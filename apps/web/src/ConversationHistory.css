@@ -241,6 +241,7 @@
 .streaming-reply .markdown-content { display: contents; }
 .streaming-reply .markdown-content > p:last-child { display: inline; }
 .streaming-acknowledgment { margin: var(--space-2) 0; color: var(--text); overflow-wrap: anywhere; }
+.streaming-food-invitation p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .streaming-message { max-width: min(88%, 62ch); margin: var(--space-4) 0; animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .streaming-reply { margin: var(--space-2) 0; color: var(--text); }
 .chat-thinking { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); }

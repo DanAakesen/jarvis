@@ -731,6 +731,23 @@ return {
             let agentIterator: AsyncIterator<ConversationAgentChunk> | undefined;
             let interrupted = false;
             let acknowledgmentSent = false;
+            let invitationId: string | undefined;
+            const invitations: string[] = [];
+            let wakeInvitation = () => {};
+            let invitationReady = new Promise<void>(resolve => { wakeInvitation = resolve; });
+            const unsubscribeInvitation = app.nowEventHub.subscribe(event => {
+              if (event.type === 'food_estimate_pending' && event.sessionId === sessionId &&
+                  event.sourceMessageId === turnMessageId) {
+                invitationId = event.confirmation.id;
+                invitations.push(streamEvent('food_invitation', event.confirmation));
+                wakeInvitation();
+              } else if (event.type === 'refresh' && invitationId &&
+                  !app.ownerInteractions?.pendingBrowserConfirmations().some(({ id }) => id === invitationId)) {
+                invitationId = undefined;
+                invitations.push(streamEvent('food_invitation', null));
+                wakeInvitation();
+              }
+            });
             try {
               agentIterator = agent.stream({
                 messageId: turnMessageId,
@@ -766,7 +783,14 @@ return {
               }, authorization, signal)[Symbol.asyncIterator]();
               let next = agentIterator.next();
               while (true) {
-                const chunk = await next;
+                const result = await Promise.race([
+                  next.then(chunk => ({ chunk })),
+                  invitationReady.then(() => null),
+                ]);
+                while (invitations.length) yield invitations.shift()!;
+                invitationReady = new Promise<void>(resolve => { wakeInvitation = resolve; });
+                if (result === null) continue;
+                const { chunk } = result;
                 if (chunk.done) break;
                 const delta = chunk.value;
                 if (typeof delta !== 'string') {
@@ -797,6 +821,7 @@ return {
               if (!roundController.signal.aborted) throw error;
               interrupted = true;
             } finally {
+              unsubscribeInvitation();
               await agentIterator?.return?.();
             }
 

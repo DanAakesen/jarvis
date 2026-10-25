@@ -287,6 +287,29 @@ the same durable browser confirmation and consume it once. Food call-site
 wiring, phrase interpretation, stream deadlines and persisted-reply SQL tests
 are retained from the merged #1278 (`d0d679f`), unchanged by reconciliation.
 
+Food invitation delivery (#1290) reuses this same `PendingAction`. After persisting
+and registering a food confirmation, the owner-interaction callback publishes its
+exact browser view and session binding through an internal `food_estimate_pending`
+Now event. The public Now stream sends only its usual invalidation; authenticated
+`GET /now` supplies the review. The matching voice relay queues presentation only,
+rechecks that the confirmation still exists, then requests a tool-free spoken
+estimate/invitation even while the food tool blocks. User speech, active responses,
+settings updates, presence and disconnect gates still apply. Cancelled/expired
+queued invitations are discarded. The initial tool dispatch still waits for the
+successful terminal response delivery from #1259; acknowledgement is not invitation
+delivery. Natural replies and committed receipts retain the shared lifecycle,
+persisted immediate-reply checks and one-time SQL consumption.
+
+Typed chat multiplexes that same internal invitation event into the open turn's
+SSE stream while the model iterator waits for the blocking tool. Both session
+and source message must match the active round. A refresh withdrawing the
+confirmation emits a null presentation; subscriptions end with the round.
+The browser validates the bounded `food_invitation` payload, shows the exact
+summary as plain text in the active conversation and invites a natural reply.
+It reveals/follows the conversation without opening Now, and removes the live
+presentation on withdrawal, expiry or turn completion. This transient view is
+not a persisted assistant answer, a new confirmation store or write authority.
+
 Integration checkpoint (25 October): #1264 at `fa3de91` adds
 `PendingProjectClarification`, `rememberProjectClarification`,
 `resolveCreateIssueProject` and typed `ProjectClarification`. Its candidate
@@ -1948,15 +1971,22 @@ digest in tab session storage, not the request text. Rollback refuses to erase
 submission evidence while records exist. Existing tasks and manual backfill
 are untouched.
 
-P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
-first stages a draft and the next creates it only after a later stored Dan
-message, from the same session, clearly approves it. The shared approval
-interpreter decides what that message means (see "Natural approval of staged
-actions" at the top); a question, condition or hesitation is not approval. The Dan-only
-`POST /factory/issues` route uses the same draft validation and creation service
-for the board. It reads all issue-title pages in the selected active repository,
-allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
-immediately before creation. New issues receive `P11` and `enhancement` labels;
+P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools.
+Issue creation is direct when the request has no gated attachments; attachment
+descriptions and public image publication stage for the existing later-message,
+same-session approval flow. The shared approval interpreter decides what that
+message means (see "Natural approval of staged actions" at the top); a question,
+condition or hesitation is not approval. The Dan-only `POST /factory/issues`
+route uses the same draft validation and creation service for the board. Project
+selectors resolve against a fresh active-project list: exact IDs, case-insensitive
+full repository names, normalized unique display names, or natural references
+supported by registered candidate data. Ambiguous or missing targets refuse
+before a write; registry read failures stay distinct from GitHub App permission
+failures. The selected project ID and repository are revalidated before issue,
+label, comment, task or generic GitHub App writes, and explicit non-self projects
+never fall back to Jarvis's repository. The service reads all issue-title pages in the selected
+active repository, allocates the lowest free `P11-NN` code (two digits minimum),
+then rechecks it immediately before creation. New issues receive `P11` and `enhancement` labels;
 titles explicitly marked `[Bug]`, `Bug:`, or `Regression:` receive `bug`.
 The default Jarvis executor creates the issue and then applies the `Jarvis`
 worker label so GitHub emits the `issues.labeled` event that P10-02 consumes.
@@ -3076,8 +3106,9 @@ arguments before retrying; workspace commands still use the existing broker and
 `packages/contracts` schemas.
 P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
 registry. They use only repository-scoped GitHub App installation tokens, default
-to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
-repositories only when they match an active project. File paths, encodings and
+to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs,
+full repository names, unique display names or candidate-supported natural
+references only when they match an active project. File paths, encodings and
 response sizes are validated and bounded; overview responses are cached by commit
 SHA. Repository files and issue text are explicitly framed as untrusted input.
 P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
@@ -6583,6 +6614,15 @@ Both internal food tools declare `denyOnPhone`. The existing phone dispatcher
 checks this after active-session validation and before generic confirmation or
 execution; denial wins over the public-phone flag. Other tools retain their
 existing public/approval behaviour. Food's own session checks remain in place.
+Model-facing food descriptions distinguish mobile/desktop browser chat and
+browser voice from telephone calls. Hosted completion instructions identify the
+runtime channel using the server's phone-session context, including image turns;
+browser realtime session instructions identify browser voice in full and compact
+modes. Device wording and historical refusals do not determine channel or permission.
+Guidance requires `log_estimate` staging before asking for confirmation; lookup
+and prose alone are not proposals. This repair leaves the existing approval
+service and persisted one-time consumption unchanged for compatibility with
+the shared lifecycle work in #1281/#1282.
 
 An additive fifth `createDailyModules` argument independently composes sensitive
 `daily_saved_food` from the same canonical nutrition factory. Existing fourth

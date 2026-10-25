@@ -91,7 +91,10 @@ export interface OwnerInteractionOptions {
   readonly store: ConfirmationStore;
   readonly conversationStore?: Pick<ConversationStore, 'getDanMessagesAfter'>;
   readonly onWebNotification?: (kind: NotificationKind, text: string) => Promise<void>;
-  readonly onConfirmationPending?: () => void;
+  readonly onConfirmationPending?: (
+    confirmation: BrowserConfirmation,
+    foodEstimate?: BrowserConfirmationDelivery['foodEstimate'],
+  ) => void;
   readonly onConfirmationsChanged?: () => void;
 }
 
@@ -213,8 +216,8 @@ export function createOwnerInteractionService({
     });
     if (delivery?.foodEstimate) foodEstimates.set(id, { action });
     onConfirmationsChanged();
-    onConfirmationPending?.();
     try {
+      onConfirmationPending?.({ ...browserConfirmations.get(id)!.view }, delivery?.foodEstimate);
       signal?.throwIfAborted();
       const resolved = await decision;
       if (resolved !== 'approve') {

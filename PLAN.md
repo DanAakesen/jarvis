@@ -1,5 +1,34 @@
 # Project plan
 
+## Mobile browser food confirmation repair (#1290)
+
+Clarified mobile/desktop browser versus telephone-call tool guidance and trusted
+runtime channel instructions. Guidance now requires backend estimate staging
+before inviting confirmation, with no authority from historical agreement.
+Merged main `dd929aa` with #1259 acknowledgement, #1264 project clarification and #1282 shared
+`PendingAction` lifecycle. Food approval retains that lifecycle and exact-proposal
+authority; no second confirmation state or parser/phone permission change.
+
+The pending food call now publishes its exact Now review and a session-bound voice
+invitation. Voice presentation can proceed during tool work without bypassing
+speech, response, settings or presence gates. Expired queued invitations are
+discarded; interruption preserves the original tool's result continuation.
+Typed-chat follow-up now streams the source/session-bound proposal into the active
+conversation while the tool waits, rather than relying on an unopened Now popover.
+The existing bubble shows the exact plain-text summary and invites a reply;
+withdrawal, expiry and completion remove its transient presentation.
+Synthetic HTTP tests read the live invitation before steering; renderer tests
+require the visible review before `Log it`. Scratch Chromium at desktop/mobile
+widths verified invitation, composer reply and synthetic receipt without overflow.
+English/Danish
+direct/discovery WebSocket tests receive invitation transcript/audio frames before
+a new owner reply and then receive the committed result once. Focused tests and
+backend build/lint pass. Full-tree qualification covers workspace lint/tests/builds,
+Python components, isolated SQL contracts and security review;
+real-SQL, live-provider and physical mobile-device acceptance remain separate.
+Next acceptance requires live invitation/recognition/playback, not acknowledgement
+alone. No production food writes.
+
 ## Shared confirmation lifecycle (#1281; 25 October 2026)
 
 Google, Factory/GitHub and browser owner interactions now share immutable

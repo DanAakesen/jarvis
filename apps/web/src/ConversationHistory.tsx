@@ -36,6 +36,7 @@ import {
   steerChatTurn,
   waitForChatSetup,
   type ChatMessage,
+  type ChatFoodInvitation,
   type ChatSession,
   type ConversationHistoryMessage,
   type ConversationHistoryToolCall,
@@ -242,6 +243,12 @@ export function ConversationHistory({
   const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
   const [streamedAcknowledgment, setStreamedAcknowledgment] = useState('');
+  const [foodInvitation, setFoodInvitation] = useState<ChatFoodInvitation | null>(null);
+  useEffect(() => {
+    if (!foodInvitation) return;
+    const timer = setTimeout(() => setFoodInvitation(null), Math.max(0, Date.parse(foodInvitation.expiresAt) - Date.now()));
+    return () => clearTimeout(timer);
+  }, [foodInvitation]);
   const [turnError, setTurnError] = useState('');
   const watchToken = useCallback(() => tokenProvider(), [tokenProvider]);
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
@@ -415,7 +422,7 @@ export function ConversationHistory({
     followedTranscript.current = element;
     followLatest.current = true;
     element.scrollTop = element.scrollHeight;
-  }, [lastMessageId, streamedText, sending, queue.length, failedTurns.length, voiceActive, loading, conversationWindow?.element]);
+  }, [lastMessageId, streamedText, foodInvitation, sending, queue.length, failedTurns.length, voiceActive, loading, conversationWindow?.element]);
 
   useLayoutEffect(() => {
     const element = transcript.current;
@@ -498,6 +505,12 @@ export function ConversationHistory({
     if (!workspaceCommands || workspaceCommands.isViewVisible?.(conversationViewId)) return;
     workspaceCommands.dispatch({ commandId: 'conversation-reveal', operation: 'restore', viewId: conversationViewId });
   }, [workspaceCommands]);
+  useEffect(() => {
+    if (foodInvitation && sending) {
+      revealHistory();
+      showLatest();
+    }
+  }, [foodInvitation, sending, revealHistory, showLatest]);
 
   const shownFailure = useRef('');
   useEffect(() => {
@@ -646,6 +659,7 @@ export function ConversationHistory({
     setHistoryError('');
     setStreamedText('');
     setStreamedAcknowledgment('');
+    setFoodInvitation(null);
     let userMessageSaved = false;
     let messageId: string | undefined;
     let partialReply = '';
@@ -716,6 +730,7 @@ export function ConversationHistory({
           }]));
           setStreamedText('');
           setSteering(false);
+          setFoodInvitation(null);
         },
         attachmentIds,
         visualForTurn,
@@ -725,6 +740,7 @@ export function ConversationHistory({
           setStreamedAcknowledgment(text);
           setStreamedText('');
         },
+        setFoodInvitation,
       );
       setMessages((current) => mergeMessages(current.map(message => message.id === messageId && assistant.visualResult
         ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant, activeSession.language)]));
@@ -758,6 +774,7 @@ export function ConversationHistory({
       turnController.current = null;
       turnSession.current = null;
       setActiveMessage(null);
+      setFoodInvitation(null);
       turnInFlight.current = false;
       setSending(false);
     }
@@ -1002,7 +1019,7 @@ export function ConversationHistory({
           // trail, and then the streamed answer in the same bubble.
           <div className="conversation-message streaming-message live-turn" data-speaker="jarvis">
             <strong className="message-author visually-hidden">Jarvis</strong>
-            {!streamedText && !streamedAcknowledgment && (
+            {!streamedText && !streamedAcknowledgment && !foodInvitation && (
               <p className="live-turn-status">
                 <WorkingCore />
                 <LivePhrase key={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
@@ -1015,6 +1032,14 @@ export function ConversationHistory({
               <p className="streaming-acknowledgment" aria-label="Jarvis's initial reply">
                 {streamedAcknowledgment}
               </p>
+            )}
+            {foodInvitation && (
+              <div className="streaming-food-invitation" role="status" aria-live="polite" aria-label="Food estimate awaiting your reply">
+                <p>{foodInvitation.summary}</p>
+                <p>{language === 'da'
+                  ? 'Vil du logge dette estimat? Svar her, eller brug godkendelsen i Now. Intet er logget endnu.'
+                  : 'Would you like to log this estimate? Reply here, or use the approval in Now. Nothing has been logged yet.'}</p>
+              </div>
             )}
             {liveTools.length > 0 && (
               <ol className="live-turn-tools" aria-label="Tools Jarvis is using">

@@ -296,11 +296,13 @@ relayed by the coordinator. This supersedes earlier camera-release holds below.
 The coordinator reports live chat `visual.path=image` on every tested turn;
 live voice image acceptance and physical-phone checks remain separate.
 
-Camera preview is a compact, preview-only workspace surface showing the local video with
-overlaid camera-switch and close controls; its accessible workspace identity and
-lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
+Camera preview is a preview-only workspace surface sized to the local video's
+actual aspect ratio and the available workspace, with no surrounding frame around
+the video and overlaid camera-switch and close controls. Its accessible workspace
+identity and lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
 capture; Close/Turn off, session end and ten minutes without a user turn stop
-the tracks. Idle recovery stays visible. Camera controls never share or cover
+the tracks. Status, observation notices and playback recovery remain visible on
+the video without scrolling its controls away. Idle recovery stays visible. Camera controls never share or cover
 the composer. Camera-on chat and correlated EN/DA realtime turns upload a fresh
 frame using deployed #713 `mode: 'handle'`, then forward its single-use handle
 without requiring a caption. Legacy screen inspection stays caption-first.
@@ -339,7 +341,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 
 | Area | Requirement |
 | --- | --- |
-| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; productive tool investigations continue until final synthesis rather than stopping at an arbitrary round count, and only a completed reply is saved. Tool calls link to the source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
+| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; productive tool investigations continue until final synthesis rather than stopping at an arbitrary round count, and only a completed reply is saved. Tool calls link to the source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data. Code changes use issue-first Factory handoff; project references resolve against active registrations, and ambiguity is clarified before a write. |
 | **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser in every presence mode. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Jarvis does not send external messages. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
@@ -542,7 +544,7 @@ a fallback when Voice Live is not configured.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
-Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a compact **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video, actual Front/Back label, Live status and overlaid Switch/Close controls; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it. The compact phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow.
+Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video at its actual aspect ratio, fitted to available workspace space without a surrounding frame, plus the actual Front/Back label, Live status and overlaid Switch/Close controls; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it, and the full status remains readable. Observation notices and playback recovery stay over the video with retry reachable without scrolling the camera controls away. The larger phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow.
 With a screen share active and the camera off, generic visual questions in text chat such as **What do you see?** inspect the shared screen and send its context with the message. Camera-specific questions still require the camera; camera-conversation mode keeps its existing priority while the camera is on.
 
 Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames; enabling or switching alone does not upload. There is no Look now button and conversation capture does not require watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
@@ -1211,7 +1213,7 @@ Dan approved these after a gap audit. They are planned, not built.
 
 ## GitHub backlog (8 October 2026, P10)
 
-Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
+Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis creates an issue with the problem and acceptance criteria; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Project references use the active registry; ambiguous or missing selections do not write, and a named non-self project never falls back to Jarvis's repository. Existing approval gates for attachments and public image publication remain. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 
 ## Proactive assistance (17 October 2026; P13)
 
@@ -1556,6 +1558,17 @@ shared. No Health write, production activation or physical-phone acceptance is
 included; broader conversational and actual client/device gates remain.
 Both internal food tools refuse phone calls before generic approval; an approval
 cannot make their unsupported phone context valid.
+Browser chat and browser voice remain supported on mobile as well as desktop;
+using a phone's browser is not a telephone call. Stage `log_estimate` before
+inviting confirmation: prose estimates and reference lookups create no pending
+approval. Without a pending proposal, prepare a new review and obtain a new reply;
+historical agreement cannot authorize it. Only a committed tool receipt proves logging.
+While the tool waits, the authenticated Now feed exposes the exact review.
+Typed chat also streams that source-bound review into the active conversation,
+with a direct invitation to reply; opening the separate Now popover is not required.
+Present-mode browser voice also requests a tool-free spoken estimate and invitation
+from that same staged summary, even though the food tool is still pending.
+An initial spoken acknowledgement is not that invitation or proof of logging.
 
 Approved #1196 extends the same reviewed flow to food photos. Existing
 conversation attachments reach the existing image-capable model path; the model
