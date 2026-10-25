@@ -5040,12 +5040,26 @@ defaults to 305 seconds and can be tuned up to 320 seconds, the configured long
 tool read timeout. The overall job remains bounded at 15 minutes.
 
 The report is persisted in owner-scoped SQL metadata in
-`dbo.workspace_html_artifacts` (migrations 0026/0027), then the same workspace
-window is updated to renderer `html-app` with the artifact ID. Reads and pin
-changes are Dan-authorized; report bytes remain within the 512 KiB contract.
-The background job has bounded concurrency, shutdown cancellation and visible
-terminal failures; voice announces a short findings summary or fixed failure
-update without invoking tools again.
+`dbo.workspace_html_artifacts` (migrations 0026/0027), then its Folio entry and
+job reference are saved. Migration 0066 adds that reference and an independent
+Workspace delivery state (`pending`, `unknown`, `failed` or `delivered`) to the
+completed job. The artifact uses the research job UUID, so the progress and
+report share one stable `research-<compact UUID>` view ID. The job becomes
+`done` after artifact, Folio and job metadata persist, before Workspace delivery
+is attempted. Only an applied-command acknowledgement marks delivery `delivered`;
+it does not prove the owner saw the report. Missing Workspace stays `pending`,
+ambiguous acknowledgement stays `unknown`, and an explicit refusal is `failed`.
+None changes successful research to a failed job.
+
+The owner-only `POST /jobs/:jobId/open-result` route resolves the stored Folio
+entry, validates and reads its artifact under the owner identity, and opens it
+through the existing Workspace broker using the same stable view ID. Reconnect,
+reload, a closed progress window and a lost acknowledgement can therefore offer
+or reopen the saved report without invoking the research provider or creating a
+second result window. Reads and pin changes remain Dan-authorized; report bytes
+remain within the 512 KiB contract. The background job retains bounded
+concurrency, shutdown cancellation and visible generation/persistence failures;
+voice announces the saved findings summary independently of presentation.
 
 The web `html-app` renderer (`HtmlAppView`, 8 October) reads the artifact from
 owner-only `GET /factory/workspace-artifacts/html/:id`, validates it with

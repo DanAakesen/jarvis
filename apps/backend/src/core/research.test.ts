@@ -371,7 +371,7 @@ describe('background interactive research', () => {
     const searchGate = deferred();
     const reportGate = deferred();
     const runner = makeRunner(reportHtml(), searchGate.promise, reportGate.promise);
-    const { app, artifacts, connection, disconnectOnHtml } = fixture(runner);
+    const { app, artifacts, disconnectOnHtml } = fixture(runner);
     const started = await startResearch(app);
     const jobId = started.json().result.jobId as string;
 

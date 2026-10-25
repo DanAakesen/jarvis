@@ -1,5 +1,23 @@
 # Agent context
 
+## Research result recovery (#1237; 25 October 2026)
+
+Focused offline checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/research.test.ts src/core/jobs.test.ts src/core/folio.test.ts src/database/background-job-store.test.ts src/database/html-artifact-store.test.ts
+npm test --workspace @jarvis/contracts -- src/index.test.js
+npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx
+```
+
+The additive `0066_research_result_recovery.sql` change is covered by the
+backend's disposable SQL Server integration workflow:
+`npm run test:database --workspace @jarvis/backend`. A local offline test does
+not validate SQL Server execution. Use only synthetic reports and owner IDs.
+Workspace delivery is separate from research completion; `delivered` means the
+client acknowledged applying its command, not that a person viewed it. A
+physical iPhone/tab reconnect remains owner acceptance, not CI evidence.
+
 ## Per-finding feedback checks (#1240)
 
 From the repository root, use `npm run build --workspace @jarvis/backend` and

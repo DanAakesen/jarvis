@@ -102,6 +102,14 @@ not be presented as a successfully empty list.
   the existing history retention for Status, Usage and audit.
 - Existing browser dismissals are sent to the server once. A failed transfer
   remains visible as an error, with those entries hidden locally until confirmed.
+- Research generation completes when the validated artifact and owner-scoped
+  Folio entry are saved. Workspace delivery is separate: pending, unknown or
+  failed delivery does not turn a saved result into a failed research job.
+  Background work keeps an **Open report** action for the saved result; opening
+  it after reconnect or reload reuses the same report and never reruns research.
+  `Delivered` requires a Workspace acknowledgement and does not claim that a
+  person has seen the report. Artifact or Folio persistence failures remain
+  research failures, and partial findings remain identified as partial.
 
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 

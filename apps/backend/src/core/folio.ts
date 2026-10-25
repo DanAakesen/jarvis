@@ -340,7 +340,7 @@ export function createFolioModule(
           return { opened: true as const };
         } catch (error) {
           const stored = await app.backgroundJobs.details(jobId).catch(() => null);
-          if (stored?.details.job.resultId) {
+          if (stored?.details.job.resultId && (error instanceof ToolRefusal || error instanceof ToolFailure)) {
             await app.backgroundJobs.setResultDelivery(jobId, workspaceResultDelivery(error)).catch(() => undefined);
           }
           if (error instanceof FolioItemNotFound || error instanceof WorkspaceHtmlArtifactNotFound ||

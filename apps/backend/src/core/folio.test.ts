@@ -202,6 +202,27 @@ describe('Folio API and Jarvis tools', () => {
     }), expect.any(AbortSignal));
   });
 
+  it('does not mark acknowledged presentation failed when delivery-state persistence fails', async () => {
+    const fixtureData = fixture();
+    const job = await fixtureData.app.backgroundJobs.start('research', 'Research: Recovered report', 2);
+    await job.done(`research-${job.jobId.replaceAll('-', '')}`, 'Report saved', {
+      resultId: `research:${job.jobId}`,
+      resultDelivery: 'pending',
+    });
+    vi.spyOn(fixtureData.app.backgroundJobs, 'setResultDelivery')
+      .mockRejectedValueOnce(new Error('database unavailable'));
+
+    const response = await fixtureData.app.inject({
+      method: 'POST',
+      url: `/jobs/${job.jobId}/open-result`,
+      headers: authorization('owner.e30.sig'),
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(fixtureData.execute).toHaveBeenCalledTimes(2);
+    expect((await fixtureData.app.backgroundJobs.details(job.jobId))?.details.job.resultDelivery).toBe('pending');
+  });
+
   it('registers private Folio tools and resolves a natural-language reopen request', async () => {
     const fixtureData = fixture();
     const listed = await fixtureData.app.inject({ url: '/tools', headers: authorization('agent.e30.sig') });

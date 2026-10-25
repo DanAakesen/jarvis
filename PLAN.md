@@ -1,5 +1,15 @@
 # Project plan
 
+## Research result recovery (#1237; 25 October 2026)
+
+Implemented saved Folio/job references, separate Workspace delivery state and an
+owner-only reopen action using the existing stable report window. Focused backend,
+contract and web tests passed; the delivery-acknowledgement persistence regression
+also passes. Backend/web builds and lint pass. The SQL integration command could
+not start because this environment has no isolated loopback SQL Server
+configuration. Next: scan secrets, run CodeQL and review the final diff.
+Physical phone acceptance remains separate.
+
 ## Per-finding chat and voice feedback (#1240)
 
 Implemented the shared `proactive_item_feedback` capability, UI/tool feedback

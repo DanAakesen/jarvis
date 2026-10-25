@@ -71,6 +71,9 @@ function mapJob(row: BackgroundJobRow): BackgroundJob {
   const hasResultId = row.result_folio_id != null;
   const hasResultDelivery = row.result_delivery_status != null;
   if (hasResultId !== hasResultDelivery) throw new Error('Stored research result reference is incomplete');
+  const resultFields = row.result_folio_id != null && row.result_delivery_status != null
+    ? { resultId: row.result_folio_id, resultDelivery: row.result_delivery_status }
+    : {};
   const job: BackgroundJob = {
     jobId: row.job_id.toLowerCase(),
     kind: row.kind,
@@ -80,8 +83,7 @@ function mapJob(row: BackgroundJobRow): BackgroundJob {
     steps: row.steps,
     ...(row.detail === null ? {} : { detail: row.detail }),
     ...(row.view_id === null ? {} : { viewId: row.view_id }),
-    ...(hasResultId && hasResultDelivery
-      ? { resultId: row.result_folio_id, resultDelivery: row.result_delivery_status } : {}),
+    ...resultFields,
     startedAt: row.started_at instanceof Date ? row.started_at.toISOString() : new Date(row.started_at).toISOString(),
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString(),
   };
