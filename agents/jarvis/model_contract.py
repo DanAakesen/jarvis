@@ -10,7 +10,6 @@ from typing import Protocol
 
 from state import ModelMessage, ModelSettings
 
-
 MAX_ACKNOWLEDGMENT_CHARACTERS = 500
 
 

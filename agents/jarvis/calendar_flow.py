@@ -226,7 +226,10 @@ def calendar_safe_prefix(text: str) -> str:
     end = 0
     for boundary in re.finditer(r"(?<=[.!?])(?:\s+|$)|\n+", text):
         sentence = text[end:boundary.end()]
-        if (_calendar_scope(sentence) and not _calendar_intent(sentence)) or calendar_claim(sentence):
+        if (
+            (_calendar_scope(sentence) and not _calendar_intent(sentence))
+            or calendar_claim(sentence)
+        ):
             break
         end = boundary.end()
     return text[:end]

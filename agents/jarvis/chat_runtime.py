@@ -868,7 +868,9 @@ def register_chat_invocation(
                                 or len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS
                             ):
                                 if len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS:
-                                    raise RuntimeError("Chat acknowledgment exceeded the size limit")
+                                    raise RuntimeError(
+                                        "Chat acknowledgment exceeded the size limit"
+                                    )
                                 continue
                             output_bytes += len(delta.text.encode("utf-8"))
                             if output_bytes > MAX_OUTPUT_BYTES:

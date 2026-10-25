@@ -29,10 +29,10 @@ from calendar_flow import (
     calendar_claim,
     calendar_context,
     calendar_details_requested,
-    calendar_safe_acknowledgment_prefix,
     calendar_multiple_requested,
     calendar_reply,
     calendar_response_scope,
+    calendar_safe_acknowledgment_prefix,
     calendar_safe_prefix,
     calendar_status_question,
     calendar_unsettled_confirmation,
@@ -61,8 +61,8 @@ from jarvis_tools import (
     model_tools,
 )
 from model_contract import (
-    AcknowledgmentBoundary,
     MAX_ACKNOWLEDGMENT_CHARACTERS,
+    AcknowledgmentBoundary,
     ModelStreamChunk,
     StreamingModelClient,
     SummaryCompletion,
@@ -1101,10 +1101,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                     )
                                                 if calendar_guard:
                                                     calendar_text.append(text)
-                                                    safe = calendar_safe_prefix(
-                                                        "".join(calendar_text)
-                                                    ) if early_calendar_text else calendar_safe_acknowledgment_prefix(
-                                                        "".join(calendar_text)
+                                                    safe = (
+                                                        calendar_safe_prefix("".join(calendar_text))
+                                                        if early_calendar_text
+                                                        else calendar_safe_acknowledgment_prefix(
+                                                            "".join(calendar_text)
+                                                        )
                                                     )
                                                     if len(safe) > len(emitted_text):
                                                         delta = safe[len(emitted_text):]
@@ -1169,10 +1171,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                             )
                                         if calendar_guard:
                                             calendar_text.append(event.delta)
-                                            safe = calendar_safe_prefix(
-                                                "".join(calendar_text)
-                                            ) if early_calendar_text else calendar_safe_acknowledgment_prefix(
-                                                "".join(calendar_text)
+                                            safe = (
+                                                calendar_safe_prefix("".join(calendar_text))
+                                                if early_calendar_text
+                                                else calendar_safe_acknowledgment_prefix(
+                                                    "".join(calendar_text)
+                                                )
                                             )
                                             if len(safe) > len(emitted_text):
                                                 delta = safe[len(emitted_text):]
