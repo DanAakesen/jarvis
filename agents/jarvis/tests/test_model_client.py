@@ -41,7 +41,7 @@ from model_client import (
     personalize_instructions,
     responses_base_url,
 )
-from model_contract import SummaryCompletion
+from model_contract import SummaryCompletion, ToolLoopStalled
 from state import ModelMessage, ModelSettings
 
 
@@ -1844,6 +1844,296 @@ async def test_tool_loop_calls_the_backend_tool_and_streams_answer() -> None:
     assert json.loads(post.content) == {"text": "Tilføj dark mode"}
     assert len(usages) == 2
     await model.close()
+
+
+@pytest.mark.asyncio
+async def test_chat_continues_after_six_tool_rounds_with_multiple_calls_per_round() -> None:
+    backend = FakeBackend()
+    rounds = [
+        [
+            completed(*[
+                FakeItem(
+                    type="function_call",
+                    call_id=f"round_{round_index}_call_{call_index}",
+                    name="create_task",
+                    arguments=json.dumps({"text": f"Action {round_index}-{call_index}"}),
+                )
+                for call_index in range(2)
+            ])
+        ]
+        for round_index in range(6)
+    ]
+    rounds.append([
+        SimpleNamespace(type="response.output_text.delta", delta="All twelve actions completed."),
+        completed(),
+    ])
+    model, transport = client([], rounds=rounds, backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        reply = "".join([
+            chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Investigate")], "en",
+            )
+        ])
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    assert reply == "All twelve actions completed."
+    assert len(transport.responses.requests) == 7
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert len(writes) == 12
+    assert all(request.headers["x-jarvis-message-id"] == "42" for request in writes)
+    outputs = [
+        item
+        for item in transport.responses.requests[-1]["input"]
+        if item.get("type") == "function_call_output"
+    ]
+    assert len(outputs) == 12
+    assert all(json.loads(item["output"])["outcome"] == "ok" for item in outputs)
+
+
+@pytest.mark.asyncio
+async def test_repeated_tool_call_for_new_steering_message_is_not_deduplicated() -> None:
+    call = FakeItem(
+        type="function_call", call_id="first", name="create_task",
+        arguments='{"text":"Create the same task"}',
+    )
+    repeated_call = FakeItem(
+        type="function_call", call_id="second", name="create_task",
+        arguments='{ "text" : "Create the same task" }',
+    )
+    same_message_repeat = FakeItem(
+        type="function_call", call_id="same_message_repeat", name="create_task",
+        arguments='{"text":"Create the same task"}',
+    )
+    backend = FakeBackend()
+    model, _ = client([], rounds=[
+        [completed(call, same_message_repeat)],
+        [completed(repeated_call)],
+        [completed()],
+    ], backend=backend)
+    fetch_count = 0
+
+    async def fetch_steering():
+        nonlocal fetch_count
+        fetch_count += 1
+        return (
+            [("43", "Please create the same task again.", "en")]
+            if fetch_count == 4 else []
+        )
+
+    fetch_token = current_steering_fetcher.set(fetch_steering)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Create the same task")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        current_steering_fetcher.reset(fetch_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert [request.headers["x-jarvis-message-id"] for request in writes] == ["42", "43"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+async def test_repeated_uncertain_tool_result_is_reused_for_final_synthesis(provider: str) -> None:
+    backend = FakeBackend(
+        model_name="claude-sonnet-5" if provider == "anthropic" else "deployment",
+    )
+    original_handle = backend.handle
+
+    def uncertain_action(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/tools/create_task":
+            backend.requests.append(request)
+            return httpx.Response(200, json={
+                "tool": "create_task",
+                "outcome": "error",
+                "result": {"message": "The action may or may not have happened; check its status."},
+            })
+        return original_handle(request)
+
+    backend.handle = uncertain_action
+    first_call = FakeItem(
+        type="function_call", call_id="first", name="create_task",
+        arguments='{"text":"Create once"}',
+    )
+    repeated_call = FakeItem(
+        type="function_call", call_id="repeated", name="create_task",
+        arguments='{ "text" : "Create once" }',
+    )
+    if provider == "openai":
+        model, transport = client([], rounds=[
+            [completed(first_call)],
+            [completed(repeated_call)],
+            [
+                SimpleNamespace(
+                    type="response.output_text.delta",
+                    delta="I could not verify whether the action completed.",
+                ),
+                completed(),
+            ],
+        ], backend=backend)
+    else:
+        model, transport = client([], backend=backend)
+
+        def anthropic_final(*content):
+            return SimpleNamespace(
+                content=list(content),
+                usage=SimpleNamespace(input_tokens=100, output_tokens=20),
+            )
+
+        model._anthropic_client = FakeAnthropic([
+            FakeAnthropicStream([], anthropic_final(
+                FakeItem(
+                    type="tool_use", id="first", name="create_task",
+                    input={"text": "Create once"},
+                ),
+            )),
+            FakeAnthropicStream([], anthropic_final(
+                FakeItem(
+                    type="tool_use", id="repeated", name="create_task",
+                    input={"text": "Create once"},
+                ),
+            )),
+            FakeAnthropicStream(
+                ["I could not verify whether the action completed."],
+                anthropic_final(FakeItem(
+                    type="text", text="I could not verify whether the action completed.",
+                )),
+            ),
+        ])
+    message_token = current_message_id.set("42")
+    try:
+        reply = "".join([
+            chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Create once")], "en",
+            )
+        ])
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    assert reply == "I could not verify whether the action completed."
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert len(writes) == 1
+    requests = (
+        transport.responses.requests
+        if provider == "openai"
+        else model._anthropic_client.messages.requests
+    )
+    final_request = requests[-1]
+    assert "tools" not in final_request
+    final_messages = (
+        final_request["input"] if provider == "openai" else final_request["messages"]
+    )
+    assert json.dumps(final_messages, ensure_ascii=False).count(
+        "may or may not have happened"
+    ) == 2
+
+
+@pytest.mark.asyncio
+async def test_repeated_tool_calls_that_ignore_final_only_retry_fail_without_replaying() -> None:
+    call = FakeItem(
+        type="function_call", call_id="call", name="create_task", arguments='{"text":"Once"}',
+    )
+    repeated_call = FakeItem(
+        type="function_call", call_id="repeated", name="create_task",
+        arguments='{"text":"Once"}',
+    )
+    backend = FakeBackend()
+    model, transport = client([], rounds=[
+        [completed(call)],
+        [completed(repeated_call)],
+        [completed(repeated_call)],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        with pytest.raises(ToolLoopStalled):
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Create once")], "en",
+            )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert len(writes) == 1
+    assert len(transport.responses.requests) == 3
+    assert "tools" not in transport.responses.requests[-1]
+
+
+@pytest.mark.asyncio
+async def test_cancellation_after_tool_completion_does_not_replay_the_action(monkeypatch) -> None:
+    call = FakeItem(
+        type="function_call", call_id="call", name="create_task", arguments='{"text":"Once"}',
+    )
+    backend = FakeBackend()
+    model, transport = client([], rounds=[[completed(call)], [completed()]], backend=backend)
+    original_create = transport.responses.create
+    attempts = 0
+
+    async def cancel_next_request(**request):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 2:
+            raise asyncio.CancelledError("cancelled by caller")
+        return await original_create(**request)
+
+    monkeypatch.setattr(transport.responses, "create", cancel_next_request)
+    message_token = current_message_id.set("42")
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Create once")], "en",
+            )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert attempts == 2
+    assert len(writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_provider_incomplete_response_after_tool_is_not_retried() -> None:
+    call = FakeItem(
+        type="function_call", call_id="call", name="create_task", arguments='{"text":"Once"}',
+    )
+    backend = FakeBackend()
+    model, transport = client([], rounds=[
+        [completed(call)],
+        [SimpleNamespace(type="response.incomplete")],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        with pytest.raises(RuntimeError, match="did not complete"):
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Create once")], "en",
+            )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert len(transport.responses.requests) == 2
+    assert len(writes) == 1
 
 
 @pytest.mark.asyncio

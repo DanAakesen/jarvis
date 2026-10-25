@@ -11,6 +11,12 @@ from typing import Protocol
 from state import ModelMessage, ModelSettings
 
 
+class ToolLoopStalled(RuntimeError):
+    """The model kept requesting already-completed tools after a final-only retry."""
+
+    code = "tool_loop_stalled"
+
+
 @dataclass(frozen=True, slots=True)
 class SummaryCompletion:
     """One finished (non-streaming) summary reply and the model that wrote it."""

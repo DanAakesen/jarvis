@@ -8282,3 +8282,17 @@ Offline synthetic checks establish local behavior only, not live acceptance.
 ## Chat tool chips hide after delivery (23 October 2026; #1085)
 
 Tool chips appear only while Jarvis is working. Once a reply is delivered the transcript keeps just the task link and any generated image, so a finished turn reads as plain conversation. While working, the status line names the actual activity (derived from the running tool) instead of rotating random phrases, and finished steps use a bare thin tick or cross. The transcript also stays pinned to the end while a reply grows after it was added (it watches the messages, not only the transcript box), without pulling back a reader who scrolled up. No backend or contract change.
+
+## Unbounded productive chat tool continuation (25 October 2026; #1256)
+
+Normal chat and voice keep requesting model responses after tool-bearing rounds
+until the provider returns a final answer; do not impose a replacement round
+count. Retain the provider's per-response output/context constraints, backend
+tool outcomes, authorization and confirmation checks, and caller cancellation.
+Scope exact-call result reuse to the originating stored message and canonical
+arguments so a repeated request cannot replay a completed or uncertain action.
+After a repeat, request one final synthesis without tools; if the provider still
+requests a tool, fail explicitly as `tool_loop_stalled`. Keep smoke invocation's
+separate bounded behavior. This removes only the ordinary-conversation cutoff;
+it does not establish the cause of the reported production failure or prove live
+provider acceptance.

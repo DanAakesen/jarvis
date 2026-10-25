@@ -56,9 +56,10 @@ from jarvis_tools import (
     current_message_id,
     current_smoke_invocation,
     current_steering_fetcher,
+    current_turn,
     model_tools,
 )
-from model_contract import StreamingModelClient, SummaryCompletion
+from model_contract import StreamingModelClient, SummaryCompletion, ToolLoopStalled
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
 from visual_context import (
     ImageInputRejected,
@@ -71,7 +72,7 @@ FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
-MAX_TOOL_ROUNDS = 5
+SMOKE_MAX_TOOL_ROUNDS = 2
 # Headroom for a summary call: the answer is capped at ~9k characters by the parser, and a
 # model that reasons by default needs room before its first visible word.
 SUMMARY_MAX_OUTPUT_TOKENS = 6_000
@@ -339,6 +340,18 @@ def image_input_rejected(exc: BaseException) -> bool:
         "image" in message
         and any(part in message for part in ("unsupported", "not support", "invalid image"))
     )
+
+
+def _tool_call_key(
+    source_message_id: str, name: str, arguments: str,
+) -> tuple[str, str, str]:
+    try:
+        normalized = json.dumps(
+            json.loads(arguments), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+    except (TypeError, ValueError):
+        normalized = arguments
+    return source_message_id, name, normalized
 
 
 def model_message_input(message: ModelMessage) -> dict[str, Any]:
@@ -959,17 +972,22 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         current_message_id.set(message_id)
                     return bool(steering_messages)
 
-                max_rounds = 2 if role == "smoke" else MAX_TOOL_ROUNDS
+                round_number = 0
                 smoke_tool_call_count = 0
                 calendar_evidence = []
                 calendar_mutation = None
-                for round_number in range(1, max_rounds + 1):
+                completed_tool_calls: dict[tuple[str, str, str], dict[str, Any]] = {}
+                force_final_synthesis = False
+                while role != "smoke" or round_number < SMOKE_MAX_TOOL_ROUNDS:
+                    round_number += 1
                     first_model_started = current_model_started_at.get()
                     with latency_span("model_coordination"):
-                        await append_steering()
+                        if await append_steering():
+                            force_final_synthesis = False
                         if phase_setter is not None and turn_id is not None:
                             await phase_setter("model")
-                        await append_steering()
+                        if await append_steering():
+                            force_final_synthesis = False
                     image_request = round_number == 1 and any(
                         message.images for message in messages
                     )
@@ -1008,6 +1026,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         and calendar_mutation is None and not calendar_evidence
                     )
                     final = None
+                    round_tools = [] if force_final_synthesis else tools
                     request: dict[str, Any] = {
                         "model": model_name,
                         "instructions": instructions,
@@ -1016,8 +1035,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         "store": False,
                         "stream": True,
                     }
-                    if tools:
-                        request["tools"] = tools
+                    if round_tools:
+                        request["tools"] = round_tools
                     if reasoning_effort and reasoning_effort != "none":
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
@@ -1031,8 +1050,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     reasoning_effort, max_output_tokens
                                 ),
                             }
-                            if tools:
-                                anthropic_request["tools"] = anthropic_tools(tools)
+                            if round_tools:
+                                anthropic_request["tools"] = anthropic_tools(round_tools)
                             accepted = False
                             try:
                                 with ExitStack() as request_timings:
@@ -1175,6 +1194,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         if use_anthropic
                         else [item for item in final.output if item.type == "function_call"]
                     )
+                    if force_final_synthesis and calls:
+                        raise ToolLoopStalled(
+                            "The model requested tools again after a final-only retry."
+                        )
                     usage = final.usage
                     input_tokens = getattr(usage, "input_tokens", None)
                     output_tokens = getattr(usage, "output_tokens", None)
@@ -1248,6 +1271,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                     if not calls:
                         if await append_steering():
+                            force_final_synthesis = False
                             if emitted_text:
                                 yield "\n\n"
                             continue
@@ -1314,6 +1338,27 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         await phase_setter("tools")
                     tool_results = []
                     calendar_results = []
+                    normalized_calls = [
+                        (
+                            call,
+                            (
+                                json.dumps(
+                                    call.input, ensure_ascii=False, separators=(",", ":")
+                                )
+                                if use_anthropic
+                                else call.arguments
+                            ),
+                        )
+                        for call in calls
+                    ]
+                    source_message_id = current_message_id.get() or current_turn.get()
+                    normalized_calls_with_keys = [
+                        (
+                            call, arguments,
+                            _tool_call_key(source_message_id, call.name, arguments),
+                        )
+                        for call, arguments in normalized_calls
+                    ]
                     ambiguous_calendar_proposals = (
                         "calendar_create_events" in definitions
                         and (
@@ -1325,13 +1370,19 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     )
                     combined_calendar = None
                     if (
-                        calendar_guard and len(calls) > 1
+                        calendar_guard
+                        and len({
+                            call_key for _, _, call_key in normalized_calls_with_keys
+                        }) > 1
                         and all(call.name == "calendar_create_event" for call in calls)
                         and "calendar_create_events" in definitions
+                        and not any(
+                            call_key in completed_tool_calls
+                            for _, _, call_key in normalized_calls_with_keys
+                        )
                     ):
                         events = [
-                            call.input if use_anthropic else json.loads(call.arguments)
-                            for call in calls
+                            json.loads(arguments) for _, arguments, _ in normalized_calls_with_keys
                         ]
                         combined_calendar = await self._tools.call(
                             "calendar_create_events", json.dumps({"events": events}),
@@ -1342,14 +1393,14 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         and all(call.name == "calendar_create_event" for call in calls)
                         and "calendar_create_events" not in definitions
                     )
-                    for call in calls:
-                        arguments = (
-                            json.dumps(call.input, ensure_ascii=False, separators=(",", ":"))
-                            if use_anthropic
-                            else call.arguments
-                        )
+                    repeated_tool_call = False
+                    for call, arguments, call_key in normalized_calls_with_keys:
                         confirmation_refused = False
-                        if (
+                        cached_result = completed_tool_calls.get(call_key)
+                        if cached_result is not None:
+                            result = cached_result
+                            repeated_tool_call = True
+                        elif (
                             call.name == "calendar_confirm_change"
                             and not ambiguous_calendar_proposals
                         ):
@@ -1375,7 +1426,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                         calendar_messages, proposal,
                                     )
                                 )
-                        if ambiguous_calendar_proposals and call.name in CALENDAR_MUTATIONS:
+                        if (
+                            cached_result is None
+                            and ambiguous_calendar_proposals
+                            and call.name in CALENDAR_MUTATIONS
+                        ):
                             result = {
                                 "tool": call.name, "outcome": "refused",
                                 "result": {"refused": (
@@ -1384,7 +1439,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "proposals or confirmation in the same round."
                                 )},
                             }
-                        elif confirmation_refused:
+                        elif cached_result is None and confirmation_refused:
                             result = {
                                 "tool": call.name, "outcome": "refused",
                                 "result": {"refused": (
@@ -1392,7 +1447,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "this request. No calendar confirmation was dispatched."
                                 )},
                             }
-                        elif (
+                        elif cached_result is None and (
                             multiple_calendar_events and call.name == "calendar_create_event"
                             and combined_calendar is None
                             and "calendar_create_events" in definitions
@@ -1404,7 +1459,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "request. Use calendar_create_events with the complete list."
                                 )},
                             }
-                        else:
+                        elif cached_result is None:
                             result = (
                                 combined_calendar if combined_calendar is not None else
                                 await self._tools.call(
@@ -1414,6 +1469,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             result = calendar_unsettled_confirmation(
                                 call.name, result, calendar_state,
                             )
+                        if cached_result is None:
+                            completed_tool_calls[call_key] = result
                         if legacy_multiple:
                             yield calendar_reply(call.name, result, danish)
                             yield (
@@ -1460,12 +1517,26 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             )
                     if use_anthropic and tool_results:
                         model_input.append({"role": "user", "content": tool_results})
+                    if repeated_tool_call:
+                        force_final_synthesis = True
+                        model_input.append({
+                            "role": "user",
+                            "content": (
+                                "An exact tool call in this turn was already completed. Its "
+                                "original result is included above; do not repeat the action. "
+                                "Answer now using the available results, and state any uncertain "
+                                "outcome plainly."
+                            ),
+                        })
                     if calendar_guard and calendar_results:
                         calendar_mutation = calendar_results[-1]
                         name, result = calendar_mutation
                         if (
                             multiple_calendar_events and name == "calendar_create_event"
-                            and round_number < max_rounds
+                            and (
+                                role != "smoke"
+                                or round_number < SMOKE_MAX_TOOL_ROUNDS
+                            )
                             and "calendar_create_events" in definitions
                         ):
                             model_input.append({
@@ -1507,8 +1578,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 "Do not invent new visual details."
                             ),
                         })
-                    await append_steering()
-                raise RuntimeError("Jarvis tool loop exceeded its round limit")
+                    if await append_steering():
+                        force_final_synthesis = False
+                raise RuntimeError("Smoke tool loop exceeded its round limit")
             except (asyncio.CancelledError, GeneratorExit):
                 raise
             except BaseException as exc:

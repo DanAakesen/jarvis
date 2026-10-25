@@ -4231,9 +4231,16 @@ latest prior Jarvis message was included, and total context characters, without
 message text. The current task/status reference JSON precedes conversation
 history in the model input so the latest exchange remains next to the new user
 message. The existing Responses tool loop records calls against Dan's message ID
-using the agent identity. The backend persists only a completed assistant
-response; an interrupted turn leaves Dan's message visible and the UI warns that
-an action may have completed. The browser never receives agent credentials.
+using the agent identity. Ordinary chat and voice continue tool rounds until the
+provider returns a final response; they have no fixed round-count cutoff. Per-call
+output limits, provider context limits, downstream tool outcomes and caller
+cancellation remain effective. Within one source message, an exact repeated tool
+call reuses its original result rather than replaying the action, then gets one
+tool-free final-synthesis attempt; another tool request fails with the
+content-free `tool_loop_stalled` code. The backend persists only a completed
+assistant response; an interrupted turn leaves Dan's message visible and the UI
+warns that an action may have completed. The browser never receives agent
+credentials.
 
 **Conversation summary (P9-105).** Older chat messages are folded into an
 append-only, owner-bound summary so decisions survive the window.
