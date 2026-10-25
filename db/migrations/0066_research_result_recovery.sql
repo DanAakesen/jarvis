@@ -1,9 +1,7 @@
 ALTER TABLE dbo.background_jobs
   ADD result_folio_id nvarchar(80) COLLATE Latin1_General_100_BIN2 NULL,
-      result_delivery_status nvarchar(16) COLLATE Latin1_General_100_BIN2 NULL;
-
-ALTER TABLE dbo.background_jobs
-  ADD CONSTRAINT CK_background_jobs_research_result CHECK (
+  result_delivery_status nvarchar(16) COLLATE Latin1_General_100_BIN2 NULL,
+  CONSTRAINT CK_background_jobs_research_result CHECK (
     (result_folio_id IS NULL AND result_delivery_status IS NULL) OR
     (kind = N'research' AND status = N'done' AND
       LEN(result_folio_id) = 45 AND LEFT(result_folio_id, 9) = N'research:' AND
