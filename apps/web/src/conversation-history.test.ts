@@ -361,6 +361,46 @@ describe('loadConversationHistory', () => {
         expect(fetch).toHaveBeenCalledOnce();
       });
 
+      it('delivers the exact food invitation while the result is still pending, then clears it', async () => {
+        const user = { id: '61', sessionId: '41', role: 'dan', text: 'Estimate this portion.',
+          model: null, at: '2026-10-12T06:17:18.000Z' };
+        const assistant = { ...user, id: '62', role: 'jarvis', text: 'Committed.' };
+        const invitation = { id: 'a'.repeat(43), summary: 'Synthetic portion: 200 kcal. Estimated grams.',
+          expiresAt: '2026-10-12T06:19:18.000Z' };
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start(value) { controller = value; } });
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(body)));
+        const encoder = new TextEncoder();
+        const enqueue = (event: string, data: unknown) =>
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        const onInvitation = vi.fn();
+        let completed = false;
+        const turn = sendChatTurn(createClient() as never, config, { id: '41', language: 'en' },
+          user.text, vi.fn(), vi.fn(), undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, undefined, onInvitation).then(result => { completed = true; return result; });
+        enqueue('user', user);
+        enqueue('food_invitation', invitation);
+        await vi.waitFor(() => expect(onInvitation).toHaveBeenCalledExactlyOnceWith(invitation));
+        expect(completed).toBe(false);
+        enqueue('food_invitation', null);
+        enqueue('done', assistant);
+        controller.close();
+        expect(await turn).toEqual(assistant);
+        expect(onInvitation.mock.calls).toEqual([[invitation], [null]]);
+      });
+
+      it.each([
+        { id: 'invalid', summary: 'Estimate', expiresAt: '2026-10-12T06:19:18.000Z' },
+        { id: 'a'.repeat(43), summary: '', expiresAt: '2026-10-12T06:19:18.000Z' },
+        { id: 'a'.repeat(43), summary: 'Estimate', expiresAt: 'invalid' },
+      ])('rejects malformed food invitation data (%j)', async invitation => {
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(
+          `event: food_invitation\ndata: ${JSON.stringify(invitation)}\n\n`,
+        )));
+        await expect(sendChatTurn(createClient() as never, config, { id: '41', language: 'en' },
+          'Estimate', vi.fn(), vi.fn())).rejects.toThrow('invalid chat stream');
+      });
+
       it('shows the backend refusal and does not retry a failed turn', async () => {
         const client = createClient();
         const fetch = vi.fn(async () => new Response(

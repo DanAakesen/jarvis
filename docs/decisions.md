@@ -71,6 +71,43 @@ declared content length and actual streamed bytes; retain the 100-run validation
 and 10-second request timeout. Synthetic regression tests cover the reported
 size with and without a content-length header, acceptance at the cap, and
 rejection/cancellation above it. A lookup error is not a failed deployment.
+
+## Mobile browser food logging is not telephone-call logging (25 October 2026; #1290)
+
+Clarify food tool guidance and trusted runtime instructions, not permissions:
+mobile/desktop browser chat and browser voice are supported; actual telephone
+calls remain denied. Current runtime context overrides device wording and earlier
+refusals, without granting approval. Require the actual `log_estimate` tool call
+before inviting confirmation; a prose estimate or lookup creates no proposal.
+With no pending proposal, obtain a new confirmation after staging, never reuse
+historical affirmative text. Preserve the current shared one-time approval service
+on the merged #1282 `PendingAction` lifecycle.
+
+Review follow-up: the blocking tool cannot deliver its invitation after returning.
+Publish the exact persisted review through the existing authenticated Now feed
+and a session-bound, internal voice presentation event while it waits. Permit
+only that food invitation to speak during pending tool work; retain response,
+settings, speech and presence gating and discard obsolete queued presentations.
+This adds no second confirmation state or authority. #1259 acknowledgement
+delivery remains distinct from the estimate/invitation.
+
+Typed-chat review follow-up: an unopened Now popover is not a delivered chat
+invitation. Forward the same persisted proposal over the active conversation
+stream, bound to its session and source message, and render it in the existing
+live bubble before the tool returns. Use plain text and existing reply/steering
+controls; retain expiry, withdrawal and shared approval/duplicate guards.
+Synthetic HTTP and rendered-client checks verify delivery before a new reply.
+Scratch Chromium at 1440px and 390px verified the visible invitation and synthetic
+reply receipt without Now, overflow or browser errors; this is not live-provider
+or signed-in production acceptance.
+
+Synthetic HTTP and English/Danish WebSocket tests exercise discovery, staging,
+public review/invitation delivery, new natural replies and committed receipts
+with isolated in-memory storage. Voice fixtures forward synthetic transcript and
+audio frames to the browser socket before injecting the new owner reply.
+They do not establish live-provider, real-SQL or physical-device acceptance.
+The hosted tool catalogue has a 60-second TTL; no browser-cache cause was established.
+
 ## Natural food-estimate confirmation reuses one-time browser approval (25 October 2026; #1277)
 
 Only pending `log_estimate` reviews accept the owner's next later reply in the

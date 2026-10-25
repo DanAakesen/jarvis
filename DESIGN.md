@@ -246,6 +246,15 @@ the owner's next natural text/browser-voice reply can confirm the current
 estimate. No new control, layout or animation is introduced. Corrections and
 deletions retain the separate approval controls; expiry and cancellation remain
 visible through the existing feed.
+The exact Now review remains available while food logging waits for approval.
+Typed chat presents that same review as plain text in the live Jarvis bubble,
+followed by one ordinary sentence inviting a reply. Reveal the conversation and
+follow the invitation when it arrives; no separate popover action is required.
+Remove withdrawn, expired and finished live invitations. Reuse the existing
+bubble and composer, with no new heading, control, accent border or animation.
+In present-mode browser voice, announce the staged estimate and invite a new reply
+without waiting for the blocking tool to return. Initial acknowledgement is not
+the invitation; retain the same proposal and existing controls, with no new chrome.
 
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
