@@ -68,7 +68,7 @@ export class PendingAction {
   }
 
   cancel(): void {
-    if (this.pending) this.state = 'cancelled';
+    if (this.pending || this.state === 'consumed') this.state = 'cancelled';
   }
 
   /** Synchronous: no other reply, cancellation or expiry can slip between the check and consumption. */
@@ -80,7 +80,8 @@ export class PendingAction {
   }
 
   async execute<T>(action: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-    if (signal?.aborted || this.state !== 'consumed' || this.now() >= this.expiresAt) {
+    if (this.state === 'consumed' && this.now() >= this.expiresAt) this.state = 'expired';
+    if (signal?.aborted || this.state !== 'consumed') {
       throw new ToolRefusal(approvalNotPending);
     }
     this.state = 'executing';

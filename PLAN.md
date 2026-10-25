@@ -9,7 +9,10 @@ checks remain with their tools. Browser-only proposals remain browser-only.
 Focused synthetic text/voice and browser regressions pass; live owner/device
 acceptance remains unverified. The related food reply/timing, project
 clarification and acknowledgment PRs are still in flight and are not merged
-by this change. Next: complete security review and final diff verification.
+by this change. Backend build/lint, secret scanning and read-only review passed.
+JavaScript CodeQL analysis was skipped because the database exceeded its size
+limit; this is not a clean automated security result. Next: PR qualification
+and live owner/device acceptance.
 
 ## Research result recovery (#1237; 25 October 2026)
 

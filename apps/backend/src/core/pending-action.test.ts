@@ -83,13 +83,16 @@ describe('shared pending-action lifecycle', () => {
     expect(write).toHaveBeenCalledOnce();
   });
 
-  it.each(['expire', 'abort'] as const)('does not execute if %s occurs after consumption', async (event) => {
+  it.each(['expire', 'abort', 'cancel'] as const)('does not execute if %s occurs after consumption', async (event) => {
     const { action, advance } = fixture();
     const controller = new AbortController();
     const write = vi.fn();
     action.consume('approve');
     if (event === 'expire') advance(60_000);
-    else controller.abort();
+    else if (event === 'abort') controller.abort();
+    else action.cancel();
+    await expect(action.execute(write, controller.signal)).rejects.toThrow();
+    advance(-60_000);
     await expect(action.execute(write, controller.signal)).rejects.toThrow();
     expect(write).not.toHaveBeenCalled();
   });
