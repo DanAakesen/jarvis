@@ -1,4 +1,4 @@
-import { randomInt } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import { issueAttachmentFields, type IssueAttachmentInput } from '@jarvis/contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
@@ -30,9 +30,11 @@ import {
 } from './issues.js';
 import {
   JARVIS_REPOSITORY,
+  ProjectClarification,
   projectSelectorSchema,
   requiresProjectSelector,
   resolveProjectForMessage,
+  resolveProject,
   resolveRepository,
   revalidateProject,
 } from './project-context.js';
@@ -77,12 +79,23 @@ interface PendingIssueCreation {
   sourceSessionId: string;
   createdAt: number;
 }
+interface PendingProjectClarification {
+  candidates: readonly Pick<Project, 'id' | 'name' | 'repo'>[];
+  selector: string;
+  requestFingerprint: string;
+  sourceMessageId: string;
+  sourceSessionId: string;
+  createdAt: number;
+}
 const pendingProjectArchives = new WeakMap<FastifyInstance, Map<string, PendingProjectArchive>>();
 const pendingIssueCreations = new WeakMap<FastifyInstance, Map<string, PendingIssueCreation>>();
+const pendingProjectClarifications = new WeakMap<FastifyInstance, Map<string, PendingProjectClarification>>();
 const projectArchiveTtlMs = 10 * 60_000;
 const maxPendingProjectArchives = 50;
 const issueCreationTtlMs = 10 * 60_000;
 const maxPendingIssueCreations = 50;
+const projectClarificationTtlMs = 10 * 60_000;
+const maxPendingProjectClarifications = 50;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -209,6 +222,166 @@ function isLaterDanReply(
     Number.isFinite(message.at.getTime()) && message.at.getTime() > action.createdAt;
 }
 
+function normalizedProjectReference(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLocaleLowerCase('en-US');
+}
+
+function issueRequestFingerprint(input: Record<string, unknown>): string {
+  const request = Object.fromEntries(Object.entries(input)
+    .filter(([key]) => key !== 'project')
+    .sort(([left], [right]) => left.localeCompare(right)));
+  return createHash('sha256').update(JSON.stringify(request)).digest('hex');
+}
+
+function isClearProjectAffirmation(text: string): boolean {
+  return /^(?:yes|yes please|yeah|yep|ja|ja tak|gerne)[.!?]*$/iu.test(text.trim());
+}
+
+function selectorAppearsInMessage(selector: string, message: string): boolean {
+  const reference = normalizedProjectReference(selector);
+  const normalizedMessage = ` ${normalizedProjectReference(message)} `;
+  return Boolean(reference) && normalizedMessage.includes(` ${reference} `);
+}
+
+function isCandidateSelector(selector: string, candidate: Pick<Project, 'id' | 'name' | 'repo'>): boolean {
+  const value = normalizedProjectReference(selector);
+  return [candidate.id, candidate.name, candidate.repo]
+    .some((identity) => normalizedProjectReference(identity) === value);
+}
+
+function rememberProjectClarification(
+  server: FastifyInstance,
+  input: Record<string, unknown> & { project?: string },
+  source: ConversationMessage,
+  clarification: ProjectClarification,
+): void {
+  let pending = pendingProjectClarifications.get(server);
+  if (!pending) {
+    pending = new Map();
+    pendingProjectClarifications.set(server, pending);
+  }
+  const now = Date.now();
+  for (const [sessionId, action] of pending) {
+    if (action.createdAt <= now - projectClarificationTtlMs) pending.delete(sessionId);
+  }
+  if (pending.size >= maxPendingProjectClarifications && !pending.has(source.sessionId)) {
+    const oldest = [...pending.entries()].sort(([, left], [, right]) => left.createdAt - right.createdAt)[0];
+    if (oldest) pending.delete(oldest[0]);
+  }
+  pending.set(source.sessionId, {
+    candidates: clarification.candidates.map(({ id, name, repo }) => ({ id, name, repo })),
+    selector: input.project ?? '',
+    requestFingerprint: issueRequestFingerprint(input),
+    sourceMessageId: source.id,
+    sourceSessionId: source.sessionId,
+    createdAt: now,
+  });
+}
+
+async function resolveCreateIssueProject(
+  request: FastifyRequest,
+  input: Record<string, unknown> & { project?: string },
+  source: ConversationMessage,
+): Promise<Project | undefined> {
+  const pending = pendingProjectClarifications.get(request.server);
+  const action = pending?.get(source.sessionId);
+  if (action) {
+    function refuse(message: string): never {
+      pending?.delete(source.sessionId);
+      throw new ToolRefusal(message);
+    }
+    if (source.id === action.sourceMessageId) {
+      throw new ToolRefusal('I asked which project you mean; wait for a new reply before continuing. No changes were made.');
+    }
+    if (action.createdAt <= Date.now() - projectClarificationTtlMs ||
+        !isLaterDanReply(source, action) ||
+        issueRequestFingerprint(input) !== action.requestFingerprint) {
+      refuse('That project clarification is no longer valid for this request. Nothing was written; please restate the request.');
+    }
+    pending?.delete(source.sessionId);
+    const conversationStore = request.server.conversationStore;
+    let nextMessages;
+    try {
+      nextMessages = await conversationStore?.getDanMessagesAfter({
+        sessionId: action.sourceSessionId, after: action.sourceMessageId, limit: 2,
+      });
+    } catch {
+      refuse('I couldn’t verify the project clarification reply. Nothing was written; please restate the request.');
+    }
+    if (!nextMessages || nextMessages.length !== 1 || nextMessages[0]?.id !== source.id) {
+      refuse('I couldn’t bind that reply to the project question. Nothing was written; please restate the request.');
+    }
+
+    const affirmative = isClearProjectAffirmation(source.text);
+    let selected: Project | undefined;
+    if (affirmative) {
+      if (action.candidates.length !== 1) {
+        refuse('That could mean more than one project. Please name the project you mean; nothing was written.');
+      }
+      const candidate = action.candidates[0]!;
+      if (input.project && normalizedProjectReference(input.project) !== normalizedProjectReference(action.selector) &&
+          !isCandidateSelector(input.project, candidate)) {
+        refuse('That is a different project from the one I asked about. Nothing was written.');
+      }
+      try {
+        selected = await resolveProject(candidate.id, request.server.projectStore ?? null);
+      } catch (error) {
+        if (error instanceof ToolFailure) throw error;
+        refuse('The project is no longer available in the active registry. Nothing was written; select it again.');
+      }
+      if (selected.repo.toLocaleLowerCase('en-US') !== candidate.repo.toLocaleLowerCase('en-US')) {
+        refuse('The project repository changed after I asked. Nothing was written; select it again.');
+      }
+    } else {
+      const selector = input.project;
+      if (!selector || !selectorAppearsInMessage(selector, source.text)) {
+        refuse('Please answer yes to the project I named or clearly name one of the listed projects. Nothing was written.');
+      }
+      try {
+        selected = await resolveProjectForMessage(selector, source.text, request.server.projectStore ?? null);
+      } catch (error) {
+        if (error instanceof ToolFailure) throw error;
+        refuse('That reply did not clearly select the project I asked about. Nothing was written.');
+      }
+      const resolved = selected;
+      if (!resolved) {
+        pending?.delete(source.sessionId);
+        throw new ToolRefusal('That reply did not clearly select the project I asked about. Nothing was written.');
+      }
+      if (!action.candidates.some((candidate) => candidate.id === resolved.id &&
+          candidate.repo.toLocaleLowerCase('en-US') === resolved.repo.toLocaleLowerCase('en-US'))) {
+        refuse('That is a different project from the clarification. Nothing was written.');
+      }
+    }
+    const resolved = selected;
+    if (!resolved) {
+      pending?.delete(source.sessionId);
+      throw new ToolRefusal('The project clarification could not be verified. Nothing was written.');
+    }
+    const candidate = action.candidates.find(({ id }) => id === resolved.id);
+    if (!candidate) {
+      pending?.delete(source.sessionId);
+      throw new ToolRefusal('That project is no longer among the clarified choices. Nothing was written.');
+    }
+    pending?.delete(source.sessionId);
+    await revalidateProject(resolved.id, candidate.repo, request.server.projectStore ?? null);
+    return resolved;
+  }
+
+  if (!input.project) return undefined;
+  try {
+    return await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null);
+  } catch (error) {
+    if (error instanceof ProjectClarification) {
+      if (!requiresProjectSelector(source.text)) {
+        throw new ToolRefusal('Please identify the active project in your request. No changes were made.');
+      }
+      rememberProjectClarification(request.server, input, source, error);
+    }
+    throw error;
+  }
+}
+
 function issueApprovalSummary(action: PendingIssueCreation): string {
   const target = action.issueNumber === undefined
     ? `Create a GitHub issue in ${action.repository} titled "${action.title}".`
@@ -286,6 +459,7 @@ async function stageIssueCreation(
   input: { project?: string; repository?: string; title: string; body: string; executor?: IssueExecutor; issueNumber?: number } & IssueAttachmentInput,
   source: ConversationMessage,
   signal: AbortSignal,
+  resolvedProject?: Project,
 ) {
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
     throw new ToolRefusal('A verified Dan message is required to confirm this issue creation.');
@@ -293,10 +467,9 @@ async function stageIssueCreation(
   if (input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
     throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
   }
-  const selector = input.project ?? input.repository;
-  const selectedProject = selector
-    ? await resolveProjectForMessage(selector, source.text, server.projectStore ?? null)
-    : undefined;
+  const selectedProject = resolvedProject ?? (input.project
+    ? await resolveProjectForMessage(input.project, source.text, server.projectStore ?? null)
+    : undefined);
   const preview = input.issueNumber === undefined ? await previewP11TaskCode({
     ...(selectedProject ? { project: selectedProject.id } : {}),
     projects: server.projectStore,
@@ -570,15 +743,13 @@ export const factoryTools: readonly JarvisTool[] = [
     execute: async (input, request, signal) => {
       const draft = input as { project?: string; title: string; body: string; executor?: IssueExecutor } & IssueAttachmentInput;
       try {
+        const source = await currentDanMessage(request, 'issue creation');
+        if (draft.project === undefined && requiresProjectSelector(source.text)) {
+          throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
+        }
+        const selectedProject = await resolveCreateIssueProject(request, draft, source);
         validateIssueDraft(draft.title, draft.body);
         if (!draft.attachmentIds?.length && draft.publish !== 'public') {
-          const source = await currentDanMessage(request, 'issue creation');
-          if (draft.project === undefined && requiresProjectSelector(source.text)) {
-            throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
-          }
-          const selectedProject = draft.project === undefined
-            ? undefined
-            : await resolveProjectForMessage(draft.project, source.text, request.server.projectStore ?? null);
           const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
           const issuer = request.server.githubAppTokenIssuer;
           if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
@@ -612,7 +783,7 @@ export const factoryTools: readonly JarvisTool[] = [
             throw new ToolFailure('I couldn’t create the GitHub issue.');
           }
         }
-        return await stageIssueCreation(request.server, draft, await currentDanMessage(request, 'issue creation'), signal);
+        return await stageIssueCreation(request.server, draft, source, signal, selectedProject);
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolFailure('The GitHub issue draft could not be prepared.');
@@ -644,11 +815,10 @@ export const factoryTools: readonly JarvisTool[] = [
             throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
           }
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
-          const selector = input.project ?? input.repository;
-          const selectedProject = selector
-            ? await resolveProjectForMessage(selector, source.text, request.server.projectStore ?? null)
+          const selectedProject = input.project
+            ? await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null)
             : undefined;
-          const repository = selectedProject?.repo ??
+          const repository = selectedProject?.repo ?? input.repository ??
             await resolveRepository(undefined, request.server.projectStore ?? null);
           if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
             throw new ToolRefusal('That repository name is invalid.');

@@ -16,6 +16,10 @@
 - Keep `create_issue` as the code-change path and reuse existing approval and
   tool replay ownership. This change adds no confirmation, execution or replay
   loop of its own.
+- For a one-project clarification, accept only an immediate clear affirmation
+  bound to the same verified session and unchanged issue request; ambiguity,
+  intervening replies, changed targets and stale registrations fail closed.
+  Explicit raw-repository issue comments remain supported without registration.
 - **Verification:** synthetic resolver and canonical dispatch tests cover English
   and Danish requests, ambiguity, no-write refusals, permission denial and project
   archive/rename races at factory and GitHub App write boundaries. Provider,

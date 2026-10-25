@@ -6,6 +6,7 @@ import {
   projectAwarenessInstructions,
   requiresProjectSelector,
   resolveProject,
+  resolveProjectForMessage,
   revalidateProject,
 } from './project-context.js';
 
@@ -73,6 +74,15 @@ describe('active project resolution', () => {
     expect((await resolveProject('  SYNTHETIC/HELLO-WORLD  ', store)).id).toBe('31');
     expect((await resolveProject(' greeting runner ', store)).id).toBe('31');
     expect(store.list).toHaveBeenCalledTimes(3);
+  });
+
+  it('accepts a unique natural reference present in the request without repeating the registered name', async () => {
+    const project = registeredProject();
+    const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
+    const resolved = await resolveProjectForMessage(
+      'hello world project', 'Add a file to the hello world project.', store,
+    );
+    expect(resolved).toMatchObject({ id: project.id, repo: project.repo });
   });
 
   it('asks before using a weak description-only reference in English or Danish', async () => {

@@ -121,8 +121,17 @@ function fixture(registeredProjects: readonly Project[] = [project]) {
   let latestMessage: ConversationMessage = {
     id: '42', sessionId: 'session', role: 'dan', text: 'Start issue 8', model: null, at: new Date(),
   };
+  const conversationMessages = [latestMessage];
   const conversationStore = {
     getHistory: vi.fn(async () => ({ messages: [latestMessage], nextCursor: null })),
+    getDanMessagesAfter: vi.fn(async ({
+      sessionId, after, limit,
+    }: { sessionId: string; after: string; limit: number }) => conversationMessages
+      .filter((message) => message.role === 'dan' && message.sessionId === sessionId &&
+        BigInt(message.id) > BigInt(after))
+      .sort((left, right) => Number(BigInt(left.id) - BigInt(right.id)))
+      .slice(0, limit)
+      .map(({ id, text }) => ({ id, text, language: 'en' as const }))),
   } as unknown as ConversationStore;
   const githubAppTokenIssuer = {
     issueForRepositoryRead: vi.fn(async () => 'read-token'),
@@ -150,7 +159,12 @@ function fixture(registeredProjects: readonly Project[] = [project]) {
   return {
     app, projectStore, taskStore, taskController, record, githubIssueClient, githubAppTokenIssuer,
     attachment, conversationAttachments, workspaceCommands,
-    setLatestMessage: (message: ConversationMessage) => { latestMessage = message; },
+    setLatestMessage: (message: ConversationMessage) => {
+      latestMessage = message;
+      const existing = conversationMessages.findIndex(({ id }) => id === message.id);
+      if (existing === -1) conversationMessages.push(message);
+      else conversationMessages[existing] = message;
+    },
   };
 }
 
@@ -375,13 +389,15 @@ describe('Software Factory Jarvis tools', () => {
       language: 'English',
       message: 'Add a hello-world file to the test project and let me know when it’s ready',
       selector: 'the test project',
+      reply: 'yes',
     },
     {
       language: 'Danish',
       message: 'Tilføj en hello-world-fil til testprojektet, og sig til, når den er klar',
       selector: 'testprojektet',
+      reply: 'ja',
     },
-  ])('clarifies a weak natural $language reference before canonical tool dispatch writes', async ({ message, selector }) => {
+  ])('continues a weak natural $language project clarification after a clear yes', async ({ message, selector, reply }) => {
     const registered = {
       ...project,
       id: '31',
@@ -412,13 +428,13 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.taskStore.create).not.toHaveBeenCalled();
 
     test.setLatestMessage({
-      id: '43', sessionId: 'session', role: 'dan', text: 'Use Greeting Runner.',
-      model: null, at: new Date(),
+      id: '43', sessionId: 'session', role: 'dan', text: reply,
+      model: null, at: new Date(Date.now() + 10_000),
     });
     const selected = await test.app.inject({
       method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
       payload: {
-        project: 'Greeting Runner', title: 'Add hello-world file',
+        project: registered.id, title: 'Add hello-world file',
         body: 'Problem: the project needs a hello-world file.\nAcceptance: the file exists.',
       },
     });
@@ -426,6 +442,199 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
     expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(registered.repo);
     expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+  });
+
+  it('writes directly for a unique natural reference included in the original request', async () => {
+    const registered = {
+      ...project, id: '31', name: 'Greeting Runner', description: 'hello world project', repo: 'synthetic/hello-world',
+    };
+    const test = fixture([registered]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a hello-world file to the hello world project.', model: null, at: new Date(),
+    });
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'hello world project', title: 'Add hello-world file', body: 'Create the file.' },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { number: 9 } });
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(registered.repo);
+  });
+
+  it.each([
+    { reply: 'No.', selector: '31', title: 'Add hello-world file' },
+    { reply: 'Maybe the other one?', selector: '31', title: 'Add hello-world file' },
+    { reply: 'yes', selector: '32', title: 'Add hello-world file' },
+    { reply: 'yes', selector: '31', title: 'Create a different thing' },
+  ])('does not continue project clarification for $reply or changed request/target', async ({ reply, selector, title }) => {
+    const selected = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
+    const other = { ...project, id: '32', name: 'Another Runner', description: 'other project', repo: 'synthetic/other' };
+    const test = fixture([selected, other]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a hello-world file to the test project.', model: null, at: new Date(),
+    });
+    const first = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'the test project', title: 'Add hello-world file', body: 'Create the file.' },
+    });
+    expect(first.json().outcome).toBe('refused');
+
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: reply, model: null, at: new Date(Date.now() + 10_000),
+    });
+    const continuation = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { project: selector, title, body: 'Create the file.' },
+    });
+    expect(continuation.json().outcome).toBe('refused');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('does not treat yes as a selection when the clarification listed multiple projects', async () => {
+    const first = { ...project, id: '31', name: 'Test fixture', repo: 'synthetic/hello-world', description: 'test project' };
+    const second = { ...project, id: '32', name: 'Greeting fixture', repo: 'synthetic/greetings', description: 'another test project' };
+    const test = fixture([first, second]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan', text: 'Add a file to the test project.',
+      model: null, at: new Date(),
+    });
+    const firstCall = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'the test project', title: 'Add a file', body: 'Create the file.' },
+    });
+    expect(firstCall.json().result.refused).toContain('more than one project');
+
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: 'yes', model: null, at: new Date(Date.now() + 10_000),
+    });
+    const continuation = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { project: '31', title: 'Add a file', body: 'Create the file.' },
+    });
+    expect(continuation.json().outcome).toBe('refused');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects yes when another owner message intervened after the project question', async () => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
+    const test = fixture([registered]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a file to the test project.', model: null, at: new Date(),
+    });
+    await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'the test project', title: 'Add a file', body: 'Create the file.' },
+    });
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: 'Actually, never mind.',
+      model: null, at: new Date(Date.now() + 10_000),
+    });
+    test.setLatestMessage({
+      id: '44', sessionId: 'session', role: 'dan', text: 'yes',
+      model: null, at: new Date(Date.now() + 20_000),
+    });
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '44' },
+      payload: { project: '31', title: 'Add a file', body: 'Create the file.' },
+    });
+    expect(response.json().outcome).toBe('refused');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('revalidates the clarified project repository before writing', async () => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
+    const test = fixture([registered]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a file to the test project.', model: null, at: new Date(),
+    });
+    const payload = { project: 'the test project', title: 'Add a file', body: 'Create the file.' };
+    const clarification = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers, payload });
+    expect(clarification.json().outcome).toBe('refused');
+    vi.mocked(test.projectStore.list)
+      .mockResolvedValueOnce([registered])
+      .mockResolvedValueOnce([{ ...registered, repo: 'synthetic/renamed' }]);
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: 'yes',
+      model: null, at: new Date(Date.now() + 10_000),
+    });
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { ...payload, project: registered.id },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('consumes an affirmative clarification once when continuation calls race or replay', async () => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
+    const test = fixture([registered]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a file to the test project.', model: null, at: new Date(),
+    });
+    const payload = { project: 'the test project', title: 'Add a file', body: 'Create the file.' };
+    await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers, payload });
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: 'yes',
+      model: null, at: new Date(Date.now() + 10_000),
+    });
+    const continuation = { ...payload, project: registered.id };
+    const results = await Promise.all([1, 2].map(() => test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: continuation,
+    })));
+    expect(results.map(({ statusCode }) => statusCode)).toEqual([200, 200]);
+    expect(results.map(({ body }) => JSON.parse(body).outcome).sort()).toEqual(['ok', 'refused']);
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+  });
+
+  it('keeps explicit unregistered repository issue comments working', async () => {
+    const test = fixture([]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Comment on issue 8 in external-owner/external-repo.', model: null, at: new Date(),
+    });
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, repository: 'external-owner/external-repo', text: 'The fix is ready.' },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
+    expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(
+      'external-owner/external-repo', 8, 'The fix is ready.', expect.any(AbortSignal),
+    );
+    expect(test.projectStore.list).not.toHaveBeenCalled();
+
+    const withAttachment = fixture([]);
+    withAttachment.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Comment on issue 8 in external-owner/external-repo.', model: null, at: new Date(),
+    });
+    const staged = await withAttachment.app.inject({
+      method: 'POST', url: '/tools/issue_comment', headers,
+      payload: {
+        issueNumber: 8, repository: 'external-owner/external-repo',
+        text: 'The fix is ready.', attachmentIds: [withAttachment.attachment.id],
+      },
+    });
+    expect(staged.json().result.status).toBe('awaiting_confirmation');
+    const published = await confirm(withAttachment, staged.json().result);
+    expect(published.json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
+    expect(withAttachment.githubIssueClient.createComment).toHaveBeenCalledWith(
+      'external-owner/external-repo', 8, expect.stringContaining('The screen shows Error: retry failed.'),
+      expect.any(AbortSignal),
+    );
+    expect(withAttachment.projectStore.list).not.toHaveBeenCalled();
   });
 
   it.each([

@@ -75,6 +75,12 @@ function candidatesMessage(projects: readonly Project[]): string {
 
 export class ProjectNotFound extends ToolRefusal {}
 
+export class ProjectClarification extends ToolRefusal {
+  constructor(message: string, readonly candidates: readonly Project[]) {
+    super(message);
+  }
+}
+
 function projectNotFound(selector: string, projects: readonly Project[]): ProjectNotFound {
   if (projectIdPattern.test(selector)) {
     return new ProjectNotFound(
@@ -87,13 +93,14 @@ function projectNotFound(selector: string, projects: readonly Project[]): Projec
   );
 }
 
-function ambiguousProject(projects: readonly Project[]): ToolRefusal {
+function ambiguousProject(projects: readonly Project[]): ProjectClarification {
   if (projects.length === 1) {
     const project = projects[0]!;
-    return new ToolRefusal(`Do you mean project ${candidatesMessage([project])}? No changes were made.`);
+    return new ProjectClarification(`Do you mean project ${candidatesMessage([project])}? No changes were made.`, projects);
   }
-  return new ToolRefusal(
+  return new ProjectClarification(
     `That could mean more than one project: ${candidatesMessage(projects)}. Which one do you mean? No changes were made.`,
+    projects,
   );
 }
 
@@ -167,13 +174,16 @@ export async function resolveProjectForMessage(
 ): Promise<Project> {
   const project = await resolveProject(selector, projectStore);
   const messageName = ` ${normalizedName(message)} `;
-  const identified = [project.id, normalizedName(project.name), normalizedName(project.repo)]
-    .some((identity) => identity.length > 0 && messageName.includes(` ${identity} `));
+  const reference = normalizedName(selector);
+  const identified = reference.length > 0 && messageName.includes(` ${reference} `);
   const selfIntent = project.repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US') &&
     /\b(?:your (?:code|repo|repository|source|issues)|yourself|jarvis(?:['’]s)? (?:own )?(?:code|repo|repository|source)|(?:din|dit|dine) (?:kode|repo|repository|kilde|issues)|dig selv)\b/iu
       .test(message);
   if (!identified && !selfIntent) {
-    throw new ToolRefusal(`Do you mean project "${project.name}" (${project.repo})? Please name it in a new message before I write. No changes were made.`);
+    throw new ProjectClarification(
+      `Do you mean project "${project.name}" (${project.repo})? No changes were made.`,
+      [project],
+    );
   }
   return project;
 }
