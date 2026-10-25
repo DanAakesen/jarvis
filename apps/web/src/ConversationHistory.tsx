@@ -467,8 +467,9 @@ export function ConversationHistory({
     const text = value.trim() || (hasFiles ? 'Please look at the attached files.' : '');
     if (!text) return;
     camera?.recordActivity?.();
+    const screenRequest = isScreenRequest(text, screenShare?.sharing);
     const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
-      (isCameraRequest(text) && !isScreenRequest(text));
+      (isCameraRequest(text) && !screenRequest);
     if (cameraRequest && !camera?.sharing) {
       setTurnError('Turn on the camera in More before asking Jarvis to inspect a frame.');
       return;
@@ -486,7 +487,7 @@ export function ConversationHistory({
     const queued: QueuedMessage = { id: ++nextQueueId.current, text, language, ...(files.length ? { attachments: files } : {}) };
     const activeSession = turnSession.current;
     // Steering carries text only, so a message with files waits in the queue instead.
-    const visualRequest = cameraRequest || isScreenRequest(text) || (screenShare?.sharing && isSharedBrowserRequest(text));
+    const visualRequest = cameraRequest || screenRequest || (screenShare?.sharing && isSharedBrowserRequest(text));
     if (sending && !queueOnly && activeSession && files.length === 0 && !visualRequest) {
       setSteering(true);
       void steerChatTurn(tokenProvider, config, activeSession, text, language).then((message) => {
@@ -544,8 +545,9 @@ export function ConversationHistory({
     let visualForTurn: VisualTurnContext | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
+      const screenRequest = isScreenRequest(text, screenShare?.sharing);
       const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
-        (isCameraRequest(text) && !isScreenRequest(text));
+        (isCameraRequest(text) && !screenRequest);
       if (cameraRequest && !camera?.sharing) {
         throw new Error('Turn on the camera in More before asking Jarvis to inspect a frame.');
       }
@@ -563,7 +565,7 @@ export function ConversationHistory({
         } else {
           contextForTurn = (await waitForChatSetup(() => camera.inspect(activeSession.id, 'caller', controller.signal), controller.signal)).description;
         }
-      } else if ((isScreenRequest(text) || isSharedBrowserRequest(text)) && screenShare?.sharing) {
+      } else if ((screenRequest || isSharedBrowserRequest(text)) && screenShare?.sharing) {
         const context = await waitForChatSetup(() => screenShare.inspect(activeSession.id, 'caller', controller.signal), controller.signal);
         contextForTurn = sharedScreenContext(context.description, context.sharedWindowTitle);
         if (isSharedBrowserRequest(text)) {
