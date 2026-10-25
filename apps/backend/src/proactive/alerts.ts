@@ -5,7 +5,7 @@ import type { FindingsStoredContext } from './engine.js';
 import type { AlertClass, AlertLedgerStore } from './alert-ledger.js';
 import { dayKey, isQuietHour } from './time.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
-import { findingAllowed } from './policy.js';
+import { automaticProactiveWorkAllowed, findingAllowed, proactiveEvidenceSourcesAllowed } from './policy.js';
 
 const findingClass: Partial<Record<string, AlertClass>> = {
   deadline: 'deadline_24h',
@@ -80,8 +80,8 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         return;
       }
       const settings = await options.store.settings.read();
-      if (settings.paused) {
-        log('paused');
+      if (!automaticProactiveWorkAllowed(settings)) {
+        log(settings.paused ? 'paused' : 'no_sources');
         return;
       }
       if (context.signal.aborted) {
@@ -93,9 +93,12 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         log('quiet_hours');
         return;
       }
-      const candidates: AlertCandidate[] = context.findings.filter((finding) => findingAllowed(
-        settings, finding.category, finding.suggestionScope, finding.relatedCategories,
-      )).flatMap((finding) => {
+      const candidates: AlertCandidate[] = context.findings.filter((finding) => {
+        const evidenceRefs = finding.evidenceRefs ?? [];
+        const sources = context.facts.filter(({ ref }) => evidenceRefs.includes(ref)).map(({ source }) => source);
+        return findingAllowed(settings, finding.category, finding.suggestionScope, finding.relatedCategories) &&
+          proactiveEvidenceSourcesAllowed(settings, sources);
+      }).flatMap((finding) => {
         const alertClass = findingClass[finding.category];
         return finding.urgency === 'time_critical' && alertClass
           ? [{
@@ -147,34 +150,50 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         return;
       }
       const latestSettings = await options.store.settings.read();
-      if (context.signal.aborted || latestSettings.paused) return;
+      if (context.signal.aborted || !automaticProactiveWorkAllowed(latestSettings)) return;
       active = active.filter(({ candidate }) => {
         const finding = context.findings.find(({ itemId }) => itemId === candidate.itemId);
+        const sources = finding
+          ? context.facts.filter(({ ref }) => (finding.evidenceRefs ?? []).includes(ref)).map(({ source }) => source)
+          : [];
         return finding !== undefined && findingAllowed(
           latestSettings, finding.category, finding.suggestionScope, finding.relatedCategories,
-        );
+        ) && proactiveEvidenceSourcesAllowed(latestSettings, sources);
       });
       if (active.length === 0) return;
-      const mostUrgent = active[0]!.candidate;
       const details = await Promise.all(active.slice(0, 3).map(async ({ candidate }) => {
         try {
           const item = await options.store.items.get(candidate.itemId, false);
-          return item ? { title: item.title, dueAt: item.dueAt } : undefined;
+          return item ? { itemId: candidate.itemId, title: item.title, dueAt: item.dueAt } : undefined;
         } catch {
           return undefined;
         }
       }));
-      if (context.signal.aborted) {
-        log('aborted', active.length);
+      const finalSettings = await options.store.settings.read();
+      if (context.signal.aborted || !automaticProactiveWorkAllowed(finalSettings)) {
+        log(context.signal.aborted ? 'aborted' : finalSettings.paused ? 'paused' : 'no_sources', active.length);
         return;
       }
+      active = active.filter(({ candidate }) => {
+        const finding = context.findings.find(({ itemId }) => itemId === candidate.itemId);
+        const sources = finding
+          ? context.facts.filter(({ ref }) => (finding.evidenceRefs ?? []).includes(ref)).map(({ source }) => source)
+          : [];
+        return finding !== undefined && findingAllowed(
+          finalSettings, finding.category, finding.suggestionScope, finding.relatedCategories,
+        ) && proactiveEvidenceSourcesAllowed(finalSettings, sources);
+      });
+      if (active.length === 0) return;
+      const mostUrgent = active[0]!.candidate;
       const request: SystemPushRequest = {
         kind: 'alert',
         count: active.length,
         language: mostUrgent.language ?? 'en',
         itemId: mostUrgent.itemId,
         origin: 'proactive_alert',
-        details: details.filter((detail) => detail !== undefined),
+        details: details.filter((detail): detail is NonNullable<typeof detail> => detail !== undefined &&
+          active.some(({ candidate }) => candidate.itemId === detail.itemId))
+          .map(({ title, dueAt }) => ({ title, dueAt })),
       };
       const outcome = await options.send(request, context.signal);
       const classes = [...new Set(active.map(({ candidate }) => candidate.alertClass))].sort().join(',');

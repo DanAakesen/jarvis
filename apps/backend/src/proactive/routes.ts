@@ -3,6 +3,7 @@ import type {
   FastifyTypeProviderDefault,
 } from 'fastify';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import { approvalDeciderFor } from '../core/approval-interpreter.js';
 import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
 import { copenhagenDayStart, monthKey, nextSlotAfter, isQuietHour } from './time.js';
 import { itemFeedback, itemIdPattern as uuidPattern } from './feedback.js';
@@ -14,6 +15,11 @@ import {
   type ProactiveSettingsPatch,
   type ProactiveStore,
 } from './store.js';
+import {
+  explicitProactivePreferenceIntent, patchForProactivePreference, proactivePreferenceCandidates, proactivePreferenceHelp,
+  resolveProactivePreferenceIntent,
+  proactiveSettingsRevision, understoodProactivePreferences, ProactiveSettingsConflictError,
+} from './preferences.js';
 
 const statusLabels = sourceLabels;
 
@@ -38,13 +44,33 @@ function validUrl(value: unknown): value is string {
   } catch { return false; }
 }
 
-function parseSettingsPatch(value: unknown): ProactiveSettingsPatch | undefined {
+async function parseSettingsPatch(
+  value: unknown,
+  resolveInstruction: (text: string) => Promise<Awaited<ReturnType<typeof resolveProactivePreferenceIntent>>>,
+):
+  Promise<
+  | { patch: ProactiveSettingsPatch; expectedRevision?: string }
+  | { error: 'unsupported_preference' }
+  | undefined
+  > {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
   const body = value as Record<string, unknown>;
+  if (Object.hasOwn(body, 'instruction')) {
+    if (Object.keys(body).some((key) => key !== 'instruction' && key !== 'expectedRevision') ||
+        typeof body.instruction !== 'string' || body.instruction.length > 500 ||
+        typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(body.expectedRevision)) return undefined;
+    const intent = await resolveInstruction(body.instruction);
+    return intent
+      ? { patch: patchForProactivePreference(intent), expectedRevision: body.expectedRevision }
+      : { error: 'unsupported_preference' };
+  }
   if (Object.keys(body).some((key) =>
-    !['paused', 'monthlyBudgetDkk', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance'].includes(key))) {
+    !['paused', 'monthlyBudgetDkk', 'sources', 'categories', 'suggestionScope', 'newsFeeds', 'guidance',
+      'expectedRevision'].includes(key))) {
     return undefined;
   }
+  if (Object.hasOwn(body, 'expectedRevision') &&
+      (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(body.expectedRevision))) return undefined;
   const patch: ProactiveSettingsPatch = {};
   if (Object.hasOwn(body, 'paused')) {
     if (typeof body.paused !== 'boolean') return undefined;
@@ -99,7 +125,10 @@ function parseSettingsPatch(value: unknown): ProactiveSettingsPatch | undefined 
     if (typeof body.guidance !== 'string' || body.guidance.length > 1000) return undefined;
     patch.guidance = body.guidance;
   }
-  return patch;
+  return {
+    patch,
+    ...(typeof body.expectedRevision === 'string' ? { expectedRevision: body.expectedRevision } : {}),
+  };
 }
 
 function responseSettings(settings: Awaited<ReturnType<ProactiveStore['settings']['read']>>) {
@@ -111,6 +140,9 @@ function responseSettings(settings: Awaited<ReturnType<ProactiveStore['settings'
     suggestionScope: settings.suggestionScope,
     newsFeeds: settings.newsFeeds,
     guidance: settings.guidance,
+    revision: proactiveSettingsRevision(settings),
+    preferences: understoodProactivePreferences(settings),
+    capabilities: proactivePreferenceHelp,
   };
 }
 
@@ -251,9 +283,37 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
 
     app.patch('/proactive/settings', async (request, reply) => {
       if (!owner(request, reply)) return;
-      const patch = parseSettingsPatch(request.body);
-      if (!patch) return reply.code(400).send({ error: 'invalid_request' });
-      return responseSettings(await options.store.settings.patch(patch));
+      const controller = new AbortController();
+      const abortRequest = () => controller.abort();
+      const abortResponse = () => { if (!reply.raw.writableEnded) controller.abort(); };
+      request.raw.once('aborted', abortRequest);
+      reply.raw.once('close', abortResponse);
+      try {
+        const parsed = await parseSettingsPatch(request.body, async (text) => {
+          const explicit = explicitProactivePreferenceIntent(text);
+          const candidates = explicit ? [explicit] : proactivePreferenceCandidates(text);
+          return resolveProactivePreferenceIntent(
+            text,
+            candidates,
+            approvalDeciderFor(request),
+            { messageId: `settings:${request.id}` },
+            controller.signal,
+          );
+        });
+        if (controller.signal.aborted) return;
+        if (!parsed) return reply.code(400).send({ error: 'invalid_request' });
+        if ('error' in parsed) return reply.code(422).send({ error: parsed.error });
+        await options.store.settings.patch(parsed.patch, parsed.expectedRevision);
+        return responseSettings(await options.store.settings.read());
+      } catch (error) {
+        if (error instanceof ProactiveSettingsConflictError) {
+          return reply.code(409).send({ error: 'settings_changed' });
+        }
+        throw error;
+      } finally {
+        request.raw.off('aborted', abortRequest);
+        reply.raw.off('close', abortResponse);
+      }
     });
 
     app.get('/proactive/items', async (request, reply) => {

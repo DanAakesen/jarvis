@@ -18,7 +18,7 @@ import type { ProactiveStore } from './store.js';
 import type { ProactiveTodoReceiptStore, TodoReceiptInput, TodoReceiptSummary } from './todo-store.js';
 import { dayKey, isQuietHour } from './time.js';
 import { MAX_VAULT_FILE_BYTES } from './todo-file.js';
-import { classifySuggestionScope, findingAllowed } from './policy.js';
+import { classifySuggestionScope, findingAllowed, proactiveSourceAllowed } from './policy.js';
 
 type VaultWriter = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read' | 'write'>;
 type WriterLogger = {
@@ -142,7 +142,7 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
         log(context, 'paused', candidates.map(({ itemId }) => itemId), 0, startedAt);
         return;
       }
-      if (!settings.sources.todos) {
+      if (!proactiveSourceAllowed(settings, 'todos')) {
         log(context, 'todos_disabled', candidates.map(({ itemId }) => itemId), 0, startedAt);
         return;
       }
@@ -326,8 +326,10 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
             return;
           }
           const latestSettings = await options.store.settings.read();
-          if (context.signal.aborted) {
-            log(context, 'run_aborted', add.map(({ itemId }) => itemId), 0, startedAt);
+          if (context.signal.aborted || latestSettings.paused || !proactiveSourceAllowed(latestSettings, 'todos')) {
+            const reason = context.signal.aborted ? 'run_aborted'
+              : latestSettings.paused ? 'paused' : 'todos_disabled';
+            log(context, reason, add.map(({ itemId }) => itemId), 0, startedAt);
             return;
           }
           const allowedIds = new Set(candidates.filter((finding) => findingAllowed(

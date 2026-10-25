@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
+import { useJarvisActivity } from './activity-context';
 import type { AreaProps } from './areas';
 import { CollapsibleSection } from './CollapsibleSection';
 import { Loader } from './Loader';
@@ -161,6 +162,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
   const [announcement, setAnnouncement] = useState('');
   const now = injectedClock ?? Date.now;
   const location = useLocation();
+  const { latestActivity } = useJarvisActivity();
   const statusRequest = useRef<AbortController | null>(null);
   const itemsRequest = useRef<AbortController | null>(null);
   const runsRequest = useRef<AbortController | null>(null);
@@ -197,12 +199,12 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
     }
   }, [backendUrl, getAccessToken]);
 
-  const loadItems = useCallback(async (state: 'open' | 'all' = 'open') => {
+  const loadItems = useCallback(async (state: 'open' | 'all' = 'open', background = false) => {
     const controller = new AbortController();
     if (state === 'open') {
       itemsRequest.current?.abort();
       itemsRequest.current = controller;
-      setItems(pending());
+      if (!background) setItems(pending());
     }
     if (state === 'all') setEarlier(pending());
     try {
@@ -264,6 +266,33 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
       activePoll.current?.abort();
     };
   }, [loadItems, loadRuns, loadStatus]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.hidden) return;
+      void loadStatus(undefined, true);
+      void loadItems('open', true);
+    };
+    const timer = window.setInterval(refresh, 10_000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [loadItems, loadStatus]);
+
+  useEffect(() => {
+    if (latestActivity?.type !== 'tool-call-finished' || latestActivity.outcome !== 'ok' ||
+        !['chat', 'voice'].includes(latestActivity.source) || latestActivity.toolName !== 'proactive_preferences') return;
+    void Promise.resolve().then(() => {
+      void loadStatus(undefined, true);
+      void loadItems('open', true);
+    });
+  }, [latestActivity, loadItems, loadStatus]);
 
   useEffect(() => {
     if (!rowFocusPending.current) return;
@@ -477,7 +506,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
         {loadedStatus && <>
           <ul className="proactive-source-list">{loadedStatus.sources.map((source) =>
             <SourceRow key={source.id} source={source} now={now()} />)}</ul>
-          <Link to="/settings#proactive-settings">Manage sources in Settings</Link>
+          <p>Source choices are preserved; source controls are not available here.</p>
         </>}
       </section>
 
@@ -502,7 +531,7 @@ export function ProactiveArea({ backendUrl, getAccessToken, signIn, now: injecte
             aria-valuetext={`Estimated ${loadedStatus.budget.estimatedSpendDkk} of ${loadedStatus.budget.monthlyLimitDkk} DKK this month.`} />
           <p>Estimated {loadedStatus.budget.estimatedSpendDkk} of {loadedStatus.budget.monthlyLimitDkk} DKK this month.</p>
           {loadedStatus.budget.state === 'exhausted' && <p>Checks are paused until next month.</p>}
-          <Link to="/settings#proactive-settings">Change the budget in Settings</Link>
+          <p>The current monthly limit is shown here and cannot be changed from this page.</p>
         </div>}
       </section>
 

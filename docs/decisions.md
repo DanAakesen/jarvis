@@ -1,5 +1,42 @@
 # Decisions
 
+## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
+
+- Keep one immediate switch for automatic proactive suggestions and a compact
+  ordinary-language summary/editor in Settings; do not expose a category/source
+  matrix or build another dashboard.
+- Use one backend capability source for the UI examples, the chat/voice help
+  operation and the supported preference intent mapping. Reads and changes use
+  the owner-bound `ProactiveStore.settings`; only persisted, read-back values
+  may be confirmed. Unsupported or ambiguous wishes are not stored as enforceable
+  preferences.
+- Settings and chat/voice share the explicit-first preference resolver. For
+  non-canonical wording, only a single target among existing capabilities can be
+  proposed to the bounded preference interpreter; the interpreter must approve
+  the exact candidate change. This keeps natural phrasing flexible without
+  allowing source/budget edits, unsupported topics or multiple changes.
+- The production preference-interpreter prompt explicitly covers pause/resume
+  of automatic suggestions and keeps owner-requested reminders separate; source
+  management, ambiguity and bare agreement remain refusals.
+- Guard Settings writes with a revision of the full existing settings record.
+  Preserve budget, cadence, quiet hours, sources, feeds, guidance, authorization
+  and other advanced values when changing a preference; a stale write reports a
+  conflict and does not erase an unsaved UI draft.
+- Pause/source changes cancel in-flight automatic work and the effective pause
+  and source policy are rechecked before automatic task writes and push delivery.
+  Do not cancel or rewrite explicitly requested reminders. Per-item “Wrong” and
+  “Useful” feedback remains per-item feedback, not a lasting learning policy.
+- Refresh open Settings and Proactive views immediately after successful
+  chat/voice preference-tool completion, and retain focus/reconnect recovery.
+  Dirty Settings text is preserved and surfaced as a revision conflict rather
+  than silently overwritten. Do not add Health sources, arbitrary preference
+  learning, migrations or production setting changes.
+- **Verification:** synthetic backend/UI tests cover shared help/state, stale
+  writes, UI draft retention/reload, failure handling and pause/source
+  cancellation. Database integration, full aggregate checks, browser/device
+  behavior and live provider acceptance are reported separately; fixture success
+  is not deployment acceptance.
+
 ## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
 
 Accepted for the direct owner request in #1239:

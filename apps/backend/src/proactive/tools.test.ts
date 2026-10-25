@@ -256,6 +256,10 @@ describe('proactive_recent_items tool', () => {
 
   it.each([
     ['Stop travel suggestions', { operation: 'update', categories: { travel: false } }],
+    ['Pause proactive suggestions.', { operation: 'update', paused: true }],
+    ['Resume proactive suggestions.', { operation: 'update', paused: false }],
+    ['Sæt proaktive forslag på pause.', { operation: 'update', paused: true }],
+    ['Genoptag proaktive forslag.', { operation: 'update', paused: false }],
     ['Hold op med rejseforslag', { operation: 'update', categories: { travel: false } }],
     ['Enable travel suggestions', { operation: 'update', categories: { travel: true } }],
     ['Show only personal suggestions', { operation: 'update', suggestionScope: 'personal' }],
@@ -275,7 +279,8 @@ describe('proactive_recent_items tool', () => {
     });
     const settings = await store.settings.read();
     if ('categories' in input) expect(settings.categories.travel).toBe(input.categories.travel);
-    else expect(settings.suggestionScope).toBe('personal');
+    else if ('suggestionScope' in input) expect(settings.suggestionScope).toBe('personal');
+    else expect(settings.paused).toBe(input.paused);
   });
 
   it('refuses malformed values and unauthorized callers without writing', async () => {
@@ -350,6 +355,26 @@ describe('proactive_recent_items tool', () => {
     expect(settings.monthlyBudgetDkk).toBe(100);
   });
 
+  it('answers proactive capability help from the same source used by Settings', async () => {
+    const module = createProactiveToolsModule({
+      enabled: true, ownerObjectId: owner, store: createMemoryProactiveStore(owner),
+    })!;
+    const tool = module.tools.find(({ name }) => name === 'proactive_preferences')!;
+    const result = await tool.execute({ operation: 'help' }, {
+      principal: { objectId: owner }, agentPrincipal: null,
+    } as unknown as FastifyRequest, new AbortController().signal);
+    expect(result).toMatchObject({
+      operation: 'help',
+      capabilities: {
+        title: { en: 'What can I ask?', da: 'Hvad kan jeg bede om?' },
+        examples: expect.arrayContaining([
+          { en: 'Pause proactive suggestions.', da: 'Sæt proaktive forslag på pause.' },
+          { en: 'Stop travel suggestions.', da: 'Hold op med rejseforslag.' },
+        ]),
+      },
+    });
+  });
+
   it('does not claim success when the durable settings update fails', async () => {
     const store = createMemoryProactiveStore(owner);
     vi.spyOn(store.settings, 'patch').mockRejectedValue(new Error('synthetic private database detail'));
@@ -370,11 +395,20 @@ describe('proactive_recent_items tool', () => {
       ['Jeg vil ikke have rejseforslag længere', { category: 'travel', enabled: false }],
       ['Slå vejrforslag fra', { category: 'weather', enabled: false }],
       ['Jeg vil kun have personlige forslag', { suggestionScope: 'personal' }],
+      ['Jeg vil gerne have, at du kun foreslår private ting fremover.', { suggestionScope: 'personal' }],
+      ['I would like you to only suggest personal things going forward.', { suggestionScope: 'personal' }],
+      ['Det ville være rart at holde forslagene til det personlige fremover.', { suggestionScope: 'personal' }],
+      ['Could we put my proactive nudges on hold for a while?', { paused: true }],
+      ['I would rather not receive more travel alerts after all.', { category: 'travel', enabled: false }],
       ['Vil du være sød at holde op med at foreslå rejser?', { category: 'travel', enabled: false }],
       ['Rejseforslag vil jeg gerne have igen, tak.', { category: 'travel', enabled: true }],
       ['Kan du slå vejrforslagene til igen, tak?', { category: 'weather', enabled: true }],
       ['Kun arbejdsrelaterede forslag vil jeg gerne have.', { suggestionScope: 'work' }],
       ['Jeg vil gerne se alle proaktive forslag igen.', { suggestionScope: 'all' }],
+      ['Pause proactive suggestions.', { paused: true }],
+      ['Resume proactive suggestions.', { paused: false }],
+      ['Sæt proaktive forslag på pause.', { paused: true }],
+      ['Genoptag proaktive forslag.', { paused: false }],
       ["I don't want any more travel suggestions, please.", { category: 'travel', enabled: false }],
       ['Could you stop suggesting trips for me, please?', { category: 'travel', enabled: false }],
       ['Please bring back travel suggestions!', { category: 'travel', enabled: true }],
@@ -470,7 +504,11 @@ describe('proactive_recent_items tool', () => {
         expect(await dispatch(text, input)).toMatchObject({ outcome: 'ok', result: { saved: true } });
       }
       const settings = await store.settings.read();
-      expect(settings).toMatchObject({ paused: true, sources: { travel: false }, monthlyBudgetDkk: 42 });
+      expect(settings).toMatchObject({
+        paused: 'paused' in intent ? intent.paused : true,
+        sources: { travel: false },
+        monthlyBudgetDkk: 42,
+      });
       const read = await dispatch('What are my proactive preferences?', { operation: 'read' });
       expect(read).toMatchObject({ outcome: 'ok', result: {
         suggestionScope: settings.suggestionScope,
@@ -478,7 +516,30 @@ describe('proactive_recent_items tool', () => {
           ? [{ id: intent.category, enabled: intent.enabled }] : []),
       } });
       if ('suggestionScope' in intent) expect(settings.suggestionScope).toBe(intent.suggestionScope);
+      if ('paused' in intent) expect(settings.paused).toBe(intent.paused);
       expect(patch).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      ['Det ville være rart at holde forslagene til det personlige fremover.', { suggestionScope: 'personal' }],
+      ['Could we put my proactive nudges on hold for a while?', { paused: true }],
+      ['I would rather not receive more travel alerts after all.', { category: 'travel', enabled: false }],
+    ] as const)('uses semantic interpretation for an ordinary-language request: %s', async (text, intent) => {
+      const model: ApprovalModelPort = vi.fn(async (prompt) => {
+        const reply = /\nREPLY-([0-9a-f]{16}) \(Dan's own words\)\n([\s\S]*?)\nEND-REPLY-\1$/u.exec(prompt.user)?.[2];
+        const entry = requests.find(([candidate]) => reply === candidate);
+        const expected = entry?.[1];
+        const matches = expected && prompt.user.includes(`\n${JSON.stringify(expected)}\n`);
+        return JSON.stringify({ verdict: matches ? 'approve' : 'neither', confidence: 0.99 });
+      });
+      const { dispatch } = fixture(model);
+      const input = { operation: 'update', ...('category' in intent
+        ? { categories: { [intent.category]: intent.enabled } } : intent) };
+
+      await expect(dispatch(text, input)).resolves.toMatchObject({
+        outcome: 'ok', result: { saved: true },
+      });
+      expect(model).toHaveBeenCalled();
     });
 
     it.each([
@@ -577,6 +638,56 @@ describe('proactive_recent_items tool', () => {
       expect(await dispatch(requests[0][0], { operation: 'update', categories: { travel: false } }, controller.signal))
         .toMatchObject({ outcome: 'refused' });
       expect(patch).not.toHaveBeenCalled();
+    });
+
+    if (surface === 'voice') it('does not persist after cancellation during the settings read', async () => {
+      const f = fixture();
+      let enteredRead!: () => void;
+      let releaseRead!: () => void;
+      const reading = new Promise<void>((resolve) => { enteredRead = resolve; });
+      const gate = new Promise<void>((resolve) => { releaseRead = resolve; });
+      const read = vi.spyOn(f.store.settings, 'read').mockImplementation(async () => {
+        enteredRead();
+        await gate;
+        return createMemoryProactiveStore(owner).settings.read();
+      });
+      const controller = new AbortController();
+      const result = f.dispatch(
+        requests[0]![0],
+        { operation: 'update', categories: { travel: false } },
+        controller.signal,
+      );
+      await reading;
+      controller.abort();
+      releaseRead();
+      await expect(result).resolves.toMatchObject({ outcome: 'refused' });
+      expect(f.patch).not.toHaveBeenCalled();
+      read.mockRestore();
+    });
+
+    it('does not persist when the owner request is replaced during the settings read', async () => {
+      const f = fixture();
+      let enteredRead!: () => void;
+      let releaseRead!: () => void;
+      const reading = new Promise<void>((resolve) => { enteredRead = resolve; });
+      const gate = new Promise<void>((resolve) => { releaseRead = resolve; });
+      const read = vi.spyOn(f.store.settings, 'read').mockImplementation(async () => {
+        enteredRead();
+        await gate;
+        return createMemoryProactiveStore(owner).settings.read();
+      });
+      const controller = new AbortController();
+      const result = f.dispatch(
+        requests[0]![0],
+        { operation: 'update', categories: { travel: false } },
+        controller.signal,
+      );
+      await reading;
+      f.replaceMessage();
+      releaseRead();
+      await expect(result).resolves.toMatchObject({ outcome: 'refused' });
+      expect(f.patch).not.toHaveBeenCalled();
+      read.mockRestore();
     });
   });
 
