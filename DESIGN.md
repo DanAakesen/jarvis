@@ -1198,8 +1198,8 @@ sessions show their total voice minutes once beside the session's first message.
 
 The conversation keeps one message list, an inline DA/EN button group, and an
 accessibly labelled text composer. Sending saves Dan's message first, then streams Jarvis's
-reply in place. Pending state keeps the Send control disabled; failures remain
-beside the composer, preserve partial text as interrupted, and warn that a task
+reply in place. Pending state keeps the Send control disabled; failures appear
+in separate Jarvis-side bubbles, preserve partial text as interrupted, and warn that a task
 action may have completed. A delivered reply is saved and history refreshes so
 tool outcomes and valid task IDs appear as labelled chips and links. The list and
 composer stay in the single-column conversation at mobile widths;
