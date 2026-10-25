@@ -5,17 +5,19 @@
 - Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
   use Workspaces names; legacy Folio clients and data retain explicit
   compatibility aliases and reversible migration 0067.
-- Current-main reconciliation is in merge commit `3407e23`, based on
-  `5231117e`; it retains the Workspaces and shared-confirmation plan updates.
-- The latest focused backend checks (95 tests), backend lint/build, and web
-  timestamp style test (78 tests) pass. Actual-App Chromium inspection with
+- Current-main reconciliation is in merge commit `c0aed2f`, based on
+  `2e29a90b`; it retains the Workspaces and shared-confirmation plan updates.
+- Focused backend checks (207 tests), web checks (111 tests), and backend/web
+  lint and builds pass on the merged tree. Actual-App Chromium inspection with
   synthetic data confirmed the Workspaces pane and a long chat timestamp 8 px
   below its message at 390×844; at 1440×900 timestamps remain absolutely
-  positioned with no horizontal overflow.
+  positioned with no horizontal overflow. Latest main did not change chat history
+  styles.
 - The SQL Server integration command was attempted locally but cannot start
   without the isolated loopback database configuration. Exact-head CI
-  `40237999399` passed, including the SQL Server integration, backend/web
-  lint-test-build and remaining qualification jobs; CodeQL `40237999367` passed.
+  `40239192479` passed all 13 jobs, including SQL Server integration and
+  backend/web lint-test-build; all four CodeQL analyses passed in
+  `40239192419`.
 
 ## Shared confirmation lifecycle (#1281; 25 October 2026)
 
@@ -34,13 +36,14 @@ Coordination review inspected #1278 `a09dfc1`, #1264 `fa3de91` (including
 owner-interactions API on the shared lifecycle; no stream deadline or playback
 gate changes belong here. The overlapping Factory merge must retain
 clarification-specific provenance and target revalidation separately from
-action approval. Combined-head qualification is now pending this reconciliation.
+action approval. Combined-head qualification passed on `c0aed2f`: exact-head CI
+`40239192479` and all four CodeQL analyses in `40239192419` succeeded.
 Food API reconciliation passed 622 targeted tests (one skipped), backend build,
 scoped lint and read-only review. It preserves the immediate-reply and
 same-millisecond food timestamp behavior without changing other action families.
-JavaScript CodeQL analysis was skipped because the database exceeded its size
-limit; this is not a clean automated security result. Next: PR qualification
-and live owner/device acceptance.
+Local JavaScript CodeQL analysis was skipped because the database exceeded its
+size limit; the exact-head GitHub CodeQL run passed all four analyses. Next: live
+owner/device acceptance.
 
 ## Natural food-estimate confirmation (#1277)
 
