@@ -1721,14 +1721,14 @@ The Folio is where everything Jarvis has pulled up lives afterwards. It replaces
 Attachments reuse the composer glass. **Attach file or photo** is the first
 item after Language in the More menu; paste and drop work without it, and a
 drop shows a focus-coloured rim and "Drop files to attach them". Pending files are
-chips under the message row. Photos use a compact 44px preview and 44px Remove
-control; filenames remain in the accessible Remove label, and uploading photos
-retain a thin progress bar. Other files show their name and type · size. Unreadable
-and failed uploads keep their explanatory text. Sent files appear as compact glass
-buttons on the message and open on demand; an expired file is disabled with an
-explanation. A publication confirmation adds the image and a warm warning surface
-stating that the repository is public. Text, not colour alone, conveys every
-state; no new animation is introduced.
+inside the composer above the text input. Photos use a compact 44px-high pill with
+a 30px preview and Remove control; uploading photos retain a thin progress bar.
+Other files show their name and type · size. Unreadable and failed uploads keep
+their explanatory text. Sent images show a compact preview in the message and open
+on demand; other sent files remain compact glass buttons. An expired file is
+disabled with an explanation. A publication confirmation adds the image and a
+warm warning surface stating that the repository is public. Text, not colour alone,
+conveys every state; no new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 

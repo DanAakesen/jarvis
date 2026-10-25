@@ -613,6 +613,7 @@
 
 .conversation-history .composer > textarea, .conversation-history .composer > .composer-prompt { grid-row: 1; grid-column: 1; }
 .conversation-history .composer > .composer-more, .conversation-history .composer > .composer-send { grid-row: 1; }
+.conversation-history .composer:has(.composer-attachments > .attachment-chips, .composer-attachments > .attachment-hint, .composer-attachments > .chat-error) > :is(textarea, .composer-prompt, .composer-more, .composer-send) { grid-row: 2; }
 .conversation-history .composer textarea::placeholder { color: transparent; }
 .composer-prompt { align-self: center; min-width: 0; padding: 0 var(--space-1); overflow: hidden; color: var(--text-muted); font-size: var(--type-body); line-height: var(--line-body);
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity var(--motion-state) var(--ease-standard); }
