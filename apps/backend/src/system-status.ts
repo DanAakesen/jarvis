@@ -89,6 +89,7 @@ export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'error_permissiondeniederror',
   'error_badrequesterror',
   'error_internalservererror',
+  'tool_loop_stalled',
 ]);
 // Assigned by the backend itself while calling or reading the hosted agent; never copied from a payload.
 export const chatAgentInvocationReasons: ReadonlySet<string> = new Set([

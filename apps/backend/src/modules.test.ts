@@ -57,6 +57,7 @@ describe('backend module composition', () => {
     const tool: JarvisTool = {
       name: 'extension_echo', description: 'Echo a validated test input',
       inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+      execution: { defaultEffect: 'action' },
       execute,
     };
     const app = buildApp(config, undefined, {
@@ -69,9 +70,16 @@ describe('backend module composition', () => {
     const listed = await app.inject({ url: '/tools', headers });
     expect(listed.statusCode).toBe(200);
     expect(listed.json()).toEqual([
-      ...coreModule.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-      ...factoryModule.tools.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-      { name: tool.name, description: tool.description, inputSchema: tool.inputSchema },
+      ...coreModule.tools.map(({ name, description, inputSchema, execution }) => ({
+        name, description, inputSchema, ...(execution ? { execution } : {}),
+      })),
+      ...factoryModule.tools.map(({ name, description, inputSchema, execution }) => ({
+        name, description, inputSchema, ...(execution ? { execution } : {}),
+      })),
+      {
+        name: tool.name, description: tool.description, inputSchema: tool.inputSchema,
+        execution: tool.execution,
+      },
     ]);
 
     const called = await app.inject({

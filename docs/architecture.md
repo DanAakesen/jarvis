@@ -340,9 +340,14 @@ both stage and receipt. No SQL migration, replica or permission change is added.
 The hosted adapter consolidates multiple proposed single-create calls before
 dispatch when the batch tool exists. For an explicit multiple-event request,
 it locally refuses an isolated single-create call before staging and bounds
-continuation to the complete batch. Failed/incomplete continuation therefore
-cannot leave a hidden first-event proposal. Approval recovery compares the latest
-request's canonical server-verified message ID with the existing staged
+continuation to the complete batch. Before coalescing, it checks each event's
+same-message uncertain action identity; any uncertain member prevents another
+batch dispatch and preserves that event's original outcome. Failed/incomplete
+continuation therefore cannot leave a hidden first-event proposal. An uncertain
+batch error continues through model synthesis with an explicit no-success
+instruction; if the provider retries the same events with new call IDs, the
+cached outcomes reach synthesis without another dispatch. Approval recovery
+compares the latest request's canonical server-verified message ID with the existing staged
 `sourceMessageId`, exposed only by trusted pending/receipt results. Optional
 `ModelMessage.source_message_id` retains that identity through verified history,
 the current request, steering and caption fallback, but is not serialized into
@@ -4231,9 +4236,40 @@ latest prior Jarvis message was included, and total context characters, without
 message text. The current task/status reference JSON precedes conversation
 history in the model input so the latest exchange remains next to the new user
 message. The existing Responses tool loop records calls against Dan's message ID
-using the agent identity. The backend persists only a completed assistant
-response; an interrupted turn leaves Dan's message visible and the UI warns that
-an action may have completed. The browser never receives agent credentials.
+using the agent identity. Ordinary chat and voice continue tool rounds until the
+provider returns a final response; they have no fixed round-count cutoff. Per-call
+output limits, provider context limits, downstream tool outcomes and caller
+cancellation remains effective. Within one source message, an exact repeated
+side-effecting tool call reuses its original result rather than replaying the
+action. If an action returns an uncertain error, a new provider call ID for the
+same canonical tool input in that same source message reuses the uncertain result
+instead of dispatching a second write; a later source message starts a new action
+scope. An uncertain combined calendar batch also continues into model synthesis;
+the original error is retained for same-event retries and no success is inferred.
+Recognized read-only tools execute afresh, including repeated status reads
+and read-after-write verification. A replayed action permits a tool-free
+final-synthesis attempt only when the round contains no other fresh work; another
+tool request then fails with the content-free `tool_loop_stalled` code.
+The backend persists only a completed assistant response; an interrupted turn
+leaves Dan's message visible and the UI warns that an action may have completed.
+If the provider returns an incomplete response after tools ran, the turn still
+fails rather than synthesizing a partial reply; completed or uncertain action
+outcomes are not recovered into that reply. The provider-incomplete regression
+verifies no blind tool replay, not partial-result recovery. The browser never
+receives agent credentials.
+
+Shared execution-effect metadata is owned by `JarvisTool.execution` in
+`apps/backend/src/core/tool-registry.ts`, returned by `GET /tools`, and parsed as
+`BackendTool.execution` in `agents/jarvis/jarvis_tools.py`. Voice adapters use
+the same registered-tool contract through `ToolRegistry`; #1188/#1261 should
+consume this field rather than maintain a second classification list. Metadata
+has an optional default effect (`read`, `action` or `unclassified`) and optional
+operation-field effect map. It describes replay handling only and never grants
+execution permission. Reads always execute fresh. Actions and unclassified calls
+reuse a result only for the same provider-issued call ID and stored source
+message; equal arguments with different call IDs are distinct invocations.
+Backend authorization, validation, confirmation and owner isolation remain the
+execution boundary.
 
 **Conversation summary (P9-105).** Older chat messages are folded into an
 append-only, owner-bound summary so decisions survive the window.

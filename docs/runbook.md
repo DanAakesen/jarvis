@@ -223,7 +223,8 @@ configured). Backend-side failures report `agent_auth_unavailable`,
 `agent_request_failed`, `agent_http_<status>` (`agent_http_other` for an unlisted
 status), `agent_response_invalid`, `agent_stream_failed` or `agent_stream_ended`;
 a hosted error event without a safe code is `agent_error_code_missing` and one
-with an unlisted code is `agent_error_code_unlisted`. A conversation check that
+with an unlisted code is `agent_error_code_unlisted`; `tool_loop_stalled` is a
+fixed safe agent failure reason. A conversation check that
 threw one of these runs once more before its result is final, so a passing
 artifact may hide a rescued first failure; `system.smoke_check` records only the
 final result. Assertion failures and timeouts are not retried.
