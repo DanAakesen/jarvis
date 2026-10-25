@@ -547,7 +547,7 @@ export function ConversationHistory({
       const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
         (isCameraRequest(text) && !isScreenRequest(text));
       if (cameraRequest && !camera?.sharing) {
-        throw new Error('Turn on the camera in More before asking Jarvis to inspect a frame.');
+        throw new Error('Enable video in More before asking Jarvis to inspect a frame.');
       }
       const activeSession = session?.language === language
         ? session
@@ -726,7 +726,7 @@ export function ConversationHistory({
     }] : []),
     ...(camera ? [{
       id: 'share-camera',
-      label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Turn camera on',
+      label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Enable video',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
       disabled: camera.starting,
@@ -755,6 +755,29 @@ export function ConversationHistory({
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
   }, ...captureActions];
+  const attachmentFailures = [
+    ...attachments.problems,
+    ...attachments.items
+      .filter((item) => item.status === 'failed')
+      .map((item) => `${item.name}: ${item.error ?? 'The upload failed.'}`),
+  ];
+  const uploadingCount = attachments.items.filter((item) => item.status === 'uploading').length;
+  const readyItems = attachments.items.filter((item) => item.status === 'ready');
+  const attachmentProgress = [
+    ...(uploadingCount ? [`${uploadingCount} ${uploadingCount === 1 ? 'file' : 'files'} uploading`] : []),
+    ...(readyItems.length ? [`${readyItems.length} ${readyItems.length === 1 ? 'file' : 'files'} ready`] : []),
+  ];
+  const unreadableFiles = readyItems.filter((item) => item.unreadable);
+  const attachmentStatusMessage = [
+    ...attachmentFailures,
+    ...(attachmentProgress.length ? [`${attachmentProgress.join(' and ')} for your next typed message.`] : []),
+    ...(unreadableFiles.length
+      ? [`Jarvis couldn’t read ${unreadableFiles.map((item) => item.name).join(', ')}; the file can still be attached.`]
+      : []),
+  ].join(' ');
+  const voiceAttachmentStatus = voiceActive && attachmentStatusMessage
+    ? { message: attachmentStatusMessage, error: attachmentFailures.length > 0 }
+    : undefined;
 
   const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
   const fileDragHandlers = voiceActive ? {} : {
@@ -974,6 +997,8 @@ export function ConversationHistory({
         config={config}
         {...(screenShare ? { screenShare } : {})}
         {...(camera ? { camera } : {})}
+        {...(attachActions[0] ? { attachmentAction: attachActions[0] } : {})}
+        {...(voiceAttachmentStatus ? { attachmentStatus: voiceAttachmentStatus } : {})}
         language={language}
         onLanguageChange={setLanguage}
         onActiveChange={updateVoiceActive}
@@ -1022,7 +1047,8 @@ export function ConversationHistory({
         />
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
-        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
+        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage}
+          leadingActions={attachActions} align="end" />
         <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
           aria-label="Send" title={uploadingFiles ? 'Waiting for uploads to finish' : 'Send message'}>
           {/* A new key per message restarts the one-off take-off animation, even when sends follow each other quickly. */}
@@ -1030,12 +1056,6 @@ export function ConversationHistory({
             <ConversationIcon name="send" />
           </span>
         </button>
-        <input ref={fileInput} className="visually-hidden" type="file" multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
-          aria-label="Attach files" data-testid="attachment-input"
-          onChange={(event) => {
-            addFiles(Array.from(event.target.files ?? []));
-            event.target.value = '';
-          }} />
         <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove} />
         {fileDrag && <p className="composer-drop-hint" aria-hidden="true">Drop files to attach them</p>}
         <p id="chat-guidance" className="visually-hidden">
@@ -1051,6 +1071,12 @@ export function ConversationHistory({
         {(screenShare?.inspecting || camera?.inspecting) &&
           <p className="composer-status" role="status">{camera?.inspecting ? 'Looking at camera…' : 'Looking at screen…'}</p>}
       </form>
+      <input ref={fileInput} className="visually-hidden" type="file" multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
+        aria-label="Attach files" data-testid="attachment-input"
+        onChange={(event) => {
+          addFiles(Array.from(event.target.files ?? []));
+          event.target.value = '';
+        }} />
       </div>
       </div>
       {historyError && messages.length > 0 && (

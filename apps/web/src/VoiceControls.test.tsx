@@ -1,5 +1,5 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -191,6 +191,24 @@ describe('VoiceControls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     view.rerender(<VoiceControls {...props} camera={camera} />);
     expect(instance.client.setCameraState).toHaveBeenLastCalledWith(false);
+  });
+
+  it('puts the attachment action first and enables video with consistent wording', () => {
+    const onSelect = vi.fn();
+    const camera = { sharing: false, conversation: false, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn() };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera}
+      attachmentAction={{ id: 'attach-file', label: 'Attach file or photo', icon: <span aria-hidden="true">+</span>, onSelect }}
+      attachmentStatus={{ message: '1 file ready for your next typed message.', error: false }} />);
+    startVoice().listen();
+    expect(screen.getByText('1 file ready for your next typed message.')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
+    expect(items[0]?.textContent).toContain('Attach file or photo');
+    expect(items[1]?.textContent).toContain('Language');
+    expect(screen.getByRole('menuitem', { name: 'Enable video' })).not.toBeNull();
+    fireEvent.click(items[0]!);
+    expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it.each(['budget_exhausted', 'budget_unavailable'] as const)('shows only the current camera item %s without echoing a relay event', async code => {
@@ -471,10 +489,10 @@ describe('VoiceControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Language', 'Mute microphone', 'Look at screen', 'Watch the screen', 'Stop sharing screen', 'Turn on camera',
+      'Language', 'Mute microphone', 'Look at screen', 'Watch the screen', 'Stop sharing screen', 'Enable video',
     ]);
     expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBeNull();
-    const cameraItem = screen.getByRole('menuitem', { name: 'Turn on camera' });
+    const cameraItem = screen.getByRole('menuitem', { name: 'Enable video' });
     expect(cameraItem.getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Look at screen' }));
     expect(screen.queryByRole('menu')).toBeNull();
@@ -496,7 +514,7 @@ describe('VoiceControls', () => {
     expect(screenShare.start).toHaveBeenCalledOnce();
     expect(screenShare.inspect).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enable video' }));
     expect(camera.start).toHaveBeenCalledOnce();
     expect(camera.inspect).not.toHaveBeenCalled();
     rerender(<VoiceControls {...props} screenShare={{ ...screenShare, sharing: true }} camera={{ ...camera, sharing: true }} />);
@@ -516,7 +534,7 @@ describe('VoiceControls', () => {
     const { container } = render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
     startVoice().listen();
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enable video' }));
     const toast = screen.getByRole('alert').closest('.conversation-toast');
     expect(toast?.parentElement?.id).toBe('jarvis-toast-stack');
     expect(container.contains(toast)).toBe(false);

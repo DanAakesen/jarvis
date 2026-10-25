@@ -1,5 +1,17 @@
 # Decisions
 
+## Compact camera preview and attachment menu order (#1265; 25 October 2026)
+
+Keep the existing Camera preview workspace lifecycle, but make the live video
+the compact surface, use its existing refracted glass rim, and overlay the
+camera-switch and close controls. Retain touch-only switching and the established
+preview recovery behavior. Use **Enable video** consistently for the camera-on
+action. Put **Attach file or photo** before Language in both typing and active
+voice More menus, reusing the existing validated upload/picker flow; do not add a
+separate Take picture or food-logging path. Keep upload progress and errors
+visible while active voice hides the typing composer. This does not change camera
+capture, permissions, or image-input behavior.
+
 ## Research completion is independent of Workspace delivery (25 October 2026; #1237)
 
 After a validated research artifact, its owner-scoped Folio entry, and the
