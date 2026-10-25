@@ -7,7 +7,15 @@ import { PendingAction } from '../core/pending-action.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
-import { JARVIS_REPOSITORY, resolveRepository } from './project-context.js';
+import {
+  JARVIS_REPOSITORY,
+  ProjectNotFound,
+  projectSelectorSchema,
+  requiresProjectSelector,
+  resolveProjectForMessage,
+  resolveRepository,
+  revalidateProject,
+} from './project-context.js';
 
 const githubApi = 'https://api.github.com';
 const responseLimit = 1024 * 1024;
@@ -479,7 +487,7 @@ function rootSchema(properties: Record<string, unknown>, required: string[] = []
 
 const repoProperties = {
   repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
-  project: { type: 'string', minLength: 1, maxLength: 140 },
+  project: { ...projectSelectorSchema },
 };
 const issueNumber = { type: 'integer', minimum: 1, maximum: 2_147_483_647 };
 const pagingProperties = {
@@ -594,9 +602,41 @@ async function runOperation(
   request: FastifyRequest,
   signal: AbortSignal,
 ): Promise<unknown> {
-  const repository = await resolveToolRepository(input, request);
-  return withGitHubAccess(request, repository, permission, (token) =>
-    handler(input, repository, request, signal, token));
+  const writes = permission.access === 'write' || (permission.also ?? []).some(({ access }) => access === 'write');
+  const selector = typeof input.project === 'string'
+    ? input.project
+    : undefined;
+  const source = writes && (selector !== undefined || typeof input.repository === 'string') &&
+      (request.jarvisConversationMessage || request.agentPrincipal)
+    ? await danMessage(request)
+    : undefined;
+  if (writes && input.repository === undefined && input.project === undefined &&
+      (request.jarvisConversationMessage || request.agentPrincipal)) {
+    if (requiresProjectSelector(source?.text ?? (await danMessage(request)).text)) {
+      throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
+    }
+  }
+  let selectedProject: Awaited<ReturnType<typeof resolveProjectForMessage>> | undefined;
+  if (writes && selector !== undefined) {
+    selectedProject = await resolveProjectForMessage(selector, source?.text ?? '', request.server.projectStore ?? null);
+  } else if (writes && typeof input.repository === 'string' && request.server.projectStore) {
+    try {
+      selectedProject = await resolveProjectForMessage(input.repository, source?.text ?? '', request.server.projectStore);
+    } catch (error) {
+      if (!(error instanceof ProjectNotFound) || requiresProjectSelector(source?.text ?? '')) throw error;
+    }
+  }
+  if (writes && typeof input.repository === 'string' && !selectedProject &&
+      requiresProjectSelector(source?.text ?? '')) {
+    throw new ToolRefusal('Which active project do you mean? I will not write to an unselected repository. No changes were made.');
+  }
+  const repository = selectedProject?.repo ?? await resolveToolRepository(input, request);
+  return withGitHubAccess(request, repository, permission, async (token) => {
+    if (selectedProject) {
+      await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
+    }
+    return handler(input, repository, request, signal, token);
+  });
 }
 
 function makeOperationTool(
