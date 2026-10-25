@@ -10,28 +10,28 @@ CREATE SYNONYM dbo.folio_items FOR dbo.workspace_items;
 ALTER TABLE dbo.background_jobs
   ADD result_workspace_item_id nvarchar(80) COLLATE Latin1_General_100_BIN2 NULL;
 
-UPDATE dbo.background_jobs
+EXEC(N'UPDATE dbo.background_jobs
   SET result_workspace_item_id = result_folio_id
-  WHERE result_folio_id IS NOT NULL;
+  WHERE result_folio_id IS NOT NULL;');
 
 ALTER TABLE dbo.background_jobs
   DROP CONSTRAINT CK_background_jobs_research_result;
 
-ALTER TABLE dbo.background_jobs
+EXEC(N'ALTER TABLE dbo.background_jobs
   ADD CONSTRAINT CK_background_jobs_workspace_result CHECK (
     (result_workspace_item_id IS NULL AND result_folio_id IS NULL AND result_delivery_status IS NULL) OR
-    (kind = N'research' AND status = N'done' AND
+    (kind = N''research'' AND status = N''done'' AND
       COALESCE(result_workspace_item_id, result_folio_id) IS NOT NULL AND
       (result_workspace_item_id IS NULL OR
-        (LEN(result_workspace_item_id) = 45 AND LEFT(result_workspace_item_id, 9) = N'research:' AND
+        (LEN(result_workspace_item_id) = 45 AND LEFT(result_workspace_item_id, 9) = N''research:'' AND
          TRY_CONVERT(uniqueidentifier, SUBSTRING(result_workspace_item_id, 10, 36)) IS NOT NULL AND
          result_workspace_item_id = LOWER(result_workspace_item_id))) AND
       (result_folio_id IS NULL OR
-        (LEN(result_folio_id) = 45 AND LEFT(result_folio_id, 9) = N'research:' AND
+        (LEN(result_folio_id) = 45 AND LEFT(result_folio_id, 9) = N''research:'' AND
          TRY_CONVERT(uniqueidentifier, SUBSTRING(result_folio_id, 10, 36)) IS NOT NULL AND
          result_folio_id = LOWER(result_folio_id))) AND
-      result_delivery_status IN (N'pending', N'unknown', N'failed', N'delivered'))
-  );
+      result_delivery_status IN (N''pending'', N''unknown'', N''failed'', N''delivered''))
+  );');
 
 EXEC(N'CREATE TRIGGER dbo.TR_background_jobs_workspace_result_compat
 ON dbo.background_jobs

@@ -420,6 +420,8 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('result_workspace_item_id');
     expect(migration?.sql).toContain('TR_background_jobs_workspace_result_compat');
     expect(migration?.sql).toContain('SET result_workspace_item_id = result_folio_id');
+    expect(migration?.sql).toContain("EXEC(N'UPDATE dbo.background_jobs");
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.background_jobs");
     expect(migration?.sql).not.toMatch(/\b(?:DELETE|TRUNCATE)\b/iu);
     const down = await readDownMigration('0067_workspaces_identifiers.sql');
     expect(down.sql).toContain('DROP SYNONYM dbo.folio_items');

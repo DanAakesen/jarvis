@@ -17,6 +17,7 @@ const owner = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 const migrationName = '0053_background_job_dismissals.sql';
 const recoveryMigration = '0066_research_result_recovery.sql';
+const workspaceMigration = '0067_workspaces_identifiers.sql';
 const store = createBackgroundJobStore(pool);
 let migrations: Migration[];
 let jobs: BackgroundJob[];
@@ -26,7 +27,7 @@ beforeAll(async () => {
   await admin.request().batch(`CREATE DATABASE [${database}];`);
   await pool.connect();
   migrations = (await readMigrations()).filter((migration) =>
-    ['0029_background_jobs.sql', '0034_research_job_retry.sql', migrationName, recoveryMigration].includes(migration.name));
+    ['0029_background_jobs.sql', '0034_research_job_retry.sql', migrationName, recoveryMigration, workspaceMigration].includes(migration.name));
   await applyMigrations(pool, migrations);
 });
 
@@ -191,11 +192,12 @@ describe('durable background job dismissals on SQL Server', () => {
     const id = jobs[1]!.jobId;
     await store.dismiss!(owner, [id]);
     const before = await store.get(id);
+    await revertMigration(pool, migrations, await readDownMigration(workspaceMigration));
     await revertMigration(pool, migrations, await readDownMigration(recoveryMigration));
     await expect(revertMigration(pool, migrations, await readDownMigration(migrationName)))
       .rejects.toThrow('dismissal preferences must be retained');
     expect((await pool.request().query('SELECT TOP (1) name FROM dbo.schema_migrations ORDER BY name DESC')).recordset[0]?.name).toBe(migrationName);
-    expect(await applyMigrations(pool, migrations)).toEqual([recoveryMigration]);
+    expect(await applyMigrations(pool, migrations)).toEqual([recoveryMigration, workspaceMigration]);
     expect(await store.listDismissed!(owner)).toEqual([id]);
     expect(await store.get(id)).toEqual(before);
   });
@@ -203,12 +205,13 @@ describe('durable background job dismissals on SQL Server', () => {
   it('reverts and reapplies empty visibility state, retaining raw jobs and bounded step history', async () => {
     const id = jobs[1]!.jobId;
     const before = await store.get(id);
+    expect(await revertMigration(pool, migrations, await readDownMigration(workspaceMigration))).toBe(workspaceMigration);
     expect(await revertMigration(pool, migrations, await readDownMigration(recoveryMigration))).toBe(recoveryMigration);
     expect(await revertMigration(pool, migrations, await readDownMigration(migrationName))).toBe(migrationName);
     expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.background_job_dismissals') AS id")).recordset[0]?.id).toBeNull();
     expect((await pool.request().input('id', sql.NVarChar(36), id)
       .query<{ status: string }>('SELECT status FROM dbo.background_jobs WHERE job_id = @id')).recordset[0]?.status).toBe(before?.details.job.status);
-    expect(await applyMigrations(pool, migrations)).toEqual([migrationName, recoveryMigration]);
+    expect(await applyMigrations(pool, migrations)).toEqual([migrationName, recoveryMigration, workspaceMigration]);
     expect(await store.get(id)).toEqual(before);
     expect(await store.list()).toHaveLength(4);
     expect(await store.listDismissed!(owner)).toEqual([]);
