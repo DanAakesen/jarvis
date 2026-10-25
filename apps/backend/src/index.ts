@@ -121,8 +121,8 @@ import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { attachmentRetentionDays, ConversationAttachmentStore } from './database/conversation-attachment-store.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
-import { createFolioModule } from './core/folio.js';
-import { FolioStore } from './database/folio-store.js';
+import { createWorkspacesModule } from './core/workspaces.js';
+import { WorkspaceItemsStore } from './database/workspace-items-store.js';
 import { createWorkspacePinsModule } from './core/workspace-pins.js';
 import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
@@ -193,7 +193,7 @@ try {
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const workspaceHtmlArtifactStore = database ? new WorkspaceHtmlArtifactStore(database.pool) : undefined;
-  const folioStore = database ? new FolioStore(database.pool) : undefined;
+  const workspaceItemsStore = database ? new WorkspaceItemsStore(database.pool) : undefined;
   const workspacePinStore = database ? new WorkspacePinStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
   const phoneSessionStore = database
@@ -474,9 +474,9 @@ try {
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
-      ...(folioStore ? { recordFolioGraph: (query: string, highlight: readonly string[], createdAt: string) => {
+      ...(workspaceItemsStore ? { recordWorkspaceGraph: (query: string, highlight: readonly string[], createdAt: string) => {
         const id = randomUUID();
-        return folioStore.record(config.auth.ownerObjectId, {
+        return workspaceItemsStore.record(config.auth.ownerObjectId, {
           id: `knowledge_graph:${id}`,
           kind: 'knowledge_graph',
           sourceId: id,
@@ -556,7 +556,7 @@ try {
       config.codexToolModel,
       htmlArtifactStore,
       {},
-      folioStore,
+      workspaceItemsStore,
     )
     : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
@@ -814,17 +814,17 @@ try {
       runner: clientFor(config.foundryRunnerAgentName),
       artifacts: workspaceArtifacts,
       model: config.codexImageModel,
-      ...(folioStore ? { folio: folioStore } : {}),
+      ...(workspaceItemsStore ? { workspaceItems: workspaceItemsStore } : {}),
     })
     : undefined;
   const htmlViewModule = database && workspaceHtmlArtifactStore
-    ? createHtmlViewModule(workspaceHtmlArtifactStore, folioStore)
+    ? createHtmlViewModule(workspaceHtmlArtifactStore, workspaceItemsStore)
     : undefined;
   const weatherModule = database && workspaceHtmlArtifactStore
     ? createWeatherModule(workspaceHtmlArtifactStore)
     : undefined;
-  const folioModule = database && folioStore && workspaceHtmlArtifactStore
-    ? createFolioModule(folioStore, workspaceHtmlArtifactStore, workspaceArtifacts)
+  const workspacesModule = database && workspaceItemsStore && workspaceHtmlArtifactStore
+    ? createWorkspacesModule(workspaceItemsStore, workspaceHtmlArtifactStore, workspaceArtifacts)
     : undefined;
   const workspacePinsModule = workspacePinStore ? createWorkspacePinsModule(workspacePinStore) : undefined;
   let visionWatch: VisionWatchService | undefined;
@@ -925,7 +925,7 @@ try {
     imageGeneration: imageGenerationModule,
     htmlView: htmlViewModule,
     weather: weatherModule,
-    folio: folioModule,
+    workspaces: workspacesModule,
     workspacePins: workspacePinsModule,
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,

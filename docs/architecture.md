@@ -769,7 +769,7 @@ Actual-App fixtures observed applied acknowledgements before the Status
 heading/selected rail entry existed. The surrounding `flushSync` and the
 navigation function's return alone did not guarantee route commit. The new
 owner observes the shell commit rather than polling DOM or awaiting health
-reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+reads. Existing Factory issue resolution, Notes draft guard, Workspaces pane,
 session/pin handlers and persistent Now session remain separate.
 
 ## Phone typing viewport ownership (14 October 2026; local)
@@ -1120,8 +1120,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   visible text and selection through a new bounded `readback` message of the
   existing sandbox bridge, accepted only from the report's own frame and
   cleared when its document is replaced. The Settings section Dan is reading
-  (never credentials), Graph and Notes pages, and the open Folio pane join the
-  snapshot as `page-settings`, `page-knowledge`, `page-notes` and `folio-pane`
+  (never credentials), Graph and Notes pages, and the open Workspaces pane join the
+  snapshot as `page-settings`, `page-knowledge`, `page-notes` and `workspaces-pane`
   windows. Content is at most 8 KiB and selection 2 KiB per window; old
   snapshots still validate.
   On signed-in routes, the shell keeps one command/feed stream mounted in a
@@ -1160,7 +1160,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   deliver Factory navigation with the returned/existing task ID. Google tools
   present bounded plain-text results or staged summaries, omitting confirmation
   codes and preserving the existing confirmation gate. Automatic views are
-  transient, not persisted in Folio. Backend tests exercise delivery, lifecycle,
+  transient, not persisted in Workspaces. Backend tests exercise delivery, lifecycle,
   cancellation, suppression, refusal, and failure isolation; UI rendering and
   live acceptance remain the UI session's responsibility.
 - P9-40 extends that same registered tool and broker with `navigate`; no new
@@ -1181,7 +1181,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   acknowledges application; refusal, timeout and cancellation retain existing
   broker semantics. Send is not an applied acknowledgement. The UI reports a
   reason when a page/section is unknown, a task/issue is not found, or Status
-  is not yet implemented. Folio navigation opens a pane over the current page.
+  is not yet implemented. The legacy `folio` navigation key opens Workspaces over
+  the current page.
   The backend rejects unknown contract keys before
   delivery and does not resolve task/issue existence on the UI's behalf.
   The UI session owns shell routing, settings-section
@@ -1297,7 +1298,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   connected kinds and the default recipient, never device labels. The UI half
   shipped first; routing is tested offline, with live multi-device acceptance pending.
   P9-43 adds optional `view` metadata for page, Settings section, Factory
-  task/issue, focused window, Folio pane and previous destination. Shared guards
+  task/issue, focused window, Workspaces pane and previous destination. Shared guards
   and the owner route validate it while accepting older snapshots. The existing
   agent-loaded `/factory/context` includes `workspaceContext` on every turn;
   the hosted client retains this field in its reference JSON. The voice relay
@@ -5086,18 +5087,18 @@ defaults to 305 seconds and can be tuned up to 320 seconds, the configured long
 tool read timeout. The overall job remains bounded at 15 minutes.
 
 The report is persisted in owner-scoped SQL metadata in
-`dbo.workspace_html_artifacts` (migrations 0026/0027), then its Folio entry and
+`dbo.workspace_html_artifacts` (migrations 0026/0027), then its Workspaces entry and
 job reference are saved. Migration 0066 adds that reference and an independent
 Workspace delivery state (`pending`, `unknown`, `failed` or `delivered`) to the
 completed job. The artifact uses the research job UUID, so the progress and
 report share one stable `research-<compact UUID>` view ID. The job becomes
-`done` after artifact, Folio and job metadata persist, before Workspace delivery
+`done` after artifact, Workspaces and job metadata persist, before Workspace delivery
 is attempted. Only an applied-command acknowledgement marks delivery `delivered`;
 it does not prove the owner saw the report. Missing Workspace stays `pending`,
 ambiguous acknowledgement stays `unknown`, and an explicit refusal is `failed`.
 None changes successful research to a failed job.
 
-The owner-only `POST /jobs/:jobId/open-result` route resolves the stored Folio
+The owner-only `POST /jobs/:jobId/open-result` route resolves the stored Workspaces
 entry, validates and reads its artifact under the owner identity, and opens it
 through the existing Workspace broker using the same stable view ID. Reconnect,
 reload, a closed progress window and a lost acknowledgement can therefore offer
@@ -5127,7 +5128,7 @@ accepts these updates only from its parent; `srcdoc` remains stable so interacti
 report state is retained. The scripts-only sandbox, CSP and artifact API remain
 unchanged.
 
-### Folio (P9-25)
+### Workspaces (legacy API namespace: Folio)
 
 P9-53 adds sensitive agent-only `read_html_view` and `update_html_view` tools.
 Reads accept exactly one artifact ID or window ID and an optional positive
@@ -5139,7 +5140,7 @@ One SQL transaction locks the owned artifact, archives its previous content in
 `workspace_html_artifact_versions`, increments `version_number`, and replaces
 HTML plus any supplied title/sources. Omitted metadata is retained in SQL,
 including during concurrent revisions. No versions are pruned by this path.
-Artifact identity, creation time, Folio records and pin state remain unchanged.
+Artifact identity, creation time, Workspaces records and pin state remain unchanged.
 Historical reads join the current artifact to enforce ownership.
 
 After commit, an acknowledged workspace `update` targets the original cached
@@ -5155,7 +5156,7 @@ Cleanup aborts obsolete loads; an active-load guard also ignores responses from
 transports that complete after cancellation. A failed revision uses the existing
 error/retry state instead of presenting old HTML as refreshed. The React key
 remains the artifact ID, preserving renderer height and workspace window identity,
-geometry, Folio and pins. No contract, sandbox, CSP, bridge or styling changes.
+geometry, Workspaces and pins. No contract, sandbox, CSP, bridge or styling changes.
 Focused tests and Chromium desktop/phone light/dark fixtures verify refresh and
 recovery offline; production acceptance remains pending. Broker acknowledgement
 still confirms that the UI applied the view update, not that the iframe finished
@@ -5170,28 +5171,35 @@ artifacts do not retain their originating job, so they are indexed as
 `html_app`. Graph snapshots are recorded from now on; older transient graph
 views cannot be recovered.
 
+The implementation is named `WorkspaceItemsStore`, `WorkspaceItem`, and
+`createWorkspacesModule`; contract consumers use the `Workspace*` symbols.
+Legacy exported `Folio*` contract symbols remain aliases for source compatibility.
+The module keeps its historical `folio` route, tool and navigation identifiers,
+and SQL continues to use `dbo.folio_items` plus `result_folio_id` so existing
+clients and persisted records remain unchanged.
+
 Owner-only `GET /folio?q=&kind=&before=` returns at most 100 items, pinned
 first and then newest, matching the item title, prompt summary, or historical
 HTML version title. `POST /folio/:id/open` validates source ownership and
 recreates or updates the saved view through the workspace command broker,
 then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
-`DELETE /folio/:id` removes only its Folio index entry; the original artifact
+`DELETE /folio/:id` removes only its Workspaces index entry; the original artifact
 and its history remain available. The shared sensitive tools `folio_search`
 and `folio_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
 P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
 `id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
 for rename. It shares unique-query resolution with `folio_open` and reuses
-`FolioStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
+`WorkspaceItemsStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
 titles. Reversible changes need no approval. Deletion fails closed if presence
 or Now approval is unavailable, refuses away/on-the-move states, and uses the
 existing `runConfirmed('delete', ...)` flow naming the title and id. Duplicate
 pending deletions are refused; after approval, presence and the title are
-rechecked before removing the Folio index entry. Source artifacts/history are
-retained and no deleted entry is returned by Folio search. Outputs mark titles
+rechecked before removing the Workspaces index entry. Source artifacts/history are
+retained and no deleted entry is returned by Workspaces search. Outputs mark titles
 as untrusted; arguments and results are redacted from the tool audit. No
 migration, GitHub App permission, dependency or web change is needed.
-The Folio rail and pane are a separate UI task.
+The Workspaces rail and pane are implemented in `apps/web/src/Workspaces.tsx`.
 
 ### Sandbox credentials
 

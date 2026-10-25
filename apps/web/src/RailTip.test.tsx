@@ -19,7 +19,7 @@ function Harness() {
 }
 
 const tip = () => document.body.querySelector<HTMLElement>('.rail-tip')!;
-const folio = () => screen.getByRole('button', { name: 'Workspaces' });
+const workspaces = () => screen.getByRole('button', { name: 'Workspaces' });
 const mouse = { pointerType: 'mouse' };
 
 afterEach(cleanup);
@@ -34,10 +34,10 @@ describe('rail label', () => {
 
   it('shows the control name on hover and closes when the pointer leaves the rail', () => {
     render(<Harness />);
-    fireEvent.pointerOver(folio(), mouse);
+    fireEvent.pointerOver(workspaces(), mouse);
     expect(tip().textContent).toBe('Workspaces');
     expect(tip().getAttribute('data-open')).toBe('true');
-    fireEvent.pointerOut(folio(), { ...mouse, relatedTarget: screen.getByRole('button', { name: 'Outside' }) });
+    fireEvent.pointerOut(workspaces(), { ...mouse, relatedTarget: screen.getByRole('button', { name: 'Outside' }) });
     expect(tip().getAttribute('data-open')).toBe('false');
   });
 
@@ -46,17 +46,17 @@ describe('rail label', () => {
     const home = screen.getByRole('link', { name: 'Conversation' });
     fireEvent.pointerOver(home, mouse);
     expect(tip().textContent).toBe('Jarvis');
-    fireEvent.pointerOut(home, { ...mouse, relatedTarget: folio() });
+    fireEvent.pointerOut(home, { ...mouse, relatedTarget: workspaces() });
     expect(tip().getAttribute('data-open')).toBe('true');
-    fireEvent.pointerOver(folio(), mouse);
+    fireEvent.pointerOver(workspaces(), mouse);
     expect(tip().textContent).toBe('Workspaces');
     expect(tip().getAttribute('data-open')).toBe('true');
   });
 
   it('stays open while the pointer travels onto the label and closes when it leaves it', () => {
     render(<Harness />);
-    fireEvent.pointerOver(folio(), mouse);
-    fireEvent.pointerOut(folio(), { ...mouse, relatedTarget: tip() });
+    fireEvent.pointerOver(workspaces(), mouse);
+    fireEvent.pointerOut(workspaces(), { ...mouse, relatedTarget: tip() });
     expect(tip().getAttribute('data-open')).toBe('true');
     fireEvent.pointerOut(tip(), { ...mouse, relatedTarget: screen.getByRole('button', { name: 'Outside' }) });
     expect(tip().getAttribute('data-open')).toBe('false');
@@ -64,7 +64,7 @@ describe('rail label', () => {
 
   it('ignores touch and controls without a name', () => {
     render(<Harness />);
-    fireEvent.pointerOver(folio(), { pointerType: 'touch' });
+    fireEvent.pointerOver(workspaces(), { pointerType: 'touch' });
     expect(tip().getAttribute('data-open')).toBe('false');
     fireEvent.pointerOver(screen.getByRole('button', { name: 'Unlabelled' }), mouse);
     expect(tip().getAttribute('data-open')).toBe('false');
@@ -81,7 +81,7 @@ describe('rail label', () => {
       render(<Harness />);
       await user.tab();
       await user.tab();
-      expect(document.activeElement).toBe(folio());
+      expect(document.activeElement).toBe(workspaces());
       expect(tip().textContent).toBe('Workspaces');
       expect(tip().getAttribute('data-open')).toBe('true');
       await user.tab();
@@ -102,7 +102,7 @@ describe('rail label', () => {
       render(<Harness />);
       await user.tab();
       await user.tab();
-      expect(document.activeElement).toBe(folio());
+      expect(document.activeElement).toBe(workspaces());
       expect(tip().getAttribute('data-open')).toBe('true');
       await user.keyboard('{Enter}');
       expect(tip().getAttribute('data-open')).toBe('false');
@@ -113,22 +113,22 @@ describe('rail label', () => {
 
   it('keeps the label closed when focus came from a pointer', () => {
     render(<Harness />);
-    fireEvent.pointerOver(folio(), mouse);
-    act(() => { folio().focus(); });
+    fireEvent.pointerOver(workspaces(), mouse);
+    act(() => { workspaces().focus(); });
     expect(tip().getAttribute('data-open')).toBe('false');
   });
 
   it('can be dismissed with Escape, by pressing the control and by resizing', () => {
     render(<Harness />);
-    fireEvent.pointerOver(folio(), mouse);
+    fireEvent.pointerOver(workspaces(), mouse);
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(tip().getAttribute('data-open')).toBe('false');
 
-    fireEvent.pointerOver(folio(), mouse);
-    fireEvent.pointerDown(folio(), mouse);
+    fireEvent.pointerOver(workspaces(), mouse);
+    fireEvent.pointerDown(workspaces(), mouse);
     expect(tip().getAttribute('data-open')).toBe('false');
 
-    fireEvent.pointerOver(folio(), mouse);
+    fireEvent.pointerOver(workspaces(), mouse);
     act(() => { window.dispatchEvent(new Event('resize')); });
     expect(tip().getAttribute('data-open')).toBe('false');
   });

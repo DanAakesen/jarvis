@@ -15,7 +15,7 @@ function Harness({ onNavigate = () => {}, path = '/', ...flags }: {
   const [open, setOpen] = useState(false);
   return <MemoryRouter initialEntries={[path]}>
     <button onClick={() => setOpen(true)}>Open menu</button>
-    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onFolio={() => {}} onContext={() => {}} {...flags} />
+    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onWorkspaces={() => {}} onContext={() => {}} {...flags} />
   </MemoryRouter>;
 }
 

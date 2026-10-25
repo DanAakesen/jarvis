@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { WorkspaceHtmlArtifactNotFound, type WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
-import type { FolioStore } from '../database/folio-store.js';
+import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import { ToolFailure } from './tool-registry.js';
 import { buildApp } from '../app.js';
 import type { BackendModule } from '../modules.js';
@@ -60,7 +60,7 @@ function appFor(options: {
     dispose: vi.fn(),
   };
   const record = vi.fn(async () => {});
-  const folioRecord = vi.fn(async () => {});
+  const workspaceItemsRecord = vi.fn(async () => {});
   const auth: TokenVerifier = async (token) => {
     if (token === 'agent.e30.sig') {
       return { kind: 'jarvis-agent', objectId: ownerId, tenantId: config.auth.tenantId };
@@ -72,12 +72,12 @@ function appFor(options: {
   };
   const app = buildApp(config, undefined, {
     auth,
-    modules: [coreModule, createHtmlViewModule(artifacts, { record: folioRecord } as unknown as FolioStore), pcModule],
+    modules: [coreModule, createHtmlViewModule(artifacts, { record: workspaceItemsRecord } as unknown as WorkspaceItemsStore), pcModule],
     toolCallStore: { record } as unknown as ToolCallStore,
     workspaceCommands: workspaceCommands as never,
   });
   appInstances.push(app);
-  return { app, create, read, readVersion, update, setPinned, execute, workspaceCommands, record, folioRecord };
+  return { app, create, read, readVersion, update, setPinned, execute, workspaceCommands, record, workspaceItemsRecord };
 }
 
 afterEach(async () => {
@@ -106,7 +106,7 @@ describe('HTML workspace app routes and tool', () => {
     }));
   });
 
-  it('updates the original research window without recreating the artifact, Folio or pin', async () => {
+  it('updates the original research window without recreating the artifact, Workspaces entry or pin', async () => {
     const fixture = appFor({ mappedView: { viewId: 'research-existing', artifactId } });
     const response = await fixture.app.inject({
       method: 'POST', url: '/tools/update_html_view', headers: toolHeaders, payload: { artifactId, html },
@@ -118,7 +118,7 @@ describe('HTML workspace app routes and tool', () => {
       view: expect.objectContaining({ title: artifact.title, data: { artifactId } }),
     }), expect.any(AbortSignal));
     expect(fixture.create).not.toHaveBeenCalled();
-    expect(fixture.folioRecord).not.toHaveBeenCalled();
+    expect(fixture.workspaceItemsRecord).not.toHaveBeenCalled();
     expect(fixture.setPinned).not.toHaveBeenCalled();
     expect(fixture.record).toHaveBeenCalledWith(expect.objectContaining({
       arguments: { redacted: true }, result: { redacted: true },

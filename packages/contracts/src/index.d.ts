@@ -411,22 +411,27 @@ export interface HtmlArtifact {
   pinned: boolean;
 }
 
-export type FolioKind = 'research' | 'html_app' | 'image' | 'knowledge_graph';
-export interface FolioItem {
-  id: `${FolioKind}:${string}`;
+export type WorkspaceItemKind = 'research' | 'html_app' | 'image' | 'knowledge_graph';
+export interface WorkspaceItem {
+  id: `${WorkspaceItemKind}:${string}`;
   title: string;
-  kind: FolioKind;
+  kind: WorkspaceItemKind;
   createdAt: string;
   promptSummary: string;
   pinned: boolean;
 }
-export interface FolioSearch {
+export interface WorkspaceItemsSearch {
   q?: string;
-  kind?: FolioKind;
+  kind?: WorkspaceItemKind;
   before?: string;
 }
-export interface FolioSearchResponse { items: FolioItem[] }
-export interface FolioPatch { title?: string; pinned?: boolean }
+export interface WorkspaceItemsSearchResponse { items: WorkspaceItem[] }
+export interface WorkspaceItemPatch { title?: string; pinned?: boolean }
+export type FolioKind = WorkspaceItemKind;
+export type FolioItem = WorkspaceItem;
+export type FolioSearch = WorkspaceItemsSearch;
+export type FolioSearchResponse = WorkspaceItemsSearchResponse;
+export type FolioPatch = WorkspaceItemPatch;
 
 export interface HtmlArtifactFrame {
   widthPx: number;
@@ -667,6 +672,16 @@ export const generatedViewSchema: Readonly<Record<string, unknown>>;
 export const generatedCodeDataSchema: Readonly<Record<string, unknown>>;
 export function isGeneratedCodeData(value: unknown): value is GeneratedCodeData;
 export const htmlArtifactSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemKinds: readonly WorkspaceItemKind[];
+export const workspaceItemSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemsSearchSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemsSearchResponseSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemPatchSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemDeleteSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemsSearchToolSchema: Readonly<Record<string, unknown>>;
+export const workspaceItemOpenToolSchema: Readonly<Record<string, unknown>>;
+export const workspacesManageToolSchema: Readonly<Record<string, unknown>>;
+export function isWorkspaceItem(value: unknown): value is WorkspaceItem;
 export const folioKinds: readonly FolioKind[];
 export const folioItemSchema: Readonly<Record<string, unknown>>;
 export const folioSearchSchema: Readonly<Record<string, unknown>>;

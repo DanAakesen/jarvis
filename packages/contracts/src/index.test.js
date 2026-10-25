@@ -34,9 +34,24 @@ import {
   isJarvisWorkActivityDetail,
   jarvisWorkActivityKinds,
   jarvisWorkActivityDetailSchema,
+  workspaceItemKinds,
+  workspaceItemSchema,
+  workspaceItemsSearchSchema,
+  workspaceItemsSearchResponseSchema,
+  workspaceItemPatchSchema,
+  workspaceItemDeleteSchema,
+  workspaceItemsSearchToolSchema,
+  workspaceItemOpenToolSchema,
+  workspacesManageToolSchema,
+  isWorkspaceItem,
   folioKinds,
   folioItemSchema,
+  folioSearchSchema,
   folioSearchResponseSchema,
+  folioPatchSchema,
+  folioDeleteSchema,
+  folioSearchToolSchema,
+  folioOpenToolSchema,
   folioManageToolSchema,
   isFolioItem,
   htmlArtifactByteLimit,
@@ -209,7 +224,7 @@ test('timeline schema and validator accept precise dates and ordered period labe
   }
 });
 
-test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {
+test('Workspaces contracts use bounded searchable item metadata and preserve legacy aliases', () => {
   const item = {
     id: 'research:56a2b0bd-af47-46b5-8e15-c6e9a718ae93',
     title: 'Ignite report',
@@ -218,19 +233,29 @@ test('Folio contracts use bounded searchable item metadata and closed item kinds
     promptSummary: 'Research Ignite battery storage',
     pinned: false,
   };
-  assert.deepEqual(folioKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
-  assert.equal(folioItemSchema.properties.promptSummary.maxLength, 500);
-  assert.equal(folioSearchResponseSchema.properties.items.maxItems, 100);
-  assert.equal(isFolioItem(item), true);
-  assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
-  assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
-  assert.equal(folioManageToolSchema.type, 'object');
-  assert.deepEqual(folioManageToolSchema.required, ['action']);
-  assert.deepEqual(folioManageToolSchema.properties.action.enum, ['rename', 'pin', 'unpin', 'delete']);
-  assert.equal(folioManageToolSchema.properties.title.maxLength, 200);
-  assert.equal(folioManageToolSchema.properties.query.maxLength, 120);
-  assert.equal(folioManageToolSchema.additionalProperties, false);
-  for (const keyword of ['oneOf', 'anyOf', 'allOf']) assert.equal(folioManageToolSchema[keyword], undefined);
+  assert.deepEqual(workspaceItemKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
+  assert.equal(workspaceItemSchema.properties.promptSummary.maxLength, 500);
+  assert.equal(workspaceItemsSearchResponseSchema.properties.items.maxItems, 100);
+  assert.equal(isWorkspaceItem(item), true);
+  assert.equal(isWorkspaceItem({ ...item, kind: 'conversation' }), false);
+  assert.equal(isWorkspaceItem({ ...item, promptSummary: ' Research ' }), false);
+  assert.equal(workspacesManageToolSchema.type, 'object');
+  assert.deepEqual(workspacesManageToolSchema.required, ['action']);
+  assert.deepEqual(workspacesManageToolSchema.properties.action.enum, ['rename', 'pin', 'unpin', 'delete']);
+  assert.equal(workspacesManageToolSchema.properties.title.maxLength, 200);
+  assert.equal(workspacesManageToolSchema.properties.query.maxLength, 120);
+  assert.equal(workspacesManageToolSchema.additionalProperties, false);
+  for (const keyword of ['oneOf', 'anyOf', 'allOf']) assert.equal(workspacesManageToolSchema[keyword], undefined);
+  assert.equal(folioKinds, workspaceItemKinds);
+  assert.equal(folioItemSchema, workspaceItemSchema);
+  assert.equal(folioSearchSchema, workspaceItemsSearchSchema);
+  assert.equal(folioSearchResponseSchema, workspaceItemsSearchResponseSchema);
+  assert.equal(folioPatchSchema, workspaceItemPatchSchema);
+  assert.equal(folioDeleteSchema, workspaceItemDeleteSchema);
+  assert.equal(folioSearchToolSchema, workspaceItemsSearchToolSchema);
+  assert.equal(folioOpenToolSchema, workspaceItemOpenToolSchema);
+  assert.equal(folioManageToolSchema, workspacesManageToolSchema);
+  assert.equal(isFolioItem, isWorkspaceItem);
 });
 
 test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {

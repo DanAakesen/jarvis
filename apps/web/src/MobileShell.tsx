@@ -25,11 +25,11 @@ function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean): readonly M
   return proactiveEnabled ? [...list.slice(0, 2), { to: '/proactive', label: 'Proactive' }, ...list.slice(2)] : list;
 }
 
-export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
+export function MobileMenu({ open, onClose, onNavigate, onWorkspaces, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
-  onFolio: () => void;
+  onWorkspaces: () => void;
   onContext: () => void;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
@@ -63,7 +63,7 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
           ))}
         </nav>
         <div className="mobile-menu-actions">
-          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onFolio(); }}>Workspaces</button>
+          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onWorkspaces(); }}>Workspaces</button>
           <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onContext(); }}>Context panel</button>
         </div>
       </div>

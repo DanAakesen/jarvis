@@ -1,18 +1,18 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FolioPane } from './Folio';
-import { groupFolio, isFolioItem, type FolioItem } from './folio-data';
+import { WorkspacesPane } from './Workspaces';
+import { groupWorkspaceItems, isWorkspaceItem, type WorkspaceItem } from './workspaces-data';
 
 const getAccessToken = vi.fn(async () => 'token');
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const now = new Date('2026-10-08T12:00:00');
-const item = (n: number, kind: FolioItem['kind'], title: string, createdAt: string, pinned = false): FolioItem => ({
+const item = (n: number, kind: WorkspaceItem['kind'], title: string, createdAt: string, pinned = false): WorkspaceItem => ({
   id: `${kind}:0000000${n}-aaaa-4bbb-8ccc-00000000000${n}`, kind, title, createdAt, promptSummary: `Summary of ${title}`, pinned,
 });
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('Folio', () => {
+describe('Workspaces', () => {
   it('validates items and groups them as Pinned, Today, This week and Earlier', () => {
     const items = [
       item(1, 'research', 'Old report', '2026-09-20T10:00:00'),
@@ -20,9 +20,9 @@ describe('Folio', () => {
       item(3, 'image', 'Pinned image', '2026-09-01T09:00:00', true),
       item(4, 'knowledge_graph', 'Graph this week', '2026-10-04T09:00:00'),
     ];
-    expect(items.every(isFolioItem)).toBe(true);
-    expect(isFolioItem({ ...items[0], id: 'image:00000001-aaaa-4bbb-8ccc-000000000001' })).toBe(false);
-    expect(groupFolio(items, now).map((group) => [group.label, group.items.map((entry) => entry.title)])).toEqual([
+    expect(items.every(isWorkspaceItem)).toBe(true);
+    expect(isWorkspaceItem({ ...items[0], id: 'image:00000001-aaaa-4bbb-8ccc-000000000001' })).toBe(false);
+    expect(groupWorkspaceItems(items, now).map((group) => [group.label, group.items.map((entry) => entry.title)])).toEqual([
       ['Pinned', ['Pinned image']], ['Today', ['Today app']], ['This week', ['Graph this week']], ['Earlier', ['Old report']],
     ]);
   });
@@ -40,7 +40,7 @@ describe('Folio', () => {
       return json({}, 500);
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<FolioPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
+    render(<WorkspacesPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
 
     expect(screen.getByText('Workspaces')).not.toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Open Ignite research' }));
@@ -66,7 +66,7 @@ describe('Folio', () => {
   it('shows an empty Workspaces pane and offers retry on failure', async () => {
     let fail = true;
     vi.stubGlobal('fetch', vi.fn(async () => fail ? json({ error: 'Workspaces are unavailable' }, 503) : json({ items: [] })));
-    render(<FolioPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
+    render(<WorkspacesPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
     expect(await screen.findByText('Workspaces could not be loaded.')).not.toBeNull();
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));

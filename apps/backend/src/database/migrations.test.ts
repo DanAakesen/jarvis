@@ -402,7 +402,7 @@ describe('committed SQL manifest', () => {
       sql: expect.stringContaining('DROP COLUMN embedding_model'),
     });
   });
-  it('indexes workspace HTML artifacts and images in Folio with reversible storage', async () => {
+  it('indexes workspace HTML artifacts and images in Workspaces with reversible storage', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0035_folio.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.folio_items');
     expect(migration?.sql).toContain("N'html_app'");

@@ -20,7 +20,7 @@ import { createBackgroundJobStore } from './background-job-store.js';
 import { createUsageStore } from './usage-store.js';
 import { createToolCallStore } from './tool-call-store.js';
 import { WorkspaceHtmlArtifactNotFound, WorkspaceHtmlArtifactStore, workspaceHtmlSizeLimit } from './workspace-html-artifact-store.js';
-import { FolioStore } from './folio-store.js';
+import { WorkspaceItemsStore } from './workspace-items-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -693,23 +693,23 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await ledger.get(base.alertKey)).toEqual(sent);
   }));
 
-  it('revises HTML artifacts atomically, retains every version and leaves Folio/pins intact', async () => {
+  it('revises HTML artifacts atomically, retains every version and leaves Workspaces/pins intact', async () => {
     const owner = randomUUID();
     const otherOwner = randomUUID();
     const store = new WorkspaceHtmlArtifactStore(pool);
-    const folio = new FolioStore(pool);
+    const workspaceItems = new WorkspaceItemsStore(pool);
     const signal = new AbortController().signal;
     const html = '<!doctype html><html><head></head><body>Original</body></html>';
     const sources = [{ title: 'Source', url: 'https://example.com' }];
     const artifact = await store.create(owner, 'Original report', html, sources, signal);
-    const folioId = `html_app:${artifact.id}` as const;
-    await folio.record(owner, {
-      id: folioId, kind: 'html_app', sourceId: artifact.id, title: artifact.title,
+    const workspaceItemId = `html_app:${artifact.id}` as const;
+    await workspaceItems.record(owner, {
+      id: workspaceItemId, kind: 'html_app', sourceId: artifact.id, title: artifact.title,
       promptSummary: artifact.title, createdAt: artifact.createdAt,
     }, signal);
     await store.setPinned(artifact.id, owner, true, signal);
-    await folio.update(owner, folioId, { pinned: true }, signal);
-    const beforeFolio = await folio.get(owner, folioId, signal);
+    await workspaceItems.update(owner, workspaceItemId, { pinned: true }, signal);
+    const beforeWorkspaceItem = await workspaceItems.get(owner, workspaceItemId, signal);
     const beforeArtifact = await store.readVersion(artifact.id, owner, signal);
 
     const revisions = await Promise.all([
@@ -724,7 +724,7 @@ describe('committed domain schema (groups 1-8)', () => {
     }
     const historical = await store.readVersion(artifact.id, owner, signal, 1);
     expect(historical).toMatchObject({ id: artifact.id, title: 'Original report', html, sources, version: 1, pinned: true });
-    expect(await folio.get(owner, folioId, signal)).toEqual(beforeFolio);
+    expect(await workspaceItems.get(owner, workspaceItemId, signal)).toEqual(beforeWorkspaceItem);
 
     const beforeRefusal = await store.readVersion(artifact.id, owner, signal);
     await expect(store.update(artifact.id, otherOwner, html, signal)).rejects.toBeInstanceOf(WorkspaceHtmlArtifactNotFound);

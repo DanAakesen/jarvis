@@ -59,7 +59,7 @@ afterAll(async () => {
 });
 
 describe('durable background job dismissals on SQL Server', () => {
-  it('persists the owner-authorized Folio result reference and delivery state across store instances', async () => {
+  it('persists the owner-authorized Workspaces result reference and delivery state across store instances', async () => {
     const jobId = jobs[0]!.jobId;
     const completed: BackgroundJob = {
       ...jobs[0]!,

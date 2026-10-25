@@ -165,9 +165,9 @@ const pageTitles: Partial<Record<WorkspaceNavigationPage, string>> = { settings:
 
 /**
  * The page Dan is on (Settings section, Graph, Notes, Status) and the Workspaces pane as snapshot windows, so `read_window` can
- * read them as `page-<page>` and `folio-pane`. Credentials are never read.
+ * read them as `page-<page>` and `workspaces-pane`. Credentials are never read.
  */
-export function readPageWindows(page: WorkspaceNavigationPage, section: WorkspaceSettingsSection | undefined, folioOpen: boolean): WorkspaceSnapshotWindow[] {
+export function readPageWindows(page: WorkspaceNavigationPage, section: WorkspaceSettingsSection | undefined, workspacesOpen: boolean): WorkspaceSnapshotWindow[] {
   const windows: WorkspaceSnapshotWindow[] = [];
   const add = (viewId: string, title: string, root: Element | null | undefined, exclude?: string) => {
     const found = root ? readElement(root, undefined, exclude) : undefined;
@@ -179,6 +179,6 @@ export function readPageWindows(page: WorkspaceNavigationPage, section: Workspac
   } else if (page !== 'settings' && pageTitles[page]) {
     add(`page-${page}`, pageTitles[page]!, document.querySelector('main#content'), '.workspace-shell-area, .jarvis-page');
   }
-  if (folioOpen) add('folio-pane', 'Workspaces', document.getElementById('folio-pane'));
+  if (workspacesOpen) add('workspaces-pane', 'Workspaces', document.getElementById('workspaces-pane'));
   return windows;
 }

@@ -44,7 +44,7 @@ export const settingsAnchors: Record<string, string> = {
 
 export type NavigateTarget =
   | { ok: true; path: string; anchorId?: string; taskId?: string; issueNumber?: number; pane?: never }
-  | { ok: true; pane: 'folio'; path?: never; anchorId?: never; taskId?: never; issueNumber?: never }
+  | { ok: true; pane: 'workspaces'; path?: never; anchorId?: never; taskId?: never; issueNumber?: never }
   | { ok: false; reason: string };
 
 /** Reads a navigate command without depending on the contract version, so older contracts simply never match. */
@@ -67,7 +67,7 @@ export function resolveNavigation({ page, section, taskId, issueNumber }: Naviga
     return { ok: false, reason: 'An issue can only be opened on the Software Factory board by its positive whole number.' };
   }
   // Workspaces is a pane over the current page rather than a page of its own.
-  if (page === 'folio') return section === undefined && taskId === undefined ? { ok: true, pane: 'folio' } : { ok: false, reason: 'The Workspaces pane has no sections.' };
+  if (page === 'folio') return section === undefined && taskId === undefined ? { ok: true, pane: 'workspaces' } : { ok: false, reason: 'The Workspaces pane has no sections.' };
   const path = pages[page];
   if (!path) return { ok: false, reason: `Unknown page: ${page}.` };
   if (section !== undefined) {

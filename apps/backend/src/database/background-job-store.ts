@@ -101,7 +101,7 @@ function addJobInputs(request: sql.Request, job: BackgroundJob, retryInput?: Res
     .input('steps', sql.TinyInt, job.steps)
     .input('detail', sql.NVarChar(120), job.detail ?? null)
     .input('viewId', sql.NVarChar(200), job.viewId ?? null)
-    .input('resultFolioId', sql.NVarChar(80), job.resultId ?? null)
+    .input('resultWorkspaceItemId', sql.NVarChar(80), job.resultId ?? null)
     .input('resultDeliveryStatus', sql.NVarChar(16), job.resultDelivery ?? null)
     .input('startedAt', sql.DateTime2(7), new Date(job.startedAt))
     .input('updatedAt', sql.DateTime2(7), new Date(job.updatedAt))
@@ -268,7 +268,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         await addJobInputs(new sql.Request(transaction), job, persistedRetryInput).query(`INSERT dbo.background_jobs
           (job_id, kind, title, status, step, steps, detail, view_id, result_folio_id, result_delivery_status,
             started_at, updated_at, retry_input)
-          VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @resultFolioId,
+          VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @resultWorkspaceItemId,
             @resultDeliveryStatus, @startedAt, @updatedAt, @retryInput);`);
         await insertStep(transaction, job);
         await transaction.commit();
@@ -285,7 +285,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       try {
         const { recordset } = await addJobInputs(new sql.Request(transaction), job).query<BackgroundJobRow>(`UPDATE dbo.background_jobs
           SET status = @status, step = @step, detail = @detail, view_id = @viewId,
-            result_folio_id = @resultFolioId, result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
+            result_folio_id = @resultWorkspaceItemId, result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
           OUTPUT INSERTED.job_id, INSERTED.kind, INSERTED.title, INSERTED.status, INSERTED.step,
             INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.result_folio_id,
             INSERTED.result_delivery_status, INSERTED.started_at, INSERTED.updated_at

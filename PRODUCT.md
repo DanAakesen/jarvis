@@ -2,10 +2,11 @@
 
 ## Workspaces saved-item pane (#1279)
 
-The saved-item pane is labeled **Workspaces** throughout the web app, including
-its rail and phone-menu entries, heading, search, status and recovery messages.
-The existing `folio` navigation key and backend API/storage identifiers remain
-internal compatibility details. Workspace delivery remains a separate action.
+The saved-item pane is **Workspaces** throughout the app and implementation.
+The legacy `folio` navigation key, `folioOpen` snapshot field, `/folio` API,
+`folio_*` tool names, contract aliases, `dbo.folio_items` table and
+`result_folio_id` column remain compatibility boundaries; data and behavior are
+preserved. Workspace delivery remains a separate action.
 
 ## Conversational finding feedback (#1240)
 
@@ -110,12 +111,12 @@ not be presented as a successfully empty list.
 - Existing browser dismissals are sent to the server once. A failed transfer
   remains visible as an error, with those entries hidden locally until confirmed.
 - Research generation completes when the validated artifact and owner-scoped
-  Folio entry are saved. Workspace delivery is separate: pending, unknown or
+  Workspaces entry are saved. Workspace delivery is separate: pending, unknown or
   failed delivery does not turn a saved result into a failed research job.
   Background work keeps an **Open report** action for the saved result; opening
   it after reconnect or reload reuses the same report and never reruns research.
   `Delivered` requires a Workspace acknowledgement and does not claim that a
-  person has seen the report. Artifact or Folio persistence failures remain
+  person has seen the report. Artifact or Workspaces persistence failures remain
   research failures, and partial findings remain identified as partial.
 
 ## Readable chat and attached phone typing (16 October 2026; local candidate)

@@ -21,7 +21,7 @@ import { defaultSettings, readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { workspaceResultDelivery } from './jobs.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
-import type { FolioStore } from '../database/folio-store.js';
+import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -359,7 +359,7 @@ export function createHtmlResearchModule(
   model: string,
   artifacts: ResearchArtifactStore,
   options: ResearchOptions = {},
-  folio?: FolioStore,
+  workspaceItems?: WorkspaceItemsStore,
 ): BackendModule {
   const jobTimeoutMs = options.jobTimeoutMs ?? defaultJobTimeoutMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
@@ -371,7 +371,7 @@ export function createHtmlResearchModule(
         const topic = safeTopic(input.topic);
         const windowTitle = researchWindowTitle(input.title, topic);
         const ownerId = request.server.ownerObjectId;
-        if (!folio) throw new ToolFailure('Research result storage is unavailable.');
+        if (!workspaceItems) throw new ToolFailure('Research result storage is unavailable.');
         if (!request.agentPrincipal &&
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
           throw new ToolRefusal('Research requires an authenticated workspace owner.');
@@ -481,7 +481,7 @@ export function createHtmlResearchModule(
             );
             const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal, tracker.jobId);
             if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
-            const folioItem = await folio.record(ownerId, {
+            const workspaceItem = await workspaceItems.record(ownerId, {
               id: `research:${artifact.id}`,
               kind: 'research',
               sourceId: artifact.id,
@@ -507,7 +507,7 @@ export function createHtmlResearchModule(
             await tracker.done(
               viewId,
               partial ? 'Ready with partial findings' : 'Report saved',
-              { resultId: folioItem.id, resultDelivery: 'pending' },
+              { resultId: workspaceItem.id, resultDelivery: 'pending' },
             );
             notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
             let deliveryError: unknown;

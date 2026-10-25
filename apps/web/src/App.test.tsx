@@ -603,15 +603,15 @@ describe('App shell', () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     render(<MemoryRouter><App config={config} dailyEnabled pushEnabled={false} /></MemoryRouter>);
     const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
-    const folio = rail.getByRole('button', { name: 'Workspaces' });
-    for (const control of [...rail.getAllByRole('link'), folio]) {
+    const workspaces = rail.getByRole('button', { name: 'Workspaces' });
+    for (const control of [...rail.getAllByRole('link'), workspaces]) {
       const name = control.getAttribute('aria-label')!;
       expect(control.getAttribute('data-rail-tip'), name).toBeTruthy();
       expect(control.getAttribute('data-tone'), name).toBeTruthy();
       expect(control.hasAttribute('title'), name).toBe(false);
     }
     expect(new Set(rail.getAllByRole('link').map((link) => link.getAttribute('data-tone'))).size).toBe(rail.getAllByRole('link').length);
-    fireEvent.pointerOver(folio, { pointerType: 'mouse' });
+    fireEvent.pointerOver(workspaces, { pointerType: 'mouse' });
     const tip = document.body.querySelector('.rail-tip')!;
     expect(tip.textContent).toBe('Workspaces');
     expect(tip.getAttribute('data-open')).toBe('true');
@@ -1595,7 +1595,7 @@ describe('App shell', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }));
       const content = document.getElementById('content')!;
       act(() => { screen.getByRole('button', { name: 'Close Workspaces' }).focus(); });
-      expect(document.activeElement?.closest('#folio-pane')).not.toBeNull();
+      expect(document.activeElement?.closest('#workspaces-pane')).not.toBeNull();
       const startedAt = Date.now();
       const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
       const advanceClock = () => { clock.mockReturnValue(startedAt + elapsed); };
@@ -1613,7 +1613,7 @@ describe('App shell', () => {
           },
         );
         expect(screen.getByRole('heading', { level: 1, name: 'Status' })).not.toBeNull();
-        expect(document.querySelector('.app-shell')?.getAttribute('data-folio-open')).toBe('false');
+        expect(document.querySelector('.app-shell')?.getAttribute('data-workspaces-open')).toBe('false');
         expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/same-page-clock/ack'))).toHaveLength(1);
       } finally {
         content.removeEventListener('focus', advanceClock);
@@ -2007,18 +2007,18 @@ describe('App shell', () => {
     await renderSignedIn('/');
     const shell = document.querySelector('.app-shell')!;
     await user.click(screen.getByRole('button', { name: 'Workspaces' }));
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
-    const pane = document.getElementById('folio-pane')!;
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+    const pane = document.getElementById('workspaces-pane')!;
     const content = document.getElementById('content')!;
     const press = (down: Element, up: Element = down) => { fireEvent.pointerDown(down); fireEvent.pointerUp(up); };
 
     press(pane);
     press(screen.getByRole('navigation', { name: 'Areas' }));
     press(pane, content);
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
 
     press(content);
-    await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
+    await waitFor(() => expect(shell.getAttribute('data-workspaces-open')).toBe('false'));
     expect(shell.getAttribute('data-navigation-open')).toBe('false');
   });
 
@@ -2068,13 +2068,13 @@ describe('App shell', () => {
     const user = userEvent.setup();
     await renderSignedIn(path);
     const shell = document.querySelector('.app-shell')!;
-    const folio = screen.getByRole('button', { name: 'Workspaces' });
-    await user.click(folio);
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    const workspaces = screen.getByRole('button', { name: 'Workspaces' });
+    await user.click(workspaces);
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
     await user.click(screen.getByRole('link', { name }));
-    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('false');
     expect(shell.getAttribute('data-navigation-open')).toBe('false');
-    expect(folio.getAttribute('aria-pressed')).toBe('false');
+    expect(workspaces.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('closes Workspaces when a phone menu selects the same page or a different page', async () => {
@@ -2089,10 +2089,10 @@ describe('App shell', () => {
     for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
       await user.click(menu);
       await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Workspaces' }));
-      expect(shell.getAttribute('data-folio-open')).toBe('true');
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
       await user.click(menu);
       await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
-      expect(shell.getAttribute('data-folio-open')).toBe('false');
+      expect(shell.getAttribute('data-workspaces-open')).toBe('false');
       expect(menu.getAttribute('aria-expanded')).toBe('false');
     }
   });
@@ -2110,8 +2110,8 @@ describe('App shell', () => {
     const shell = document.querySelector('.app-shell')!;
     for (const [index, page] of ['home', 'usage'].entries()) {
       await user.click(screen.getByRole('button', { name: 'Workspaces' }));
-      expect(shell.getAttribute('data-folio-open')).toBe('true');
-      const commandId = `leave-folio-${index}`;
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+      const commandId = `leave-workspaces-${index}`;
       act(() => {
         activityStream!.enqueue(new TextEncoder().encode(
           `event: workspace-command\ndata: ${JSON.stringify({
@@ -2120,8 +2120,8 @@ describe('App shell', () => {
           })}\n\n`,
         ));
       });
-      await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
-      expect(document.activeElement?.closest('#folio-pane')).toBeNull();
+      await waitFor(() => expect(shell.getAttribute('data-workspaces-open')).toBe('false'));
+      expect(document.activeElement?.closest('#workspaces-pane')).toBeNull();
       await waitFor(() => expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith(`/commands/${commandId}/ack`))).toBeTruthy());
     }
   });
@@ -2135,11 +2135,11 @@ describe('App shell', () => {
     await screen.findByRole('navigation', { name: 'Areas' });
     await user.click(screen.getByRole('button', { name: 'Workspaces' }));
     const shell = document.querySelector('.app-shell')!;
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Previous page' }));
-    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Next page' }));
-    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('false');
   });
 
   it('opens a local camera preview, docks it without stopping capture, and lets Jarvis restore and close it', async () => {

@@ -8379,3 +8379,13 @@ production failure or prove live provider acceptance. A provider-incomplete
 response after tool execution remains a failure: no partial reply is synthesized
 from prior tool outputs, and the user-facing warning indicates that an action may
 have completed. Recovery of useful partial results is not implemented.
+
+## Workspaces naming and legacy compatibility (#1279; 25 October 2026)
+
+Use Workspaces for the feature's user-facing and implementation names, including
+the web component/data models, backend store/module and contract symbols. Keep
+legacy `folio` navigation, snapshot, API, tool and database identifiers as
+compatibility boundaries; expose the prior contract symbol names as aliases.
+This avoids changing existing clients or persisted data while completing the
+requested rename. The separate chat-time layout remains below message text on
+mobile widths up to 700px and retains its desktop position.

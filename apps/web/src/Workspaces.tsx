@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { backendFetch } from './backend-request';
 import { StateMessage } from './StateMessage';
-import { folioKinds as kinds, folioPageSize as pageSize, groupFolio, isFolioItem, type FolioItem, type FolioKind } from './folio-data';
+import { workspaceItemKinds as kinds, workspaceItemPageSize as pageSize, groupWorkspaceItems, isWorkspaceItem, type WorkspaceItem, type WorkspaceItemKind } from './workspaces-data';
 import { formatDateOnly, formatTimeOnly } from './format/date-time';
 
 /**
- * Workspaces (P9-25, #519): everything Jarvis has pulled up, reopened from the left pane. Search and kind chips filter;
+ * Workspaces (P9-25, #519): saved reports and views Jarvis can reopen from the left pane. Search and kind chips filter;
  * pinned items come first, then Today, This week and Earlier. Opening goes through the backend, which sends the window
  * back through the workspace broker like any other Jarvis window.
  */
@@ -17,7 +17,7 @@ function formatWhen(iso: string, now = new Date()) {
     : formatDateOnly(date);
 }
 
-function KindIcon({ kind }: { kind: FolioKind }) {
+function KindIcon({ kind }: { kind: WorkspaceItemKind }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (kind) {
     case 'research': return <svg {...common}><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v4h4M10 12h5m-5 4h5" /></svg>;
@@ -27,7 +27,7 @@ function KindIcon({ kind }: { kind: FolioKind }) {
   }
 }
 
-function FolioIcon({ name }: { name: 'pin' | 'rename' | 'delete' | 'close' | 'search' }) {
+function WorkspacePaneIcon({ name }: { name: 'pin' | 'rename' | 'delete' | 'close' | 'search' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'pin': return <svg {...common}><path d="m14.5 3.5 6 6-3 1.5-3.5 3.5.5 4-1.5 1.5-3.5-3.5L5 21l-.5-.5L9 16l-3.5-3.5L7 11l4 .5 3.5-3.5z" /></svg>;
@@ -40,10 +40,10 @@ function FolioIcon({ name }: { name: 'pin' | 'rename' | 'delete' | 'close' | 'se
 
 type ListState =
   | { status: 'loading' }
-  | { status: 'ready'; items: FolioItem[]; more: boolean }
+  | { status: 'ready'; items: WorkspaceItem[]; more: boolean }
   | { status: 'error'; message: string };
 
-export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKey }: {
+export function WorkspacesPane({ backendUrl, getAccessToken, open, onClose, refreshKey }: {
   backendUrl?: string | null;
   getAccessToken: () => Promise<string>;
   open: boolean;
@@ -53,7 +53,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
 }) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
-  const [kind, setKind] = useState<FolioKind | null>(null);
+  const [kind, setKind] = useState<WorkspaceItemKind | null>(null);
   const [list, setList] = useState<ListState>({ status: 'loading' });
   const [reload, setReload] = useState(0);
   const [notice, setNotice] = useState<{ id?: string; text: string; tone: 'info' | 'error' } | null>(null);
@@ -95,8 +95,8 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     const body: unknown = await response.json();
     const items = typeof body === 'object' && body !== null && Array.isArray((body as { items?: unknown }).items)
       ? (body as { items: unknown[] }).items : null;
-    if (!items || !items.every(isFolioItem)) throw new Error('Jarvis returned an invalid Workspaces list.');
-    return items as FolioItem[];
+    if (!items || !items.every(isWorkspaceItem)) throw new Error('Jarvis returned an invalid Workspaces list.');
+    return items as WorkspaceItem[];
   }, [call, debounced, kind]);
 
   useEffect(() => {
@@ -124,12 +124,12 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     }
   };
 
-  const replace = (item: FolioItem) => setList((current) => current.status === 'ready'
+  const replace = (item: WorkspaceItem) => setList((current) => current.status === 'ready'
     ? { ...current, items: current.items.map((known) => known.id === item.id ? item : known) } : current);
   const remove = (id: string) => setList((current) => current.status === 'ready'
     ? { ...current, items: current.items.filter((known) => known.id !== id) } : current);
 
-  const reopen = async (item: FolioItem) => {
+  const reopen = async (item: WorkspaceItem) => {
     setBusy(item.id);
     setNotice(null);
     try {
@@ -153,13 +153,13 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     }
   };
 
-  const patch = async (item: FolioItem, change: { title?: string; pinned?: boolean }) => {
+  const patch = async (item: WorkspaceItem, change: { title?: string; pinned?: boolean }) => {
     setBusy(item.id);
     try {
       const response = await call(`/folio/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: change });
       const body: unknown = response.ok ? await response.json() : null;
       if (response.status === 404) { remove(item.id); setNotice({ text: `“${item.title}” is no longer available.`, tone: 'error' }); return false; }
-      if (!response.ok || !isFolioItem(body)) { setNotice({ id: item.id, text: 'The change could not be saved.', tone: 'error' }); return false; }
+      if (!response.ok || !isWorkspaceItem(body)) { setNotice({ id: item.id, text: 'The change could not be saved.', tone: 'error' }); return false; }
       replace(body);
       return true;
     } catch {
@@ -170,14 +170,14 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     }
   };
 
-  const submitRename = async (event: FormEvent, item: FolioItem) => {
+  const submitRename = async (event: FormEvent, item: WorkspaceItem) => {
     event.preventDefault();
     const title = renaming?.title.trim() ?? '';
     if (!title || title === item.title) { setRenaming(null); return; }
     if (await patch(item, { title: title.slice(0, 200) })) setRenaming(null);
   };
 
-  const confirmRemove = async (item: FolioItem) => {
+  const confirmRemove = async (item: WorkspaceItem) => {
     setBusy(item.id);
     try {
       const response = await call(`/folio/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: { confirm: true } });
@@ -195,91 +195,91 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     }
   };
 
-  const groups = useMemo(() => list.status === 'ready' ? groupFolio(list.items) : [], [list]);
+  const groups = useMemo(() => list.status === 'ready' ? groupWorkspaceItems(list.items) : [], [list]);
   const filtered = Boolean(debounced || kind);
 
   return (
-    <aside id="folio-pane" className="area-sidebar folio-pane" hidden={!open} aria-labelledby="folio-heading"
+    <aside id="workspaces-pane" className="area-sidebar workspaces-pane" hidden={!open} aria-labelledby="workspaces-heading"
       onKeyDown={(event) => { if (event.key === 'Escape' && !renaming && !confirmDelete) onClose(); }}>
       <div className="sidebar-heading">
-        <span id="folio-heading">Workspaces</span>
-        <button className="sidebar-close" type="button" aria-label="Close Workspaces" onClick={onClose}><FolioIcon name="close" /></button>
+        <span id="workspaces-heading">Workspaces</span>
+        <button className="sidebar-close" type="button" aria-label="Close Workspaces" onClick={onClose}><WorkspacePaneIcon name="close" /></button>
       </div>
-      <div className="folio-body">
-        <label className="folio-search">
-          <FolioIcon name="search" />
+      <div className="workspaces-body">
+        <label className="workspaces-search">
+          <WorkspacePaneIcon name="search" />
           <span className="visually-hidden">Search Workspaces</span>
           <input ref={search} type="search" value={query} maxLength={120} placeholder="Search reports, apps, images…"
             onChange={(event) => setQuery(event.target.value)} />
         </label>
-        <div className="folio-kinds" role="group" aria-label="Show only">
+        <div className="workspaces-kinds" role="group" aria-label="Show only">
           {kinds.map((entry) => (
-            <button key={entry.kind} type="button" className="folio-kind" aria-pressed={kind === entry.kind}
+            <button key={entry.kind} type="button" className="workspaces-kind" aria-pressed={kind === entry.kind}
               onClick={() => setKind((current) => current === entry.kind ? null : entry.kind)}>
               {entry.label}
             </button>
           ))}
         </div>
-        {notice && !notice.id && <p className="folio-notice" role={notice.tone === 'error' ? 'alert' : 'status'} data-tone={notice.tone}>{notice.text}</p>}
-        <div className="folio-results">
+        {notice && !notice.id && <p className="workspaces-notice" role={notice.tone === 'error' ? 'alert' : 'status'} data-tone={notice.tone}>{notice.text}</p>}
+        <div className="workspaces-results">
           {list.status === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading Workspaces" />}
-          {list.status === 'error' && <StateMessage variant="error" className="folio-state" message={list.message}
+          {list.status === 'error' && <StateMessage variant="error" className="workspaces-state" message={list.message}
             actionLabel="Retry" onAction={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }} />}
           {list.status === 'ready' && !list.items.length && (filtered ? (
-            <StateMessage variant="empty" className="folio-state"
+            <StateMessage variant="empty" className="workspaces-state"
               message={`Nothing matches${debounced ? ` “${debounced}”` : ''}${kind ? ` in ${kinds.find((entry) => entry.kind === kind)?.label}` : ''}.`}
               actionLabel="Clear search" onAction={() => { setQuery(''); setDebounced(''); setKind(null); search.current?.focus(); }} />
           ) : (
-            <StateMessage variant="empty" className="folio-state" message="No saved items." />
+            <StateMessage variant="empty" className="workspaces-state" message="No saved items." />
           ))}
           {groups.map((group) => (
-            <section key={group.label} className="folio-group" aria-label={group.label}>
+            <section key={group.label} className="workspaces-group" aria-label={group.label}>
               <h3>{group.label}</h3>
               <ul>
                 {group.items.map((item) => (
-                  <li key={item.id} className="folio-item" data-opened={opened === item.id || undefined} data-busy={busy === item.id || undefined}>
+                  <li key={item.id} className="workspaces-item" data-opened={opened === item.id || undefined} data-busy={busy === item.id || undefined}>
                     {renaming?.id === item.id ? (
-                      <form className="folio-rename" onSubmit={(event) => { void submitRename(event, item); }}>
-                        <label className="visually-hidden" htmlFor={`folio-rename-${item.id}`}>New title</label>
-                        <input id={`folio-rename-${item.id}`} autoFocus value={renaming.title} maxLength={200}
+                      <form className="workspaces-rename" onSubmit={(event) => { void submitRename(event, item); }}>
+                        <label className="visually-hidden" htmlFor={`workspaces-rename-${item.id}`}>New title</label>
+                        <input id={`workspaces-rename-${item.id}`} autoFocus value={renaming.title} maxLength={200}
                           onChange={(event) => setRenaming({ id: item.id, title: event.target.value })}
                           onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); setRenaming(null); } }} />
                         <button className="secondary-button" type="submit" disabled={busy === item.id}>Save</button>
                       </form>
                     ) : confirmDelete === item.id ? (
-                      <div className="folio-confirm" role="group" aria-label={`Remove ${item.title}`}>
+                      <div className="workspaces-confirm" role="group" aria-label={`Remove ${item.title}`}>
                         <span>Remove “{item.title}”?</span>
                         <button className="secondary-button danger-button" type="button" disabled={busy === item.id} onClick={() => { void confirmRemove(item); }}>Remove</button>
                         <button className="secondary-button" type="button" onClick={() => setConfirmDelete(null)}>Keep</button>
                       </div>
                     ) : (
                       <>
-                        <button className="folio-open" type="button" disabled={busy === item.id} onClick={() => { void reopen(item); }}
-                          aria-label={`Open ${item.title}`} aria-describedby={`folio-summary-${item.id}`}>
-                          <span className="folio-kind-icon" data-kind={item.kind}><KindIcon kind={item.kind} /></span>
-                          <span className="folio-title">{item.title}</span>
-                          <time className="folio-time" dateTime={item.createdAt}>{formatWhen(item.createdAt)}</time>
-                          <span id={`folio-summary-${item.id}`} className="folio-summary">{item.promptSummary}</span>
+                        <button className="workspaces-open" type="button" disabled={busy === item.id} onClick={() => { void reopen(item); }}
+                          aria-label={`Open ${item.title}`} aria-describedby={`workspaces-summary-${item.id}`}>
+                          <span className="workspaces-kind-icon" data-kind={item.kind}><KindIcon kind={item.kind} /></span>
+                          <span className="workspaces-title">{item.title}</span>
+                          <time className="workspaces-time" dateTime={item.createdAt}>{formatWhen(item.createdAt)}</time>
+                          <span id={`workspaces-summary-${item.id}`} className="workspaces-summary">{item.promptSummary}</span>
                         </button>
-                        <span className="folio-actions">
-                          <button type="button" className="folio-action" aria-pressed={item.pinned} disabled={busy === item.id}
+                        <span className="workspaces-actions">
+                          <button type="button" className="workspaces-action" aria-pressed={item.pinned} disabled={busy === item.id}
                             aria-label={item.pinned ? `Unpin ${item.title}` : `Pin ${item.title}`} title={item.pinned ? 'Unpin' : 'Pin'}
-                            onClick={() => { void patch(item, { pinned: !item.pinned }); }}><FolioIcon name="pin" /></button>
-                          <button type="button" className="folio-action" aria-label={`Rename ${item.title}`} title="Rename"
-                            onClick={() => setRenaming({ id: item.id, title: item.title })}><FolioIcon name="rename" /></button>
-                          <button type="button" className="folio-action" aria-label={`Remove ${item.title}`} title="Remove"
-                            onClick={() => setConfirmDelete(item.id)}><FolioIcon name="delete" /></button>
+                            onClick={() => { void patch(item, { pinned: !item.pinned }); }}><WorkspacePaneIcon name="pin" /></button>
+                          <button type="button" className="workspaces-action" aria-label={`Rename ${item.title}`} title="Rename"
+                            onClick={() => setRenaming({ id: item.id, title: item.title })}><WorkspacePaneIcon name="rename" /></button>
+                          <button type="button" className="workspaces-action" aria-label={`Remove ${item.title}`} title="Remove"
+                            onClick={() => setConfirmDelete(item.id)}><WorkspacePaneIcon name="delete" /></button>
                         </span>
                       </>
                     )}
-                    {notice?.id === item.id && <p className="folio-notice" role="alert" data-tone={notice.tone}>{notice.text}</p>}
+                    {notice?.id === item.id && <p className="workspaces-notice" role="alert" data-tone={notice.tone}>{notice.text}</p>}
                   </li>
                 ))}
               </ul>
             </section>
           ))}
           {list.status === 'ready' && list.more && (
-            <button className="secondary-button folio-more" type="button" onClick={() => { void loadOlder(); }}>Show older</button>
+            <button className="secondary-button workspaces-more" type="button" onClick={() => { void loadOlder(); }}>Show older</button>
           )}
         </div>
       </div>

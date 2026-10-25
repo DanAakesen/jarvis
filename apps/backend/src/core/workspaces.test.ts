@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import { FolioItemNotFound, type FolioStore } from '../database/folio-store.js';
+import { WorkspaceItemNotFound, type WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import type { ConfirmationStore } from '../database/confirmation-store.js';
 import { createOwnerInteractionService, type OwnerInteractionService } from './owner-interactions.js';
 import type { AwayModeStore } from './away-mode.js';
@@ -11,7 +11,7 @@ import type { WorkspaceHtmlArtifactStore } from '../database/workspace-html-arti
 import type { WorkspaceSnapshot } from '@jarvis/contracts';
 import type { ToolCallStore } from './tool-calls.js';
 import { coreModule } from './index.js';
-import { createFolioModule } from './folio.js';
+import { createWorkspacesModule } from './workspaces.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
@@ -35,7 +35,7 @@ function fixture(options: { ownerInteractions?: OwnerInteractionService; awayMod
   }));
   const update = vi.fn(async () => ({ ...item, pinned: true }));
   const remove = vi.fn(async () => {});
-  const store = { search, get, update, delete: remove } as unknown as FolioStore;
+  const store = { search, get, update, delete: remove } as unknown as WorkspaceItemsStore;
   const read = vi.fn(async () => ({}));
   const htmlArtifacts = { read } as unknown as WorkspaceHtmlArtifactStore;
   const readUrl = vi.fn(async () => 'https://jarvisstore.blob.core.windows.net/artifacts/image.png?sig=test');
@@ -55,7 +55,7 @@ function fixture(options: { ownerInteractions?: OwnerInteractionService; awayMod
   };
   const app = buildApp(config, undefined, {
     auth,
-    modules: [coreModule, createFolioModule(store, htmlArtifacts, imageArtifacts)],
+    modules: [coreModule, createWorkspacesModule(store, htmlArtifacts, imageArtifacts)],
     toolCallStore: { record } as unknown as ToolCallStore,
     workspaceCommands: workspaceCommands as never,
     ...options,
@@ -94,7 +94,7 @@ function manage(app: ReturnType<typeof buildApp>, payload: Record<string, unknow
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-describe('Folio API and Jarvis tools', () => {
+describe('Workspaces API and Jarvis tools', () => {
   it('restricts the API to the owner and returns bounded search results', async () => {
     const fixtureData = fixture();
     expect((await fixtureData.app.inject({ url: '/folio' })).statusCode).toBe(401);
@@ -223,7 +223,7 @@ describe('Folio API and Jarvis tools', () => {
     expect((await fixtureData.app.backgroundJobs.details(job.jobId))?.details.job.resultDelivery).toBe('pending');
   });
 
-  it('registers private Folio tools and resolves a natural-language reopen request', async () => {
+  it('keeps the legacy private tool names while resolving a Workspaces reopen request', async () => {
     const fixtureData = fixture();
     const listed = await fixtureData.app.inject({ url: '/tools', headers: authorization('agent.e30.sig') });
     expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('folio_search');
@@ -268,7 +268,7 @@ describe('Folio API and Jarvis tools', () => {
     expect(data.remove).not.toHaveBeenCalled();
   });
 
-  it('accepts the owner and rejects other users before accessing Folio', async () => {
+  it('accepts the owner and rejects other users before accessing Workspaces', async () => {
     const data = fixture();
     expect((await manage(data.app, { id: item.id, action: 'pin' }, 'other.e30.sig')).json().outcome).toBe('refused');
     expect(data.update).not.toHaveBeenCalled();
@@ -285,17 +285,17 @@ describe('Folio API and Jarvis tools', () => {
     data.search.mockResolvedValueOnce([]);
     expect((await manage(data.app, { query: 'missing', action: 'delete' })).json().outcome).toBe('refused');
     expect((await manage(data.app, { query: 'missing', action: 'rename', title: 'New' })).json().result.refused)
-      .toContain('No Folio item matched');
+      .toContain('No Workspaces item matched');
     expect(data.update).not.toHaveBeenCalled();
     expect(data.remove).not.toHaveBeenCalled();
   });
 
   it.each(['rename', 'pin', 'unpin', 'delete'])('refuses an unknown id for $action', async (action) => {
     const data = fixture({ awayModeStore: presence(), ownerInteractions: approvals() });
-    data.update.mockRejectedValueOnce(new FolioItemNotFound());
-    data.get.mockRejectedValueOnce(new FolioItemNotFound());
+    data.update.mockRejectedValueOnce(new WorkspaceItemNotFound());
+    data.get.mockRejectedValueOnce(new WorkspaceItemNotFound());
     const response = await manage(data.app, { id: item.id, action, ...(action === 'rename' ? { title: 'New' } : {}) });
-    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: 'That Folio item was not found.' } });
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: 'That Workspaces item was not found.' } });
     expect(data.remove).not.toHaveBeenCalled();
   });
 

@@ -88,7 +88,7 @@ describe('page navigation', () => {
   });
 
   it('refuses unknown or malformed targets with a reason', () => {
-    expect(resolveNavigation({ page: 'folio' })).toEqual({ ok: true, pane: 'folio' });
+    expect(resolveNavigation({ page: 'folio' })).toEqual({ ok: true, pane: 'workspaces' });
     for (const request of [{ page: 'folio', section: 'x' }, { page: 'status', taskId: '42' }, { page: 'status', section: 'voice' }, { page: 'nowhere' }, { page: 'settings', section: 'nope' },
       { page: 'settings', section: 'backend' }, { page: 'usage', section: 'voice' }, { page: 'factory', taskId: 'abc' }, { page: 'home', taskId: '42' }]) {
       const result = resolveNavigation(request);

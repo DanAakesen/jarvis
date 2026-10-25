@@ -390,7 +390,7 @@ function semanticPairings(): Pairing[] {
     { label: 'Knowledge graph Tasks mark', foreground: 'var(--graph-tasks)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
   ];
 
-  for (const tone of ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'folio']) {
+  for (const tone of ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'workspaces']) {
     for (const [state, percent] of [['selected', 16], ['hover', 24], ['pressed', 32]] as const) {
       pairings.push({
         label: `Rail icon ${tone} tone / ${state}`,

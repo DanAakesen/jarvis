@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import sql from 'mssql';
-import { FolioItemNotFound, FolioStore } from './folio-store.js';
+import { WorkspaceItemNotFound, WorkspaceItemsStore } from './workspace-items-store.js';
 
 const ownerId = 'd5b41c2f-33f4-4b4f-9a52-09346e50c8dd';
 const sourceId = '56a2b0bd-af47-46b5-8e15-c6e9a718ae93';
@@ -13,7 +13,7 @@ function fixture(recordset: unknown[] = [], rowsAffected: number[] = [1]) {
   const request = { input, query, cancel: vi.fn() };
   input.mockReturnValue(request);
   const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
-  return { store: new FolioStore(pool), query, input, request };
+  return { store: new WorkspaceItemsStore(pool), query, input, request };
 }
 
 function row(overrides: Record<string, unknown> = {}) {
@@ -30,7 +30,7 @@ function row(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('Folio store', () => {
+describe('Workspace items store', () => {
   it('records source-backed items with bounded metadata and parameterized values', async () => {
     const data = fixture([row()]);
     const item = await data.store.record(ownerId, {
@@ -53,7 +53,7 @@ describe('Folio store', () => {
       title: 'Invalid',
       promptSummary: 'x'.repeat(501),
       createdAt: createdAt.toISOString(),
-    }, new AbortController().signal)).rejects.toThrow('Invalid Folio record');
+    }, new AbortController().signal)).rejects.toThrow('Invalid Workspace item record');
   });
 
   it('searches within the owner, filters by kind and date, and orders pinned items first', async () => {
@@ -91,6 +91,6 @@ describe('Folio store', () => {
 
     const missing = fixture([], [0]);
     await expect(missing.store.delete(ownerId, itemId, new AbortController().signal))
-      .rejects.toBeInstanceOf(FolioItemNotFound);
+      .rejects.toBeInstanceOf(WorkspaceItemNotFound);
   });
 });
