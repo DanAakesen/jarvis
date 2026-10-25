@@ -26,7 +26,11 @@ from azure.ai.agentserver.invocations.voice import (
     new_response_id,
 )
 
-from model_contract import StreamingModelClient
+from model_contract import (
+    MAX_ACKNOWLEDGMENT_CHARACTERS,
+    AcknowledgmentBoundary,
+    StreamingModelClient,
+)
 from response_telemetry import ResponseTelemetry
 from state import (
     MAX_PENDING_PROACTIVE,
@@ -429,6 +433,27 @@ class ResponseCoordinator:
         async for chunk in self._model_client.complete(
             request, settings=operation.state.model_settings
         ):
+            if isinstance(chunk, AcknowledgmentBoundary):
+                if (
+                    not chunks
+                    or "".join(chunks) != chunk.text
+                    or len(chunk.text) > MAX_ACKNOWLEDGMENT_CHARACTERS
+                ):
+                    raise RuntimeError("The model acknowledgment did not match streamed text")
+                await operation.session.send(
+                    ResponseOutputTextDone(
+                        response_id=operation.response_id,
+                        item_id=item_id,
+                        text=chunk.text,
+                        voice=voice,
+                    )
+                )
+                operation.output_item_count += 1
+                chunks.clear()
+                utf8_bytes = 0
+                item_id = new_item_id()
+                first_chunk = True
+                continue
             encoded = len(chunk.encode("utf-8"))
             if len(chunks) >= MAX_OUTPUT_CHUNKS or utf8_bytes + encoded > MAX_OUTPUT_UTF8_BYTES:
                 raise RuntimeError("Model output exceeded sample limits")
@@ -455,7 +480,7 @@ class ResponseCoordinator:
                 voice=voice,
             )
         )
-        operation.output_item_count = 1
+        operation.output_item_count += 1
         operation.release_capacity()
         await operation.session.send(ResponseDone(response_id=operation.response_id))
         if operation.telemetry is not None:

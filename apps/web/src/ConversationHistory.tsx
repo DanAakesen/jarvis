@@ -81,7 +81,12 @@ function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'late
   }
 }
 
-type FailedTurn = QueuedMessage & { messageId?: string; error: string; partialReply: string };
+type FailedTurn = QueuedMessage & {
+  messageId?: string;
+  error: string;
+  partialReply: string;
+  acknowledgment: string;
+};
 
 function relativeTime(at: string, now: number): string {
   const seconds = Math.round((Date.parse(at) - now) / 1000);
@@ -212,6 +217,7 @@ export function ConversationHistory({
   const [activeMessage, setActiveMessage] = useState<QueuedMessage | null>(null);
   const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
+  const [streamedAcknowledgment, setStreamedAcknowledgment] = useState('');
   const [turnError, setTurnError] = useState('');
   const watchToken = useCallback(() => tokenProvider(), [tokenProvider]);
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
@@ -538,9 +544,11 @@ export function ConversationHistory({
     setActiveMessage(queued);
     setHistoryError('');
     setStreamedText('');
+    setStreamedAcknowledgment('');
     let userMessageSaved = false;
     let messageId: string | undefined;
     let partialReply = '';
+    let acknowledgment = '';
     let contextForTurn: string | undefined;
     let visualForTurn: VisualTurnContext | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
@@ -575,9 +583,7 @@ export function ConversationHistory({
           };
         }
       }
-      const visualArguments: [attachmentIds?: readonly string[] | undefined, visualContext?: VisualTurnContext | undefined] = visualForTurn
-        ? [queuedFiles.length ? queuedFiles.map((file) => file.id) : undefined, visualForTurn]
-        : queuedFiles.length ? [queuedFiles.map((file) => file.id)] : [];
+      const attachmentIds = queuedFiles.length ? queuedFiles.map((file) => file.id) : undefined;
       const assistant = await sendChatTurn(
         tokenProvider,
         config,
@@ -601,6 +607,8 @@ export function ConversationHistory({
         controller.signal,
         (message) => {
           partialReply = '';
+          acknowledgment = '';
+          setStreamedAcknowledgment('');
           setMessages((current) => mergeMessages(current, [{
             ...asHistoryMessage(message, activeSession.language),
             interrupted: true,
@@ -608,11 +616,19 @@ export function ConversationHistory({
           setStreamedText('');
           setSteering(false);
         },
-        ...visualArguments,
+        attachmentIds,
+        visualForTurn,
+        (text) => {
+          acknowledgment = text;
+          partialReply = '';
+          setStreamedAcknowledgment(text);
+          setStreamedText('');
+        },
       );
       setMessages((current) => mergeMessages(current.map(message => message.id === messageId && assistant.visualResult
         ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant, activeSession.language)]));
       setStreamedText('');
+      setStreamedAcknowledgment('');
       setReload((value) => value + 1);
     } catch (reason) {
       const message = controller.signal.aborted
@@ -623,9 +639,11 @@ export function ConversationHistory({
         ...(messageId ? { messageId } : {}),
         error: message,
         partialReply,
+        acknowledgment,
       }]);
       if (userMessageSaved) {
         setStreamedText('');
+        setStreamedAcknowledgment('');
         setReload((value) => value + 1);
       } else {
         if (!draftValue.current) {
@@ -655,6 +673,7 @@ export function ConversationHistory({
     return (
       <li className="conversation-message" data-speaker="jarvis" key={turn.id} tabIndex={0}>
         <strong className="message-author visually-hidden">Jarvis</strong>
+        {turn.acknowledgment && <p className="streaming-acknowledgment">{turn.acknowledgment}</p>}
         {turn.partialReply && <div className="interrupted-reply">
           <p>Partial reply, interrupted:</p>
           <MarkdownContent source={turn.partialReply} gfm />
@@ -877,13 +896,18 @@ export function ConversationHistory({
           // trail, and then the streamed answer in the same bubble.
           <div className="conversation-message streaming-message live-turn" data-speaker="jarvis">
             <strong className="message-author visually-hidden">Jarvis</strong>
-            {!streamedText && (
+            {!streamedText && !streamedAcknowledgment && (
               <p className="live-turn-status">
                 <WorkingCore />
                 <LivePhrase key={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
                   phase={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
                   tool={[...liveTools].reverse().find((tool) => tool.state === 'running')?.tool ?? null} text={workText} />
                 <span className="visually-hidden" role="status" aria-live="polite">Jarvis is thinking…</span>
+              </p>
+            )}
+            {streamedAcknowledgment && (
+              <p className="streaming-acknowledgment" aria-label="Jarvis's initial reply">
+                {streamedAcknowledgment}
               </p>
             )}
             {liveTools.length > 0 && (

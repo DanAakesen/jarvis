@@ -416,9 +416,12 @@ describe('Voice Live capability-preserving fallback', () => {
     let page = 0;
     do {
       const callId = `discover_${page++}`;
+      const responseId = `discover_response_${page}`;
+      active.event('response.created', { response: { id: responseId } });
       active.event('response.function_call_arguments.done', {
         name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: callId, arguments: JSON.stringify({ offset }),
       });
+      active.event('response.done', { response: { id: responseId, status: 'completed' } });
       await vi.advanceTimersByTimeAsync(0);
       const output = JSON.parse(toolOutput(callId) as string) as {
         outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
@@ -448,6 +451,7 @@ describe('Voice Live capability-preserving fallback', () => {
       .find((message) => message.item?.call_id === callId)?.item.output;
     expect(names(active)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
 
+    active.event('response.created', { response: { id: 'full_catalogue_response' } });
     active.event('response.function_call_arguments.done', {
       name: 'daily_food',
       call_id: 'food',
@@ -461,6 +465,7 @@ describe('Voice Live capability-preserving fallback', () => {
     active.event('response.function_call_arguments.done', {
       name: 'unregistered_tool', call_id: 'unadvertised', arguments: '{"note":"synthetic exact meal"}',
     });
+    active.event('response.done', { response: { id: 'full_catalogue_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(JSON.parse(toolOutput('food') as string)).toMatchObject({ tool: 'daily_food', outcome: 'ok' });
@@ -483,15 +488,19 @@ describe('Voice Live capability-preserving fallback', () => {
     fallback.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
 
+    fallback.event('response.created', { response: { id: 'food_discovery_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'food_discovery', arguments: '{}',
     });
+    fallback.event('response.done', { response: { id: 'food_discovery_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
+    fallback.event('response.created', { response: { id: 'food_execution_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_EXECUTION_TOOL,
       call_id: 'food_call',
       arguments: JSON.stringify({ capability: 'daily_food', arguments: { note: 'synthetic' } }),
     });
+    fallback.event('response.done', { response: { id: 'food_execution_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     expect(JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'food_call')!.item.output))
@@ -523,9 +532,11 @@ describe('Voice Live capability-preserving fallback', () => {
     expect(names(fallback)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
     expect(frameOf(fallback).session.tools).not.toEqual(initialDefinitions);
     fallback.event('session.updated');
+    fallback.event('response.created', { response: { id: 'discover_fallback_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'discover_fallback', arguments: '{}',
     });
+    fallback.event('response.done', { response: { id: 'discover_fallback_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     const output = JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'discover_fallback')!.item.output);
@@ -748,12 +759,20 @@ describe('Voice Live capability-preserving fallback', () => {
     const ready = f.sockets[1]!;
     ready.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    ready.event('response.created', { response: { id: 'outside_subset_response' } });
     ready.event('response.function_call_arguments.done', { name: 'proactive_recent_items', call_id: 'call_1', arguments: '{}' });
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execute).not.toHaveBeenCalled();
+    expect(ready.sent.map((data) => JSON.parse(data))
+      .filter((message) => message.item?.type === 'function_call_output')).toEqual([]);
+
+    ready.event('response.done', { response: { id: 'outside_subset_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
       .map((message) => ({ call: message.item.call_id, ...JSON.parse(message.item.output) }));
+    expect(f.browser.sent.map((data) => JSON.parse(data).type)).toContain('response.done');
     expect(outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({ call: 'call_1', outcome: 'refused' }),
       expect.objectContaining({ call: 'call_2', outcome: 'refused' }),
