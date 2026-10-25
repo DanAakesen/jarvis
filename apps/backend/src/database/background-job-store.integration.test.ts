@@ -27,7 +27,9 @@ beforeAll(async () => {
   await admin.request().batch(`CREATE DATABASE [${database}];`);
   await pool.connect();
   migrations = (await readMigrations()).filter((migration) =>
-    ['0029_background_jobs.sql', '0034_research_job_retry.sql', migrationName, recoveryMigration, workspaceMigration].includes(migration.name));
+    ['0019_workspace_artifacts.sql', '0025_workspace_html_artifacts.sql', '0029_background_jobs.sql',
+      '0034_research_job_retry.sql', '0035_folio.sql', '0036_folio_lowercase_ids.sql',
+      migrationName, recoveryMigration, workspaceMigration].includes(migration.name));
   await applyMigrations(pool, migrations);
 });
 
