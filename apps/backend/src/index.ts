@@ -595,7 +595,9 @@ try {
         await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
-      onConfirmationPending: () => nowEventHub.publish({ type: 'status', kind: 'approval_pending' }),
+      onConfirmationPending: (confirmation, foodEstimate) => nowEventHub.publish(foodEstimate
+        ? { type: 'food_estimate_pending', sessionId: foodEstimate.sessionId, confirmation }
+        : { type: 'status', kind: 'approval_pending' }),
     })
     : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;

@@ -236,6 +236,10 @@ the owner's next natural text/browser-voice reply can confirm the current
 estimate. No new control, layout or animation is introduced. Corrections and
 deletions retain the separate approval controls; expiry and cancellation remain
 visible through the existing feed.
+The exact Now review remains available while food logging waits for approval.
+In present-mode browser voice, announce the staged estimate and invite a new reply
+without waiting for the blocking tool to return. Initial acknowledgement is not
+the invitation; retain the same proposal and existing controls, with no new chrome.
 
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing

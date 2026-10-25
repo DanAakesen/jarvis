@@ -4,11 +4,20 @@
 
 Use the existing natural-food checks below, plus backend
 `src/core/phone-approval.test.ts`, `src/voice/startup.test.ts` and
-`src/daily/tools/food.test.ts`. The food-review HTTP fixture now starts at
-discovery/lookup and stages through the tool route before steering `Log it`;
-fresh and earlier-refusal histories use isolated synthetic records. Relay tests
-start from an estimate request and actual tool execution in both direct and
-compact discovery modes for English/Danish. Hosted-agent qualification:
+`src/daily/tools/food.test.ts`. The food-review HTTP fixture starts at
+discovery/lookup, stages through the tool route and reads the exact invitation
+through authenticated `GET /now` before steering `Log it`; fresh and earlier-refusal
+histories use isolated synthetic records. Relay tests start from an estimate
+request and actual tool execution in both direct and compact discovery modes
+for English/Danish. They require invitation transcript/audio frames on the browser
+socket before sending a new owner reply, then require the committed result
+transcript. They also cover deferral during user speech, expiry before delivery,
+and interrupted invitation responses retaining the tool-result continuation.
+The internal invitation event carries the existing confirmation's presentation,
+not a second approval lifecycle. #1259 acknowledgement is not invitation evidence.
+Full local qualification uses `npm run lint`, `npm test`, `npm run build`, and
+the isolated SQL command below when its loopback fixture is available.
+Hosted-agent qualification:
 `bash .github/scripts/python-ci.sh agents/jarvis`.
 These are mocked-provider/in-memory tests, not live-provider, SQL persistence,
 microphone or physical-device acceptance. Do not write production meals.

@@ -39,10 +39,20 @@ refusals, without granting approval. Require the actual `log_estimate` tool call
 before inviting confirmation; a prose estimate or lookup creates no proposal.
 With no pending proposal, obtain a new confirmation after staging, never reuse
 historical affirmative text. Preserve the current shared one-time approval service
-and leave its lifecycle refactor to #1281/#1282.
+on the merged #1282 `PendingAction` lifecycle.
+
+Review follow-up: the blocking tool cannot deliver its invitation after returning.
+Publish the exact persisted review through the existing authenticated Now feed
+and a session-bound, internal voice presentation event while it waits. Permit
+only that food invitation to speak during pending tool work; retain response,
+settings, speech and presence gating and discard obsolete queued presentations.
+This adds no second confirmation state or authority. #1259 acknowledgement
+delivery remains distinct from the estimate/invitation.
 
 Synthetic HTTP and English/Danish WebSocket tests exercise discovery, staging,
-natural confirmation and committed receipts with isolated in-memory storage.
+public review/invitation delivery, new natural replies and committed receipts
+with isolated in-memory storage. Voice fixtures forward synthetic transcript and
+audio frames to the browser socket before injecting the new owner reply.
 They do not establish live-provider, real-SQL or physical-device acceptance.
 The hosted tool catalogue has a 60-second TTL; no browser-cache cause was established.
 

@@ -5,14 +5,21 @@
 Clarified mobile/desktop browser versus telephone-call tool guidance and trusted
 runtime channel instructions. Guidance now requires backend estimate staging
 before inviting confirmation, with no authority from historical agreement.
-No parser, phone permission or confirmation-lifecycle change; #1281/#1282 owns
-the shared lifecycle refactor.
+Merged latest main `5231117` with #1259 acknowledgement and #1282 shared
+`PendingAction` lifecycle. Food approval retains that lifecycle and exact-proposal
+authority; no second confirmation state or parser/phone permission change.
 
-Focused synthetic HTTP discovery/lookup/staging/steering and English/Danish
-WebSocket direct/discovery tests return committed receipts once. Hosted-agent
-Ruff, byte-compilation and all 925 tests passed locally. Broader exact-tree
-qualification and security review are next; real-SQL, live-provider and physical
-mobile-device acceptance remain separate and unverified. No production food writes.
+The pending food call now publishes its exact Now review and a session-bound voice
+invitation. Voice presentation can proceed during tool work without bypassing
+speech, response, settings or presence gates. Expired queued invitations are
+discarded; interruption preserves the original tool's result continuation.
+Synthetic HTTP tests read the public review before steering; English/Danish
+direct/discovery WebSocket tests receive invitation transcript/audio frames before
+a new owner reply and then receive the committed result once. Focused tests and
+backend build/lint pass. Fresh full-tree qualification and security review follow;
+real-SQL, live-provider and physical mobile-device acceptance remain separate.
+Next acceptance requires live invitation/recognition/playback, not acknowledgement
+alone. No production food writes.
 
 ## Shared confirmation lifecycle (#1281; 25 October 2026)
 

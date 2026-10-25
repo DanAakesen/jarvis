@@ -209,11 +209,6 @@ describe('inactive internal food proposal review', () => {
         const pending = app.inject({ method: 'POST', url: '/tools/daily_food_review', headers: agentHeaders,
           payload: { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
             referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } } }).then(response => response.json());
-        await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
-        expect(f.store.log).not.toHaveBeenCalled();
-        const reply = await app.inject({ method: 'POST', url: '/conversation/sessions/41/steer',
-          headers: ownerHeaders, payload: { text: 'Log it', language: 'en' } });
-        expect(reply.statusCode).toBe(202);
         const receipt = await pending;
         expect(receipt).toMatchObject({ outcome: 'ok', result: { status: 'committed',
           record: { energy_kcal: 200, capture_method: 'text' } } });
@@ -221,10 +216,27 @@ describe('inactive internal food proposal review', () => {
         expect(await service.resolveFoodEstimateReply!({ ...messages.find(message => message.id === '43')!, id: '44' },
           approvalDeciderFor(f.request), signal())).toBe(false);
       } },
+      nowFeedStore: { read: async () => ({ running: [], items: [], updatedAt: new Date().toISOString() }),
+        dismiss: vi.fn(async () => false) },
     });
     try {
-      const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
-        headers: ownerHeaders, payload: { text: 'Estimate this synthetic food portion.' } });
+      const turn = app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+        headers: ownerHeaders, payload: { text: 'Estimate this synthetic food portion.' } }).then(response => response);
+      await vi.waitFor(async () => {
+        const feed = await app.inject({ method: 'GET', url: '/now', headers: ownerHeaders });
+        expect(feed.statusCode).toBe(200);
+        expect(feed.json().confirmations).toEqual([expect.objectContaining({
+          summary: expect.stringContaining('Review this exact food estimate for logging in Now. Nothing has changed.'),
+        })]);
+        expect(feed.json().confirmations[0].summary).toContain('Synthetic portion');
+        expect(feed.json().confirmations[0].summary).toContain('200 kcal');
+        expect(feed.json().confirmations[0].summary).toContain('Uncertainty:');
+      });
+      expect(f.store.log).not.toHaveBeenCalled();
+      const reply = await app.inject({ method: 'POST', url: '/conversation/sessions/41/steer',
+        headers: ownerHeaders, payload: { text: 'Log it', language: 'en' } });
+      expect(reply.statusCode).toBe(202);
+      const response = await turn;
       expect(response.statusCode).toBe(200);
       expect(response.body).toContain('committed');
       expect(response.body).not.toContain('event: error');

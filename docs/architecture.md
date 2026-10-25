@@ -287,6 +287,19 @@ the same durable browser confirmation and consume it once. Food call-site
 wiring, phrase interpretation, stream deadlines and persisted-reply SQL tests
 are retained from the merged #1278 (`d0d679f`), unchanged by reconciliation.
 
+Food invitation delivery (#1290) reuses this same `PendingAction`. After persisting
+and registering a food confirmation, the owner-interaction callback publishes its
+exact browser view and session binding through an internal `food_estimate_pending`
+Now event. The public Now stream sends only its usual invalidation; authenticated
+`GET /now` supplies the review. The matching voice relay queues presentation only,
+rechecks that the confirmation still exists, then requests a tool-free spoken
+estimate/invitation even while the food tool blocks. User speech, active responses,
+settings updates, presence and disconnect gates still apply. Cancelled/expired
+queued invitations are discarded. The initial tool dispatch still waits for the
+successful terminal response delivery from #1259; acknowledgement is not invitation
+delivery. Natural replies and committed receipts retain the shared lifecycle,
+persisted immediate-reply checks and one-time SQL consumption.
+
 Integration checkpoint (25 October): #1264 at `fa3de91` adds
 `PendingProjectClarification`, `rememberProjectClarification`,
 `resolveCreateIssueProject` and typed `ProjectClarification`. Its candidate

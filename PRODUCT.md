@@ -1533,6 +1533,10 @@ using a phone's browser is not a telephone call. Stage `log_estimate` before
 inviting confirmation: prose estimates and reference lookups create no pending
 approval. Without a pending proposal, prepare a new review and obtain a new reply;
 historical agreement cannot authorize it. Only a committed tool receipt proves logging.
+While the tool waits, the authenticated Now feed exposes the exact review.
+Present-mode browser voice also requests a tool-free spoken estimate and invitation
+from that same staged summary, even though the food tool is still pending.
+An initial spoken acknowledgement is not that invitation or proof of logging.
 
 Approved #1196 extends the same reviewed flow to food photos. Existing
 conversation attachments reach the existing image-capable model path; the model
