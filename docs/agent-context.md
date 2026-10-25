@@ -847,10 +847,11 @@ backend-side failure nor a hosted error event. Backend-side failures report
 (`agent_http_other` for an unlisted status), `agent_response_invalid`,
 `agent_stream_failed` or `agent_stream_ended`. A hosted error event without a
 safe code is `agent_error_code_missing`; with an unlisted code,
-`agent_error_code_unlisted`. #884's 36 hosted origin codes are unchanged. Degraded
-identity and no-timestamp reasons appear as `not_reported_or_redacted` in
-artifacts (open web clients accept HTTP reasons only for down checks); read them
-in the `system.smoke_check` events instead.
+`agent_error_code_unlisted`. The agent-defined `tool_loop_stalled` code is also
+preserved as a fixed safe reason. #884's hosted origin codes are unchanged.
+Degraded identity and no-timestamp reasons appear as `not_reported_or_redacted`
+in artifacts (open web clients accept HTTP reasons only for down checks); read
+them in the `system.smoke_check` events instead.
 
 A conversation check that threw one of these failures runs once more before its
 result is final; assertion failures and timeouts do not. The retry is a
@@ -3599,6 +3600,15 @@ Signed-in pages need a scratch Vite config. It aliases `./auth` to a stub that
 returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
+
+Workspace content responsiveness (#1260) has a synthetic Chromium fixture at
+`apps/web/browser-tests/workspace-content.html`, driven by
+`scripts/check-workspace-content-browser.mjs`. It reuses the web Vite config and
+does not sign in or call live services. Install `playwright-core@1.64.1` into a
+scratch directory, set `PLAYWRIGHT_CORE_MODULE` to its `index.mjs`, and run the
+script from the repository root; the exact command, viewport matrix, screenshot
+links, initial-phone chart-mark assertion, and known limits are in
+`docs/ui/screenshots/workspace-content/README.md`.
 
 P9-73 fixture checks used Chromium and WebKit at 390×844, 1280×900 and
 844×390 in light/dark, replacing served CSS `env()` values only in the scratch

@@ -3,11 +3,14 @@ import type { FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
 import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../core/owner-interactions.js';
 import type { MealInput } from '../nutrition/model.js';
-import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
+import { createToolRegistry, ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { fridaReference, type FridaLookup, type LookupComponent } from '../nutrition/frida.js';
 import type { DailyFoodLookup } from '../query.js';
 import { dailyFoodReviewTool } from './food-review.js';
 import { foodReviewSchema } from '../nutrition/review.js';
+import {
+  executeRealtimeCapabilityCall, VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL,
+} from '../../voice/realtime.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const at = new Date('2026-10-17T03:00:00Z');
@@ -103,6 +106,7 @@ function fixture() {
     server: { ownerObjectId: owner, conversationStore,
       awayModeStore: { read: vi.fn(async () => mode) }, ownerInteractions: { runConfirmed } },
     principal: { objectId: owner }, headers: {}, jarvisConversationMessage: source,
+    validateInput: vi.fn(() => true), getValidationFunction: vi.fn(() => undefined), log: { info: vi.fn() },
   } as unknown as FastifyRequest;
   const nutrition = vi.fn(() => store);
   const lookup = vi.fn<DailyFoodLookup>(async components => syntheticLookup(components));
@@ -119,7 +123,51 @@ function fixture() {
     setAttachments: (value: typeof photo[]) => { attachments = value; } };
 }
 
+async function executeThroughVoiceCapability(
+  tool: ReturnType<typeof dailyFoodReviewTool>, request: FastifyRequest, input: unknown,
+) {
+  const registry = createToolRegistry([{ id: 'daily', tools: [tool] }]);
+  const discovered = new Set<string>();
+  const discovery = JSON.parse(await executeRealtimeCapabilityCall({
+    type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_DISCOVERY_TOOL,
+    call_id: 'food-review-discovery', arguments: '{}',
+  }, registry, request, signal(), discovered, undefined, false));
+  expect(discovery).toMatchObject({
+    outcome: 'ok', result: { capabilities: [expect.objectContaining({ name: 'daily_food_review' })] },
+  });
+  return executeRealtimeCapabilityCall({
+    type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_EXECUTION_TOOL,
+    call_id: 'food-review-execution',
+    arguments: JSON.stringify({ capability: 'daily_food_review', arguments: input }),
+  }, registry, request, signal(), discovered, undefined, false);
+}
+
 describe('inactive internal food proposal review', () => {
+  it('keeps estimate and correction writes behind browser approval through compact voice dispatch', async () => {
+    const estimateFixture = fixture();
+    const estimateResult = executeThroughVoiceCapability(estimateFixture.tool, estimateFixture.request, estimate());
+    await estimateFixture.staged;
+    expect(estimateFixture.store.log).not.toHaveBeenCalled();
+    expect(estimateFixture.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
+    estimateFixture.approve();
+    expect(JSON.parse(await estimateResult)).toMatchObject({
+      tool: 'daily_food_review', outcome: 'ok', result: { status: 'committed' },
+    });
+    expect(estimateFixture.store.log).toHaveBeenCalledOnce();
+
+    const correctionFixture = fixture();
+    correctionFixture.seed();
+    const correctionResult = executeThroughVoiceCapability(correctionFixture.tool, correctionFixture.request, {
+      change: { operation: 'correct', idempotencyKey: 'retained-key', expectedRevision: '1', changes: { energyKcal: 222 } },
+    });
+    await correctionFixture.staged;
+    expect(correctionFixture.store.correct).not.toHaveBeenCalled();
+    correctionFixture.reject();
+    expect(JSON.parse(await correctionResult)).toMatchObject({
+      tool: 'daily_food_review', outcome: 'refused', result: { refused: 'Dan rejected the request.' },
+    });
+    expect(correctionFixture.store.correct).not.toHaveBeenCalled();
+  });
   it('preserves each operation and unknown versus zero through real Fastify/Ajv before strict tool validation', async () => {
     const app = Fastify();
     app.post('/synthetic-food-schema', { schema: { body: fixture().tool.inputSchema } }, async request => foodReviewSchema.parse(request.body));

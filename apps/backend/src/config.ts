@@ -32,7 +32,6 @@ export interface BackendConfig {
   healthUploadEnabled: boolean;
   /** Owner session tokens (JARVIS_OWNER_SESSION_ENABLED). False keeps the backend accepting Entra tokens only. */
   ownerSessionEnabled: boolean;
-  voiceToolBudgetProbeEnabled: boolean;
   phone?: {
     acsEndpoint: string;
     acsResourceId: string;
@@ -239,11 +238,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (ownerSessionSetting !== undefined && ownerSessionSetting !== 'true' && ownerSessionSetting !== 'false') {
     throw new ConfigurationError('JARVIS_OWNER_SESSION_ENABLED must be true or false');
   }
-  const voiceToolBudgetProbeSetting = env.JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED;
-  if (voiceToolBudgetProbeSetting !== undefined &&
-      voiceToolBudgetProbeSetting !== 'true' && voiceToolBudgetProbeSetting !== 'false') {
-    throw new ConfigurationError('JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED must be true or false');
-  }
   const auth = loadAuthConfig(env);
 
   return {
@@ -273,7 +267,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     proactiveAlertsEnabled: env.JARVIS_PROACTIVE_ALERTS_ENABLED === 'true',
     healthUploadEnabled: healthUploadSetting === 'true',
     ownerSessionEnabled: ownerSessionSetting === 'true',
-    voiceToolBudgetProbeEnabled: voiceToolBudgetProbeSetting !== 'false',
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
     ...(dailyFeedsSetting === 'true' ? { dailyFeedsEnabled: true as const } : {}),

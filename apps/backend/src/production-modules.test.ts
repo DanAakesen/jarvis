@@ -31,8 +31,10 @@ import { composeDaily } from './daily/composition.js';
 import { createMemoryOwnerReminderStore } from './proactive/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
-import { createRealtimeSessionUpdate, toModelToolSchema } from './voice/realtime.js';
-import { createToolBudgetRungs, TOOL_BUDGET_ALWAYS_KEPT_TOOLS } from './voice/tool-budget.js';
+import {
+  createRealtimeSessionUpdate, toModelToolSchema, VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL,
+} from './voice/realtime.js';
+import { createToolBudgetRungs } from './voice/tool-budget.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
@@ -165,43 +167,21 @@ describe('production tool catalogue', () => {
     }
   });
 
-  it('keeps every always-kept voice tool-budget tool in the catalogue and builds the English fallback ladder from it', () => {
+  it('uses direct canonical schemas first and compact registry discovery on fallback', () => {
     const registry = buildCatalogue(modulesWithEveryFeature());
-    const proactiveBudgetOmissions = ['proactive_recent_items', 'proactive_preferences'];
-    for (const name of TOOL_BUDGET_ALWAYS_KEPT_TOOLS) {
-      expect(registry.get(name), `${name} is listed in TOOL_BUDGET_ALWAYS_KEPT_TOOLS but not in the catalogue`).toBeDefined();
-    }
-    const definitionBytes = ({ name, description, inputSchema }: { name: string; description: string; inputSchema: unknown }) =>
-      Buffer.byteLength(JSON.stringify({
-        type: 'function', name, description, parameters: toModelToolSchema(inputSchema),
-      }));
-    // Match the budget's per-definition accounting; array delimiters and separators are not budgeted.
-    const bytes = (tools: readonly { name: string; description: string; inputSchema: unknown }[]) =>
-      tools.reduce((sum, tool) => sum + definitionBytes(tool), 0);
     const rungs = createToolBudgetRungs(registry);
-    expect(rungs.map(({ name }) => name)).toEqual(['R0', 'R1', 'R2', 'R3', 'R4', 'R5']);
-    expect(rungs.map(({ deadlineMs }) => deadlineMs)).toEqual([8_000, 6_000, 6_000, 6_000, 6_000, 6_000]);
-    expect(rungs.map(({ instructions }) => instructions))
-      .toEqual(['full', 'notice', 'notice', 'notice', 'notice', 'compact']);
-    const [r0, r1, r2, r3, r4, r5] = rungs.map(({ tools }) => tools.list());
-    expect(r0).toEqual(registry.list());
-    expect(r1!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => !proactiveBudgetOmissions.includes(name)));
-    expect(r1!.some(({ name }) => name.startsWith('daily_'))).toBe(true);
-    expect(r1!.map(({ name }) => name)).toContain('proactive_item_feedback');
-    expect(r2!.map(({ name }) => name)).toEqual(registry.list().map(({ name }) => name)
-      .filter((name) => !name.startsWith('daily_') && !proactiveBudgetOmissions.includes(name)));
-    expect(r2!.map(({ name }) => name)).toContain('proactive_item_feedback');
-    expect(r3!.map(({ name }) => name)).toEqual(expect.arrayContaining([...TOOL_BUDGET_ALWAYS_KEPT_TOOLS]));
-    expect(bytes(r3!)).toBeLessThanOrEqual(bytes(r0!) / 2);
-    expect(bytes(r3!)).toBeGreaterThan(bytes(r0!) * 0.45);
-    // Everything kept is smaller than everything dropped, apart from the always-kept tools.
-    const kept = new Set(r3!.map(({ name }) => name));
-    const largestKept = Math.max(...r3!.filter(({ name }) => !(TOOL_BUDGET_ALWAYS_KEPT_TOOLS as readonly string[]).includes(name))
-      .map((tool) => bytes([tool])));
-    for (const tool of r0!.filter(({ name }) => !kept.has(name))) expect(bytes([tool])).toBeGreaterThanOrEqual(largestKept);
-    expect(r4).toEqual([]);
-    expect(r5).toEqual([]);
+    expect(rungs.map(({ name }) => name)).toEqual(['R1', 'R2']);
+    expect(rungs.map(({ instructions }) => instructions)).toEqual(['full', 'compact']);
+    expect(rungs.map(({ capabilityMode }) => capabilityMode)).toEqual(['direct', 'discovery']);
+    expect(rungs.map(({ deadlineMs }) => deadlineMs)).toEqual([6_000, 6_000]);
+    for (const { tools } of rungs) expect(tools.list()).toEqual(registry.list());
+    const [initial, fallback] = rungs;
+    expect(createRealtimeSessionUpdate(initial!.tools).session.tools.map(({ name }) => name))
+      .toEqual(registry.list().map(({ name }) => name));
+    expect(createRealtimeSessionUpdate(
+      fallback!.tools, undefined, undefined, 'en', [], undefined, undefined, undefined, 'compact', undefined, 'discovery',
+    ).session.tools.map(({ name }) => name))
+      .toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL]);
   });
 
   it('preserves registered capabilities with proactive off and adds exactly the proactive tools when enabled', () => {

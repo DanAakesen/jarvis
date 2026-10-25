@@ -273,7 +273,7 @@ test('system smoke contract requires the ordered allowlisted checks and sanitize
   const degradedIdentity = {
     ...report,
     entries: report.entries.map((entry, index) => index === systemSmokeCheckIds.indexOf('chat_identity')
-      ? { ...entry, status: 'degraded', reason: 'identity_reply' }
+      ? { ...entry, status: 'degraded', reason: 'tool_loop_stalled' }
       : entry),
   };
   assert.equal(isSystemSmokeStatus(degradedIdentity), true);

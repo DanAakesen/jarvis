@@ -121,7 +121,9 @@ export function htmlAppDocument(html: string, theme: HtmlAppTheme) {
     + `<meta name="referrer" content="no-referrer">`
     + `<style>:root { color-scheme: ${theme.scheme} !important; ${variables} }
 html, body { background: var(--jarvis-background) !important; color: var(--jarvis-text) !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+html, body { min-width: 0 !important; max-width: 100% !important; overflow-wrap: anywhere !important; }
 body { margin: 0 !important; font-family: var(--jarvis-font, system-ui, sans-serif); }
+img, video, svg, canvas { max-width: 100% !important; height: auto; }
 [data-jarvis-document-root] { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
 </style>`
     + `<script>${bridgeScript}</script>`;

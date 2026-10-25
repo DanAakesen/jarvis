@@ -754,11 +754,45 @@ describe('ConversationHistory', () => {
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
     const error = screen.getByRole('alert');
     expect(error.textContent).toContain('First turn failed');
-    expect(error.closest('[data-speaker="dan"]')?.textContent).toContain(userMessage.text);
+    expect(error.closest('[data-speaker]')?.getAttribute('data-speaker')).toBe('jarvis');
+    expect(screen.getByText(userMessage.text).closest('[data-speaker]')?.getAttribute('data-speaker')).toBe('dan');
     expect(screen.getByText('Partial reply, interrupted:')).not.toBeNull();
     expect(sendChatTurn.mock.calls[1]?.[3]).toBe('Next after failure');
     await act(async () => finish({ ...assistantMessage, id: '54' }));
     expect(screen.getByRole('alert')).toBe(error);
+  });
+
+  it.each([
+    { saved: true, partial: 'Partial answer' },
+    { saved: true, partial: '' },
+    { saved: false, partial: 'Partial answer' },
+    { saved: false, partial: '' },
+  ])('separates user text from assistant failure (saved: $saved, partial: "$partial")', async ({ saved, partial }) => {
+    sendChatTurn.mockImplementationOnce(async (_client, _config, _session, _text, onUser, onDelta) => {
+      if (saved) onUser(userMessage);
+      if (partial) onDelta(partial);
+      throw new Error('Reply failed.');
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    const error = await screen.findByRole('alert');
+    const assistant = error.closest('.conversation-message');
+    const user = screen.getByText(userMessage.text, { selector: 'p' }).closest('.conversation-message');
+    expect(assistant?.getAttribute('data-speaker')).toBe('jarvis');
+    expect(user?.getAttribute('data-speaker')).toBe('dan');
+    expect(user?.querySelector('[role="alert"]')).toBeNull();
+    expect(assistant?.textContent).not.toContain(userMessage.text);
+    expect(user?.nextElementSibling).toBe(assistant);
+    expect(assistant?.querySelector('.message-author')?.textContent).toBe('Jarvis');
+    if (partial) {
+      expect(screen.getByText(partial).closest('.conversation-message')).toBe(assistant);
+      expect(user?.textContent).not.toContain(partial);
+    } else {
+      expect(screen.queryByText('Partial reply, interrupted:')).toBeNull();
+    }
   });
 
   it('steers a streaming turn with the selected language and retains the interrupted partial once', async () => {
@@ -1081,7 +1115,8 @@ describe('ConversationHistory', () => {
     expect((input as HTMLTextAreaElement).value).toBe('Keep this draft');
     fireEvent.change(input, { target: { value: 'can you see anything?' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(await screen.findByText('Camera frame failed. Try again.')).not.toBeNull();
+    const error = await screen.findByText('Camera frame failed. Try again.');
+    expect(error.closest('.conversation-message')?.getAttribute('data-speaker')).toBe('jarvis');
     expect(sendChatTurn).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Turn camera off' }));

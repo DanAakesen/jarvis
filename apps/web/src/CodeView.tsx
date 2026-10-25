@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { GeneratedCodeData } from '@jarvis/contracts';
 
 /**
@@ -34,6 +34,7 @@ function markQuery(line: string, query: string | undefined): ReactNode {
 
 export function CodeView({ data, title }: { data: GeneratedCodeData; title: string }) {
   const body = useRef<HTMLDivElement>(null);
+  const [wrapLines, setWrapLines] = useState(true);
   const startLine = data.startLine ?? 1;
   const lines = useMemo(() => data.content.split(/\r\n|\r|\n/u), [data.content]);
   const highlighted = useMemo(() => {
@@ -61,15 +62,19 @@ export function CodeView({ data, title }: { data: GeneratedCodeData; title: stri
   }, [data.path, data.content, firstHighlight]);
 
   return (
-    <figure className="code-view" aria-label={title}>
+    <figure className={`code-view${wrapLines ? ' code-view--wrap' : ''}`} aria-label={title}>
       <figcaption className="code-view-header">
-        <span className="code-view-path" title={`${data.repo}/${data.path}`}>
+        <span className="code-view-path">
           <span className="code-view-repo">{data.repo}</span>
           <span className="code-view-folder">{folder ? ` / ${folder}` : ' / '}</span>
           <strong>{name}</strong>
         </span>
         {data.ref && <span className="code-view-chip" title="Branch or commit">{data.ref}</span>}
         {data.language && <span className="code-view-chip">{data.language}</span>}
+        <label className="code-view-wrap">
+          <input type="checkbox" checked={wrapLines} onChange={(event) => setWrapLines(event.currentTarget.checked)} />
+          Wrap lines
+        </label>
         {link && <a className="code-view-link" href={link} target="_blank" rel="noreferrer">Open on GitHub</a>}
       </figcaption>
       {(data.query || data.highlight?.length) && (
@@ -85,11 +90,11 @@ export function CodeView({ data, title }: { data: GeneratedCodeData; title: stri
             const lit = highlighted.has(number);
             return (
               <Fragment key={number}>
+                {index > 0 && '\n'}
                 <span className="code-line" data-line={number} data-highlighted={lit || undefined}>
                   <span className="code-line-number" aria-hidden="true">{number}</span>
-                  <span className="code-line-text">{markQuery(line, data.query) || ' '}</span>
+                  <span className="code-line-text">{markQuery(line, data.query)}</span>
                 </span>
-                {'\n'}
               </Fragment>
             );
           })}

@@ -52,7 +52,7 @@ from jarvis_tools import (
     current_steering_fetcher,
     current_turn,
 )
-from model_contract import StreamingModelClient
+from model_contract import StreamingModelClient, ToolLoopStalled
 from state import ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
@@ -71,6 +71,8 @@ logger = logging.getLogger("chat_runtime")
 
 def chat_failure_code(exc: BaseException) -> str:
     """A short, content-free cause for a failed turn: a known code or only the exception class."""
+    if isinstance(exc, ToolLoopStalled):
+        return exc.code
     code = getattr(exc, "code", None) if isinstance(exc, BackendUnavailable) else None
     if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
         return code

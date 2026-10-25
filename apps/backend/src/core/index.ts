@@ -158,7 +158,9 @@ export const coreModule: BackendModule = {
       if (smoke && !request.agentPrincipal) return reply.code(403).send({ error: 'Smoke tools are unavailable' });
       return app.jarvisTools.list()
         .filter(({ name }) => !smoke || smokeTools.has(name))
-        .map(({ name, description, inputSchema }) => ({ name, description, inputSchema }));
+        .map(({ name, description, inputSchema, execution }) => ({
+          name, description, inputSchema, ...(execution ? { execution } : {}),
+        }));
     });
     for (const tool of app.jarvisTools.list()) {
       app.post(`/tools/${tool.name}`, {
