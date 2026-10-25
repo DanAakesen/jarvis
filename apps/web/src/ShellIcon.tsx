@@ -1,4 +1,4 @@
-export type ShellIconName = 'home' | 'factory' | 'knowledge' | 'tasks' | 'notes_tree' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily' | 'present' | 'away' | 'on_the_move' | 'running' | 'done' | 'failed' | 'idle' | 'attention';
+export type ShellIconName = 'home' | 'factory' | 'knowledge' | 'tasks' | 'notes_tree' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily' | 'present' | 'away' | 'on_the_move' | 'running' | 'done' | 'failed' | 'idle' | 'attention' | 'chat' | 'health' | 'workspaces' | 'menu' | 'chevron' | 'sparkle';
 
 export function ShellIcon({ name }: { name: ShellIconName }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -49,5 +49,17 @@ export function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="M4 4h16v16H4Z" /><path d="M4 14h5l2 3h2l2-3h5" /></svg>;
     case 'attention':
       return <svg {...common}><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></svg>;
+    case 'chat':
+      return <svg {...common}><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-4 2v-5.5A7.5 7.5 0 1 1 20 11.5Z" /></svg>;
+    case 'health':
+      return <svg {...common}><path d="M20.8 8.7c0 5.1-8.8 11.1-8.8 11.1S3.2 13.8 3.2 8.7A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.8 2.3Z" /></svg>;
+    case 'workspaces':
+      return <svg {...common}><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1" /><rect x="14" y="3.5" width="6.5" height="6.5" rx="1" /><rect x="3.5" y="14" width="6.5" height="6.5" rx="1" /><rect x="14" y="14" width="6.5" height="6.5" rx="1" /></svg>;
+    case 'menu':
+      return <svg {...common}><path d="M4 6h16M4 12h16M4 18h16" /></svg>;
+    case 'chevron':
+      return <svg {...common}><path d="m9 6 6 6-6 6" /></svg>;
+    case 'sparkle':
+      return <svg {...common}><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" /><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" /></svg>;
   }
 }

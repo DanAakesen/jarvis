@@ -14,7 +14,7 @@ export type MoreMenuAction = {
   description?: string;
 };
 
-function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'check' }) {
+function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'check' | 'plus' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'more':
@@ -27,6 +27,8 @@ function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'c
       return <svg {...common}><path d="m9 6 6 6-6 6" /></svg>;
     case 'check':
       return <svg {...common}><path d="m5 12.5 4.5 4.5L19 7" /></svg>;
+    case 'plus':
+      return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
   }
 }
 
@@ -65,7 +67,7 @@ export function ConversationMoreMenu({
   align?: 'start' | 'end';
   className?: string;
   label?: string;
-  icon?: 'more' | 'attach';
+  icon?: 'more' | 'attach' | 'plus';
   /** Explains how a language choice applies, shown inside the Language flyout. */
   languageNote?: string;
 }) {

@@ -679,12 +679,19 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
   });
 
-  it('keeps phone message times on the bubble rim rather than below the bubble', () => {
+  it('keeps message times below the bubble without covering its text', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('absolute');
+    expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'top')).toBe('calc(100% + var(--space-1))');
+    expect(ruleDeclaration(history, /\.conversation-message\s*\{([^}]*)\}/, 'margin')).toBe('var(--space-4) 0 calc(var(--space-4) + var(--space-2))');
     const touchRules = mediaBlocks(history).filter(({ query }) => /hover:\s*none/u.test(query)).map(({ body }) => body).join('\n');
     expect(touchRules).toContain('.message-metadata { opacity: 1; }');
-    expect(touchRules).not.toMatch(/\.conversation-message \.message-metadata\s*\{[^}]*position:\s*static/su);
+  });
+
+  it('keeps the phone dictation stop control visible while a draft can be sent', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(history).toContain('.composer[data-can-send="true"]:not([data-dictating="true"]) > .composer-dictate { display: none; }');
+    expect(history).toContain('.composer[data-can-send="true"][data-dictating="true"] > .composer-send { display: none; }');
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
@@ -752,7 +759,7 @@ describe('shared glass tokens', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     const voice = readFileSync('src/VoiceControls.css', 'utf8');
     const toasts = readFileSync('src/ConversationToast.css', 'utf8');
-    expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --phone-dock-bottom: calc(env(safe-area-inset-bottom) + 16px); }');
+    expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --mobile-nav-height: 68px; --phone-dock-bottom: calc(env(safe-area-inset-bottom) + var(--mobile-nav-height) + 16px); }');
     expect(ruleDeclaration(styles, /\.app-shell\.app-signed-out\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) calc(env(safe-area-inset-right) + var(--space-5)) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + var(--space-5))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, '--dock-space')).toBe('calc(68px + var(--phone-dock-bottom))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="true"\] \.jarvis-page\s*\{([^}]*)\}/, 'padding-bottom')).toBe('var(--phone-dock-bottom)');
@@ -1011,7 +1018,6 @@ describe('shared glass tokens', () => {
     for (const selector of [
       /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/,
-      /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.camera-control-button\[aria-pressed="true"\], \.topbar-icon-button\[aria-expanded="true"\], \.settings-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.workspace-arrangement-options \[aria-pressed="true"\]\s*\{([^}]*)\}/,
       /\.folio-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
@@ -1025,6 +1031,9 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.presence-chip-trigger\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
     expect(ruleDeclaration(source, /\.workspace-tab-item\[data-state="front"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
     expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'font-weight')).toBe('750');
+    expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'background')).toBe('transparent');
+    expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
+    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link\[aria-current="page"\], \.mobile-bottom-nav-link\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
     expect(source).toContain('--selection-hover: var(--state-selected-hover)');
     expect(source).toContain('--selection-pressed: var(--state-selected-pressed)');
     expect(source).toContain('background: var(--selection-pressed, var(--glass-pressed))');

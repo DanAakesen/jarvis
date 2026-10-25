@@ -61,7 +61,33 @@ const assistantMessage = {
 };
 const steeringMessage = { ...userMessage, id: '53', text: 'Continue in English.' };
 
-function renderConversation(historyRefresh = 0, camera?: CameraController, onVoiceActiveChange = vi.fn(), screenShare?: ScreenShareController) {
+class MockDictationRecognition {
+  static instance: MockDictationRecognition;
+  lang = '';
+  interimResults = false;
+  continuous = false;
+  onstart: (() => void) | null = null;
+  onresult: ((event: Event & { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0?: { transcript?: string } }> }) => void) | null = null;
+  onerror: ((event: Event & { error: string }) => void) | null = null;
+  onend: (() => void) | null = null;
+  start = vi.fn();
+  stop = vi.fn(() => this.onend?.());
+  abort = vi.fn();
+
+  constructor() {
+    MockDictationRecognition.instance = this;
+  }
+
+  emitTranscript(transcript: string) {
+    const result = Object.assign([{ transcript }], { isFinal: true });
+    this.onresult?.({ resultIndex: 0, results: [result] } as unknown as Event & {
+      resultIndex: number;
+      results: ArrayLike<{ isFinal: boolean; 0?: { transcript?: string } }>;
+    });
+  }
+}
+
+function renderConversation(historyRefresh = 0, camera?: CameraController, onVoiceActiveChange = vi.fn(), screenShare?: ScreenShareController, phone = false) {
   return render(
     <JarvisActivityProvider>
       <MemoryRouter>
@@ -71,6 +97,7 @@ function renderConversation(historyRefresh = 0, camera?: CameraController, onVoi
             getAccessToken={getAccessToken}
             config={config}
             historyRefresh={historyRefresh}
+            phone={phone}
             {...(camera ? { camera } : {})}
             {...(screenShare ? { screenShare } : {})}
           />
@@ -138,6 +165,51 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('dictates into the draft without starting or sending an assistant turn', async () => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.type(textbox, 'Remember');
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    expect(MockDictationRecognition.instance.lang).toBe('en-US');
+    expect(screen.getByRole('button', { name: 'Stop dictation' }).getAttribute('aria-pressed')).toBe('true');
+    act(() => MockDictationRecognition.instance.emitTranscript('the launch time'));
+    expect(textbox).toHaveProperty('value', 'Remember the launch time');
+    expect(textbox.closest('form')?.getAttribute('data-dictating')).toBe('true');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
+  });
+
+  it('shows a clear disabled explanation when browser dictation is unavailable', () => {
+    renderConversation();
+    expect(screen.getByRole('button', { name: 'Dictate' })).toHaveProperty('disabled', true);
+    expect(screen.getByText("Dictation isn't supported in this browser.")).not.toBeNull();
+  });
+
+  it('explains denied microphone permission without changing the draft', async () => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.type(textbox, 'Keep this');
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    act(() => MockDictationRecognition.instance.onerror?.({ error: 'not-allowed' } as Event & { error: string }));
+    expect(screen.getByRole('alert').textContent).toContain('Microphone permission was denied');
+    expect(textbox).toHaveProperty('value', 'Keep this');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
+  it('starts the existing realtime Voice session from the plus menu on phones', async () => {
+    const user = userEvent.setup();
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Voice' }));
+    expect(await screen.findByRole('button', { name: 'End voice' })).not.toBeNull();
+    expect(voiceSessions).toHaveLength(1);
+  });
+
   it.each(['image', 'caption'] as const)('shows the completed %s path on its user turn without inferring from a frame reference', async visualPath => {
     const user = userEvent.setup();
     const camera: CameraController = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',

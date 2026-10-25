@@ -1,5 +1,21 @@
 # Decisions
 
+## Phone navigation and draft-only dictation (#1287; 25 October 2026)
+
+Use the approved dark phone composition with the compact composer above a
+bottom Chat/Health/Workspaces/Menu navigation. Highlight the current destination
+by color only; the page sheet uses horizontally swipeable pages and keyboard
+Previous/Next controls. Keep message times below bubbles and preserve existing
+attachment and visual-capture actions. Voice remains the existing realtime
+assistant session under the plus menu.
+
+Dictate is a separate browser `SpeechRecognition` action that appends finalized
+transcript text to the persisted unsent draft; it never submits or starts
+`BrowserVoiceClient`. This reuses a platform speech API rather than adding a new
+backend transcription route. Browser support and permission errors remain
+visible; audio processing follows the browser's speech-recognition
+implementation, which may use its provider. No new API or storage contract.
+
 ## Bound deployment-status responses at 4 MiB (25 October 2026; #1267)
 
 The GitHub Actions deployment reader requests up to 100 workflow runs. Allow

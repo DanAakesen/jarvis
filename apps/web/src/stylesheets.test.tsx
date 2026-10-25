@@ -62,6 +62,7 @@ const sideBorderAllowlist: AllowlistEntry[] = [
   { file: 'styles.css', selector: '.area-sidebar', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the sidebar on narrow layouts.' },
   { file: 'styles.css', selector: '.context-panel', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Structural boundary below the context panel on narrow layouts.' },
   { file: 'styles.css', selector: '.mobile-menu-actions', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates navigation from menu actions.' },
+  { file: 'styles.css', selector: '.mobile-bottom-nav', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates the phone navigation dock from page content.' },
   { file: 'styles.css', selector: '.system-status-row + .system-status-row', property: 'border-top', value: '1px solid var(--rule)', reason: 'Separates consecutive system status rows.' },
   { file: 'daily/daily.css', selector: '.daily-table th, .daily-table td', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Daily table row separator; file is owned by the parallel Daily work.' },
   { file: 'daily/ui/daily-ui.css', selector: '.daily-scroll-table th, .daily-scroll-table td', property: 'border-bottom', value: '1px solid var(--rule)', reason: 'Daily scroll table row separator; file is owned by the parallel Daily work.' },

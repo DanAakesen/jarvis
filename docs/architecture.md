@@ -404,6 +404,25 @@ canonical CSS own both phone halves; desktop resumes its existing fit/anchor
 path when the media policy changes back. Phone Move/resize controls are absent.
 No new geometry state, persistence format, API or voice behaviour is introduced.
 
+## Mobile navigation, dictation and composer (25 October 2026; #1287)
+
+`App` renders the phone-only bottom navigation from the existing route state.
+Chat, enabled Health and Workspaces are direct destinations; Menu opens the
+existing page sheet, whose horizontal scroll-snap rail groups links into pages.
+`ConversationHistory` keeps existing attachment/capture actions in the plus
+menu and calls the existing VoiceControls start callback from the Voice entry.
+
+Draft-only Dictate uses the browser's `SpeechRecognition` API (with its WebKit
+alias where available), not `BrowserVoiceClient.onUserTurn`: realtime voice
+transcripts are assistant turns and must not be repurposed as drafts. A final
+recognized segment is appended to the existing draft and saved through the
+existing draft effect; it is never submitted automatically. Recognition is
+requested only after the owner's Dictate click, follows the selected chat
+language, and reports unsupported browsers and microphone errors. Transcription
+is handled by the browser speech-recognition implementation and may be
+provider-backed; Jarvis does not send dictation audio through its realtime voice
+backend. No API, database or persisted-draft contract changes.
+
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
 Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,

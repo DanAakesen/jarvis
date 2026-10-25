@@ -294,6 +294,21 @@ keyboard-height estimate, focus-scroll workaround or keyboard-fit animation.
 This narrows the earlier manual-placement descriptions to desktop. Controlled
 Chromium layout evidence does not establish physical iPhone/Safari acceptance.
 
+## Mobile navigation and composer actions (#1287; 25 October 2026)
+
+Follow Dan's selected dark Jarvis phone mockup with its signature glass rim.
+Keep the 44px plus control, compact message field, distinct Dictate action and
+existing send behavior in one row. Dictate appends browser speech recognition
+to the draft; realtime Voice remains a separate plus-menu action beside the
+existing attachment, video and screen-sharing actions.
+
+Place message times below each bubble, never on its text or rim. Anchor the
+bottom navigation below the composer with Chat, Health when enabled, Workspaces
+and Menu. Use color alone for the current destination, with no dot. The Menu
+sheet pages horizontally with native touch scrolling and offers Previous/Next
+controls for keyboard users; retain the established dark glass surfaces, shared
+control radius and focus treatment.
+
 ## Chat records and keyboard geometry (16 October 2026; local candidate)
 
 Keep the current glass chat, compact message type and readable composer.
