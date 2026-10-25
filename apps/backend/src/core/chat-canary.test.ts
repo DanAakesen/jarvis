@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ChatAgentError,
   ChatAgentInvocationError,
@@ -61,14 +61,89 @@ function passingAgent(
   return { stream: vi.fn(implementation) };
 }
 
-function probes(agent: ConversationAgent, now?: () => number) {
-  return createChatAcceptanceProbes(agent, now);
+async function probes(agent: ConversationAgent, now?: () => number) {
+  const suite = createChatAcceptanceProbes(agent, now);
+  const result = suite.chat_canary!();
+  await vi.runAllTimersAsync();
+  await result;
+  return suite;
 }
 
 describe('post-deploy chat acceptance suite', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('spaces every hosted call, including approval, and caps active calls at three', async () => {
+    const base = passingAgent();
+    const starts: number[] = [];
+    let active = 0;
+    let maximum = 0;
+    const agent: ConversationAgent = {
+      async *stream(input, owner, signal) {
+        starts.push(Date.now());
+        maximum = Math.max(maximum, ++active);
+        try {
+          await new Promise<void>((resolve) => { setTimeout(resolve, 24_500); });
+          yield* base.stream(input, owner, signal);
+        } finally {
+          active--;
+        }
+      },
+    };
+    const suite = createChatAcceptanceProbes(agent);
+    const result = suite.chat_canary!();
+    await vi.advanceTimersByTimeAsync(23_999);
+    expect(starts).toHaveLength(3);
+    expect(maximum).toBe(3);
+    await vi.runAllTimersAsync();
+    await expect(result).resolves.toEqual({ status: 'ok' });
+    expect(starts).toHaveLength(8);
+    expect(maximum).toBe(3);
+    expect(starts.slice(1).every((start, index) => start - starts[index]! >= 8_000)).toBe(true);
+    expect(starts[7]! - starts[0]!).toBeGreaterThanOrEqual(56_000);
+  });
+
+  it.each([
+    [undefined, 60_000],
+    [45_000, 45_000],
+    [0, 30_000],
+    [600_000, 60_000],
+    [Number.NaN, 60_000],
+  ])('backs off once with hint %s bounded to %s ms', async (hint, wait) => {
+    const attempts: number[] = [];
+    const agent = passingAgent((input) => {
+      if (input.text === prompts[1]) {
+        attempts.push(Date.now());
+        throw new ChatAgentError('rate_limit_exceeded', hint);
+      }
+      return undefined;
+    });
+    const suite = createChatAcceptanceProbes(agent);
+    const result = suite.chat_capabilities!();
+    await vi.advanceTimersByTimeAsync(8_000 + wait - 1);
+    expect(attempts).toHaveLength(1);
+    await vi.runAllTimersAsync();
+    await expect(result).resolves.toEqual({ status: 'down', reason: 'rate_limit_exceeded' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'rate_limit_exceeded' });
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1]! - attempts[0]!).toBeGreaterThanOrEqual(wait);
+    expect(agent.stream).toHaveBeenCalledTimes(9);
+  });
+
+  it.each(['backend_unavailable', 'error_ratelimiterror', 'settings_http_429', 'private_code'])(
+    'does not retry other hosted failures: %s', async (code) => {
+      const agent = passingAgent((input) => {
+        if (input.text === prompts[1]) throw new ChatAgentError(code);
+        return undefined;
+      });
+      const suite = await probes(agent);
+      await expect(suite.chat_canary!()).resolves.toMatchObject({ status: 'down' });
+      expect(agent.stream).toHaveBeenCalledTimes(8);
+    },
+  );
   it('reports each scripted prompt as an independent passing check', async () => {
     const agent = passingAgent();
-    const suite = probes(agent);
+    const suite = await probes(agent);
     const entries = await Promise.all(Object.entries(suite).map(async ([id, probe]) => [id, await probe!()] as const));
 
     expect(Object.fromEntries(entries)).toEqual({
@@ -99,7 +174,7 @@ describe('post-deploy chat acceptance suite', () => {
     const agent = passingAgent((input) => input.text === 'what is in issue 700?'
       ? { text: 'Issue 700 is Camera preview behavior.' }
       : undefined);
-    const suite = probes(agent);
+    const suite = await probes(agent);
 
     await expect(suite.chat_github_read!()).resolves.toMatchObject({
       status: 'down', reason: 'github_issue_unavailable',
@@ -112,20 +187,22 @@ describe('post-deploy chat acceptance suite', () => {
   });
 
   it.each([...chatAgentFailureReasons])('retains the fixed hosted origin %s for only the failed prompt', async (code) => {
-    const suite = probes(passingAgent((input) => {
+    const suite = await probes(passingAgent((input) => {
       if (input.text === prompts[1]) throw new ChatAgentError(code);
       return undefined;
     }));
 
     await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: code });
-    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+    await expect(suite.chat_canary!()).resolves.toEqual({
+      status: 'down', reason: code === 'rate_limit_exceeded' ? code : 'acceptance_check_failed',
+    });
     await expect(suite.chat_plain_approval!()).resolves.toEqual({ status: 'ok' });
   });
 
   it.each([...chatAgentInvocationReasons].filter((reason) => !reason.startsWith('agent_error_code_')))(
     'retains the fixed backend-side failure %s for only the failed prompt',
     async (reason) => {
-      const suite = probes(passingAgent((input) => {
+      const suite = await probes(passingAgent((input) => {
         if (input.text === prompts[2]) {
           throw new ChatAgentInvocationError('Chat agent failed', reason as ChatAgentInvocationReason);
         }
@@ -149,7 +226,7 @@ describe('post-deploy chat acceptance suite', () => {
     [Object.assign(new Error('private provider detail'), { reason: 'agent_http_503' }), 'agent_error'],
     [new ChatAgentInvocationError('Chat agent failed', 'private_reason' as ChatAgentInvocationReason), 'agent_error'],
   ])('does not trust unknown codes, assertion codes or ordinary exception text: %s', async (error, reason) => {
-    const suite = probes(passingAgent((input) => {
+    const suite = await probes(passingAgent((input) => {
       if (input.text === prompts[1]) throw error;
       return undefined;
     }));
@@ -158,15 +235,15 @@ describe('post-deploy chat acceptance suite', () => {
     await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
   });
 
-  it('runs a prompt that threw once more and reports the passing second attempt', async () => {
+  it('retries a rate-limited check once and reports the passing second attempt', async () => {
     let failures = 0;
     const agent = passingAgent((input) => {
       if (input.text === prompts[1] && failures++ === 0) {
-        throw new ChatAgentInvocationError('Chat agent request failed', 'agent_request_failed');
+        throw new ChatAgentError('rate_limit_exceeded');
       }
       return undefined;
     });
-    const suite = probes(agent);
+    const suite = await probes(agent);
     const entries = await Promise.all(Object.entries(suite).map(async ([id, probe]) => [id, await probe!()] as const));
 
     expect(Object.fromEntries(entries)).toEqual({
@@ -183,7 +260,7 @@ describe('post-deploy chat acceptance suite', () => {
     expect(vi.mocked(agent.stream).mock.calls.filter(([input]) => input.text === prompts[1])).toHaveLength(2);
   });
 
-  it('keeps the first failure when the second attempt fails as well', async () => {
+  it('never retries other invocation failures', async () => {
     let attempts = 0;
     const agent = passingAgent((input) => {
       if (input.text === prompts[1]) {
@@ -193,25 +270,25 @@ describe('post-deploy chat acceptance suite', () => {
       }
       return undefined;
     });
-    const suite = probes(agent);
+    const suite = await probes(agent);
 
     await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: 'agent_http_503' });
     await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
-    expect(agent.stream).toHaveBeenCalledTimes(9);
+    expect(agent.stream).toHaveBeenCalledTimes(8);
   });
 
-  it('keeps a persistently failing identity prompt as a warning after its second attempt', async () => {
+  it('keeps a failing identity invocation as a warning without retrying', async () => {
     const agent = passingAgent((input) => {
       if (input.text === prompts[0]) {
         throw new ChatAgentInvocationError('Chat agent unavailable (HTTP 503)', 'agent_http_503');
       }
       return undefined;
     });
-    const suite = probes(agent);
+    const suite = await probes(agent);
 
     await expect(suite.chat_identity!()).resolves.toEqual({ status: 'degraded', reason: 'agent_http_503' });
     await expect(suite.chat_canary!()).resolves.toEqual({ status: 'ok' });
-    expect(agent.stream).toHaveBeenCalledTimes(9);
+    expect(agent.stream).toHaveBeenCalledTimes(8);
   });
 
   it('skips the second attempt once the first has used too much of the suite budget', async () => {
@@ -223,13 +300,13 @@ describe('post-deploy chat acceptance suite', () => {
       }
       return undefined;
     });
-    const suite = probes(agent, () => clock);
+    const suite = await probes(agent, () => clock);
 
     await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: 'agent_request_failed' });
     expect(agent.stream).toHaveBeenCalledTimes(8);
   });
 
-  it('bounds a stalled second attempt by its own window and keeps the first failure', async () => {
+  it('bounds a stalled rate-limit retry by its own call deadline', async () => {
     vi.useFakeTimers();
     try {
       const base = passingAgent();
@@ -242,19 +319,17 @@ describe('post-deploy chat acceptance suite', () => {
           if (input.text !== 'yes') return base.stream(input, owner, signal);
           approvalSignals.push(signal);
           return approvalSignals.length === 1
-            ? iterable(() => Promise.reject(new ChatAgentInvocationError(
-              'Chat agent unavailable (HTTP 503)', 'agent_http_503',
-            )))
+            ? iterable(() => Promise.reject(new ChatAgentError('rate_limit_exceeded')))
             : iterable(() => new Promise<IteratorResult<string>>((_resolve, reject) => {
               signal.addEventListener('abort', () => reject(new DOMException('Fixture cancelled', 'AbortError')), { once: true });
             }));
         },
       };
-      const suite = probes(agent);
+      const suite = createChatAcceptanceProbes(agent);
       const result = suite.chat_plain_approval!();
-      await vi.advanceTimersByTimeAsync(25_000);
+      await vi.runAllTimersAsync();
 
-      await expect(result).resolves.toEqual({ status: 'down', reason: 'agent_http_503' });
+      await expect(result).resolves.toEqual({ status: 'down', reason: 'timeout' });
       await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
       expect(approvalSignals).toHaveLength(2);
       expect(approvalSignals[1]!.aborted).toBe(true);
@@ -274,7 +349,7 @@ describe('post-deploy chat acceptance suite', () => {
         capabilities: ['Notes: vault_read, vault_search', 'Calendar: calendar_today_agenda', 'GitHub tools: github_read'],
       }],
     } : undefined);
-    const suite = probes(agent);
+    const suite = await probes(agent);
 
     await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'ok' });
     await expect(suite.chat_canary!()).resolves.toEqual({ status: 'ok' });
@@ -290,7 +365,7 @@ describe('post-deploy chat acceptance suite', () => {
     'I can help with Notes, mycalendars and GitHub tools',
     'I can help with Notes, calendarsync and GitHub tools',
   ])('rejects missing categories, synonyms and partial calendar words: %s', async (text) => {
-    const suite = probes(passingAgent((input) => input.text === prompts[1] ? {
+    const suite = await probes(passingAgent((input) => input.text === prompts[1] ? {
       text,
       calls: [{
         name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok',
@@ -329,7 +404,7 @@ describe('post-deploy chat acceptance suite', () => {
       calls: [{ name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok', capabilities }],
     })),
   ])('keeps plural replies failing for $reason', async ({ reason, calls }) => {
-    const suite = probes(passingAgent((input) => input.text === prompts[1] ? {
+    const suite = await probes(passingAgent((input) => input.text === prompts[1] ? {
       text: 'I can help with Notes, calendars and GitHub tools',
       calls,
     } : undefined));
@@ -371,14 +446,14 @@ describe('post-deploy chat acceptance suite', () => {
       }],
     },
   ] as const)('reports a content-free $reason diagnosis', async ({ reason, text, calls }) => {
-    const suite = probes(passingAgent((input) => input.text === prompts[1] ? { text, calls: [...calls] } : undefined));
+    const suite = await probes(passingAgent((input) => input.text === prompts[1] ? { text, calls: [...calls] } : undefined));
 
     await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason });
     await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
   });
 
   it('reports wording-only identity and missing-image timestamp failures as warnings', async () => {
-    const suite = probes(passingAgent((input) => input.text === prompts[0]
+    const suite = await probes(passingAgent((input) => input.text === prompts[0]
       ? { text: 'I am a generic assistant named Jarvis.' }
       : input.text === prompts[5]
         ? { text: 'The image was captured at 12:34.' }
@@ -394,14 +469,16 @@ describe('post-deploy chat acceptance suite', () => {
   it('coalesces concurrent report entries and caches one suite for 60 seconds', async () => {
     let now = 0;
     const agent = passingAgent();
-    const suite = probes(agent, () => now);
+    const suite = await probes(agent, () => now);
 
     await Promise.all(Object.values(suite).map((probe) => probe!()));
     await suite.chat_jobs!();
     expect(agent.stream).toHaveBeenCalledTimes(8);
 
     now = 60_000;
-    await suite.chat_jobs!();
+    const refreshed = suite.chat_jobs!();
+    await vi.runAllTimersAsync();
+    await refreshed;
     expect(agent.stream).toHaveBeenCalledTimes(16);
   });
 
@@ -420,9 +497,9 @@ describe('post-deploy chat acceptance suite', () => {
           };
         },
       };
-      const suite = probes(stalled);
+      const suite = createChatAcceptanceProbes(stalled);
       const result = suite.chat_jobs!();
-      await vi.advanceTimersByTimeAsync(25_000);
+      await vi.runAllTimersAsync();
       await expect(result).resolves.toMatchObject({ status: 'down', reason: 'timeout' });
       await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: 'timeout' });
       await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });

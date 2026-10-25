@@ -82,6 +82,7 @@ export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'error_pooltimeout',
   'error_remoteprotocolerror',
   'error_ratelimiterror',
+  'rate_limit_exceeded',
   'error_apistatuserror',
   'error_apiconnectionerror',
   'error_apitimeouterror',
@@ -130,7 +131,7 @@ const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>>
     'Agent settings could not be built.',
     'Agent contract could not be checked.',
   ]),
-  chat_canary: new Set(['acceptance_check_failed', 'agent_error', 'timeout']),
+  chat_canary: new Set(['acceptance_check_failed', 'agent_error', 'timeout', 'rate_limit_exceeded']),
   chat_identity: new Set(['catalogue_unavailable', 'identity_reply', ...sharedChatFailureReasons]),
   chat_capabilities: new Set([
     'catalogue_unavailable',

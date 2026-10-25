@@ -36,6 +36,7 @@ CHAT_AGENT_FAILURE_REASONS = frozenset({
     "error_pooltimeout",
     "error_remoteprotocolerror",
     "error_ratelimiterror",
+    "rate_limit_exceeded",
     "error_apistatuserror",
     "error_apiconnectionerror",
     "error_apitimeouterror",
@@ -70,7 +71,7 @@ SHARED = (
     frozenset({"agent_error", "timeout"}) | CHAT_AGENT_FAILURE_REASONS | CHAT_AGENT_INVOCATION_REASONS
 )
 SAFE_REASONS = {
-    "chat_canary": {"agent_error", "timeout", "acceptance_check_failed"},
+    "chat_canary": {"agent_error", "timeout", "acceptance_check_failed", "rate_limit_exceeded"},
     "chat_identity": SHARED | {"catalogue_unavailable", "identity_reply"},
     "chat_capabilities": SHARED | {
         "catalogue_unavailable", "capabilities_discovery_missing",

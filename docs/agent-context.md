@@ -819,7 +819,7 @@ Focused checks:
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
 
-## Chat acceptance failure labels and one bounded retry (#820, 17 October 2026)
+## Chat acceptance pacing and rate-limit recovery (#1232, 25 October 2026)
 
 Read a failed chat check's safe reason in the acceptance artifact first; never
 call smoke, model or provider endpoints to investigate an old run. A bare
@@ -829,27 +829,45 @@ backend-side failure nor a hosted error event. Backend-side failures report
 (`agent_http_other` for an unlisted status), `agent_response_invalid`,
 `agent_stream_failed` or `agent_stream_ended`. A hosted error event without a
 safe code is `agent_error_code_missing`; with an unlisted code,
-`agent_error_code_unlisted`. #884's 36 hosted origin codes are unchanged. Degraded
+`agent_error_code_unlisted`. `rate_limit_exceeded` is an allowed hosted, canary,
+smoke-log and artifact reason, not an unlisted error. Degraded
 identity and no-timestamp reasons appear as `not_reported_or_redacted` in
 artifacts (open web clients accept HTTP reasons only for down checks); read them
 in the `system.smoke_check` events instead.
 
-A conversation check that threw one of these failures runs once more before its
-result is final; assertion failures and timeouts do not. The retry is a
-deliberate gate-tolerance change, not a proven fix, and a rescued first failure
-is not recorded. Remove the retry wave in `runSuite` to revert it. #816's
+Only `rate_limit_exceeded` retries a check, once. A numeric SSE `retry_after`
+(seconds) or HTTP `Retry-After` hint sets the wait, clamped to 30–60 seconds;
+without a valid hint it waits a full 60 seconds after the rejection. Retries
+re-enter the same pacing queue. A second throttle fails with the named reason,
+including `chat_canary`; other second-attempt failures retain their actual reason.
+Other errors, assertion failures and timeouts never retry. A rescued first
+throttle is not retained in the report; inspect dependency telemetry too. #816's
 coordination client is never opened for smoke turns; the agent test
 `test_smoke_invocations_open_no_coordination_connection` pins that.
 
-Several `chat_*` checks failing together with `agent_error_code_unlisted` while the
+The acceptance-only queue starts hosted calls at least eight seconds apart and
+allows at most three active calls, including the plain-approval follow-up and
+retries. Eight hosted calls (roughly 15 model calls) span at least 56 seconds.
+Expect about 60–90 seconds without throttles; rate-limit recovery and slow calls
+can take longer, bounded by a 240-second suite deadline and 25 seconds per active
+hosted call. The deployment request allows 250 seconds within the unchanged
+five-minute job timeout. Normal chat and retained Status reads bypass this queue.
+No capacity or infrastructure change is part of this fix.
+
+Several `chat_*` checks failing together with `rate_limit_exceeded` (or historical
+`agent_error_code_unlisted`) while the
 backend tool callbacks return 200 is not automatically a flake. Before rerunning,
 query the Foundry Responses API `invoke_agent` dependency spans in Application
 Insights (`AppDependencies`, `error.type` in the span properties) for
 `rate_limit_exceeded`. The acceptance run sends about 15 Chat model calls and 57K
 to 66K input tokens in one minute, which exceeded the 50,000 tokens per minute of
-the `gpt-6-astra` deployment until its capacity was raised to 150 on 23 October
-(#1232). Raise the capacity of the model the Chat setting selects before pacing
-the checks.
+the `gpt-6-astra` deployment until its capacity was raised to 150 on 23 October.
+Failures recurred at capacity 150 on 25 October: short bursts, not just minute
+totals, matter. Check actual call spacing, concurrency and retry timing before
+rerunning; do not assume an authentication failure or raise capacity as a fix.
+Completion still requires two consecutive production releases passing acceptance
+on their first attempt with no throttled dependency spans, checked after each
+deploy. Unit tests are not that live verification.
 
 Targeted commands:
 `npm test --workspace @jarvis/backend -- src/core/chat-agent.test.ts src/core/chat-canary.test.ts src/system-status.test.ts`,
