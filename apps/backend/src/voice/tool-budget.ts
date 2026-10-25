@@ -7,7 +7,7 @@ const proactiveTools = new Set(['proactive_recent_items', 'proactive_preferences
 
 export type ToolBudgetRungName = 'R0' | 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
 export const TOOL_BUDGET_HEALTH_RUNG = 1;
-export const TOOL_BUDGET_COLD_START_RUNG = 2; // The previous R1 frame was ready in 1,341 ms after R0 stalled at 8,001 ms on 21 October 2026.
+export const TOOL_BUDGET_COLD_START_RUNG = 1;
 
 export const TOOL_BUDGET_PROBE_NAMES = [
   'full', 'no_proactive', 'no_daily', 'reduced_plus_copies',

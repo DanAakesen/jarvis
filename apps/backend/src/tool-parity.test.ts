@@ -13,6 +13,8 @@ import { createVaultModule } from './vault/index.js';
 import type { BackendModule } from './modules.js';
 import { createRealtimeSessionUpdate } from './voice/realtime.js';
 import { createGoogleModule } from './google/tools.js';
+import type sql from 'mssql';
+import { composeDaily } from './daily/composition.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
@@ -41,8 +43,12 @@ const additionalTools: BackendModule = {
 };
 
 function fixture() {
+  const daily = composeDaily({
+    enabled: true, pool: {} as sql.ConnectionPool, ownerObjectId: config.auth.ownerObjectId,
+  });
+  if (!daily) throw new Error('Daily fixture did not compose');
   const app = buildApp(config, undefined, {
-    modules: [coreModule, conversationModule, factoryModule, additionalTools],
+    modules: [coreModule, conversationModule, factoryModule, daily, additionalTools],
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
   });
   apps.push(app);
@@ -72,18 +78,28 @@ function missingInstructionTools(
 }
 
 describe('voice and chat tool parity', () => {
-  it('matches the voice tool names to /tools and checks shared instruction references', async () => {
+  it.each([
+    ['Danish chat', 'chat', 'da'],
+    ['English chat', 'chat', 'en'],
+    ['Danish browser voice', 'voice', 'da'],
+    ['English browser voice', 'voice', 'en'],
+  ] as const)('uses the shared capability catalogue for %s', async (_path, channel, language) => {
     const app = fixture();
     const response = await app.inject({ url: '/tools', headers });
     expect(response.statusCode).toBe(200);
     const catalogue = response.json() as { name: string; inputSchema: unknown }[];
-    const voice = createRealtimeSessionUpdate(app.jarvisTools).session;
 
-    expect(voice.tools.map(({ name }) => name)).toEqual(catalogue.map(({ name }) => name));
+    if (channel === 'voice') {
+      const voice = createRealtimeSessionUpdate(
+        app.jarvisTools, undefined, undefined, language,
+      ).session;
+      expect(voice.tools.map(({ name }) => name)).toEqual(catalogue.map(({ name }) => name));
+    }
 
     expect(catalogue.map(({ name }) => name)).toEqual(expect.arrayContaining([
       'mail_search', 'calendar_create_event', 'calendar_create_events',
-      'calendar_get_pending_change', 'calendar_confirm_change',
+      'calendar_get_pending_change', 'calendar_confirm_change', 'vault_search', 'get_system_health',
+      'daily_query', 'daily_food', 'daily_food_review',
     ]));
     expect(missingInstructionTools(capabilityInstructions(defaultSettings.memory), catalogue)).toEqual([]);
   });
