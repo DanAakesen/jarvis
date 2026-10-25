@@ -1076,7 +1076,7 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect((await screen.findByRole('alert')).textContent)
-      .toBe('Turn on the camera in More before asking Jarvis to inspect a frame.');
+      .toBe('Enable video in More before asking Jarvis to inspect a frame.');
     expect(createChatSession).not.toHaveBeenCalled();
     expect(sendChatTurn).not.toHaveBeenCalled();
   });
@@ -1400,6 +1400,8 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('group', { name: 'Reply language' })).toBeNull();
     const more = screen.getByRole('button', { name: 'More options' });
     more.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Attach file or photo' }));
     await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
     await user.keyboard('{ArrowRight}');
