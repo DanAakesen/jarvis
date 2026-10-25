@@ -1230,86 +1230,78 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
   });
 
-  it('fails closed when the initial spoken response has no playback receipt', async () => {
-    const received: Record<string, unknown>[] = [];
-    let upstream!: WebSocket;
-    let resolveToolOutput!: () => void;
-    const toolOutput = new Promise<void>((resolve) => { resolveToolOutput = resolve; });
-    const execute = vi.fn(async () => ({ ok: true }));
-    const upstreamUrl = await echoServer((socket) => {
-      upstream = socket;
-      socket.on('message', (data) => {
-        const event = JSON.parse(data.toString()) as Record<string, unknown>;
-        received.push(event);
-        if ((event.item as Record<string, unknown> | undefined)?.type === 'function_call_output') resolveToolOutput();
+  it.each(['missing', 'negative'] as const)(
+    'continues the received request when initial acknowledgment playback is %s',
+    async (receipt) => {
+      const received: Record<string, unknown>[] = [];
+      let upstream!: WebSocket;
+      const execute = vi.fn(async () => ({ ok: true }));
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
       });
-    });
-    const toolModule: BackendModule = {
-      id: 'failed-playback-test',
-      tools: [{
+      const toolModule: BackendModule = {
+        id: 'failed-playback-test',
+        tools: [{
+          name: 'failed_playback_test',
+          description: 'Return a test result.',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          execute,
+        }],
+        registerRoutes: async () => {},
+      };
+      const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }), undefined, [], [toolModule]);
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+      await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+      const speechStopped = new Promise<void>((resolve) => {
+        const onMessage = (data: RawData) => {
+          if ((JSON.parse(data.toString()) as Record<string, unknown>).type !== 'input_audio_buffer.speech_stopped') return;
+          browser.off('message', onMessage);
+          resolve();
+        };
+        browser.on('message', onMessage);
+      });
+      upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+      await speechStopped;
+      browser.send(JSON.stringify({ type: 'response.create' }));
+      await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+      upstream.send(JSON.stringify({ type: 'response.created', response: { id: 'failed_ack' } }));
+      upstream.send(JSON.stringify({ type: 'response.audio.delta', delta: 'AQID' }));
+      upstream.send(JSON.stringify({
+        type: 'response.function_call_arguments.done',
+        call_id: 'failed_ack_call',
         name: 'failed_playback_test',
-        description: 'Return a test result.',
-        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-        execute,
-      }],
-      registerRoutes: async () => {},
-    };
-    const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
-      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
-    }), undefined, [], [toolModule]);
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const address = app.server.address() as AddressInfo;
-    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
-    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+        arguments: '{}',
+      }));
+      if (receipt === 'negative') {
+        browser.send(JSON.stringify({
+          type: 'jarvis.voice.playback.completed',
+          responseId: 'failed_ack',
+          audible: false,
+        }));
+      }
+      const terminalDelivered = new Promise<void>((resolve) => {
+        const onMessage = (data: RawData) => {
+          if ((JSON.parse(data.toString()) as Record<string, unknown>).type !== 'response.done') return;
+          browser.off('message', onMessage);
+          resolve();
+        };
+        browser.on('message', onMessage);
+      });
+      upstream.send(JSON.stringify({ type: 'response.done', response: { id: 'failed_ack' } }));
+      await terminalDelivered;
+      await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+      await vi.waitFor(() => expect(received.some((event) =>
+        (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(true));
+    },
+  );
 
-    const speechStopped = new Promise<void>((resolve) => {
-      const onMessage = (data: RawData) => {
-        if ((JSON.parse(data.toString()) as Record<string, unknown>).type !== 'input_audio_buffer.speech_stopped') return;
-        browser.off('message', onMessage);
-        resolve();
-      };
-      browser.on('message', onMessage);
-    });
-    upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
-    await speechStopped;
-    browser.send(JSON.stringify({ type: 'response.create' }));
-    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
-    upstream.send(JSON.stringify({ type: 'response.created', response: { id: 'failed_ack' } }));
-    upstream.send(JSON.stringify({ type: 'response.audio.delta', delta: 'AQID' }));
-    vi.useFakeTimers();
-    upstream.send(JSON.stringify({
-      type: 'response.function_call_arguments.done',
-      call_id: 'failed_ack_call',
-      name: 'failed_playback_test',
-      arguments: '{}',
-    }));
-    const terminalDelivered = new Promise<void>((resolve) => {
-      const onMessage = (data: RawData) => {
-        if ((JSON.parse(data.toString()) as Record<string, unknown>).type !== 'response.done') return;
-        browser.off('message', onMessage);
-        resolve();
-      };
-      browser.on('message', onMessage);
-    });
-    upstream.send(JSON.stringify({ type: 'response.done', response: { id: 'failed_ack' } }));
-    await terminalDelivered;
-    browser.send(JSON.stringify({
-      type: 'jarvis.voice.playback.completed',
-      responseId: 'stale_response_id',
-      audible: true,
-    }));
-    await vi.advanceTimersByTimeAsync(30_001);
-    await toolOutput;
-    expect(received.some((event) =>
-      (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(true);
-    expect(execute).not.toHaveBeenCalled();
-    const output = received.find((event) =>
-      (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')?.item as
-        Record<string, unknown>;
-    expect(String(output.output)).toContain('initial spoken response was not confirmed');
-  });
-
-  it('cancels a gated tool after barge-in and ignores its late playback receipt', async () => {
+  it('cancels a tool after barge-in and ignores its late playback receipt', async () => {
     const received: Record<string, unknown>[] = [];
     let upstream!: WebSocket;
     const execute = vi.fn(async () => ({ ok: true }));
@@ -1369,7 +1361,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(false);
   });
 
-  it('waits for the first spoken reply, then accepts multiple silent tool rounds', async () => {
+  it('continues after initial terminal delivery without playback and accepts silent tool rounds', async () => {
     const received: Record<string, unknown>[] = [];
     const order: string[] = [];
     let upstream!: WebSocket;
@@ -1436,14 +1428,6 @@ describe('backend-relayed Voice Live WebSocket', () => {
     order.push('response.done');
     upstream.send(JSON.stringify({ type: 'response.done', response: { id: responseId } }));
     await responseDoneDelivered;
-    expect(activity.mock.calls.some(([event]) => event.type === 'tool-call-finished')).toBe(false);
-    expect(received.some((event) =>
-      (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(false);
-    browser.send(JSON.stringify({
-      type: 'jarvis.voice.playback.completed',
-      responseId,
-      audible: true,
-    }));
     await vi.waitFor(() => {
       expect(activity.mock.calls.some(([event]) =>
         event.type === 'tool-call-finished')).toBe(true);
@@ -1453,19 +1437,18 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
     expect(order).toEqual(['response.done', 'tool-output', 'response.create']);
 
+    browser.send(JSON.stringify({
+      type: 'jarvis.voice.playback.completed',
+      responseId,
+      audible: false,
+    }));
+
     for (const index of [2, 3]) {
       await vi.waitFor(() => {
         expect(received.filter((event) => event.type === 'response.create')).toHaveLength(index);
       });
       const silentResponseId = `silent_tool_response_${index}`;
       upstream.send(JSON.stringify({ type: 'response.created', response: { id: silentResponseId } }));
-      if (index === 2) {
-        browser.send(JSON.stringify({
-          type: 'jarvis.voice.playback.completed',
-          responseId,
-          audible: false,
-        }));
-      }
       upstream.send(JSON.stringify({
         type: 'response.function_call_arguments.done',
         call_id: `queued_call_${index}`,

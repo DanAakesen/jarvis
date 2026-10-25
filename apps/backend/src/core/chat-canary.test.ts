@@ -180,7 +180,8 @@ describe('post-deploy chat acceptance suite', () => {
       }),
     };
 
-    await expect(probes(agent).chat_identity!()).resolves.toEqual({ status: 'ok' });
+    const suite = await probes(agent);
+    await expect(suite.chat_identity!()).resolves.toEqual({ status: 'ok' });
   });
 
   it('fails the matching deterministic check when a required tool call is missing', async () => {

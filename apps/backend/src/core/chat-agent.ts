@@ -191,12 +191,10 @@ function invocationFailure(
   return new ChatAgentInvocationError(message, reason, { cause: error });
 }
 
-<<<<<<< HEAD
-function chunkFromEvent(event: { event: string; data: string }): ConversationAgentChunk | undefined {
-  if (event.event === 'error') throw new ChatAgentError(errorCode(event.data));
-  if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
-=======
-function deltaFromEvent(event: { event: string; data: string }, headers: Headers): string | undefined {
+function chunkFromEvent(
+  event: { event: string; data: string },
+  headers: Headers,
+): ConversationAgentChunk | undefined {
   if (event.event === 'error') {
     let retryAfterMs: number | undefined;
     const retryAfter = headers.get('retry-after');
@@ -213,8 +211,7 @@ function deltaFromEvent(event: { event: string; data: string }, headers: Headers
     } catch { /* Invalid error metadata is ignored. */ }
     throw new ChatAgentError(errorCode(event.data), retryAfterMs);
   }
-  if (event.event !== 'delta') return undefined;
->>>>>>> origin/main
+  if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
   let payload: unknown;
   try {
     payload = JSON.parse(event.data);
@@ -442,13 +439,8 @@ export function createFoundryInvocationConversationAgent(
           for (const event of parsed.events) {
             finish(event);
             if (completed) break;
-<<<<<<< HEAD
-            const chunk = chunkFromEvent(event);
+            const chunk = chunkFromEvent(event, response.headers);
             if (chunk !== undefined) {
-=======
-            const delta = deltaFromEvent(event, response.headers);
-            if (delta !== undefined) {
->>>>>>> origin/main
               firstDeltaMs ??= performance.now() - invocationStarted;
               yield chunk;
             }
@@ -461,13 +453,8 @@ export function createFoundryInvocationConversationAgent(
           for (const event of finalEvents) {
             finish(event);
             if (completed) break;
-<<<<<<< HEAD
-            const chunk = chunkFromEvent(event);
+            const chunk = chunkFromEvent(event, response.headers);
             if (chunk !== undefined) {
-=======
-            const delta = deltaFromEvent(event, response.headers);
-            if (delta !== undefined) {
->>>>>>> origin/main
               firstDeltaMs ??= performance.now() - invocationStarted;
               yield chunk;
             }

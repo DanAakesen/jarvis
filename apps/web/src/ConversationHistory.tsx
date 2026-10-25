@@ -670,13 +670,9 @@ export function ConversationHistory({
 
   function failedTurnFeedback(turn: FailedTurn) {
     return (
-<<<<<<< HEAD
-      <div key={turn.id}>
-        {turn.acknowledgment && <p className="streaming-acknowledgment">{turn.acknowledgment}</p>}
-=======
       <li className="conversation-message" data-speaker="jarvis" key={turn.id} tabIndex={0}>
         <strong className="message-author visually-hidden">Jarvis</strong>
->>>>>>> origin/main
+        {turn.acknowledgment && <p className="streaming-acknowledgment">{turn.acknowledgment}</p>}
         {turn.partialReply && <div className="interrupted-reply">
           <p>Partial reply, interrupted:</p>
           <MarkdownContent source={turn.partialReply} gfm />
