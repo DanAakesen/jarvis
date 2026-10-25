@@ -237,10 +237,18 @@ function isClearProjectAffirmation(text: string): boolean {
   return /^(?:yes|yes please|yeah|yep|ja|ja tak|gerne)[.!?]*$/iu.test(text.trim());
 }
 
+function isUnclearProjectSelection(text: string): boolean {
+  return /[?]/u.test(text) ||
+    /\b(?:no|nope|not|never|don't|dont|doesn't|doesnt|can't|cannot|won't|maybe|perhaps|possibly|uncertain|unsure|instead|rather|i think|i guess|i suppose|not sure|nej|ikke|aldrig|måske|maaske|muligvis|usikker|usikkert|usikre|hellere|jeg tror)\b/iu
+      .test(text);
+}
+
 function selectorAppearsInMessage(selector: string, message: string): boolean {
   const reference = normalizedProjectReference(selector);
-  const normalizedMessage = ` ${normalizedProjectReference(message)} `;
-  return Boolean(reference) && normalizedMessage.includes(` ${reference} `);
+  if (!reference) return false;
+  const escaped = reference.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&').replace(/\s+/gu, '\\s+');
+  return new RegExp(`(?:^|\\s)${escaped}(?=$|[\\s.,!?;:])`, 'iu')
+    .test(normalizedProjectReference(message));
 }
 
 function isCandidateSelector(selector: string, candidate: Pick<Project, 'id' | 'name' | 'repo'>): boolean {
@@ -334,7 +342,8 @@ async function resolveCreateIssueProject(
       }
     } else {
       const selector = input.project;
-      if (!selector || !selectorAppearsInMessage(selector, source.text)) {
+      if (!selector || isUnclearProjectSelection(source.text) ||
+          !selectorAppearsInMessage(selector, source.text)) {
         refuse('Please answer yes to the project I named or clearly name one of the listed projects. Nothing was written.');
       }
       try {

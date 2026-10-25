@@ -18,7 +18,9 @@
   loop of its own.
 - For a one-project clarification, accept only an immediate clear affirmation
   bound to the same verified session and unchanged issue request; ambiguity,
-  intervening replies, changed targets and stale registrations fail closed.
+  denial/uncertainty (including replies that also name a candidate), intervening
+  replies, changed targets and stale registrations fail closed. A clear named
+  selection remains valid when multiple candidates were listed.
   Explicit raw-repository issue comments remain supported without registration.
 - **Verification:** synthetic resolver and canonical dispatch tests cover English
   and Danish requests, ambiguity, no-write refusals, permission denial and project

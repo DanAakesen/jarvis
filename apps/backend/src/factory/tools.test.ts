@@ -465,6 +465,9 @@ describe('Software Factory Jarvis tools', () => {
   it.each([
     { reply: 'No.', selector: '31', title: 'Add hello-world file' },
     { reply: 'Maybe the other one?', selector: '31', title: 'Add hello-world file' },
+    { reply: 'No, not Greeting Runner please.', selector: 'Greeting Runner', title: 'Add hello-world file' },
+    { reply: 'Maybe Greeting Runner instead.', selector: 'Greeting Runner', title: 'Add hello-world file' },
+    { reply: 'Måske Greeting Runner?', selector: 'Greeting Runner', title: 'Add hello-world file' },
     { reply: 'yes', selector: '32', title: 'Add hello-world file' },
     { reply: 'yes', selector: '31', title: 'Create a different thing' },
   ])('does not continue project clarification for $reply or changed request/target', async ({ reply, selector, title }) => {
@@ -492,6 +495,32 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
     expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
     expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a clear named project selection after clarification', async () => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
+    const other = { ...project, id: '32', name: 'Other Runner', description: 'test project for other fixtures', repo: 'synthetic/other' };
+    const test = fixture([registered, other]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a file to the test project.', model: null, at: new Date(),
+    });
+    const payload = { project: 'the test project', title: 'Add a file', body: 'Create the file.' };
+    const clarification = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers, payload });
+    expect(clarification.json().result.refused).toContain('That could mean more than one project');
+
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: 'I mean Greeting Runner.',
+      model: null, at: new Date(Date.now() + 10_000),
+    });
+    const continuation = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { ...payload, project: registered.name },
+    });
+
+    expect(continuation.json()).toMatchObject({ outcome: 'ok', result: { number: 9 } });
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(registered.repo);
   });
 
   it('does not treat yes as a selection when the clarification listed multiple projects', async () => {
