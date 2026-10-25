@@ -226,8 +226,12 @@ flowchart TD
   N --> Q[Refuse and ask Dan one short natural question. The action stays pending]
 ```
 
-**Provenance** is deterministic and lives in `google/pending-actions.ts` and the
-Factory and GitHub App confirm tools. The message must be the owner's verified
+**Lifecycle and provenance** live in `core/pending-action.ts`. Google, Factory,
+GitHub App and browser owner-interaction adapters use its immutable proposal,
+expiry, cancellation, one-time consumption and execution gate. Adapters retain
+lookup indexes, result receipts, durable browser decisions and tool-specific
+permission checks; they do not implement their own reply eligibility rules.
+The message must be the owner's verified
 current message (voice: the transcribed turn the relay sets on that call only;
 chat: the `x-jarvis-message-id` header equal to the newest stored Dan message,
 with the agent identity), strictly later than the staging message by numeric id
@@ -265,6 +269,38 @@ interpreter, so a plain reply still works and everything else is asked about.
 After the interpreter awaits, the action is re-checked synchronously (same
 pending object, not expired, call not aborted) and consumed before execution, so
 concurrent confirmations execute once.
+
+Browser confirmations (including food review) use the same lifecycle while
+retaining the authenticated browser decision and SQL one-time consumption.
+An unbound browser proposal cannot be approved by a conversational reply.
+Browser decisions racing cancellation or expiry cannot start execution.
+Acknowledgment of receipt is not action approval, and identifying a project
+does not approve a subsequent action on it.
+
+The owner-interactions API preserves #1278's opt-in
+`BrowserConfirmationDelivery.foodEstimate` binding,
+`OwnerInteractionOptions.conversationStore` and `resolveFoodEstimateReply`.
+The adapter verifies the next persisted reply before and after shared
+interpretation; ambiguous, superseded or unrelated replies lose conversational
+authority while the browser card remains available. Decisions still resolve
+the same durable browser confirmation and consume it once. Food call-site
+wiring, phrase interpretation, stream deadlines and persisted-reply SQL tests
+are retained from the merged #1278 (`d0d679f`), unchanged by reconciliation.
+
+Integration checkpoint (25 October): #1264 at `fa3de91` adds
+`PendingProjectClarification`, `rememberProjectClarification`,
+`resolveCreateIssueProject` and typed `ProjectClarification`. Its candidate
+IDs/repos, request fingerprint, immediate-reply verification and target
+revalidation remain target-selection logic, separate from the shared action
+confirmation in `stageIssueCreation`. Its use of `isLaterDanReply` must be
+retained for clarification when resolving the overlapping Factory file;
+action confirmations use `PendingAction` instead. #1259 at `f229ec7` waits for
+actual terminal response delivery, not an audible playback receipt. Missing
+or negative playback receipts do not block dispatch; explicit cancellation
+and failed response delivery still do. This PR does not modify those relay
+or timing paths. Combined-head qualification is still required after the
+remaining related branches integrate. The current-main merge includes food;
+project clarification and acknowledgment branch-only changes are not imported.
 
 Routing no longer matches approval phrases. In chat, any turn with a calendar
 referent in the last two messages makes the agent call

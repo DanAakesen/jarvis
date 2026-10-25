@@ -1,5 +1,30 @@
 # Project plan
 
+## Shared confirmation lifecycle (#1281; 25 October 2026)
+
+Google, Factory/GitHub and browser owner interactions now share immutable
+proposals, reply eligibility, cancellation/expiry, consumption and execution
+through `core/pending-action.ts`. Tool permission and food revision/presence
+checks remain with their tools. Browser-only proposals remain browser-only.
+Focused synthetic text/voice and browser regressions pass; live owner/device
+acceptance remains unverified. Current-main reconciliation includes the verified
+food merge `d0d679f` and retains its routing, timing and persisted-reply SQL
+fixture unchanged. Project clarification and acknowledgment remain in their
+separate PRs; this merge does not introduce their branch-only changes.
+Earlier backend build/lint, secret scanning and read-only review passed.
+Coordination review inspected #1278 `a09dfc1`, #1264 `fa3de91` (including
+`dc742dd` clarification behavior) and #1259 `f229ec7`. Preserve the food
+owner-interactions API on the shared lifecycle; no stream deadline or playback
+gate changes belong here. The overlapping Factory merge must retain
+clarification-specific provenance and target revalidation separately from
+action approval. Combined-head qualification is now pending this reconciliation.
+Food API reconciliation passed 622 targeted tests (one skipped), backend build,
+scoped lint and read-only review. It preserves the immediate-reply and
+same-millisecond food timestamp behavior without changing other action families.
+JavaScript CodeQL analysis was skipped because the database exceeded its size
+limit; this is not a clean automated security result. Next: PR qualification
+and live owner/device acceptance.
+
 ## Natural food-estimate confirmation (#1277)
 
 Implemented estimate-only natural reply binding through the shared one-time
