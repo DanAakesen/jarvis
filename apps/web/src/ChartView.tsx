@@ -46,9 +46,17 @@ export function ChartView({ kind, series, title }: { kind: 'line' | 'bar' | 'are
       : [0, 0.25, 0.5, 0.75, 1].map((fraction, index) => ({
         label: formatChartX(layout.xMin + fraction * (layout.xMax - layout.xMin)), at: fraction, index,
       }));
-  const labelWidth = Math.max(0, ...xLabels.map(({ label }) => label.length * 8));
+  const labelWidths = xLabels.map(({ label }) => label.length * 8);
+  const labelWidth = Math.max(0, ...labelWidths);
   const labelPadding = labelWidth / 2;
-  const chartPlotWidth = Math.max(plotWidth, xLabels.length * (labelWidth + 16));
+  const availablePlotWidth = Math.max(0, plotWidth - labelPadding * 2);
+  const minimumPlotWidth = xLabels.slice(1).reduce((minimum, label, index) => {
+    const gap = label.at - xLabels[index]!.at;
+    if (gap <= 0) return minimum;
+    const needed = ((labelWidths[index] ?? 0) + (labelWidths[index + 1] ?? 0)) / 2 + 16;
+    return Math.max(minimum, needed / gap);
+  }, 0);
+  const chartPlotWidth = Math.max(availablePlotWidth, minimumPlotWidth);
   const width = chartPlotWidth + margin.left + margin.right + labelPadding * 2;
   const plotLeft = margin.left + labelPadding;
   const plotRight = width - margin.right - labelPadding;
@@ -59,8 +67,8 @@ export function ChartView({ kind, series, title }: { kind: 'line' | 'bar' | 'are
 
   return (
     <figure ref={figure} className="generated-chart" aria-labelledby={`${id}-caption`}>
-      <div className="generated-chart-plot" role="region" aria-label={`Scrollable chart plot: ${title}`}
-        aria-describedby={needsHorizontalScroll ? `${id}-scroll-hint` : undefined} tabIndex={0}>
+      <div className="generated-chart-plot" role="region" aria-label={`${needsHorizontalScroll ? 'Scrollable chart' : 'Chart'} plot: ${title}`}
+        aria-describedby={needsHorizontalScroll ? `${id}-scroll-hint` : undefined} tabIndex={needsHorizontalScroll ? 0 : undefined}>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-caption`} width={width} height={height} preserveAspectRatio="xMidYMid meet">
         {layout.yTicks.map((tick) => (
           <g key={tick} className="chart-grid">

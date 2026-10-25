@@ -45,6 +45,10 @@ describe('GeneratedViewRenderer timeline', () => {
     expect(screen.getByRole('img', { name: /Revenue: bar chart of Reported, Genuine/ })).not.toBeNull();
     expect(container.querySelectorAll('.chart-bars rect')).toHaveLength(4);
     expect(container.querySelector('.chart-legend')?.textContent).toBe('ReportedGenuine');
+    const plot = screen.getByRole('region', { name: 'Chart plot: Revenue' });
+    expect(plot.hasAttribute('tabindex')).toBe(false);
+    expect(plot.hasAttribute('aria-describedby')).toBe(false);
+    expect(Number(container.querySelector('svg')?.getAttribute('width'))).toBeLessThanOrEqual(640);
     expect(screen.getByRole('table', { name: 'Revenue values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(4);
   });
 
