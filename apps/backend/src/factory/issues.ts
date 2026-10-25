@@ -1,5 +1,11 @@
-import { JARVIS_REPOSITORY, resolveProject, resolveRepository, revalidateProject } from './project-context.js';
-import type { ProjectStore } from './projects.js';
+import {
+  JARVIS_REPOSITORY,
+  ProjectNotFound,
+  resolveProject,
+  resolveRepository,
+  revalidateProject,
+} from './project-context.js';
+import type { Project, ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import { GitHubIssueRequestError, type GitHubIssue, type GitHubIssueClient } from '../github/issues.js';
 import { ToolRefusal } from '../core/tool-registry.js';
@@ -305,11 +311,17 @@ export async function startIssueTask(input: {
       !input.github.readComments || !input.github.readAgentRules) {
     throw new Error('Issue task service unavailable');
   }
-  const project = input.repository !== undefined
-    ? await resolveProject(input.repository, input.projects)
-    : input.project !== undefined
-      ? await resolveProject(input.project, input.projects)
-      : (await input.projects.list()).find(({ repo }) => repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US'));
+  let project: Project | undefined;
+  try {
+    project = input.repository !== undefined
+      ? await resolveProject(input.repository, input.projects)
+      : input.project !== undefined
+        ? await resolveProject(input.project, input.projects)
+        : (await input.projects.list()).find(({ repo }) => repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US'));
+  } catch (error) {
+    if (error instanceof ProjectNotFound) return { kind: 'project-not-found' };
+    throw error;
+  }
   if (!project) return { kind: 'project-not-found' };
   if (!input.tasks.findActiveByIssue) throw new Error('Issue task storage unavailable');
   const existing = await input.tasks.findActiveByIssue(project.id, input.issue);

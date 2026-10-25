@@ -5,6 +5,7 @@ import { isSimpleApproval } from '../core/approval.js';
 import { coreModule } from '../core/index.js';
 import { factoryModule } from './index.js';
 import { githubAppTools } from './github-app-tools.js';
+import type { Project, ProjectStore } from './projects.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -15,7 +16,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 
 function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | 'write' | 'admin'> = {
   issues: 'read', pull_requests: 'write', contents: 'read', actions: 'read', checks: 'read',
-}, agent = false, message = 'Please do it') {
+}, agent = false, message = 'Please do it', projectStore?: ProjectStore) {
   vi.stubGlobal('fetch', fetchImpl);
   const githubAppTokenIssuer = {
     readInstallationPermissions: vi.fn(async () => permissions),
@@ -27,6 +28,7 @@ function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | '
       ? { kind: 'jarvis-agent', objectId: '00000000-0000-0000-0000-000000000001', tenantId: config.auth.tenantId }
       : { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }) as never,
     githubAppTokenIssuer: githubAppTokenIssuer as never,
+    projectStore,
     conversationStore: {
       getHistory: vi.fn(async () => ({
         messages: [{ id: '42', sessionId: 'session', role: 'dan', text: message, at: new Date() }], nextCursor: null,
@@ -42,6 +44,15 @@ const writeOperations = new Set([
   'issue_update', 'pr_create', 'pr_update', 'pr_comment', 'pr_review', 'pr_merge', 'pr_ready',
   'branch_create', 'workflow_dispatch', 'workflow_rerun', 'file_write', 'label_create',
 ]);
+const registeredProject = {
+  id: '7', name: 'Greeting project', description: null, repo: 'synthetic/greetings',
+  default_branch: 'main', default_agent: 'codex', policy: 'deliver_pr', merge_rules: null,
+  sandbox_size: '1x2', tech: 'typescript', max_parallel_tasks: 1, active: true,
+} satisfies Project;
+const projectChanges: Array<{ change: string; currentProjects: Project[] }> = [
+  { change: 'archived', currentProjects: [] },
+  { change: 'renamed', currentProjects: [{ ...registeredProject, repo: 'synthetic/renamed' }] },
+];
 
 async function callTool(app: ReturnType<typeof buildApp>, name: string, payload: unknown) {
   if (name === 'github_capabilities' || name === 'github_read' || name === 'github_write') {
@@ -77,6 +88,33 @@ describe('GitHub App capability tools', () => {
     expect(githubAppTokenIssuer.readInstallationPermissions).not.toHaveBeenCalled();
     expect(fetchImpl).not.toHaveBeenCalled();
   });
+
+  it.each(projectChanges)(
+    'revalidates an explicitly selected project before a GitHub write when it is $change',
+    async ({ change, currentProjects }) => {
+      const projectStore = {
+        list: vi.fn(async () => [registeredProject]),
+      } as unknown as ProjectStore;
+      const fetchImpl = vi.fn<typeof fetch>();
+      const { app, githubAppTokenIssuer } = fixture(
+        fetchImpl, { contents: 'write' }, true, 'Write to the Greeting project', projectStore,
+      );
+      vi.mocked(githubAppTokenIssuer.readInstallationPermissions).mockImplementation(async () => {
+        projectStore.list = vi.fn(async () => currentProjects);
+        return { contents: 'write' };
+      });
+
+      const response = await callTool(app, 'file_write', {
+        project: '7', path: 'README.md', branch: 'feature', content: 'Hello', message: 'Add README',
+      });
+
+      expect(response.json()).toMatchObject({
+        outcome: 'refused',
+        result: { refused: expect.stringContaining(change === 'archived' ? 'no longer active' : 'repository changed') },
+      });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['yes', 'approved', 'confirmed', 'go ahead', 'YES.', 'Go Ahead!', 'ok', 'yes please'])(
     'accepts only a simple later approval word: %s', (value) => {

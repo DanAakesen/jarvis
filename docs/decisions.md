@@ -10,15 +10,16 @@
   that it was archived; registry read failures remain distinct from project and
   GitHub App permission failures.
 - Pin the selected project ID and repository and revalidate them before issue,
-  label, comment or task writes. Do not fall back from a named non-self project,
-  register/unarchive projects or change permissions to make a request succeed.
+  label, comment, task or generic GitHub App writes. Do not fall back from a named
+  non-self project, register/unarchive projects or change permissions to make a
+  request succeed.
 - Keep `create_issue` as the code-change path and reuse existing approval and
   tool replay ownership. This change adds no confirmation, execution or replay
   loop of its own.
 - **Verification:** synthetic resolver and canonical dispatch tests cover English
   and Danish requests, ambiguity, no-write refusals, permission denial and project
-  archive/rename races. Provider, production and physical voice acceptance remain
-  unverified.
+  archive/rename races at factory and GitHub App write boundaries. Provider,
+  production and physical voice acceptance remain unverified.
 
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 

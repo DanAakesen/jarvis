@@ -10,7 +10,9 @@ import {
   JARVIS_REPOSITORY,
   projectSelectorSchema,
   requiresProjectSelector,
+  resolveProject,
   resolveRepository,
+  revalidateProject,
 } from './project-context.js';
 
 const githubApi = 'https://api.github.com';
@@ -599,9 +601,16 @@ async function runOperation(
       throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
     }
   }
-  const repository = await resolveToolRepository(input, request);
-  return withGitHubAccess(request, repository, permission, (token) =>
-    handler(input, repository, request, signal, token));
+  const selectedProject = writes && input.repository === undefined && typeof input.project === 'string'
+    ? await resolveProject(input.project, request.server.projectStore ?? null)
+    : undefined;
+  const repository = selectedProject?.repo ?? await resolveToolRepository(input, request);
+  return withGitHubAccess(request, repository, permission, async (token) => {
+    if (selectedProject) {
+      await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
+    }
+    return handler(input, repository, request, signal, token);
+  });
 }
 
 function makeOperationTool(

@@ -1865,8 +1865,8 @@ full repository names, normalized unique display names, or natural references
 supported by registered candidate data. Ambiguous or missing targets refuse
 before a write; registry read failures stay distinct from GitHub App permission
 failures. The selected project ID and repository are revalidated before issue,
-label, comment or task writes, and explicit non-self projects never fall back to
-Jarvis's repository. The service reads all issue-title pages in the selected
+label, comment, task or generic GitHub App writes, and explicit non-self projects
+never fall back to Jarvis's repository. The service reads all issue-title pages in the selected
 active repository, allocates the lowest free `P11-NN` code (two digits minimum),
 then rechecks it immediately before creation. New issues receive `P11` and `enhancement` labels;
 titles explicitly marked `[Bug]`, `Bug:`, or `Regression:` receive `bug`.
