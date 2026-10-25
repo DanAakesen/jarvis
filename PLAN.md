@@ -13,8 +13,9 @@
   below its message at 390×844; at 1440×900 timestamps remain absolutely
   positioned with no horizontal overflow.
 - The SQL Server integration command was attempted locally but cannot start
-  without the isolated loopback database configuration. Exact-head SQL Server
-  CI and normal CI/security qualification remain pending publication.
+  without the isolated loopback database configuration. Exact-head CI
+  `40237999399` passed, including the SQL Server integration, backend/web
+  lint-test-build and remaining qualification jobs; CodeQL `40237999367` passed.
 
 ## Shared confirmation lifecycle (#1281; 25 October 2026)
 
