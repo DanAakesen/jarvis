@@ -229,10 +229,15 @@ describe('voice and chat tool parity', () => {
 
     const toolOutput = (callId: string) => fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === callId)?.item.output;
-    fallback.event('response.function_call_arguments.done', {
-      name: 'parity_probe', call_id: 'unadvertised', arguments: '{"value":"synthetic"}',
-    });
-    await vi.waitFor(() => expect(toolOutput('unadvertised')).toBeDefined());
+    const call = async (name: string, callId: string, args: string) => {
+      const responseId = `${callId}_response`;
+      fallback.event('response.created', { response: { id: responseId } });
+      fallback.event('response.function_call_arguments.done', { name, call_id: callId, arguments: args });
+      expect(toolOutput(callId)).toBeUndefined();
+      fallback.event('response.done', { response: { id: responseId, status: 'completed' } });
+      await vi.waitFor(() => expect(toolOutput(callId)).toBeDefined());
+    };
+    await call('parity_probe', 'unadvertised', '{"value":"synthetic"}');
     expect(JSON.parse(toolOutput('unadvertised') as string)).toMatchObject({ outcome: 'refused' });
     expect(parityExecute).not.toHaveBeenCalled();
 
@@ -242,12 +247,7 @@ describe('voice and chat tool parity', () => {
     let page = 0;
     do {
       const callId = `page_${page++}`;
-      fallback.event('response.function_call_arguments.done', {
-        name: VOICE_CAPABILITY_DISCOVERY_TOOL,
-        call_id: callId,
-        arguments: JSON.stringify({ offset }),
-      });
-      await vi.waitFor(() => expect(toolOutput(callId)).toBeDefined());
+      await call(VOICE_CAPABILITY_DISCOVERY_TOOL, callId, JSON.stringify({ offset }));
       const output = JSON.parse(toolOutput(callId) as string) as {
         outcome: string;         result: { capabilities: { name: string; parameters: unknown }[]; nextOffset: number | null };
       };
@@ -259,23 +259,15 @@ describe('voice and chat tool parity', () => {
     expect(discovered.sort()).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
     expect(projectSelectorDescription(discoveredIssueParameters)).toContain('Natural references');
 
-    fallback.event('response.function_call_arguments.done', {
-      name: VOICE_CAPABILITY_EXECUTION_TOOL,
-      call_id: 'advertised',
-      arguments: JSON.stringify({ capability: 'parity_probe', arguments: { value: 'synthetic' } }),
-    });
-    await vi.waitFor(() => expect(toolOutput('advertised')).toBeDefined());
+    await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'advertised',
+      JSON.stringify({ capability: 'parity_probe', arguments: { value: 'synthetic' } }));
     expect(JSON.parse(toolOutput('advertised') as string)).toMatchObject({
       tool: 'parity_probe', outcome: 'ok', result: { status: 'synthetic-ok' },
     });
     expect(parityExecute).toHaveBeenCalledOnce();
 
-    fallback.event('response.function_call_arguments.done', {
-      name: VOICE_CAPABILITY_EXECUTION_TOOL,
-      call_id: 'system_health',
-      arguments: JSON.stringify({ capability: 'get_system_health', arguments: {} }),
-    });
-    await vi.waitFor(() => expect(toolOutput('system_health')).toBeDefined());
+    await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'system_health',
+      JSON.stringify({ capability: 'get_system_health', arguments: {} }));
     expect(JSON.parse(toolOutput('system_health') as string)).toMatchObject({
       tool: 'get_system_health', outcome: 'ok', result: { components: expect.any(Array) },
     });

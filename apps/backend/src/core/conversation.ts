@@ -16,6 +16,7 @@ import {
   CHAT_AGENT_DIAGNOSTIC_PHASES,
   CHAT_AGENT_PHASES,
   createFoundryAgentSessionId,
+  type ConversationAgentChunk,
   type AgentPhaseTimings,
   type ConversationVisualResult,
 } from './chat-agent.js';
@@ -727,8 +728,9 @@ return {
             const signal = AbortSignal.any([controller.signal, roundController.signal]);
             const agentStartedAt = performance.now();
             let firstByteLogged = false;
-            let agentIterator: AsyncIterator<string> | undefined;
+            let agentIterator: AsyncIterator<ConversationAgentChunk> | undefined;
             let interrupted = false;
+            let acknowledgmentSent = false;
             try {
               agentIterator = agent.stream({
                 messageId: turnMessageId,
@@ -767,6 +769,16 @@ return {
                 const chunk = await next;
                 if (chunk.done) break;
                 const delta = chunk.value;
+                if (typeof delta !== 'string') {
+                  if (acknowledgmentSent || !partial.startsWith(delta.text)) {
+                    throw new Error('Chat acknowledgment did not match the streamed reply');
+                  }
+                  acknowledgmentSent = true;
+                  partial = partial.slice(delta.text.length);
+                  yield streamEvent('acknowledgment', { text: delta.text });
+                  next = agentIterator.next();
+                  continue;
+                }
                 if (!firstByteLogged) {
                   firstByteLogged = true;
                   logChatLatency(request, 'agent_first_byte', agentStartedAt);

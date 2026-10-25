@@ -32,6 +32,7 @@ from calendar_flow import (
     calendar_multiple_requested,
     calendar_reply,
     calendar_response_scope,
+    calendar_safe_acknowledgment_prefix,
     calendar_safe_prefix,
     calendar_status_question,
     calendar_unsettled_confirmation,
@@ -51,6 +52,7 @@ from jarvis_tools import (
     BackendToolClient,
     backend_settings_from_environment,
     compose_identity_instructions,
+    current_chat_acknowledgment_enabled,
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
@@ -59,7 +61,14 @@ from jarvis_tools import (
     current_turn,
     model_tools,
 )
-from model_contract import StreamingModelClient, SummaryCompletion, ToolLoopStalled
+from model_contract import (
+    MAX_ACKNOWLEDGMENT_CHARACTERS,
+    AcknowledgmentBoundary,
+    ModelStreamChunk,
+    StreamingModelClient,
+    SummaryCompletion,
+    ToolLoopStalled,
+)
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
 from visual_context import (
     ImageInputRejected,
@@ -94,6 +103,24 @@ markdown only when it helps.
 Use the tools and safety rules supplied by the backend. After a successful action, confirm it in one
 short sentence without repeating details Dan just approved. Report failed, partial or unverified
 results plainly, including what failed and the next step; never say a failed action is done.""",
+}
+PRE_TOOL_ACKNOWLEDGMENT = {
+    "da": (
+        "If this request needs one or more tools, begin with one brief, natural "
+        "sentence in the first person saying what I will check or do. Ground it in "
+        "the request and tools actually available. Do not claim that anything has "
+        "already been checked or succeeded, give an ETA, or narrate later tool calls. "
+        "Then use the tools and give the useful result once. If no tool is needed, "
+        "answer directly without an acknowledgment."
+    ),
+    "en": (
+        "If this request needs one or more tools, begin with one brief, natural "
+        "first-person sentence saying what I will check or do. Ground it in the "
+        "request and tools actually available. Do not claim that anything has "
+        "already been checked or succeeded, give an ETA, or narrate later tool calls. "
+        "Then use the tools and give the useful result once. If no tool is needed, answer "
+        "directly without an acknowledgment."
+    ),
 }
 
 CHAT_FORMAT_INSTRUCTIONS = (
@@ -223,6 +250,7 @@ def personalize_instructions(
     return "\n\n".join((
         compose_identity_instructions(settings.identity_description, selected_language),
         instructions,
+        PRE_TOOL_ACKNOWLEDGMENT[selected_language],
         "Response preferences (style only):\n"
         f"- Tone: {PERSONALITY_TONES[settings.tone]}.\n"
         f"- Response style: {PERSONALITY_RESPONSE_STYLES[settings.response_style]}.\n"
@@ -619,7 +647,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
     async def complete(
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
         has_image = any(message.images for message in messages)
         role = "chat" if has_image else "voice"
@@ -657,11 +685,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         settings: ModelSettings | None = None,
         reflex_note: str | None = None,
         smoke: bool = False,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
             raise ValueError("Unsupported chat language")
         instructions = CHAT_INSTRUCTIONS[language]
+        if not current_chat_acknowledgment_enabled.get():
+            instructions += (
+                "\nThis is a continuation after Dan interrupted the same turn. Do not repeat any "
+                "preliminary acknowledgment; continue with the requested work or its result."
+            )
         if reflex_note is not None:
             instructions += (
                 "\nTrusted backend reflex result for this turn: "
@@ -730,7 +763,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         role: str,
         allow_anthropic: bool = False,
         language: str = "da",
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         with _tracer.start_as_current_span(
             "chat",
             kind=SpanKind.CLIENT,
@@ -1008,6 +1041,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                 round_number = 0
                 smoke_tool_call_count = 0
+                acknowledgment_emitted = False
                 calendar_evidence = []
                 calendar_mutation = None
                 completed_tool_calls: dict[
@@ -1058,6 +1092,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             log_latency("agent_pre_model", chat_started)
                     first_text_ms: int | None = None
                     calendar_text: list[str] = []
+                    delivered_text: list[str] = []
                     emitted_text = ""
                     early_calendar_text = (
                         calendar_guard and role == "chat"
@@ -1125,14 +1160,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                     )
                                                 if calendar_guard:
                                                     calendar_text.append(text)
-                                                    if early_calendar_text:
-                                                        safe = calendar_safe_prefix(
+                                                    safe = (
+                                                        calendar_safe_prefix("".join(calendar_text))
+                                                        if early_calendar_text
+                                                        else calendar_safe_acknowledgment_prefix(
                                                             "".join(calendar_text)
                                                         )
-                                                        if len(safe) > len(emitted_text):
-                                                            yield safe[len(emitted_text):]
-                                                            emitted_text = safe
+                                                    )
+                                                    if len(safe) > len(emitted_text):
+                                                        delta = safe[len(emitted_text):]
+                                                        delivered_text.append(delta)
+                                                        yield delta
+                                                        emitted_text = safe
                                                 else:
+                                                    delivered_text.append(text)
                                                     yield text
                                         final = await stream.get_final_message()
                             except Exception as exc:
@@ -1189,14 +1230,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                             )
                                         if calendar_guard:
                                             calendar_text.append(event.delta)
-                                            if early_calendar_text:
-                                                safe = calendar_safe_prefix(
+                                            safe = (
+                                                calendar_safe_prefix("".join(calendar_text))
+                                                if early_calendar_text
+                                                else calendar_safe_acknowledgment_prefix(
                                                     "".join(calendar_text)
                                                 )
-                                                if len(safe) > len(emitted_text):
-                                                    yield safe[len(emitted_text):]
-                                                    emitted_text = safe
+                                            )
+                                            if len(safe) > len(emitted_text):
+                                                delta = safe[len(emitted_text):]
+                                                delivered_text.append(delta)
+                                                yield delta
+                                                emitted_text = safe
                                         else:
+                                            delivered_text.append(event.delta)
                                             yield event.delta
                                     elif event.type == "response.completed":
                                         final = event.response
@@ -1361,6 +1408,17 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 yield reply
                         return
 
+                    acknowledgment = "".join(delivered_text)
+                    if (
+                        current_chat_acknowledgment_enabled.get()
+                        and not acknowledgment_emitted
+                        and role in {"chat", "voice"}
+                        and acknowledgment.strip()
+                    ):
+                        if len(acknowledgment) > MAX_ACKNOWLEDGMENT_CHARACTERS:
+                            raise RuntimeError("Model acknowledgment exceeded the size limit")
+                        yield AcknowledgmentBoundary(acknowledgment)
+                        acknowledgment_emitted = True
                     if emitted_text:
                         yield "\n\n"
                     if use_anthropic:
