@@ -9,27 +9,30 @@ import { ShellIcon, type ShellIconName } from './ShellIcon';
  * moving between pages (Jarvis can also switch pages by voice), and one caption line says what Jarvis is doing.
  */
 const pages = [
-  { to: '/', label: 'Jarvis', icon: 'chat', end: true },
-  { to: '/factory/kanban', label: 'Software Factory', icon: 'workspaces' },
-  { to: '/notes', label: 'Notes', icon: 'knowledge' },
+  { to: '/factory/kanban', label: 'Software Factory', icon: 'status' },
+  { to: '/notes', label: 'Notes', icon: 'tasks' },
   { to: '/usage', label: 'Usage', icon: 'usage' },
   { to: '/status', label: 'Status', icon: 'status' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ] as const;
 
 type MenuPage = { readonly to: string; readonly label: string; readonly icon: ShellIconName; readonly end?: true };
+type MenuEntry =
+  | { kind: 'page'; key: string; label: string; to: string; icon: ShellIconName; end?: true; currentSection?: boolean }
+  | { kind: 'section'; key: string; label: string; to: string; icon: ShellIconName; current?: boolean }
+  | { kind: 'context'; key: 'context'; label: 'Context panel'; icon: 'context' };
 
-/** Same order as the rail (`appAreas`): Proactive follows the first area, which is Daily when that is on. */
-function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean): readonly MenuPage[] {
-  const list: readonly MenuPage[] = dailyEnabled ? [pages[0], { to: '/health', label: 'Health', icon: 'health' }, ...pages.slice(1)] : pages;
-  return proactiveEnabled ? [...list.slice(0, 2), { to: '/proactive', label: 'Proactive', icon: 'sparkle' }, ...list.slice(2)] : list;
+/** Chat, Health and Workspaces have persistent bottom controls; the sheet lists the remaining destinations. */
+function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean, healthSections: boolean): readonly MenuPage[] {
+  const proactive = proactiveEnabled ? [{ to: '/proactive', label: 'Proactive', icon: 'sparkle' as const }] : [];
+  const health = dailyEnabled && healthSections ? [{ to: '/health', label: 'Health', icon: 'health' as const }] : [];
+  return [...proactive, ...health, ...pages];
 }
 
-export function MobileMenu({ open, onClose, onNavigate, onWorkspaces, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
+export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
-  onWorkspaces: () => void;
   onContext: () => void;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
@@ -41,15 +44,16 @@ export function MobileMenu({ open, onClose, onNavigate, onWorkspaces, onContext,
   const pageRail = useRef<HTMLElement>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const { onKeyDown } = useModalLifecycle({ active: open, dialog: sheet, boundary: root, onDismiss: onClose });
-  const entries = menuPages(dailyEnabled, proactiveEnabled).flatMap((page) => {
+  const entries: MenuEntry[] = menuPages(dailyEnabled, proactiveEnabled, sections?.label === 'Health').flatMap((page) => {
     const currentSection = sections?.label === page.label;
     return [
-      { key: page.to, label: page.label, to: page.to, end: page.end, icon: page.icon, currentSection },
+      { kind: 'page' as const, key: page.to, label: page.label, to: page.to, ...(page.end ? { end: page.end } : {}), icon: page.icon, currentSection },
       ...(sections && currentSection ? sections.links.map((link) => ({
-        key: link.id, label: link.label, to: link.to, icon: 'navigation' as const, current: link.current,
+        kind: 'section' as const, key: link.id, label: link.label, to: link.to, icon: 'navigation' as const, current: link.current,
       })) : []),
     ];
   });
+  entries.push({ kind: 'context', key: 'context', label: 'Context panel', icon: 'context' });
   const pageSize = 4;
   const entryPages = Array.from({ length: Math.ceil(entries.length / pageSize) }, (_, index) =>
     entries.slice(index * pageSize, (index + 1) * pageSize));
@@ -66,11 +70,17 @@ export function MobileMenu({ open, onClose, onNavigate, onWorkspaces, onContext,
     <div ref={root} className="mobile-menu" hidden={!open} inert={!open}>
       <div className="mobile-menu-backdrop" aria-hidden="true" onClick={onClose} />
       <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-heading" tabIndex={-1} onKeyDown={onKeyDown}>
-        <span className="mobile-menu-grip" aria-hidden="true" />
-        <header className="modal-heading">
-          <h2 id="mobile-menu-heading">Go to</h2>
-          <button className="modal-close" type="button" aria-label="Close menu" onClick={onClose}><ShellIcon name="close" /></button>
-        </header>
+          <header className="modal-heading">
+            <button className="modal-close" type="button" aria-label="Close menu" onClick={onClose}><ShellIcon name="close" /></button>
+            <h2 id="mobile-menu-heading" className="visually-hidden">Go to</h2>
+            {entryPages.length > 1 && <div className="mobile-menu-pagination">
+              <button className="mobile-menu-page-button" type="button" disabled={pageIndex === 0}
+                aria-label="Previous menu page" onClick={() => selectPage(Math.max(0, pageIndex - 1))}><ShellIcon name="chevron" /></button>
+              <span aria-live="polite" aria-label={`Page ${pageIndex + 1} of ${entryPages.length}`}>{pageIndex + 1} / {entryPages.length}</span>
+              <button className="mobile-menu-page-button" type="button" disabled={pageIndex === entryPages.length - 1}
+                aria-label="Next menu page" onClick={() => selectPage(Math.min(entryPages.length - 1, pageIndex + 1))}><ShellIcon name="chevron" /></button>
+            </div>}
+          </header>
         <nav ref={pageRail} className="mobile-menu-body" aria-label="Pages"
           onScroll={(event) => {
             const width = event.currentTarget.clientWidth;
@@ -78,34 +88,24 @@ export function MobileMenu({ open, onClose, onNavigate, onWorkspaces, onContext,
           }}>
           {entryPages.map((pageEntries, index) => (
             <div key={index} className="mobile-menu-page" aria-label={`Menu page ${index + 1}`}>
-              {pageEntries.map((entry) => (
-                'current' in entry ? (
+              {pageEntries.map((entry) => {
+                const contents = <><ShellIcon name={entry.icon} /><span>{entry.label}</span><ShellIcon name="chevron" /></>;
+                if (entry.kind === 'context') return (
+                  <button key={entry.key} className="mobile-menu-link" type="button" onClick={() => { onClose(); onContext(); }}>{contents}</button>
+                );
+                if (entry.kind === 'section') return (
                   <Link key={entry.key} className="mobile-menu-link mobile-menu-sublink" to={entry.to}
-                    aria-current={entry.current ? 'page' : undefined} onClick={() => { onNavigate(); onClose(); }}>
-                    <ShellIcon name={entry.icon} /><span>{entry.label}</span><ShellIcon name="chevron" />
-                  </Link>
-                ) : (
+                    aria-current={entry.current ? 'page' : undefined} onClick={() => { onNavigate(); onClose(); }}>{contents}</Link>
+                );
+                return (
                   <NavLink key={entry.key} className="mobile-menu-link" to={entry.to} end={entry.end === true}
                     {...(entry.currentSection ? { 'aria-current': 'location' as const } : {})}
-                    onClick={() => { onNavigate(); onClose(); }}>
-                    <ShellIcon name={entry.icon} /><span>{entry.label}</span><ShellIcon name="chevron" />
-                  </NavLink>
-                )
-              ))}
+                    onClick={() => { onNavigate(); onClose(); }}>{contents}</NavLink>
+                );
+              })}
             </div>
           ))}
         </nav>
-        {entryPages.length > 1 && <div className="mobile-menu-pagination">
-          <button className="mobile-menu-page-button" type="button" disabled={pageIndex === 0}
-            aria-label="Previous menu page" onClick={() => selectPage(Math.max(0, pageIndex - 1))}>Previous</button>
-          <span aria-live="polite">Page {pageIndex + 1} of {entryPages.length}</span>
-          <button className="mobile-menu-page-button" type="button" disabled={pageIndex === entryPages.length - 1}
-            aria-label="Next menu page" onClick={() => selectPage(Math.min(entryPages.length - 1, pageIndex + 1))}>Next</button>
-        </div>}
-        <div className="mobile-menu-actions">
-          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onWorkspaces(); }}>Workspaces</button>
-          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onContext(); }}>Context panel</button>
-        </div>
       </div>
     </div>
   );

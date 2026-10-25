@@ -1156,7 +1156,7 @@ export function ConversationHistory({
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage}
-          leadingActions={attachActions} actions={captureActions} align="end" icon="plus" />
+          leadingActions={attachActions} actions={captureActions} align="start" icon="plus" />
         <button className="composer-dictate" type="button" disabled={!dictationAvailable}
           aria-label={dictating ? 'Stop dictation' : 'Dictate'} aria-pressed={dictating}
           aria-describedby={`dictation-guidance${!dictationAvailable || dictating || dictationError ? ' dictation-status' : ''}`}
@@ -1186,9 +1186,10 @@ export function ConversationHistory({
           Dictation uses your browser’s speech-recognition service, which may process audio outside Jarvis. It adds text to this draft only.
         </p>
         {(!dictationAvailable || dictating || dictationError) && <p id="dictation-status" className="composer-status"
+          data-dictating={dictating || undefined}
           role={dictationError ? 'alert' : dictating ? 'status' : 'note'}>
           {dictationError || (dictating
-            ? 'Listening. Your browser’s speech-recognition service handles transcription. Select Stop dictation to finish.'
+            ? 'Listening. Tap Stop dictation to finish.'
             : "Dictation isn't supported in this browser.")}
         </p>}
         {screenShare?.sharing && <div className="composer-live">

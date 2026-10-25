@@ -285,6 +285,10 @@
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
 .app-shell[data-phone="true"] .conversation-history .composer-status { grid-column: 1 / -1; }
+.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 44px; overflow-y: auto; }
+.app-shell[data-phone="true"] .conversation-history .composer-status[data-dictating] {
+  min-width: 0; overflow: hidden; font-size: var(--type-caption); line-height: var(--line-tight); text-overflow: ellipsis; white-space: nowrap;
+}
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:focus-visible { outline-offset: 0; }
 
 @media (max-width: 380px) {

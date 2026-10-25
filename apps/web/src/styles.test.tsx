@@ -72,6 +72,21 @@ describe('responsive stylesheet contract', () => {
     expect(sharedStyles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
   });
 
+  it('keeps the phone page sheet compact above the composer and navigation dock', () => {
+    expect(sharedStyles).toContain('bottom: calc(var(--phone-dock-bottom, 84px) + var(--conversation-composer-height, 52px) + var(--space-2));');
+    expect(sharedStyles).toContain('max-height: min(196px, calc(var(--overlay-viewport-height, 100dvh) - var(--phone-dock-bottom, 84px) - var(--conversation-composer-height, 52px) - env(safe-area-inset-top) - var(--space-4)));');
+    expect(sharedStyles).toContain('.mobile-menu-page .mobile-menu-link { min-height: 48px; gap: var(--space-1); padding-inline: var(--space-2); }');
+    expect(sharedStyles).toContain('.mobile-menu-sheet .modal-heading { order: 2; display: grid; grid-template-columns: 44px auto; gap: var(--space-1); margin: 0; }');
+    expect(sharedStyles).toContain('.mobile-menu-sheet .mobile-menu-body { order: 1; flex: 1 1 auto; }');
+  });
+
+  it('keeps mobile dictation feedback concise and the draft field within the compact composer row', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 44px; overflow-y: auto; }');
+    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer-status[data-dictating]');
+    expect(history).toContain('text-overflow: ellipsis; white-space: nowrap;');
+  });
+
   it('keeps table scrolling focusable and the narrow action grid shrinkable', () => {
     expect(ruleDeclaration(sharedStyles, /\.generated-view-table:focus-visible\s*\{([^}]*)\}/, 'outline'))
       .toBe('3px solid var(--focus)');

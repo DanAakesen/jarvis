@@ -874,7 +874,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             onToggleWorkspaces={() => { setNavigationOpen(false); setFolioOpen((open) => !open); }}
             onOpenMenu={() => setMenuOpen((open) => !open)} onNavigate={closePagePanels} />
           <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels}
-            onWorkspaces={() => { closePagePanels(); setFolioOpen(true); }} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
+            onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
             {...(sectionLinks && activeArea ? { sections: { label: activeArea.label, links: sectionLinks } } : {})} />
         </>
       )}

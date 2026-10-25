@@ -310,14 +310,20 @@ dot. The Menu sheet pages horizontally with native touch scrolling and offers Pr
 controls for keyboard users; retain the established dark glass surfaces, shared
 control radius and focus treatment.
 
-The approved reference mockup was linked in PR #1292, but its reference-only
-commit is no longer available to this checkout; the captures below are not a
-pixel comparison. Synthetic Chromium captures at 390×844 and
-320×700 show the [phone shell](docs/ui/screenshots/mobile-navigation-1287/shell-390.jpg),
-[plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-390.jpg),
+The approved [reference mockup](https://github.com/DanAakesen/jarvis/blob/9cca3271948539828938f103442563811d3b526d/docs/design/1287-selected-mobile-reference.png)
+was fetched from its named reference branch and compared at a matching 390×844
+viewport. The 176px sheet sits immediately above the composer and dock; its
+two-row page starts at the top edge like the reference. The plus popover stays
+within both 320px and 390px viewports, and timestamps render below loaded
+bubbles. Synthetic Chromium captures show the [loaded conversation](docs/ui/screenshots/mobile-navigation-1287/shell-390.jpg),
+[390px plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-390.jpg),
+[320px plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-320.jpg),
 [draft dictation](docs/ui/screenshots/mobile-navigation-1287/dictation-draft-390.jpg),
-[swiped menu page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-390.jpg), and
-[narrow layout](docs/ui/screenshots/mobile-navigation-1287/shell-320.jpg). The
+[first menu page](docs/ui/screenshots/mobile-navigation-1287/menu-open-390.jpg),
+[swiped second page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-390.jpg),
+[320px first page](docs/ui/screenshots/mobile-navigation-1287/menu-page1-320.jpg),
+[320px second page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-320.jpg),
+and [narrow shell](docs/ui/screenshots/mobile-navigation-1287/shell-320.jpg). The
 browser fixture stubs authentication and API responses and emits a simulated speech
 result; it does not verify a live microphone, iOS Safari, or a physical phone.
 

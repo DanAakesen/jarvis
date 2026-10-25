@@ -174,6 +174,7 @@ describe('ConversationHistory', () => {
     await user.click(screen.getByRole('button', { name: 'Dictate' }));
     expect(MockDictationRecognition.instance.lang).toBe('en-US');
     expect(screen.getByRole('button', { name: 'Stop dictation' }).getAttribute('aria-pressed')).toBe('true');
+    expect(document.getElementById('dictation-status')?.textContent).toBe('Listening. Tap Stop dictation to finish.');
     act(() => MockDictationRecognition.instance.emitTranscript('the launch time'));
     expect(textbox).toHaveProperty('value', 'Remember the launch time');
     expect(screen.getByRole('button', { name: 'Stop dictation' })).not.toBeNull();
@@ -205,6 +206,7 @@ describe('ConversationHistory', () => {
   it('starts the existing realtime Voice session from the plus menu on phones', async () => {
     const user = userEvent.setup();
     renderConversation(0, undefined, vi.fn(), undefined, true);
+    expect(document.querySelector('.composer-more')?.getAttribute('data-align')).toBe('start');
     await user.click(screen.getByRole('button', { name: 'More options' }));
     await user.click(screen.getByRole('menuitem', { name: 'Voice' }));
     expect(await screen.findByRole('button', { name: 'End voice' })).not.toBeNull();
