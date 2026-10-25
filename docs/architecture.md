@@ -4238,11 +4238,14 @@ cancellation remains effective. Within one source message, an exact repeated
 side-effecting tool call reuses its original result rather than replaying the
 action. Recognized read-only tools execute afresh, including repeated status
 reads and read-after-write verification. A replayed action permits a tool-free final-synthesis attempt only when the round contains no other fresh
-work; another tool request then fails with the content-free `tool_loop_stalled`
-code. The backend persists only a completed
-assistant response; an interrupted turn leaves Dan's message visible and the UI
-warns that an action may have completed. The browser never receives agent
-credentials.
+work; another tool request then fails with the content-free `tool_loop_stalled` code.
+The backend persists only a completed assistant response; an interrupted turn
+leaves Dan's message visible and the UI warns that an action may have completed.
+If the provider returns an incomplete response after tools ran, the turn still
+fails rather than synthesizing a partial reply; completed or uncertain action
+outcomes are not recovered into that reply. The provider-incomplete regression
+verifies no blind tool replay, not partial-result recovery. The browser never
+receives agent credentials.
 
 **Conversation summary (P9-105).** Older chat messages are folded into an
 append-only, owner-bound summary so decisions survive the window.

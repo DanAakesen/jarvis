@@ -8297,4 +8297,7 @@ tool-free synthesis attempt only when the round contains no other fresh work; if
 the provider then requests a tool, fail explicitly as `tool_loop_stalled`. Keep
 smoke invocation's separate bounded behavior. This removes only the
 ordinary-conversation cutoff; it does not establish the cause of the reported
-production failure or prove live provider acceptance.
+production failure or prove live provider acceptance. A provider-incomplete
+response after tool execution remains a failure: no partial reply is synthesized
+from prior tool outputs, and the user-facing warning indicates that an action may
+have completed. Recovery of useful partial results is not implemented.
