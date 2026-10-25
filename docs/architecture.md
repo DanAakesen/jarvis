@@ -5335,14 +5335,14 @@ the five largest server-owned tool names/sizes. No payload content is logged.
 See [voice startup diagnosis](runbook.md#voice-startup-diagnosis).
 
 **English tool-budget fallback** (`apps/backend/src/voice/tool-budget.ts`, 21 October
-2026, #1184; Health follow-up #1188). New processes start at R2, the same
-known-good reduced frame measured on 21 October under its previous name, R1
-(R0 stalled at 8,001 ms; the reduced frame became ready in 1,341 ms). R1 now
-omits only `proactive_recent_items` and includes configured `daily_*` tools.
-The relay walks the deterministic ladder from the current rung; only `tools`
-and instruction text change, and every foreground attempt uses a fresh
-upstream socket waiting for `session.updated` (8 s at R0, 6 s at R1-R5;
-24 s worst case from cold R2, 38 s if a remembered R0 must step down). A
+2026, #1184; Health follow-up #1188). Fresh processes now start at R1, which
+includes configured `daily_*` tools and omits `proactive_recent_items` and
+`proactive_preferences`. This is not the 21 October reduced frame: its 1,341 ms
+readiness measurement does not establish that this larger frame will be ready
+as quickly. The relay walks the deterministic ladder from the current rung;
+only `tools` and instruction text change, and every foreground attempt uses a
+fresh upstream socket waiting for `session.updated` (8 s at R0, 6 s at R1-R5;
+30 s worst case from cold R1, 38 s if a remembered R0 must step down). A
 deadline, upstream `error` or close before readiness steps down. Abandoned
 sockets are closed and none of their events reach the browser (held pre-ready
 events are forwarded only after readiness). If every rung fails the relay
@@ -5351,31 +5351,36 @@ closes 4010 and logs `voice.tool_budget_exhausted`.
 | Rung | Tools | Instructions |
 |---|---|---|
 | R0 | all | full |
-| R1 | all except `proactive_recent_items` | full + notice |
-| R2 | all except `daily_*` and `proactive_recent_items` | full + notice |
+| R1 | all except `proactive_recent_items` and `proactive_preferences` | full + notice |
+| R2 | all except `daily_*` and proactive tools | full + notice |
 | R3 | `set_presence_mode`, `set_away_mode` and the smallest others up to half of R0's definition bytes | full + notice |
 | R4 | none | full + notice |
 | R5 | none | base identity and style text + notice |
 
 The backend keeps the last rung that reached `session.updated` in process memory
-(a restart clears it), starts new sessions there, steps down from it within the
-session if needed, and never remembers a rung that did not become ready. After a
+(a restart clears it), starts new sessions at R1 until a probe or live session
+has established a different ready rung, steps down from it within the session
+if needed, and never remembers a rung that did not become ready. After a
 non-R0 session becomes ready, a process-wide probe coordinator may run once per
 30 minutes. It builds independent `full`, `no_proactive`, `no_daily` and
 `reduced_plus_copies` frames through `createRealtimeSessionUpdate`, uses fresh
 credentialed sockets, sends no audio or conversation, and waits at most 8 seconds
 for `session.updated`. Probes do not forward events to the browser or delay the
 live session. A ready `full` probe promotes memory to R0; a ready `no_proactive`
-probe promotes it to R1, whose exact tool set includes Daily. Other probe
-outcomes do not change the selected rung. Each later live frame (presence-mode
-updates, camera turn-detection updates, `response.create` instructions) uses the
-selected rung, and a model call to a tool outside the active subset is refused
-without execution. Danish does not use the ladder or probes.
+probe promotes it to R1, whose exact tool set includes Daily. Either success
+queues the same capability update on the active relay; the dispatcher switches
+to the larger set only after `session.updated`. If the update is not acknowledged,
+the existing settings-update reconnect path applies, and the remembered rung is
+used on reconnect. Other probe outcomes do not change the selected rung. Each
+later live frame (presence-mode updates, camera turn-detection updates,
+`response.create` instructions) uses the selected rung, and a model call to a
+tool outside the active subset is refused without execution. Danish does not use
+the ladder or probes.
 `voice.tool_budget_probe` exports fixed probe names, counts, byte sizes,
 outcomes and timings only. Probe readiness confirms only that that frame received
 `session.updated`; it does not establish a tool-count, byte-size, context, or
 tool-content limit. The earlier R0/R1 timings establish a startup difference,
-not a cause.
+not a cause or the readiness time of the current Daily-capable R1 frame.
 
 | Area | Design | Evidence |
 | --- | --- | --- |

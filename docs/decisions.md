@@ -859,6 +859,29 @@ access is therefore conditional on Voice Live accepting the Health-capable frame
 in that process; verify a real English voice Health request after deployment
 before closing #1188.
 
+## Daily-capable English cold start and shared discovery (25 October 2026; #1188)
+
+Refs DanAakesen/jarvis#1188.
+
+Fresh English browser-voice sessions now start at R1, which advertises the
+configured Daily tools, including food read/log/review, while omitting the
+proactive tools. Chat discovery and both realtime language adapters still use
+the canonical backend registry; no duplicate food capability or approval path
+is introduced. Direct exact/favourite logging and exact Now review for estimates
+and corrections remain unchanged; a spoken yes is not approval.
+
+R1 is a larger frame than the 21 October reduced frame, so the old 1,341 ms
+measurement does not establish its readiness or startup time. If R1 fails, the
+existing bounded ladder may reach R2 or lower, where Daily tools are absent.
+Those sessions must report unavailable capabilities honestly and never execute
+an unadvertised call. A successful `full` or `no_proactive` background probe
+queues the corresponding schema update on the active relay and remembers the
+rung for later sessions. The active dispatcher changes only after the provider
+acknowledges `session.updated`; a failed acknowledgement follows the existing
+reconnect path. No current production probe result or live English Health
+request is available here, so provider cause, post-change startup responsiveness
+and production parity remain unverified.
+
 ## Notes Tasks panel: tick to complete with Undo, quick add to Inbox (22 October 2026; #1085)
 
 On the owner's request the Tasks panel can complete tasks and add them. Ticking is

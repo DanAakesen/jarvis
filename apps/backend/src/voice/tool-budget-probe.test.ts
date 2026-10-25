@@ -58,6 +58,7 @@ function setup(enabled = true, now: () => number = () => performance.now()) {
   });
   const memory = createToolBudgetMemory();
   const probe = createVoiceToolBudgetProbe(connect, enabled, now);
+  const onPromotionReady = vi.fn();
   const context = {
     buildFrame: (name: ToolBudgetProbeName) => ({
       type: 'session.update',
@@ -66,9 +67,13 @@ function setup(enabled = true, now: () => number = () => performance.now()) {
     acquireToken: async () => 'unused',
     voiceModel: 'gpt-realtime-2.1',
     memory,
+    onPromotionReady,
     log: log as FastifyBaseLogger,
   };
-  return { probe, connect, context, memory, records, sockets, get maximumOpenSockets() { return maximumOpenSockets; } };
+  return {
+    probe, connect, context, memory, records, sockets, onPromotionReady,
+    get maximumOpenSockets() { return maximumOpenSockets; },
+  };
 }
 
 describe('voice tool-budget background probes', () => {
@@ -96,6 +101,7 @@ describe('voice tool-budget background probes', () => {
       record.probe, record.outcome,
     ])).toEqual([['full', 'timeout'], ['no_proactive', 'ready']]);
     expect(f.memory.get()).toBe(1);
+    expect(f.onPromotionReady).toHaveBeenCalledExactlyOnceWith('no_proactive');
     expect(f.connect).toHaveBeenCalledTimes(2);
     expect(f.maximumOpenSockets).toBe(1);
     expect(f.sockets.every((socket) => socket.sent.every((data) =>
@@ -126,9 +132,34 @@ describe('voice tool-budget background probes', () => {
     f.sockets[0]!.event('session.updated');
     await vi.advanceTimersByTimeAsync(0);
     expect(f.memory.get()).toBe(0);
+    expect(f.onPromotionReady).toHaveBeenCalledExactlyOnceWith('full');
     expect(f.records.filter((record) => record.msg === 'voice.tool_budget_probe'))
       .toEqual([expect.objectContaining({ probe: 'full', outcome: 'ready' })]);
     expect(f.connect).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('notifies a reconnecting active session when its in-flight shared probe succeeds', async () => {
+    const f = setup();
+    const originalAbort = new AbortController();
+    const originalPromotion = vi.fn();
+    const reconnectPromotion = vi.fn();
+    f.probe.start({
+      ...f.context, signal: originalAbort.signal, onPromotionReady: originalPromotion,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    f.sockets[0]!.open();
+
+    expect(f.probe.start({
+      ...f.context, signal: new AbortController().signal, onPromotionReady: reconnectPromotion,
+    })).toBe(false);
+    originalAbort.abort();
+    f.sockets[0]!.event('session.updated');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(originalPromotion).not.toHaveBeenCalled();
+    expect(reconnectPromotion).toHaveBeenCalledExactlyOnceWith('full');
+    expect(f.memory.get()).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -144,6 +175,7 @@ describe('voice tool-budget background probes', () => {
       msg: 'voice.tool_budget_probe', probe: 'no_daily', outcome: 'ready',
     }));
     expect(f.memory.get()).toBeUndefined();
+    expect(f.onPromotionReady).not.toHaveBeenCalled();
     await f.probe.close();
   });
 

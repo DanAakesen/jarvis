@@ -22,7 +22,15 @@ interface ProbeContext {
   readonly acquireToken: (signal: AbortSignal) => Promise<string>;
   readonly voiceModel: string;
   readonly memory: ToolBudgetMemory;
+  readonly signal?: AbortSignal;
+  readonly onPromotionReady?: (probe: 'full' | 'no_proactive') => void;
   readonly log: FastifyBaseLogger;
+}
+
+interface PromotionObserver {
+  readonly callback: (probe: 'full' | 'no_proactive') => void;
+  readonly signal: AbortSignal | undefined;
+  dispose(): void;
 }
 
 interface ActiveProbe {
@@ -64,6 +72,37 @@ export function createVoiceToolBudgetProbe(
   let running = false;
   let lastRunAt: number | undefined;
   let active: ActiveProbe | undefined;
+  const promotionObservers = new Set<PromotionObserver>();
+
+  const observePromotion = (context: ProbeContext) => {
+    if (!context.onPromotionReady || context.signal?.aborted) return;
+    if ([...promotionObservers].some((observer) =>
+      observer.callback === context.onPromotionReady && observer.signal === context.signal)) return;
+    let observing = true;
+    const observer: PromotionObserver = {
+      callback: context.onPromotionReady,
+      signal: context.signal,
+      dispose() {
+        if (!observing) return;
+        observing = false;
+        promotionObservers.delete(observer);
+        context.signal?.removeEventListener('abort', observer.dispose);
+      },
+    };
+    promotionObservers.add(observer);
+    context.signal?.addEventListener('abort', observer.dispose, { once: true });
+  };
+
+  const notifyPromotion = (probe: 'full' | 'no_proactive') => {
+    for (const observer of [...promotionObservers]) {
+      observer.dispose();
+      if (!observer.signal?.aborted) observer.callback(probe);
+    }
+  };
+
+  const clearPromotionObservers = () => {
+    for (const observer of [...promotionObservers]) observer.dispose();
+  };
 
   const runProbe = (
     probe: ToolBudgetProbeName, serialized: string,
@@ -166,8 +205,13 @@ export function createVoiceToolBudgetProbe(
       }
       const outcome = await runProbe(probe, serialized, metrics, context);
       if (outcome === 'ready') {
-        if (probe === 'full') context.memory.set(0);
-        else if (probe === 'no_proactive') context.memory.set(TOOL_BUDGET_HEALTH_RUNG);
+        if (probe === 'full') {
+          context.memory.set(0);
+          notifyPromotion(probe);
+        } else if (probe === 'no_proactive') {
+          context.memory.set(TOOL_BUDGET_HEALTH_RUNG);
+          notifyPromotion(probe);
+        }
       }
       if (outcome === 'ready' || disposed) return;
     }
@@ -175,9 +219,13 @@ export function createVoiceToolBudgetProbe(
 
   return {
     start(context) {
+      if (!enabled || disposed) return false;
+      observePromotion(context);
+      const remembered = context.memory.get();
+      if (remembered === 0) context.onPromotionReady?.('full');
+      else if (remembered === TOOL_BUDGET_HEALTH_RUNG) context.onPromotionReady?.('no_proactive');
       const startedAt = now();
-      if (!enabled || disposed || running ||
-          (lastRunAt !== undefined && startedAt - lastRunAt < TOOL_BUDGET_PROBE_INTERVAL_MS)) return false;
+      if (running || (lastRunAt !== undefined && startedAt - lastRunAt < TOOL_BUDGET_PROBE_INTERVAL_MS)) return false;
       running = true;
       lastRunAt = startedAt;
       queueMicrotask(() => {
@@ -190,12 +238,16 @@ export function createVoiceToolBudgetProbe(
             probe: 'full', toolCount: 0, toolBytes: 0, instructionsBytes: 0, frameBytes: 0,
             outcome: 'error', elapsedMs: 0,
           }, 'voice.tool_budget_probe');
-        }).finally(() => { running = false; });
+        }).finally(() => {
+          running = false;
+          clearPromotionObservers();
+        });
       });
       return true;
     },
     async close() {
       disposed = true;
+      clearPromotionObservers();
       const current = active;
       current?.finish('closed');
       await current?.done;

@@ -550,6 +550,65 @@ describe('English voice tool-budget fallback', () => {
     expect(responseCreate.response.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
   });
 
+  it('restores Daily in the active session and on reconnect after the no-proactive probe succeeds', async () => {
+    const execute = vi.fn(async () => ({ status: 'available' }));
+    const f = await fixture({}, 'en', [
+      probeTool('daily_food', 100, execute), probeTool('proactive_recent_items', 100),
+    ], true);
+    f.behaviour.onFrame = (socket) => {
+      if (socket === f.upstream) {
+        socket.event('error', { error: { code: 'private_code' } });
+        return;
+      }
+      const names = toolNames(socket);
+      if (names.includes('daily_food') && names.includes('proactive_recent_items')) return;
+      socket.event('session.updated');
+    };
+
+    f.openFirst();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    const abandoned = f.sockets[1]!;
+    expect(toolNames(abandoned)).not.toContain('daily_food');
+    await vi.advanceTimersByTimeAsync(0);
+    f.browser.close(1000, 'Reconnect');
+    await vi.advanceTimersByTimeAsync(0);
+    const reconnectBrowser = new FakeSocket();
+    reconnectBrowser.readyState = WebSocket.OPEN;
+    await f.start(reconnectBrowser);
+    const active = f.sockets[3]!;
+    expect(toolNames(active)).not.toContain('daily_food');
+
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(f.records).toContainEqual(expect.objectContaining({
+      msg: 'voice.tool_budget_probe', probe: 'no_proactive', outcome: 'ready',
+    }));
+    const promotion = frameOf(active, active.sent.length - 1).session;
+    expect(promotion.tools).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'daily_food' }),
+    ]));
+    expect(active.sent).toHaveLength(2);
+    expect(abandoned.sent).toHaveLength(1);
+
+    active.event('session.updated');
+    active.event('response.function_call_arguments.done', {
+      name: 'daily_food', call_id: 'food_call', arguments: '{"note":"synthetic"}',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const output = active.sent.map((data) => JSON.parse(data))
+      .find((message) => message.item?.call_id === 'food_call');
+    expect(output).toMatchObject({
+      item: { output: expect.stringContaining('"outcome":"ok"') },
+    });
+    expect(execute).toHaveBeenCalledOnce();
+
+    const laterReconnect = new FakeSocket();
+    laterReconnect.readyState = WebSocket.OPEN;
+    await f.start(laterReconnect);
+    expect(toolNames(f.sockets.at(-1)!)).toContain('daily_food');
+    expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R1' }));
+  });
+
   it.each([
     ['R1', 0], ['R2', 1], ['R3', 2], ['R4', 3], ['R5', 4],
   ] as const)('selects %s, the first rung below a silent byte threshold', async (rung, index) => {

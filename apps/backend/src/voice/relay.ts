@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   createToolBudgetMemory, createToolBudgetProbeTools, createToolBudgetRungs,
-  TOOL_BUDGET_COLD_START_RUNG, type ToolBudgetMemory, type ToolBudgetProbeName, type ToolBudgetRung,
+  TOOL_BUDGET_COLD_START_RUNG, TOOL_BUDGET_HEALTH_RUNG,
+  type ToolBudgetMemory, type ToolBudgetProbeName, type ToolBudgetRung,
 } from './tool-budget.js';
 import { createVoiceToolBudgetProbe, type VoiceToolBudgetProbe } from './tool-budget-probe.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
@@ -393,9 +394,9 @@ function registerVoiceRoute(
     let attemptFrame: ReturnType<typeof diagnostics.measure> | undefined;
     controller.signal.addEventListener('abort', () => clearTimeout(attemptTimer), { once: true });
     const activeTools = () => activeRung?.tools ?? app.jarvisTools;
-    const sessionUpdate = () => createRealtimeSessionUpdate(
-      activeTools(), personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-      activeRung?.instructions, identitySettings,
+    const sessionUpdate = (rung: ToolBudgetRung | undefined = activeRung) => createRealtimeSessionUpdate(
+      rung?.tools ?? app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
+      rung?.instructions, identitySettings,
     );
     let configured = false;
     let upstreamSessionReady = false;
@@ -419,6 +420,8 @@ function registerVoiceRoute(
     let settingsUpdateQueued = false;
     let settingsUpdateTimer: ReturnType<typeof setTimeout> | undefined;
     let pendingCompositionRevision: string | undefined;
+    let pendingToolBudgetRung: ToolBudgetRung | undefined;
+    let queuedToolBudgetRung: ToolBudgetRung | undefined;
     let voiceTuning = defaultSettings.voice;
     let voiceModel = ENGLISH_REALTIME_MODEL;
     let transcriptionModel = defaultSettings.roles.transcription.model;
@@ -1598,7 +1601,9 @@ function registerVoiceRoute(
       settingsUpdateQueued = false;
       settingsUpdatePending = true;
       pendingCompositionRevision = desiredCompositionRevision;
-      sendUpstream(sessionUpdate(), () => {
+      pendingToolBudgetRung = queuedToolBudgetRung;
+      queuedToolBudgetRung = undefined;
+      sendUpstream(sessionUpdate(pendingToolBudgetRung), () => {
         settingsUpdateTimer = setTimeout(() => {
           if (settingsUpdatePending) close(1012, 'Settings changed; reconnect');
         }, 5_000);
@@ -1612,9 +1617,31 @@ function registerVoiceRoute(
       settingsUpdatePending = false;
       appliedCompositionRevision = pendingCompositionRevision ?? desiredCompositionRevision;
       pendingCompositionRevision = undefined;
+      if (pendingToolBudgetRung && toolBudgetRungs) {
+        activeRung = pendingToolBudgetRung;
+        rungIndex = toolBudgetRungs.indexOf(activeRung);
+        diagnostics.toolBudget(activeRung.name, attemptCount);
+        pendingToolBudgetRung = undefined;
+      }
       if (desiredCompositionRevision !== appliedCompositionRevision) settingsUpdateQueued = true;
       applyQueuedSettingsUpdate();
       flushPendingResponseCreate();
+    };
+
+    const queueToolBudgetPromotion = (probe: 'full' | 'no_proactive') => {
+      const promotedRung = toolBudgetRungs?.[probe === 'full' ? 0 : TOOL_BUDGET_HEALTH_RUNG];
+      if (!promotedRung || controller.signal.aborted || endRequested || !upstreamSessionReady ||
+          upstream?.readyState !== WebSocket.OPEN) return;
+      const promotedIndex = toolBudgetRungs!.indexOf(promotedRung);
+      const currentIndex = Math.min(
+        rungIndex,
+        pendingToolBudgetRung ? toolBudgetRungs!.indexOf(pendingToolBudgetRung) : rungIndex,
+        queuedToolBudgetRung ? toolBudgetRungs!.indexOf(queuedToolBudgetRung) : rungIndex,
+      );
+      if (promotedIndex >= currentIndex) return;
+      queuedToolBudgetRung = promotedRung;
+      settingsUpdateQueued = true;
+      applyQueuedSettingsUpdate();
     };
 
     const updateCameraTurnDetection = () => {
@@ -2301,7 +2328,11 @@ function registerVoiceRoute(
         const attemptReady = () => {
           clearTimeout(attemptTimer);
           logAttempt('ready');
-          toolBudgetMemory!.set(rungIndex);
+          const readyPromotion = toolBudgetMemory!.get();
+          const startingRung = startRung ?? TOOL_BUDGET_COLD_START_RUNG;
+          if (!(readyPromotion !== undefined && readyPromotion < startingRung && rungIndex === startingRung)) {
+            toolBudgetMemory!.set(rungIndex);
+          }
           request.log.info({
             language, rung: activeRung!.name, remembered: startRung !== undefined && startRung === rungIndex,
             attempts: attemptCount,
@@ -2323,7 +2354,9 @@ function registerVoiceRoute(
               acquireToken: (signal) => credential(getToken, signal),
               voiceModel,
               memory: toolBudgetMemory!,
+              signal: controller.signal,
               log: request.log,
+              onPromotionReady: queueToolBudgetPromotion,
             });
           }
         };

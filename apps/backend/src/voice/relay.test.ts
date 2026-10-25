@@ -3567,7 +3567,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       });
       expect(firstSession).not.toHaveProperty('type');
       if (name.startsWith('daily_')) {
-        expect((firstSession.tools as { name: string }[]).some((tool) => tool.name === name)).toBe(false);
+        expect((firstSession.tools as { name: string }[]).some((tool) => tool.name === name)).toBe(true);
         await vi.waitFor(() => expect(records.some((record) => {
           const entry = JSON.parse(record) as Record<string, unknown>;
           return entry.msg === 'voice.tool_budget_probe' && entry.probe === 'full' && entry.outcome === 'ready';

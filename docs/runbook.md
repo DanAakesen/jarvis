@@ -87,13 +87,15 @@ the five largest tool definitions (server-owned names and UTF-8 bytes).
 It survives browser-first closure and cancellation. No transcripts, instructions,
 tool arguments, payloads or close-reason text belong in these new diagnostics.
 
-English tool-budget fallback. A new process starts at **R2**, which is the
-known-good frame measured on 21 October under its previous name, R1 (R0 stalled
-at 8,001 ms; the reduced frame became ready in 1,341 ms). **R1** is now a
-Daily-capable candidate that omits only `proactive_recent_items`. The backend
-uses R1 for later sessions only after its independent `no_proactive` probe
-receives `session.updated`; otherwise the known-good R2 start and fallbacks
-remain. Each foreground attempt uses a fresh socket and logs
+English tool-budget fallback. A fresh process now starts at **R1**, which
+includes configured Daily tools and omits `proactive_recent_items` and
+`proactive_preferences`. This is a larger frame than the one measured on 21
+October: the old 1,341 ms result does not establish that this Daily-capable R1
+will be ready as quickly. If R1 does not become ready, the bounded ladder can
+step down to R2, which omits Daily tools, or smaller rungs. The session
+instructions say some tools are unavailable, and unadvertised calls are
+refused; do not report a missing capability as completed. Each foreground
+attempt uses a fresh socket and logs
 `voice.tool_budget_attempt` with `rung` (R0-R5), `toolCount`, `toolBytes`,
 `instructionsBytes`, `frameBytes`, `outcome` (`ready`, `timeout`, `error` or
 `closed`) and `elapsedMs` since connect (8 s at R0, 6 s at R1-R5).
@@ -114,14 +116,19 @@ ready probe:
 
 - **`full` ready** selects R0 for later sessions.
 - **`no_proactive` ready** selects R1 for later sessions. That exact frame
-  includes `daily_*` tools and excludes `proactive_recent_items`.
+  includes configured `daily_*` tools and excludes both proactive tools.
 - `no_daily` and `reduced_plus_copies` are diagnostic measurements only; they
   do not change the selected rung.
 
 Readiness proves only that the measured frame received `session.updated` during
 that probe. It does not identify a tool-count, byte-size, context, or
-tool-content limit. The prior R0/R1 timings show a startup difference, not its
-cause. Set
+tool-content limit. A ready `full` or `no_proactive` probe also queues its
+capability update on the active relay; the active dispatcher changes only after
+that session update is acknowledged. If it is not acknowledged, the relay uses
+the existing reconnect path, and the promoted rung is tried on reconnect. The
+prior R0/R1 timings show a startup difference, not the cause or current R1
+readiness. Post-change production readiness and an English voice Health request
+still require owner verification. Set
 `JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` to disable probes. No
 instructions, tool names, payloads or arguments appear in probe logs.
 

@@ -478,15 +478,17 @@ English voice sessions use Ryan HD and the British butler persona. The backend o
 
 Voice startup must not silently wait for the browser's 60-second warm-up limit:
 the Danish route's upstream connection and readiness each have a 15-second relay
-deadline. English starts at R1, the known-good frame measured after the full R0
-frame stalled on 21 October, and steps down through the existing smaller sizes
-if needed. It keeps the first rung that works, so voice stays usable even when
-some tools are unavailable; Jarvis then says so briefly and suggests the chat
-for what it cannot do. After a session becomes ready below R0, an independent
-background probe can test larger frames no more than once every 30 minutes per
-process. A ready full-frame probe remembers R0 for later sessions; measurements
-never change the fallback ladder or active session. Probing is enabled by
-default and can be disabled with
+deadline. English starts at R1, which includes configured Daily tools but
+omits proactive tools. This larger frame has not been verified live and is not
+the frame measured in the earlier startup probe. If it fails, the existing
+bounded fallback may select a rung without Daily tools; Jarvis must report that
+limitation and suggest chat rather than claim the capability succeeded. After a
+session becomes ready below R0, an independent background probe can test larger
+frames no more than once every 30 minutes per process. A ready probe remembers a
+larger rung for later sessions and queues that catalogue on the active session.
+The active dispatcher changes only after Voice Live acknowledges the session
+update; a failed acknowledgement follows the existing reconnect path. Probing is enabled by default and
+can be disabled with
 `JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false`. A missed deadline, or every
 foreground size failing, closes the socket with code 4010 and shows “Voice
 service did not become ready. Retrying…” using the existing reconnect backoff.
@@ -1384,10 +1386,11 @@ complete a capability. Reuse existing general tools where they provide the
 equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
-English realtime voice advertises configured Daily tools only after Voice Live
-accepts a Health-capable session frame; until then its known-good reduced frame
-does not include them. A probe or passing CI is not production acceptance for
-Health parity.
+English realtime voice now advertises configured Daily tools in its first R1
+frame. If that frame fails and the relay falls back to R2 or a smaller rung,
+Daily tools are unavailable in that session. A probe or passing CI is not
+production acceptance for Health parity or proof that the larger cold-start
+frame remains responsive.
 
 Health and nutrition history (#1201) must be traversable beyond the first
 page. Each Health call reads at most 93 inclusive Copenhagen dates and 100
