@@ -38,6 +38,40 @@ function streamedResponse(chunks: string[], headers: HeadersInit = { 'content-ty
 }
 
 describe('Foundry Invocations chat agent', () => {
+  it.each(['45', new Date(Date.now() + 45_000).toUTCString(), 'private-invalid'])(
+    'reads a valid Retry-After response hint without copying the header: %s', async (retryAfter) => {
+      const { agent } = createAgent(vi.fn(async () => streamedResponse([
+        'event: error\ndata: {"code":"rate_limit_exceeded"}\n\n',
+      ], { 'content-type': 'text/event-stream', 'retry-after': retryAfter })));
+      let error: unknown;
+      try {
+        for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+          expect(chunk).toBeUndefined();
+        }
+      } catch (caught) { error = caught; }
+      expect(error).toBeInstanceOf(ChatAgentError);
+      if (retryAfter === 'private-invalid') expect((error as ChatAgentError).retryAfterMs).toBeUndefined();
+      else expect((error as ChatAgentError).retryAfterMs).toBeGreaterThan(30_000);
+    },
+  );
+  it.each([
+    [45, 45_000], [0, 0], [-1, undefined], ['private', undefined], [null, undefined],
+  ])('retains only numeric nonnegative retry metadata: %s', async (retryAfter, expected) => {
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      `event: error\ndata: ${JSON.stringify({
+        code: 'rate_limit_exceeded', retry_after: retryAfter, message: 'never-retain',
+      })}\n\n`,
+    ])));
+    const consume = async () => {
+      for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+        expect(chunk).toBeUndefined();
+      }
+    };
+    await expect(consume()).rejects.toMatchObject({
+      name: 'ChatAgentError', code: 'rate_limit_exceeded', retryAfterMs: expected,
+      message: 'Chat agent failed (rate_limit_exceeded)',
+    });
+  });
   it('accepts a description-free handle and keeps deferred caption evidence internal and bounded', async () => {
     const onVisualResult = vi.fn();
     const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId: 'a'.repeat(32) };

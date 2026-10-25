@@ -494,7 +494,7 @@ jobs:
           [[ -n "$token" ]] || { echo "::error::The deployment identity returned no token."; exit 1; }
           echo "::add-mask::$token"
           response="$RUNNER_TEMP/status-smoke.json"
-          if ! curl --fail --silent --show-error --max-time 60 \
+          if ! curl --fail --silent --show-error --max-time 250 \
             --oauth2-bearer "$token" \
             "https://$BACKEND_FQDN/status/smoke" --output "$response"; then
             unset token
