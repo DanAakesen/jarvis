@@ -1,10 +1,11 @@
 import { randomInt } from 'node:crypto';
 import type { ConversationMessage } from '../core/conversation-store.js';
-import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
+import { approvalNotPending } from '../core/approval.js';
 import {
-  fastApprovalDecider, safeDecision, type ApprovalDecider, type ApprovalVerdict,
+  fastApprovalDecider, type ApprovalDecider, type ApprovalVerdict,
 } from '../core/approval-interpreter.js';
 import { ToolRefusal } from '../core/tool-registry.js';
+import { PendingAction as Confirmation } from '../core/pending-action.js';
 
 const ACTION_TTL_MS = 10 * 60_000;
 const MAX_PENDING_ACTIONS = 50;
@@ -23,6 +24,7 @@ interface PendingAction {
   readonly summary: string;
   readonly items?: readonly string[];
   readonly execute: (signal: AbortSignal) => Promise<unknown>;
+  readonly confirmation: Confirmation;
 }
 
 export class PendingGoogleActions {
@@ -36,7 +38,7 @@ export class PendingGoogleActions {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  stage(input: Omit<PendingAction, 'code' | 'createdAt'>): {
+  stage(input: Omit<PendingAction, 'code' | 'createdAt' | 'confirmation'>): {
     readonly status: 'awaiting_confirmation';
     readonly summary: string;
     readonly confirmationCode: string;
@@ -51,15 +53,24 @@ export class PendingGoogleActions {
       throw new Error('Too many pending Google actions');
     }
     for (const [code, action] of this.actions) {
-      if (action.scope === input.scope) this.actions.delete(code);
+      if (action.scope === input.scope) {
+        action.confirmation.cancel();
+        this.actions.delete(code);
+      }
     }
     let code: string;
     do {
       code = String(randomInt(0, 100_000_000)).padStart(8, '0');
     } while (this.actions.has(code));
+    const createdAt = this.now();
+    const confirmation = new Confirmation({
+      key: code, summary: input.summary, family: input.scope,
+      sourceMessageId: input.sourceMessageId, sourceSessionId: input.sourceSessionId,
+      createdAt, lifetimeMs: ACTION_TTL_MS, now: this.now,
+    });
     const action: PendingAction = {
       ...input, ...(input.items ? { items: Object.freeze([...input.items]) } : {}),
-      code, createdAt: this.now(),
+      code, createdAt, confirmation,
     };
     this.actions.set(code, action);
     if (input.scope === 'calendar') {
@@ -67,10 +78,8 @@ export class PendingGoogleActions {
       this.calendarReceipt = undefined;
     }
     return {
-      status: 'awaiting_confirmation',
-      summary: input.summary,
+      ...confirmation.presentation,
       confirmationCode: code,
-      instruction: `Nothing has changed. ${approvalInstruction}`,
       ...(input.items ? { items: input.items.map((summary) => ({ summary })) } : {}),
     };
   }
@@ -86,13 +95,7 @@ export class PendingGoogleActions {
   ): { readonly action: PendingAction; readonly message: ConversationMessage } | undefined {
     this.removeExpired();
     const action = this.actions.get(code);
-    if (!action || action.scope !== scope || !message || message.role !== 'dan' ||
-        !/^[1-9]\d{0,18}$/u.test(message.id) ||
-        !/^[1-9]\d{0,18}$/u.test(action.sourceMessageId) ||
-        message.id === action.sourceMessageId ||
-        BigInt(message.id) <= BigInt(action.sourceMessageId) ||
-        !message.sessionId || message.sessionId !== action.sourceSessionId ||
-        !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt) {
+    if (!action || action.scope !== scope || !action.confirmation.eligible(message)) {
       return undefined;
     }
     return { action, message };
@@ -108,10 +111,7 @@ export class PendingGoogleActions {
   ): Promise<ApprovalVerdict | undefined> {
     const eligible = this.eligible(scope, code, message);
     if (!eligible) return undefined;
-    return safeDecision(decide, {
-      reply: eligible.message.text, summary: eligible.action.summary, family: scope,
-      messageId: eligible.message.id, sessionId: eligible.message.sessionId, actionKey: code,
-    }, signal);
+    return eligible.action.confirmation.decision(eligible.message, decide, signal);
   }
 
   async confirm(
@@ -124,15 +124,12 @@ export class PendingGoogleActions {
     const eligible = this.eligible(scope, code, message);
     if (!eligible) throw new ToolRefusal(approvalNotPending);
     const { action } = eligible;
-    const verdict = await safeDecision(decide, {
-      reply: eligible.message.text, summary: action.summary, family: scope,
-      messageId: eligible.message.id, sessionId: eligible.message.sessionId, actionKey: code,
-    }, signal);
+    const verdict = await action.confirmation.decision(eligible.message, decide, signal);
     // The interpreter awaited: another confirmation may have consumed, replaced or expired this action meanwhile.
     // Nothing below this check awaits before the action is consumed, so exactly one confirmation can proceed.
     this.removeExpired();
     if (signal.aborted || this.actions.get(code) !== action) throw new ToolRefusal(approvalNotPending);
-    if (verdict === 'neither') throw new ToolRefusal(approvalUnclear);
+    const decision = action.confirmation.consume(verdict, signal);
     this.actions.delete(code);
     const remember = (result: Record<string, unknown>) => {
       if (scope === 'calendar' && this.calendarProposal === action) {
@@ -146,7 +143,7 @@ export class PendingGoogleActions {
       }
       return result;
     };
-    if (verdict === 'decline') {
+    if (decision === 'decline') {
       return remember({
         status: 'cancelled', summary: action.summary,
         detail: `The pending ${scope === 'calendar' ? 'calendar' : 'Google'} change was discarded. No change was made.`,
@@ -158,7 +155,7 @@ export class PendingGoogleActions {
       status: 'unverified', summary: action.summary,
       detail: 'The approval was consumed, but the calendar result is unverified. Check the calendar before proposing a retry; do not repeat the write.',
     });
-    const result = await action.execute(signal);
+    const result = await action.confirmation.execute(() => action.execute(signal), signal);
     if (typeof result !== 'object' || result === null || Array.isArray(result)) return result;
     const resultObject = result as Record<string, unknown>;
     const completed = resultObject.status === 'completed' &&
@@ -180,12 +177,9 @@ export class PendingGoogleActions {
     const action = [...this.actions.values()].find((candidate) =>
       candidate.scope === 'calendar' && visible(candidate.sourceSessionId));
     return action ? {
-      status: 'awaiting_confirmation' as const,
-      summary: action.summary,
+      ...action.confirmation.presentation,
       confirmationCode: action.code,
       ...(action.items ? { sourceMessageId: action.sourceMessageId } : {}),
-      expiresAt: new Date(action.createdAt + ACTION_TTL_MS).toISOString(),
-      instruction: `Nothing has changed. ${approvalInstruction}`,
       ...(action.items ? { items: action.items.map((summary) => ({ summary })) } : {}),
     } : {
       status: 'none' as const,
@@ -203,7 +197,7 @@ export class PendingGoogleActions {
   private removeExpired(): void {
     const cutoff = this.now() - ACTION_TTL_MS;
     for (const [code, action] of this.actions) {
-      if (action.createdAt <= cutoff) this.actions.delete(code);
+      if (!action.confirmation.pending) this.actions.delete(code);
     }
     if (this.calendarProposal && this.calendarProposal.createdAt <= cutoff) {
       this.calendarProposal = undefined;

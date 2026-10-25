@@ -41,6 +41,7 @@ from jarvis_tools import (
     BACKEND_HTTP_TIMEOUT_SECONDS,
     BackendUnavailable,
     backend_settings_from_environment,
+    current_chat_acknowledgment_enabled,
     current_chat_phase_setter,
     current_chat_session_id,
     current_chat_turn_id,
@@ -52,7 +53,12 @@ from jarvis_tools import (
     current_steering_fetcher,
     current_turn,
 )
-from model_contract import StreamingModelClient, ToolLoopStalled
+from model_contract import (
+    MAX_ACKNOWLEDGMENT_CHARACTERS,
+    AcknowledgmentBoundary,
+    StreamingModelClient,
+    ToolLoopStalled,
+)
 from state import ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
@@ -641,6 +647,7 @@ def register_chat_invocation(
             turn_token = current_turn.set(None if smoke else message_id)
             chat_turn_token = current_chat_turn_id.set(turn_id)
             chat_session_token = current_chat_session_id.set(chat_session_id)
+            acknowledgment_token = current_chat_acknowledgment_enabled.set(not steering)
             smoke_calls: list[dict[str, Any]] = []
             smoke_token = current_smoke_invocation.set(smoke)
             smoke_approval_token = current_smoke_approval.set(smoke and smoke_approval is True)
@@ -656,6 +663,7 @@ def register_chat_invocation(
             steering_fetcher_token = None
             phase_setter_token = None
             first_delta = True
+            acknowledgment_sent = False
             visual_emitted = False
             completed = False
             try:
@@ -856,6 +864,26 @@ def register_chat_invocation(
                         )
                     await resources.enter_async_context(aclosing(chat))
                     async for delta in chat:
+                        if isinstance(delta, AcknowledgmentBoundary):
+                            if (
+                                acknowledgment_sent
+                                or not delta.text.strip()
+                                or len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS
+                            ):
+                                if len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS:
+                                    raise RuntimeError(
+                                        "Chat acknowledgment exceeded the size limit"
+                                    )
+                                continue
+                            output_bytes += len(delta.text.encode("utf-8"))
+                            if output_bytes > MAX_OUTPUT_BYTES:
+                                raise RuntimeError("Chat response exceeded the size limit")
+                            acknowledgment_sent = True
+                            yield (
+                                "event: acknowledgment\ndata: "
+                                f"{json.dumps({'text': delta.text}, ensure_ascii=False)}\n\n"
+                            )
+                            continue
                         if not delta:
                             continue
                         output_bytes += len(delta.encode("utf-8"))
@@ -909,6 +937,7 @@ def register_chat_invocation(
                 current_turn.reset(turn_token)
                 current_chat_turn_id.reset(chat_turn_token)
                 current_chat_session_id.reset(chat_session_token)
+                current_chat_acknowledgment_enabled.reset(acknowledgment_token)
                 current_visual_result.reset(visual_token)
                 current_image_reservation.reset(image_reservation_token)
                 current_visual_fallback.reset(visual_fallback_token)

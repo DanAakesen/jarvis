@@ -19,6 +19,26 @@ page fixtures cover Foundry/runner explanations, vault evidence times and
 ordinary refresh. These checks do not run live model/runner probes or access
 private vault data.
 
+## Shared confirmation lifecycle checks (#1281; 25 October 2026)
+
+Focused offline checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/pending-action.test.ts src/core/owner-interactions.test.ts src/google src/daily/tools/food-review.test.ts src/daily/tools/saved-food.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts
+npm test --workspace @jarvis/backend -- src/factory/pending-action-tools.test.ts src/factory/tools.test.ts src/factory/github-approval.test.ts src/factory/github-app-tools.test.ts src/factory/pull-request-tools.test.ts src/factory/repository-tools.test.ts
+```
+
+These use synthetic stores/providers, not live account mutations or physical
+voice acceptance. `core/pending-action.ts` owns confirmation transitions;
+adapters keep permission checks, routing indexes and result receipts.
+Food API compatibility tests exercise opt-in `foodEstimate` delivery and
+`resolveFoodEstimateReply` with synthetic persisted replies and injected
+decisions. The reconciled tree includes #1278's merged call-site, phrase and
+streaming changes and retains its real SQL fixture below. The focused combined
+checks do not establish live-device acceptance or qualify branch-only #1264
+target clarification. The reconciled tree also includes #1259's reviewed
+acknowledgment and response-delivery changes.
+
 ## Natural food confirmation checks (#1277; 25 October 2026)
 
 Use synthetic food records only. Focused checks from the repository root:

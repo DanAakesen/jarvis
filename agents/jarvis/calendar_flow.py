@@ -222,14 +222,39 @@ def calendar_claim(text: str) -> bool:
 
 
 def calendar_safe_prefix(text: str) -> str:
-    """Release complete non-action sentences; keep partial/unsafe wording buffered."""
+    """Release complete non-action or explicit-intent sentences; buffer unsafe wording."""
     end = 0
     for boundary in re.finditer(r"(?<=[.!?])(?:\s+|$)|\n+", text):
         sentence = text[end:boundary.end()]
-        if _calendar_scope(sentence) or calendar_claim(sentence):
+        if (
+            (_calendar_scope(sentence) and not _calendar_intent(sentence))
+            or calendar_claim(sentence)
+        ):
             break
         end = boundary.end()
     return text[:end]
+
+
+def calendar_safe_acknowledgment_prefix(text: str) -> str:
+    safe = calendar_safe_prefix(text)
+    match = re.match(
+        r"^\s*(?:I(?:'ll| will| can| am going to)\s+"
+        r"(?:check|look at|review|compare|search|find|verify)\b|"
+        r"Jeg\s+(?:vil|skal|kan|tjekker|undersøger|gennemgår)\b)[^.!?\n]*[.!?]",
+        safe,
+        re.IGNORECASE,
+    )
+    return match.group(0).strip() if match else ""
+
+
+def _calendar_intent(sentence: str) -> bool:
+    return re.match(
+        r"^\s*(?:I(?:'ll| will| can| am going to)\s+"
+        r"(?:check|look at|review|compare|search|find|verify)\b|"
+        r"Jeg\s+(?:vil|skal|kan|tjekker|undersøger|gennemgår)\b)",
+        sentence,
+        re.IGNORECASE,
+    ) is not None
 
 
 def pending_calendar(result: dict[str, Any]) -> dict[str, Any] | None:

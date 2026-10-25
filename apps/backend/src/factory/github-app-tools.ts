@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
-import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
+import { approvalDeciderFor } from '../core/approval-interpreter.js';
+import { PendingAction } from '../core/pending-action.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -52,9 +53,7 @@ interface OperationDefinition {
 }
 
 interface PendingApproval {
-  readonly sourceMessageId: string;
-  readonly sourceSessionId: string;
-  readonly createdAt: number;
+  readonly confirmation: PendingAction;
   readonly warning?: string;
   readonly explicitProceed?: boolean;
 }
@@ -97,7 +96,7 @@ function hasExplicitProceed(
 ): boolean {
   const key = approvalKey(tool, repository, input);
   const action = pendingApprovals.get(request.server)?.get(key);
-  return Boolean(action && action.createdAt + approvalTtlMs > Date.now() && action.explicitProceed === true);
+  return Boolean(action?.confirmation.pending && action.explicitProceed === true);
 }
 
 function saysProceed(value: string): boolean {
@@ -417,46 +416,54 @@ async function approval(
   repository: string,
   input: Input,
   warningText?: string,
-): Promise<void> {
+): Promise<PendingAction> {
   const message = await danMessage(request);
   const key = approvalKey(tool, repository, input);
   const now = Date.now();
   const actions = pendingApprovals.get(request.server) ?? new Map<string, PendingApproval>();
   pendingApprovals.set(request.server, actions);
   const expire = () => {
-    const clock = Date.now();
-    for (const [id, action] of actions) if (action.createdAt + approvalTtlMs <= clock) actions.delete(id);
+    for (const [id, action] of actions) {
+      if (!action.confirmation.pending) {
+        action.confirmation.cancel();
+        actions.delete(id);
+      }
+    }
   };
   expire();
   const pending = actions.get(key);
   // Provenance first: a verified later message in the same session. Only then is its meaning interpreted.
-  if (pending && BigInt(message.id) > BigInt(pending.sourceMessageId) &&
-      message.sessionId === pending.sourceSessionId &&
-      Number.isFinite(message.at.getTime()) && message.at.getTime() > pending.createdAt) {
-    const verdict = await safeDecision(approvalDeciderFor(request), {
-      reply: message.text, summary: approvalSummary(tool, repository, input, pending.warning ?? warningText),
-      family: 'github', messageId: message.id, sessionId: message.sessionId, actionKey: key,
-    }, signal);
+  if (pending?.confirmation.eligible(message)) {
+    const verdict = await pending.confirmation.decision(message, approvalDeciderFor(request), signal);
     // Nothing below awaits before the approval is consumed, so only one concurrent call can use it.
     expire();
     if (signal.aborted || actions.get(key) !== pending) throw new ToolRefusal(approvalNotPending);
-    if (verdict === 'approve') {
-      actions.delete(key);
-      return;
-    }
     const warning = warningText ?? pending.warning;
-    if (verdict === 'decline') {
-      actions.delete(key);
-      throw new ToolRefusal('Dan declined, so I made no change.');
+    let decision: 'approve' | 'decline';
+    try {
+      decision = pending.confirmation.consume(verdict, signal);
+    } catch (error) {
+      if (error instanceof ToolRefusal && error.message === approvalUnclear && warning) {
+        throw new ToolRefusal(`${approvalUnclear} ${warning}`);
+      }
+      throw error;
     }
-    throw new ToolRefusal(`${approvalUnclear}${warning ? ` ${warning}` : ''}`);
+    actions.delete(key);
+    if (decision === 'decline') throw new ToolRefusal('Dan declined, so I made no change.');
+    return pending.confirmation;
   }
   if (!pending) {
     if (actions.size >= maxPendingApprovals) throw new ToolFailure('I have too many pending GitHub approvals; try again shortly.');
     actions.set(key, {
-      sourceMessageId: message.id,
-      sourceSessionId: message.sessionId,
-      createdAt: now,
+      confirmation: new PendingAction({
+        key,
+        summary: approvalSummary(tool, repository, input, warningText),
+        family: 'github',
+        sourceMessageId: message.id,
+        sourceSessionId: message.sessionId,
+        createdAt: now,
+        lifetimeMs: approvalTtlMs,
+      }),
       ...(warningText ? { warning: warningText } : {}),
       ...(tool === 'pr_merge' && input.proceedDespiteFailingChecks === true &&
         saysProceed(message.text) ? { explicitProceed: true } : {}),
@@ -878,7 +885,7 @@ function arrayInput(input: Input, name: string): string[] | undefined {
 async function requireApproval(
   request: FastifyRequest, signal: AbortSignal, name: string, repository: string, input: Input, warningText?: string,
 ) {
-  await approval(request, signal, name, repository, input, warningText);
+  return approval(request, signal, name, repository, input, warningText);
 }
 
 async function writeHandler(
@@ -902,6 +909,7 @@ async function writeHandler(
   scan(input);
   const base = requireRepoName(repository);
   if (name === 'issue_update') {
+    let confirmation: PendingAction | undefined;
     const number = requireNumber(input, 'number');
     const patch: Record<string, unknown> = {};
     const title = text(input, 'title', 500);
@@ -911,7 +919,7 @@ async function writeHandler(
     if (input.state !== undefined) {
       if (!['open', 'closed'].includes(String(input.state))) throw new ToolRefusal('I need issue state open or closed.');
       if (input.state === 'closed') {
-        await requireApproval(request, signal, name, repository, input);
+        confirmation = await requireApproval(request, signal, name, repository, input);
       }
       patch.state = input.state;
     }
@@ -950,7 +958,8 @@ async function writeHandler(
       patch.labels = labelSet;
     }
     if (Object.keys(patch).length === 0) throw new ToolRefusal('I need at least one issue field to update.');
-    const result = object(await githubJson(`${base}/issues/${number}`, token, signal, 'PATCH', patch));
+    const write = () => githubJson(`${base}/issues/${number}`, token, signal, 'PATCH', patch);
+    const result = object(await (confirmation ? confirmation.execute(write, signal) : write()));
     return { status: 'updated', repository, number, title: safeString(result?.title, 500), state: safeString(result?.state, 20), url: safeString(result?.html_url, 500) };
   }
   if (name === 'pr_create') {
@@ -965,6 +974,7 @@ async function writeHandler(
     return { status: 'created', repository, number: result?.number, title: safeString(result?.title, 500), url: safeString(result?.html_url, 500) };
   }
   if (name === 'pr_update') {
+    let confirmation: PendingAction | undefined;
     requireNumber(input, 'number');
     const patch: Record<string, unknown> = {};
     for (const key of ['title', 'body', 'state', 'base'] as const) {
@@ -973,13 +983,14 @@ async function writeHandler(
         if (key === 'state' && !['open', 'closed'].includes(value)) throw new ToolRefusal('I need pull request state open or closed.');
         if (key === 'base' && !branchPattern.test(value)) throw new ToolRefusal('I need a valid base branch.');
         if (key === 'state' && value === 'closed') {
-          await requireApproval(request, signal, name, repository, input);
+          confirmation = await requireApproval(request, signal, name, repository, input);
         }
         patch[key] = value;
       }
     }
     if (Object.keys(patch).length === 0) throw new ToolRefusal('I need at least one pull request field to update.');
-    const result = object(await githubJson(`${base}/pulls/${requireNumber(input, 'number')}`, token, signal, 'PATCH', patch));
+    const write = () => githubJson(`${base}/pulls/${requireNumber(input, 'number')}`, token, signal, 'PATCH', patch);
+    const result = object(await (confirmation ? confirmation.execute(write, signal) : write()));
     return { status: 'updated', repository, number: result?.number, state: safeString(result?.state, 20), url: safeString(result?.html_url, 500) };
   }
   if (name === 'pr_comment') {
@@ -1028,11 +1039,11 @@ async function writeHandler(
         throw new ToolRefusal('I can’t merge while checks are failing. Dan must explicitly say to proceed despite the failures.');
       }
     }
-    await requireApproval(request, signal, name, repository, input,
+    const confirmation = await requireApproval(request, signal, name, repository, input,
       failing ? 'Some checks are failing. I will proceed only because Dan explicitly asked me to continue.' : undefined);
-    const merged = object(await githubJson(`${base}/pulls/${number}/merge`, token, signal, 'PUT', {
+    const merged = object(await confirmation.execute(() => githubJson(`${base}/pulls/${number}/merge`, token, signal, 'PUT', {
       merge_method: method, sha: expected.toLowerCase(),
-    }));
+    }), signal));
     if (merged?.merged !== true) throw new ToolFailure('I couldn’t confirm that the pull request merged.');
     return { status: 'merged', repository, number, sha: safeString(merged.sha, 40), message: safeString(merged.message, 500) };
   }
@@ -1079,6 +1090,7 @@ async function writeHandler(
     return { status: 'rerun_requested', repository, runId };
   }
   if (name === 'file_write') {
+    let confirmation: PendingAction | undefined;
     const path = text(input, 'path', 1024, true)!;
     const branch = text(input, 'branch', 255, true)!;
     const content = text(input, 'content', maxFileContentBytes, true)!;
@@ -1092,12 +1104,13 @@ async function writeHandler(
     const isDefaultBranch = metadata?.default_branch === branch;
     const isPublic = metadata?.private === false;
     if (isDefaultBranch || isPublic) {
-      await requireApproval(request, signal, name, repository, input,
+      confirmation = await requireApproval(request, signal, name, repository, input,
         isPublic ? 'This writes content to a public repository where anyone can read it.' : undefined);
     }
-    const result = object(await githubJson(`${base}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, token, signal, 'PUT', {
+    const write = () => githubJson(`${base}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, token, signal, 'PUT', {
       message, content: Buffer.from(content).toString('base64'), branch, ...(sha ? { sha } : {}),
-    }));
+    });
+    const result = object(await (confirmation ? confirmation.execute(write, signal) : write()));
     return { status: 'written', repository, path, branch, sha: safeString(object(result?.commit)?.sha, 40), url: safeString(object(result?.content)?.html_url, 500) };
   }
   if (name === 'label_create') {
