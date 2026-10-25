@@ -340,9 +340,14 @@ both stage and receipt. No SQL migration, replica or permission change is added.
 The hosted adapter consolidates multiple proposed single-create calls before
 dispatch when the batch tool exists. For an explicit multiple-event request,
 it locally refuses an isolated single-create call before staging and bounds
-continuation to the complete batch. Failed/incomplete continuation therefore
-cannot leave a hidden first-event proposal. Approval recovery compares the latest
-request's canonical server-verified message ID with the existing staged
+continuation to the complete batch. Before coalescing, it checks each event's
+same-message uncertain action identity; any uncertain member prevents another
+batch dispatch and preserves that event's original outcome. Failed/incomplete
+continuation therefore cannot leave a hidden first-event proposal. An uncertain
+batch error continues through model synthesis with an explicit no-success
+instruction; if the provider retries the same events with new call IDs, the
+cached outcomes reach synthesis without another dispatch. Approval recovery
+compares the latest request's canonical server-verified message ID with the existing staged
 `sourceMessageId`, exposed only by trusted pending/receipt results. Optional
 `ModelMessage.source_message_id` retains that identity through verified history,
 the current request, steering and caption fallback, but is not serialized into
@@ -4231,9 +4236,40 @@ latest prior Jarvis message was included, and total context characters, without
 message text. The current task/status reference JSON precedes conversation
 history in the model input so the latest exchange remains next to the new user
 message. The existing Responses tool loop records calls against Dan's message ID
-using the agent identity. The backend persists only a completed assistant
-response; an interrupted turn leaves Dan's message visible and the UI warns that
-an action may have completed. The browser never receives agent credentials.
+using the agent identity. Ordinary chat and voice continue tool rounds until the
+provider returns a final response; they have no fixed round-count cutoff. Per-call
+output limits, provider context limits, downstream tool outcomes and caller
+cancellation remains effective. Within one source message, an exact repeated
+side-effecting tool call reuses its original result rather than replaying the
+action. If an action returns an uncertain error, a new provider call ID for the
+same canonical tool input in that same source message reuses the uncertain result
+instead of dispatching a second write; a later source message starts a new action
+scope. An uncertain combined calendar batch also continues into model synthesis;
+the original error is retained for same-event retries and no success is inferred.
+Recognized read-only tools execute afresh, including repeated status reads
+and read-after-write verification. A replayed action permits a tool-free
+final-synthesis attempt only when the round contains no other fresh work; another
+tool request then fails with the content-free `tool_loop_stalled` code.
+The backend persists only a completed assistant response; an interrupted turn
+leaves Dan's message visible and the UI warns that an action may have completed.
+If the provider returns an incomplete response after tools ran, the turn still
+fails rather than synthesizing a partial reply; completed or uncertain action
+outcomes are not recovered into that reply. The provider-incomplete regression
+verifies no blind tool replay, not partial-result recovery. The browser never
+receives agent credentials.
+
+Shared execution-effect metadata is owned by `JarvisTool.execution` in
+`apps/backend/src/core/tool-registry.ts`, returned by `GET /tools`, and parsed as
+`BackendTool.execution` in `agents/jarvis/jarvis_tools.py`. Voice adapters use
+the same registered-tool contract through `ToolRegistry`; #1188/#1261 should
+consume this field rather than maintain a second classification list. Metadata
+has an optional default effect (`read`, `action` or `unclassified`) and optional
+operation-field effect map. It describes replay handling only and never grants
+execution permission. Reads always execute fresh. Actions and unclassified calls
+reuse a result only for the same provider-issued call ID and stored source
+message; equal arguments with different call IDs are distinct invocations.
+Backend authorization, validation, confirmation and owner isolation remain the
+execution boundary.
 
 **Conversation summary (P9-105).** Older chat messages are folded into an
 append-only, owner-bound summary so decisions survive the window.
@@ -5324,9 +5360,10 @@ Startup now records request-relative `voice.session_stage` events and one
 `voice.session_summary` on the first browser/upstream/relay/shutdown close.
 Session creation is bounded to 10 seconds; settings plus model catalogue,
 away-mode and project-context reads each fall back after 5 seconds. Connecting
-and waiting for readiness each have a separate 15-second watchdog on the Danish
-route. English requires `session.updated` and instead runs the tool-budget
-fallback below; Danish accepts `session.created` or `session.updated`.
+and readiness on the hosted Danish fallback each have separate 15-second
+watchdogs. Voice Live uses two bounded six-second startup attempts for both
+languages and requires `session.updated`; the hosted Danish fallback keeps its
+native `session.created` readiness contract.
 Timeouts emit `voice.stage_timeout` and close the browser with 4010 immediately,
 independently of storage finalization. The client displays fixed retry wording
 and preserves backoff. The summary exports only stages/timings, allowlisted event
@@ -5334,48 +5371,36 @@ types, close ownership/code, and initial configuration tool count/UTF-8 size plu
 the five largest server-owned tool names/sizes. No payload content is logged.
 See [voice startup diagnosis](runbook.md#voice-startup-diagnosis).
 
-**English tool-budget fallback** (`apps/backend/src/voice/tool-budget.ts`, 21 October
-2026, #1184; Health follow-up #1188). New processes start at R2, the same
-known-good reduced frame measured on 21 October under its previous name, R1
-(R0 stalled at 8,001 ms; the reduced frame became ready in 1,341 ms). R1 now
-omits only `proactive_recent_items` and includes configured `daily_*` tools.
-The relay walks the deterministic ladder from the current rung; only `tools`
-and instruction text change, and every foreground attempt uses a fresh
-upstream socket waiting for `session.updated` (8 s at R0, 6 s at R1-R5;
-24 s worst case from cold R2, 38 s if a remembered R0 must step down). A
-deadline, upstream `error` or close before readiness steps down. Abandoned
-sockets are closed and none of their events reach the browser (held pre-ready
-events are forwarded only after readiness). If every rung fails the relay
-closes 4010 and logs `voice.tool_budget_exhausted`.
+**Shared Voice Live capability transport** (`apps/backend/src/voice/realtime.ts`
+and `relay.ts`, 25 October 2026, #1188). English and Danish Voice Live sessions
+start with direct schemas for the full configured `app.jarvisTools` registry.
+The bounded fallback changes only the transport representation: it advertises
+`jarvis_discover_capabilities` and `jarvis_execute_capability`. Discovery returns
+up to eight schemas per page, bounded by the existing 1 MiB voice result limit;
+the relay tracks names discovered in that session. Execution accepts only a
+registered, previously discovered name and delegates to
+`executeRealtimeToolCall`, so both modes retain the same schema validation,
+backend authorization, session isolation, idempotency and confirmation policy.
+No capability is pruned by language, transport rung or the fallback.
 
-| Rung | Tools | Instructions |
-|---|---|---|
-| R0 | all | full |
-| R1 | all except `proactive_recent_items` | full + notice |
-| R2 | all except `daily_*` and `proactive_recent_items` | full + notice |
-| R3 | `set_presence_mode`, `set_away_mode` and the smallest others up to half of R0's definition bytes | full + notice |
-| R4 | none | full + notice |
-| R5 | none | base identity and style text + notice |
+Each Voice Live attempt gets a fresh socket and a six-second deadline. The
+fallback starts only after a pre-readiness timeout, provider error or close.
+Abandoned sockets are closed and their events are not forwarded. A successful
+`session.updated` is the only event that selects and remembers the
+representation for reconnect; cancellation and a second failed attempt close
+with 4010. There is no background frame-probe coordinator or active-session
+promotion. The hosted Danish agent fallback is a separate provider-owned
+protocol: it retains its existing setup and readiness and is not switched to the
+Voice Live discovery wrappers.
 
-The backend keeps the last rung that reached `session.updated` in process memory
-(a restart clears it), starts new sessions there, steps down from it within the
-session if needed, and never remembers a rung that did not become ready. After a
-non-R0 session becomes ready, a process-wide probe coordinator may run once per
-30 minutes. It builds independent `full`, `no_proactive`, `no_daily` and
-`reduced_plus_copies` frames through `createRealtimeSessionUpdate`, uses fresh
-credentialed sockets, sends no audio or conversation, and waits at most 8 seconds
-for `session.updated`. Probes do not forward events to the browser or delay the
-live session. A ready `full` probe promotes memory to R0; a ready `no_proactive`
-probe promotes it to R1, whose exact tool set includes Daily. Other probe
-outcomes do not change the selected rung. Each later live frame (presence-mode
-updates, camera turn-detection updates, `response.create` instructions) uses the
-selected rung, and a model call to a tool outside the active subset is refused
-without execution. Danish does not use the ladder or probes.
-`voice.tool_budget_probe` exports fixed probe names, counts, byte sizes,
-outcomes and timings only. Probe readiness confirms only that that frame received
-`session.updated`; it does not establish a tool-count, byte-size, context, or
-tool-content limit. The earlier R0/R1 timings establish a startup difference,
-not a cause.
+Direct exact/favourite food logging still uses `daily_food`; estimates and
+corrections still wait for the authenticated browser Now review. Compact voice
+discovery does not grant permission or treat spoken agreement as approval.
+Tests exercise healthy and constrained relays in both languages, paged
+discovery/dispatch, real food logging/review handlers, denial and authorization
+boundaries, and reconnect. Local fixtures do not establish live provider,
+browser-audio or physical-iPhone acceptance. No numeric provider schema or
+context ceiling is claimed.
 
 | Area | Design | Evidence |
 | --- | --- | --- |

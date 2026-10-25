@@ -26,6 +26,7 @@ from jarvis_tools import (
     current_steering_fetcher,
 )
 from model_client import AzureOpenAIResponsesClient
+from model_contract import ToolLoopStalled
 from state import ModelMessage, ModelSettings
 from visual_context import visual_context, visual_context_text
 from voice_runtime import create_app
@@ -1028,6 +1029,12 @@ def test_chat_stream_error_carries_the_settings_failure_code_only() -> None:
     assert "event: error" in response.text
     assert '"code": "capability_instructions_too_large"' in response.text
     assert "SECRET-DETAIL" not in response.text
+
+
+def test_stalled_tool_loop_uses_a_content_free_failure_code() -> None:
+    assert chat_runtime.chat_failure_code(ToolLoopStalled("private tool arguments")) == (
+        "tool_loop_stalled"
+    )
 
 
 async def _context() -> list[ModelMessage]:
