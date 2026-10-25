@@ -1,5 +1,39 @@
 # Architecture
 
+## Natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+The existing agent stream carries an `AcknowledgmentBoundary` after its streamed
+first-person intent text and immediately before the first tool handoff. Direct
+answers do not emit the boundary; continuation after steering suppresses another
+acknowledgment. This reuses the active model request and normal stream rather than
+adding a planning request or display delay.
+
+Hosted chat relays the boundary as a distinct SSE event. The backend checks that
+it matches the streamed prefix, forwards it to the live conversation UI, and
+persists only the final answer. The UI does not replay the transient segment from
+history. Hosted voice sends the acknowledgment `ResponseOutputTextDone` item
+through the AgentServer session before resuming the same model stream. That is an
+ordered transport send, not a provider/client receipt or proof that speech was
+played; this transport exposes no playback-completion contract.
+
+Realtime voice uses the same English and Danish acknowledgment intent guidance
+with a transport-specific adapter. A tool call waits for a matching successful
+(`response.status: completed`) terminal event to be accepted by the browser
+transport, but not for confirmation that initial acknowledgment audio played.
+The provider emits `response.done` for completed, cancelled, failed and
+incomplete outcomes, so terminal delivery alone cannot release a queued tool.
+Missing or negative playback receipts do not block a received request;
+cancellation, barge-in, required approvals, authorization and failed or
+non-successful terminal delivery/status still prevent tool execution. First
+tool-only responses and later silent tool rounds also need no playback receipt.
+Browser playback completion is not proof of physical-speaker output.
+
+Synthetic fixtures verify the ordering `streamed intent → boundary → tool work →
+final result`, continued tool execution after missing or negative initial playback
+receipts, rejection of non-completed terminal statuses, cancellation, later
+silent tool rounds, and direct turns without a boundary. No live model latency or
+physical-device playback was measured.
+
 ## Vault mirror status consumption (19 October 2026; P14-29)
 
 The backend reads private `vault-mirror-status/status.json` with its existing
@@ -192,8 +226,12 @@ flowchart TD
   N --> Q[Refuse and ask Dan one short natural question. The action stays pending]
 ```
 
-**Provenance** is deterministic and lives in `google/pending-actions.ts` and the
-Factory and GitHub App confirm tools. The message must be the owner's verified
+**Lifecycle and provenance** live in `core/pending-action.ts`. Google, Factory,
+GitHub App and browser owner-interaction adapters use its immutable proposal,
+expiry, cancellation, one-time consumption and execution gate. Adapters retain
+lookup indexes, result receipts, durable browser decisions and tool-specific
+permission checks; they do not implement their own reply eligibility rules.
+The message must be the owner's verified
 current message (voice: the transcribed turn the relay sets on that call only;
 chat: the `x-jarvis-message-id` header equal to the newest stored Dan message,
 with the agent identity), strictly later than the staging message by numeric id
@@ -231,6 +269,38 @@ interpreter, so a plain reply still works and everything else is asked about.
 After the interpreter awaits, the action is re-checked synchronously (same
 pending object, not expired, call not aborted) and consumed before execution, so
 concurrent confirmations execute once.
+
+Browser confirmations (including food review) use the same lifecycle while
+retaining the authenticated browser decision and SQL one-time consumption.
+An unbound browser proposal cannot be approved by a conversational reply.
+Browser decisions racing cancellation or expiry cannot start execution.
+Acknowledgment of receipt is not action approval, and identifying a project
+does not approve a subsequent action on it.
+
+The owner-interactions API preserves #1278's opt-in
+`BrowserConfirmationDelivery.foodEstimate` binding,
+`OwnerInteractionOptions.conversationStore` and `resolveFoodEstimateReply`.
+The adapter verifies the next persisted reply before and after shared
+interpretation; ambiguous, superseded or unrelated replies lose conversational
+authority while the browser card remains available. Decisions still resolve
+the same durable browser confirmation and consume it once. Food call-site
+wiring, phrase interpretation, stream deadlines and persisted-reply SQL tests
+are retained from the merged #1278 (`d0d679f`), unchanged by reconciliation.
+
+Integration checkpoint (25 October): #1264 at `fa3de91` adds
+`PendingProjectClarification`, `rememberProjectClarification`,
+`resolveCreateIssueProject` and typed `ProjectClarification`. Its candidate
+IDs/repos, request fingerprint, immediate-reply verification and target
+revalidation remain target-selection logic, separate from the shared action
+confirmation in `stageIssueCreation`. Its use of `isLaterDanReply` must be
+retained for clarification when resolving the overlapping Factory file;
+action confirmations use `PendingAction` instead. #1259 at `f229ec7` waits for
+actual terminal response delivery, not an audible playback receipt. Missing
+or negative playback receipts do not block dispatch; explicit cancellation
+and failed response delivery still do. This PR does not modify those relay
+or timing paths. Combined-head qualification is still required after the
+remaining related branches integrate. The current-main merge includes food;
+project clarification and acknowledgment branch-only changes are not imported.
 
 Routing no longer matches approval phrases. In chat, any turn with a calendar
 referent in the last two messages makes the agent call

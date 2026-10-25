@@ -1266,6 +1266,13 @@ separate Enable microphone action. P8-10 implements the desktop shell/fullscreen
 transition, available-window carry-over and the selected end-control behavior;
 P8-11 implements phone view switching on the existing client controller.
 
+For a tool-backed turn, the first streamed sentence is separated into a labelled,
+transient Jarvis reply while work is pending. It stays in the transcript only for
+that live turn, is removed when the final reply arrives, and remains beside an
+honest failure message if the turn cannot finish. Direct replies use the existing
+stream without an extra segment. This uses the same message surface and spacing at
+phone and desktop widths; it is not a tool-activity label or a repeated status.
+
 ### Phone workspace (P8-11)
 
 P9-73 keeps phone docks one comfortable gap above the bottom safe area, shared
