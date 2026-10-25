@@ -17,12 +17,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setPreviewBounds(width: number, height: number) {
+function setPreviewBounds(width: number, height: number, statusHeight = 36) {
   vi.stubGlobal('ResizeObserver', class {
     private readonly callback: ResizeObserverCallback;
     constructor(callback: ResizeObserverCallback) { this.callback = callback; }
     observe(target: Element) {
-      this.callback([{ target, contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+      const contentRect = target.classList.contains('camera-status-label')
+        ? { width, height: statusHeight }
+        : { width, height };
+      const borderBoxSize = target.classList.contains('camera-status-label')
+        ? [{ inlineSize: width, blockSize: statusHeight }]
+        : [];
+      this.callback([{ target, contentRect, borderBoxSize } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver);
     }
     disconnect() {}
   });
@@ -147,6 +153,18 @@ describe('Camera preview', () => {
     };
     render(<CameraPreview camera={controller} />);
     expect(screen.getByText('Camera on - direction unavailable')).not.toBeNull();
+  });
+  it('reserves feedback below the full wrapped camera status label', () => {
+    setPreviewBounds(400, 300, 68.4);
+    const controller: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      previewStream: {} as MediaStream, start: vi.fn(async () => true), stop: vi.fn(),
+      inspect: vi.fn(async () => ({ description: 'Fixture.' })),
+    };
+    const { container } = render(<CameraPreview camera={controller} />);
+    const picture = container.querySelector<HTMLElement>('.camera-preview-picture')!;
+    expect(within(picture).getByText('Camera on - direction unavailable')).not.toBeNull();
+    expect(picture.style.getPropertyValue('--camera-preview-status-height')).toBe('68.4px');
   });
   it('keeps startup and capture failures visible with retry, without a manual inspection button', () => {
     const controller = camera({ sharing: false, previewStream: null, error: 'No camera available.' });

@@ -16,6 +16,7 @@ export const cameraPreviewViewId = 'camera-preview';
 export function CameraPreview({ camera }: { camera: CameraController }) {
   const video = useRef<HTMLVideoElement>(null);
   const container = useRef<HTMLDivElement>(null);
+  const picture = useRef<HTMLDivElement>(null);
   const measuredStream = useRef<MediaStream | null>(null);
   const [playback, setPlayback] = useState<{ stream: MediaStream; error: string } | null>(null);
   const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
@@ -44,13 +45,22 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
   }, [attempt, stream]);
   useEffect(() => {
     const element = container.current;
+    const pictureElement = picture.current;
     if (!element || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setPreviewSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    const statusLabel = pictureElement?.querySelector<HTMLElement>('.camera-status-label');
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === element) setPreviewSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+        if (entry.target === statusLabel) {
+          const statusHeight = entry.borderBoxSize?.[0]?.blockSize ?? statusLabel?.getBoundingClientRect().height ?? 0;
+          pictureElement?.style.setProperty('--camera-preview-status-height', `${statusHeight}px`);
+        }
+      }
     });
     observer.observe(element);
+    if (statusLabel) observer.observe(statusLabel);
     return () => observer.disconnect();
-  }, []);
+  }, [camera.sharing, camera.starting]);
   const scale = videoSize && previewSize.width > 0 && previewSize.height > 0
     ? Math.min(previewSize.width / videoSize.width, previewSize.height / videoSize.height)
     : 0;
@@ -65,7 +75,7 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
     }
   };
   return <div ref={container} className="camera-preview" data-inactive={!camera.sharing && !camera.starting}>
-    <div className="camera-preview-picture" data-facing={camera.facing} style={pictureSize}>
+    <div ref={picture} className="camera-preview-picture" data-facing={camera.facing} style={pictureSize}>
       <video ref={video} autoPlay muted playsInline aria-label="Live camera preview" data-readback="off"
         onLoadedMetadata={(event) => updateVideoSize(event.currentTarget)}
         onResize={(event) => updateVideoSize(event.currentTarget)} />

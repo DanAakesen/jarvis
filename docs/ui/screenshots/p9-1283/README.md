@@ -8,6 +8,8 @@ The 320×700 touch-phone screenshots cover a 360×640 portrait source, same-stre
 switch to 640×360 landscape and back, the Front status badge, full unknown-
 direction status, visible observation and playback recovery, and a scrolled
 feedback panel. The 1440×1000 desktop screenshot uses the portrait source.
+`desktop-portrait-unknown-feedback.png` verifies that a long observation notice
+starts 8px below the complete wrapped unavailable-direction badge.
 
 `measurements.json` records the viewport, source and rendered dimensions, status
 line count, frame styles, and switch/close positions for each screenshot. At

@@ -775,6 +775,85 @@
         "left": 115.2
       },
       "screenshot": "desktop-portrait.png"
+    },
+    {
+      "case": "1440x1000 desktop portrait source with unknown direction and long observation notice",
+      "source": "360x640",
+      "picture": {
+        "x": 515.078,
+        "y": 149.254,
+        "width": 242.999,
+        "height": 431.999,
+        "top": 149.254,
+        "right": 758.078,
+        "bottom": 581.253,
+        "left": 515.078
+      },
+      "video": {
+        "x": 515.078,
+        "y": 149.254,
+        "width": 242.999,
+        "height": 431.999,
+        "top": 149.254,
+        "right": 758.078,
+        "bottom": 581.253,
+        "left": 515.078
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Camera on - direction unavailable",
+      "statusBox": {
+        "x": 523.078,
+        "y": 201.254,
+        "width": 226.999,
+        "height": 48.281,
+        "top": 201.254,
+        "right": 750.078,
+        "bottom": 249.535,
+        "left": 523.078
+      },
+      "statusClientHeight": 48,
+      "statusScrollHeight": 48,
+      "feedback": {
+        "x": 523.078,
+        "y": 257.535,
+        "width": 226.999,
+        "height": 315.718,
+        "top": 257.535,
+        "right": 750.078,
+        "bottom": 573.253,
+        "left": 523.078
+      },
+      "statusFeedbackGap": 8,
+      "noticeBox": {
+        "x": 531.078,
+        "y": 265.535,
+        "width": 210.999,
+        "height": 299.718,
+        "top": 265.535,
+        "right": 742.078,
+        "bottom": 565.253,
+        "left": 531.078
+      },
+      "controls": [
+        {
+          "name": "Close camera preview",
+          "x": 710.078,
+          "y": 153.254,
+          "width": 44,
+          "height": 44,
+          "top": 153.254,
+          "right": 754.078,
+          "bottom": 197.254,
+          "left": 710.078
+        }
+      ],
+      "controlsInsideVideo": true,
+      "screenshot": "desktop-portrait-unknown-feedback.png"
     }
   ]
 }
