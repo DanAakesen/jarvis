@@ -322,6 +322,7 @@ describe('committed SQL manifest', () => {
       '0063_proactive_suggestion_preferences.sql',
       '0064_owner_sessions.sql',
       '0065_owner_reminder_schedules.sql',
+      '0066_research_result_recovery.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

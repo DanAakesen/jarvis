@@ -442,6 +442,12 @@ without a supported owned action. A historical interruption is not current
 system health. Preserve borderless tabs and phone-sheet geometry; local fixture
 inspection and live acceptance are separate.
 
+Completed research keeps its saved-report action when Workspace delivery is
+pending, unknown or failed. The detail states that the report is saved and
+labels the delivery state; **Open report** retries presentation through the
+existing Folio path. Workspace acknowledgement is not presented as proof that
+the owner has viewed the report.
+
 Merged-header Chromium fixtures are in `docs/ui/screenshots/p11-12/merged-*`
 at 390×844 and 1440×900, light and dark, captured with reduced motion.
 Synthetic auth/API data exercised

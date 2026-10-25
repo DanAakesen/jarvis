@@ -8,6 +8,7 @@ import { createOwnerInteractionService, type OwnerInteractionService } from './o
 import type { AwayModeStore } from './away-mode.js';
 import type { WorkspaceArtifactStore } from '../database/workspace-artifact-store.js';
 import type { WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
+import type { WorkspaceSnapshot } from '@jarvis/contracts';
 import type { ToolCallStore } from './tool-calls.js';
 import { coreModule } from './index.js';
 import { createFolioModule } from './folio.js';
@@ -29,7 +30,9 @@ const authorization = (token: string) => ({ authorization: ['Bearer', token].joi
 
 function fixture(options: { ownerInteractions?: OwnerInteractionService; awayModeStore?: AwayModeStore } = {}) {
   const search = vi.fn(async () => [item]);
-  const get = vi.fn(async () => ({ item, sourceId }));
+  const get = vi.fn(async (_owner: string, id: string) => ({
+    item: { ...item, id }, sourceId: id.slice('research:'.length),
+  }));
   const update = vi.fn(async () => ({ ...item, pinned: true }));
   const remove = vi.fn(async () => {});
   const store = { search, get, update, delete: remove } as unknown as FolioStore;
@@ -38,8 +41,9 @@ function fixture(options: { ownerInteractions?: OwnerInteractionService; awayMod
   const readUrl = vi.fn(async () => 'https://jarvisstore.blob.core.windows.net/artifacts/image.png?sig=test');
   const imageArtifacts = { readUrl } as unknown as WorkspaceArtifactStore;
   const execute = vi.fn(async () => {});
+  const snapshot = vi.fn((): WorkspaceSnapshot | undefined => undefined);
   const workspaceCommands = {
-    snapshot: vi.fn(() => undefined),
+    snapshot,
     execute,
     dispose: vi.fn(),
   };
@@ -57,7 +61,7 @@ function fixture(options: { ownerInteractions?: OwnerInteractionService; awayMod
     ...options,
   });
   apps.push(app);
-  return { app, search, get, update, remove, read, readUrl, execute, record };
+  return { app, search, get, update, remove, read, readUrl, execute, record, snapshot };
 }
 
 function presence(mode: 'present' | 'away' | 'on_the_move' = 'present'): AwayModeStore {
@@ -116,6 +120,7 @@ describe('Folio API and Jarvis tools', () => {
       headers: authorization('owner.e30.sig'),
       payload: {},
     });
+
     expect(opened.statusCode).toBe(200);
     expect(opened.json()).toEqual(item);
     expect(fixtureData.read).toHaveBeenCalledWith(sourceId, ownerId, expect.any(AbortSignal));
@@ -152,6 +157,70 @@ describe('Folio API and Jarvis tools', () => {
     expect(deleted.statusCode).toBe(200);
     expect(deleted.json()).toEqual({ deleted: true });
     expect(fixtureData.remove).toHaveBeenCalledWith(ownerId, item.id, expect.any(AbortSignal));
+  });
+
+  it('recovers a saved research result under its stable window id and records only acknowledged delivery', async () => {
+    const fixtureData = fixture();
+    const job = await fixtureData.app.backgroundJobs.start('research', 'Research: Recovered report', 2);
+    const resultId = `research:${job.jobId}`;
+    const resultViewId = `research-${job.jobId.replaceAll('-', '')}`;
+    await job.done(resultViewId, 'Report saved', { resultId, resultDelivery: 'pending' });
+
+    const denied = await fixtureData.app.inject({
+      method: 'POST',
+      url: `/jobs/${job.jobId}/open-result`,
+      headers: authorization('other.e30.sig'),
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(fixtureData.execute).not.toHaveBeenCalled();
+
+    const opened = await fixtureData.app.inject({
+      method: 'POST',
+      url: `/jobs/${job.jobId}/open-result`,
+      headers: authorization('owner.e30.sig'),
+    });
+    expect(opened.statusCode).toBe(200);
+    expect(opened.json()).toEqual({ opened: true });
+    expect(fixtureData.get).toHaveBeenCalledWith(ownerId, resultId, expect.any(AbortSignal));
+    expect(fixtureData.execute).toHaveBeenNthCalledWith(1, ownerId, expect.objectContaining({
+      operation: 'create', viewId: resultViewId,
+    }), expect.any(AbortSignal));
+    expect((await fixtureData.app.backgroundJobs.details(job.jobId))?.details.job.resultDelivery).toBe('delivered');
+
+    fixtureData.snapshot.mockReturnValue({
+      windows: [{ viewId: resultViewId, title: 'Recovered report', state: 'open' }],
+      contextPanelOpen: false,
+    });
+    const openedAgain = await fixtureData.app.inject({
+      method: 'POST',
+      url: `/jobs/${job.jobId}/open-result`,
+      headers: authorization('owner.e30.sig'),
+    });
+    expect(openedAgain.statusCode).toBe(200);
+    expect(fixtureData.execute).toHaveBeenNthCalledWith(3, ownerId, expect.objectContaining({
+      operation: 'update', viewId: resultViewId,
+    }), expect.any(AbortSignal));
+  });
+
+  it('does not mark acknowledged presentation failed when delivery-state persistence fails', async () => {
+    const fixtureData = fixture();
+    const job = await fixtureData.app.backgroundJobs.start('research', 'Research: Recovered report', 2);
+    await job.done(`research-${job.jobId.replaceAll('-', '')}`, 'Report saved', {
+      resultId: `research:${job.jobId}`,
+      resultDelivery: 'pending',
+    });
+    vi.spyOn(fixtureData.app.backgroundJobs, 'setResultDelivery')
+      .mockRejectedValueOnce(new Error('database unavailable'));
+
+    const response = await fixtureData.app.inject({
+      method: 'POST',
+      url: `/jobs/${job.jobId}/open-result`,
+      headers: authorization('owner.e30.sig'),
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(fixtureData.execute).toHaveBeenCalledTimes(2);
+    expect((await fixtureData.app.backgroundJobs.details(job.jobId))?.details.job.resultDelivery).toBe('pending');
   });
 
   it('registers private Folio tools and resolves a natural-language reopen request', async () => {

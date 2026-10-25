@@ -1,5 +1,22 @@
 # Decisions
 
+## Research completion is independent of Workspace delivery (25 October 2026; #1237)
+
+After a validated research artifact, its owner-scoped Folio entry, and the
+job's durable result reference are saved, the job is complete regardless of
+whether a Workspace tab is connected or acknowledges presentation. Persist
+delivery separately as pending, unknown, failed or delivered; only an applied
+Workspace acknowledgement permits delivered. That acknowledgement means the
+client applied the command, not that the owner viewed the report.
+
+Use the existing Folio and job records plus a single stable research view ID.
+The owner-only open-result route reuses the Folio reader and Workspace broker;
+reconnect/reload offers the existing artifact and never calls the provider
+again. Real artifact/Folio/job persistence failures remain failures. This is
+the approved delivery-boundary item only; the separate research-concurrency
+race is out of scope. Validation uses synthetic data; physical iPhone behavior
+remains a separate owner acceptance step.
+
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
 - Keep one immediate switch for automatic proactive suggestions and a compact
