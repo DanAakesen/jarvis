@@ -234,6 +234,9 @@ describe('HTML workspace app routes and tool', () => {
     expect(description).toContain("connect-src 'none'");
     expect(description).toContain('do not use external libraries, scripts, stylesheets or fetches');
     expect(description).toContain('hand-written inline SVG or canvas');
+    expect(description).toContain('readable at the available window width');
+    expect(description).toContain('labelled, keyboard-focusable region');
+    expect(description).toContain('Fit images to their container without changing aspect ratio');
   });
 
   it('creates an artifact and opens only its reference through the workspace command path', async () => {

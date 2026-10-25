@@ -37,6 +37,41 @@
   behavior and live provider acceptance are reported separately; fixture success
   is not deployment acceptance.
 
+## Workspace content stays within its allocated width (25 October 2026; Refs #1260)
+
+- Wrap repository text by default and provide an accessible “Wrap lines” checkbox
+  to restore original horizontal code layout. Keep source text, line numbers,
+  highlighted ranges, search marks and link behavior unchanged.
+- Let prose and long values wrap in their window. Keep intentional table/chart
+  exploration inside named, focusable local regions; show full chart labels and
+  retain all source values. Fit images to the frame without distortion.
+- Bound only the host container and first-party Jarvis report document. Do not
+  claim control over arbitrary external documents, execute them for inspection,
+  or weaken the report's scripts-only sandbox, CSP or validated bridge.
+- Keep the document from forcing a 280px minimum width below that CSS width at
+  high zoom. This preserves the surrounding workspace and foreground-window
+  transitions while preventing page-level horizontal overflow.
+- **Evidence:** `scripts/check-workspace-content-browser.mjs` reuses the web
+  Vite setup with the synthetic fixture in
+  `apps/web/browser-tests/workspace-content.fixture.tsx`. It checks 320×700,
+  375×812 and 390×844 portrait; 844×390 touch landscape; a 160 CSS px viewport
+  at DPR 2; 1440×1000 desktop; a 520px allocated Workspace container; and
+  resizing open windows through 1024×900. It checks exact selected-code
+  clipboard text, wrapping/original lines, highlights/search marks, local
+  focusable table/chart scrolling and values, and verifies chart marks are visible
+  at the initial scroll position at each phone width. The 520px capture closes the
+  other desktop windows, resets page scroll and checks the README window heading
+  inside the viewport crop. It also
+  checks page overflow, theme changes, foreground switching and close/reopen.
+  Durable captures and the reproduction command are in
+  `docs/ui/screenshots/workspace-content/README.md`. Component
+  suites cover list/detail/timeline/image renderers and sandbox/CSP/bridge
+  contracts; those were not exercised in this browser fixture. DPR 2 is not
+  actual 200% browser zoom, and Chromium emulation is not physical iPhone or
+  iOS Safari acceptance. Dark mode was exercised but not captured. Voice/chat
+  transitions and live services were not tested. Physical iPhone acceptance
+  remains with the owner; keep #1260 open until it.
+
 ## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
 
 Accepted for the direct owner request in #1239:
