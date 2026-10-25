@@ -68,6 +68,7 @@ function setup(overrides: Partial<ProactiveEngineOptions> = {}) {
     jobId: 'test-job',
     progress: vi.fn(async () => {}),
     done: vi.fn(async () => { events.push('job:done'); }),
+    setResultDelivery: vi.fn(async () => {}),
     fail: vi.fn(async () => { events.push('job:fail'); }),
   } satisfies BackgroundJobHandle;
   const start = vi.fn(async () => { events.push('job:start'); return job; });

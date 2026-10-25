@@ -91,3 +91,7 @@ sessions; without SQL there is no boot revoke. This may wake a paused serverless
 database. Its down batch drops the table. Sessions are revocable credentials, not
 evidence, so dropping them is the same as revoking every session: the owner signs
 in again. Deploy the migration before the backend revision that uses the table.
+
+`0066_research_result_recovery.sql` stores the Folio entry and Workspace delivery
+state on completed research jobs. The down batch removes only those references;
+saved reports and Folio entries remain untouched.

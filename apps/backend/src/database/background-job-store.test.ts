@@ -25,6 +25,40 @@ function dismissalSqlFixture(rows: Array<{ job_id: string; status: string }> = [
 }
 
 describe('SQL background job dismissals', () => {
+  it('persists acknowledged delivery only for a completed research result and prevents a later downgrade', async () => {
+    const row = {
+      job_id: finishedId,
+      kind: 'research',
+      title: 'Research: Result recovery',
+      status: 'done',
+      step: 2,
+      steps: 2,
+      detail: 'Report saved',
+      view_id: `research-${finishedId.replaceAll('-', '')}`,
+      result_folio_id: `research:${finishedId}`,
+      result_delivery_status: 'delivered',
+      started_at: new Date('2026-10-20T12:00:00.000Z'),
+      updated_at: new Date('2026-10-20T12:01:00.000Z'),
+    };
+    const request = {
+      input: vi.fn().mockReturnThis(),
+      query: vi.fn().mockResolvedValueOnce({ recordset: [row] }).mockResolvedValueOnce({ recordset: [] }),
+    };
+    const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
+    const store = createBackgroundJobStore(pool);
+
+    await expect(store.updateResultDelivery(finishedId, 'delivered')).resolves.toMatchObject({
+      resultId: `research:${finishedId}`, resultDelivery: 'delivered',
+    });
+    await expect(store.updateResultDelivery(finishedId, 'unknown')).resolves.toBeNull();
+    const statement = request.query.mock.calls[0]?.[0] as string;
+    expect(statement).toContain("WHERE job_id = @jobId AND status = N'done' AND result_folio_id IS NOT NULL");
+    expect(statement).toContain("result_delivery_status <> N'delivered' OR @resultDeliveryStatus = N'delivered'");
+    expect(request.input).toHaveBeenCalledWith('jobId', sql.NVarChar(36), finishedId);
+    await expect(store.updateResultDelivery('bad-id', 'pending')).rejects.toThrow(TypeError);
+    expect(request.query).toHaveBeenCalledTimes(2);
+  });
+
   it('uses the proactive restart reason without changing other job recovery text', async () => {
     const { request, store } = dismissalSqlFixture();
     await expect(store.reconcileInterrupted()).resolves.toEqual([]);

@@ -1083,6 +1083,16 @@ test('background jobs are bounded and typed', () => {
   assert.equal(isBackgroundJob({ ...job, kind: 'embedding' }), true);
   assert.equal(isBackgroundJob({ ...job, kind: 'proactive' }), true);
   assert.equal(isBackgroundJob({ ...job, status: 'done', step: 3, viewId: 'research-abc' }), true);
+  const savedResearch = {
+    ...job, status: 'done', step: 3, viewId: 'research-11111111111141118111111111111111',
+    resultId: 'research:11111111-1111-4111-8111-111111111111', resultDelivery: 'pending',
+  };
+  assert.equal(isBackgroundJob(savedResearch), true);
+  assert.equal(isBackgroundJob({ ...savedResearch, resultDelivery: 'displayed' }), false);
+  assert.equal(isBackgroundJob({ ...savedResearch, kind: 'image' }), false);
+  assert.equal(isBackgroundJob({ ...savedResearch, resultId: 'research:not-a-uuid' }), false);
+  assert.equal(isBackgroundJob({ ...savedResearch, resultDelivery: undefined }), false);
+  assert.equal(isBackgroundJob({ ...job, resultId: savedResearch.resultId }), false);
   assert.equal(isBackgroundJob({ ...job, step: 4 }), false);
   assert.equal(isBackgroundJob({ ...job, title: 'x'.repeat(81) }), false);
   assert.equal(isBackgroundJob({ ...job, kind: 'shell' }), false);
