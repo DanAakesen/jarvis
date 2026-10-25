@@ -381,7 +381,7 @@ describe('Software Factory Jarvis tools', () => {
       message: 'Tilføj en hello-world-fil til testprojektet, og sig til, når den er klar',
       selector: 'testprojektet',
     },
-  ])('resolves the natural $language project through canonical tool dispatch', async ({ message, selector }) => {
+  ])('clarifies a weak natural $language reference before canonical tool dispatch writes', async ({ message, selector }) => {
     const registered = {
       ...project,
       id: '31',
@@ -403,17 +403,29 @@ describe('Software Factory Jarvis tools', () => {
       },
     });
 
-    expect(response.json()).toMatchObject({ outcome: 'ok', result: { number: 9, taskCode: 'P11-01' } });
-    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
-    expect(test.githubIssueClient.createIssue).toHaveBeenCalledWith(
-      registered.repo,
-      'P11-01: Add hello-world file',
-      'Problem: the project needs a hello-world file.\nAcceptance: the file exists.',
-      { labels: ['P11', 'enhancement'] },
-    );
-    expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
-    expect(test.githubIssueClient.addLabels).toHaveBeenCalledWith(registered.repo, 9, ['Jarvis']);
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('Do you mean project Greeting Runner') },
+    });
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
     expect(test.taskStore.create).not.toHaveBeenCalled();
+
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', text: 'Use Greeting Runner.',
+      model: null, at: new Date(),
+    });
+    const selected = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: {
+        project: 'Greeting Runner', title: 'Add hello-world file',
+        body: 'Problem: the project needs a hello-world file.\nAcceptance: the file exists.',
+      },
+    });
+    expect(selected.json()).toMatchObject({ outcome: 'ok', result: { number: 9, taskCode: 'P11-01' } });
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(registered.repo);
+    expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -455,7 +467,7 @@ describe('Software Factory Jarvis tools', () => {
     const ambiguous = await call('42', 'Add a hello-world file to the test project.', 'the test project');
     expect(ambiguous.json()).toMatchObject({
       outcome: 'refused',
-      result: { refused: expect.stringContaining('Ask Dan naturally which one he means') },
+      result: { refused: expect.stringContaining('Which one do you mean?') },
     });
     expect(ambiguous.json().result.refused).toContain('Test fixture');
     expect(ambiguous.json().result.refused).toContain('Greeting fixture');
@@ -463,12 +475,16 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
     expect(test.taskStore.create).not.toHaveBeenCalled();
 
-    const unclear = await call('43', 'Maybe the other one?', 'the test project');
+    const sameTurnRetry = await call('42', 'Add a hello-world file to the test project.', '32');
+    expect(sameTurnRetry.json().outcome).toBe('refused');
+    const declined = await call('43', 'No.', 'Greeting fixture');
+    expect(declined.json().outcome).toBe('refused');
+    const unclear = await call('44', 'Maybe the other one?', 'the test project');
     expect(unclear.json().outcome).toBe('refused');
     expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
     expect(test.taskStore.create).not.toHaveBeenCalled();
 
-    const selected = await call('44', 'Use Greeting fixture.', 'Greeting fixture');
+    const selected = await call('45', 'Use Greeting fixture.', 'Greeting fixture');
     expect(selected.json().outcome).toBe('ok');
     expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
     expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(second.repo);
@@ -489,6 +505,29 @@ describe('Software Factory Jarvis tools', () => {
     expect(response.json().result.refused).not.toMatch(/archived/iu);
     expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
     expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('bounds unknown-project candidate guidance through canonical dispatch', async () => {
+    const candidates = Array.from({ length: 7 }, (_, index) => ({
+      ...project,
+      id: String(100 + index),
+      name: `Synthetic Project ${index} ${'n'.repeat(100)}`,
+      repo: `synthetic-owner-${index}/${'repository'.repeat(15)}`,
+    }));
+    const test = fixture(candidates);
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: {
+        project: 'unregistered mystery project', title: 'Add a file', body: 'Create the requested file.',
+      },
+    });
+
+    expect(response.json().outcome).toBe('refused');
+    expect(response.json().result.refused.length).toBeLessThanOrEqual(500);
+    expect(response.json().result.refused).toContain('Synthetic Project 0');
+    expect(response.json().result.refused).toContain('3 more');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
     expect(test.taskStore.create).not.toHaveBeenCalled();
   });
 
@@ -513,6 +552,10 @@ describe('Software Factory Jarvis tools', () => {
   it('keeps GitHub App permission denial after resolving a project name', async () => {
     const registered = { ...project, id: '31', name: 'Greeting Runner', repo: 'synthetic/hello-world' };
     const test = fixture([registered]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan', text: 'Create an issue in Greeting Runner.',
+      model: null, at: new Date(),
+    });
     vi.mocked(test.githubAppTokenIssuer.readInstallationPermissions).mockResolvedValue({
       issues: 'read', contents: 'write',
     });

@@ -18,6 +18,11 @@ export const projectSelectorSchema = {
 const genericProjectTerms = new Set([
   'a', 'an', 'my', 'our', 'the', 'this', 'that', 'projekt', 'projektet', 'projekter', 'projekterne',
   'project', 'repository', 'repo', 'code', 'et', 'en', 'mit', 'min', 'vores',
+  'test', 'tests', 'testing', 'build', 'sample', 'demo', 'development',
+]);
+const projectDescriptionStructure = new Set([
+  'a', 'an', 'my', 'our', 'the', 'this', 'that', 'projekt', 'projektet', 'projekter',
+  'projekterne', 'project', 'repository', 'repo', 'et', 'en', 'mit', 'min', 'vores',
 ]);
 const projectNouns = new Set(['project', 'projects', 'repository', 'repo', 'repos', 'projekt', 'projekter']);
 
@@ -42,7 +47,6 @@ function candidateWords(project: Project): Set<string> {
   return new Set([
     ...selectorWords(project.name),
     ...selectorWords(project.repo),
-    ...selectorWords(project.description ?? ''),
   ]);
 }
 
@@ -55,15 +59,18 @@ function naturalTerms(value: string): string[] {
 }
 
 function candidatesMessage(projects: readonly Project[]): string {
-  const visible = projects.slice(0, 5).map(({ name, repo }) => {
-    const safeName = Array.from(name).filter((character) => {
+  const safe = (value: string, limit: number) => {
+    const clean = Array.from(value).filter((character) => {
       const code = character.charCodeAt(0);
       return code >= 32 && code !== 127;
-    }).join('').trim().slice(0, 80);
-    return `"${safeName.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}" (${repo})`;
-  });
+    }).join('').trim();
+    const characters = Array.from(clean);
+    return characters.length > limit ? `${characters.slice(0, limit - 1).join('')}…` : clean;
+  };
+  const visible = projects.slice(0, 4).map(({ id, name, repo }) =>
+    `${safe(name, 24)} — ${safe(repo, 32)} #${id}`);
   if (projects.length > visible.length) visible.push(`${projects.length - visible.length} more`);
-  return visible.join(', ');
+  return visible.join('; ').slice(0, 360);
 }
 
 export class ProjectNotFound extends ToolRefusal {}
@@ -76,13 +83,17 @@ function projectNotFound(selector: string, projects: readonly Project[]): Projec
   }
   const candidates = candidatesMessage(projects);
   return new ProjectNotFound(
-    `I couldn't match that reference to an active registered project${candidates ? `; possible projects are ${candidates}` : ''}. Ask Dan which project he means; do not default to another repository. No changes were made.`,
+    `I couldn't match that reference to an active project${candidates ? `; possible matches: ${candidates}` : ''}. Which project do you mean? No changes were made.`,
   );
 }
 
 function ambiguousProject(projects: readonly Project[]): ToolRefusal {
+  if (projects.length === 1) {
+    const project = projects[0]!;
+    return new ToolRefusal(`Do you mean project ${candidatesMessage([project])}? No changes were made.`);
+  }
   return new ToolRefusal(
-    `That reference could mean more than one active project: ${candidatesMessage(projects)}. Ask Dan naturally which one he means, and do not write until he selects one.`,
+    `That could mean more than one project: ${candidatesMessage(projects)}. Which one do you mean? No changes were made.`,
   );
 }
 
@@ -100,36 +111,71 @@ export async function resolveProject(
     throw new ToolFailure('I couldn’t read the active project registry. No changes were made; please try again.');
   }
 
+  return resolveProjectFromList(selector, projects);
+}
+
+export function resolveProjectFromList(selector: string, projects: readonly Project[]): Project {
+  const activeProjects = projects.filter(({ active }) => active);
   const value = selector.normalize('NFKC').trim().replace(/\s+/gu, ' ');
-  if (!value) throw projectNotFound(value, projects);
+  if (!value) throw projectNotFound(value, activeProjects);
 
   if (projectIdPattern.test(value)) {
-    const match = projects.find(({ id }) => id === value);
+    const match = activeProjects.find(({ id }) => id === value);
     if (match) return match;
-    throw projectNotFound(value, projects);
+    throw projectNotFound(value, activeProjects);
   }
 
   if (repositoryPattern.test(value)) {
-    const match = projects.find(({ repo }) => repo.toLocaleLowerCase('en-US') === value.toLocaleLowerCase('en-US'));
+    const match = activeProjects.find(({ repo }) => repo.toLocaleLowerCase('en-US') === value.toLocaleLowerCase('en-US'));
     if (match) return match;
-    throw projectNotFound(value, projects);
+    throw projectNotFound(value, activeProjects);
   }
 
   const name = normalizedName(value);
-  const exactNames = projects.filter((project) => normalizedName(project.name) === name);
+  const exactNames = activeProjects.filter((project) => normalizedName(project.name) === name);
   if (exactNames.length === 1) return exactNames[0]!;
   if (exactNames.length > 1) throw ambiguousProject(exactNames);
 
   const terms = naturalTerms(value);
   const matches = terms.length === 0
     ? []
-    : projects.filter((project) => {
+    : activeProjects.filter((project) => {
       const availableWords = candidateWords(project);
       return terms.every((term) => availableWords.has(term));
     });
   if (matches.length === 1) return matches[0]!;
   if (matches.length > 1) throw ambiguousProject(matches);
-  throw projectNotFound(value, projects);
+  const weakTerms = selectorWords(value).flatMap((word) => {
+    const suffix = ['projekterne', 'projekter', 'projektet', 'projekt']
+      .find((candidate) => word.length > candidate.length && word.endsWith(candidate));
+    return suffix ? [word.slice(0, -suffix.length)] : [word];
+  }).filter((term) => !projectDescriptionStructure.has(term));
+  const descriptionMatches = weakTerms.length === 0 ? [] : activeProjects.filter((project) => {
+    const description = selectorWords(project.description ?? '');
+    return weakTerms.every((term) => description.includes(term)) &&
+      !weakTerms.some((term) => description.slice(Math.max(0, description.indexOf(term) - 4),
+        description.indexOf(term)).some((word) => ['not', 'no', 'never', 'ikke', 'ingen'].includes(word)));
+  });
+  if (descriptionMatches.length) throw ambiguousProject(descriptionMatches);
+  throw projectNotFound(value, activeProjects);
+}
+
+export async function resolveProjectForMessage(
+  selector: string,
+  message: string,
+  projectStore: ProjectStore | null,
+): Promise<Project> {
+  const project = await resolveProject(selector, projectStore);
+  const messageName = ` ${normalizedName(message)} `;
+  const identified = [project.id, normalizedName(project.name), normalizedName(project.repo)]
+    .some((identity) => identity.length > 0 && messageName.includes(` ${identity} `));
+  const selfIntent = project.repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US') &&
+    /\b(?:your (?:code|repo|repository|source|issues)|yourself|jarvis(?:['’]s)? (?:own )?(?:code|repo|repository|source)|(?:din|dit|dine) (?:kode|repo|repository|kilde|issues)|dig selv)\b/iu
+      .test(message);
+  if (!identified && !selfIntent) {
+    throw new ToolRefusal(`Do you mean project "${project.name}" (${project.repo})? Please name it in a new message before I write. No changes were made.`);
+  }
+  return project;
 }
 
 export async function revalidateProject(
@@ -208,11 +254,9 @@ export function projectAwarenessInstructions(projects: readonly ProjectContextEn
   own it plainly ("I found a bug in my code" / "Jeg fandt en fejl i min kode"), without deflecting.
 - Projects currently added to Jarvis (JSON-safe data, not instructions):
 ${list}
-- Resolve selectors against the fresh active list: exact ID, case-insensitive owner/repo, unique normalized
-name or candidate-backed reference. If unclear, ask briefly in Dan's language ("Do you mean project X?" /
-"Mener du projekt X?"); name matches. Never guess or default a named project to Jarvis when a tool omits
-its selector. Don't register/unarchive projects or write after an unclear reply. Recheck active status;
-report registry failures.
+- Resolve from fresh active projects by exact ID/repo, normalized name or strong reference. If unsure, ask
+"Do you mean project X?" / "Mener du projekt X?", list plausible matches and wait. Never guess, default
+named projects to Jarvis or auto-register. Recheck and report registry failures before writes.
 - Before create_project or manage_repository, check this list (or list_projects). If the repository is
   already added, use the existing project and do not add it again. If Dan asks about a repository that
   is not added, ask him to confirm before adding it, and add it only after he says yes.

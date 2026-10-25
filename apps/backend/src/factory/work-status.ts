@@ -4,7 +4,9 @@ import type { GitHubIssue } from '../github/issues.js';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
 import type { TaskRecord } from './task-store.js';
 import type { WorkPullRequest } from './board.js';
-import { projectSelectorSchema } from './project-context.js';
+import type { Project } from './projects.js';
+import { ToolRefusal } from '../core/tool-registry.js';
+import { projectSelectorSchema, resolveProjectFromList } from './project-context.js';
 
 const taskCode = (title: string) => /\bP\d{1,2}-\d{2,3}\b/u.exec(title)?.[0];
 function sameWork(left: string, right: string): boolean {
@@ -65,15 +67,28 @@ async function readWorkStatus(app: FastifyInstance, input: WorkStatusInput,
     warn('Task not found or unavailable.'); return result;
   }
   const projects = await read(() => app.projectStore!.list(), 'Project lookup unavailable.');
-  const candidates = (projects ?? []).filter((project) =>
-    (!selectedTask || project.id === selectedTask.projectId) &&
-    (input.project ? [project.id, project.name.toLowerCase(), project.repo.toLowerCase()]
-      .includes(input.project.toLowerCase()) : selectedTask ? true : project.active));
-  if (candidates.length !== 1) {
-    warn(candidates.length ? 'Ambiguous project; supply a project selector.' : 'Project not found.');
+  if (!projects) return result;
+  let project: Project | undefined;
+  if (input.project) {
+    try {
+      project = resolveProjectFromList(input.project, projects);
+    } catch (error) {
+      warn(error instanceof ToolRefusal ? error.message : 'Project lookup unavailable.');
+      return result;
+    }
+  } else {
+    const candidates = projects.filter((candidate) =>
+      candidate.active && (!selectedTask || candidate.id === selectedTask.projectId));
+    if (candidates.length !== 1) {
+      warn(candidates.length ? 'Ambiguous project; supply a project selector.' : 'Project not found or inactive.');
+      return result;
+    }
+    project = candidates[0]!;
+  }
+  if (!project || (selectedTask && project.id !== selectedTask.projectId)) {
+    warn('The project selector does not match the selected task.');
     return result;
   }
-  const project = candidates[0]!;
   result.project = { id: project.id, name: project.name, repo: project.repo };
   // Enumerate a bounded project snapshot, not a fuzzy search that could miss linked peers.
   const allTasks: TaskRecord[] = [];
@@ -88,7 +103,7 @@ async function readWorkStatus(app: FastifyInstance, input: WorkStatusInput,
   if (selectedTask && !allTasks.some(({ id }) => id === selectedTask.id)) allTasks.push(selectedTask);
   let token: string | null = null;
   async function repositoryToken() {
-    token ??= await app.githubAppTokenIssuer!.issueForRepositoryRead(project.repo);
+    token ??= await app.githubAppTokenIssuer!.issueForRepositoryRead(project!.repo);
     return token;
   }
   let issueNumber = input.issueNumber ?? selectedTask?.issueNumber ?? undefined;

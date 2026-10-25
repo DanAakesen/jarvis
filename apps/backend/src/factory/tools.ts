@@ -32,7 +32,7 @@ import {
   JARVIS_REPOSITORY,
   projectSelectorSchema,
   requiresProjectSelector,
-  resolveProject,
+  resolveProjectForMessage,
   resolveRepository,
   revalidateProject,
 } from './project-context.js';
@@ -293,8 +293,9 @@ async function stageIssueCreation(
   if (input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
     throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
   }
-  const selectedProject = input.project && input.repository === undefined
-    ? await resolveProject(input.project, server.projectStore ?? null)
+  const selector = input.project ?? input.repository;
+  const selectedProject = selector
+    ? await resolveProjectForMessage(selector, source.text, server.projectStore ?? null)
     : undefined;
   const preview = input.issueNumber === undefined ? await previewP11TaskCode({
     ...(selectedProject ? { project: selectedProject.id } : {}),
@@ -577,7 +578,7 @@ export const factoryTools: readonly JarvisTool[] = [
           }
           const selectedProject = draft.project === undefined
             ? undefined
-            : await resolveProject(draft.project, request.server.projectStore ?? null);
+            : await resolveProjectForMessage(draft.project, source.text, request.server.projectStore ?? null);
           const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
           const issuer = request.server.githubAppTokenIssuer;
           if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
@@ -643,10 +644,11 @@ export const factoryTools: readonly JarvisTool[] = [
             throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
           }
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
-          const selectedProject = input.repository === undefined && input.project !== undefined
-            ? await resolveProject(input.project, request.server.projectStore ?? null)
+          const selector = input.project ?? input.repository;
+          const selectedProject = selector
+            ? await resolveProjectForMessage(selector, source.text, request.server.projectStore ?? null)
             : undefined;
-          const repository = input.repository ?? selectedProject?.repo ??
+          const repository = selectedProject?.repo ??
             await resolveRepository(undefined, request.server.projectStore ?? null);
           if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
             throw new ToolRefusal('That repository name is invalid.');
@@ -717,6 +719,9 @@ export const factoryTools: readonly JarvisTool[] = [
       const { project, issue } = input as StartIssueToolInput;
       if (project === undefined && requiresProjectSelector(message.text)) {
         throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No task was created.');
+      }
+      if (project !== undefined) {
+        await resolveProjectForMessage(project, message.text, request.server.projectStore ?? null);
       }
       const result = await startIssueTask({
         projects: request.server.projectStore,

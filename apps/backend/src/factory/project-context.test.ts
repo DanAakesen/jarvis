@@ -45,7 +45,7 @@ describe('project awareness', () => {
     expect(text).toContain('- jarvis-test-target (DanAakesen/jarvis-test-target, project ID 1)');
     expect(text).toContain('ask him to confirm before adding it');
     expect(text).toContain('do not add it again');
-    expect(text).toContain('Mener du projekt X?');
+    expect(text).toContain('"Mener du projekt X?"');
     expect(text).toContain('Do not use create_task for code changes.');
   });
 
@@ -75,12 +75,16 @@ describe('active project resolution', () => {
     expect(store.list).toHaveBeenCalledTimes(3);
   });
 
-  it('matches natural English and Danish references only through registered candidate data', async () => {
+  it('asks before using a weak description-only reference in English or Danish', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
 
-    expect((await resolveProject('the test project', store)).id).toBe(project.id);
-    expect((await resolveProject('testprojektet', store)).id).toBe(project.id);
+    await expect(resolveProject('the test project', store)).rejects.toThrow('Do you mean project Greeting Runner');
+    await expect(resolveProject('testprojektet', store)).rejects.toThrow('Do you mean project Greeting Runner');
+    const negated = { list: vi.fn(async () => [
+      registeredProject({ description: 'not a test project' }),
+    ]) } as unknown as ProjectStore;
+    await expect(resolveProject('the test project', negated)).rejects.toThrow("couldn't match");
   });
 
   it('refuses multiple plausible projects and duplicate normalized display names', async () => {
@@ -90,8 +94,8 @@ describe('active project resolution', () => {
 
     const ambiguous = await resolveProject('the test project', store).catch((error: unknown) => error);
     expect(ambiguous).toBeInstanceOf(ToolRefusal);
-    expect((ambiguous as Error).message).toContain('"Greeting fixture" (synthetic/other)');
-    expect((ambiguous as Error).message).toContain('"Test fixture" (synthetic/hello-world)');
+    expect((ambiguous as Error).message).toContain('Greeting fixture — synthetic/other #32');
+    expect((ambiguous as Error).message).toContain('Test fixture — synthetic/hello-world #31');
 
     const duplicateNames = { list: vi.fn(async () => [
       first,

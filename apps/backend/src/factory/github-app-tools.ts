@@ -8,9 +8,10 @@ import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.
 import { containsLikelySecret } from './issues.js';
 import {
   JARVIS_REPOSITORY,
+  ProjectNotFound,
   projectSelectorSchema,
   requiresProjectSelector,
-  resolveProject,
+  resolveProjectForMessage,
   resolveRepository,
   revalidateProject,
 } from './project-context.js';
@@ -595,15 +596,33 @@ async function runOperation(
   signal: AbortSignal,
 ): Promise<unknown> {
   const writes = permission.access === 'write' || (permission.also ?? []).some(({ access }) => access === 'write');
+  const selector = typeof input.project === 'string'
+    ? input.project
+    : undefined;
+  const source = writes && (selector !== undefined || typeof input.repository === 'string') &&
+      (request.jarvisConversationMessage || request.agentPrincipal)
+    ? await danMessage(request)
+    : undefined;
   if (writes && input.repository === undefined && input.project === undefined &&
       (request.jarvisConversationMessage || request.agentPrincipal)) {
-    if (requiresProjectSelector((await danMessage(request)).text)) {
+    if (requiresProjectSelector(source?.text ?? (await danMessage(request)).text)) {
       throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
     }
   }
-  const selectedProject = writes && input.repository === undefined && typeof input.project === 'string'
-    ? await resolveProject(input.project, request.server.projectStore ?? null)
-    : undefined;
+  let selectedProject: Awaited<ReturnType<typeof resolveProjectForMessage>> | undefined;
+  if (writes && selector !== undefined) {
+    selectedProject = await resolveProjectForMessage(selector, source?.text ?? '', request.server.projectStore ?? null);
+  } else if (writes && typeof input.repository === 'string' && request.server.projectStore) {
+    try {
+      selectedProject = await resolveProjectForMessage(input.repository, source?.text ?? '', request.server.projectStore);
+    } catch (error) {
+      if (!(error instanceof ProjectNotFound) || requiresProjectSelector(source?.text ?? '')) throw error;
+    }
+  }
+  if (writes && typeof input.repository === 'string' && !selectedProject &&
+      requiresProjectSelector(source?.text ?? '')) {
+    throw new ToolRefusal('Which active project do you mean? I will not write to an unselected repository. No changes were made.');
+  }
   const repository = selectedProject?.repo ?? await resolveToolRepository(input, request);
   return withGitHubAccess(request, repository, permission, async (token) => {
     if (selectedProject) {
