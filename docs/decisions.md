@@ -2,13 +2,14 @@
 
 ## Compact camera preview and attachment menu order (#1265; 25 October 2026)
 
-Keep the existing Camera preview workspace lifecycle, but make the live video
-the compact surface, use its existing refracted glass rim, and overlay the
-camera-switch and close controls. Retain touch-only switching and the established
-preview recovery behavior. Use **Enable video** consistently for the camera-on
-action. Put **Attach file or photo** first in the typing More menu, reusing the
-existing validated upload/picker flow. This does not change camera capture,
-permissions, or image-input behavior.
+Keep the existing Camera preview workspace identity and lifecycle, but make the
+live video the only visible window surface, use its existing refracted glass rim,
+and overlay the camera-switch and close controls. Keep its accessible heading,
+workspace commands and media teardown; retain touch-only switching and the
+established preview recovery behavior. Use **Enable video** consistently for the
+camera-on action. Put **Attach file or photo** first in the typing More menu,
+reusing the existing validated upload/picker flow. This does not change camera
+capture, permissions, or image-input behavior.
 
 ## Research completion is independent of Workspace delivery (25 October 2026; #1237)
 

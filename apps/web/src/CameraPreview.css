@@ -1,7 +1,6 @@
-.workspace-window.workspace-window-camera-preview { gap: var(--space-2); padding: var(--space-2); }
-.workspace-window-camera-preview .workspace-window-heading { margin: 0; padding-inline: var(--space-2) var(--space-1); }
-.workspace-window-camera-preview .workspace-window-heading h3 { font-size: var(--type-subsection); }
-.workspace-window-camera-preview .workspace-view-content { display: flex; overflow: hidden; }
+.workspace-window.workspace-window-camera-preview { gap: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.workspace-window.workspace-window-camera-preview:focus-within { box-shadow: none; }
+.workspace-window-camera-preview .workspace-view-content { display: flex; min-height: 0; overflow: auto; padding: 0; }
 .camera-preview { position: relative; display: flex; flex: 1; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 0; }
 .camera-preview-picture { position: relative; display: grid; flex: 1; min-height: 80px; overflow: hidden; place-items: center; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-muted); }
 .camera-preview[data-inactive="true"] .camera-preview-picture { display: none; }

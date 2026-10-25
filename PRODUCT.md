@@ -268,9 +268,9 @@ relayed by the coordinator. This supersedes earlier camera-release holds below.
 The coordinator reports live chat `visual.path=image` on every tested turn;
 live voice image acceptance and physical-phone checks remain separate.
 
-Camera preview is a compact workspace window showing the local video with
-overlaid camera-switch and close controls; Front/Back status and mobile-touch-only
-switching remain. It docks without stopping
+Camera preview is a compact, preview-only workspace surface showing the local video with
+overlaid camera-switch and close controls; its accessible workspace identity and
+lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
 capture; Close/Turn off, session end and ten minutes without a user turn stop
 the tracks. Idle recovery stays visible. Camera controls never share or cover
 the composer. Camera-on chat and correlated EN/DA realtime turns upload a fresh

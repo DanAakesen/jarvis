@@ -2184,7 +2184,7 @@ describe('App shell', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/now/workspace/state') &&
       JSON.parse(String(init?.body)).windows.some((window: { viewId: string; title: string }) =>
         window.viewId === 'camera-preview' && window.title === 'Camera preview'))).toBe(true));
-    await user.click(within(preview).getByRole('button', { name: 'Minimise Camera preview' }));
+    expect(await workspace.command('minimise-camera', 'minimise', 'camera-preview')).toMatchObject({ applied: true });
     expect(preview.getAttribute('aria-hidden')).toBe('true');
     expect(track.stop).not.toHaveBeenCalled();
     expect(video.srcObject).toBe(stream);

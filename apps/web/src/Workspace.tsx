@@ -1476,7 +1476,7 @@ export const Workspace = forwardRef<WorkspaceController, {
 
           return (
             <article
-              className={`workspace-window luminous-glass${view.presentation === 'conversation' ? ' workspace-window-conversation' : ''}${view.presentation === 'camera-preview' ? ' workspace-window-camera-preview' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
+              className={`workspace-window${view.presentation === 'camera-preview' ? ' workspace-window-camera-preview' : ' luminous-glass'}${view.presentation === 'conversation' ? ' workspace-window-conversation' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
               key={view.id}
               data-view-id={view.id}
               data-conversation-positioned={docked && conversationPositioned || undefined}
@@ -1492,6 +1492,19 @@ export const Workspace = forwardRef<WorkspaceController, {
               onFocusCapture={(event) => raiseView(event, view.id)}
               onPointerDownCapture={(event) => raiseView(event, view.id)}
             >
+              {view.presentation === 'camera-preview' ? (
+                <h3
+                  ref={(element) => {
+                    if (element) windowHeadings.current.set(view.id, element);
+                    else windowHeadings.current.delete(view.id);
+                  }}
+                  id={titleId}
+                  tabIndex={-1}
+                  className="visually-hidden"
+                >
+                  {view.title}
+                </h3>
+              ) : (
               <header className="workspace-window-heading">
                 {!maximized && docked && phone && <button className="conversation-resize-handle" type="button"
                   aria-label="Resize Conversation height"
@@ -1622,6 +1635,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   </button>
                 </div>
               </header>
+              )}
               <div className={view.presentation === 'conversation' ? 'workspace-conversation-content' : 'workspace-view-content'}>
                 {view.content.status === 'loading' && <StateMessage variant="loading" message="Loading view." />}
                 {view.content.status === 'empty' && <StateMessage variant="empty" message="This view has no content." />}
