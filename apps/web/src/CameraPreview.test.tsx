@@ -120,12 +120,13 @@ describe('Camera preview', () => {
   it('shows playback failure with a working retry, never claiming Live before playback succeeds', async () => {
     setPreviewBounds(400, 300);
     vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new Error('Autoplay unavailable.'));
-    const controller = camera();
+    const controller = camera({ observationNotice: 'Camera capture limit reached. Using an observation from 20 seconds ago.' });
     render(<CameraPreview camera={controller} />);
     await screen.findByRole('alert');
     expect(screen.queryByText('Live')).toBeNull();
     const picture = document.querySelector<HTMLElement>('.camera-preview-picture')!;
     expect(within(picture).getByRole('button', { name: 'Retry preview' })).not.toBeNull();
+    expect(within(picture).getByText(/Camera capture limit reached/u)).not.toBeNull();
     const video = screen.getByLabelText('Live camera preview');
     Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
     Object.defineProperty(video, 'videoHeight', { configurable: true, value: 360 });
