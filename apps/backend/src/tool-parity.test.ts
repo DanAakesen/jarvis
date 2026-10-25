@@ -28,6 +28,11 @@ const parityExecute = vi.fn(async () => ({ status: 'synthetic-ok' }));
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
+function projectSelectorDescription(schema: unknown): string {
+  const properties = (schema as { properties?: Record<string, { description?: string }> }).properties;
+  return properties?.project?.description ?? '';
+}
+
 const browserAgent = {
   runClause: async () => ({}),
   runTask: async () => ({}),
@@ -183,6 +188,9 @@ describe('voice and chat tool parity', () => {
     const response = await app.inject({ url: '/tools', headers });
     expect(response.statusCode).toBe(200);
     const catalogue = response.json() as { name: string; inputSchema: unknown }[];
+    const createIssue = catalogue.find(({ name }) => name === 'create_issue');
+    expect(createIssue).toBeDefined();
+    expect(projectSelectorDescription(createIssue?.inputSchema)).toContain('Natural references');
 
     if (voice) {
       const { socket } = await voice.start(language);
@@ -234,19 +242,22 @@ describe('voice and chat tool parity', () => {
     expect(parityExecute).not.toHaveBeenCalled();
 
     const discovered: string[] = [];
+    let discoveredIssueParameters: unknown;
     let offset: number | null = 0;
     let page = 0;
     do {
       const callId = `page_${page++}`;
       await call(VOICE_CAPABILITY_DISCOVERY_TOOL, callId, JSON.stringify({ offset }));
       const output = JSON.parse(toolOutput(callId) as string) as {
-        outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
+        outcome: string;         result: { capabilities: { name: string; parameters: unknown }[]; nextOffset: number | null };
       };
       expect(output.outcome).toBe('ok');
       discovered.push(...output.result.capabilities.map(({ name }) => name));
+      discoveredIssueParameters ??= output.result.capabilities.find(({ name }) => name === 'create_issue')?.parameters;
       offset = output.result.nextOffset;
     } while (offset !== null);
     expect(discovered.sort()).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(projectSelectorDescription(discoveredIssueParameters)).toContain('Natural references');
 
     await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'advertised',
       JSON.stringify({ capability: 'parity_probe', arguments: { value: 'synthetic' } }));

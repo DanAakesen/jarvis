@@ -1,5 +1,35 @@
 # Decisions
 
+## Resolve project references against the active registry (25 October 2026; #1263)
+
+- Resolve explicit project IDs and full repository names exactly; normalize
+  display names conservatively and match natural references only against current
+  active registered-project candidates. Never select the first plausible match.
+- Ask one short natural-language question before a write when the reference is
+  ambiguous or absent. A missing project in the active-only list does not prove
+  that it was archived; registry read failures remain distinct from project and
+  GitHub App permission failures.
+- Pin the selected project ID and repository and revalidate them before issue,
+  label, comment, task or generic GitHub App writes. Do not fall back from a named
+  non-self project, register/unarchive projects or change permissions to make a
+  request succeed.
+- Keep `create_issue` as the code-change path and reuse existing approval and
+  tool replay ownership. This change adds no confirmation, execution or replay
+  loop of its own.
+- For a one-project clarification, accept only an immediate clear affirmation
+  bound to the same verified session and unchanged issue request; ambiguity,
+  denial/uncertainty (including replies that also name a candidate), intervening
+  replies, changed targets and stale registrations fail closed. A clear named
+  selection remains valid when multiple candidates were listed.
+  The shared pending-action lifecycle owns clarification reply eligibility,
+  expiry, cancellation and one-time selection; selecting a project is not issue
+  approval.
+  Explicit raw-repository issue comments remain supported without registration.
+- **Verification:** synthetic resolver and canonical dispatch tests cover English
+  and Danish requests, ambiguity, no-write refusals, permission denial and project
+  archive/rename races at factory and GitHub App write boundaries. Provider,
+  production and physical voice acceptance remain unverified.
+
 ## Base vault-index freshness on successful sync evidence (#1288; 25 October 2026)
 
 Use the vault module's existing synchronization outcome rather than the newest
@@ -42,6 +72,42 @@ and 10-second request timeout. Synthetic regression tests cover the reported
 size with and without a content-length header, acceptance at the cap, and
 rejection/cancellation above it. A lookup error is not a failed deployment.
 
+## Mobile browser food logging is not telephone-call logging (25 October 2026; #1290)
+
+Clarify food tool guidance and trusted runtime instructions, not permissions:
+mobile/desktop browser chat and browser voice are supported; actual telephone
+calls remain denied. Current runtime context overrides device wording and earlier
+refusals, without granting approval. Require the actual `log_estimate` tool call
+before inviting confirmation; a prose estimate or lookup creates no proposal.
+With no pending proposal, obtain a new confirmation after staging, never reuse
+historical affirmative text. Preserve the current shared one-time approval service
+on the merged #1282 `PendingAction` lifecycle.
+
+Review follow-up: the blocking tool cannot deliver its invitation after returning.
+Publish the exact persisted review through the existing authenticated Now feed
+and a session-bound, internal voice presentation event while it waits. Permit
+only that food invitation to speak during pending tool work; retain response,
+settings, speech and presence gating and discard obsolete queued presentations.
+This adds no second confirmation state or authority. #1259 acknowledgement
+delivery remains distinct from the estimate/invitation.
+
+Typed-chat review follow-up: an unopened Now popover is not a delivered chat
+invitation. Forward the same persisted proposal over the active conversation
+stream, bound to its session and source message, and render it in the existing
+live bubble before the tool returns. Use plain text and existing reply/steering
+controls; retain expiry, withdrawal and shared approval/duplicate guards.
+Synthetic HTTP and rendered-client checks verify delivery before a new reply.
+Scratch Chromium at 1440px and 390px verified the visible invitation and synthetic
+reply receipt without Now, overflow or browser errors; this is not live-provider
+or signed-in production acceptance.
+
+Synthetic HTTP and English/Danish WebSocket tests exercise discovery, staging,
+public review/invitation delivery, new natural replies and committed receipts
+with isolated in-memory storage. Voice fixtures forward synthetic transcript and
+audio frames to the browser socket before injecting the new owner reply.
+They do not establish live-provider, real-SQL or physical-device acceptance.
+The hosted tool catalogue has a 60-second TTL; no browser-cache cause was established.
+
 ## Natural food-estimate confirmation reuses one-time browser approval (25 October 2026; #1277)
 
 Only pending `log_estimate` reviews accept the owner's next later reply in the
@@ -59,7 +125,6 @@ headroom. Keep food's 180-second operation and 120-second approval limits,
 and ordinary browser requests' 120-second deadline. Sanitize transport-read
 failures and direct the owner to check status before retrying. Synthetic checks
 do not establish live provider, microphone, device or deployment acceptance.
-
 ## Compact camera preview and attachment menu order (#1265; 25 October 2026)
 
 Keep the existing Camera preview workspace identity and lifecycle, but make the
@@ -70,7 +135,6 @@ established preview recovery behavior. Use **Enable video** consistently for the
 camera-on action. Put **Attach file or photo** first in the typing More menu,
 reusing the existing validated upload/picker flow. This does not change camera
 capture, permissions, or image-input behavior.
-
 ## Generic text questions use an active screen share (#1266; 25 October 2026)
 
 Text submission and turn execution resolve generic English/Danish visual

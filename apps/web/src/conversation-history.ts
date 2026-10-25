@@ -179,6 +179,12 @@ function chatMessageResult(message: ChatMessage): ChatMessage {
   };
 }
 
+export interface ChatFoodInvitation {
+  id: string;
+  summary: string;
+  expiresAt: string;
+}
+
 export async function sendChatTurn(
   getAccessToken: () => Promise<string>,
   config: PublicConfig,
@@ -194,6 +200,7 @@ export async function sendChatTurn(
   attachmentIds?: readonly string[],
   visualContext?: VisualTurnContext,
   onAcknowledgment?: (text: string) => void,
+  onFoodInvitation?: (invitation: ChatFoodInvitation | null) => void,
 ): Promise<ChatMessage> {
   if (visualContext !== undefined && screenContext !== undefined) {
     throw new Error('Send visual context or legacy screen context, not both.');
@@ -251,6 +258,16 @@ export async function sendChatTurn(
         throw new Error('Jarvis returned an invalid chat stream.');
       }
       onAcknowledgment?.(payload.text);
+    } else if (event.event === 'food_invitation') {
+      if (payload === null) onFoodInvitation?.(null);
+      else {
+        if (!isRecord(payload) || typeof payload.id !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(payload.id) ||
+            typeof payload.summary !== 'string' || !payload.summary.trim() || payload.summary.length > 4000 ||
+            typeof payload.expiresAt !== 'string' || !Number.isFinite(Date.parse(payload.expiresAt))) {
+          throw new Error('Jarvis returned an invalid chat stream.');
+        }
+        onFoodInvitation?.({ id: payload.id, summary: payload.summary, expiresAt: payload.expiresAt });
+      }
     } else if (event.event === 'interrupted') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
       onInterrupted?.(chatMessageResult(payload));
