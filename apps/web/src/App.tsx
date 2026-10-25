@@ -243,6 +243,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   if (JSON.stringify(viewHistory.current) !== JSON.stringify(location)) setViewHistory({ current: location, previous: viewHistory.current });
   const view: LookingAtView = useMemo(() => ({
     ...location,
+    workspacesOpen,
     folioOpen: workspacesOpen,
     ...(frontViewId && location.issueNumber === undefined ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),

@@ -67,7 +67,7 @@ export function resolveNavigation({ page, section, taskId, issueNumber }: Naviga
     return { ok: false, reason: 'An issue can only be opened on the Software Factory board by its positive whole number.' };
   }
   // Workspaces is a pane over the current page rather than a page of its own.
-  if (page === 'folio') return section === undefined && taskId === undefined ? { ok: true, pane: 'workspaces' } : { ok: false, reason: 'The Workspaces pane has no sections.' };
+  if (page === 'workspaces' || page === 'folio') return section === undefined && taskId === undefined ? { ok: true, pane: 'workspaces' } : { ok: false, reason: 'The Workspaces pane has no sections.' };
   const path = pages[page];
   if (!path) return { ok: false, reason: `Unknown page: ${page}.` };
   if (section !== undefined) {

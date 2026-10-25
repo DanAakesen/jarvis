@@ -137,7 +137,8 @@ test('workspace snapshots accept old clients and validate optional current and p
     assert.equal(isWorkspaceSnapshot({ ...snapshot, view: { page } }), true);
   }
   const view = {
-    page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report', folioOpen: true,
+    page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report',
+    workspacesOpen: true, folioOpen: true,
     previous: { page: 'settings', section: 'voice' },
   };
   assert.equal(isWorkspaceSnapshot({ ...snapshot, view }), true);
@@ -146,7 +147,8 @@ test('workspace snapshots accept old clients and validate optional current and p
     { page: 'settings', section: 'unknown' }, { page: 'home', taskId: '10' },
     { page: 'factory', taskId: '../10' }, { page: 'factory', issueNumber: 0 },
     { page: 'factory', issueNumber: Number.MAX_SAFE_INTEGER + 1 },
-    { page: 'home', folioOpen: 'true' }, { page: 'home', focusedViewId: '../report' },
+    { page: 'home', workspacesOpen: 'true' }, { page: 'home', folioOpen: 'true' },
+    { page: 'home', focusedViewId: '../report' },
     { page: 'home', previous: { page: 'home', previous: { page: 'factory' } } },
     { page: 'home', previous: { page: 'factory', issueNumber: -1 } },
   ]) {
@@ -989,7 +991,7 @@ test('validates exact current-session actions and values', () => {
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
-    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily', 'health',
+    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'workspaces', 'folio', 'status', 'daily', 'health',
   ]);
   assert.deepEqual(workspaceSettingsSections, [
     'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',

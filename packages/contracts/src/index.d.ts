@@ -512,6 +512,8 @@ export interface WorkspaceViewLocation {
   issueNumber?: number;
 }
 export interface WorkspaceView extends WorkspaceViewLocation {
+  workspacesOpen?: boolean;
+  /** @deprecated Use workspacesOpen; accepted for older clients. */
   folioOpen?: boolean;
   focusedViewId?: string;
   previous?: WorkspaceViewLocation;
@@ -521,7 +523,7 @@ export function isWorkspaceView(value: unknown): value is WorkspaceView;
 export function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot;
 
 export const workspaceNavigationPages: readonly [
-  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily', 'health',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'workspaces', 'folio', 'status', 'daily', 'health',
 ];
 export type WorkspaceNavigationPage = typeof workspaceNavigationPages[number];
 export const workspaceSettingsSections: readonly [

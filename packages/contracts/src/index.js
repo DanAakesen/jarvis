@@ -466,7 +466,7 @@ export const workspaceViewIdSchema = {
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
 export const workspaceNavigationPages = Object.freeze([
-  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily', 'health',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'workspaces', 'folio', 'status', 'daily', 'health',
 ]);
 export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
@@ -483,6 +483,7 @@ const workspaceLocationProperties = {
 };
 export const workspaceViewSchema = Object.freeze(object({
   ...workspaceLocationProperties,
+  workspacesOpen: { type: 'boolean' },
   folioOpen: { type: 'boolean' },
   focusedViewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
   previous: object(workspaceLocationProperties, ['page']),
@@ -498,7 +499,8 @@ function isWorkspaceLocation(value, extraKeys = []) {
 }
 
 export function isWorkspaceView(value) {
-  return isWorkspaceLocation(value, ['folioOpen', 'focusedViewId', 'previous']) &&
+  return isWorkspaceLocation(value, ['workspacesOpen', 'folioOpen', 'focusedViewId', 'previous']) &&
+    (value.workspacesOpen === undefined || typeof value.workspacesOpen === 'boolean') &&
     (value.folioOpen === undefined || typeof value.folioOpen === 'boolean') &&
     (value.focusedViewId === undefined || typeof value.focusedViewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value.focusedViewId)) &&
     (value.previous === undefined || isWorkspaceLocation(value.previous));
