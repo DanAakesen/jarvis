@@ -1144,6 +1144,8 @@ export function ConversationHistory({
       <form id="conversation-composer" className="composer" hidden={voiceActive}
         onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
+        <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove}
+          getAccessToken={tokenProvider} config={config} />
         <textarea
           ref={input}
           id="message"
@@ -1202,7 +1204,6 @@ export function ConversationHistory({
             addFiles(Array.from(event.target.files ?? []));
             event.target.value = '';
           }} />
-        <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove} />
         {fileDrag && <p className="composer-drop-hint" aria-hidden="true">Drop files to attach them</p>}
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.
