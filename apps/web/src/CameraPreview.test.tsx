@@ -66,6 +66,22 @@ describe('Camera preview', () => {
     expect(picture.style.height).toBe(expectedHeight);
     expect(picture.querySelector('video')).toBe(video);
   });
+  it('resizes the preview when video metadata reports a new orientation', () => {
+    setPreviewBounds(400, 300);
+    const { container } = render(<CameraPreview camera={camera()} />);
+    const video = screen.getByLabelText('Live camera preview');
+    const picture = container.querySelector<HTMLElement>('.camera-preview-picture')!;
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 360, writable: true });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 640, writable: true });
+    fireEvent.loadedMetadata(video);
+    expect(picture.style.width).toBe('168.75px');
+    expect(picture.style.height).toBe('300px');
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640, writable: true });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 360, writable: true });
+    fireEvent.loadedMetadata(video);
+    expect(picture.style.width).toBe('400px');
+    expect(picture.style.height).toBe('225px');
+  });
   it('plays the existing muted stream locally and detaches without stopping capture on unmount', async () => {
     const controller = camera();
     const view = render(<CameraPreview camera={controller} />);
