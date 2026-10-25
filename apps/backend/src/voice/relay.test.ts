@@ -3545,7 +3545,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
       await app.listen({ host: '127.0.0.1', port: 0 });
       const address = app.server.address() as AddressInfo;
-      let browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+      const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
       const receiveBrowserEvents = (socket: WebSocket) => socket.on('message', (data) => {
         browserEvents.push(JSON.parse(data.toString()) as Record<string, unknown>);
       });

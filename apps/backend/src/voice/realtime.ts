@@ -542,7 +542,9 @@ export async function executeRealtimeCapabilityCall(
   if (call.name === VOICE_CAPABILITY_DISCOVERY_TOOL) {
     const input = parsedArguments(call);
     if (!input || !hasOnlyKeys(input, ['offset']) ||
-        input.offset !== undefined && (!Number.isInteger(input.offset) || input.offset < 0)) {
+        input.offset !== undefined && (
+          typeof input.offset !== 'number' || !Number.isInteger(input.offset) || input.offset < 0
+        )) {
       return toolOutput(call.name, 'refused', { refused: 'Invalid capability discovery request.' });
     }
     const catalogue = tools.list();

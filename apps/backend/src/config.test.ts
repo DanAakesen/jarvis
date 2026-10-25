@@ -33,7 +33,6 @@ describe('backend configuration', () => {
       proactiveAlertsEnabled: false,
       healthUploadEnabled: false,
       ownerSessionEnabled: false,
-      voiceToolBudgetProbeEnabled: true,
       auth: loadAuthConfig({}),
     });
   });
@@ -108,7 +107,6 @@ describe('backend configuration', () => {
       proactiveAlertsEnabled: false,
       healthUploadEnabled: false,
       ownerSessionEnabled: false,
-      voiceToolBudgetProbeEnabled: true,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {

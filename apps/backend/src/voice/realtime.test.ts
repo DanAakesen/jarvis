@@ -14,7 +14,6 @@ import {
   DANISH_REALTIME_VOICE,
   executeRealtimeToolCall,
   VOICE_CAPABILITY_DISCOVERY_TOOL,
-  VOICE_CAPABILITY_EXECUTION_TOOL,
   resolveCalendarReply,
   calendarStatusQuestion,
   calendarTurnContext,
