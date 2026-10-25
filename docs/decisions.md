@@ -18,6 +18,17 @@ and ordinary browser requests' 120-second deadline. Sanitize transport-read
 failures and direct the owner to check status before retrying. Synthetic checks
 do not establish live provider, microphone, device or deployment acceptance.
 
+## Compact camera preview and attachment menu order (#1265; 25 October 2026)
+
+Keep the existing Camera preview workspace identity and lifecycle, but make the
+live video the only visible window surface, use its existing refracted glass rim,
+and overlay the camera-switch and close controls. Keep its accessible heading,
+workspace commands and media teardown; retain touch-only switching and the
+established preview recovery behavior. Use **Enable video** consistently for the
+camera-on action. Put **Attach file or photo** first in the typing More menu,
+reusing the existing validated upload/picker flow. This does not change camera
+capture, permissions, or image-input behavior.
+
 ## Generic text questions use an active screen share (#1266; 25 October 2026)
 
 Text submission and turn execution resolve generic English/Danish visual

@@ -471,7 +471,7 @@ export function ConversationHistory({
     const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
       (isCameraRequest(text) && !screenRequest);
     if (cameraRequest && !camera?.sharing) {
-      setTurnError('Turn on the camera in More before asking Jarvis to inspect a frame.');
+      setTurnError('Enable video in More before asking Jarvis to inspect a frame.');
       return;
     }
     const files = hasFiles ? takeFiles() : [];
@@ -549,7 +549,7 @@ export function ConversationHistory({
       const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
         (isCameraRequest(text) && !screenRequest);
       if (cameraRequest && !camera?.sharing) {
-        throw new Error('Turn on the camera in More before asking Jarvis to inspect a frame.');
+        throw new Error('Enable video in More before asking Jarvis to inspect a frame.');
       }
       const activeSession = session?.language === language
         ? session
@@ -728,7 +728,7 @@ export function ConversationHistory({
     }] : []),
     ...(camera ? [{
       id: 'share-camera',
-      label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Turn camera on',
+      label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Enable video',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
       disabled: camera.starting,
@@ -756,8 +756,7 @@ export function ConversationHistory({
     onSelect: () => fileInput.current?.click(),
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
-  }, ...captureActions];
-
+  }];
   const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
   const fileDragHandlers = voiceActive ? {} : {
     onDragEnter: (event: React.DragEvent) => {
@@ -1024,7 +1023,8 @@ export function ConversationHistory({
         />
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
-        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
+        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage}
+          leadingActions={attachActions} actions={captureActions} align="end" />
         <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
           aria-label="Send" title={uploadingFiles ? 'Waiting for uploads to finish' : 'Send message'}>
           {/* A new key per message restarts the one-off take-off animation, even when sends follow each other quickly. */}
