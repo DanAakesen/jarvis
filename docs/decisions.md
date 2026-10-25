@@ -1,5 +1,15 @@
 # Decisions
 
+## Bound deployment-status responses at 4 MiB (25 October 2026; #1267)
+
+The GitHub Actions deployment reader requests up to 100 workflow runs. Allow
+4 MiB instead of 1 MiB so the reported 1,215,280-byte response fits with headroom,
+while retaining a finite per-request memory bound. Enforce the cap on both the
+declared content length and actual streamed bytes; retain the 100-run validation
+and 10-second request timeout. Synthetic regression tests cover the reported
+size with and without a content-length header, acceptance at the cap, and
+rejection/cancellation above it. A lookup error is not a failed deployment.
+
 ## Research completion is independent of Workspace delivery (25 October 2026; #1237)
 
 After a validated research artifact, its owner-scoped Folio entry, and the

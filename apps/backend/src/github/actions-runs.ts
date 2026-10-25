@@ -1,7 +1,7 @@
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 
 const githubApi = 'https://api.github.com';
-const maxResponseBytes = 1024 * 1024;
+const maxResponseBytes = 4 * 1024 * 1024;
 const requestTimeoutMs = 10_000;
 
 export interface GitHubActionsDeploymentRun {
