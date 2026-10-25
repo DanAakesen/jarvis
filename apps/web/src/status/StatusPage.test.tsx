@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { systemSmokeCheckIds, type SystemStatus } from '@jarvis/contracts';
@@ -93,6 +93,219 @@ describe('Status page', () => {
       headers: { Authorization: `${['Bear', 'er'].join('')} fixture-token`, Accept: 'application/json' },
       cache: 'no-store', signal: expect.any(AbortSignal),
     }));
+  });
+
+  it('explains Foundry catalogue evidence and runner health without upgrading unknown checks', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'foundry.chat'
+      ? { ...entry, status: 'unknown', details: { configured: true, catalogue: 'live', deploymentAvailable: true } }
+      : entry.id === 'foundry.voice'
+        ? { ...entry, status: 'degraded', details: { configured: true, catalogue: 'live', deploymentAvailable: false } }
+        : entry.id === 'foundry.embeddings'
+          ? { ...entry, status: 'degraded', details: { configured: true, catalogue: 'fallback', deploymentAvailable: true } }
+          : entry.id === 'runner'
+            ? { ...entry, status: 'unknown', details: { configured: true, healthProbe: 'not_run' } }
+            : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const chat = await screen.findByRole('listitem', { name: 'Foundry chat' });
+    expect(within(chat).getByText('Unknown')).not.toBeNull();
+    expect(within(chat).getByText(/deployment is listed, but this check did not run a model request/)).not.toBeNull();
+    const voice = screen.getByRole('listitem', { name: 'Foundry voice' });
+    expect(within(voice).getByText('Degraded')).not.toBeNull();
+    expect(within(voice).getByText(/No deployment for this capability was found in the live model catalogue/)).not.toBeNull();
+    const embeddings = screen.getByRole('listitem', { name: 'Foundry embeddings' });
+    expect(within(embeddings).getByText('Degraded')).not.toBeNull();
+    expect(within(embeddings).getByText(/fallback configuration; live deployment availability is not verified/)).not.toBeNull();
+    const runner = screen.getByRole('listitem', { name: 'Agent runner' });
+    expect(within(runner).getByText('Unknown')).not.toBeNull();
+    expect(within(runner).getByText(/runtime health has not been probed/)).not.toBeNull();
+  });
+
+  it('reports the backend-emitted unconfigured runner state instead of claiming it is configured', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'runner'
+      ? {
+        ...entry,
+        status: 'down',
+        details: { configured: false, activeSessions: 0, healthProbe: 'not_run' },
+      }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const runner = await screen.findByRole('listitem', { name: 'Agent runner' });
+    expect(within(runner).getByText('This check is not configured.')).not.toBeNull();
+    expect(within(runner).queryByText(/runner is configured|runtime health has not been probed/)).toBeNull();
+  });
+
+  it.each([
+    {
+      outcome: 'pending',
+      latestSyncAttemptAt: null,
+      syncFresh: null,
+      embeddingCoveragePercent: 100,
+      message: 'No completed vault sync is verified since this backend process started.',
+    },
+    {
+      outcome: 'error',
+      latestSyncAttemptAt: '2026-10-25T11:30:00.000Z',
+      syncFresh: true,
+      embeddingCoveragePercent: 100,
+      message: 'The latest vault sync attempt failed.',
+    },
+    {
+      outcome: 'ok',
+      latestSyncAttemptAt: '2026-10-24T11:30:00.000Z',
+      syncFresh: false,
+      embeddingCoveragePercent: 100,
+      message: 'The last successful sync timestamp does not verify freshness.',
+    },
+    {
+      outcome: 'ok',
+      latestSyncAttemptAt: '2026-10-25T11:30:00.000Z',
+      lastSuccessfulSyncAt: 'invalid-timestamp',
+      syncFresh: false,
+      embeddingCoveragePercent: 100,
+      message: 'The last successful sync timestamp does not verify freshness.',
+    },
+    {
+      outcome: 'ok',
+      latestSyncAttemptAt: '2026-10-25T11:30:00.000Z',
+      syncFresh: true,
+      embeddingCoveragePercent: 50,
+      message: 'Embedding coverage is incomplete (1 of 2 chunks embedded).',
+    },
+  ])('explains vault index $outcome evidence', async ({
+    outcome, latestSyncAttemptAt, lastSuccessfulSyncAt, syncFresh, embeddingCoveragePercent, message,
+  }) => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'vault_index'
+      ? {
+        ...entry,
+        status: outcome === 'pending' ? 'unknown' : 'degraded',
+        details: {
+          chunks: 2,
+          embeddedChunks: embeddingCoveragePercent === 100 ? 2 : 1,
+          embeddingCoveragePercent,
+          latestIndexedAt: '2026-10-25T11:00:00.000Z',
+          latestSyncAttemptAt,
+          lastSuccessfulSyncAt: lastSuccessfulSyncAt ?? (outcome === 'pending' ? null : '2026-10-25T11:30:00.000Z'),
+          syncOutcome: outcome,
+          syncFresh,
+        },
+      }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const vault = await screen.findByRole('listitem', { name: 'Vault index' });
+    expect(within(vault).getByText(message)).not.toBeNull();
+  });
+
+  it('does not hide stale prior success during a pending sync', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'vault_index'
+      ? {
+        ...entry,
+        status: 'degraded',
+        details: {
+          chunks: 2,
+          embeddedChunks: 2,
+          embeddingCoveragePercent: 100,
+          latestIndexedAt: '2026-10-25T11:00:00.000Z',
+          latestSyncAttemptAt: '2026-10-25T11:59:00.000Z',
+          lastSuccessfulSyncAt: '2026-10-24T11:00:00.000Z',
+          syncOutcome: 'pending',
+          syncFresh: false,
+        },
+      }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const vault = await screen.findByRole('listitem', { name: 'Vault index' });
+    expect(within(vault).getByText('Degraded')).not.toBeNull();
+    expect(within(vault).getByText(/A vault sync attempt is still running/)).not.toBeNull();
+    expect(within(vault).getByText(/last successful sync timestamp does not verify freshness/)).not.toBeNull();
+  });
+
+  it('does not claim a legacy empty vault snapshot completed a sync without outcome evidence', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'vault_index'
+      ? { ...entry, status: 'unknown', details: { chunks: 0, embeddedChunks: 0 } }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const vault = await screen.findByRole('listitem', { name: 'Vault index' });
+    expect(within(vault).getByText(/does not verify a successful sync/)).not.toBeNull();
+    expect(within(vault).queryByText(/sync completed successfully/)).toBeNull();
+  });
+
+  it('labels a healthy index as based on the last success while a newer sync is pending', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'vault_index'
+      ? {
+        ...entry,
+        status: 'ok',
+        details: {
+          chunks: 2,
+          embeddedChunks: 2,
+          embeddingCoveragePercent: 100,
+          latestIndexedAt: '2026-10-01T11:00:00.000Z',
+          latestSyncAttemptAt: '2026-10-25T11:59:00.000Z',
+          lastSuccessfulSyncAt: '2026-10-25T11:30:00.000Z',
+          syncOutcome: 'pending',
+          syncFresh: true,
+        },
+      }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const vault = await screen.findByRole('listitem', { name: 'Vault index' });
+    expect(within(vault).getByText('OK')).not.toBeNull();
+    expect(within(vault).getByText(/status reflects the last successful sync/)).not.toBeNull();
+  });
+
+  it('keeps vault evidence timestamps distinct from a refreshed status-check time', async () => {
+    const checkedAt = '2026-10-25T11:59:00.000Z';
+    const refreshedAt = '2026-10-25T12:00:00.000Z';
+    const lastSync = '2026-10-24T12:00:00.000Z';
+    const latestContent = '2026-10-01T12:00:00.000Z';
+    const report = (at: string): SystemStatus => {
+      const value = snapshot(at);
+      value.entries = value.entries.map(entry => entry.id === 'vault_index'
+        ? {
+          ...entry,
+          details: {
+            chunks: 2,
+            embeddingCoveragePercent: 100,
+            latestIndexedAt: latestContent,
+            latestSyncAttemptAt: lastSync,
+            lastSuccessfulSyncAt: lastSync,
+            syncOutcome: 'ok',
+            syncFresh: true,
+          },
+        }
+        : entry);
+      return value;
+    };
+    fetchMock.mockResolvedValueOnce(response(report(checkedAt))).mockResolvedValueOnce(response(report(refreshedAt)));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    const vault = await screen.findByRole('listitem', { name: 'Vault index' });
+
+    expect(vault.querySelector(`time[datetime="${checkedAt}"]`)).not.toBeNull();
+    expect(vault.querySelector(`time[datetime="${lastSync}"]`)).not.toBeNull();
+    expect(vault.querySelector(`time[datetime="${latestContent}"]`)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }));
+    await waitFor(() => expect(vault.querySelector(`time[datetime="${refreshedAt}"]`)).not.toBeNull());
+    expect(vault.querySelector(`time[datetime="${refreshedAt}"]`)).not.toBeNull();
+    expect(vault.querySelector(`time[datetime="${lastSync}"]`)).not.toBeNull();
+    expect(vault.querySelector(`time[datetime="${latestContent}"]`)).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the page intro the only top-level snapshot so the smoke timestamp is not styled as a panel', async () => {

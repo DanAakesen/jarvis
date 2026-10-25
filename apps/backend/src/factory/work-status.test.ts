@@ -49,19 +49,36 @@ function fixture(agent = false) {
   const persisted = vi.fn(async () => {});
   const token = { issueForRepositoryRead: vi.fn(async () => 'read-token'),
     issueForActions: vi.fn(async () => 'actions-token') } as unknown as GitHubAppTokenIssuer;
+  const projectStore = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
   const app = buildApp(config, undefined, { modules: [coreModule, factoryModule],
     auth: async () => agent
       ? { kind: 'jarvis-agent' as const, objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }
       : { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' },
-    projectStore: { list: vi.fn(async () => [project]) } as unknown as ProjectStore,
+    projectStore,
     taskStore, githubIssueClient: github, factoryBoardReader: board, releaseViewStore: releases,
     githubAppTokenIssuer: token, taskController: { control }, toolCallStore: { record: persisted } });
   apps.push(app);
-  return { app, issue, tasks, taskStore, github, board, releases, control, persisted, token };
+  return { app, issue, tasks, taskStore, github, board, releases, control, persisted, token, projectStore };
 }
 afterEach(async () => { vi.unstubAllGlobals(); await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('get_work_status evidence and restart safety', () => {
+  it('resolves its advertised selector through the shared active-project resolver', async () => {
+    const f = fixture();
+    const testProject = {
+      ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world',
+    };
+    vi.mocked(f.projectStore.list).mockResolvedValue([project, testProject]);
+
+    const exact = await getWorkStatus(f.app, { issueNumber: 8, project: ' greeting   runner ' });
+    expect(exact.project).toMatchObject({ id: '31', repo: testProject.repo });
+
+    const ambiguous = await getWorkStatus(f.app, { issueNumber: 8, project: 'the test project' });
+    expect(ambiguous.project).toBeNull();
+    expect(ambiguous.partial).toBe(true);
+    expect(ambiguous.warnings.join(' ')).toContain('Do you mean project Greeting Runner');
+  });
+
   it('is always discoverable, sensitive and strictly read-only with complete delivery evidence', async () => {
     const f = fixture();
     const response = await f.app.inject({ method: 'POST', url: '/tools/get_work_status', headers,

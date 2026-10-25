@@ -3,7 +3,7 @@ import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { createGitHubActionsLogClient } from '../github/actions-logs.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
-import { resolveRepository } from './project-context.js';
+import { projectSelectorSchema, resolveRepository } from './project-context.js';
 
 const githubApi = 'https://api.github.com';
 const maxResponseBytes = 1024 * 1024;
@@ -417,10 +417,8 @@ function redactSecrets(value: string): { readonly text: string; readonly redacte
 
 const projectProperty = {
   project: {
-    type: 'string',
-    minLength: 1,
-    maxLength: 140,
-    description: 'Omit for Jarvis\'s own repository; otherwise use a registered project ID or owner/name.',
+    ...projectSelectorSchema,
+    description: 'Omit for Jarvis\'s own repository; otherwise use an active project ID, full owner/repo, project name, or a natural reference supported by the active registry.',
   },
 };
 const objectSchema = (properties: Record<string, unknown>) => ({

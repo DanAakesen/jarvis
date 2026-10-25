@@ -1928,15 +1928,22 @@ digest in tab session storage, not the request text. Rollback refuses to erase
 submission evidence while records exist. Existing tasks and manual backfill
 are untouched.
 
-P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
-first stages a draft and the next creates it only after a later stored Dan
-message, from the same session, clearly approves it. The shared approval
-interpreter decides what that message means (see "Natural approval of staged
-actions" at the top); a question, condition or hesitation is not approval. The Dan-only
-`POST /factory/issues` route uses the same draft validation and creation service
-for the board. It reads all issue-title pages in the selected active repository,
-allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
-immediately before creation. New issues receive `P11` and `enhancement` labels;
+P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools.
+Issue creation is direct when the request has no gated attachments; attachment
+descriptions and public image publication stage for the existing later-message,
+same-session approval flow. The shared approval interpreter decides what that
+message means (see "Natural approval of staged actions" at the top); a question,
+condition or hesitation is not approval. The Dan-only `POST /factory/issues`
+route uses the same draft validation and creation service for the board. Project
+selectors resolve against a fresh active-project list: exact IDs, case-insensitive
+full repository names, normalized unique display names, or natural references
+supported by registered candidate data. Ambiguous or missing targets refuse
+before a write; registry read failures stay distinct from GitHub App permission
+failures. The selected project ID and repository are revalidated before issue,
+label, comment, task or generic GitHub App writes, and explicit non-self projects
+never fall back to Jarvis's repository. The service reads all issue-title pages in the selected
+active repository, allocates the lowest free `P11-NN` code (two digits minimum),
+then rechecks it immediately before creation. New issues receive `P11` and `enhancement` labels;
 titles explicitly marked `[Bug]`, `Bug:`, or `Regression:` receive `bug`.
 The default Jarvis executor creates the issue and then applies the `Jarvis`
 worker label so GitHub emits the `issues.labeled` event that P10-02 consumes.
@@ -3056,8 +3063,9 @@ arguments before retrying; workspace commands still use the existing broker and
 `packages/contracts` schemas.
 P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
 registry. They use only repository-scoped GitHub App installation tokens, default
-to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
-repositories only when they match an active project. File paths, encodings and
+to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs,
+full repository names, unique display names or candidate-supported natural
+references only when they match an active project. File paths, encodings and
 response sizes are validated and bounded; overview responses are cached by commit
 SHA. Repository files and issue text are explicitly framed as untrusted input.
 P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
@@ -3133,7 +3141,14 @@ are offered. Recovery still uses each existing tool's validation/approval.
 The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
 entries compare configuration and the cached ARM catalogue, without claiming a
 successful model invocation. Vault status aggregates note/chunk counts, latest
-`indexed_at`, and embedding coverage without reading note text. GitHub App
+`indexed_at`, and embedding coverage without reading note text. Index freshness
+uses the vault module's process-local synchronization outcome: a completed
+no-change sync refreshes freshness, while a failed attempt remains degraded and
+retains the distinct last successful time. `latestIndexedAt` describes only the
+latest changed chunk and is not a freshness signal. Without a verified sync in
+the current process, including after restart, the index remains unknown even if
+chunk rows exist. The status check timestamp is independent of those evidence
+times; no sync outcome is persisted and no migration is added. GitHub App
 permissions come from the repository's installation metadata; Google uses a
 bounded Calendar list read. PC bridge state is live in process and reports
 connection, pause and wake-word state. Its current protocol does not provide
