@@ -636,6 +636,13 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
+Text and voice share the pending-action lifecycle: an exact proposal, a verified
+later owner decision bound to that action, expiry/cancellation and one-time
+execution. Tools retain their own permission checks. An acknowledgment that a
+request was received is not approval; identifying a project selects the target,
+not permission for an action on it. Browser-only proposals keep their
+authenticated browser approval boundary.
+
 Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
 P13-02 adds an optional web push opt-in, on in production since P13-03, for a

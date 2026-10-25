@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import { ToolRefusal } from '../core/tool-registry.js';
+import { PendingAction } from './pending-action.js';
 import type {
   ConfirmationDecision,
   ConfirmationStore,
@@ -93,11 +94,15 @@ export function createOwnerInteractionService({
   onConfirmationsChanged = () => {},
 }: OwnerInteractionOptions): OwnerInteractionService {
   const waiters = new Map<string, (result: WaitResult) => void>();
-  const browserConfirmations = new Map<string, BrowserConfirmation>();
+  const browserConfirmations = new Map<string, {
+    readonly view: BrowserConfirmation;
+    readonly action: PendingAction;
+  }>();
 
   async function waitForDecision(
     id: string,
     lifetimeSeconds: number,
+    action: PendingAction,
     signal?: AbortSignal,
   ): Promise<WaitResult> {
     let finish!: (result: WaitResult) => void;
@@ -110,11 +115,13 @@ export function createOwnerInteractionService({
       };
     });
     const expire = () => {
+      action.cancel();
       void store.expireConfirmation(id, ownerObjectId)
         .catch(() => false)
         .finally(() => finish('expired'));
     };
     const abort = () => {
+      action.cancel();
       void store.cancelConfirmation(id, ownerObjectId).catch(() => undefined);
       finish('cancelled');
     };
@@ -137,7 +144,7 @@ export function createOwnerInteractionService({
     summary: string,
     signal?: AbortSignal,
     delivery?: BrowserConfirmationDelivery,
-  ): Promise<void> {
+  ): Promise<PendingAction> {
     const lifetimeSeconds = delivery?.lifetimeSeconds ?? confirmationLifetimeSeconds;
     if (!supportedKinds.has(actionKind) || !validText(summary) ||
         delivery !== undefined && (!delivery || typeof delivery !== 'object' || delivery.channel !== 'browser') ||
@@ -149,6 +156,9 @@ export function createOwnerInteractionService({
       throw new ToolRefusal('There are too many pending browser confirmations.');
     }
     const id = randomBytes(32).toString('base64url');
+    const action = new PendingAction({
+      key: id, summary, createdAt: Date.now(), lifetimeMs: lifetimeSeconds * 1000,
+    });
     try {
       const phoneSessionId = phoneSessionContext.getStore();
       if (phoneSessionId === undefined) {
@@ -176,12 +186,10 @@ export function createOwnerInteractionService({
     const waitSignal = signal
       ? AbortSignal.any([signal, waiterController.signal])
       : waiterController.signal;
-    const decision = waitForDecision(id, lifetimeSeconds, waitSignal);
+    const decision = waitForDecision(id, Math.max(0, (action.expiresAt - Date.now()) / 1000), action, waitSignal);
     browserConfirmations.set(id, {
-      id,
-      actionKind,
-      summary,
-      expiresAt: new Date(Date.now() + lifetimeSeconds * 1000).toISOString(),
+      view: { id, actionKind, summary: action.presentation.summary, expiresAt: action.presentation.expiresAt },
+      action,
     });
     onConfirmationsChanged();
     onConfirmationPending?.();
@@ -189,6 +197,7 @@ export function createOwnerInteractionService({
       signal?.throwIfAborted();
       const resolved = await decision;
       if (resolved !== 'approve') {
+        action.cancel();
         throw new ToolRefusal(resolved === 'reject'
           ? 'Dan rejected the request.'
           : 'The confirmation was cancelled or expired.');
@@ -198,7 +207,10 @@ export function createOwnerInteractionService({
       try { consumed = await store.consumeApproval(id, ownerObjectId); }
       catch { consumed = false; }
       if (!consumed) throw new ToolRefusal('The confirmation expired or was already used.');
+      action.consume('approve', signal);
+      return action;
     } catch (error) {
+      action.cancel();
       waiterController.abort();
       await store.cancelConfirmation(id, ownerObjectId).catch(() => undefined);
       if (signal?.aborted) signal.throwIfAborted();
@@ -209,15 +221,23 @@ export function createOwnerInteractionService({
 
   return {
     async expirePendingConfirmations() {
+      for (const [id, { action }] of browserConfirmations) {
+        action.cancel();
+        waiters.get(id)?.('expired');
+      }
       await store.expirePendingConfirmations();
     },
     pendingBrowserConfirmations() {
-      return [...browserConfirmations.values()].slice(0, maxPendingBrowserConfirmations);
+      return [...browserConfirmations.values()]
+        .filter(({ action }) => action.pending)
+        .slice(0, maxPendingBrowserConfirmations).map(({ view }) => ({ ...view }));
     },
     async resolveBrowserConfirmation(id, decision) {
+      const pending = browserConfirmations.get(id);
       if (!confirmationIdPattern.test(id) || (decision !== 'approve' && decision !== 'reject') ||
-        !browserConfirmations.has(id) || !waiters.has(id)) return false;
+        !pending?.action.pending || !waiters.has(id)) return false;
       const status = await store.resolveConfirmation(id, ownerObjectId, browserConversationId, decision);
+      if (!pending.action.pending) return false;
       if (status === 'approved' || status === 'rejected') {
         waiters.get(id)?.(status === 'approved' ? 'approve' : 'reject');
         return true;
@@ -230,12 +250,13 @@ export function createOwnerInteractionService({
       if (!onWebNotification) throw new ToolRefusal('Jarvis notifications are unavailable.');
       await onWebNotification(kind, text);
     },
-    requestConfirmation,
+    async requestConfirmation(actionKind, summary, signal, delivery) {
+      await requestConfirmation(actionKind, summary, signal, delivery);
+    },
     async runConfirmed(actionKind, summary, action, signal, delivery) {
       if (typeof action !== 'function') throw new ToolRefusal('A confirmed action is required.');
-      await requestConfirmation(actionKind, summary, signal, delivery);
-      signal?.throwIfAborted();
-      return action();
+      const confirmation = await requestConfirmation(actionKind, summary, signal, delivery);
+      return confirmation.execute(action, signal);
     },
   };
 }

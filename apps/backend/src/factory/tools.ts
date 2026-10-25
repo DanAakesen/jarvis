@@ -1,8 +1,9 @@
 import { randomInt } from 'node:crypto';
 import { issueAttachmentFields, type IssueAttachmentInput } from '@jarvis/contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
-import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
+import { approvalInstruction, approvalNotPending } from '../core/approval.js';
+import { approvalDeciderFor } from '../core/approval-interpreter.js';
+import { PendingAction } from '../core/pending-action.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
@@ -53,9 +54,7 @@ interface PendingProjectArchive {
   projectId: string;
   name: string;
   repo: string;
-  sourceMessageId: string;
-  sourceSessionId: string;
-  createdAt: number;
+  confirmation: PendingAction;
 }
 interface PendingIssueCreation {
   repository: string;
@@ -66,9 +65,7 @@ interface PendingIssueCreation {
   body: string;
   executor: IssueExecutor;
   taskCode?: string;
-  sourceMessageId: string;
-  sourceSessionId: string;
-  createdAt: number;
+  confirmation: PendingAction;
 }
 const pendingProjectArchives = new WeakMap<FastifyInstance, Map<string, PendingProjectArchive>>();
 const pendingIssueCreations = new WeakMap<FastifyInstance, Map<string, PendingIssueCreation>>();
@@ -185,24 +182,16 @@ function hasSession(message: ConversationMessage): boolean {
   return typeof message.sessionId === 'string' && message.sessionId.length > 0;
 }
 
-function cleanPendingArchives(actions: Map<string, PendingProjectArchive>, now = Date.now()): void {
-  const cutoff = now - projectArchiveTtlMs;
+function cleanPendingArchives(actions: Map<string, PendingProjectArchive>): void {
   for (const [code, action] of actions) {
-    if (action.createdAt <= cutoff) actions.delete(code);
+    if (!action.confirmation.pending) {
+      action.confirmation.cancel();
+      actions.delete(code);
+    }
   }
 }
 
-/** Provenance only: a verified Dan message that came after the proposal, in the same session. Meaning is decided separately. */
-function isLaterDanReply(
-  message: ConversationMessage,
-  action: { readonly sourceMessageId: string; readonly sourceSessionId: string; readonly createdAt: number },
-): boolean {
-  return message.role === 'dan' && /^[1-9]\d{0,18}$/u.test(message.id) && BigInt(message.id) <= maxSqlBigInt &&
-    BigInt(message.id) > BigInt(action.sourceMessageId) && message.sessionId === action.sourceSessionId &&
-    Number.isFinite(message.at.getTime()) && message.at.getTime() > action.createdAt;
-}
-
-function issueApprovalSummary(action: PendingIssueCreation): string {
+function issueApprovalSummary(action: Pick<PendingIssueCreation, 'repository' | 'title' | 'issueNumber' | 'publicAttachment'>): string {
   const target = action.issueNumber === undefined
     ? `Create a GitHub issue in ${action.repository} titled "${action.title}".`
     : `Add a comment to issue #${action.issueNumber} in ${action.repository}.`;
@@ -223,6 +212,7 @@ function stageProjectArchive(
     pendingProjectArchives.set(server, actions);
   }
   cleanPendingArchives(actions);
+  for (const action of actions.values()) action.confirmation.cancel();
   actions.clear();
   if (actions.size >= maxPendingProjectArchives) throw new Error('Too many pending project archives');
   let confirmationCode: string;
@@ -233,9 +223,15 @@ function stageProjectArchive(
     projectId: project.id,
     name: project.name,
     repo: project.repo,
-    sourceMessageId: source.id,
-    sourceSessionId: source.sessionId,
-    createdAt: Date.now(),
+    confirmation: new PendingAction({
+      key: confirmationCode,
+      summary: `Archive the Software Factory project "${project.name}" (${project.repo}).`,
+      family: 'factory',
+      sourceMessageId: source.id,
+      sourceSessionId: source.sessionId,
+      createdAt: Date.now(),
+      lifetimeMs: projectArchiveTtlMs,
+    }),
   });
   return {
     status: 'awaiting_confirmation',
@@ -256,22 +252,19 @@ async function confirmProjectArchive(
   const actions = pendingProjectArchives.get(request.server);
   if (actions) cleanPendingArchives(actions);
   const action = actions?.get(confirmationCode);
-  if (!actions || !action || !isLaterDanReply(message, action)) throw new ToolRefusal(approvalNotPending);
-  const verdict = await safeDecision(approvalDeciderFor(request), {
-    reply: message.text,
-    summary: `Archive the Software Factory project "${action.name}" (${action.repo}).`,
-    family: 'factory', messageId: message.id, sessionId: message.sessionId, actionKey: confirmationCode,
-  }, signal);
+  if (!actions || !action || !action.confirmation.eligible(message)) throw new ToolRefusal(approvalNotPending);
+  const verdict = await action.confirmation.decision(message, approvalDeciderFor(request), signal);
   // Nothing below awaits before the action is consumed, so a concurrent confirm or a newer proposal cannot slip through.
   cleanPendingArchives(actions);
   if (signal.aborted || actions.get(confirmationCode) !== action) throw new ToolRefusal(approvalNotPending);
-  if (verdict === 'neither') throw new ToolRefusal(approvalUnclear);
+  const decision = action.confirmation.consume(verdict, signal);
   actions.delete(confirmationCode);
-  if (verdict === 'decline') throw new ToolRefusal('Cancelled; the project was not archived.');
-  signal.throwIfAborted();
-  const store = requireStore(request.server.projectStore, 'Project service');
-  if (!await store.archive(action.projectId)) throw new ToolRefusal('The active project was not found; nothing was archived.');
-  return { status: 'archived', projectId: action.projectId, name: action.name, repo: action.repo };
+  if (decision === 'decline') throw new ToolRefusal('Cancelled; the project was not archived.');
+  return action.confirmation.execute(async () => {
+    const store = requireStore(request.server.projectStore, 'Project service');
+    if (!await store.archive(action.projectId)) throw new ToolRefusal('The active project was not found; nothing was archived.');
+    return { status: 'archived', projectId: action.projectId, name: action.name, repo: action.repo };
+  }, signal);
 }
 
 async function stageIssueCreation(
@@ -312,9 +305,7 @@ async function stageIssueCreation(
     pendingIssueCreations.set(server, actions);
   }
   const now = Date.now();
-  for (const [code, action] of actions) {
-    if (action.createdAt <= now - issueCreationTtlMs) actions.delete(code);
-  }
+  for (const action of actions.values()) action.confirmation.cancel();
   actions.clear();
   if (actions.size >= maxPendingIssueCreations) throw new Error('Too many pending issue creations');
   let confirmationCode: string;
@@ -331,9 +322,20 @@ async function stageIssueCreation(
     body,
     executor,
     ...(preview.taskCode ? { taskCode: preview.taskCode } : {}),
-    sourceMessageId: source.id,
-    sourceSessionId: source.sessionId,
-    createdAt: now,
+    confirmation: new PendingAction({
+      key: confirmationCode,
+      summary: issueApprovalSummary({
+        repository: preview.repository,
+        title: input.title.trim(),
+        ...(input.issueNumber === undefined ? {} : { issueNumber: input.issueNumber }),
+        ...(publicAttachment ? { publicAttachment } : {}),
+      }),
+      family: 'factory',
+      sourceMessageId: source.id,
+      sourceSessionId: source.sessionId,
+      createdAt: now,
+      lifetimeMs: issueCreationTtlMs,
+    }),
   });
   return {
     status: 'awaiting_confirmation',
@@ -378,66 +380,69 @@ async function confirmIssueCreation(
   const actions = pendingIssueCreations.get(request.server);
   const cleanExpired = () => {
     if (!actions) return;
-    const cutoff = Date.now() - issueCreationTtlMs;
-    for (const [code, pending] of actions) if (pending.createdAt <= cutoff) actions.delete(code);
+    for (const [code, pending] of actions) {
+      if (!pending.confirmation.pending) {
+        pending.confirmation.cancel();
+        actions.delete(code);
+      }
+    }
   };
   cleanExpired();
   const action = actions?.get(confirmationCode);
-  if (!actions || !action || !isLaterDanReply(message, action)) throw new ToolRefusal(approvalNotPending);
-  const verdict = await safeDecision(approvalDeciderFor(request), {
-    reply: message.text, summary: issueApprovalSummary(action),
-    family: 'factory', messageId: message.id, sessionId: message.sessionId, actionKey: confirmationCode,
-  }, signal);
+  if (!actions || !action || !action.confirmation.eligible(message)) throw new ToolRefusal(approvalNotPending);
+  const verdict = await action.confirmation.decision(message, approvalDeciderFor(request), signal);
   const stillPending = () => {
     cleanExpired();
     return !signal.aborted && actions.get(confirmationCode) === action;
   };
   if (!stillPending()) throw new ToolRefusal(approvalNotPending);
-  if (verdict === 'neither') throw new ToolRefusal(approvalUnclear);
-  if (verdict === 'decline') {
+  if (verdict !== 'approve') {
+    action.confirmation.consume(verdict, signal);
     actions.delete(confirmationCode);
     throw new ToolRefusal('Cancelled; nothing was written.');
   }
   await requireIssueWritePermission(request, action.repository, action.publicAttachment !== undefined);
   // Re-check after the permission lookup: only one confirm may consume the staged issue.
   if (!stillPending()) throw new ToolRefusal(approvalNotPending);
+  action.confirmation.consume(verdict, signal);
   actions.delete(confirmationCode);
-  signal.throwIfAborted();
   try {
-    if (action.issueNumber !== undefined) {
-      const issue = await request.server.githubIssueClient?.readIssue(action.repository, action.issueNumber);
-      if (!issue || issue.isPullRequest) throw new ToolRefusal('That GitHub issue was not found; nothing was written.');
-      let body = action.body;
-      validateIssueDraft(action.title, body);
-      if (action.publicAttachment) {
-        body += `\n\n${await publishIssueAttachment(request.server, action.repository, action.issueNumber, action.publicAttachment, signal)}`;
-      }
-      signal.throwIfAborted();
-      await request.server.githubIssueClient!.createComment(action.repository, action.issueNumber, body, signal);
-      return { status: 'commented', number: action.issueNumber, url: issue.url };
-    }
-    if (await resolveRepository(action.project, request.server.projectStore) !== action.repository) {
-      throw new ToolRefusal('The target repository changed; stage the issue again.');
-    }
-    const created = await createJarvisIssue({
-      ...(action.project ? { project: action.project } : {}),
-      title: action.title,
-      body: action.body,
-      executor: action.executor,
-      ...(action.taskCode ? { expectedTaskCode: action.taskCode } : {}),
-      projects: request.server.projectStore,
-      github: request.server.githubIssueClient,
-    });
-    if (action.publicAttachment) {
-      try {
-        const image = await publishIssueAttachment(request.server, action.repository, created.number, action.publicAttachment, signal);
+    return await action.confirmation.execute(async () => {
+      if (action.issueNumber !== undefined) {
+        const issue = await request.server.githubIssueClient?.readIssue(action.repository, action.issueNumber);
+        if (!issue || issue.isPullRequest) throw new ToolRefusal('That GitHub issue was not found; nothing was written.');
+        let body = action.body;
+        validateIssueDraft(action.title, body);
+        if (action.publicAttachment) {
+          body += `\n\n${await publishIssueAttachment(request.server, action.repository, action.issueNumber, action.publicAttachment, signal)}`;
+        }
         signal.throwIfAborted();
-        await request.server.githubIssueClient!.createComment(action.repository, created.number, image, signal);
-      } catch {
-        throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`);
+        await request.server.githubIssueClient!.createComment(action.repository, action.issueNumber, body, signal);
+        return { status: 'commented', number: action.issueNumber, url: issue.url };
       }
-    }
-    return created;
+      if (await resolveRepository(action.project, request.server.projectStore) !== action.repository) {
+        throw new ToolRefusal('The target repository changed; stage the issue again.');
+      }
+      const created = await createJarvisIssue({
+        ...(action.project ? { project: action.project } : {}),
+        title: action.title,
+        body: action.body,
+        executor: action.executor,
+        ...(action.taskCode ? { expectedTaskCode: action.taskCode } : {}),
+        projects: request.server.projectStore,
+        github: request.server.githubIssueClient,
+      });
+      if (action.publicAttachment) {
+        try {
+          const image = await publishIssueAttachment(request.server, action.repository, created.number, action.publicAttachment, signal);
+          signal.throwIfAborted();
+          await request.server.githubIssueClient!.createComment(action.repository, created.number, image, signal);
+        } catch {
+          throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`);
+        }
+      }
+      return created;
+    }, signal);
   } catch (error) {
     if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
     if (error instanceof IssueTaskCodeConflictError) {

@@ -1,5 +1,16 @@
 # Project plan
 
+## Shared confirmation lifecycle (#1281; 25 October 2026)
+
+Google, Factory/GitHub and browser owner interactions now share immutable
+proposals, reply eligibility, cancellation/expiry, consumption and execution
+through `core/pending-action.ts`. Tool permission and food revision/presence
+checks remain with their tools. Browser-only proposals remain browser-only.
+Focused synthetic text/voice and browser regressions pass; live owner/device
+acceptance remains unverified. The related food reply/timing, project
+clarification and acknowledgment PRs are still in flight and are not merged
+by this change. Next: complete security review and final diff verification.
+
 ## Research result recovery (#1237; 25 October 2026)
 
 Implemented saved Folio/job references, separate Workspace delivery state and an

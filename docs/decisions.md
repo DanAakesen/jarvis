@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-10-25 — Share confirmation transitions, retain tool authorization (#1281)
+
+Use `core/pending-action.ts` for exact immutable proposals, later-owner
+reply/session eligibility, expiry, cancellation, one-time consumption and
+execution. Google, Factory/GitHub and browser owner interactions adapt to it.
+Keep SQL browser approval consumption and tool-specific permission, presence
+and revision checks; consolidating lifecycle logic must not broaden authority.
+Receipt acknowledgments and project clarification are not action approval.
+Browser-only proposals have no conversational source binding and cannot be
+approved by spoken/text agreement. Related in-flight food reply/timing work
+must use the same lifecycle rather than a food-specific confirmation state
+machine. Synthetic regressions verify the boundary; live voice/model/device
+acceptance is separate.
+
 ## Generic text questions use an active screen share (#1266; 25 October 2026)
 
 Text submission and turn execution resolve generic English/Danish visual

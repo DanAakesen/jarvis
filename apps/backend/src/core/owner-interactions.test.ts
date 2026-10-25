@@ -139,6 +139,51 @@ describe('owner interactions', () => {
     await expect(operation).resolves.toBeUndefined();
   });
 
+  it('cancels the shared lifecycle even while a browser decision is in flight', async () => {
+    const { service, store } = fixture();
+    const action = vi.fn();
+    const controller = new AbortController();
+    const operation = service.runConfirmed('other', 'Review this exact change.', action, controller.signal);
+    const cancelled = expect(operation).rejects.toThrow();
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const { id } = service.pendingBrowserConfirmations()[0]!;
+    let finish!: (status: 'approved') => void;
+    vi.mocked(store.resolveConfirmation).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const decision = service.resolveBrowserConfirmation(id, 'approve');
+    controller.abort();
+    finish('approved');
+    await expect(decision).resolves.toBe(false);
+    await cancelled;
+    expect(action).not.toHaveBeenCalled();
+    expect(store.consumeApproval).not.toHaveBeenCalled();
+  });
+
+  it('expires active waiters as well as durable pending confirmations', async () => {
+    const { service } = fixture();
+    const action = vi.fn();
+    const operation = service.runConfirmed('other', 'Review this exact change.', action);
+    const expired = expect(operation).rejects.toThrow('expired');
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const { id } = service.pendingBrowserConfirmations()[0]!;
+    await service.expirePendingConfirmations();
+    await expired;
+    await expect(service.resolveBrowserConfirmation(id, 'approve')).resolves.toBe(false);
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('executes only once when the same browser approval is submitted twice', async () => {
+    const { service } = fixture();
+    const action = vi.fn(async () => 'done');
+    const operation = service.runConfirmed('other', 'Review this exact change.', action);
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const { id } = service.pendingBrowserConfirmations()[0]!;
+    expect(await Promise.all([
+      service.resolveBrowserConfirmation(id, 'approve'), service.resolveBrowserConfirmation(id, 'approve'),
+    ])).toEqual([true, false]);
+    await expect(operation).resolves.toBe('done');
+    expect(action).toHaveBeenCalledOnce();
+  });
+
   it('sends notifications only to the authenticated web feed', async () => {
     const { service, onWebNotification } = fixture();
     await service.notify('warning', 'A task needs attention.');

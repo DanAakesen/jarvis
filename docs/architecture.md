@@ -192,8 +192,12 @@ flowchart TD
   N --> Q[Refuse and ask Dan one short natural question. The action stays pending]
 ```
 
-**Provenance** is deterministic and lives in `google/pending-actions.ts` and the
-Factory and GitHub App confirm tools. The message must be the owner's verified
+**Lifecycle and provenance** live in `core/pending-action.ts`. Google, Factory,
+GitHub App and browser owner-interaction adapters use its immutable proposal,
+expiry, cancellation, one-time consumption and execution gate. Adapters retain
+lookup indexes, result receipts, durable browser decisions and tool-specific
+permission checks; they do not implement their own reply eligibility rules.
+The message must be the owner's verified
 current message (voice: the transcribed turn the relay sets on that call only;
 chat: the `x-jarvis-message-id` header equal to the newest stored Dan message,
 with the agent identity), strictly later than the staging message by numeric id
@@ -231,6 +235,16 @@ interpreter, so a plain reply still works and everything else is asked about.
 After the interpreter awaits, the action is re-checked synchronously (same
 pending object, not expired, call not aborted) and consumed before execution, so
 concurrent confirmations execute once.
+
+Browser confirmations (including food review) use the same lifecycle while
+retaining the authenticated browser decision and SQL one-time consumption.
+An unbound browser proposal cannot be approved by a conversational reply.
+Browser decisions racing cancellation or expiry cannot start execution.
+Acknowledgment of receipt is not action approval, and identifying a project
+does not approve a subsequent action on it. The in-flight food reply/timing
+work (#1277/#1278) must bind any natural reply to this same lifecycle rather
+than introduce another pending-action implementation; project clarification
+(#1263/#1264) and initial acknowledgment (#1258/#1259) do not bypass it.
 
 Routing no longer matches approval phrases. In chat, any turn with a calendar
 referent in the last two messages makes the agent call

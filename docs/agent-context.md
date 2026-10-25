@@ -1,5 +1,18 @@
 # Agent context
 
+## Shared confirmation lifecycle checks (#1281; 25 October 2026)
+
+Focused offline checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/pending-action.test.ts src/core/owner-interactions.test.ts src/google src/daily/tools/food-review.test.ts src/daily/tools/saved-food.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts
+npm test --workspace @jarvis/backend -- src/factory/pending-action-tools.test.ts src/factory/tools.test.ts src/factory/github-approval.test.ts src/factory/github-app-tools.test.ts src/factory/pull-request-tools.test.ts src/factory/repository-tools.test.ts
+```
+
+These use synthetic stores/providers, not live account mutations or physical
+voice acceptance. `core/pending-action.ts` owns confirmation transitions;
+adapters keep permission checks, routing indexes and result receipts.
+
 ## Research result recovery (#1237; 25 October 2026)
 
 Focused offline checks from the repository root:
