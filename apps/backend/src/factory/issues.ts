@@ -2,7 +2,7 @@ import { JARVIS_REPOSITORY } from './project-context.js';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import { GitHubIssueRequestError, type GitHubIssue, type GitHubIssueClient } from '../github/issues.js';
-import { resolveRepository } from './project-context.js';
+import { resolveProject, resolveRepository, revalidateProject } from './project-context.js';
 import { taskStates } from './task-lifecycle.js';
 
 const maxPromptBytes = 50_000;
@@ -113,7 +113,9 @@ export async function previewP11TaskCode(input: {
   github: GitHubIssueClient | null;
 }): Promise<{ repository: string; taskCode: string }> {
   if (!input.github?.listIssueTitles) throw new Error('GitHub issue service unavailable');
-  const repository = await resolveRepository(input.project, input.projects);
+  const repository = input.project === undefined
+    ? await resolveRepository(undefined, input.projects)
+    : (await resolveProject(input.project, input.projects)).repo;
   const issueTitles = await input.github.listIssueTitles(repository);
   return { repository, taskCode: allocateP11TaskCode(issueTitles) };
 }
@@ -124,6 +126,7 @@ export async function createJarvisIssue(input: {
   body: string;
   executor?: IssueExecutor;
   expectedTaskCode?: string;
+  expectedRepository?: string;
   projects: ProjectStore | null;
   github: GitHubIssueClient | null;
 }): Promise<{ number: number; url: string; taskCode: string }> {
@@ -133,12 +136,20 @@ export async function createJarvisIssue(input: {
   if (!input.github?.listIssueTitles || !input.github.createIssue || !input.github.addLabels) {
     throw new Error('GitHub issue service unavailable');
   }
-  const repository = await resolveRepository(input.project, input.projects);
+  const selectedProject = input.project === undefined
+    ? undefined
+    : await resolveProject(input.project, input.projects);
+  const repository = selectedProject?.repo ?? await resolveRepository(undefined, input.projects);
+  if (input.expectedRepository &&
+      input.expectedRepository.toLocaleLowerCase('en-US') !== repository.toLocaleLowerCase('en-US')) {
+    throw new ToolRefusal('The selected project repository changed. Nothing was written; select the project again.');
+  }
   return withIssueCreationLock(repository, async () => {
     const taskCode = allocateP11TaskCode(await input.github!.listIssueTitles(repository));
     if (input.expectedTaskCode !== undefined && taskCode !== input.expectedTaskCode) {
       throw new IssueTaskCodeConflictError();
     }
+    if (selectedProject) await revalidateProject(selectedProject.id, repository, input.projects);
     const title = `${taskCode}: ${input.title.trim()}`;
     const labels = ['P11', issueKindLabel(input.title)];
     if (executor === 'copilot') labels.push('Copilot');
@@ -156,12 +167,14 @@ export async function createJarvisIssue(input: {
     }
     if (executor === 'jarvis') {
       try {
+        if (selectedProject) await revalidateProject(selectedProject.id, repository, input.projects);
         await input.github!.addLabels(repository, issue.number, ['Jarvis']);
       } catch {
         throw new IssueCreationPartialError(issue, taskCode, executor);
       }
     } else if (executor === 'copilot') {
       try {
+        if (selectedProject) await revalidateProject(selectedProject.id, repository, input.projects);
         await input.github!.createComment(
           repository,
           issue.number,
@@ -256,23 +269,6 @@ export class LinkedIssueTaskCreationError extends Error {
   }
 }
 
-function findProject(
-  projects: readonly Project[],
-  project: string | undefined,
-  repository: string | undefined,
-): Project | undefined {
-  if (repository) {
-    return projects.find((item) => item.repo.toLowerCase() === repository.toLowerCase());
-  }
-  if (project === undefined) {
-    return projects.find((item) => item.repo.toLowerCase() === JARVIS_REPOSITORY.toLowerCase());
-  }
-  if (/^[1-9][0-9]{0,18}$/u.test(project)) {
-    return projects.find((item) => item.id === project);
-  }
-  return projects.find((item) => item.repo.toLowerCase() === project.toLowerCase());
-}
-
 function taskPrompt(
   issue: GitHubIssue,
   comments: readonly string[],
@@ -309,7 +305,11 @@ export async function startIssueTask(input: {
       !input.github.readComments || !input.github.readAgentRules) {
     throw new Error('Issue task service unavailable');
   }
-  const project = findProject(await input.projects.list(), input.project, input.repository);
+  const project = input.repository !== undefined
+    ? await resolveProject(input.repository, input.projects)
+    : input.project !== undefined
+      ? await resolveProject(input.project, input.projects)
+      : (await input.projects.list()).find(({ repo }) => repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US'));
   if (!project) return { kind: 'project-not-found' };
   if (!input.tasks.findActiveByIssue) throw new Error('Issue task storage unavailable');
   const existing = await input.tasks.findActiveByIssue(project.id, input.issue);
@@ -328,6 +328,7 @@ export async function startIssueTask(input: {
     .map((comment) => comment.body), agentRules, project.repo, input.issue);
   if (!prompt) return { kind: 'prompt-too-large' };
 
+  await revalidateProject(project.id, project.repo, input.projects);
   let task: TaskRecord | null;
   try {
     task = await input.tasks.create({
@@ -368,9 +369,11 @@ export async function createLinkedTaskFromPrompt(input: {
   const project = (await input.projects.list()).find(({ id }) => id === input.projectId);
   if (!project) return null;
   const title = input.title ?? (input.prompt.trim().split(/\r?\n/u, 1)[0]?.trim().slice(0, 200) || 'New task');
+  await revalidateProject(project.id, project.repo, input.projects);
   const issue = await input.github.createIssue(project.repo, title, input.prompt);
   let task: TaskRecord | null;
   try {
+    await revalidateProject(project.id, project.repo, input.projects);
     task = await input.tasks.create({
       projectId: project.id,
       issueNumber: issue.number,

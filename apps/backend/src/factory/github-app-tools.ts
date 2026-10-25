@@ -6,7 +6,7 @@ import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.j
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
-import { JARVIS_REPOSITORY, resolveRepository } from './project-context.js';
+import { JARVIS_REPOSITORY, projectSelectorSchema, resolveRepository } from './project-context.js';
 
 const githubApi = 'https://api.github.com';
 const responseLimit = 1024 * 1024;
@@ -472,7 +472,7 @@ function rootSchema(properties: Record<string, unknown>, required: string[] = []
 
 const repoProperties = {
   repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
-  project: { type: 'string', minLength: 1, maxLength: 140 },
+  project: { ...projectSelectorSchema },
 };
 const issueNumber = { type: 'integer', minimum: 1, maximum: 2_147_483_647 };
 const pagingProperties = {

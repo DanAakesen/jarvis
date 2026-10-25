@@ -292,11 +292,15 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
     assert 'When Dan says "your code"' in text
     assert "Its code, PRs, issues" in text
     assert "The Software Factory is one way I build and" in text
+    assert "use create_issue with project ID 2 for code changes" in text
+    assert "Do not use create_task for code changes" in text
+    assert "Mener du projekt X?" in text
+    assert "Do you mean project X?" in text
     assert "I found a bug in my code" in text
     assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
     assert "ask him to confirm before adding it" in text
-    assert "which is not added as a project yet" in personalize_instructions(
+    assert "which is not listed as an active project in this context" in personalize_instructions(
         "base", ModelSettings("gpt-5.6-luna", "none")
     )
 

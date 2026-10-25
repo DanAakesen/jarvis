@@ -28,7 +28,13 @@ import {
   containsLikelySecret,
   validateIssueDraft,
 } from './issues.js';
-import { resolveRepository } from './project-context.js';
+import {
+  JARVIS_REPOSITORY,
+  projectSelectorSchema,
+  resolveProject,
+  resolveRepository,
+  revalidateProject,
+} from './project-context.js';
 import { issueAttachments, withAttachmentDescriptions, previewIssueImage, publishIssueAttachment, type IssueAttachment } from './issue-attachments.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -283,14 +289,20 @@ async function stageIssueCreation(
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
     throw new ToolRefusal('A verified Dan message is required to confirm this issue creation.');
   }
+  const selectedProject = input.project && input.repository === undefined
+    ? await resolveProject(input.project, server.projectStore ?? null)
+    : undefined;
   const preview = input.issueNumber === undefined ? await previewP11TaskCode({
-    ...(input.project ? { project: input.project } : {}),
+    ...(selectedProject ? { project: selectedProject.id } : {}),
     projects: server.projectStore,
     github: server.githubIssueClient,
   }) : {
-    repository: input.repository ?? await resolveRepository(input.project, server.projectStore),
+    repository: input.repository ?? selectedProject?.repo ?? await resolveRepository(undefined, server.projectStore),
     taskCode: undefined,
   };
+  if (selectedProject && selectedProject.repo.toLocaleLowerCase('en-US') !== preview.repository.toLocaleLowerCase('en-US')) {
+    throw new ToolRefusal('The selected project changed while preparing this request. Nothing was written; select it again.');
+  }
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(preview.repository)) {
     throw new ToolRefusal('That repository name is invalid.');
   }
@@ -326,7 +338,7 @@ async function stageIssueCreation(
     repository: preview.repository,
     ...(input.issueNumber === undefined ? {} : { issueNumber: input.issueNumber }),
     ...(publicAttachment ? { publicAttachment } : {}),
-    ...(input.project ? { project: input.project } : {}),
+    ...(selectedProject ? { project: selectedProject.id } : {}),
     title: input.title.trim(),
     body,
     executor,
@@ -398,9 +410,15 @@ async function confirmIssueCreation(
     actions.delete(confirmationCode);
     throw new ToolRefusal('Cancelled; nothing was written.');
   }
+  if (action.project) {
+    await revalidateProject(action.project, action.repository, request.server.projectStore ?? null);
+  }
   await requireIssueWritePermission(request, action.repository, action.publicAttachment !== undefined);
   // Re-check after the permission lookup: only one confirm may consume the staged issue.
   if (!stillPending()) throw new ToolRefusal(approvalNotPending);
+  if (action.project) {
+    await revalidateProject(action.project, action.repository, request.server.projectStore ?? null);
+  }
   actions.delete(confirmationCode);
   signal.throwIfAborted();
   try {
@@ -410,13 +428,22 @@ async function confirmIssueCreation(
       let body = action.body;
       validateIssueDraft(action.title, body);
       if (action.publicAttachment) {
+        if (action.project) {
+          await revalidateProject(action.project, action.repository, request.server.projectStore ?? null);
+        }
         body += `\n\n${await publishIssueAttachment(request.server, action.repository, action.issueNumber, action.publicAttachment, signal)}`;
       }
       signal.throwIfAborted();
+      if (action.project) {
+        await revalidateProject(action.project, action.repository, request.server.projectStore ?? null);
+      }
       await request.server.githubIssueClient!.createComment(action.repository, action.issueNumber, body, signal);
       return { status: 'commented', number: action.issueNumber, url: issue.url };
     }
-    if (await resolveRepository(action.project, request.server.projectStore) !== action.repository) {
+    if (!action.project && action.repository !== JARVIS_REPOSITORY) {
+      throw new ToolRefusal('The target repository changed; stage the issue again.');
+    }
+    if (action.project && await resolveRepository(action.project, request.server.projectStore) !== action.repository) {
       throw new ToolRefusal('The target repository changed; stage the issue again.');
     }
     const created = await createJarvisIssue({
@@ -425,6 +452,7 @@ async function confirmIssueCreation(
       body: action.body,
       executor: action.executor,
       ...(action.taskCode ? { expectedTaskCode: action.taskCode } : {}),
+      expectedRepository: action.repository,
       projects: request.server.projectStore,
       github: request.server.githubIssueClient,
     });
@@ -524,7 +552,7 @@ export const factoryTools: readonly JarvisTool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        project: { type: 'string', minLength: 1, maxLength: 140 },
+        project: { ...projectSelectorSchema },
         title: { type: 'string', minLength: 1, maxLength: 200 },
         body: { type: 'string', minLength: 1, maxLength: 50_000 },
         executor: { type: 'string', enum: ['jarvis', 'copilot', 'none'] },
@@ -540,7 +568,10 @@ export const factoryTools: readonly JarvisTool[] = [
         validateIssueDraft(draft.title, draft.body);
         if (!draft.attachmentIds?.length && draft.publish !== 'public') {
           await currentDanMessage(request, 'issue creation');
-          const repository = await resolveRepository(draft.project, request.server.projectStore ?? null);
+          const selectedProject = draft.project === undefined
+            ? undefined
+            : await resolveProject(draft.project, request.server.projectStore ?? null);
+          const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
           const issuer = request.server.githubAppTokenIssuer;
           if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
           let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
@@ -554,10 +585,11 @@ export const factoryTools: readonly JarvisTool[] = [
           }
           try {
             return await createJarvisIssue({
-              ...(draft.project ? { project: draft.project } : {}),
+              ...(selectedProject ? { project: selectedProject.id } : {}),
               title: draft.title,
               body: draft.body,
               ...(draft.executor !== undefined ? { executor: draft.executor } : {}),
+              expectedRepository: repository,
               projects: request.server.projectStore,
               github: request.server.githubIssueClient,
             });
@@ -574,7 +606,7 @@ export const factoryTools: readonly JarvisTool[] = [
         }
         return await stageIssueCreation(request.server, draft, await currentDanMessage(request, 'issue creation'), signal);
       } catch (error) {
-        if (error instanceof ToolRefusal) throw error;
+        if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolFailure('The GitHub issue draft could not be prepared.');
       }
     },
@@ -588,7 +620,7 @@ export const factoryTools: readonly JarvisTool[] = [
       properties: {
         issueNumber: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
         repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
-        project: { type: 'string', minLength: 1, maxLength: 140 },
+        project: { ...projectSelectorSchema },
         text: { type: 'string', minLength: 1, maxLength: 4_000 },
         ...issueAttachmentFields,
       },
@@ -601,8 +633,11 @@ export const factoryTools: readonly JarvisTool[] = [
         if (!input.attachmentIds?.length && input.publish !== 'public') {
           await currentDanMessage(request, 'issue comment');
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
-          const repository = input.repository ??
-            await resolveRepository(input.project, request.server.projectStore ?? null);
+          const selectedProject = input.repository === undefined && input.project !== undefined
+            ? await resolveProject(input.project, request.server.projectStore ?? null)
+            : undefined;
+          const repository = input.repository ?? selectedProject?.repo ??
+            await resolveRepository(undefined, request.server.projectStore ?? null);
           if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
             throw new ToolRefusal('That repository name is invalid.');
           }
@@ -617,9 +652,11 @@ export const factoryTools: readonly JarvisTool[] = [
           if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
             throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
           }
+          if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
           const issue = await request.server.githubIssueClient?.readIssue(repository, input.issueNumber);
           if (!issue || issue.isPullRequest) throw new ToolRefusal('I couldn’t find that GitHub issue.');
           try {
+            if (selectedProject) await revalidateProject(selectedProject.id, repository, request.server.projectStore ?? null);
             await request.server.githubIssueClient!.createComment(repository, input.issueNumber, input.text, signal);
           } catch (error) {
             if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
@@ -634,7 +671,7 @@ export const factoryTools: readonly JarvisTool[] = [
           ...input, title: 'Issue comment', body: input.text,
         }, await currentDanMessage(request, 'issue comment'), signal);
       } catch (error) {
-        if (error instanceof ToolRefusal) throw error;
+        if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolRefusal('The issue comment is invalid, contains a secret, or could not be prepared.');
       }
     },
@@ -659,7 +696,7 @@ export const factoryTools: readonly JarvisTool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        project: { type: 'string', minLength: 1, maxLength: 140 },
+        project: { ...projectSelectorSchema },
         issue: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
       },
       required: ['issue'],
@@ -674,10 +711,11 @@ export const factoryTools: readonly JarvisTool[] = [
         github: request.server.githubIssueClient,
         ...(project ? { project } : {}),
         issue,
-      }).catch(() => {
+      }).catch((error: unknown) => {
+        if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolFailure('GitHub issue task service is unavailable.');
       });
-      if (result.kind === 'project-not-found') throw new ToolRefusal('That project is not available.');
+      if (result.kind === 'project-not-found') throw new ToolRefusal('That project is not in the active project registry. No task was created; ask Dan which active project he means.');
       if (result.kind === 'issue-not-found') throw new ToolRefusal('That GitHub issue was not found.');
       if (result.kind === 'issue-closed') throw new ToolRefusal('Only open GitHub issues can be started.');
       if (result.kind === 'not-an-issue') throw new ToolRefusal('A pull request cannot be started as an issue.');

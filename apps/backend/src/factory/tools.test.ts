@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectStore } from './projects.js';
+import type { Project, ProjectStore } from './projects.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { capabilityInstructions } from '../core/capability-instructions.js';
@@ -71,7 +71,7 @@ const detail: TaskDetail = {
   usage: [],
 };
 
-function fixture() {
+function fixture(registeredProjects: readonly Project[] = [project]) {
   const attachment = {
     id: '7b96c6a9-9f80-4a8b-8a73-51517fe37512', name: 'broken.png',
     contentType: 'image/png', size: 100, status: 'ready' as const,
@@ -86,7 +86,7 @@ function fixture() {
   };
   const workspaceCommands = { isConnected: vi.fn(() => true), execute: vi.fn(async () => {}), dispose: vi.fn() };
   const projectStore = {
-    list: vi.fn(async () => [project]),
+    list: vi.fn(async () => [...registeredProjects]),
     update: vi.fn(async (id: string, fields: Partial<typeof project>) => id === project.id ? { ...project, ...fields } : null),
     archive: vi.fn(async (id: string) => id === project.id),
   } as unknown as ProjectStore;
@@ -124,6 +124,10 @@ function fixture() {
   const conversationStore = {
     getHistory: vi.fn(async () => ({ messages: [latestMessage], nextCursor: null })),
   } as unknown as ConversationStore;
+  const githubAppTokenIssuer = {
+    issueForRepositoryRead: vi.fn(async () => 'read-token'),
+    readInstallationPermissions: vi.fn(async () => ({ issues: 'write' as const, contents: 'write' as const })),
+  };
   const app = buildApp(config, undefined, {
     modules: [coreModule, factoryModule],
     auth: (async () => ({
@@ -134,10 +138,7 @@ function fixture() {
     projectStore,
     taskStore,
     githubIssueClient,
-    githubAppTokenIssuer: {
-      issueForRepositoryRead: vi.fn(async () => 'read-token'),
-      readInstallationPermissions: vi.fn(async () => ({ issues: 'write' as const, contents: 'write' as const })),
-    } as unknown as NonNullable<import('../app.js').BuildAppOptions['githubAppTokenIssuer']>,
+    githubAppTokenIssuer: githubAppTokenIssuer as unknown as NonNullable<import('../app.js').BuildAppOptions['githubAppTokenIssuer']>,
     factoryBoardReader: { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) },
     conversationStore,
     conversationAttachments: conversationAttachments as unknown as ConversationAttachmentStore,
@@ -147,7 +148,7 @@ function fixture() {
   });
   apps.push(app);
   return {
-    app, projectStore, taskStore, taskController, record, githubIssueClient,
+    app, projectStore, taskStore, taskController, record, githubIssueClient, githubAppTokenIssuer,
     attachment, conversationAttachments, workspaceCommands,
     setLatestMessage: (message: ConversationMessage) => { latestMessage = message; },
   };
@@ -337,6 +338,8 @@ describe('Software Factory Jarvis tools', () => {
     ]);
     expect(response.json().every(({ inputSchema }: { inputSchema: { type: string } }) =>
       inputSchema.type === 'object')).toBe(true);
+    const advertisedIssue = response.json().find(({ name }: { name: string }) => name === 'create_issue');
+    expect(advertisedIssue.inputSchema.properties.project.description).toContain('active project ID');
   });
 
   it('creates a code-change issue directly when Dan asks', async () => {
@@ -366,6 +369,165 @@ describe('Software Factory Jarvis tools', () => {
     );
     expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 9, ['Jarvis']);
   });
+
+  it.each([
+    {
+      language: 'English',
+      message: 'Add a hello-world file to the test project and let me know when it’s ready',
+      selector: 'the test project',
+    },
+    {
+      language: 'Danish',
+      message: 'Tilføj en hello-world-fil til testprojektet, og sig til, når den er klar',
+      selector: 'testprojektet',
+    },
+  ])('resolves the natural $language project through canonical tool dispatch', async ({ message, selector }) => {
+    const registered = {
+      ...project,
+      id: '31',
+      name: 'Greeting Runner',
+      description: 'test project for hello-world changes',
+      repo: 'synthetic/hello-world',
+    };
+    const test = fixture([registered]);
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan', text: message, model: null, at: new Date(),
+    });
+
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: {
+        project: selector,
+        title: 'Add hello-world file',
+        body: 'Problem: the project needs a hello-world file.\nAcceptance: the file exists.',
+      },
+    });
+
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { number: 9, taskCode: 'P11-01' } });
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledWith(
+      registered.repo,
+      'P11-01: Add hello-world file',
+      'Problem: the project needs a hello-world file.\nAcceptance: the file exists.',
+      { labels: ['P11', 'enhancement'] },
+    );
+    expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.addLabels).toHaveBeenCalledWith(registered.repo, 9, ['Jarvis']);
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('clarifies ambiguous project names without writing, and continues only after a clear selection', async () => {
+    const first = { ...project, id: '31', name: 'Test fixture', repo: 'synthetic/hello-world', description: 'test project' };
+    const second = { ...project, id: '32', name: 'Greeting fixture', repo: 'synthetic/greetings', description: 'another test project' };
+    const test = fixture([first, second]);
+    const call = async (id: string, message: string, selector: string) => {
+      test.setLatestMessage({ id, sessionId: 'session', role: 'dan', text: message, model: null, at: new Date() });
+      return test.app.inject({
+        method: 'POST', url: '/tools/create_issue',
+        headers: { ...headers, 'x-jarvis-message-id': id },
+        payload: { project: selector, title: 'Add hello-world file', body: 'Create the requested file.' },
+      });
+    };
+
+    const ambiguous = await call('42', 'Add a hello-world file to the test project.', 'the test project');
+    expect(ambiguous.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('Ask Dan naturally which one he means') },
+    });
+    expect(ambiguous.json().result.refused).toContain('Test fixture');
+    expect(ambiguous.json().result.refused).toContain('Greeting fixture');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+
+    const unclear = await call('43', 'Maybe the other one?', 'the test project');
+    expect(unclear.json().outcome).toBe('refused');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+
+    const selected = await call('44', 'Use Greeting fixture.', 'Greeting fixture');
+    expect(selected.json().outcome).toBe('ok');
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+    expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(second.repo);
+    expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a missing explicit project without falling back to Jarvis or writing', async () => {
+    const test = fixture();
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: '999', title: 'Add hello-world file', body: 'Create the requested file.' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('Project ID 999 is not in the active project registry') },
+    });
+    expect(response.json().result.refused).not.toMatch(/archived/iu);
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('reports project registry read failure distinctly and performs no write', async () => {
+    const test = fixture();
+    vi.mocked(test.projectStore.list).mockRejectedValue(new Error('private database detail'));
+
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'the test project', title: 'Add hello-world file', body: 'Create the requested file.' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'error',
+      result: { error: expect.stringContaining('couldn’t read the active project registry') },
+    });
+    expect(JSON.stringify(response.json())).not.toContain('private database detail');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps GitHub App permission denial after resolving a project name', async () => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', repo: 'synthetic/hello-world' };
+    const test = fixture([registered]);
+    vi.mocked(test.githubAppTokenIssuer.readInstallationPermissions).mockResolvedValue({
+      issues: 'read', contents: 'write',
+    });
+
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'Greeting Runner', title: 'Add hello-world file', body: 'Create the requested file.' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'I can’t; my GitHub App lacks Issues: write.' },
+    });
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+  });
+
+  it.each(['archived', 'renamed'] as const)(
+    'does not write if the selected project is %s between resolution and issue creation',
+    async (change) => {
+      const registered = { ...project, id: '31', name: 'Greeting Runner', repo: 'synthetic/hello-world' };
+      const test = fixture([registered]);
+      vi.mocked(test.projectStore.list)
+        .mockResolvedValueOnce([registered])
+        .mockResolvedValueOnce([registered])
+        .mockResolvedValueOnce(change === 'archived' ? [] : [{ ...registered, repo: 'synthetic/renamed' }]);
+
+      const response = await test.app.inject({
+        method: 'POST', url: '/tools/create_issue', headers,
+        payload: { project: 'Greeting Runner', title: 'Add hello-world file', body: 'Create the requested file.' },
+      });
+
+      expect(response.json().outcome).toBe('refused');
+      expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+      expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+      expect(test.taskStore.create).not.toHaveBeenCalled();
+    },
+  );
 
   it('executes all tools through their stores and records message-linked calls', async () => {
     const { app, projectStore, taskStore, taskController, record } = fixture();
@@ -399,7 +561,7 @@ describe('Software Factory Jarvis tools', () => {
       });
     }
 
-    expect(projectStore.list).toHaveBeenCalledTimes(4);
+    expect(projectStore.list).toHaveBeenCalledTimes(6);
     expect(projectStore.update).toHaveBeenCalledWith('7', {
       name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot',
     });

@@ -4,6 +4,7 @@ import type { GitHubIssue } from '../github/issues.js';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
 import type { TaskRecord } from './task-store.js';
 import type { WorkPullRequest } from './board.js';
+import { projectSelectorSchema } from './project-context.js';
 
 const taskCode = (title: string) => /\bP\d{1,2}-\d{2,3}\b/u.exec(title)?.[0];
 function sameWork(left: string, right: string): boolean {
@@ -16,7 +17,7 @@ export const workStatusSchema = {
     issueNumber: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
     query: { type: 'string', minLength: 1, maxLength: 100 },
-    project: { type: 'string', minLength: 1, maxLength: 140 },
+    project: { ...projectSelectorSchema },
   },
   additionalProperties: false,
 };
