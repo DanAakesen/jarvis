@@ -78,7 +78,7 @@ describe('composer attachments', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
     expect(sendChatTurn.mock.calls[0]![3]).toBe('Look');
-    expect(sendChatTurn.mock.calls[0]!.at(-2)).toEqual([fileId]);
+    expect(sendChatTurn.mock.calls[0]![11]).toEqual([fileId]);
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Files to send' })).toBeNull());
   });
 
