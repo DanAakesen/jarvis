@@ -19,6 +19,16 @@ const genericProjectTerms = new Set([
   'a', 'an', 'my', 'our', 'the', 'this', 'that', 'projekt', 'projektet', 'projekter', 'projekterne',
   'project', 'repository', 'repo', 'code', 'et', 'en', 'mit', 'min', 'vores',
 ]);
+const projectNouns = new Set(['project', 'projects', 'repository', 'repo', 'repos', 'projekt', 'projekter']);
+
+export function requiresProjectSelector(message: string): boolean {
+  const words = selectorWords(message);
+  const mentionsProject = words.some((word) => projectNouns.has(word) ||
+    ['projekterne', 'projektet', 'projekt'].some((suffix) => word.length > suffix.length && word.endsWith(suffix)));
+  const explicitlySelf = /\b(?:your (?:code|repo|repository|source|issues)|yourself|jarvis(?:['’]s)? (?:own )?(?:code|repo|repository|source)|(?:din|dit|dine) (?:kode|repo|repository|kilde|issues)|dig selv)\b/iu
+    .test(message) || message.toLocaleLowerCase('en-US').includes(JARVIS_REPOSITORY.toLocaleLowerCase('en-US'));
+  return mentionsProject && !explicitlySelf;
+}
 
 function selectorWords(value: string): string[] {
   return value.normalize('NFKC').toLocaleLowerCase('en-US').match(/[\p{L}\p{N}]+/gu) ?? [];
@@ -201,7 +211,8 @@ ${list}
   ask one short question in Dan's language (for example "Do you mean project X?" / "Mener du projekt X?")
   before any write. If several candidates match, name them and ask him to choose. Never guess, substitute
   Jarvis's repository for a named non-self project, register/unarchive a project, or write after an unclear
-  answer. The backend rechecks the active project before writes; a registry failure means stop and say so.
+  answer. If Dan names a project but a tool call omits its selector, ask instead of using the Jarvis default.
+  The backend rechecks the active project before writes; a registry failure means stop and say so.
 - Before create_project or manage_repository, check this list (or list_projects). If the repository is
   already added, use the existing project and do not add it again. If Dan asks about a repository that
   is not added, ask him to confirm before adding it, and add it only after he says yes.

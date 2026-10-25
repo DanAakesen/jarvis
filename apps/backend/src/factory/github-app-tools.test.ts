@@ -15,7 +15,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 
 function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | 'write' | 'admin'> = {
   issues: 'read', pull_requests: 'write', contents: 'read', actions: 'read', checks: 'read',
-}, agent = false) {
+}, agent = false, message = 'Please do it') {
   vi.stubGlobal('fetch', fetchImpl);
   const githubAppTokenIssuer = {
     readInstallationPermissions: vi.fn(async () => permissions),
@@ -29,7 +29,7 @@ function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | '
     githubAppTokenIssuer: githubAppTokenIssuer as never,
     conversationStore: {
       getHistory: vi.fn(async () => ({
-        messages: [{ id: '42', sessionId: 'session', role: 'dan', text: 'Please do it', at: new Date() }], nextCursor: null,
+        messages: [{ id: '42', sessionId: 'session', role: 'dan', text: message, at: new Date() }], nextCursor: null,
       })),
     } as never,
     toolCallStore: { record: vi.fn(async () => {}) },
@@ -59,6 +59,25 @@ afterEach(async () => {
 });
 
 describe('GitHub App capability tools', () => {
+  it.each([
+    'Add a README to the test project',
+    'Tilføj en README til testprojektet',
+  ])('does not default GitHub writes to Jarvis when the source names a project: %s', async (message) => {
+    const fetchImpl = vi.fn<typeof fetch>();
+    const { app, githubAppTokenIssuer } = fixture(fetchImpl, { contents: 'write' }, true, message);
+
+    const response = await callTool(app, 'file_write', {
+      path: 'README.md', branch: 'feature', content: 'Hello', message: 'Add README',
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('Which active project do you mean?') },
+    });
+    expect(githubAppTokenIssuer.readInstallationPermissions).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it.each(['yes', 'approved', 'confirmed', 'go ahead', 'YES.', 'Go Ahead!', 'ok', 'yes please'])(
     'accepts only a simple later approval word: %s', (value) => {
       expect(isSimpleApproval(value)).toBe(true);

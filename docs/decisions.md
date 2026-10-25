@@ -1,5 +1,25 @@
 # Decisions
 
+## Resolve project references against the active registry (25 October 2026; #1263)
+
+- Resolve explicit project IDs and full repository names exactly; normalize
+  display names conservatively and match natural references only against current
+  active registered-project candidates. Never select the first plausible match.
+- Ask one short natural-language question before a write when the reference is
+  ambiguous or absent. A missing project in the active-only list does not prove
+  that it was archived; registry read failures remain distinct from project and
+  GitHub App permission failures.
+- Pin the selected project ID and repository and revalidate them before issue,
+  label, comment or task writes. Do not fall back from a named non-self project,
+  register/unarchive projects or change permissions to make a request succeed.
+- Keep `create_issue` as the code-change path and reuse existing approval and
+  tool replay ownership. This change adds no confirmation, execution or replay
+  loop of its own.
+- **Verification:** synthetic resolver and canonical dispatch tests cover English
+  and Danish requests, ambiguity, no-write refusals, permission denial and project
+  archive/rename races. Provider, production and physical voice acceptance remain
+  unverified.
+
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
 - Keep one immediate switch for automatic proactive suggestions and a compact

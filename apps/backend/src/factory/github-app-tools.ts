@@ -6,7 +6,12 @@ import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.j
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
-import { JARVIS_REPOSITORY, projectSelectorSchema, resolveRepository } from './project-context.js';
+import {
+  JARVIS_REPOSITORY,
+  projectSelectorSchema,
+  requiresProjectSelector,
+  resolveRepository,
+} from './project-context.js';
 
 const githubApi = 'https://api.github.com';
 const responseLimit = 1024 * 1024;
@@ -587,6 +592,13 @@ async function runOperation(
   request: FastifyRequest,
   signal: AbortSignal,
 ): Promise<unknown> {
+  const writes = permission.access === 'write' || (permission.also ?? []).some(({ access }) => access === 'write');
+  if (writes && input.repository === undefined && input.project === undefined &&
+      (request.jarvisConversationMessage || request.agentPrincipal)) {
+    if (requiresProjectSelector((await danMessage(request)).text)) {
+      throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
+    }
+  }
   const repository = await resolveToolRepository(input, request);
   return withGitHubAccess(request, repository, permission, (token) =>
     handler(input, repository, request, signal, token));

@@ -4,6 +4,7 @@ import type { Project, ProjectStore } from './projects.js';
 import {
   JARVIS_REPOSITORY,
   projectAwarenessInstructions,
+  requiresProjectSelector,
   resolveProject,
   revalidateProject,
 } from './project-context.js';
@@ -57,6 +58,13 @@ describe('project awareness', () => {
 });
 
 describe('active project resolution', () => {
+  it('requires a selector when a message names a project, except for explicit own-code requests', () => {
+    expect(requiresProjectSelector('Add a hello-world file to the test project')).toBe(true);
+    expect(requiresProjectSelector('Tilføj en fil til testprojektet')).toBe(true);
+    expect(requiresProjectSelector('Improve your code')).toBe(false);
+    expect(requiresProjectSelector('Fix the Jarvis repository')).toBe(false);
+  });
+
   it('resolves IDs, full repositories, and normalized display names exactly', async () => {
     const project = registeredProject({ name: '  Greeting   Runner  ' });
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;

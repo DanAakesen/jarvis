@@ -1,8 +1,8 @@
-import { JARVIS_REPOSITORY } from './project-context.js';
-import type { Project, ProjectStore } from './projects.js';
+import { JARVIS_REPOSITORY, resolveProject, resolveRepository, revalidateProject } from './project-context.js';
+import type { ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import { GitHubIssueRequestError, type GitHubIssue, type GitHubIssueClient } from '../github/issues.js';
-import { resolveProject, resolveRepository, revalidateProject } from './project-context.js';
+import { ToolRefusal } from '../core/tool-registry.js';
 import { taskStates } from './task-lifecycle.js';
 
 const maxPromptBytes = 50_000;

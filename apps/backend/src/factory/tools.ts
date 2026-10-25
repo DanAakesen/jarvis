@@ -31,6 +31,7 @@ import {
 import {
   JARVIS_REPOSITORY,
   projectSelectorSchema,
+  requiresProjectSelector,
   resolveProject,
   resolveRepository,
   revalidateProject,
@@ -288,6 +289,9 @@ async function stageIssueCreation(
 ) {
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
     throw new ToolRefusal('A verified Dan message is required to confirm this issue creation.');
+  }
+  if (input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
+    throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
   }
   const selectedProject = input.project && input.repository === undefined
     ? await resolveProject(input.project, server.projectStore ?? null)
@@ -567,7 +571,10 @@ export const factoryTools: readonly JarvisTool[] = [
       try {
         validateIssueDraft(draft.title, draft.body);
         if (!draft.attachmentIds?.length && draft.publish !== 'public') {
-          await currentDanMessage(request, 'issue creation');
+          const source = await currentDanMessage(request, 'issue creation');
+          if (draft.project === undefined && requiresProjectSelector(source.text)) {
+            throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
+          }
           const selectedProject = draft.project === undefined
             ? undefined
             : await resolveProject(draft.project, request.server.projectStore ?? null);
@@ -631,7 +638,10 @@ export const factoryTools: readonly JarvisTool[] = [
       const input = value as { issueNumber: number; text: string; repository?: string; project?: string } & IssueAttachmentInput;
       try {
         if (!input.attachmentIds?.length && input.publish !== 'public') {
-          await currentDanMessage(request, 'issue comment');
+          const source = await currentDanMessage(request, 'issue comment');
+          if (input.repository === undefined && input.project === undefined && requiresProjectSelector(source.text)) {
+            throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
+          }
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
           const selectedProject = input.repository === undefined && input.project !== undefined
             ? await resolveProject(input.project, request.server.projectStore ?? null)
@@ -703,8 +713,11 @@ export const factoryTools: readonly JarvisTool[] = [
       additionalProperties: false,
     },
     execute: async (input, request) => {
-      await currentDanMessage(request);
+      const message = await currentDanMessage(request);
       const { project, issue } = input as StartIssueToolInput;
+      if (project === undefined && requiresProjectSelector(message.text)) {
+        throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No task was created.');
+      }
       const result = await startIssueTask({
         projects: request.server.projectStore,
         tasks: request.server.taskStore,

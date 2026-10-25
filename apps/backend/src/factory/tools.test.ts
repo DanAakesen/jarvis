@@ -416,6 +416,29 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.taskStore.create).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'Add a hello-world file to the test project and let me know when it’s ready',
+    'Tilføj en hello-world-fil til testprojektet, og sig til, når den er klar',
+  ])('does not fall back to Jarvis when the source message names a project but the tool omits its selector', async (message) => {
+    const test = fixture();
+    test.setLatestMessage({
+      id: '42', sessionId: 'session', role: 'dan', text: message, model: null, at: new Date(),
+    });
+
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { title: 'Add hello-world file', body: 'Create the requested file.' },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('Which active project do you mean?') },
+    });
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
   it('clarifies ambiguous project names without writing, and continues only after a clear selection', async () => {
     const first = { ...project, id: '31', name: 'Test fixture', repo: 'synthetic/hello-world', description: 'test project' };
     const second = { ...project, id: '32', name: 'Greeting fixture', repo: 'synthetic/greetings', description: 'another test project' };
