@@ -182,6 +182,57 @@ describe('loadConversationHistory', () => {
         expect(fetch).not.toHaveBeenCalled();
       });
 
+      it('keeps streaming through preparation and the food review window within the existing ingress limit', async () => {
+        vi.useFakeTimers();
+        const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+          const controller = new AbortController();
+          setTimeout(() => controller.abort(), ms);
+          return controller.signal;
+        });
+        try {
+          let stream!: ReadableStreamDefaultController<Uint8Array>;
+          let requestSignal!: AbortSignal;
+          const user = { id: '51', sessionId: '41', role: 'dan', text: 'Synthetic estimate', model: null,
+            at: '2026-10-25T12:00:00Z' };
+          const committed = { ...user, id: '52', role: 'jarvis', text: 'Logged.' };
+          const encoder = new TextEncoder();
+          const event = (name: string, value: unknown) => encoder.encode(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`);
+          vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+            requestSignal = init.signal!;
+            return new Response(new ReadableStream<Uint8Array>({ start(controller) {
+              stream = controller;
+              stream.enqueue(event('user', user));
+            } }));
+          }));
+          const result = sendChatTurn(createClient(), config, { id: '41', language: 'en' }, user.text, vi.fn(), vi.fn());
+          await vi.advanceTimersByTimeAsync(60_000); // Estimate preparation.
+          expect(requestSignal.aborted).toBe(false);
+          await vi.advanceTimersByTimeAsync(110_000); // Still inside the pending review window.
+          expect(requestSignal.aborted).toBe(false);
+          expect(timeout).toHaveBeenCalledWith(240_000);
+          stream.enqueue(event('done', committed));
+          stream.close();
+          expect(await result).toEqual(committed);
+          await vi.advanceTimersByTimeAsync(70_000);
+          expect(requestSignal.aborted).toBe(true);
+        } finally {
+          timeout.mockRestore();
+          vi.useRealTimers();
+        }
+      });
+
+      it('sanitizes stream-read failures and marks delivery uncertain without replaying the turn', async () => {
+        const fetch = vi.fn(async () => new Response(new ReadableStream({
+          start(controller) { controller.error(new Error('private transport diagnostics')); },
+        })));
+        vi.stubGlobal('fetch', fetch);
+        const uncertain = vi.fn();
+        await expect(sendChatTurn(createClient(), config, { id: '41', language: 'en' }, 'Synthetic estimate',
+          vi.fn(), vi.fn(), uncertain)).rejects.toThrow('A food entry or another action may already have completed');
+        expect(uncertain).toHaveBeenCalledOnce();
+        expect(fetch).toHaveBeenCalledOnce();
+      });
+
       it('creates a session and reads streamed user and assistant messages', async () => {
         const client = createClient();
         const userMessage = {
@@ -278,6 +329,36 @@ describe('loadConversationHistory', () => {
           controller.close();
         }
         await expect(turn).resolves.toEqual(assistantMessage);
+      });
+
+      it('delivers a distinct acknowledgment boundary before final text', async () => {
+        const userMessage = {
+          id: '61', sessionId: '41', role: 'dan', text: 'Compare my targets.', model: null,
+          at: '2026-10-12T06:17:18.000Z',
+        };
+        const assistantMessage = { ...userMessage, id: '62', role: 'jarvis', text: 'The targets match.' };
+        const acknowledgment = "I'll compare your saved targets.";
+        const fetch = vi.fn()
+          .mockResolvedValueOnce(new Response([
+            `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
+            `event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+            `event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+            `event: delta\ndata: ${JSON.stringify({ text: assistantMessage.text })}\n\n`,
+            `event: done\ndata: ${JSON.stringify(assistantMessage)}\n\n`,
+          ].join(''), { headers: { 'Content-Type': 'text/event-stream' } }));
+        vi.stubGlobal('fetch', fetch);
+        const onAcknowledgment = vi.fn();
+        const onDelta = vi.fn();
+
+        await sendChatTurn(
+          createClient() as never, config, { id: '41', language: 'en' },
+          userMessage.text, vi.fn(), onDelta, undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, onAcknowledgment,
+        );
+
+        expect(onDelta.mock.calls).toEqual([[acknowledgment], [assistantMessage.text]]);
+        expect(onAcknowledgment).toHaveBeenCalledExactlyOnceWith(acknowledgment);
+        expect(fetch).toHaveBeenCalledOnce();
       });
 
       it('shows the backend refusal and does not retry a failed turn', async () => {

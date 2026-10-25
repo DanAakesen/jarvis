@@ -2,6 +2,7 @@ import {
   ChatAgentError,
   ChatAgentInvocationError,
   type ConversationAgent,
+  type ConversationAgentChunk,
   type ConversationAgentToolCall,
 } from './chat-agent.js';
 import {
@@ -77,7 +78,9 @@ async function runPrompt(
     ...options,
     onAgentToolCalls: (calls) => { toolCalls = calls; },
   }, '', signal);
-  for await (const chunk of response) output.push(chunk);
+  for await (const chunk of response) {
+    if (typeof chunk === 'string') output.push(chunk);
+  }
   return { text: output.join(''), toolCalls };
 }
 
@@ -125,11 +128,12 @@ function pacedAgent(agent: ConversationAgent): ConversationAgent {
       };
       const timer = setTimeout(abort, perPromptTimeoutMs);
       signal.addEventListener('abort', abort, { once: true });
-      let iterator: AsyncIterator<string> | undefined;
+      let iterator: AsyncIterator<ConversationAgentChunk> | undefined;
       try {
-        iterator = agent.stream(input, authorization, controller.signal)[Symbol.asyncIterator]();
+        const stream = agent.stream(input, authorization, controller.signal)[Symbol.asyncIterator]();
+        iterator = stream;
         while (true) {
-          const chunk = await Promise.race([iterator.next(), deadline]);
+          const chunk = await Promise.race([stream.next(), deadline]);
           if (chunk.done) break;
           yield chunk.value;
         }

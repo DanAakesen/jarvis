@@ -230,6 +230,13 @@ whenever a background-work pair is present. Only the running icon rotates, and
 neither OS nor app reduced-motion mode allows that animation. Preserve the
 background-work popover contents, delivery and dismissal.
 
+Food-estimate confirmation (#1277) keeps this exact proposal and its existing
+Approve/Reject fallback, but no longer requires opening the popover to approve:
+the owner's next natural text/browser-voice reply can confirm the current
+estimate. No new control, layout or animation is introduced. Corrections and
+deletions retain the separate approval controls; expiry and cancellation remain
+visible through the existing feed.
+
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
 individual desktop job tabs and phone window sheet. Settings, presence and
@@ -1243,6 +1250,13 @@ restore typing focus. The ready state says the microphone is off and offers a
 separate Enable microphone action. P8-10 implements the desktop shell/fullscreen
 transition, available-window carry-over and the selected end-control behavior;
 P8-11 implements phone view switching on the existing client controller.
+
+For a tool-backed turn, the first streamed sentence is separated into a labelled,
+transient Jarvis reply while work is pending. It stays in the transcript only for
+that live turn, is removed when the final reply arrives, and remains beside an
+honest failure message if the turn cannot finish. Direct replies use the existing
+stream without an extra segment. This uses the same message surface and spacing at
+phone and desktop widths; it is not a tool-activity label or a repeated status.
 
 ### Phone workspace (P8-11)
 

@@ -637,7 +637,14 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Text and voice share the pending-action lifecycle: an exact proposal, a verified
+later owner decision bound to that action, expiry/cancellation and one-time
+execution. Tools retain their own permission checks. An acknowledgment that a
+request was received is not approval; identifying a project selects the target,
+not permission for an action on it. Browser-only proposals keep their
+authenticated browser approval boundary.
+
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains available. Only a current pending food estimate also accepts the owner's next natural reply in the same text/browser-voice session, without a separate button.
 
 P13-02 adds an optional web push opt-in, on in production since P13-03, for a
 visible alert that links to a durable owner-protected item. P13-21 includes
@@ -664,6 +671,17 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Conversation opens at the latest messages with typing focus: a calm greeting when empty; visually distinct Dan/Jarvis messages across chat and voice sessions; channel, language and relative time on hover/focus (always visible on touch or reduced motion); thinking feedback until the first delta, then open-surface streaming text with a live caret; tool-call chips (tool, outcome, link to task), and voice minutes per sitting; retained failed-turn and interrupted-reply feedback; history refresh retains messages without duplicates; removable queued Dan bubbles and an accessible queue count | Type from the floating bottom-centred, auto-growing composer; while idle Send/Enter starts a turn and while Jarvis replies Send/Enter steers it, preserving any interrupted partial reply; Ctrl+Enter adds to the removable FIFO queue; send queued messages in order after success or error; keep Send, the More → Language menu and voice entry available during replies; capture language per message so changes apply to the next message; Shift+Enter adds a line; voice starts immediately while the chat reply continues into history; preserve unsaved and next drafts on failure |
 | Voice state: connecting, waiting for microphone, listening, thinking, tool work, speaking, muted and reconnecting; accessible status beneath the orb. History and composer hide during voice; exit restores the draft and typing focus | Start voice requests microphone permission and prepares audio; capture begins after permission and authenticated session readiness. End voice; interrupt by speaking; mute/unmute or exceptional microphone retry in More |
 | Header attention (P9-120): undismissed task-attention, credential-warning and alert items, plus every pending browser confirmation; background-work history stays reachable for every non-dismissed job, including interrupted jobs | Open a linked task, release or project; dismiss an item or finished job; approve or reject a browser confirmation |
+
+For tool-backed turns, Jarvis gives one brief, truthful first-person sentence in the
+conversation language before tool work. Chat shows it as a distinct interim segment.
+Hosted voice emits a separate initial text item before resuming the model stream;
+its transport does not acknowledge that a user heard it. Browser realtime voice
+waits for browser playback completion only when the initial turn response contains
+audio and tool calls; tool-only responses and later silent tool rounds need no
+playback receipt. A browser receipt is not proof of physical-speaker output. The
+final answer contains only the useful result, and a failed or partial turn retains
+an honest terminal outcome. Direct answers and greetings remain single, immediate
+replies without a preamble.
 
 #### Proactive page (P13-10; default off)
 
@@ -1499,7 +1517,12 @@ that cannot be shown completely and gives a rename-safe recovery. Model proposal
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
-approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Confirmations always remain in the browser app even if presence changes. Rejected,
+approval within its displayed two-minute window. For estimates only, a natural affirmative
+such as "yes, log that" in the same session consumes that exact pending approval.
+Unrelated/conditional replies, ambiguous proposals, stale replies and other sessions
+cannot authorize it; unrelated replies end conversational approval for that proposal.
+Corrections and deletions still require Now. Confirmations remain in the browser
+app even if presence changes, and present mode is rechecked before writing. Rejected,
 cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
 shared. No Health write, production activation or physical-phone acceptance is

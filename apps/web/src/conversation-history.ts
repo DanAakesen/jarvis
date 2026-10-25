@@ -112,7 +112,8 @@ async function chatResponse(
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.any([AbortSignal.timeout(120_000), ...(signal ? [signal] : [])]),
+      // Streaming turns include tool work and approval; use the existing 240-second ingress ceiling.
+      signal: AbortSignal.any([AbortSignal.timeout(accept === 'text/event-stream' ? 240_000 : 120_000), ...(signal ? [signal] : [])]),
     });
   } catch {
     onDeliveryUncertain?.();
@@ -192,6 +193,7 @@ export async function sendChatTurn(
   onInterrupted?: (message: ChatMessage) => void,
   attachmentIds?: readonly string[],
   visualContext?: VisualTurnContext,
+  onAcknowledgment?: (text: string) => void,
 ): Promise<ChatMessage> {
   if (visualContext !== undefined && screenContext !== undefined) {
     throw new Error('Send visual context or legacy screen context, not both.');
@@ -221,6 +223,7 @@ export async function sendChatTurn(
   let userMessage: ChatMessage | null = null;
   let assistantMessage: ChatMessage | null = null;
   const processFrame = (frame: string) => {
+    if (signal?.aborted) return;
     const event = parseEvent(frame);
     if (!event) return;
     let payload: unknown;
@@ -242,6 +245,12 @@ export async function sendChatTurn(
         throw new Error('Jarvis returned an invalid chat stream.');
       }
       onDelta(payload.text);
+    } else if (event.event === 'acknowledgment') {
+      if (!isRecord(payload) || typeof payload.text !== 'string' ||
+          !payload.text.trim() || Array.from(payload.text).length > 500) {
+        throw new Error('Jarvis returned an invalid chat stream.');
+      }
+      onAcknowledgment?.(payload.text);
     } else if (event.event === 'interrupted') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
       onInterrupted?.(chatMessageResult(payload));
@@ -253,7 +262,12 @@ export async function sendChatTurn(
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try { chunk = await reader.read(); }
+      catch {
+        throw new Error('Connection interrupted. A food entry or another action may already have completed; check conversation and action status before trying again.');
+      }
+      const { done, value } = chunk;
       if (done) break;
       receivedBytes += value.byteLength;
       if (receivedBytes > 1024 * 1024) throw new Error('Jarvis returned a chat response that was too large.');

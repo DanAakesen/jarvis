@@ -12,6 +12,8 @@ import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
 import { dailySavedFoodTool } from '../daily/tools/saved-food.js';
 import { createOwnerInteractionService } from '../core/owner-interactions.js';
 import { createConfirmationStore } from './confirmation-store.js';
+import { createConversationStore } from './conversation-store.js';
+import { approvalDeciderFor } from '../core/approval-interpreter.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -386,22 +388,25 @@ describe('inactive nutrition services on real SQL Server', () => {
     }
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
   });
-  it('requires actual one-time browser approvals for internal estimate/correction/deletion on real SQL', async () => {
-    const at = new Date(now()); const sessionId = randomUUID();
+  it.each(['browser', 'natural'] as const)('requires actual one-time browser approvals for internal estimate/correction/deletion on real SQL (%s estimate reply)', async replyMode => {
+    const conversations = createConversationStore(pool);
+    const session = await conversations.createSession({ channel: 'voice', language: 'en' });
+    const source = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
+      text: 'I ate a synthetic portion; review the estimate.', model: null }))!;
+    const at = source.at;
     const controller = new AbortController();
     const notifications: string[] = [];
     const confirmations = createOwnerInteractionService({
-      ownerObjectId: owner, store: createConfirmationStore(pool), onWebNotification: async () => {},
+      ownerObjectId: owner, store: createConfirmationStore(pool), conversationStore: conversations, onWebNotification: async () => {},
     });
-    const source = { id: '223001', sessionId, role: 'dan' as const, text: 'I ate a synthetic portion; review the estimate.', model: null, at };
     const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
       server: { ownerObjectId: owner, ownerInteractions: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
-        conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
-    const tool = dailyFoodReviewTool(request => NutritionStore.forRequest(pool, request, now, {
+        conversationStore: conversations } } as unknown as FastifyRequest;
+    const tool = dailyFoodReviewTool(request => NutritionStore.forRequest(pool, request, () => at.toISOString(), {
       publish: change => { notifications.push(...change.sources); },
     }), () => at.getTime());
     let active: Promise<unknown> | undefined;
-    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve') => {
+    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve', naturalReply = false) => {
       active = tool.execute(input, req, controller.signal);
       const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
       await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
@@ -410,7 +415,12 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect(remaining).toBeGreaterThan(0);
       expect(remaining).toBeLessThanOrEqual(120_000);
       expect(confirmation.summary).toContain('Nothing has changed');
-      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
+      if (naturalReply) {
+        const reply = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
+          text: 'yes, log that', model: null }))!;
+        expect(await confirmations.resolveFoodEstimateReply!(reply, approvalDeciderFor(req), controller.signal)).toBe(true);
+        expect(await confirmations.resolveFoodEstimateReply!(reply, approvalDeciderFor(req), controller.signal)).toBe(false);
+      } else expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
       const result = await outcome;
       expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
       if (!result.ok) throw result.error;
@@ -418,24 +428,27 @@ describe('inactive nutrition services on real SQL Server', () => {
     };
     try {
       const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic reviewed portion', energyKcal: 200 } } };
-      const logged = await review(input) as { record: { idempotency_key: string } };
+      const logged = await review(input, 'approve', replyMode === 'natural') as { record: { idempotency_key: string } };
       expect(logged).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice', revision: '1' } });
       expect(await tool.execute(input, req, controller.signal)).toEqual(logged);
       expect(notifications).toEqual(['daily.nutrition.meals']);
       const key = logged.record.idempotency_key;
-      req.jarvisConversationMessage = { ...source, id: '223002', text: 'Correct this synthetic portion.' };
+      req.jarvisConversationMessage = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
+        text: 'Correct this synthetic portion.', model: null }))!;
       const correction = { change: { operation: 'correct', idempotencyKey: key, expectedRevision: '1',
         changes: { energyKcal: 222, occurredAt: '2026-01-01T23:30:00Z' } } };
       const corrected = await review(correction);
       expect(corrected).toMatchObject({ status: 'committed', record: { energy_kcal: 222, meal_date: '2026-01-02', revision: '2' } });
       expect(await tool.execute(correction, req, controller.signal)).toEqual(corrected);
       expect(notifications).toHaveLength(2);
-      req.jarvisConversationMessage = { ...source, id: '223003', text: 'Delete this synthetic portion.' };
+      req.jarvisConversationMessage = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
+        text: 'Delete this synthetic portion.', model: null }))!;
       const deletion = { change: { operation: 'delete', idempotencyKey: key, expectedRevision: '2' } };
       await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
       expect(await store().intake(key, signal())).toMatchObject({ deleted_at: null, revision: '2' });
       expect(notifications).toHaveLength(2);
-      req.jarvisConversationMessage = { ...source, id: '223004', text: 'Now approve deletion of this synthetic portion.' };
+      req.jarvisConversationMessage = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
+        text: 'Now approve deletion of this synthetic portion.', model: null }))!;
       expect(await review(deletion)).toMatchObject({ status: 'committed', record: { energy_kcal: 222, revision: '3', deleted_at: expect.any(String) } });
       expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted', record: { revision: '3' } });
       expect(notifications).toHaveLength(3);
