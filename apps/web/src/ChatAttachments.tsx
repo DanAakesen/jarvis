@@ -32,14 +32,19 @@ function ComposerImagePreview({ item, getAccessToken, config }: {
   const [localPreviewFailed, setLocalPreviewFailed] = useState(false);
   const fallbackRequested = useRef(false);
   useEffect(() => {
-    if ((item.previewUrl && !localPreviewFailed) || !item.id || item.status !== 'ready' || fallbackRequested.current) return;
+    if ((item.previewUrl && !localPreviewFailed) || !item.id || item.status !== 'ready' || url || unavailable || fallbackRequested.current) return;
     fallbackRequested.current = true;
     const controller = new AbortController();
     void loadAttachmentUrl(getAccessToken, config, item.id, controller.signal)
-      .then(setUrl)
+      .then((loadedUrl) => {
+        if (!controller.signal.aborted) setUrl(loadedUrl);
+      })
       .catch(() => { if (!controller.signal.aborted) setUnavailable(true); });
-    return () => controller.abort();
-  }, [config, getAccessToken, item.id, item.previewUrl, item.status, localPreviewFailed]);
+    return () => {
+      controller.abort();
+      if (!url) fallbackRequested.current = false;
+    };
+  }, [config, getAccessToken, item.id, item.previewUrl, item.status, localPreviewFailed, unavailable, url]);
 
   const previewUrl = item.previewUrl && !localPreviewFailed ? item.previewUrl : url;
   return previewUrl && !unavailable
