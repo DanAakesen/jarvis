@@ -1,5 +1,18 @@
 # Agent context
 
+## Mobile browser food confirmation checks (#1290; 25 October 2026)
+
+Use the existing natural-food checks below, plus backend
+`src/core/phone-approval.test.ts`, `src/voice/startup.test.ts` and
+`src/daily/tools/food.test.ts`. The food-review HTTP fixture now starts at
+discovery/lookup and stages through the tool route before steering `Log it`;
+fresh and earlier-refusal histories use isolated synthetic records. Relay tests
+start from an estimate request and actual tool execution in both direct and
+compact discovery modes for English/Danish. Hosted-agent qualification:
+`bash .github/scripts/python-ci.sh agents/jarvis`.
+These are mocked-provider/in-memory tests, not live-provider, SQL persistence,
+microphone or physical-device acceptance. Do not write production meals.
+
 ## Natural food confirmation checks (#1277; 25 October 2026)
 
 Use synthetic food records only. Focused checks from the repository root:

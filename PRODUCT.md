@@ -1510,6 +1510,11 @@ shared. No Health write, production activation or physical-phone acceptance is
 included; broader conversational and actual client/device gates remain.
 Both internal food tools refuse phone calls before generic approval; an approval
 cannot make their unsupported phone context valid.
+Browser chat and browser voice remain supported on mobile as well as desktop;
+using a phone's browser is not a telephone call. Stage `log_estimate` before
+inviting confirmation: prose estimates and reference lookups create no pending
+approval. Without a pending proposal, prepare a new review and obtain a new reply;
+historical agreement cannot authorize it. Only a committed tool receipt proves logging.
 
 Approved #1196 extends the same reviewed flow to food photos. Existing
 conversation attachments reach the existing image-capable model path; the model

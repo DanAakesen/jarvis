@@ -32,6 +32,8 @@ import type { TaskController, TaskRecord, TaskStore } from '../factory/task-stor
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import { createOwnerInteractionService } from '../core/owner-interactions.js';
+import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
+import type { MealInput } from '../daily/nutrition/model.js';
 import {
   createDanishVoiceAgentEndpoint,
   DANISH_VOICE_AGENT_NAME,
@@ -3797,17 +3799,64 @@ describe('backend-relayed Voice Live WebSocket', () => {
 });
 
 describe('food estimate confirmation turns', () => {
-  it.each(['/voice', '/voice/da'])('binds the persisted natural reply to the pending food estimate in %s', async path => {
+  it.each([
+    { path: '/voice', discovery: false }, { path: '/voice/da', discovery: false },
+    { path: '/voice', discovery: true }, { path: '/voice/da', discovery: true },
+  ])('stages a food estimate before binding Log it once in $path (discovery: $discovery)', async ({ path, discovery }) => {
     let upstream!: WebSocket;
-    const upstreamUrl = await echoServer(socket => { upstream = socket; });
+    let connections = 0;
+    const ready = Promise.withResolvers<void>();
+    const outputs = new Map<string, Record<string, unknown>>();
+    const upstreamUrl = await echoServer(socket => {
+      upstream = socket;
+      const fallback = discovery && connections++ === 0;
+      socket.on('message', data => {
+        const event = JSON.parse(data.toString());
+        if (event.type === 'session.update') {
+          expect(event.session.instructions).toContain('Trusted runtime channel: browser voice');
+          socket.send(JSON.stringify(fallback ? { type: 'error', error: { code: 'schema_constraint' } }
+            : { type: 'session.updated' }));
+          if (!fallback) ready.resolve();
+        }
+        if (event.type === 'conversation.item.create' && event.item?.type === 'function_call_output') {
+          outputs.set(event.item.call_id, JSON.parse(event.item.output));
+        }
+      });
+    }, false);
     const connect = (_token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, { signal });
-    const { app, conversationStore } = appFor(connect, undefined, [], [], connect);
-    conversationStore.addMessage.mockImplementation(async input => ({
-      id: input.text === 'yes, log that' ? '43' : '44', sessionId: input.sessionId,
-      role: input.role, text: input.text, model: input.model, at: new Date(),
+    const rows = new Map<string, Record<string, unknown>>();
+    const log = vi.fn(async (input: MealInput) => {
+      const saved = { id: input.id, idempotency_key: input.idempotencyKey, revision: '1', deleted_at: null,
+        meal_name: input.mealName, energy_kcal: input.energyKcal, capture_method: input.captureMethod,
+        nutrient_provenance_json: JSON.stringify(input.provenance) };
+      rows.set(input.idempotencyKey, saved);
+      return saved;
+    });
+    const tool = dailyFoodReviewTool(() => ({
+      intake: async key => rows.get(key) ?? null, lookupSaved: async () => null, log,
+      correct: vi.fn(), remove: vi.fn(),
     }));
+    const { app, conversationStore } = appFor(connect, undefined, [], [
+      { id: 'synthetic-food', registerRoutes: async () => {}, tools: [tool] },
+    ], connect);
+    const messages: Awaited<ReturnType<ConversationStore['addMessage']>>[] = [];
+    conversationStore.addMessage.mockImplementation(async input => {
+      const message = { id: String(42 + messages.length), sessionId: input.sessionId,
+        role: input.role, text: input.text, model: input.model, at: new Date() };
+      messages.push(message);
+      return message;
+    });
+    app.conversationStore = {
+      ...conversationStore,
+      getSession: async () => ({ id: '41', channel: 'voice', language: path === '/voice/da' ? 'da' : 'en',
+        startedAt: new Date(), endedAt: null }),
+      getDanMessagesAfter: async ({ after }) => messages.filter(message => message.role === 'dan' && BigInt(message.id) > BigInt(after))
+        .map(({ id, text }) => ({ id, text, language: 'en' as const })),
+    };
+    app.awayModeStore = { read: async () => ({ mode: 'present', source: 'manual', changedAt: null }),
+      set: vi.fn(), markPresent: vi.fn() };
     const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
-      conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) }, store: {
+      conversationStore: app.conversationStore, store: {
       createConfirmation: vi.fn(async () => {}),
       resolveConfirmation: vi.fn(async () => 'approved'),
       consumeApproval: vi.fn(async () => true),
@@ -3818,18 +3867,41 @@ describe('food estimate confirmation turns', () => {
     app.ownerInteractions = service;
     await app.listen({ host: '127.0.0.1', port: 0 });
     await openBrowser(`ws://127.0.0.1:${(app.server.address() as AddressInfo).port}${path}`);
-    await vi.waitFor(() => expect(upstream).toBeDefined());
-    const action = vi.fn(async () => ({ status: 'committed', energyKcal: 200 }));
-    const operation = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, undefined,
-      { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
-    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    await ready.promise;
     upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
-      item_id: 'food-approval', transcript: 'yes, log that' }));
-    await expect(operation).resolves.toEqual({ status: 'committed', energyKcal: 200 });
+      item_id: 'food-request', transcript: 'Estimate this synthetic food portion.' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    const call = (name: string, callId: string, args: unknown) => {
+      const item = { type: 'function_call', name, call_id: callId, arguments: JSON.stringify(args) };
+      upstream.send(JSON.stringify({ ...item, type: 'response.function_call_arguments.done' }));
+      upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed', output: [item] } }));
+    };
+    if (discovery) {
+      let offset: number | null = 0;
+      let discovered = '';
+      do {
+        const callId = `food-discovery-${offset}`;
+        call('jarvis_discover_capabilities', callId, { offset });
+        await vi.waitFor(() => expect(outputs.get(callId)).toMatchObject({ outcome: 'ok' }));
+        discovered += JSON.stringify(outputs.get(callId));
+        offset = (outputs.get(callId)!.result as { nextOffset: number | null }).nextOffset;
+      } while (offset !== null);
+      expect(discovered).toContain('a mobile browser is NOT a telephone call');
+    }
+    expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+    const args = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion', energyKcal: 200 } } };
+    call(discovery ? 'jarvis_execute_capability' : 'daily_food_review', 'food-estimate',
+      discovery ? { capability: 'daily_food_review', arguments: args } : args);
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    expect(log).not.toHaveBeenCalled();
+    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'food-approval', transcript: 'Log it' }));
+    await vi.waitFor(() => expect(outputs.get('food-estimate')).toMatchObject({ outcome: 'ok',
+      result: { status: 'committed', record: { energy_kcal: 200, capture_method: 'voice' } } }));
     upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
       item_id: 'food-repeat', transcript: 'yes' }));
-    await vi.waitFor(() => expect(conversationStore.addMessage).toHaveBeenCalledTimes(2));
-    expect(action).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(log).toHaveBeenCalledOnce();
     expect(service.pendingBrowserConfirmations()).toEqual([]);
   });
 });

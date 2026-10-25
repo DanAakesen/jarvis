@@ -1,5 +1,19 @@
 # Project plan
 
+## Mobile browser food confirmation repair (#1290)
+
+Clarified mobile/desktop browser versus telephone-call tool guidance and trusted
+runtime channel instructions. Guidance now requires backend estimate staging
+before inviting confirmation, with no authority from historical agreement.
+No parser, phone permission or confirmation-lifecycle change; #1281/#1282 owns
+the shared lifecycle refactor.
+
+Focused synthetic HTTP discovery/lookup/staging/steering and English/Danish
+WebSocket direct/discovery tests return committed receipts once. Hosted-agent
+Ruff, byte-compilation and all 925 tests passed locally. Broader exact-tree
+qualification and security review are next; real-SQL, live-provider and physical
+mobile-device acceptance remain separate and unverified. No production food writes.
+
 ## Natural food-estimate confirmation (#1277)
 
 Implemented estimate-only natural reply binding through the shared one-time

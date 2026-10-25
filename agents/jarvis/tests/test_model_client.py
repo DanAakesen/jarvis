@@ -24,6 +24,7 @@ from jarvis_tools import (
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
+    current_phone_session_id,
     current_steering_fetcher,
 )
 from model_client import (
@@ -1635,6 +1636,41 @@ async def test_chat_reuses_container_catalogue_but_refreshes_live_settings_and_c
         assert paths.count("/agent/settings") == 2
         assert not any(path.startswith("/tools/memory") for path in paths)
     finally:
+        await model.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("earlier_refusal", [False, True])
+@pytest.mark.parametrize("channel", ["chat", "voice", "phone"])
+async def test_trusted_channel_does_not_infer_telephone_from_mobile_history(
+    earlier_refusal: bool, channel: str,
+) -> None:
+    backend = FakeBackend(catalogue=[{
+        "name": "daily_food_review",
+        "description": "Browser chat/browser voice on mobile are not telephone calls.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }])
+    model, transport = client([completed()], backend=backend)
+    token = current_phone_session_id.set("41" if channel == "phone" else None)
+    messages = (
+        [ModelMessage("assistant", "Food logging is unavailable in a phone session.")]
+        if earlier_refusal else []
+    ) + [ModelMessage("user", "Estimate a synthetic food portion in my mobile browser.")]
+    try:
+        response = model.complete_chat(messages, "en") if channel == "chat" else model.complete(
+            messages
+        )
+        _ = [chunk async for chunk in response]
+        request = transport.responses.request
+        expected = {"chat": "browser chat", "voice": "browser voice", "phone": "telephone call"}
+        assert f"Trusted runtime channel: {expected[channel]}." in request["instructions"]
+        assert "not device wording or earlier refusals" in request["instructions"]
+        assert "prose or lookup alone creates no pending proposal" in request["instructions"]
+        assert "committed tool receipt" in request["instructions"]
+        assert any(tool["name"] == "daily_food_review" for tool in request["tools"])
+        assert any(request.url.path == "/tools" for request in backend.requests)
+    finally:
+        current_phone_session_id.reset(token)
         await model.close()
 
 

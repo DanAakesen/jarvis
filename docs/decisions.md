@@ -10,6 +10,22 @@ and 10-second request timeout. Synthetic regression tests cover the reported
 size with and without a content-length header, acceptance at the cap, and
 rejection/cancellation above it. A lookup error is not a failed deployment.
 
+## Mobile browser food logging is not telephone-call logging (25 October 2026; #1290)
+
+Clarify food tool guidance and trusted runtime instructions, not permissions:
+mobile/desktop browser chat and browser voice are supported; actual telephone
+calls remain denied. Current runtime context overrides device wording and earlier
+refusals, without granting approval. Require the actual `log_estimate` tool call
+before inviting confirmation; a prose estimate or lookup creates no proposal.
+With no pending proposal, obtain a new confirmation after staging, never reuse
+historical affirmative text. Preserve the current shared one-time approval service
+and leave its lifecycle refactor to #1281/#1282.
+
+Synthetic HTTP and English/Danish WebSocket tests exercise discovery, staging,
+natural confirmation and committed receipts with isolated in-memory storage.
+They do not establish live-provider, real-SQL or physical-device acceptance.
+The hosted tool catalogue has a 60-second TTL; no browser-cache cause was established.
+
 ## Natural food-estimate confirmation reuses one-time browser approval (25 October 2026; #1277)
 
 Only pending `log_estimate` reviews accept the owner's next later reply in the

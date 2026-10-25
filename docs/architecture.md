@@ -6486,6 +6486,15 @@ Both internal food tools declare `denyOnPhone`. The existing phone dispatcher
 checks this after active-session validation and before generic confirmation or
 execution; denial wins over the public-phone flag. Other tools retain their
 existing public/approval behaviour. Food's own session checks remain in place.
+Model-facing food descriptions distinguish mobile/desktop browser chat and
+browser voice from telephone calls. Hosted completion instructions identify the
+runtime channel using the server's phone-session context, including image turns;
+browser realtime session instructions identify browser voice in full and compact
+modes. Device wording and historical refusals do not determine channel or permission.
+Guidance requires `log_estimate` staging before asking for confirmation; lookup
+and prose alone are not proposals. This repair leaves the existing approval
+service and persisted one-time consumption unchanged for compatibility with
+the shared lifecycle work in #1281/#1282.
 
 An additive fifth `createDailyModules` argument independently composes sensitive
 `daily_saved_food` from the same canonical nutrition factory. Existing fourth
