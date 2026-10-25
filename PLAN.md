@@ -5,14 +5,16 @@
 - Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
   use Workspaces names; legacy Folio clients and data retain explicit
   compatibility aliases and reversible migration 0067.
-- Focused backend tests pass (243), contract tests pass (174), focused web tests,
-  backend/web builds and lint pass. Actual-App Chromium inspection with
+- Current-main reconciliation is in merge commit `3407e23`, based on
+  `5231117e`; it retains the Workspaces and shared-confirmation plan updates.
+- The latest focused backend checks (95 tests), backend lint/build, and web
+  timestamp style test (78 tests) pass. Actual-App Chromium inspection with
   synthetic data confirmed the Workspaces pane and a long chat timestamp 8 px
   below its message at 390×844; at 1440×900 timestamps remain absolutely
-  positioned and there is no horizontal overflow.
-- SQL Server integration could not start because this environment lacks the
-  isolated loopback database configuration. Next: run the exact-head database
-  integration and normal CI/security gates.
+  positioned with no horizontal overflow.
+- The SQL Server integration command was attempted locally but cannot start
+  without the isolated loopback database configuration. Exact-head SQL Server
+  CI and normal CI/security qualification remain pending publication.
 
 ## Shared confirmation lifecycle (#1281; 25 October 2026)
 

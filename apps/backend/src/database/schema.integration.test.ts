@@ -247,21 +247,69 @@ describe('committed domain schema (groups 1-8)', () => {
         .input('resultId', sql.NVarChar(80), legacyUpdate)
         .query('UPDATE dbo.background_jobs SET result_folio_id = @resultId WHERE job_id = @jobId;');
       let synchronized = await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
-        .query<{ result_workspace_item_id: string; result_folio_id: string }>(
-          'SELECT result_workspace_item_id, result_folio_id FROM dbo.background_jobs WHERE job_id = @jobId;');
+        .query<{ result_workspace_item_id: string | null; result_folio_id: string | null; result_delivery_status: string | null }>(
+          'SELECT result_workspace_item_id, result_folio_id, result_delivery_status FROM dbo.background_jobs WHERE job_id = @jobId;');
       expect(synchronized.recordset[0]).toEqual({
-        result_workspace_item_id: legacyUpdate, result_folio_id: legacyUpdate,
+        result_workspace_item_id: legacyUpdate, result_folio_id: legacyUpdate, result_delivery_status: 'pending',
       });
       await rollbackPool.request()
         .input('jobId', sql.NVarChar(36), jobId)
         .input('resultId', sql.NVarChar(80), canonicalUpdate)
         .query('UPDATE dbo.background_jobs SET result_workspace_item_id = @resultId WHERE job_id = @jobId;');
       synchronized = await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
-        .query<{ result_workspace_item_id: string; result_folio_id: string }>(
-          'SELECT result_workspace_item_id, result_folio_id FROM dbo.background_jobs WHERE job_id = @jobId;');
+        .query<{ result_workspace_item_id: string | null; result_folio_id: string | null; result_delivery_status: string | null }>(
+          'SELECT result_workspace_item_id, result_folio_id, result_delivery_status FROM dbo.background_jobs WHERE job_id = @jobId;');
       expect(synchronized.recordset[0]).toEqual({
-        result_workspace_item_id: canonicalUpdate, result_folio_id: canonicalUpdate,
+        result_workspace_item_id: canonicalUpdate, result_folio_id: canonicalUpdate, result_delivery_status: 'pending',
       });
+
+      await rollbackPool.request()
+        .input('jobId', sql.NVarChar(36), jobId)
+        .input('resultId', sql.NVarChar(80), canonicalUpdate)
+        .query(`UPDATE dbo.background_jobs
+          SET result_workspace_item_id = NULL, result_folio_id = @resultId
+          WHERE job_id = @jobId;`);
+      synchronized = await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
+        .query<{ result_workspace_item_id: string | null; result_folio_id: string | null; result_delivery_status: string | null }>(
+          'SELECT result_workspace_item_id, result_folio_id, result_delivery_status FROM dbo.background_jobs WHERE job_id = @jobId;');
+      expect(synchronized.recordset[0]).toEqual({
+        result_workspace_item_id: canonicalUpdate, result_folio_id: canonicalUpdate, result_delivery_status: 'pending',
+      });
+
+      await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
+        .query(`UPDATE dbo.background_jobs
+          SET result_folio_id = NULL, result_delivery_status = NULL
+          WHERE job_id = @jobId;`);
+      synchronized = await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
+        .query<{ result_workspace_item_id: string | null; result_folio_id: string | null; result_delivery_status: string | null }>(
+          'SELECT result_workspace_item_id, result_folio_id, result_delivery_status FROM dbo.background_jobs WHERE job_id = @jobId;');
+      expect(synchronized.recordset[0]).toEqual({
+        result_workspace_item_id: null, result_folio_id: null, result_delivery_status: null,
+      });
+
+      await rollbackPool.request()
+        .input('jobId', sql.NVarChar(36), jobId)
+        .input('resultId', sql.NVarChar(80), legacyUpdate)
+        .query(`UPDATE dbo.background_jobs
+          SET result_folio_id = @resultId, result_delivery_status = N'pending'
+          WHERE job_id = @jobId;`);
+      await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
+        .query(`UPDATE dbo.background_jobs
+          SET result_workspace_item_id = NULL, result_delivery_status = NULL
+          WHERE job_id = @jobId;`);
+      synchronized = await rollbackPool.request().input('jobId', sql.NVarChar(36), jobId)
+        .query<{ result_workspace_item_id: string | null; result_folio_id: string | null; result_delivery_status: string | null }>(
+          'SELECT result_workspace_item_id, result_folio_id, result_delivery_status FROM dbo.background_jobs WHERE job_id = @jobId;');
+      expect(synchronized.recordset[0]).toEqual({
+        result_workspace_item_id: null, result_folio_id: null, result_delivery_status: null,
+      });
+
+      await rollbackPool.request()
+        .input('jobId', sql.NVarChar(36), jobId)
+        .input('resultId', sql.NVarChar(80), canonicalUpdate)
+        .query(`UPDATE dbo.background_jobs
+          SET result_folio_id = @resultId, result_delivery_status = N'pending'
+          WHERE job_id = @jobId;`);
 
       await expect(revertMigration(rollbackPool, committed, down)).resolves.toBe(migration.name);
       const restored = await rollbackPool.request().input('itemId', sql.NVarChar(80), itemId)

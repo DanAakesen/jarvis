@@ -17,6 +17,7 @@ import type { BackendModule } from './modules.js';
 import { createVoiceRelayModule } from './voice/relay.js';
 import { VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL } from './voice/realtime.js';
 import { createGoogleModule } from './google/tools.js';
+import { createWorkspacesModule } from './core/workspaces.js';
 import type sql from 'mssql';
 import { composeDaily } from './daily/composition.js';
 import type { ConversationStore } from './core/conversation-store.js';
@@ -41,6 +42,7 @@ const additionalTools: BackendModule = {
     ...createBrowserAgentModule(browserAgent).tools,
     ...createVaultModule({} as never).tools,
     ...createHtmlResearchModule(() => ({} as never), 'gpt-5.5', {} as never).tools,
+    ...createWorkspacesModule({} as never, {} as never).tools,
     ...createGoogleModule({
       request: async () => { throw new Error('Parity fixtures must not call Google'); },
     }, { timeZone: 'Europe/Copenhagen' }).tools,

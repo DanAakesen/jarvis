@@ -99,4 +99,8 @@ saved reports and Folio entries remain untouched.
 `0067_workspaces_identifiers.sql` renames the saved-item table to
 `dbo.workspace_items` and adds `result_workspace_item_id`. A `dbo.folio_items`
 synonym and synchronization trigger preserve existing SQL callers; the down
-batch restores the old table/column names without deleting saved items.
+batch restores the old table/column names without deleting saved items. Updating
+one result column mirrors it to the other. Writing NULL to only one result alias
+clears both aliases and the delivery status; when both columns are written with
+one NULL and a valid delivery status, the trigger synchronizes from the non-NULL
+value.

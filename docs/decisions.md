@@ -8487,7 +8487,9 @@ API, `workspaces_*` tools, and `dbo.workspace_items`/
 with legacy navigation/snapshot values, route/tool aliases, exported contract
 aliases, a `dbo.folio_items` synonym, and synchronized old/new job-result
 columns. Migration 0067 renames the table and backfills the new column without
-deleting saved items; its down migration restores the old identifiers. Access
-controls and source-artifact retention do not change. The separate chat-time
-layout remains below message text on mobile widths up to 700px and retains its
-desktop position.
+deleting saved items; its down migration restores the old identifiers. Writing
+NULL to only one result alias clears both aliases and delivery status; a mixed
+write with one NULL alias and a valid delivery status synchronizes both from the
+non-NULL identifier. Access controls and source-artifact retention do not change.
+The separate chat-time layout remains below message text on mobile widths up to
+700px and retains its desktop position.
