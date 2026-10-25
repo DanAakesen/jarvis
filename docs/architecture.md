@@ -11,16 +11,25 @@ adding a planning request or display delay.
 Hosted chat relays the boundary as a distinct SSE event. The backend checks that
 it matches the streamed prefix, forwards it to the live conversation UI, and
 persists only the final answer. The UI does not replay the transient segment from
-history. Hosted voice closes the first text output item before continuing and
-persists/speaks the separate final item. Realtime voice uses the same English and
-Danish first-person intent guidance; tool execution waits for the matching
-response terminal event to be accepted by the browser WebSocket send callback.
-Cancellation or failed delivery does not authorize queued tool execution. This is
-transport acceptance, not proof that a physical speaker played the audio.
+history. Hosted voice sends the acknowledgment `ResponseOutputTextDone` item
+through the AgentServer session before resuming the same model stream. That is an
+ordered transport send, not a provider/client receipt or proof that speech was
+played; this transport exposes no playback-completion contract.
+
+Realtime voice uses the same English and Danish acknowledgment intent guidance
+with a transport-specific adapter. It tracks the first response for each voice
+turn. A tool call in that response waits for terminal-event browser-send acceptance;
+when that response contains audio, it also waits for the response-ID-matched browser
+playback receipt. A tool-only first response and later silent tool rounds need no
+playback receipt. A failed initial playback confirmation does not execute the
+action and returns an error tool result for an honest continuation. Cancellation
+or failed terminal delivery does not authorize queued tool execution. Browser
+playback completion is not proof of physical-speaker output.
 
 Synthetic fixtures verify the ordering `streamed intent → boundary → tool work →
-final result` and direct turns without a boundary. No live model latency or
-physical-device playback was measured.
+final result`, first-response playback gating, later silent tool rounds, and direct
+turns without a boundary. No live model latency or physical-device playback was
+measured.
 
 ## Vault mirror status consumption (19 October 2026; P14-29)
 

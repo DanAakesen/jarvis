@@ -4,11 +4,13 @@
 
 Reuses the active model stream to deliver one contextual first-person
 acknowledgment before tool work; direct answers stay immediate. Chat keeps the
-acknowledgment as a transient segment, hosted voice separates its spoken text item,
-and realtime voice gates tools on terminal-event delivery. Synthetic ordering
-fixtures cover English/Danish guidance, final-answer separation and failure paths.
-The selected approach adds no model request or artificial delay; fixture order is
-verified, while live model timing and physical audio acceptance remain unmeasured.
+acknowledgment as a transient segment, hosted voice emits a separate text item
+before resuming the model stream (without a provider playback receipt), and
+realtime voice gates only an audio-bearing initial turn response. Tool-only first
+responses and subsequent silent tool rounds require terminal-event delivery but
+not playback receipts. Synthetic fixtures cover ordering, failed playback,
+cancellation, stale receipts and silent rounds. The approach adds no model request
+or artificial delay; live timing and physical audio acceptance remain unmeasured.
 Next: final-head aggregate CI and owner-run live/device acceptance. No merge or
 deployment is authorized.
 

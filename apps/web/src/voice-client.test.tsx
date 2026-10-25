@@ -547,11 +547,13 @@ describe('BrowserVoiceClient', () => {
 
   it('reports a response without audio as not audibly delivered', async () => {
     const audio = audioAdapter();
+    const statuses: string[] = [];
     let socket: MockSocket | undefined;
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
       language: 'da',
+      onStatus: (status) => statuses.push(status),
       createAudio: () => audio,
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -561,7 +563,7 @@ describe('BrowserVoiceClient', () => {
     clients.push(client);
 
     client.start();
-    await until(() => client.state === 'ready');
+    await until(() => statuses.includes('listening'));
     socket?.receive({ type: 'response.created', response: { id: 'silent-response' } });
     socket?.receive({ type: 'response.done', response: { id: 'silent-response' } });
 

@@ -76,25 +76,30 @@ const CAMERA_UNAVAILABLE_REASONS = new Set([
 interface ResponseCompletion {
   readonly promise: Promise<boolean>;
   readonly resolve: (completed: boolean) => void;
+  readonly initialTurnResponse: boolean;
   responseId?: string;
   terminalDelivered?: boolean;
+  playbackRequired?: boolean;
   playbackCompleted?: boolean;
 }
 
 const RESPONSE_PLAYBACK_TIMEOUT_MS = 30_000;
 
-function responseCompletion(): ResponseCompletion {
+function responseCompletion(initialTurnResponse: boolean): ResponseCompletion {
   let resolve!: (completed: boolean) => void;
   const promise = new Promise<boolean>((done) => { resolve = done; });
-  return { promise, resolve };
+  return { promise, resolve, initialTurnResponse };
 }
 
 function settleResponseCompletion(completion: ResponseCompletion): boolean {
-  if (completion.terminalDelivered === false || completion.playbackCompleted === false) {
+  if (completion.terminalDelivered === false ||
+      completion.terminalDelivered === true &&
+        completion.playbackRequired && completion.playbackCompleted === false) {
     completion.resolve(false);
     return true;
   }
-  if (completion.terminalDelivered === true && completion.playbackCompleted === true) {
+  if (completion.terminalDelivered === true &&
+      (!completion.playbackRequired || completion.playbackCompleted === true)) {
     completion.resolve(true);
     return true;
   }
@@ -453,6 +458,7 @@ function registerVoiceRoute(
     let toolCallsInResponse = false;
     let responseDone = false;
     let responseCompletionState: ResponseCompletion | undefined;
+    let initialTurnResponsePending = false;
     let presence: AwayModeState = defaultAwayModeState;
     let awayMode = false;
     let projects: ProjectContextEntry[] = [];
@@ -1613,7 +1619,8 @@ function registerVoiceRoute(
       responseCreateActive = true;
       assistantResponding = true;
       responseDone = false;
-      responseCompletionState = responseCompletion();
+      responseCompletionState = responseCompletion(initialTurnResponsePending);
+      initialTurnResponsePending = false;
       responseImageUsageItem = pendingImageUsageItem;
       pendingImageUsageItem = undefined;
       const response = next.response as Record<string, unknown> | undefined;
@@ -1899,6 +1906,20 @@ function registerVoiceRoute(
           return;
         }
         if (!completion || !await waitForResponseCompletion(completion, controller.signal)) {
+          if (!controller.signal.aborted && completion?.initialTurnResponse &&
+              completion.playbackRequired && completion.terminalDelivered === true) {
+            sendToolOutput({
+              type: 'conversation.item.create',
+              item: {
+                type: 'function_call_output',
+                call_id: call.call_id,
+                output: JSON.stringify({
+                  outcome: 'error',
+                  error: 'The initial spoken response was not confirmed; the action was not run.',
+                }),
+              },
+            });
+          }
           if (completion && responseCompletionState === completion) {
             responseCompletionState = undefined;
           }
@@ -2031,7 +2052,7 @@ function registerVoiceRoute(
         }
         const completion = responseCompletionState;
         if (!completion || completion.responseId !== event.responseId) return;
-        completion.playbackCompleted = event.audible;
+        if (completion.playbackRequired) completion.playbackCompleted = event.audible;
         if (settleResponseCompletion(completion) && responseCompletionState === completion) {
           responseCompletionState = undefined;
         }
@@ -2498,6 +2519,7 @@ function registerVoiceRoute(
               receiveTranscriptionDelta(event);
             }
             if (event?.type === 'input_audio_buffer.speech_started') {
+              initialTurnResponsePending = false;
               clearCameraImage();
               pendingImageUsageItem = undefined;
               cameraGeneration += 1;
@@ -2522,6 +2544,7 @@ function registerVoiceRoute(
               partialSpeechStopped = false;
             }
             if (event?.type === 'input_audio_buffer.speech_stopped') {
+              initialTurnResponsePending = true;
               finishTurnTiming();
               userSpeaking = false;
               speechStoppedAt = performance.now();
@@ -2554,12 +2577,20 @@ function registerVoiceRoute(
               speechToFirstAudioMs = performance.now() - speechStoppedAt;
             }
             if ((event?.type === 'response.audio.delta' || event?.type === 'response.output_audio.delta') &&
-                typeof event.delta === 'string' && event.delta && turnTiming?.firstAudioDeltaMs === null) {
-              turnTiming.firstAudioDeltaMs = elapsedSinceSpeechStopped() ?? null;
+                typeof event.delta === 'string' && event.delta) {
+              if (responseCompletionState?.initialTurnResponse) {
+                responseCompletionState.playbackRequired = true;
+              }
+              if (turnTiming?.firstAudioDeltaMs === null) {
+                turnTiming.firstAudioDeltaMs = elapsedSinceSpeechStopped() ?? null;
+              }
             }
             if (event?.type === 'response.created') {
               const response = event.response as { id?: unknown } | undefined;
-              if (!responseCompletionState) responseCompletionState = responseCompletion();
+              if (!responseCompletionState) {
+                responseCompletionState = responseCompletion(initialTurnResponsePending);
+                initialTurnResponsePending = false;
+              }
               if (typeof response?.id === 'string' &&
                   response.id.length <= 128) {
                 responseCompletionState.responseId = response.id;
@@ -2673,6 +2704,7 @@ function registerVoiceRoute(
             } else if (!english && event?.type === 'user.message' &&
                 typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
                 Array.isArray(event.content)) {
+              initialTurnResponsePending = true;
               const text = event.content.flatMap((part) =>
                 part !== null && typeof part === 'object' && !Array.isArray(part) &&
                 (part as Record<string, unknown>).type === 'input_text' &&

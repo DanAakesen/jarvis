@@ -250,7 +250,7 @@ def test_streams_model_output_and_commits_history() -> None:
 
 
 @pytest.mark.asyncio
-async def test_voice_finishes_acknowledgment_segment_before_tool_work_and_final_speech() -> None:
+async def test_voice_emits_acknowledgment_text_done_before_tool_work_and_final_speech() -> None:
     acknowledgment = "I'll check your saved targets."
     order: list[str] = []
 

@@ -10,14 +10,23 @@
   reasoning. Do not claim a check or action has already succeeded, invent an ETA,
   repeat it in the final answer/history, or narrate later tool calls.
 - Reuse the existing streamed text and add a typed boundary at the first tool
-  handoff. Chat shows the boundary as a distinct transient segment; hosted voice
-  finishes it as a separate text item. Realtime tools wait until the matching
-  terminal event has been accepted by the browser WebSocket. Cancellation,
-  approvals, authorization and idempotency remain unchanged.
+  handoff. The same model-stream lifecycle serves hosted chat and hosted voice;
+  their adapters respectively emit a transient SSE segment and a separate
+  `ResponseOutputTextDone` item. The AgentServer transport send orders model
+  continuation but has no client/provider speech receipt, so it does not prove
+  the user heard the item before tool work.
+- Realtime voice uses the same bilingual intent policy through its provider
+  adapter. Only the first response of a turn gates tool work on playback, and
+  only when it contains audio; tool-only first responses and later silent tool
+  rounds proceed after terminal-event browser-send acceptance. A failed playback
+  receipt skips the tool and passes an error result to the continuation; terminal
+  delivery failure/cancellation remains fail-closed. Browser playback receipts
+  do not prove physical-speaker output.
 - Fixture ordering confirms streamed intent before tool work and final result after
-  it; direct turns have no boundary. No live latency or physical audio playback is
-  claimed. Owner acceptance remains separate; this task authorizes no merge or
-  deployment.
+  it; direct turns have no boundary. Relay fixtures cover the initial spoken
+  response, first tool-only response and multiple silent rounds without blanket
+  audio receipts. No live latency or physical audio playback is claimed. Owner
+  acceptance remains separate; this task authorizes no merge or deployment.
 
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
