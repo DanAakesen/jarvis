@@ -130,6 +130,32 @@ a confirmed conflict. Unknown outcomes instruct a reread rather than a blind
 retry. Synthetic checks cover these boundaries; physical iOS/Obsidian sync and
 live speech acceptance remain separate owner checks.
 
+## Pace live chat acceptance and retry only rate limits (#1232; 25 October 2026)
+
+- **Decision.** Keep capacity at 150. Pace only acceptance hosted calls at eight
+  seconds between starts with at most three active calls, including approval
+  follow-ups and retries. Normal chat and retained Status reads are unchanged.
+- **Recovery.** Retry a check once only for `rate_limit_exceeded`. Wait a full
+  minute after rejection without a hint; use SSE `retry_after` seconds or HTTP
+  `Retry-After` when present, bounded to 30–60 seconds. Retry through the same
+  queue; the second result is final. Other failures never retry.
+- **Evidence.** The 25 October release failed both attempts at capacity 150,
+  with four throttled spans each. Thirteen agent calls started in about 2.6
+  seconds, and retries within the same minute were rejected again despite only
+  about 66K input tokens against a 150K/minute limit. This supersedes the earlier
+  wait-and-watch choice below; it does not authorize another capacity increase.
+- **Reporting and bounds.** Allow `rate_limit_exceeded` in smoke, aggregate
+  canary, log and artifact reasons without retaining provider messages or private
+  values. Eight hosted calls / roughly 15 model calls span at least 56 seconds;
+  expect 60–90 seconds normally. Use a 240-second suite deadline, 25 seconds per
+  active call and a 250-second deploy HTTP timeout within the existing five-minute
+  job. Keep the 60-second result cache.
+- **Verification.** Fake-timer tests cover spacing, concurrency, retry bounds,
+  non-retry failures and named second throttles. Production acceptance remains
+  unverified until two consecutive releases pass on their first attempt with
+  zero `rate_limit_exceeded` spans checked after each deployment. This change
+  does not deploy, merge or close the issue.
+
 ## Chat model rate limit raised for live acceptance (#1232; 23 October 2026)
 
 Decided as a reversible rate-limit change that follows the 5 October capacity

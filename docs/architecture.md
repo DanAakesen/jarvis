@@ -3083,8 +3083,14 @@ names, schemas, descriptions and serialized size, and builds the same
 `/agent/settings` payload used by the route, then verifies the shape accepted by
 the agent. It imposes no catalogue-count ceiling. The cached
 `chat_canary` suite uses the backend's agent identity and runs seven fixed
-acceptance prompts under the existing `smoke` usage role. It has one 55-second
-suite deadline, a 25-second per-prompt deadline and a 60-second result cache.
+acceptance prompts under the existing `smoke` usage role. Its acceptance-only
+queue admits at most three active hosted calls and spaces starts at least eight
+seconds apart, including the approval follow-up and retries. Eight hosted calls
+(roughly 15 model calls) span at least 56 seconds; expect 60–90 seconds normally.
+It has one 240-second suite deadline, a 25-second deadline per active hosted
+call (queue time excluded), and a 60-second result cache. Deploy allows 250
+seconds for the request inside the unchanged five-minute acceptance job.
+Normal chat and retained Status reads do not use the queue.
 Smoke requests omit user history and running-task context, do not persist
 conversation messages or tool-call audits, and limit each model invocation to
 two rounds, one tool call and 256 output tokens. The agent receives only
@@ -3132,13 +3138,17 @@ keeps its cause in-process only. A hosted error event without a safe code or wit
 an unlisted code reports `agent_error_code_missing` or `agent_error_code_unlisted`;
 any other unexpected exception remains `agent_error`. These
 `chatAgentInvocationReasons` are mirrored by the Python formatter with a parity
-test, and cancellation is never relabelled. The canary re-runs a conversation
-check once when its first attempt threw one of these failures. Assertion failures
-and timeouts are never retried. The retry starts only if the first wave finished
-within 25 seconds of the suite start, runs concurrently in a 25-second window
-inside the unchanged 55-second suite deadline, and replaces the first result only
-when it passes. Smoke prompts are read-only or no-op, so repeating them has no
-side effects; a rescued first failure is not recorded in the report.
+test, and cancellation is never relabelled by the invocation client.
+`rate_limit_exceeded` is explicitly allowed in hosted, canary, smoke-log and
+artifact reasons. Only that failure retries its check once: wait 60 seconds
+after rejection by default, or use a numeric SSE `retry_after` (seconds) /
+HTTP `Retry-After` hint clamped to 30–60 seconds, then re-enter the same queue.
+The second result is final; a second throttle names `rate_limit_exceeded` on
+both the check and aggregate canary. Other errors, assertion failures and
+timeouts never retry. Smoke prompts are read-only or no-op, so repeating them
+has no side effects; a rescued throttle is not recorded in the report.
+Capacity remains unchanged. Two consecutive production releases with first-attempt
+acceptance and zero throttled spans remain required live verification.
 Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
 non-mutating HTTP projection that omits non-down reasons. This preserves the
 legacy validator in already-open clients during parallel web/backend deploys.

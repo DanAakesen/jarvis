@@ -6,13 +6,21 @@ import { isSystemSmokeStatus, systemSmokeCheckIds } from '@jarvis/contracts';
 
 const smokeCheckedAt = '2026-10-14T01:03:29.169Z';
 
-function runChatSmoke(agent: ConversationAgent | undefined) {
+async function runChatSmoke(agent: ConversationAgent | undefined) {
   const now = () => Date.parse(smokeCheckedAt);
-  return createSystemSmokeReader(
+  const ownsTimers = !vi.isFakeTimers();
+  if (ownsTimers) vi.useFakeTimers();
+  const report = createSystemSmokeReader(
     createSystemStatusReader({}, undefined, now),
     createChatAcceptanceProbes(agent, now),
     now,
   ).run();
+  try {
+    if (ownsTimers) await vi.runAllTimersAsync();
+    return await report;
+  } finally {
+    if (ownsTimers) vi.useRealTimers();
+  }
 }
 
 function expectSmokeFailures(
@@ -147,7 +155,7 @@ describe('system status reader', () => {
       const report = await runChatSmoke(agent);
 
       expectSmokeFailures(report, {
-        chat_canary: ['down', 'acceptance_check_failed'],
+        chat_canary: ['down', code === 'rate_limit_exceeded' ? code : 'acceptance_check_failed'],
         chat_identity: ['degraded', reason],
         chat_capabilities: ['down', reason],
         chat_github_read: ['down', reason],
@@ -180,7 +188,7 @@ describe('system status reader', () => {
         },
       };
       const reportPromise = runChatSmoke(stalled);
-      await vi.advanceTimersByTimeAsync(25_000);
+      await vi.runAllTimersAsync();
       const report = await reportPromise;
 
       expectSmokeFailures(report, {

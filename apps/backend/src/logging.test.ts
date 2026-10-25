@@ -226,6 +226,9 @@ describe('structured log export', () => {
     ['chat_capabilities', 'down', 'capabilities_receipt_incomplete'],
     ['chat_capabilities', 'down', 'capabilities_reply_incomplete'],
     ['chat_canary', 'down', 'acceptance_check_failed'],
+    ...['chat_canary', 'chat_identity', 'chat_capabilities', 'chat_github_read', 'chat_jobs',
+      'chat_navigation', 'chat_no_timestamp', 'chat_plain_approval']
+      .map((id) => [id, 'down', 'rate_limit_exceeded']),
     ['chat_jobs', 'down', 'jobs_unavailable'],
     ['chat_navigation', 'down', 'navigation_refusal_missing'],
     ['chat_plain_approval', 'down', 'plain_approval_failed'],
