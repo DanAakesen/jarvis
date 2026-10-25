@@ -38,25 +38,37 @@ export function ComposerAttachments({
       {items.length > 0 && (
         <ul className="attachment-chips" aria-label="Files to send">
           {items.map((item) => (
-            <li key={item.key} className="attachment-chip" data-status={item.status}>
+            <li key={item.key} className={`attachment-chip${isImageAttachment(item.contentType) ? ' attachment-chip--image' : ''}`} data-status={item.status}>
               {item.previewUrl
                 ? <img className="attachment-thumb" src={item.previewUrl} alt="" />
                 : <span className="attachment-thumb"><FileGlyph image={isImageAttachment(item.contentType)} /></span>}
-              <span className="attachment-text">
-                <span className="attachment-name" title={item.name}>{item.name}</span>
-                <span className="attachment-meta">
-                  {typeLabel(item.contentType)} · {formatBytes(item.size)}
-                  {item.status === 'uploading' && ` · Uploading ${Math.round(item.progress * 100)}%`}
-                  {item.status === 'ready' && !item.unreadable && ' · Ready'}
+              {isImageAttachment(item.contentType) ? (
+                <>
+                  {item.status === 'uploading' && (
+                    <progress className="attachment-progress" max={1} value={item.progress} aria-label={`Uploading ${item.name}`} />
+                  )}
+                  {item.status === 'ready' && item.unreadable && (
+                    <span className="attachment-note">Jarvis couldn’t read this file. It can still be sent, but Jarvis won’t see its contents.</span>
+                  )}
+                  {item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
+                </>
+              ) : (
+                <span className="attachment-text">
+                  <span className="attachment-name" title={item.name}>{item.name}</span>
+                  <span className="attachment-meta">
+                    {typeLabel(item.contentType)} · {formatBytes(item.size)}
+                    {item.status === 'uploading' && ` · Uploading ${Math.round(item.progress * 100)}%`}
+                    {item.status === 'ready' && !item.unreadable && ' · Ready'}
+                  </span>
+                  {item.status === 'uploading' && (
+                    <progress className="attachment-progress" max={1} value={item.progress} aria-label={`Uploading ${item.name}`} />
+                  )}
+                  {item.status === 'ready' && item.unreadable && (
+                    <span className="attachment-note">Jarvis couldn’t read this file. It can still be sent, but Jarvis won’t see its contents.</span>
+                  )}
+                  {item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
                 </span>
-                {item.status === 'uploading' && (
-                  <progress className="attachment-progress" max={1} value={item.progress} aria-label={`Uploading ${item.name}`} />
-                )}
-                {item.status === 'ready' && item.unreadable && (
-                  <span className="attachment-note">Jarvis couldn’t read this file. It can still be sent, but Jarvis won’t see its contents.</span>
-                )}
-                {item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
-              </span>
+              )}
               <button className="attachment-remove" type="button" aria-label={`Remove ${item.name}`} title="Remove"
                 onClick={() => onRemove(item.key)}>
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">

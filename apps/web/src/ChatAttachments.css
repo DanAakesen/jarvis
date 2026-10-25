@@ -2,8 +2,10 @@
 .composer-attachments:not(:has(.attachment-chips, .attachment-hint, .chat-error)) { display: contents; }
 .attachment-chips, .message-attachments { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-1) var(--space-1) var(--space-2); padding: 0; list-style: none; }
 .attachment-chip { position: relative; display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-2) var(--space-1) var(--space-2) var(--space-2); border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); }
+.attachment-chip--image { gap: var(--space-1); padding: 0; background: transparent; }
 .attachment-chip[data-status="failed"] { background: var(--error-wash); }
 .attachment-thumb { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--surface-muted); object-fit: cover; color: var(--text-muted); }
+.attachment-chip--image .attachment-thumb { width: 44px; height: 44px; }
 .attachment-thumb svg { width: 20px; height: 20px; }
 .attachment-text { display: flex; flex-direction: column; min-width: 0; max-width: 16rem; font-size: var(--type-small); }
 .attachment-name { overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -11,8 +13,10 @@
 .attachment-note { margin-top: var(--space-1); color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
 .attachment-note[data-error] { color: var(--error); }
 .attachment-progress { width: 100%; height: 4px; margin-top: var(--space-1); border: 0; border-radius: var(--radius-pill); background: var(--surface-muted); accent-color: var(--success); }
+.attachment-chip--image .attachment-progress { position: absolute; bottom: 0; left: 0; width: 44px; height: 3px; margin: 0; }
 .attachment-hint { margin: 0 var(--space-2) var(--space-1); color: var(--text-muted); font-size: var(--type-small); }
 .attachment-remove { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: calc(var(--space-2) * -1) 0; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); cursor: pointer; }
+.attachment-chip--image .attachment-remove { margin: 0; }
 .attachment-remove svg { width: 16px; height: 16px; }
 .attachment-remove:hover { background: var(--glass-hover); color: var(--text); }
 .attachment-remove:focus-visible, .message-attachment-open:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }

@@ -101,12 +101,34 @@ describe('composer attachments', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it('keeps image uploads compact while retaining progress and removal', async () => {
+    let finish!: () => void;
+    uploadAttachment.mockImplementationOnce((_c, _cfg, file: File, options: { onProgress: (n: number) => void }) =>
+      new Promise((resolve) => {
+        options.onProgress(0.4);
+        finish = () => resolve({ id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready' });
+      }));
+    renderConversation();
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
+    const chips = await screen.findByRole('list', { name: 'Files to send' });
+    const chip = chips.querySelector('.attachment-chip');
+    expect(chip?.classList.contains('attachment-chip--image')).toBe(true);
+    expect(within(chips).queryByText('holiday.jpg')).toBeNull();
+    expect(within(chips).getByRole('progressbar', { name: 'Uploading holiday.jpg' })).toBeTruthy();
+    expect(within(chips).getByRole('button', { name: 'Remove holiday.jpg' })).toBeTruthy();
+    finish();
+    await waitFor(() => expect(within(chips).queryByRole('progressbar')).toBeNull());
+    expect(within(chips).queryByText('holiday.jpg')).toBeNull();
+    expect(within(chips).queryByText(/Ready|image\/jpeg/u)).toBeNull();
+  });
+
   it('turns a pasted screenshot into an attachment and keeps pasted text', async () => {
     renderConversation();
     const box = await screen.findByRole('textbox', { name: 'Message Jarvis' });
     const shot = new File([new Uint8Array(4)], 'image.png', { type: 'image/png' });
     fireEvent.paste(box, { clipboardData: { files: [shot], getData: () => '' } });
-    expect(await screen.findByText(/^screenshot-\d{8}-\d{6}\.png$/u)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /^Remove screenshot-\d{8}-\d{6}\.png$/u })).toBeTruthy();
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
     fireEvent.paste(box, { clipboardData: { files: [shot], getData: () => 'plain text' } });
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
