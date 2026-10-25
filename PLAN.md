@@ -5,19 +5,20 @@
 - Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
   use Workspaces names; legacy Folio clients and data retain explicit
   compatibility aliases and reversible migration 0067.
-- Current-main reconciliation is in merge commit `c0aed2f`, based on
-  `2e29a90b`; it retains the Workspaces and shared-confirmation plan updates.
-- Focused backend checks (207 tests), web checks (111 tests), and backend/web
-  lint and builds pass on the merged tree. Actual-App Chromium inspection with
-  synthetic data confirmed the Workspaces pane and a long chat timestamp 8 px
-  below its message at 390×844; at 1440×900 timestamps remain absolutely
-  positioned with no horizontal overflow. Latest main did not change chat history
-  styles.
-- The SQL Server integration command was attempted locally but cannot start
-  without the isolated loopback database configuration. Exact-head CI
-  `40239192479` passed all 13 jobs, including SQL Server integration and
-  backend/web lint-test-build; all four CodeQL analyses passed in
-  `40239192419`.
+- Current-main reconciliation is in two-parent merge `3204eb5`, with
+  `dd929aa19c1f26b862f1bce8fd3dfd4334d697b4` as its second parent.
+- Focused merged-tree checks passed: 312 backend project/Workspaces/tool/
+  capability/migration tests, 155 web chat-history/Workspaces/style tests, and
+  176 agent model-client tests. Backend and web lint and builds also pass.
+- Actual-App Chromium checks used synthetic history at 390×844 and 1440×900.
+  On mobile, the long message ended at y=683.70 and its timestamp began at
+  y=691.70 (8 px separation); metadata was static and document width remained
+  390 px. On desktop, metadata remained absolute and document width remained
+  1440 px. No browser console or page errors were observed.
+- Local SQL Server integration could not start without the isolated loopback
+  database fixture. Exact-merge-head CI `40241143675` passed all 12 required
+  jobs, including SQL Server migration/database contracts; the infrastructure
+  job was skipped. All four CodeQL analyses passed in `40241143507`.
 
 ## Shared confirmation lifecycle (#1281; 25 October 2026)
 
