@@ -55,8 +55,8 @@ function readableKey(key: string): string {
 
 function reason(entry: SystemStatusEntry): string | undefined {
   const details = entry.details;
-  if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
   if (details?.configured === false) return 'This check is not configured.';
+  if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
   if (entry.id.startsWith('foundry.')) {
     if (details?.catalogue === 'fallback') return 'The model catalogue uses fallback configuration; live deployment availability is not verified.';
     if (details?.catalogue === 'live' && details.deploymentAvailable === false) {
@@ -82,16 +82,19 @@ function reason(entry: SystemStatusEntry): string | undefined {
       }
     }
     if (entry.status === 'unknown' && details?.chunks === 0) {
-      return details.syncOutcome === 'pending'
-        ? 'The last successful sync found no content chunks; a newer sync is still running.'
-        : 'The latest sync completed, but the vault index has no content chunks.';
+      if (details.syncOutcome === 'pending') {
+        return 'The last successful sync found no content chunks; a newer sync is still running.';
+      }
+      return details.syncOutcome === 'ok'
+        ? 'The latest recorded sync completed successfully, but the vault index has no content chunks.'
+        : 'The vault index has no content chunks, and this snapshot does not verify a successful sync.';
     }
     if (entry.status === 'degraded' || details?.syncOutcome === 'pending') {
       const reasons = [];
       if (details?.syncOutcome === 'error') reasons.push('The latest vault sync attempt failed.');
       if (details?.syncOutcome === 'pending') reasons.push('A vault sync attempt is still running.');
       if (details?.syncFresh === false) {
-        reasons.push('The last successful sync is over 24 hours old or has a future-dated timestamp.');
+        reasons.push('The last successful sync timestamp does not verify freshness.');
       }
       if (typeof details?.chunks === 'number' && typeof details.embeddedChunks === 'number' &&
           details.embeddedChunks < details.chunks) {

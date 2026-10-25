@@ -123,6 +123,23 @@ describe('Status page', () => {
     expect(within(runner).getByText(/runtime health has not been probed/)).not.toBeNull();
   });
 
+  it('reports the backend-emitted unconfigured runner state instead of claiming it is configured', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'runner'
+      ? {
+        ...entry,
+        status: 'down',
+        details: { configured: false, activeSessions: 0, healthProbe: 'not_run' },
+      }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const runner = await screen.findByRole('listitem', { name: 'Agent runner' });
+    expect(within(runner).getByText('This check is not configured.')).not.toBeNull();
+    expect(within(runner).queryByText(/runner is configured|runtime health has not been probed/)).toBeNull();
+  });
+
   it.each([
     {
       outcome: 'pending',
@@ -143,7 +160,15 @@ describe('Status page', () => {
       latestSyncAttemptAt: '2026-10-24T11:30:00.000Z',
       syncFresh: false,
       embeddingCoveragePercent: 100,
-      message: 'The last successful sync is over 24 hours old or has a future-dated timestamp.',
+      message: 'The last successful sync timestamp does not verify freshness.',
+    },
+    {
+      outcome: 'ok',
+      latestSyncAttemptAt: '2026-10-25T11:30:00.000Z',
+      lastSuccessfulSyncAt: 'invalid-timestamp',
+      syncFresh: false,
+      embeddingCoveragePercent: 100,
+      message: 'The last successful sync timestamp does not verify freshness.',
     },
     {
       outcome: 'ok',
@@ -152,7 +177,9 @@ describe('Status page', () => {
       embeddingCoveragePercent: 50,
       message: 'Embedding coverage is incomplete (1 of 2 chunks embedded).',
     },
-  ])('explains vault index $outcome evidence', async ({ outcome, latestSyncAttemptAt, syncFresh, embeddingCoveragePercent, message }) => {
+  ])('explains vault index $outcome evidence', async ({
+    outcome, latestSyncAttemptAt, lastSuccessfulSyncAt, syncFresh, embeddingCoveragePercent, message,
+  }) => {
     const report = snapshot();
     report.entries = report.entries.map(entry => entry.id === 'vault_index'
       ? {
@@ -164,7 +191,7 @@ describe('Status page', () => {
           embeddingCoveragePercent,
           latestIndexedAt: '2026-10-25T11:00:00.000Z',
           latestSyncAttemptAt,
-          lastSuccessfulSyncAt: outcome === 'pending' ? null : '2026-10-25T11:30:00.000Z',
+          lastSuccessfulSyncAt: lastSuccessfulSyncAt ?? (outcome === 'pending' ? null : '2026-10-25T11:30:00.000Z'),
           syncOutcome: outcome,
           syncFresh,
         },
@@ -201,7 +228,20 @@ describe('Status page', () => {
     const vault = await screen.findByRole('listitem', { name: 'Vault index' });
     expect(within(vault).getByText('Degraded')).not.toBeNull();
     expect(within(vault).getByText(/A vault sync attempt is still running/)).not.toBeNull();
-    expect(within(vault).getByText(/last successful sync is over 24 hours old/)).not.toBeNull();
+    expect(within(vault).getByText(/last successful sync timestamp does not verify freshness/)).not.toBeNull();
+  });
+
+  it('does not claim a legacy empty vault snapshot completed a sync without outcome evidence', async () => {
+    const report = snapshot();
+    report.entries = report.entries.map(entry => entry.id === 'vault_index'
+      ? { ...entry, status: 'unknown', details: { chunks: 0, embeddedChunks: 0 } }
+      : entry);
+    fetchMock.mockResolvedValue(response(report));
+    render(<StatusPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+
+    const vault = await screen.findByRole('listitem', { name: 'Vault index' });
+    expect(within(vault).getByText(/does not verify a successful sync/)).not.toBeNull();
+    expect(within(vault).queryByText(/sync completed successfully/)).toBeNull();
   });
 
   it('labels a healthy index as based on the last success while a newer sync is pending', async () => {
