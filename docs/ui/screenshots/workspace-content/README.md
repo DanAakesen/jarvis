@@ -8,7 +8,7 @@ Synthetic fixture only; no real repository data, signed-in account, or service i
 | [Phone table](workspace-375-table.png) | 375 × 812 | Wide table in its local scroll container |
 | [Phone chart](workspace-390-chart.png) | 390 × 844 | Plotted bars visible initially; long labels wrap and dense data scrolls locally |
 | [Desktop](workspace-1440-desktop.png) | 1440 × 1000 | Workspace at full width |
-| [Narrow desktop window](workspace-520-narrow-desktop.png) | 1440 × 1000 | Workspace element captured at 520 CSS px with the window in frame |
+| [Narrow desktop window](workspace-520-narrow-desktop.png) | 520 × 1000 viewport crop | README window foregrounded and page scroll reset to the top |
 
 ![Workspace README at 320 CSS px](workspace-320-code.png)
 
@@ -18,7 +18,7 @@ Synthetic fixture only; no real repository data, signed-in account, or service i
 
 ![Workspace at desktop width](workspace-1440-desktop.png)
 
-![Workspace window framed within its 520 CSS px container](workspace-520-narrow-desktop.png)
+![README window framed in the 520 CSS px narrow-desktop viewport](workspace-520-narrow-desktop.png)
 
 ## Reproduce the checks
 
@@ -31,7 +31,7 @@ PLAYWRIGHT_CORE_MODULE=/tmp/jarvis-workspace-browser/node_modules/playwright-cor
   node scripts/check-workspace-content-browser.mjs
 ```
 
-The script starts the existing web Vite configuration, uses only synthetic data in `apps/web/browser-tests/workspace-content.fixture.tsx`, asserts no document/body horizontal overflow, and rewrites the screenshots above. It exercises 320 × 700, 375 × 812, 390 × 844, 844 × 390 touch landscape, 160 × 350 CSS px at DPR 2, 1440 × 1000 desktop, a 520px allocated Workspace at desktop width, and resizing the open Workspace through 1024 × 900 and back. At the initial scroll position, it asserts the first three chart data marks are visible at all three phone widths. It checks line wrapping and original-line scrolling, exact selected-code clipboard text, line highlights/search marks, all table/chart values, keyboard focus and local horizontal scrolling, foreground switching, close/reopen, and light/dark mode. The 520px screenshot captures the Workspace element itself so prior page scroll cannot clip the reviewed window.
+The script starts the existing web Vite configuration, uses only synthetic data in `apps/web/browser-tests/workspace-content.fixture.tsx`, asserts no document/body horizontal overflow, and rewrites the screenshots above. It exercises 320 × 700, 375 × 812, 390 × 844, 844 × 390 touch landscape, 160 × 350 CSS px at DPR 2, 1440 × 1000 desktop, a 520px allocated Workspace at desktop width, and resizing the open Workspace through 1024 × 900 and back. At the initial scroll position, it asserts the first three chart data marks are visible at all three phone widths. It checks line wrapping and original-line scrolling, exact selected-code clipboard text, line highlights/search marks, all table/chart values, keyboard focus and local horizontal scrolling, foreground switching, close/reopen, and light/dark mode. The 520px screenshot closes the other desktop windows, resets page scroll to the top, and captures the 520 × 1000 viewport crop after verifying the README window heading is in frame.
 
 ## Limits
 

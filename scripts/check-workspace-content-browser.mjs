@@ -45,7 +45,10 @@ async function capture(page, name, selector) {
   await controls.evaluate((element) => { element.hidden = true; });
   try {
     const path = resolve(screenshotDirectory, name);
-    if (selector) await page.locator(selector).screenshot({ path });
+    if (selector?.clip) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path, clip: selector.clip });
+    } else if (selector) await page.locator(selector).screenshot({ path });
     else await page.screenshot({ path });
   } finally {
     await controls.evaluate((element) => { element.hidden = false; });
@@ -233,12 +236,22 @@ try {
   await page.waitForFunction(() => document.querySelector('.workspace')?.getAttribute('data-phone') === 'false');
   await noPageOverflow(page, '1440x1000 desktop');
   await capture(page, 'workspace-1440-desktop.png');
+  for (const [id, title] of [['table', tableTitle], ['chart', chartTitle]]) {
+    const window = page.locator(`.workspace-window[data-view-id="${id}"]`);
+    await window.getByRole('button', { name: `Close ${title}` }).click();
+    await window.waitFor({ state: 'detached' });
+  }
   await page.getByTestId('constrain-workspace').click();
   await page.waitForFunction(() => document.querySelector('.workspace-browser-fixture-stage')?.clientWidth === 520);
   await foreground(page, 'Synthetic README');
   const narrowWidth = await page.locator('.workspace-window[data-view-id="readme"]').evaluate((element) => element.clientWidth);
   assert(narrowWidth > 0 && narrowWidth < 520, `narrow desktop window should have a constrained content width, got ${narrowWidth}`);
-  await capture(page, 'workspace-520-narrow-desktop.png', '.workspace');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const headingBounds = await page.locator('.workspace-window[data-view-id="readme"] .workspace-window-heading').boundingBox();
+  assert(headingBounds && headingBounds.x >= 0 && headingBounds.x + headingBounds.width <= 520
+    && headingBounds.y >= 0 && headingBounds.y + headingBounds.height <= 1000,
+  `narrow-desktop README heading must be visible at the initial page scroll (${JSON.stringify(headingBounds)})`);
+  await capture(page, 'workspace-520-narrow-desktop.png', { clip: { x: 0, y: 0, width: 520, height: 1000 } });
   await page.getByTestId('expand-workspace').click();
   await page.setViewportSize({ width: 1024, height: 900 });
   await noPageOverflow(page, 'desktop viewport resized after opening windows');

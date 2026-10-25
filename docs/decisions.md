@@ -59,8 +59,9 @@
   resizing open windows through 1024×900. It checks exact selected-code
   clipboard text, wrapping/original lines, highlights/search marks, local
   focusable table/chart scrolling and values, and verifies chart marks are visible
-  at the initial scroll position at each phone width. The 520px capture targets
-  the Workspace element to avoid retained page scroll clipping the window. It also
+  at the initial scroll position at each phone width. The 520px capture closes the
+  other desktop windows, resets page scroll and checks the README window heading
+  inside the viewport crop. It also
   checks page overflow, theme changes, foreground switching and close/reopen.
   Durable captures and the reproduction command are in
   `docs/ui/screenshots/workspace-content/README.md`. Component
