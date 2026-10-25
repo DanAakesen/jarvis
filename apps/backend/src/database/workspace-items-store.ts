@@ -112,10 +112,10 @@ export class WorkspaceItemsStore {
       .input('pinned', sql.Bit, record.pinned ?? false)
       .input('payload', sql.NVarChar(sql.MAX), record.payload ? JSON.stringify(record.payload) : null);
     const { recordset } = await query<WorkspaceItemRow>(request, `IF EXISTS (
-        SELECT 1 FROM dbo.folio_items WHERE item_id = @id AND owner_object_id = @owner
+        SELECT 1 FROM dbo.workspace_items WHERE item_id = @id AND owner_object_id = @owner
       )
       BEGIN
-        UPDATE dbo.folio_items
+        UPDATE dbo.workspace_items
           SET title = @title, prompt_summary = @summary, payload_json = @payload
           OUTPUT inserted.item_id, inserted.kind, inserted.source_id, inserted.title,
             inserted.prompt_summary, inserted.created_at, inserted.pinned, inserted.payload_json
@@ -123,7 +123,7 @@ export class WorkspaceItemsStore {
       END
       ELSE
       BEGIN
-        INSERT dbo.folio_items
+        INSERT dbo.workspace_items
           (item_id, owner_object_id, kind, source_id, title, prompt_summary, created_at, pinned, payload_json)
         OUTPUT inserted.item_id, inserted.kind, inserted.source_id, inserted.title,
           inserted.prompt_summary, inserted.created_at, inserted.pinned, inserted.payload_json
@@ -152,7 +152,7 @@ export class WorkspaceItemsStore {
     const matchTerms = termFilters.length ? termFilters.join(' AND ') : '1 = 1';
     const { recordset } = await query<WorkspaceItemRow>(request, `SELECT TOP (100) item_id, kind, source_id, title,
         prompt_summary, created_at, pinned, payload_json
-      FROM dbo.folio_items AS item
+      FROM dbo.workspace_items AS item
       WHERE owner_object_id = @owner
         AND (@kind IS NULL OR kind = @kind)
         AND (@before IS NULL OR created_at < @before)
@@ -169,7 +169,7 @@ export class WorkspaceItemsStore {
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase());
     const { recordset } = await query<WorkspaceItemRow>(request, `SELECT item_id, kind, source_id, title,
         prompt_summary, created_at, pinned, payload_json
-      FROM dbo.folio_items WHERE item_id = @id AND owner_object_id = @owner;`, signal);
+      FROM dbo.workspace_items WHERE item_id = @id AND owner_object_id = @owner;`, signal);
     const row = recordset[0];
     if (!row || row.kind !== kind) throw new WorkspaceItemNotFound();
     const item = mapItem(row);
@@ -203,7 +203,7 @@ export class WorkspaceItemsStore {
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())
       .input('title', sql.NVarChar(200), patch.title?.trim() ?? null)
       .input('pinned', sql.Bit, patch.pinned ?? null);
-    const { recordset } = await query<WorkspaceItemRow>(request, `UPDATE dbo.folio_items
+    const { recordset } = await query<WorkspaceItemRow>(request, `UPDATE dbo.workspace_items
       SET title = COALESCE(@title, title), pinned = COALESCE(@pinned, pinned)
       OUTPUT inserted.item_id, inserted.kind, inserted.source_id, inserted.title,
         inserted.prompt_summary, inserted.created_at, inserted.pinned, inserted.payload_json
@@ -218,7 +218,7 @@ export class WorkspaceItemsStore {
     const request = this.pool.request()
       .input('id', sql.NVarChar(80), id.toLowerCase())
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase());
-    const { rowsAffected } = await query<{ item_id: string }>(request, `DELETE dbo.folio_items
+    const { rowsAffected } = await query<{ item_id: string }>(request, `DELETE dbo.workspace_items
       OUTPUT deleted.item_id WHERE item_id = @id AND owner_object_id = @owner;`, signal);
     if (rowsAffected[0] !== 1) throw new WorkspaceItemNotFound();
   }

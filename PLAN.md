@@ -1,5 +1,19 @@
 # Project plan
 
+## Workspaces identifier completion (#1279; 25 October 2026)
+
+- Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
+  use Workspaces names; legacy Folio clients and data retain explicit
+  compatibility aliases and reversible migration 0067.
+- Focused backend tests pass (243), contract tests pass (174), focused web tests,
+  backend/web builds and lint pass. Actual-App Chromium inspection with
+  synthetic data confirmed the Workspaces pane and a long chat timestamp 8 px
+  below its message at 390×844; at 1440×900 timestamps remain absolutely
+  positioned and there is no horizontal overflow.
+- SQL Server integration could not start because this environment lacks the
+  isolated loopback database configuration. Next: run the exact-head database
+  integration and normal CI/security gates.
+
 ## Natural food-estimate confirmation (#1277)
 
 Implemented estimate-only natural reply binding through the shared one-time

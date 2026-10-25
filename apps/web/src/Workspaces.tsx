@@ -89,7 +89,7 @@ export function WorkspacesPane({ backendUrl, getAccessToken, open, onClose, refr
     if (debounced) params.set('q', debounced);
     if (kind) params.set('kind', kind);
     if (before) params.set('before', before);
-    const response = await call(`/folio${params.size ? `?${params}` : ''}`, { signal });
+    const response = await call(`/workspaces${params.size ? `?${params}` : ''}`, { signal });
     if (response.status === 404) throw new Error('Workspaces are unavailable.');
     if (!response.ok) throw new Error(response.status === 503 ? 'Workspaces are unavailable right now.' : `Workspaces could not be loaded (${response.status}).`);
     const body: unknown = await response.json();
@@ -133,7 +133,7 @@ export function WorkspacesPane({ backendUrl, getAccessToken, open, onClose, refr
     setBusy(item.id);
     setNotice(null);
     try {
-      const response = await call(`/folio/${encodeURIComponent(item.id)}/open`, { method: 'POST', body: {} });
+      const response = await call(`/workspaces/${encodeURIComponent(item.id)}/open`, { method: 'POST', body: {} });
       if (response.status === 404) {
         remove(item.id);
         setNotice({ text: `“${item.title}” is no longer available.`, tone: 'error' });
@@ -156,7 +156,7 @@ export function WorkspacesPane({ backendUrl, getAccessToken, open, onClose, refr
   const patch = async (item: WorkspaceItem, change: { title?: string; pinned?: boolean }) => {
     setBusy(item.id);
     try {
-      const response = await call(`/folio/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: change });
+      const response = await call(`/workspaces/${encodeURIComponent(item.id)}`, { method: 'PATCH', body: change });
       const body: unknown = response.ok ? await response.json() : null;
       if (response.status === 404) { remove(item.id); setNotice({ text: `“${item.title}” is no longer available.`, tone: 'error' }); return false; }
       if (!response.ok || !isWorkspaceItem(body)) { setNotice({ id: item.id, text: 'The change could not be saved.', tone: 'error' }); return false; }
@@ -180,7 +180,7 @@ export function WorkspacesPane({ backendUrl, getAccessToken, open, onClose, refr
   const confirmRemove = async (item: WorkspaceItem) => {
     setBusy(item.id);
     try {
-      const response = await call(`/folio/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: { confirm: true } });
+      const response = await call(`/workspaces/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: { confirm: true } });
       if (response.ok || response.status === 404) {
         remove(item.id);
         setNotice({ text: `Removed “${item.title}” from Workspaces.`, tone: 'info' });

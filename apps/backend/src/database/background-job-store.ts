@@ -24,7 +24,7 @@ interface BackgroundJobRow {
   view_id: string | null;
   started_at: Date | string;
   updated_at: Date | string;
-  result_folio_id?: string | null;
+  result_workspace_item_id?: string | null;
   result_delivery_status?: BackgroundJob['resultDelivery'] | null;
   retry_input?: string | null;
   retry_job_id?: string | null;
@@ -68,11 +68,11 @@ export interface BackgroundJobDismissalResult {
 }
 
 function mapJob(row: BackgroundJobRow): BackgroundJob {
-  const hasResultId = row.result_folio_id != null;
+  const hasResultId = row.result_workspace_item_id != null;
   const hasResultDelivery = row.result_delivery_status != null;
   if (hasResultId !== hasResultDelivery) throw new Error('Stored research result reference is incomplete');
-  const resultFields = row.result_folio_id != null && row.result_delivery_status != null
-    ? { resultId: row.result_folio_id, resultDelivery: row.result_delivery_status }
+  const resultFields = row.result_workspace_item_id != null && row.result_delivery_status != null
+    ? { resultId: row.result_workspace_item_id, resultDelivery: row.result_delivery_status }
     : {};
   const job: BackgroundJob = {
     jobId: row.job_id.toLowerCase(),
@@ -160,7 +160,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       const { recordset } = await pool.request()
         .input('ownerObjectId', sql.UniqueIdentifier, ownerObjectId)
         .query<BackgroundJobRow>(`SELECT TOP (1000) job.job_id, job.kind, job.title, job.status, job.step, job.steps,
-          job.detail, job.view_id, job.result_folio_id, job.result_delivery_status, job.started_at, job.updated_at
+          job.detail, job.view_id, job.result_workspace_item_id, job.result_delivery_status, job.started_at, job.updated_at
           FROM dbo.background_jobs AS job
           WHERE job.started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
             AND NOT EXISTS (SELECT 1 FROM dbo.background_job_dismissals AS dismissal
@@ -266,7 +266,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
           persistedRetryInput = storedRetryInput;
         }
         await addJobInputs(new sql.Request(transaction), job, persistedRetryInput).query(`INSERT dbo.background_jobs
-          (job_id, kind, title, status, step, steps, detail, view_id, result_folio_id, result_delivery_status,
+          (job_id, kind, title, status, step, steps, detail, view_id, result_workspace_item_id, result_delivery_status,
             started_at, updated_at, retry_input)
           VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @resultWorkspaceItemId,
             @resultDeliveryStatus, @startedAt, @updatedAt, @retryInput);`);
@@ -285,9 +285,9 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       try {
         const { recordset } = await addJobInputs(new sql.Request(transaction), job).query<BackgroundJobRow>(`UPDATE dbo.background_jobs
           SET status = @status, step = @step, detail = @detail, view_id = @viewId,
-            result_folio_id = @resultWorkspaceItemId, result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
+            result_workspace_item_id = @resultWorkspaceItemId, result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
           OUTPUT INSERTED.job_id, INSERTED.kind, INSERTED.title, INSERTED.status, INSERTED.step,
-            INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.result_folio_id,
+            INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.result_workspace_item_id,
             INSERTED.result_delivery_status, INSERTED.started_at, INSERTED.updated_at
           WHERE job_id = @jobId AND status = N'running';`);
         const updated = recordset[0] ? mapJob(recordset[0]) : null;
@@ -310,9 +310,9 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         .query<BackgroundJobRow>(`UPDATE dbo.background_jobs
           SET result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
           OUTPUT INSERTED.job_id, INSERTED.kind, INSERTED.title, INSERTED.status, INSERTED.step,
-            INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.result_folio_id,
+            INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.result_workspace_item_id,
             INSERTED.result_delivery_status, INSERTED.started_at, INSERTED.updated_at
-          WHERE job_id = @jobId AND status = N'done' AND result_folio_id IS NOT NULL
+          WHERE job_id = @jobId AND status = N'done' AND result_workspace_item_id IS NOT NULL
             AND (result_delivery_status <> N'delivered' OR @resultDeliveryStatus = N'delivered');`);
       return recordset[0] ? mapJob(recordset[0]) : null;
     },
@@ -336,7 +336,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
     async list() {
       await pruneJobs(pool);
       const { recordset } = await pool.request().query<BackgroundJobRow>(`SELECT job_id, kind, title, status, step, steps,
-        detail, view_id, result_folio_id, result_delivery_status, started_at, updated_at
+        detail, view_id, result_workspace_item_id, result_delivery_status, started_at, updated_at
         FROM dbo.background_jobs
         WHERE started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
         ORDER BY started_at DESC;`);
@@ -346,7 +346,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       const { recordset } = await pool.request()
         .input('jobId', sql.NVarChar(36), jobId.toLowerCase())
         .query<BackgroundJobRow>(`SELECT job_id, kind, title, status, step, steps, detail, view_id,
-          result_folio_id, result_delivery_status, started_at, updated_at, retry_input, retry_job_id
+          result_workspace_item_id, result_delivery_status, started_at, updated_at, retry_input, retry_job_id
           FROM dbo.background_jobs WHERE job_id = @jobId
             AND started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME());`);
       const row = recordset[0];

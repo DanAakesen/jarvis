@@ -3,10 +3,12 @@
 ## Workspaces saved-item pane (#1279)
 
 The saved-item pane is **Workspaces** throughout the app and implementation.
-The legacy `folio` navigation key, `folioOpen` snapshot field, `/folio` API,
-`folio_*` tool names, contract aliases, `dbo.folio_items` table and
-`result_folio_id` column remain compatibility boundaries; data and behavior are
-preserved. Workspace delivery remains a separate action.
+Canonical identifiers are `workspaces`/`workspacesOpen`, `/workspaces`,
+`workspaces_*`, `dbo.workspace_items` and `result_workspace_item_id`. Existing
+clients and records remain compatible through `folio` navigation/snapshot
+values, legacy API/tool routes, contract aliases, the SQL table synonym and the
+synchronized job-result column added by migration 0067. Workspace delivery
+remains a separate action.
 
 ## Conversational finding feedback (#1240)
 
@@ -454,8 +456,8 @@ remain visible. The navigation contract and backend are built offline; shell
 routing, the usual page transition and live acceptance belong to the UI session.
 Factory task navigation opens the task window over the board and focuses its
 card; issue-number navigation focuses that issue's card. The UI refuses missing
-tasks/issues with a reason. Status is a read-only shell page. Workspaces is a
-pane: the legacy `folio` navigation key opens it over the current page.
+tasks/issues with a reason. Status is a read-only shell page. Workspaces is a pane; `workspaces` is the canonical navigation key and `folio`
+remains accepted for older clients.
 
 P9-43 supplies a short, content-free workspace reference on every voice and chat
 turn. “This/that” identifies the focused window or task/issue; “go back” uses the

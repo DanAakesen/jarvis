@@ -33,7 +33,7 @@ describe('Workspaces', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       calls.push(`${init?.method ?? 'GET'} ${url.pathname}${url.search}`);
-      if (url.pathname === '/folio') return json({ items: url.searchParams.get('q') === 'nothing' ? [] : [report] });
+      if (url.pathname === '/workspaces') return json({ items: url.searchParams.get('q') === 'nothing' ? [] : [report] });
       if (url.pathname.endsWith('/open')) return json(report);
       if (init?.method === 'PATCH') return json({ ...report, pinned: true });
       if (init?.method === 'DELETE') return json({ deleted: true });
@@ -44,13 +44,13 @@ describe('Workspaces', () => {
 
     expect(screen.getByText('Workspaces')).not.toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Open Ignite research' }));
-    await waitFor(() => expect(calls).toContain(`POST /folio/${encodeURIComponent(report.id)}/open`));
+    await waitFor(() => expect(calls).toContain(`POST /workspaces/${encodeURIComponent(report.id)}/open`));
 
     fireEvent.click(screen.getByRole('button', { name: 'Pin Ignite research' }));
     expect(await screen.findByRole('region', { name: 'Pinned' })).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
-    await waitFor(() => expect(calls).toContain('GET /folio?kind=research'));
+    await waitFor(() => expect(calls).toContain('GET /workspaces?kind=research'));
 
     fireEvent.change(screen.getByLabelText('Search Workspaces'), { target: { value: 'nothing' } });
     expect(await screen.findByText(/Nothing matches “nothing” in Reports/)).not.toBeNull();
@@ -60,7 +60,7 @@ describe('Workspaces', () => {
     const confirm = screen.getByRole('group', { name: 'Remove Ignite research' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }));
     expect(await screen.findByText('Removed “Ignite research” from Workspaces.')).not.toBeNull();
-    expect(calls).toContain(`DELETE /folio/${encodeURIComponent(report.id)}`);
+    expect(calls).toContain(`DELETE /workspaces/${encodeURIComponent(report.id)}`);
   });
 
   it('shows an empty Workspaces pane and offers retry on failure', async () => {

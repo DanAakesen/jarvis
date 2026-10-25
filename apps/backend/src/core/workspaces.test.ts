@@ -87,7 +87,7 @@ function approvals() {
 
 function manage(app: ReturnType<typeof buildApp>, payload: Record<string, unknown>, token = 'agent.e30.sig') {
   return app.inject({
-    method: 'POST', url: '/tools/folio_manage',
+    method: 'POST', url: '/tools/workspaces_manage',
     headers: { ...authorization(token), 'x-jarvis-message-id': '42' }, payload,
   });
 }
@@ -97,10 +97,11 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 describe('Workspaces API and Jarvis tools', () => {
   it('restricts the API to the owner and returns bounded search results', async () => {
     const fixtureData = fixture();
-    expect((await fixtureData.app.inject({ url: '/folio' })).statusCode).toBe(401);
+    expect((await fixtureData.app.inject({ url: '/workspaces' })).statusCode).toBe(401);
+    expect((await fixtureData.app.inject({ url: '/workspaces', headers: authorization('other.e30.sig') })).statusCode).toBe(403);
     expect((await fixtureData.app.inject({ url: '/folio', headers: authorization('other.e30.sig') })).statusCode).toBe(403);
     const response = await fixtureData.app.inject({
-      url: '/folio?q=Ignite&kind=research&before=2026-10-07T00%3A00%3A00.000Z',
+      url: '/workspaces?q=Ignite&kind=research&before=2026-10-07T00%3A00%3A00.000Z',
       headers: authorization('owner.e30.sig'),
     });
 
@@ -116,7 +117,7 @@ describe('Workspaces API and Jarvis tools', () => {
     const fixtureData = fixture();
     const opened = await fixtureData.app.inject({
       method: 'POST',
-      url: `/folio/${encodeURIComponent(item.id)}/open`,
+      url: `/workspaces/${encodeURIComponent(item.id)}/open`,
       headers: authorization('owner.e30.sig'),
       payload: {},
     });
@@ -132,7 +133,7 @@ describe('Workspaces API and Jarvis tools', () => {
 
     const patched = await fixtureData.app.inject({
       method: 'PATCH',
-      url: `/folio/${encodeURIComponent(item.id)}`,
+      url: `/workspaces/${encodeURIComponent(item.id)}`,
       headers: authorization('owner.e30.sig'),
       payload: { title: 'Pinned Ignite report', pinned: true },
     });
@@ -143,14 +144,14 @@ describe('Workspaces API and Jarvis tools', () => {
 
     expect((await fixtureData.app.inject({
       method: 'DELETE',
-      url: `/folio/${encodeURIComponent(item.id)}`,
+      url: `/workspaces/${encodeURIComponent(item.id)}`,
       headers: authorization('owner.e30.sig'),
       payload: { confirm: false },
     })).statusCode).toBe(400);
     expect(fixtureData.remove).not.toHaveBeenCalled();
     const deleted = await fixtureData.app.inject({
       method: 'DELETE',
-      url: `/folio/${encodeURIComponent(item.id)}`,
+      url: `/workspaces/${encodeURIComponent(item.id)}`,
       headers: authorization('owner.e30.sig'),
       payload: { confirm: true },
     });
@@ -223,31 +224,55 @@ describe('Workspaces API and Jarvis tools', () => {
     expect((await fixtureData.app.backgroundJobs.details(job.jobId))?.details.job.resultDelivery).toBe('pending');
   });
 
-  it('keeps the legacy private tool names while resolving a Workspaces reopen request', async () => {
+  it('exposes canonical private Workspaces tools and retains their legacy aliases', async () => {
     const fixtureData = fixture();
     const listed = await fixtureData.app.inject({ url: '/tools', headers: authorization('agent.e30.sig') });
+    expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('workspaces_search');
+    expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('workspaces_open');
+    expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('workspaces_manage');
     expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('folio_search');
     expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('folio_open');
     expect(listed.json().map((tool: { name: string }) => tool.name)).toContain('folio_manage');
     const result = await fixtureData.app.inject({
       method: 'POST',
-      url: '/tools/folio_open',
+      url: '/tools/workspaces_open',
       headers: { ...authorization('agent.e30.sig'), 'x-jarvis-message-id': '42' },
       payload: { query: 'pull up the Ignite research again' },
     });
 
     expect(result.statusCode).toBe(200);
     expect(result.json()).toMatchObject({
-      tool: 'folio_open',
+      tool: 'workspaces_open',
       outcome: 'ok',
       result: { id: item.id, title: item.title, opened: true },
     });
     expect(fixtureData.search).toHaveBeenCalledWith(ownerId, { q: 'pull up the Ignite research again' }, expect.any(AbortSignal));
     expect(fixtureData.record).toHaveBeenCalledWith(expect.objectContaining({
-      tool: 'folio_open',
+      tool: 'workspaces_open',
       arguments: { redacted: true },
       result: { redacted: true },
     }));
+  });
+
+  it('continues to serve legacy Folio API routes and tool aliases', async () => {
+    const fixtureData = fixture();
+    const headers = authorization('owner.e30.sig');
+    expect((await fixtureData.app.inject({ url: '/folio', headers })).json()).toEqual({ items: [item] });
+    expect((await fixtureData.app.inject({
+      method: 'POST', url: `/folio/${encodeURIComponent(item.id)}/open`, headers, payload: {},
+    })).statusCode).toBe(200);
+    expect((await fixtureData.app.inject({
+      method: 'PATCH', url: `/folio/${encodeURIComponent(item.id)}`, headers, payload: { pinned: true },
+    })).statusCode).toBe(200);
+    expect((await fixtureData.app.inject({
+      method: 'DELETE', url: `/folio/${encodeURIComponent(item.id)}`, headers, payload: { confirm: true },
+    })).statusCode).toBe(200);
+    const alias = await fixtureData.app.inject({
+      method: 'POST', url: '/tools/folio_open',
+      headers: { ...authorization('agent.e30.sig'), 'x-jarvis-message-id': '42' },
+      payload: { id: item.id },
+    });
+    expect(alias.json()).toMatchObject({ tool: 'folio_open', outcome: 'ok' });
   });
 
   it.each([
@@ -263,7 +288,7 @@ describe('Workspaces API and Jarvis tools', () => {
     });
     expect(data.update).toHaveBeenCalledWith(ownerId, item.id, patch, expect.any(AbortSignal));
     expect(data.record).toHaveBeenCalledWith(expect.objectContaining({
-      tool: 'folio_manage', arguments: { redacted: true }, result: { redacted: true },
+      tool: 'workspaces_manage', arguments: { redacted: true }, result: { redacted: true },
     }));
     expect(data.remove).not.toHaveBeenCalled();
   });
@@ -342,7 +367,7 @@ describe('Workspaces API and Jarvis tools', () => {
     if (decision === 'approve') {
       expect(response.json().result).toMatchObject({ id: item.id, deleted: true, untrusted: true });
       expect(data.remove).toHaveBeenCalledWith(ownerId, item.id, expect.any(AbortSignal));
-      const listed = await data.app.inject({ url: '/folio', headers: authorization('owner.e30.sig') });
+      const listed = await data.app.inject({ url: '/workspaces', headers: authorization('owner.e30.sig') });
       expect(listed.json().items).toEqual([]);
       expect(data.read).not.toHaveBeenCalled();
     } else {

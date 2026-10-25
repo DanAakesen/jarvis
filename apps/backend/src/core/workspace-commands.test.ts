@@ -300,10 +300,41 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
     });
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
-    // Tabs opened before the rename only know the legacy page value, so Health is delivered as `daily`.
-    expect(delivered).toEqual([page === 'health' ? { ...command, page: 'daily' } : command]);
+    // Tabs opened before the rename only know legacy page values.
+    expect(delivered).toEqual([page === 'health'
+      ? { ...command, page: 'daily' }
+      : page === 'workspaces' ? { ...command, page: 'folio' } : command]);
     connection.close();
   });
+
+  it.each([
+    { client: 'legacy', advertisesWorkspaces: false, deliveredPage: 'folio' },
+    { client: 'current', advertisesWorkspaces: true, deliveredPage: 'workspaces' },
+  ])('adapts Workspaces navigation for $client clients', async ({ advertisesWorkspaces, deliveredPage }) => {
+    const { app, broker } = fixture();
+    const command = { commandId: `navigate-workspaces-${deliveredPage}`, operation: 'navigate', page: 'workspaces' };
+    let delivered: WorkspaceCommand | undefined;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered = data.command;
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true);
+      }
+      return true;
+    });
+    if (advertisesWorkspaces) broker.updateSnapshot(ownerId, connection.sessionId, {
+      windows: [], contextPanelOpen: false, view: { page: 'home', workspacesOpen: false, folioOpen: false },
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+      });
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true } });
+      expect(delivered).toEqual({ ...command, page: deliveredPage });
+    } finally {
+      connection.close();
+    }
+  });
+
   it.each(['daily', 'health'] as const)('refuses %s navigation before delivery when its data module is absent', async (page) => {
     const { app, broker } = fixture();
     const send = vi.fn(() => true);
@@ -398,7 +429,7 @@ describe('workspace command delivery', () => {
   it.each([
     { page: 'factory', taskId: '42', reason: 'Task no longer exists.' },
     { page: 'factory', issueNumber: 567, reason: 'Issue card was not found.' },
-    { page: 'folio', reason: 'Folio is not available yet.' },
+    { page: 'folio', reason: 'Workspaces is not available on this client.' },
     { page: 'status', reason: 'Status is not available yet.' },
   ])('reports UI navigation refusal with its reason: %j', async ({ reason, ...destination }) => {
     const { app, broker } = fixture();

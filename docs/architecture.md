@@ -1166,7 +1166,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - P9-40 extends that same registered tool and broker with `navigate`; no new
   event channel, route or persistence is added. `packages/contracts` exports
   `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,
-  `notes`, `knowledge` (kept; opens the graph), `folio`, `status`) and `workspaceSettingsSections`
+  `notes`, `knowledge` (kept; opens the graph), `workspaces`, `folio`, `status`) and `workspaceSettingsSections`
   (`appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`,
   `coding`, `projects`, `routines`, `credentials`, `backend`). The command requires
   `commandId`, `operation: 'navigate'` and `page`; `section` is settings-only,
@@ -1181,8 +1181,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   acknowledges application; refusal, timeout and cancellation retain existing
   broker semantics. Send is not an applied acknowledgement. The UI reports a
   reason when a page/section is unknown, a task/issue is not found, or Status
-  is not yet implemented. The legacy `folio` navigation key opens Workspaces over
-  the current page.
+  is not yet implemented. New clients navigate with `workspaces`; `folio`
+  remains accepted, and clients without the `workspacesOpen` snapshot field
+  receive the legacy value.
   The backend rejects unknown contract keys before
   delivery and does not resolve task/issue existence on the UI's behalf.
   The UI session owns shell routing, settings-section
@@ -5174,22 +5175,26 @@ views cannot be recovered.
 The implementation is named `WorkspaceItemsStore`, `WorkspaceItem`, and
 `createWorkspacesModule`; contract consumers use the `Workspace*` symbols.
 Legacy exported `Folio*` contract symbols remain aliases for source compatibility.
-The module keeps its historical `folio` route, tool and navigation identifiers,
-and SQL continues to use `dbo.folio_items` plus `result_folio_id` so existing
-clients and persisted records remain unchanged.
+New clients use `/workspaces`, `workspaces_search`, `workspaces_open`,
+`workspaces_manage`, `workspaces` navigation and the `workspacesOpen` snapshot
+field. `/folio`, `folio_*`, `folio` navigation and `folioOpen` remain accepted
+for existing clients. Migration `0067_workspaces_identifiers.sql` renames
+`dbo.folio_items` to `dbo.workspace_items` and introduces
+`result_workspace_item_id`; a legacy SQL synonym and trigger keep old table and
+column reads/writes working, with no saved-item deletion.
 
-Owner-only `GET /folio?q=&kind=&before=` returns at most 100 items, pinned
+Owner-only `GET /workspaces?q=&kind=&before=` returns at most 100 items, pinned
 first and then newest, matching the item title, prompt summary, or historical
-HTML version title. `POST /folio/:id/open` validates source ownership and
+HTML version title. `POST /workspaces/:id/open` validates source ownership and
 recreates or updates the saved view through the workspace command broker,
-then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
-`DELETE /folio/:id` removes only its Workspaces index entry; the original artifact
-and its history remain available. The shared sensitive tools `folio_search`
-and `folio_open` provide the same owner-scoped search and broker-backed reopen
+then focuses it. `PATCH /workspaces/:id` pins or renames an item. Confirmed
+`DELETE /workspaces/:id` removes only its Workspaces index entry; the original artifact
+and its history remain available. The sensitive tools `workspaces_search`
+and `workspaces_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
-P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
+P9-56 adds sensitive `workspaces_manage` with a plain root object schema: exactly one
 `id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
-for rename. It shares unique-query resolution with `folio_open` and reuses
+for rename. It shares unique-query resolution with `workspaces_open` and reuses
 `WorkspaceItemsStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
 titles. Reversible changes need no approval. Deletion fails closed if presence
 or Now approval is unavailable, refuses away/on-the-move states, and uses the
@@ -5198,7 +5203,7 @@ pending deletions are refused; after approval, presence and the title are
 rechecked before removing the Workspaces index entry. Source artifacts/history are
 retained and no deleted entry is returned by Workspaces search. Outputs mark titles
 as untrusted; arguments and results are redacted from the tool audit. No
-migration, GitHub App permission, dependency or web change is needed.
+migration changes artifact retention, GitHub App permissions, or access control.
 The Workspaces rail and pane are implemented in `apps/web/src/Workspaces.tsx`.
 
 ### Sandbox credentials

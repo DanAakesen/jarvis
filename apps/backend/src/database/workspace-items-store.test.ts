@@ -45,7 +45,7 @@ describe('Workspace items store', () => {
     expect(item).toMatchObject({ id: itemId, kind: 'research', pinned: false });
     expect(data.input).toHaveBeenCalledWith('title', sql.NVarChar(200), 'Ignite report');
     expect(data.input).toHaveBeenCalledWith('summary', sql.NVarChar(500), 'Research Ignite battery storage');
-    expect(data.query.mock.calls[0]?.[0]).toContain('INSERT dbo.folio_items');
+    expect(data.query.mock.calls[0]?.[0]).toContain('INSERT dbo.workspace_items');
     await expect(data.store.record(ownerId, {
       id: itemId,
       kind: 'research',
@@ -87,7 +87,7 @@ describe('Workspace items store', () => {
     await data.store.update(ownerId, itemId, { pinned: true }, new AbortController().signal);
     expect(data.query.mock.calls[1]?.[0]).toContain('WHERE item_id = @id AND owner_object_id = @owner');
     await data.store.delete(ownerId, itemId, new AbortController().signal);
-    expect(data.query.mock.calls[2]?.[0]).toContain('DELETE dbo.folio_items');
+    expect(data.query.mock.calls[2]?.[0]).toContain('DELETE dbo.workspace_items');
 
     const missing = fixture([], [0]);
     await expect(missing.store.delete(ownerId, itemId, new AbortController().signal))

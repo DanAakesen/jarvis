@@ -8422,10 +8422,14 @@ have completed. Recovery of useful partial results is not implemented.
 
 ## Workspaces naming and legacy compatibility (#1279; 25 October 2026)
 
-Use Workspaces for the feature's user-facing and implementation names, including
-the web component/data models, backend store/module and contract symbols. Keep
-legacy `folio` navigation, snapshot, API, tool and database identifiers as
-compatibility boundaries; expose the prior contract symbol names as aliases.
-This avoids changing existing clients or persisted data while completing the
-requested rename. The separate chat-time layout remains below message text on
-mobile widths up to 700px and retains its desktop position.
+Use Workspaces for user-facing and canonical implementation names, including
+the `workspaces` navigation key, `workspacesOpen` snapshot field, `/workspaces`
+API, `workspaces_*` tools, and `dbo.workspace_items`/
+`result_workspace_item_id` storage. Preserve existing clients and integrations
+with legacy navigation/snapshot values, route/tool aliases, exported contract
+aliases, a `dbo.folio_items` synonym, and synchronized old/new job-result
+columns. Migration 0067 renames the table and backfills the new column without
+deleting saved items; its down migration restores the old identifiers. Access
+controls and source-artifact retention do not change. The separate chat-time
+layout remains below message text on mobile widths up to 700px and retains its
+desktop position.

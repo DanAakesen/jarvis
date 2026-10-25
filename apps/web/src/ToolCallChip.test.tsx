@@ -9,6 +9,7 @@ describe('livePhraseFor', () => {
 
   it('names what the running tool is doing', () => {
     expect(livePhraseFor('working', 'vault_search')).toBe('Searching your notes…');
+    expect(livePhraseFor('working', 'workspaces_search')).toBe('Searching your notes…');
     expect(livePhraseFor('working', 'vault_write')).toBe('Updating your notes…');
     expect(livePhraseFor('working', 'daily_query')).toBe('Checking your health data…');
     expect(livePhraseFor('working', 'calendar_list_events')).toBe('Checking your calendar…');
