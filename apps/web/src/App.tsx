@@ -523,7 +523,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       id: cameraPreviewViewId,
       title: 'Camera preview',
       presentation: 'camera-preview' as const,
-      initialGeometry: { x: 0.7, y: 0.02, width: 0.29, height: 0.42, columns: 1 },
+      initialGeometry: { x: 0.76, y: 0.02, width: 0.23, height: 0.32, columns: 1 },
       onClose: camera.stop,
       content: { status: 'ready' as const, content: <CameraPreview camera={camera} /> },
     }] : []),

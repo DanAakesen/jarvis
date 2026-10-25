@@ -44,13 +44,13 @@ function focusItem(container: HTMLElement | null, move: 'first' | 'last' | 'next
 }
 
 /**
- * Shared three-dot conversation menu. When the caller passes language state, Language is the first row
- * and opens a Danish/English flyout bound to it; callers may add further actions below it. The same
- * menu, with an attachment trigger and no Language row, serves the composer's attachment actions.
+ * Shared three-dot conversation menu. Leading actions precede the optional Language row; remaining
+ * actions follow it. Language opens a Danish/English flyout bound to the caller's state.
  */
 export function ConversationMoreMenu({
   language,
   onLanguageChange,
+  leadingActions = [],
   actions = [],
   align = 'start',
   className,
@@ -60,6 +60,7 @@ export function ConversationMoreMenu({
 }: {
   language?: VoiceLanguage;
   onLanguageChange?: (language: VoiceLanguage) => void;
+  leadingActions?: MoreMenuAction[];
   actions?: MoreMenuAction[];
   align?: 'start' | 'end';
   className?: string;
@@ -185,6 +186,32 @@ export function ConversationMoreMenu({
     event.stopPropagation();
   };
 
+  const renderActions = (menuActions: MoreMenuAction[]) => menuActions.map((action) => {
+    const descriptionId = action.description ? `${id}-${action.id}-description` : undefined;
+    return (
+      <Fragment key={action.id}>
+        <button
+          className="more-menu-item"
+          type="button"
+          role="menuitem"
+          tabIndex={-1}
+          aria-disabled={action.disabled || undefined}
+          aria-describedby={descriptionId}
+          title={action.description}
+          onClick={() => {
+            if (action.disabled) return;
+            close(true);
+            action.onSelect();
+          }}
+        >
+          {action.icon}
+          <span className="more-menu-label">{action.label}</span>
+        </button>
+        {descriptionId && <span id={descriptionId} className="visually-hidden">{action.description}</span>}
+      </Fragment>
+    );
+  });
+
   return (
     <div
       ref={root}
@@ -212,6 +239,7 @@ export function ConversationMoreMenu({
       {open && (
         <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label={label}
           onKeyDown={(event) => onMenuKeyDown(event, false)}>
+          {renderActions(leadingActions)}
           {language !== undefined && onLanguageChange && <div role="none" className="more-menu-language">
             <button
               ref={languageItem}
@@ -253,31 +281,7 @@ export function ConversationMoreMenu({
               </div>
             )}
           </div>}
-          {actions.map((action) => {
-            const descriptionId = action.description ? `${id}-${action.id}-description` : undefined;
-            return (
-              <Fragment key={action.id}>
-                <button
-                  className="more-menu-item"
-                  type="button"
-                  role="menuitem"
-                  tabIndex={-1}
-                  aria-disabled={action.disabled || undefined}
-                  aria-describedby={descriptionId}
-                  title={action.description}
-                  onClick={() => {
-                    if (action.disabled) return;
-                    close(true);
-                    action.onSelect();
-                  }}
-                >
-                  {action.icon}
-                  <span className="more-menu-label">{action.label}</span>
-                </button>
-                {descriptionId && <span id={descriptionId} className="visually-hidden">{action.description}</span>}
-              </Fragment>
-            );
-          })}
+          {renderActions(actions)}
         </div>
       )}
     </div>
