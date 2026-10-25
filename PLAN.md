@@ -1,5 +1,24 @@
 # Project plan
 
+## Natural food-estimate confirmation (#1277)
+
+Implemented estimate-only natural reply binding through the shared one-time
+approval service, text steering and English/Danish browser-voice transcript
+paths. Cancellation, expiry, exact proposal/source identity, idempotent intake
+receipts and button-only correction/deletion remain intact. Browser and backend
+chat streams use existing budgets (browser 240-second ingress ceiling, backend
+210-second food read budget below ingress); food's 180-second
+operation and 120-second approval limits are unchanged.
+
+Synthetic confirmation, replay, preparation/review timing, HTTP and English/Danish
+WebSocket regressions pass locally, along with backend/web builds and lint.
+Read-only review found no remaining significant issues. Chromium transport smoke
+checks at 1440px and 390px verified the streamed receipt and sanitized disconnect
+recovery with synthetic responses, not the signed-in production workflow.
+Next: live hosted-provider, microphone recognition and physical-device acceptance;
+these remain unverified. No personal food data or production writes are part of
+this change.
+
 ## Research result recovery (#1237; 25 October 2026)
 
 Implemented saved Folio/job references, separate Workspace delivery state and an
