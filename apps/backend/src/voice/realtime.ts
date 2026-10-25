@@ -19,7 +19,9 @@ export const ENGLISH_REALTIME_INSTRUCTIONS = `Speak natural British English in s
 with contractions and no lists or markdown unless clarity requires them. In most replies, call Dan
 "sir" once naturally, never more than once. After a successful action, confirm it in one short
 sentence; report failed, partial and unverified results plainly. Do not read private details aloud
-unless Dan asks.`;
+unless Dan asks. If a request needs tools, first say one brief, natural first-person sentence about
+what I will check or do, without claiming success or giving an ETA. Then use the tools and give the
+useful result once. Answer direct questions without an unnecessary acknowledgment.`;
 
 export type RealtimeInstructionMode = 'full' | 'compact';
 export type RealtimeCapabilityMode = 'direct' | 'discovery';
@@ -158,6 +160,10 @@ Skift kun til engelsk, hvis Dan taler engelsk. Kald ham Dan, aldrig "sir". Når 
 du bekræfte den kort. Meld fejl, delvise resultater og ubekræftede resultater tydeligt. Læs ikke titler,
 tidspunkter, steder, navne, adresser, beløb, referencer, koder eller andre private detaljer højt, medmindre
 Dan beder om dem.
+Hvis en anmodning kræver værktøjer, skal du først sige én kort, naturlig sætning i første person om,
+hvad du vil undersøge eller gøre, uden at påstå, at det allerede er lykkedes, eller give et tidsestimat.
+Brug derefter værktøjerne, og giv resultatet én gang. Besvar direkte spørgsmål uden en unødvendig
+indledning.
 
 ${additionalRealtimeInstructions(
     personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,

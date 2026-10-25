@@ -6,6 +6,7 @@ import {
 } from '../core/approval-interpreter.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import type { JarvisTool } from '../core/tool-registry.js';
+import { PendingAction } from '../core/pending-action.js';
 
 // The GitHub App module reaches a JWT helper that none of these tests call.
 vi.mock('jose', () => ({ SignJWT: class {} }));
@@ -248,6 +249,50 @@ describe.each(surfaces)('natural approval of a GitHub write (%s)', (surface) => 
     await expect(f.write(surface, dan('11', approving[0]!))).rejects.toThrow(approvalInstruction);
     expect(model).not.toHaveBeenCalled();
     expect(f.puts()).toHaveLength(0);
+  });
+
+  it('cannot approve an expired proposal after the same write has been staged again', async () => {
+    let resolveModel!: (value: string) => void;
+    let entered!: () => void;
+    const deciding = new Promise<void>((resolve) => { entered = resolve; });
+    const model: ApprovalModelPort = () => {
+      entered();
+      return new Promise<string>((resolve) => { resolveModel = resolve; });
+    };
+    const f = fixture({ model });
+    await f.stage(surface);
+    f.advance(2_000);
+    const rejected = expect(f.write(surface, dan('11', approving[0]!))).rejects.toThrow(approvalNotPending);
+    await deciding;
+    f.advance(TTL_MS);
+    await f.stage(surface, '12');
+    resolveModel(JSON.stringify({ verdict: 'approve', confidence: 0.97 }));
+    await rejected;
+    expect(f.puts()).toHaveLength(0);
+    f.advance(2_000);
+    await expect(f.write(surface, dan('13', 'yes'))).resolves.toMatchObject({ status: 'written' });
+    expect(f.puts()).toHaveLength(1);
+  });
+
+  it('checks expiry again when executing a consumed approval', async () => {
+    const f = fixture();
+    await f.stage(surface);
+    f.advance(2_000);
+    const consume = PendingAction.prototype.consume;
+    const execute = vi.spyOn(PendingAction.prototype, 'execute');
+    const consumption = vi.spyOn(PendingAction.prototype, 'consume').mockImplementation(function (this: PendingAction, ...args) {
+      const verdict = consume.apply(this, args);
+      f.advance(TTL_MS);
+      return verdict;
+    });
+    try {
+      await expect(f.write(surface, dan('11', 'yes'))).rejects.toThrow(approvalNotPending);
+      expect(execute).toHaveBeenCalledOnce();
+      expect(f.puts()).toHaveLength(0);
+    } finally {
+      consumption.mockRestore();
+      execute.mockRestore();
+    }
   });
 
   it('cannot replay an approval: the second call stages afresh and the same message cannot approve it', async () => {
