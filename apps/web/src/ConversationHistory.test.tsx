@@ -609,6 +609,8 @@ describe('ConversationHistory', () => {
       undefined,
       expect.any(AbortSignal),
       expect.any(Function),
+      undefined,
+      undefined,
       expect.any(Function),
     );
   });
@@ -619,7 +621,7 @@ describe('ConversationHistory', () => {
     sendChatTurn.mockImplementation(async (...args: unknown[]) => {
       const onUser = args[4] as (message: typeof userMessage) => void;
       const onDelta = args[5] as (text: string) => void;
-      const onAcknowledgment = args.at(-1) as (text: string) => void;
+      const onAcknowledgment = args[13] as (text: string) => void;
       onUser(userMessage);
       onDelta(acknowledgment);
       onAcknowledgment(acknowledgment);
@@ -633,6 +635,9 @@ describe('ConversationHistory', () => {
     expect((await screen.findByLabelText("Jarvis's initial reply")).textContent).toContain(
       acknowledgment,
     );
+    expect(sendChatTurn.mock.calls[0]?.[11]).toBeUndefined();
+    expect(sendChatTurn.mock.calls[0]?.[12]).toBeUndefined();
+    expect(sendChatTurn.mock.calls[0]?.[13]).toEqual(expect.any(Function));
     expect(screen.queryByLabelText('Jarvis reply in progress')).toBeNull();
     expect(screen.queryByText('Jarvis is thinking…')).toBeNull();
     await act(async () => finish(assistantMessage));
@@ -646,7 +651,7 @@ describe('ConversationHistory', () => {
     sendChatTurn.mockImplementationOnce(async (...args: unknown[]) => {
       const onUser = args[4] as (message: typeof userMessage) => void;
       const onDelta = args[5] as (text: string) => void;
-      const onAcknowledgment = args.at(-1) as (text: string) => void;
+      const onAcknowledgment = args[13] as (text: string) => void;
       onUser(userMessage);
       onDelta(acknowledgment);
       onAcknowledgment(acknowledgment);
@@ -1064,6 +1069,8 @@ describe('ConversationHistory', () => {
       undefined,
       expect.any(AbortSignal),
       expect.any(Function),
+      undefined,
+      undefined,
       expect.any(Function),
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();

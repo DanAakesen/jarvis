@@ -581,9 +581,7 @@ export function ConversationHistory({
           };
         }
       }
-      const visualArguments: [attachmentIds?: readonly string[] | undefined, visualContext?: VisualTurnContext | undefined] = visualForTurn
-        ? [queuedFiles.length ? queuedFiles.map((file) => file.id) : undefined, visualForTurn]
-        : queuedFiles.length ? [queuedFiles.map((file) => file.id)] : [];
+      const attachmentIds = queuedFiles.length ? queuedFiles.map((file) => file.id) : undefined;
       const assistant = await sendChatTurn(
         tokenProvider,
         config,
@@ -616,7 +614,8 @@ export function ConversationHistory({
           setStreamedText('');
           setSteering(false);
         },
-        ...visualArguments,
+        attachmentIds,
+        visualForTurn,
         (text) => {
           acknowledgment = text;
           partialReply = '';
