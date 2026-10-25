@@ -16,26 +16,25 @@ export function ChartView({ kind, series, title }: { kind: 'line' | 'bar' | 'are
   const id = useId();
   const figure = useRef<HTMLElement>(null);
   // The SVG is drawn at its real width so axis text stays legible on a phone instead of shrinking with the chart.
-  const [width, setWidth] = useState(640);
+  const [availableWidth, setAvailableWidth] = useState(640);
   useEffect(() => {
     const element = figure.current;
     if (!element || typeof ResizeObserver !== 'function') return;
     const observer = new ResizeObserver(([entry]) => {
       const next = Math.round(Math.min(960, Math.max(260, entry?.contentRect.width ?? 640)));
-      setWidth((current) => (Math.abs(current - next) > 4 ? next : current));
+      setAvailableWidth((current) => (Math.abs(current - next) > 4 ? next : current));
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const height = width < 480 ? 220 : 280;
-  const plotWidth = width - margin.left - margin.right;
+  const height = availableWidth < 480 ? 220 : 280;
+  const plotWidth = availableWidth - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const px = (fraction: number) => margin.left + fraction * plotWidth;
   const py = (fraction: number) => margin.top + (1 - fraction) * plotHeight;
   const bars = kind === 'bar';
   const layout = chartLayout(series, bars, kind !== 'line');
   const numericXs = layout.categorical ? [] : [...new Set(series.flatMap((entry) => entry.points.map((point) => point.x as number)))].sort((a, b) => a - b);
-  const maxLabels = width < 480 ? 4 : 8;
+  const maxLabels = availableWidth < 480 ? 4 : 8;
   const baseline = py(yPosition(layout, Math.max(layout.yMin, Math.min(0, layout.yMax))));
   const xLabels = layout.categorical
     ? layout.categories.map((label, index) => ({ label, at: xPosition(layout, label, bars), index }))
@@ -47,20 +46,30 @@ export function ChartView({ kind, series, title }: { kind: 'line' | 'bar' | 'are
       : [0, 0.25, 0.5, 0.75, 1].map((fraction, index) => ({
         label: formatChartX(layout.xMin + fraction * (layout.xMax - layout.xMin)), at: fraction, index,
       }));
-  const slot = plotWidth / Math.max(1, layout.categories.length);
+  const labelWidth = Math.max(0, ...xLabels.map(({ label }) => label.length * 8));
+  const labelPadding = labelWidth / 2;
+  const chartPlotWidth = Math.max(plotWidth, xLabels.length * (labelWidth + 16));
+  const width = chartPlotWidth + margin.left + margin.right + labelPadding * 2;
+  const plotLeft = margin.left + labelPadding;
+  const plotRight = width - margin.right - labelPadding;
+  const px = (fraction: number) => plotLeft + fraction * chartPlotWidth;
+  const slot = chartPlotWidth / Math.max(1, layout.categories.length);
   const barWidth = Math.min(36, (slot * 0.72) / Math.max(1, series.length));
+  const needsHorizontalScroll = width > availableWidth;
 
   return (
     <figure ref={figure} className="generated-chart" aria-labelledby={`${id}-caption`}>
+      <div className="generated-chart-plot" role="region" aria-label={`Scrollable chart plot: ${title}`}
+        aria-describedby={needsHorizontalScroll ? `${id}-scroll-hint` : undefined} tabIndex={0}>
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-caption`} width={width} height={height} preserveAspectRatio="xMidYMid meet">
         {layout.yTicks.map((tick) => (
           <g key={tick} className="chart-grid">
-            <line x1={margin.left} x2={width - margin.right} y1={py(yPosition(layout, tick))} y2={py(yPosition(layout, tick))} />
+            <line x1={plotLeft} x2={plotRight} y1={py(yPosition(layout, tick))} y2={py(yPosition(layout, tick))} />
             <text x={margin.left - 8} y={py(yPosition(layout, tick))} textAnchor="end" dominantBaseline="middle">{formatChartNumber(tick)}</text>
           </g>
         ))}
         {xLabels.map(({ label, at, index }) => (
-          <text key={`${label}-${index}`} className="chart-x-label" x={px(at)} y={height - 12} textAnchor="middle">{label.length > 14 ? `${label.slice(0, 13)}…` : label}</text>
+          <text key={`${label}-${index}`} className="chart-x-label" x={px(at)} y={height - 12} textAnchor="middle">{label}</text>
         ))}
         {series.map((entry, seriesIndex) => {
           const colour = colours[seriesIndex % colours.length];
@@ -98,6 +107,8 @@ export function ChartView({ kind, series, title }: { kind: 'line' | 'bar' | 'are
           );
         })}
       </svg>
+      </div>
+      {needsHorizontalScroll && <p id={`${id}-scroll-hint`} className="generated-chart-scroll-hint">Scroll horizontally to read all chart labels.</p>}
       <figcaption id={`${id}-caption`} className="visually-hidden">{`${title}: ${kind} chart of ${series.map((entry) => entry.name).join(', ')}`}</figcaption>
       {series.length > 1 && (
         <ul className="chart-legend" aria-hidden="true">

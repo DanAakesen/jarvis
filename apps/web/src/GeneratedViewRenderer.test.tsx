@@ -47,6 +47,54 @@ describe('GeneratedViewRenderer timeline', () => {
     expect(container.querySelector('.chart-legend')?.textContent).toBe('ReportedGenuine');
     expect(screen.getByRole('table', { name: 'Revenue values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(4);
   });
+
+  it('keeps long chart labels intact in a local scroll region and retains every value', () => {
+    const labels = ['2026 autumn harvest with an extended category label', '2026 winter planning with another extended category label'];
+    const view = {
+      version: 1, title: 'Seasonal output', renderer: 'chart',
+      source: { id: 'usage', status: 'complete', updatedAt: '2026-10-08T16:00:00.000Z' },
+      data: { kind: 'bar', series: [{ name: 'Reported', points: labels.map((x, index) => ({ x, y: index + 1 })) }] },
+    } as unknown as GeneratedView;
+    const { container } = render(<GeneratedViewRenderer view={view} />);
+    const plot = screen.getByRole('region', { name: 'Scrollable chart plot: Seasonal output' });
+
+    expect(plot.getAttribute('tabindex')).toBe('0');
+    expect(plot.getAttribute('aria-describedby')).toBeTruthy();
+    expect(screen.getByText('Scroll horizontally to read all chart labels.')).not.toBeNull();
+    expect(Array.from(container.querySelectorAll('.chart-x-label'), (label) => label.textContent)).toEqual(labels);
+    expect(Number(container.querySelector('svg')?.getAttribute('width'))).toBeGreaterThan(640);
+    expect(screen.getByRole('table', { name: 'Seasonal output values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+
+  it('keeps long prose, list, detail, task-card and status content intact', () => {
+    const longText = `https://example.com/${'unbroken-path-segment/'.repeat(4)}`;
+    const source = { id: 'research', status: 'complete' };
+    const views = [
+      { renderer: 'list', data: { items: [{ title: longText, description: longText, details: [{ label: 'Path', value: longText }] }] } },
+      { renderer: 'detail', data: { fields: [{ label: 'Path', value: longText }] } },
+      { renderer: 'text', data: { format: 'plain', content: `README ${longText}\n${longText}` } },
+      { renderer: 'task-card', data: { id: 'task-1', title: longText, state: 'Running', summary: longText } },
+      { renderer: 'status', data: { label: 'Status', value: longText, state: 'warning' } },
+    ];
+
+    for (const content of views) {
+      const view = { version: 1, title: 'Synthetic narrow view', source, ...content } as unknown as GeneratedView;
+      const { container, unmount } = render(<GeneratedViewRenderer view={view} />);
+      expect(container.textContent).toContain(longText);
+      unmount();
+    }
+  });
+
+  it('fits images to the renderer and keeps their alternative text', () => {
+    const view = {
+      version: 1, title: 'Synthetic image', renderer: 'image',
+      source: { id: 'image_generation', status: 'complete' },
+      data: { images: [{ url: 'https://github.com/example/image.png', alt: 'An oversized synthetic landscape' }] },
+    } as unknown as GeneratedView;
+    render(<GeneratedViewRenderer view={view} />);
+    expect(screen.getByRole('img', { name: 'An oversized synthetic landscape' }).getAttribute('src'))
+      .toBe('https://github.com/example/image.png');
+  });
 });
 
 describe('GeneratedViewRenderer table', () => {
@@ -65,6 +113,23 @@ describe('GeneratedViewRenderer table', () => {
     expect(headers.map((cell) => cell.classList.contains('generated-view-number'))).toEqual([true, false, false]);
     expect(rows.map((row) => Array.from(row.querySelectorAll('td'), (cell) => cell.classList.contains('generated-view-number'))))
       .toEqual([[true, false, false], [true, false, false], [true, false, false]]);
+  });
+
+  it('keeps wide tables inside a named, focusable scroll region without dropping cells', () => {
+    const columns = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
+    const longCell = 'unbroken-cell-value-'.repeat(12);
+    const view = {
+      version: 1, title: 'Wide synthetic table', renderer: 'table',
+      source: { id: 'research', status: 'partial' },
+      data: { columns, rows: [columns.map(() => longCell)] },
+    } as unknown as GeneratedView;
+    const { container } = render(<GeneratedViewRenderer view={view} />);
+    const region = screen.getByRole('region', { name: 'Scrollable table: Wide synthetic table' });
+
+    expect(region.getAttribute('tabindex')).toBe('0');
+    expect(container.querySelectorAll('th')).toHaveLength(12);
+    expect(container.querySelectorAll('td')).toHaveLength(12);
+    expect(container.querySelector('tbody')?.textContent).toContain(longCell);
   });
 });
 

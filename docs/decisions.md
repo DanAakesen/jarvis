@@ -37,6 +37,28 @@
   behavior and live provider acceptance are reported separately; fixture success
   is not deployment acceptance.
 
+## Workspace content stays within its allocated width (25 October 2026; Refs #1260)
+
+- Wrap repository text by default and provide an accessible “Wrap lines” checkbox
+  to restore original horizontal code layout. Keep source text, line numbers,
+  highlighted ranges, search marks and link behavior unchanged.
+- Let prose and long values wrap in their window. Keep intentional table/chart
+  exploration inside named, focusable local regions; show full chart labels and
+  retain all source values. Fit images to the frame without distortion.
+- Bound only the host container and first-party Jarvis report document. Do not
+  claim control over arbitrary external documents, execute them for inspection,
+  or weaken the report's scripts-only sandbox, CSP or validated bridge.
+- Keep the document from forcing a 280px minimum width below that CSS width at
+  high zoom. This preserves the surrounding workspace and foreground-window
+  transitions while preventing page-level horizontal overflow.
+- **Evidence:** component tests cover code wrapping and exact text, highlights
+  and marks; wide tables, chart labels and values; prose/list/detail/task/status,
+  image and timeline renderers; the knowledge graph and sandbox contract have
+  their existing focused suites. Synthetic Chromium covers 320/375/390px,
+  desktop and a narrow window, landscape, 200% effective CSS width, theme
+  changes, local scrolling, selection, foreground switching and close/reopen.
+  Physical iPhone acceptance remains with the owner; keep #1260 open until it.
+
 ## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
 
 Accepted for the direct owner request in #1239:
