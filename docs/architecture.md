@@ -250,7 +250,8 @@ The adapter verifies the next persisted reply before and after shared
 interpretation; ambiguous, superseded or unrelated replies lose conversational
 authority while the browser card remains available. Decisions still resolve
 the same durable browser confirmation and consume it once. Food call-site
-wiring, phrase interpretation and stream deadlines remain in #1278.
+wiring, phrase interpretation, stream deadlines and persisted-reply SQL tests
+are retained from the merged #1278 (`d0d679f`), unchanged by reconciliation.
 
 Integration checkpoint (25 October): #1264 at `fa3de91` adds
 `PendingProjectClarification`, `rememberProjectClarification`,
@@ -264,7 +265,8 @@ actual terminal response delivery, not an audible playback receipt. Missing
 or negative playback receipts do not block dispatch; explicit cancellation
 and failed response delivery still do. This PR does not modify those relay
 or timing paths. Combined-head qualification is still required after the
-related branches integrate.
+remaining related branches integrate. The current-main merge includes food;
+project clarification and acknowledgment branch-only changes are not imported.
 
 Routing no longer matches approval phrases. In chat, any turn with a calendar
 referent in the last two messages makes the agent call
@@ -6483,11 +6485,26 @@ staging and in the action callback. Existing Now owner-authenticated approval,
 persisted one-time consumption supplies authority. Food cards have an explicit
 120-second lifetime shared by SQL, visible expiry and the service timer;
 default confirmations for all other callers remain five minutes.
+For `log_estimate` only, private pending metadata binds the exact confirmation to
+the source message and session. The authenticated chat steering route and persisted
+browser-voice end-of-turn path interpret the next later owner reply against that
+summary, then resolve the same persisted one-time approval. No new food tool or
+model-supplied authority is added. Wrong-session, stale, ambiguous and superseded
+replies fail closed. Persisted session replies must contain exactly the approving
+message after the source, both before and after interpretation; a correction or
+cancellation during preparation cannot be skipped. An unrelated reply removes conversational authority, leaving
+Now controls available. A handled chat reply is consumed without aborting or
+replaying the active tool round. Voice uses the original tool result as its receipt.
 Per-tool pending target keys prevent duplicate concurrent cards; cancellation
 bounds the entire food operation to 180 seconds from execution entry.
 No global proposal manager, detached writer or new table is added.
 The hosted agent gives only this tool a 210-second response-read deadline,
 below the externally ingressed Container App's 240-second HTTP limit.
+The browser chat stream uses the existing 240-second ingress ceiling; the backend
+Foundry invocation reader reuses the 210-second food read budget below that ceiling,
+rather than cutting off approval at 120 seconds.
+Nonstreaming browser requests remain bounded at 120 seconds; stream-read failures
+show a stable uncertain-delivery recovery instead of raw transport diagnostics.
 Configured research/ordinary deadlines and connection/write/pool limits remain
 unchanged. Generated input uses one number/null nutrient type, not a coercible
 numeric-first union; strict domain validation still follows HTTP validation.

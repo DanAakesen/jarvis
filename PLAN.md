@@ -7,21 +7,50 @@ proposals, reply eligibility, cancellation/expiry, consumption and execution
 through `core/pending-action.ts`. Tool permission and food revision/presence
 checks remain with their tools. Browser-only proposals remain browser-only.
 Focused synthetic text/voice and browser regressions pass; live owner/device
-acceptance remains unverified. The related food reply/timing, project
-clarification and acknowledgment PRs are still in flight and are not merged
-by this change. Backend build/lint, secret scanning and read-only review passed.
+acceptance remains unverified. Current-main reconciliation includes the verified
+food merge `d0d679f` and retains its routing, timing and persisted-reply SQL
+fixture unchanged. Project clarification and acknowledgment remain in their
+separate PRs; this merge does not introduce their branch-only changes.
+Earlier backend build/lint, secret scanning and read-only review passed.
 Coordination review inspected #1278 `a09dfc1`, #1264 `fa3de91` (including
 `dc742dd` clarification behavior) and #1259 `f229ec7`. Preserve the food
 owner-interactions API on the shared lifecycle; no stream deadline or playback
 gate changes belong here. The overlapping Factory merge must retain
 clarification-specific provenance and target revalidation separately from
-action approval. Final combined-head qualification remains pending integration.
+action approval. Combined-head qualification is now pending this reconciliation.
 Food API reconciliation passed 622 targeted tests (one skipped), backend build,
 scoped lint and read-only review. It preserves the immediate-reply and
 same-millisecond food timestamp behavior without changing other action families.
 JavaScript CodeQL analysis was skipped because the database exceeded its size
 limit; this is not a clean automated security result. Next: PR qualification
 and live owner/device acceptance.
+
+## Natural food-estimate confirmation (#1277)
+
+Implemented estimate-only natural reply binding through the shared one-time
+approval service, text steering and English/Danish browser-voice transcript
+paths. Cancellation, expiry, exact proposal/source identity, idempotent intake
+receipts and button-only correction/deletion remain intact. Browser and backend
+chat streams use existing budgets (browser 240-second ingress ceiling, backend
+210-second food read budget below ingress); food's 180-second
+operation and 120-second approval limits are unchanged.
+
+Synthetic confirmation, replay, preparation/review timing, HTTP and English/Danish
+WebSocket regressions pass locally, along with backend/web builds and lint.
+Read-only review found no remaining significant issues. Chromium transport smoke
+checks at 1440px and 390px verified the streamed receipt and sanitized disconnect
+recovery with synthetic responses, not the signed-in production workflow.
+Qualification repair: merged main `5c0a61c`, then its successor `ac871bf`, retaining
+the food and main decision-log entries.
+The failing real-SQL review fixture now supplies the SQL conversation store and
+persisted source/replies instead of a session-only stub. Its clock follows the
+persisted source; browser and natural approval variants retain rejection,
+one-time consumption, intake replay, correction and deletion assertions.
+Full combined-tree qualification is being rerun; earlier-head CI is not acceptance
+of this repaired candidate.
+Next: live hosted-provider, microphone recognition and physical-device acceptance;
+these remain unverified. No personal food data or production writes are part of
+this change.
 
 ## Research result recovery (#1237; 25 October 2026)
 

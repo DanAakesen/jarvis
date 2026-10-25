@@ -268,8 +268,9 @@ relayed by the coordinator. This supersedes earlier camera-release holds below.
 The coordinator reports live chat `visual.path=image` on every tested turn;
 live voice image acceptance and physical-phone checks remain separate.
 
-Camera preview is a separate workspace window with local video, actual
-Front/Back status and mobile-touch-only switching. It docks without stopping
+Camera preview is a compact, preview-only workspace surface showing the local video with
+overlaid camera-switch and close controls; its accessible workspace identity and
+lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
 capture; Close/Turn off, session end and ten minutes without a user turn stop
 the tracks. Idle recovery stays visible. Camera controls never share or cover
 the composer. Camera-on chat and correlated EN/DA realtime turns upload a fresh
@@ -513,9 +514,8 @@ a fallback when Voice Live is not configured.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
+Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a compact **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video, actual Front/Back label, Live status and overlaid Switch/Close controls; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it. The compact phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow.
 With a screen share active and the camera off, generic visual questions in text chat such as **What do you see?** inspect the shared screen and send its context with the message. Camera-specific questions still require the camera; camera-conversation mode keeps its existing priority while the camera is on.
-
-Camera access starts after Dan turns it on in More and grants browser permission. It opens a separate **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video, actual Front/Back label, Live status and Turn off; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it. The compact phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close or Turn off stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt.
 
 Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames; enabling or switching alone does not upload. There is no Look now button and conversation capture does not require watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
 
@@ -643,7 +643,7 @@ request was received is not approval; identifying a project selects the target,
 not permission for an action on it. Browser-only proposals keep their
 authenticated browser approval boundary.
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains available. Only a current pending food estimate also accepts the owner's next natural reply in the same text/browser-voice session, without a separate button.
 
 P13-02 adds an optional web push opt-in, on in production since P13-03, for a
 visible alert that links to a durable owner-protected item. P13-21 includes
@@ -1505,7 +1505,12 @@ that cannot be shown completely and gives a rename-safe recovery. Model proposal
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
-approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Confirmations always remain in the browser app even if presence changes. Rejected,
+approval within its displayed two-minute window. For estimates only, a natural affirmative
+such as "yes, log that" in the same session consumes that exact pending approval.
+Unrelated/conditional replies, ambiguous proposals, stale replies and other sessions
+cannot authorize it; unrelated replies end conversational approval for that proposal.
+Corrections and deletions still require Now. Confirmations remain in the browser
+app even if presence changes, and present mode is rechecked before writing. Rejected,
 cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
 shared. No Health write, production activation or physical-phone acceptance is

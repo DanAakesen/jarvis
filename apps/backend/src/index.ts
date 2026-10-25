@@ -589,6 +589,7 @@ try {
     ? createOwnerInteractionService({
       ownerObjectId: config.auth.ownerObjectId,
       store: createConfirmationStore(database.pool),
+      ...(conversationStore ? { conversationStore } : {}),
       onWebNotification: async (kind, text) => {
         if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
         await nowFeedStore.recordNotification(kind, text);

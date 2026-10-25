@@ -163,7 +163,10 @@ describe('composer attachments', () => {
     renderConversation();
     await screen.findByRole('textbox', { name: 'Message Jarvis' });
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    expect(screen.getByRole('menuitem', { name: 'Attach file or photo' })).toBeTruthy();
+    const menu = screen.getByRole('menu');
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items[0]?.getAttribute('aria-label') ?? items[0]?.textContent).toContain('Attach file or photo');
+    expect(items[1]?.textContent).toContain('Language');
   });
 });
 
