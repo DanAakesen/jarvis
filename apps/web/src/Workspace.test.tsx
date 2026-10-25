@@ -1900,7 +1900,7 @@ describe('camera preview ownership', () => {
 
     expect(cameraWindow.querySelector('.workspace-window-heading')).toBeNull();
     expect(cameraWindow.classList.contains('luminous-glass')).toBe(false);
-    expect(picture.classList.contains('luminous-glass')).toBe(true);
+    expect(picture.classList.contains('luminous-glass')).toBe(false);
     expect(within(picture).getByRole('button', { name: 'Switch to back camera' })).not.toBeNull();
     expect(within(picture).getByRole('button', { name: 'Close camera preview' })).not.toBeNull();
     expect(within(cameraWindow).queryByRole('button', { name: 'Minimise Camera preview' })).toBeNull();
