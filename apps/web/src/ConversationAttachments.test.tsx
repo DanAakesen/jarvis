@@ -154,6 +154,25 @@ describe('composer attachments', () => {
     expect(TestURL.revokeObjectURL).toHaveBeenCalledWith(previewUrl);
   });
 
+  it('falls back to the uploaded image when a local preview fails before upload completes', async () => {
+    const previewUrl = 'blob:preview/holiday.jpg';
+    const signedUrl = 'https://acct.blob.core.windows.net/x?sig=1';
+    stubObjectUrl(previewUrl);
+    loadAttachmentUrl.mockResolvedValue(signedUrl);
+    let finish!: () => void;
+    uploadAttachment.mockImplementationOnce((_c, _cfg, file: File) =>
+      new Promise((resolve) => {
+        finish = () => resolve({ id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready' });
+      }));
+    renderConversation();
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
+    fireEvent.error(await screen.findByRole('img', { name: 'Preview of holiday.jpg' }));
+    finish();
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', signedUrl));
+    expect(loadAttachmentUrl).toHaveBeenCalledWith(expect.any(Function), config, fileId, expect.any(AbortSignal));
+  });
+
   it('turns a pasted screenshot into an attachment and keeps pasted text', async () => {
     renderConversation();
     const box = await screen.findByRole('textbox', { name: 'Message Jarvis' });
@@ -243,6 +262,15 @@ describe('conversation attachments', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Open bug.png' }));
     await waitFor(() => expect(tab.location.href).toBe('https://acct.blob.core.windows.net/x?sig=1'));
     expect(tab.opener).toBeNull();
+  });
+
+  it('replaces a failed sent-image preview with an accessible unavailable state', async () => {
+    loadConversationHistory.mockResolvedValue(history());
+    loadAttachmentUrl.mockResolvedValue('https://acct.blob.core.windows.net/x?sig=1');
+    renderConversation();
+    fireEvent.error(await screen.findByRole('img', { name: 'Preview of bug.png' }));
+    expect(await screen.findByRole('img', { name: 'Preview unavailable for bug.png' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Preview of bug.png' })).toBeNull();
   });
 
   it('shows an expired attachment and other open failures', async () => {

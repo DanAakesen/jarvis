@@ -29,18 +29,25 @@ function ComposerImagePreview({ item, getAccessToken, config }: {
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [localPreviewFailed, setLocalPreviewFailed] = useState(false);
+  const fallbackRequested = useRef(false);
   useEffect(() => {
-    if (item.previewUrl || !item.id || item.status !== 'ready') return;
+    if ((item.previewUrl && !localPreviewFailed) || !item.id || item.status !== 'ready' || fallbackRequested.current) return;
+    fallbackRequested.current = true;
     const controller = new AbortController();
     void loadAttachmentUrl(getAccessToken, config, item.id, controller.signal)
       .then(setUrl)
       .catch(() => { if (!controller.signal.aborted) setUnavailable(true); });
     return () => controller.abort();
-  }, [config, getAccessToken, item.id, item.previewUrl, item.status]);
+  }, [config, getAccessToken, item.id, item.previewUrl, item.status, localPreviewFailed]);
 
-  const previewUrl = item.previewUrl ?? url;
+  const previewUrl = item.previewUrl && !localPreviewFailed ? item.previewUrl : url;
   return previewUrl && !unavailable
-    ? <img className="attachment-thumb" src={previewUrl} alt={`Preview of ${item.name}`} onError={() => setUnavailable(true)} />
+    ? <img className="attachment-thumb" src={previewUrl} alt={`Preview of ${item.name}`}
+        onError={() => {
+          if (previewUrl === item.previewUrl) setLocalPreviewFailed(true);
+          else setUnavailable(true);
+        }} />
     : <span className="attachment-thumb" role="img" aria-label={`Preview unavailable for ${item.name}`}>
         <FileGlyph image />
       </span>;
@@ -218,7 +225,7 @@ function ImageAttachmentLink({ getAccessToken, config, attachment }: {
         aria-label={`Open ${attachment.name}`} aria-busy={preview.phase === 'loading' || state.phase === 'opening' || undefined}
         disabled={state.phase === 'expired'}>
         {preview.phase === 'ready'
-          ? <img src={preview.url} alt={`Preview of ${attachment.name}`} />
+          ? <img src={preview.url} alt={`Preview of ${attachment.name}`} onError={() => setPreview({ phase: 'error' })} />
           : <span className="message-attachment-preview-state" role={preview.phase === 'loading' ? 'status' : 'img'}
               aria-label={preview.phase === 'error' ? `Preview unavailable for ${attachment.name}` : undefined}>
               {preview.phase === 'loading' ? 'Loading image preview…' : 'Preview unavailable'}
