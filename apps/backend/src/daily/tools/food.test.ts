@@ -3,7 +3,10 @@ import type { FastifyRequest } from 'fastify';
 import type { ConversationHistoryMessage, ConversationSession } from '../../core/conversation-store.js';
 import { dailyFoodTool } from './food.js';
 import type { IntakeAuthority, MealInput } from '../nutrition/model.js';
-import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
+import { createToolRegistry, ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
+import {
+  executeRealtimeCapabilityCall, VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL,
+} from '../../voice/realtime.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const at = new Date('2026-10-16T23:30:00Z');
@@ -37,14 +40,43 @@ function fixture() {
   const getHistory = vi.fn(async () => ({ messages: [{ ...source, channel: 'chat', language: 'en', interrupted: false,
     voiceMinutes: null, toolCalls: [], attachments: [] } satisfies ConversationHistoryMessage], nextCursor: null }));
   const request = { server: { ownerObjectId: owner, conversationStore: { getSession, getHistory } },
-    headers: {}, principal: { objectId: owner }, jarvisConversationMessage: { ...source } } as unknown as FastifyRequest;
+    headers: {}, principal: { objectId: owner }, jarvisConversationMessage: { ...source },
+    validateInput: vi.fn(() => true), getValidationFunction: vi.fn(() => undefined), log: { info: vi.fn() },
+  } as unknown as FastifyRequest;
   const nutrition = vi.fn(() => store);
   const tool = dailyFoodTool(nutrition, () => at.getTime());
   return { tool, request, nutrition, store, favorite, session, getHistory, rows };
 }
 const favoriteInput = { operation: 'log_favorite' };
 
+async function executeThroughVoiceCapability(tool: ReturnType<typeof dailyFoodTool>, request: FastifyRequest, input: unknown) {
+  const registry = createToolRegistry([{ id: 'daily', tools: [tool] }]);
+  const discovered = new Set<string>();
+  const discovery = JSON.parse(await executeRealtimeCapabilityCall({
+    type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_DISCOVERY_TOOL,
+    call_id: 'food-discovery', arguments: '{}',
+  }, registry, request, signal(), discovered, undefined, false));
+  expect(discovery).toMatchObject({ outcome: 'ok', result: { capabilities: [expect.objectContaining({ name: 'daily_food' })] } });
+  return executeRealtimeCapabilityCall({
+    type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_EXECUTION_TOOL,
+    call_id: 'food-execution', arguments: JSON.stringify({ capability: 'daily_food', arguments: input }),
+  }, registry, request, signal(), discovered, undefined, false);
+}
+
 describe('inactive internal food tool', () => {
+  it.each([
+    ['explicit exact label', 'Log yoghurt: 123 kcal, protein 4 g', { operation: 'log_exact' }],
+    ['saved favourite', 'Log my favourite Synthetic Dinner', favoriteInput],
+  ])('preserves %s semantics through compact voice discovery and dispatch', async (_label, text, input) => {
+    const f = fixture();
+    f.request.jarvisConversationMessage = { ...source, text };
+    const output = JSON.parse(await executeThroughVoiceCapability(f.tool, f.request, input));
+    expect(output).toMatchObject({ tool: 'daily_food', outcome: 'ok', result: { status: 'committed' } });
+    expect(f.store.log).toHaveBeenCalledOnce();
+    expect(f.store.log.mock.calls[0]![0].captureMethod).toBe('voice');
+    expect(f.store.log.mock.calls[0]![1]).toMatchObject({ proposalRequired: false });
+    expect(output.result.record).not.toHaveProperty('private_field');
+  });
   it('logs the actual saved snapshot from verified voice with no second approval and a safe real receipt', async () => {
     const f = fixture();
     const result = await f.tool.execute(favoriteInput, f.request, signal());

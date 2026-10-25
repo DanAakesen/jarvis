@@ -673,8 +673,20 @@ describe('Google Calendar and Gmail tools', () => {
         expect(response.result).not.toHaveProperty('instruction');
         expect(response.confirmation).not.toContain('Done:');
         expect(response.result.detail).toContain('1 of 3');
-        expect((await confirm()).json().outcome).toBe('refused');
+        setLatest(conversationMessage('44', 'yes', new Date(Date.now() + 20_000)));
+        const replay = await app.inject({
+          method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('44'),
+          payload: { confirmationCode: staged.result.confirmationCode },
+        });
+        expect(replay.json().outcome).toBe('refused');
         expect(request).toHaveBeenCalledTimes(2);
+        const reconciled = await app.inject({
+          method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('44'),
+          payload: {},
+        });
+        expect(reconciled.json()).toMatchObject({
+          outcome: 'ok', result: { status: 'none', lastChange: { status: 'partial' } },
+        });
       },
     );
 

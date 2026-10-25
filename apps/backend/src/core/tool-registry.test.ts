@@ -38,6 +38,29 @@ describe('tool catalogue validation', () => {
     expect(registry.list().map(({ name }) => name)).toEqual(definitions.map(({ name }) => name));
   });
 
+  it('retains validated, immutable execution metadata for shared capability adapters', () => {
+    const metadata = {
+      defaultEffect: 'unclassified',
+      operation: { field: 'operation', effects: { read: 'read', update: 'action' } },
+    } as const;
+    const registry = createToolRegistry([{
+      id: 'a', tools: [tool('preferences', { execution: metadata })],
+    }]);
+    const execution = registry.get('preferences')!.execution!;
+    expect(execution).toEqual(metadata);
+    expect(Object.isFrozen(execution)).toBe(true);
+    expect(Object.isFrozen(execution.operation)).toBe(true);
+    expect(Object.isFrozen(execution.operation!.effects)).toBe(true);
+  });
+
+  it('rejects malformed execution metadata', () => {
+    expect(() => createToolRegistry([{
+      id: 'a', tools: [tool('invalid', {
+        execution: { defaultEffect: 'action', operation: { field: 'operation', effects: { read: 'unknown' } } },
+      })],
+    }])).toThrow('Invalid Jarvis tool execution metadata');
+  });
+
   it('refuses an over-long description and an oversized catalogue', () => {
     expect(() => createToolRegistry([{
       id: 'a', tools: [tool('long', { description: 'x'.repeat(MAX_TOOL_DESCRIPTION_CHARACTERS + 1) })],

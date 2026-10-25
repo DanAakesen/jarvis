@@ -785,29 +785,18 @@ Write-back stays in `dry-run` until the fixed image is deployed and the
 affected note on GitHub is repaired. Both conditions were met the same morning;
 see the entry above.
 
-## Known-good English cold start and background probes (21 October 2026; #1188)
+## Historical English startup measurement (21 October 2026; superseded 25 October)
 
 Refs DanAakesen/jarvis#1184, Refs DanAakesen/jarvis#1177.
 
-The 21 October production measurement showed that R0 (122 tools, 129,098 frame
-bytes) stalled at 8,001 ms while R1 (111 tools, 107,755 frame bytes) became
-ready in 1,341 ms. New English voice sessions therefore start at R1 rather
-than paying for R0 after every backend restart. The existing foreground ladder,
-step-down behavior and successful-rung memory remain unchanged.
-
-After a session is ready below R0, one independent probe sequence per process
-may run every 30 minutes. It tests `full`, `no_proactive`, `no_daily`, then
-`reduced_plus_copies` using separate sockets and the normal realtime frame
-builder. Each probe has an 8-second deadline; only a ready `full` probe updates
-the remembered rung. Other probe frames measure tool-content and size
-hypotheses without changing the fallback ladder or active session. Content-free
-probe logs contain only fixed names, counts, byte sizes, outcomes and timings.
-Probing is enabled by default and can be disabled with
-`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false`.
-
-This supersedes the #1184 rule that new sessions start at the last known rung
-and that restart is required to try R0. Actual probe outcomes and provider
-acceptance still require an owner English voice attempt after deployment.
+The 21 October production measurement showed that an R0 frame (122 tools,
+129,098 frame bytes) stalled at 8,001 ms while the then-current R1 frame (111
+tools, 107,755 frame bytes) became ready in 1,341 ms. These are historical
+observations, not proof of a provider limit or the readiness of today's frames.
+The English-only rung ladder and its background probes were subsequently
+removed. The 25 October correction uses direct full-registry schemas followed
+by a capability-preserving discovery representation for both Voice Live
+languages; see the current decision below.
 
 ## Route proactive tasks to Personal/Work and exclude project work (21 October 2026; #1186)
 
@@ -836,56 +825,61 @@ writes, conflict retry and recovery. Ordinary user-requested task creation,
 
 Refs DanAakesen/jarvis#1186
 
-## Measured tool-budget fallback for English voice (21 October 2026; #1184)
+## Historical English tool-budget fallback (21 October 2026; superseded 25 October)
 
 Refs DanAakesen/jarvis#1177, Refs DanAakesen/jarvis#1153, Refs DanAakesen/jarvis#1182.
-Production logs of 21 October show nine English sessions in which Voice Live accepted
-the socket and sent `session.created` but never answered the 122-tool, about 129 KB
-`session.update` (no `session.updated`, no `error`; relay close 4010 after 15 s).
-Azure Monitor shows nine `onHandshake` calls and no `VoiceLive_SessionDone`. The last
-working English sessions are from 16-17 October; since then the frame gained the
-`daily_*` and `proactive_recent_items` tools, lost the Teams tools and grew its
-instruction text. This evidence justifies a measured fallback and supersedes the
-"no speculative payload reduction" part of the #1177 entry.
+Production logs from 21 October showed nine English sessions in which Voice Live
+accepted the socket and sent `session.created` but did not answer the then-current
+122-tool, approximately 129 KB `session.update`; Azure Monitor showed nine
+`onHandshake` calls and no `VoiceLive_SessionDone`. That incident motivated
+bounded recovery, but did not identify a tool-count, schema-size or context
+limit.
 
-The English route now tries a fixed ladder (R0 all tools; R1 without `daily_*` and
-`proactive_recent_items`; R2 about half of R0's tool bytes, always keeping
-`set_presence_mode` and `set_away_mode`; R3 no tools; R4 no tools and compact
-instructions), each with a fresh socket and an 8 s (R0) or 6 s (R1-R4) deadline to
-`session.updated`. Reduced rungs add one sentence telling Jarvis to say tools are
-unavailable and suggest the chat. The last rung that became ready is remembered per
-backend process (no expiry, no re-probing; a restart clears it), later frames and
-`response.create` instructions use the selected rung, and the relay refuses calls to
-tools outside it. Content-free `voice.tool_budget_attempt`, `_selected` and
-`_exhausted` logs plus `toolBudgetRung`/`toolBudgetAttempts` in the session summary
-show which size worked. Danish is unchanged. The new log messages are added to the
-structured-log allow-list with fixed vocabularies only.
+The English-only reduced catalogue and fallback ladder described in the
+historical implementation were replaced on 25 October. The current recovery
+preserves the canonical registry: both Voice Live language paths try full direct
+schemas, then compact paged discovery and guarded dispatch over the same
+registry. See the current shared capability decision below. Production
+responsiveness still requires an owner browser voice attempt after deployment.
 
-The limit itself is still unverified: no tool-count, tool-byte or context limit is
-documented for this Voice Live API version, and none can be measured from CI. The
-rung that produces `session.updated` after deployment is the first real measurement;
-the owner makes one English voice attempt and reads it from the logs
-([runbook](runbook.md#voice-startup-diagnosis)).
-
-## Readiness-gated Health access in English voice (22 October 2026; #1188)
+## Historical readiness-gated Health access (22 October 2026; superseded 25 October)
 
 Refs DanAakesen/jarvis#1184, DanAakesen/jarvis#1177.
 
-Post-deployment `voice.tool_budget_probe` records were not available to this
-agent, so this change does not claim a cause for the earlier R0/R1 startup
-difference. Keep the previously measured reduced frame as the cold-start rung
-(now named R2). Add R1 as the exact `no_proactive` candidate: it contains the
-configured `daily_*` tools, excludes `proactive_recent_items`, and uses the
-reduced-rung instructions. Promote subsequent sessions to R1 only when that
-independent frame receives `session.updated`; a ready full frame still promotes
-to R0. A failed or inconclusive probe leaves the known-good cold start in
-place, and foreground fallback continues down the bounded ladder.
+This interim approach made Health access conditional on Voice Live accepting a
+Health-capable full frame or a background probe/update. It is superseded by the
+25 October shared discovery transport, which retains access to the canonical
+catalogue during bounded fallback and requires no active-session promotion.
+The production Health workflow and its approval boundary are unchanged; a live
+owner verification is still required.
 
-The probe is evidence that its exact frame became ready at that time, not proof
-of a provider limit or of a specific tool, count, or size as the cause. Health
-access is therefore conditional on Voice Live accepting the Health-capable frame
-in that process; verify a real English voice Health request after deployment
-before closing #1188.
+## Capability-preserving Voice Live discovery for Danish and English (25 October 2026; #1188)
+
+Refs DanAakesen/jarvis#1188.
+
+Both Danish and English browser Voice Live paths use the canonical backend tool
+registry. R1 advertises its full configured schema set directly. If startup
+times out, errors or closes before readiness, R2 advertises bounded paged
+discovery and execution wrappers backed by that same registry. Discovery pages
+are limited to eight schemas and 1 MiB; execution requires prior discovery and
+delegates to the existing realtime validator/dispatcher. The transport does not
+maintain a reduced capability whitelist or a second approval policy.
+
+Only a provider-acknowledged `session.updated` selects a representation for the
+current session and process-local reconnect memory. There are two bounded
+attempts on fresh sockets, no background probes, and no active-session
+promotion. If discovery cannot return a schema within its bound, it reports an
+explicit error rather than silently dropping it. Danish hosted-agent fallback
+retains its provider-owned configuration and readiness contract, distinct from
+Voice Live.
+
+Direct exact/favourite food logging and the browser Now review for estimates and
+corrections remain unchanged; spoken agreement is not approval. The same
+backend authorization, validation, identity and session-isolation logic remains
+authoritative. Local synthetic tests cover real relay selection, compact
+discovery/dispatch and food approval/denial, but do not establish live provider,
+browser-audio or physical-iPhone acceptance. The 21 October timings remain
+historical evidence only and do not prove a provider schema or context limit.
 
 ## Notes Tasks panel: tick to complete with Undo, quick add to Inbox (22 October 2026; #1085)
 
@@ -8310,3 +8304,28 @@ Offline synthetic checks establish local behavior only, not live acceptance.
 ## Chat tool chips hide after delivery (23 October 2026; #1085)
 
 Tool chips appear only while Jarvis is working. Once a reply is delivered the transcript keeps just the task link and any generated image, so a finished turn reads as plain conversation. While working, the status line names the actual activity (derived from the running tool) instead of rotating random phrases, and finished steps use a bare thin tick or cross. The transcript also stays pinned to the end while a reply grows after it was added (it watches the messages, not only the transcript box), without pulling back a reader who scrolled up. No backend or contract change.
+
+## Unbounded productive chat tool continuation (25 October 2026; #1256)
+
+Normal chat and voice keep requesting model responses after tool-bearing rounds
+until the provider returns a final answer; do not impose a replacement round
+count. Retain the provider's per-response output/context constraints, backend
+tool outcomes, authorization and confirmation checks, and caller cancellation.
+Use the shared `JarvisTool.execution` contract in
+`apps/backend/src/core/tool-registry.ts` and expose it through `GET /tools`.
+Read effects execute fresh; action and unclassified effects reuse results for
+the same provider-issued call ID within the originating stored message.
+Additionally, after an uncertain error, a new call ID with the same canonical
+tool input in that same source message reuses the uncertain result to prevent a
+second write. A later owner message starts a new action scope. Known outcomes
+with distinct call IDs remain distinct even when arguments match. Metadata never
+grants permission; backend authorization, validation, confirmation and
+owner-isolation checks remain authoritative. A replayed invocation permits a
+tool-free synthesis attempt only when the round contains no other fresh work; if
+the provider then requests a tool, fail explicitly as `tool_loop_stalled`. Keep
+smoke invocation's separate bounded behavior. This removes only the
+ordinary-conversation cutoff; it does not establish the cause of the reported
+production failure or prove live provider acceptance. A provider-incomplete
+response after tool execution remains a failure: no partial reply is synthesized
+from prior tool outputs, and the user-facing warning indicates that an action may
+have completed. Recovery of useful partial results is not implemented.

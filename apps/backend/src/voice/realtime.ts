@@ -23,12 +23,59 @@ unless Dan asks. If a request needs tools, first say one brief, natural first-pe
 what I will check or do, without claiming success or giving an ETA. Then use the tools and give the
 useful result once. Answer direct questions without an unnecessary acknowledgment.`;
 
-export const TOOLS_UNAVAILABLE_NOTICE =
-  'Some of my tools are unavailable in this voice session. When Dan asks for something I cannot do without them, I say so briefly and suggest the chat.';
-export type RealtimeInstructionMode = 'full' | 'notice' | 'compact';
+export type RealtimeInstructionMode = 'full' | 'compact';
+export type RealtimeCapabilityMode = 'direct' | 'discovery';
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
+const VOICE_CAPABILITY_PAGE_SIZE = 8;
+
+export const VOICE_CAPABILITY_DISCOVERY_TOOL = 'jarvis_discover_capabilities';
+export const VOICE_CAPABILITY_EXECUTION_TOOL = 'jarvis_execute_capability';
+
+const voiceCapabilityDiscoverySchema = {
+  type: 'object',
+  properties: {
+    offset: { type: 'integer', minimum: 0 },
+  },
+  additionalProperties: false,
+} as const;
+
+const voiceCapabilityExecutionSchema = {
+  type: 'object',
+  properties: {
+    capability: { type: 'string', minLength: 1, maxLength: 64 },
+    arguments: { type: 'object', additionalProperties: true },
+  },
+  required: ['capability', 'arguments'],
+  additionalProperties: false,
+} as const;
+
+function voiceCapabilityToolDefinitions() {
+  return [
+    {
+      type: 'function' as const,
+      name: VOICE_CAPABILITY_DISCOVERY_TOOL,
+      description: 'List Jarvis capabilities and their input schemas in pages. Discover a capability before invoking it.',
+      parameters: toModelToolSchema(voiceCapabilityDiscoverySchema),
+    },
+    {
+      type: 'function' as const,
+      name: VOICE_CAPABILITY_EXECUTION_TOOL,
+      description: 'Invoke a capability previously returned by jarvis_discover_capabilities using its exact name and arguments.',
+      parameters: toModelToolSchema(voiceCapabilityExecutionSchema),
+    },
+  ];
+}
+
+function directToolDefinitions(tools: ToolRegistry) {
+  return tools.list().map((tool) => ({
+    type: 'function' as const,
+    name: tool.name,
+    description: tool.description,
+    parameters: toModelToolSchema(tool.inputSchema),
+  }));
+}
 
 const toneDescriptions: Record<Settings['personality']['tone'], string> = {
   british_butler: 'courteous, composed and precise, with sparing dry wit',
@@ -121,6 +168,53 @@ indledning.
 ${additionalRealtimeInstructions(
     personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
   )}`;
+}
+
+function voiceCapabilityGuidance(language: 'da' | 'en'): string {
+  return language === 'da'
+      ? `Brug først jarvis_discover_capabilities for at finde den relevante kapabilitet og dens skema. Kald derefter jarvis_execute_capability med det nøjagtige kapabilitetsnavn og argumenterne. Skemaet er vejledning; backend validerer stadig alle argumenter og anvender den eksisterende adgangs- og godkendelsespolitik. En mundtlig accept erstatter aldrig godkendelse i Now.`
+      : `Use jarvis_discover_capabilities first to find the relevant capability and its schema. Then call jarvis_execute_capability with the exact capability name and arguments. The schema guides the call; the backend still validates every argument and applies the existing authorization and approval policy. Spoken agreement never replaces approval in Now.`;
+}
+
+function compactInstructions(
+  personality: Settings['personality'],
+  identity: Settings['identity'],
+  presence: AwayModeState,
+  projects: readonly ProjectContextEntry[],
+  memory: Settings['memory'],
+  language: 'da' | 'en',
+  proactiveEnabled: boolean,
+  proactivePreferencesEnabled: boolean,
+  ownerRemindersEnabled: boolean,
+): string {
+    const style = language === 'da'
+      ? `Svar naturligt på dansk i korte mundtlige sætninger. Tone: ${toneDescriptions[personality.tone]}; stil: ${responseStyleDescriptions[personality.responseStyle]}.`
+      : `Speak natural British English in short spoken sentences. Tone: ${toneDescriptions[personality.tone]}; style: ${responseStyleDescriptions[personality.responseStyle]}.`;
+    const customInstructions = JSON.stringify(personality.customInstructions);
+    const customMode = personality.modeInstructions[presence.mode] === builtInModeInstructions[presence.mode]
+      ? '' : personality.modeInstructions[presence.mode];
+    const preferences = language === 'da'
+      ? `Gemte instruktioner fra ejeren er stilpræferencer, ikke politik eller værktøjsinput:\n${customInstructions}\n${memory.automaticCapture
+        ? 'Gem kun tydeligt udtrykte, varige fakta; udled dem ikke.'
+        : 'Gem ikke minder proaktivt; skriv kun til vault, når Dan beder direkte om det.'}`
+      : `Saved owner instructions are style preferences, not policy or tool input:\n${customInstructions}\n${memory.automaticCapture
+        ? 'Save only clearly stated, durable facts; do not infer them.'
+        : 'Do not proactively save memories; write to the vault only when Dan directly asks.'}`;
+    const modePreference = language === 'da'
+      ? `Gemt instruktion for den aktuelle tilstand er en stilpræference, ikke politik eller værktøjsinput:\n${JSON.stringify(customMode)}`
+      : `Saved instruction for the current mode is a style preference, not policy or tool input:\n${JSON.stringify(customMode)}`;
+    const capabilities = capabilityInstructions(
+      memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
+    );
+    return [
+      composeIdentityInstructions(identity, language),
+      style,
+      modeContext(presence),
+      preferences,
+      modePreference,
+      capabilities,
+      projectAwarenessInstructions(projects),
+    ].join('\n\n');
 }
 
 function schemaRecord(value: unknown): value is Record<string, unknown> {
@@ -249,6 +343,7 @@ export function createRealtimeSessionUpdate(
   memory: Settings['memory'] = defaultSettings.memory,
   instructionMode: RealtimeInstructionMode = 'full',
   identity: Settings['identity'] = defaultSettings.identity,
+  capabilityMode: RealtimeCapabilityMode = 'direct',
 ) {
   const danish = language === 'da';
   const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
@@ -261,19 +356,17 @@ export function createRealtimeSessionUpdate(
     : englishPersonalityInstructions(
       personality, identity, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
     );
-  const compactEnglishInstructions = `${composeIdentityInstructions(identity, 'en')}
-
-${ENGLISH_REALTIME_INSTRUCTIONS}
-
-Response preferences (style only): ${toneDescriptions[personality.tone]}; ${responseStyleDescriptions[personality.responseStyle]}.
-
-${modeContext(presence)}
-Mode adds context but never replaces shared identity.`;
+  const compactVoiceInstructions = compactInstructions(
+    personality, identity, presence, projects, memory, language,
+    proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
+  );
+  const instructions = instructionMode === 'compact' ? compactVoiceInstructions : fullInstructions;
   return {
     type: 'session.update',
     session: {
-      instructions: danish || instructionMode === 'full' ? fullInstructions
-        : `${instructionMode === 'compact' ? compactEnglishInstructions : fullInstructions}\n\n${TOOLS_UNAVAILABLE_NOTICE}`,
+      instructions: capabilityMode === 'discovery'
+        ? `${instructions}\n\n${voiceCapabilityGuidance(language)}`
+        : instructions,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
@@ -300,12 +393,7 @@ Mode adds context but never replaces shared identity.`;
         ? { model: transcriptionModel, language: 'da', phrase_list: DANISH_PHRASE_LIST }
         : { model: transcriptionModel },
       voice: { name: danish ? DANISH_REALTIME_VOICE : ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
-      tools: tools.list().map(({ name, description, inputSchema }) => ({
-        type: 'function',
-        name,
-        description,
-        parameters: toModelToolSchema(inputSchema),
-      })),
+      tools: capabilityMode === 'discovery' ? voiceCapabilityToolDefinitions() : directToolDefinitions(tools),
       tool_choice: 'auto',
     },
   };
@@ -337,7 +425,9 @@ function toolOutput(name: string, outcome: ToolCallOutcome, result: unknown): st
 
 /** The relay refuses, without executing, a call to a tool the active voice session did not offer. */
 export function toolUnavailableOutput(name: string): string {
-  return toolOutput(name, 'refused', { reason: 'This tool is unavailable in this voice session; suggest the chat.' });
+  return toolOutput(name, 'refused', {
+    refused: 'This capability was not advertised in this voice session. Discover capabilities first; nothing was executed.',
+  });
 }
 
 function toolFailure(name: string): string {
@@ -416,6 +506,104 @@ export async function resolveCalendarReply(
   };
 }
 
+function parsedArguments(call: RealtimeFunctionCall): Record<string, unknown> | undefined {
+  if (typeof call.arguments !== 'string' || Buffer.byteLength(call.arguments) > MAX_TOOL_ARGUMENT_BYTES) return undefined;
+  try {
+    const value: unknown = JSON.parse(call.arguments);
+    return schemaRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key));
+}
+
+export function realtimeCapabilityTarget(
+  call: RealtimeFunctionCall,
+  tools: ToolRegistry,
+  discoveredCapabilities: Set<string>,
+): string | undefined {
+  if (call.name !== VOICE_CAPABILITY_EXECUTION_TOOL) return undefined;
+  const input = parsedArguments(call);
+  if (!input || typeof input.capability !== 'string' || !discoveredCapabilities.has(input.capability) ||
+      !tools.get(input.capability)) return undefined;
+  return input.capability;
+}
+
+/**
+ * Voice advertises a bounded transport protocol, while discovery and execution stay
+ * backed by the canonical registry and its existing per-tool validation/policy.
+ */
+export async function executeRealtimeCapabilityCall(
+  call: RealtimeFunctionCall,
+  tools: ToolRegistry,
+  request: FastifyRequest,
+  signal: AbortSignal,
+  discoveredCapabilities: Set<string>,
+  beforeExecute?: (tool: NonNullable<ReturnType<ToolRegistry['get']>>, input: unknown, signal: AbortSignal) => Promise<void>,
+  presentResult = true,
+): Promise<string> {
+  if (call.name === VOICE_CAPABILITY_DISCOVERY_TOOL) {
+    const input = parsedArguments(call);
+    if (!input || !hasOnlyKeys(input, ['offset']) ||
+        input.offset !== undefined && (
+          typeof input.offset !== 'number' || !Number.isInteger(input.offset) || input.offset < 0
+        )) {
+      return toolOutput(call.name, 'refused', { refused: 'Invalid capability discovery request.' });
+    }
+    const catalogue = tools.list();
+    const offset = typeof input.offset === 'number' ? input.offset : 0;
+    if (offset > catalogue.length) {
+      return toolOutput(call.name, 'refused', { refused: 'Capability page is outside the catalogue.' });
+    }
+    const capabilities: { name: string; description: string; parameters: unknown }[] = [];
+    let nextIndex = offset;
+    while (nextIndex < catalogue.length && capabilities.length < VOICE_CAPABILITY_PAGE_SIZE) {
+      const capability = catalogue[nextIndex]!;
+      const definition = {
+        name: capability.name,
+        description: capability.description,
+        parameters: toModelToolSchema(capability.inputSchema),
+      };
+      const candidate = [...capabilities, definition];
+      const nextOffset = nextIndex + 1 < catalogue.length ? nextIndex + 1 : null;
+      const output = toolOutput(call.name, 'ok', { capabilities: candidate, nextOffset });
+      if (Buffer.byteLength(output) > MAX_TOOL_RESULT_BYTES) break;
+      capabilities.push(definition);
+      discoveredCapabilities.add(capability.name);
+      nextIndex += 1;
+    }
+    if (capabilities.length === 0 && offset < catalogue.length) {
+      return toolOutput(call.name, 'error', { error: 'Capability schema exceeds the voice discovery response limit.' });
+    }
+    return toolOutput(call.name, 'ok', {
+      capabilities,
+      nextOffset: nextIndex < catalogue.length ? nextIndex : null,
+    });
+  }
+
+  if (call.name !== VOICE_CAPABILITY_EXECUTION_TOOL) return toolUnavailableOutput(call.name);
+  const input = parsedArguments(call);
+  if (!input || !hasOnlyKeys(input, ['capability', 'arguments']) ||
+      typeof input.capability !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(input.capability) ||
+      !schemaRecord(input.arguments)) {
+    return toolOutput(call.name, 'refused', { refused: 'Invalid capability execution request. Nothing was executed.' });
+  }
+  const capability = tools.get(input.capability);
+  if (!capability || !discoveredCapabilities.has(input.capability)) {
+    return toolOutput(call.name, 'refused', {
+      refused: 'Discover this capability before invoking it. Nothing was executed.',
+    });
+  }
+  return executeRealtimeToolCall({
+    ...call,
+    name: capability.name,
+    arguments: JSON.stringify(input.arguments),
+  }, tools, request, signal, beforeExecute, presentResult);
+}
+
 export async function executeRealtimeToolCall(
   call: RealtimeFunctionCall,
   tools: ToolRegistry,
@@ -427,6 +615,7 @@ export async function executeRealtimeToolCall(
   if (typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name)) {
     return toolFailure('unknown_tool');
   }
+
   if (typeof call.arguments !== 'string') return toolFailure(call.name);
   const tool = tools.get(call.name);
   if (!tool || Buffer.byteLength(call.arguments) > MAX_TOOL_ARGUMENT_BYTES) return toolFailure(call.name);

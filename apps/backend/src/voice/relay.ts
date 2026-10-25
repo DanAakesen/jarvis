@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
-  createToolBudgetMemory, createToolBudgetProbeTools, createToolBudgetRungs,
-  TOOL_BUDGET_COLD_START_RUNG, type ToolBudgetMemory, type ToolBudgetProbeName, type ToolBudgetRung,
+  createToolBudgetMemory, createToolBudgetRungs, TOOL_BUDGET_COLD_START_RUNG,
+  type ToolBudgetMemory, type ToolBudgetRung,
 } from './tool-budget.js';
-import { createVoiceToolBudgetProbe, type VoiceToolBudgetProbe } from './tool-budget-probe.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { runModelToolCall } from '../core/tool-origin.js';
@@ -14,13 +13,14 @@ import WebSocket, { type RawData } from 'ws';
 import { voiceLiveModels } from '../core/model-catalog.js';
 import {
   createRealtimeSessionUpdate,
-  toolUnavailableOutput,
   resolveCalendarReply,
   calendarTurnContext,
   ENGLISH_REALTIME_MODEL,
+  executeRealtimeCapabilityCall,
   executeRealtimeToolCall,
   isBrowserControlledToolOutput,
   parseVoiceEvent,
+  realtimeCapabilityTarget,
   type RealtimeFunctionCall,
 } from './realtime.js';
 import type { BackendModule } from '../modules.js';
@@ -225,7 +225,6 @@ function ledgerInstructions(entries: readonly VoiceReflexLedgerEntry[]): string 
 
 export interface VoiceRelayOptions {
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
-  readonly toolBudgetProbeEnabled?: boolean;
   readonly connect?: VoiceConnectionFactory;
   readonly connectDanish?: VoiceConnectionFactory;
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
@@ -408,7 +407,6 @@ function registerVoiceRoute(
   recordImageUsage?: VoiceRelayOptions['recordImageUsage'],
   captionFrame?: VoiceRelayOptions['captionFrame'],
   toolBudgetMemory?: ToolBudgetMemory,
-  toolBudgetProbe?: VoiceToolBudgetProbe,
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     const controller = new AbortController();
@@ -434,8 +432,7 @@ function registerVoiceRoute(
         ?? (() => {})
       : () => {};
     let upstream: WebSocket | undefined;
-    // Only the English route probes for a working tool budget; Danish keeps its single full session update.
-    const toolBudgetRungs = language === 'en' && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
+    const toolBudgetRungs = english && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
     let activeRung: ToolBudgetRung | undefined = toolBudgetRungs?.[TOOL_BUDGET_COLD_START_RUNG];
     let rungIndex = toolBudgetRungs ? TOOL_BUDGET_COLD_START_RUNG : 0;
     let attemptCount = 0;
@@ -444,9 +441,10 @@ function registerVoiceRoute(
     let attemptFrame: ReturnType<typeof diagnostics.measure> | undefined;
     controller.signal.addEventListener('abort', () => clearTimeout(attemptTimer), { once: true });
     const activeTools = () => activeRung?.tools ?? app.jarvisTools;
-    const sessionUpdate = () => createRealtimeSessionUpdate(
-      activeTools(), personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-      activeRung?.instructions, identitySettings,
+    const discoveredCapabilities = new Set<string>();
+    const sessionUpdate = (rung: ToolBudgetRung | undefined = activeRung) => createRealtimeSessionUpdate(
+      rung?.tools ?? app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
+      rung?.instructions, identitySettings, rung?.capabilityMode,
     );
     let configured = false;
     let upstreamSessionReady = false;
@@ -1832,8 +1830,11 @@ function registerVoiceRoute(
     };
 
     const runToolCall = (call: RealtimeFunctionCall) => {
+<<<<<<< HEAD
       const completion = responseCompletionState;
       if (call.name === 'research') request.announceResearchCompletion = announceResearchCompletion;
+=======
+>>>>>>> origin/main
       if (!/^[A-Za-z0-9_-]{1,128}$/u.test(call.call_id) ||
           typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name) ||
           typeof call.arguments !== 'string' ||
@@ -1842,13 +1843,16 @@ function registerVoiceRoute(
         close(1008, 'Invalid voice tool call');
         return;
       }
+      const capabilityName = realtimeCapabilityTarget(call, activeTools(), discoveredCapabilities);
+      const toolName = capabilityName ?? call.name;
+      if (toolName === 'research') request.announceResearchCompletion = announceResearchCompletion;
       seenCallIds.add(call.call_id);
       pendingToolCalls += 1;
       toolCallsInResponse = true;
       const toolTurnTiming = turnTiming;
       const toolTiming: VoiceToolTiming | undefined = toolTurnTiming
         ? {
-          name: call.name,
+          name: toolName,
           startedMs: elapsedSinceSpeechStopped(toolTurnTiming) ?? 0,
           finishedMs: null,
           outcome: 'interrupted',
@@ -1856,8 +1860,8 @@ function registerVoiceRoute(
         : undefined;
       if (toolTiming) toolTurnTiming?.tools.push(toolTiming);
       const toolActivityId = randomUUID();
-      const sharedBrowserCall = call.name === 'browser_do_shared' ||
-        (call.name === 'browser_do' && request.requireSharedScreenContext === true);
+      const sharedBrowserCall = toolName === 'browser_do_shared' ||
+        (toolName === 'browser_do' && request.requireSharedScreenContext === true);
       const browserStopController = sharedBrowserCall ? new AbortController() : undefined;
       const announceBrowserProgress = browserStopController
         ? () => {
@@ -1880,7 +1884,7 @@ function registerVoiceRoute(
         activeToolActivities.delete(finishToolActivity);
         if (type === 'tool-call-finished') {
           app.jarvisActivityHub.publish({
-            type, activityId: toolActivityId, source: 'voice', toolName: call.name, outcome: outcome ?? 'error',
+            type, activityId: toolActivityId, source: 'voice', toolName, outcome: outcome ?? 'error',
           });
         } else {
           app.jarvisActivityHub.publish({ type, activityId: toolActivityId, source: 'voice' });
@@ -1891,7 +1895,7 @@ function registerVoiceRoute(
         type: 'tool-call-started',
         activityId: toolActivityId,
         source: 'voice',
-        toolName: call.name,
+        toolName,
       });
       toolQueue = toolQueue.then(async () => {
         if (controller.signal.aborted) {
@@ -1930,19 +1934,18 @@ function registerVoiceRoute(
         const signal = AbortSignal.any([
           controller.signal,
           AbortSignal.timeout(
-            call.name === 'daily_feed' ? 210_000
-              : ['daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_history', 'daily_coach_status'].includes(call.name) ? 180_000 : 30_000,
+            toolName === 'daily_feed' ? 210_000
+              : ['daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_history', 'daily_coach_status'].includes(toolName) ? 180_000 : 30_000,
           ),
           ...(browserStopController ? [browserStopController.signal] : []),
         ]);
         if (latestDanMessage) request.jarvisConversationMessage = latestDanMessage;
         try {
-          const output = activeRung && !activeRung.tools.get(call.name) && app.jarvisTools.get(call.name)
-            ? toolUnavailableOutput(call.name)
-            : await runModelToolCall(request, () =>
-              executeRealtimeToolCall(call, activeTools(), request, signal));
-          if (call.name.startsWith('calendar_')) calendarConversation = true;
-          else if (call.name.startsWith('mail_')) calendarConversation = false;
+          const output = await runModelToolCall(request, () => activeRung?.capabilityMode === 'discovery'
+            ? executeRealtimeCapabilityCall(call, activeTools(), request, signal, discoveredCapabilities)
+            : executeRealtimeToolCall(call, activeTools(), request, signal));
+          if (toolName.startsWith('calendar_')) calendarConversation = true;
+          else if (toolName.startsWith('mail_')) calendarConversation = false;
           let outcome: 'ok' | 'refused' | 'error' = 'error';
           try {
             const response = JSON.parse(output) as { outcome?: unknown };
@@ -1950,7 +1953,7 @@ function registerVoiceRoute(
               outcome = response.outcome;
             }
           } catch { /* The fallback is an error outcome. */ }
-          if (outcome === 'ok' && (call.name === 'set_presence_mode' || call.name === 'set_away_mode') && app.awayModeStore) {
+          if (outcome === 'ok' && (toolName === 'set_presence_mode' || toolName === 'set_away_mode') && app.awayModeStore) {
             presence = await app.awayModeStore.read();
             awayMode = presence.mode !== 'present';
             sendUpstream(sessionUpdate());
@@ -2394,32 +2397,19 @@ function registerVoiceRoute(
         };
         const attemptReady = () => {
           clearTimeout(attemptTimer);
-          logAttempt('ready');
-          toolBudgetMemory!.set(rungIndex);
-          request.log.info({
-            language, rung: activeRung!.name, remembered: startRung !== undefined && startRung === rungIndex,
-            attempts: attemptCount,
-          }, 'voice.tool_budget_selected');
-          diagnostics.toolBudget(activeRung!.name, attemptCount);
+          if (toolBudgetRungs) {
+            logAttempt('ready');
+            toolBudgetMemory!.set(rungIndex);
+            request.log.info({
+              language, rung: activeRung!.name, remembered: startRung !== undefined && startRung === rungIndex,
+              attempts: attemptCount,
+            }, 'voice.tool_budget_selected');
+            diagnostics.toolBudget(activeRung!.name, attemptCount);
+          }
           for (const message of heldEvents.splice(0)) {
             if (browser.readyState === WebSocket.OPEN) browser.send(message.data, { binary: message.binary });
           }
           flushQueued();
-          if (rungIndex !== 0 && toolBudgetProbe) {
-            toolBudgetProbe.start({
-              buildFrame: (probe: ToolBudgetProbeName) => {
-                const tools = createToolBudgetProbeTools(probe, app.jarvisTools);
-                return createRealtimeSessionUpdate(
-                  tools, personality, presence, 'en', projects, transcriptionModel, voiceTuning, memorySettings,
-                  probe === 'reduced_plus_copies' || probe === 'no_proactive' ? 'notice' : 'full',
-                );
-              },
-              acquireToken: (signal) => credential(getToken, signal),
-              voiceModel,
-              memory: toolBudgetMemory!,
-              log: request.log,
-            });
-          }
         };
         openAttempt = (index: number) => {
           rungIndex = index;
@@ -2498,6 +2488,12 @@ function registerVoiceRoute(
               upstreamSessionReady = true;
               diagnostics.clearWatchdog();
               if (toolBudgetRungs) attemptReady();
+              else {
+                for (const message of heldEvents.splice(0)) {
+                  if (browser.readyState === WebSocket.OPEN) browser.send(message.data, { binary: message.binary });
+                }
+                flushQueued();
+              }
               if (sessionId && statusAnnouncer && visionWatch) {
                 unregisterVisionVoice = visionWatch.registerVoice(
                   sessionId,
@@ -2791,16 +2787,10 @@ function registerVoiceRoute(
 
 export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModule {
   const toolBudgetMemory = createToolBudgetMemory();
-  const toolBudgetProbe = options.connect
-    ? createVoiceToolBudgetProbe(options.connect, options.toolBudgetProbeEnabled ?? true)
-    : undefined;
   return {
     id: 'voice',
     tools: [],
     registerRoutes: async (app) => {
-      if (toolBudgetProbe) {
-        app.addHook('onClose', async () => { await toolBudgetProbe.close(); });
-      }
       options.registerPhoneMediaRoute?.(app);
       if (options.connect) {
         registerVoiceRoute(
@@ -2817,7 +2807,6 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.recordImageUsage,
           options.captionFrame,
           toolBudgetMemory,
-          toolBudgetProbe,
         );
       }
       if (options.connect) {
@@ -2836,6 +2825,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.reserveImageBudget,
           options.recordImageUsage,
           options.captionFrame,
+          toolBudgetMemory,
         );
       } else if (options.connectDanish) {
         registerVoiceRoute(

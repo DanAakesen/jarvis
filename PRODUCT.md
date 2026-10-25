@@ -302,7 +302,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 
 | Area | Requirement |
 | --- | --- |
-| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; only a completed reply is saved, and tool calls link to that source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
+| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; productive tool investigations continue until final synthesis rather than stopping at an arbitrary round count, and only a completed reply is saved. Tool calls link to the source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
 | **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser in every presence mode. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Jarvis does not send external messages. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
@@ -476,24 +476,23 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
-Voice startup must not silently wait for the browser's 60-second warm-up limit:
-the Danish route's upstream connection and readiness each have a 15-second relay
-deadline. English starts at R1, the known-good frame measured after the full R0
-frame stalled on 21 October, and steps down through the existing smaller sizes
-if needed. It keeps the first rung that works, so voice stays usable even when
-some tools are unavailable; Jarvis then says so briefly and suggests the chat
-for what it cannot do. After a session becomes ready below R0, an independent
-background probe can test larger frames no more than once every 30 minutes per
-process. A ready full-frame probe remembers R0 for later sessions; measurements
-never change the fallback ladder or active session. Probing is enabled by
-default and can be disabled with
-`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false`. A missed deadline, or every
-foreground size failing, closes the socket with code 4010 and shows “Voice
-service did not become ready. Retrying…” using the existing reconnect backoff.
-Readiness remains `session.updated` for English and `session.created` or
-`session.updated` for Danish. Content-free stage, attempt, probe and
-terminal-summary logs support diagnosis; real provider acceptance still
-requires an owner voice attempt after deployment.
+Browser voice uses the same canonical backend tool registry and execution policy
+for Danish and English. Voice Live first advertises every configured tool with
+its validated schema. If that bounded startup attempt fails, a second attempt
+advertises only paged capability discovery and execution functions; discovery
+reads the same registry, and dispatch still enters the existing validator,
+authorization and approval path. This representation does not remove Daily or
+proactive capabilities. The model must discover a capability before using it;
+an undiscovered or unregistered call is rejected. Large discovery responses
+fail explicitly rather than silently truncating the catalogue.
+
+Each Voice Live startup attempt uses a fresh socket and a six-second
+`session.updated` deadline. The process remembers the last acknowledged
+representation for reconnects. If both attempts fail, the relay closes with
+code 4010 and the browser uses its existing retry backoff. The hosted Danish
+voice-agent fallback retains its provider-owned setup and `session.created`
+readiness path. No background tool-budget probes run. Provider acceptance and
+real browser audio still require an owner attempt after deployment.
 
 During an English voice session, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 
@@ -1395,10 +1394,11 @@ complete a capability. Reuse existing general tools where they provide the
 equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
-English realtime voice advertises configured Daily tools only after Voice Live
-accepts a Health-capable session frame; until then its known-good reduced frame
-does not include them. A probe or passing CI is not production acceptance for
-Health parity.
+Both Danish and English Voice Live start with the configured Daily tools in R1;
+the capability-preserving R2 discovery transport is used if the direct schema
+frame does not become ready. R2 preserves catalogue access but does not bypass
+the existing server-side permissions or review requirements. Passing CI is not
+production acceptance for Health parity or proof of live provider responsiveness.
 
 Health and nutrition history (#1201) must be traversable beyond the first
 page. Each Health call reads at most 93 inclusive Copenhagen dates and 100
