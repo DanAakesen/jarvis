@@ -377,6 +377,46 @@ describe('GitHub vault', () => {
     ]);
   });
 
+  it('distinguishes attempted and successful syncs, including no-op runs and a process restart', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(Date.parse('2026-10-25T12:00:00.000Z'));
+      const remote = { 'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' } };
+      const { github, indexStore, module } = moduleFor({ remote });
+
+      expect(module.syncStatus()).toEqual({
+        outcome: 'pending', latestAttemptAt: null, lastSuccessfulAt: null,
+      });
+      await expect(module.synchronize(signal())).resolves.toEqual({ added: 1, changed: 0, removed: 0 });
+      const firstSuccess = module.syncStatus().lastSuccessfulAt;
+      expect(module.syncStatus()).toMatchObject({ outcome: 'ok', latestAttemptAt: firstSuccess, lastSuccessfulAt: firstSuccess });
+
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(module.synchronize(signal())).resolves.toEqual({ added: 0, changed: 0, removed: 0 });
+      const noOpSuccess = module.syncStatus().lastSuccessfulAt;
+      expect(noOpSuccess).not.toBe(firstSuccess);
+      expect(module.syncStatus()).toMatchObject({
+        outcome: 'ok', latestAttemptAt: noOpSuccess, lastSuccessfulAt: noOpSuccess,
+      });
+
+      github.fetcher.mockRejectedValueOnce(new Error('synthetic provider failure'));
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(module.synchronize(signal())).rejects.toThrow('synthetic provider failure');
+      expect(module.syncStatus()).toMatchObject({
+        outcome: 'error',
+        latestAttemptAt: new Date(Date.parse(noOpSuccess!) + 1_000).toISOString(),
+        lastSuccessfulAt: noOpSuccess,
+      });
+
+      const restarted = moduleFor({ remote, index: indexStore }).module;
+      expect(restarted.syncStatus()).toEqual({
+        outcome: 'pending', latestAttemptAt: null, lastSuccessfulAt: null,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each(['chat', 'voice'] as const)('dispatches safe task writes through the shared %s registry', async (channel) => {
     const path = 'Personal/Inbox.md';
     const original = '# Tasks\r\n\r\n- [ ] Read a book 🔁 every week 🆔 abc\r\nKeep this line.\r\n';
@@ -2142,6 +2182,8 @@ describe('GitHub vault', () => {
     const status = await app.inject({ url: '/memory/status', headers: apiAuthorization });
     expect(status.json()).toMatchObject({
       notesByFolder: { People: 1, Work: 0, Personal: 0, General: 0 },
+      latestSyncAttemptAt: expect.any(String),
+      lastSuccessfulSyncAt: expect.any(String),
       lastIndexOutcome: { outcome: 'ok', added: 1 },
     });
     expect(status.json().lastVaultSyncAt).toEqual(expect.any(String));

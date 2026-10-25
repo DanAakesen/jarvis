@@ -96,6 +96,11 @@ export interface MemoryEmbeddingLogFields {
 
 export interface VaultModule extends BackendModule {
   synchronize(signal: AbortSignal): Promise<{ readonly added: number; readonly changed: number; readonly removed: number }>;
+  syncStatus(): {
+    readonly outcome: VaultIndexOutcome['outcome'];
+    readonly latestAttemptAt: string | null;
+    readonly lastSuccessfulAt: string | null;
+  };
   reembed(
     signal: AbortSignal,
     progress: (step: number, detail: string) => Promise<void>,
@@ -121,7 +126,7 @@ interface MemoryApiItem {
 
 interface VaultIndexOutcome {
   readonly outcome: 'pending' | 'ok' | 'error';
-  readonly at: string;
+  readonly at: string | null;
   readonly added?: number;
   readonly changed?: number;
   readonly removed?: number;
@@ -794,7 +799,8 @@ export function createVaultModule(options: {
   let indexStatus: 'pending' | 'ready' | 'failed' = 'pending';
   let appMissing = false;
   let lastVaultSyncAt: string | null = null;
-  let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
+  let lastSuccessfulSyncAt: string | null = null;
+  let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: null };
   let directoryTree: VaultDirectoryTree | undefined;
   const pendingVaultDeletions = new Set<string>();
   let graphCache: { readonly key: string; readonly value: Promise<KnowledgeGraph> } | undefined;
@@ -995,24 +1001,27 @@ export function createVaultModule(options: {
   }
 
   function synchronize(signal: AbortSignal) {
-    synchronization ??= performSynchronization(signal)
-      .then(({ summary, directoryTree: nextDirectoryTree }) => {
+    if (!synchronization) {
+      lastVaultSyncAt = new Date().toISOString();
+      lastIndexOutcome = { outcome: 'pending', at: lastVaultSyncAt };
+      synchronization = performSynchronization(signal)
+        .then(({ summary, directoryTree: nextDirectoryTree }) => {
         indexStatus = 'ready';
         appMissing = false;
-        lastVaultSyncAt = new Date().toISOString();
-        lastIndexOutcome = { outcome: 'ok', at: lastVaultSyncAt, ...summary };
-        directoryTree = { ...nextDirectoryTree, updatedAt: lastVaultSyncAt };
+        lastSuccessfulSyncAt = new Date().toISOString();
+        lastIndexOutcome = { outcome: 'ok', at: lastSuccessfulSyncAt, ...summary };
+        directoryTree = { ...nextDirectoryTree, updatedAt: lastSuccessfulSyncAt };
         graphCache = undefined;
         return summary;
-      })
-      .catch((error: unknown) => {
+        })
+        .catch((error: unknown) => {
         indexStatus = 'failed';
         appMissing = error instanceof VaultAppNotInstalledError;
-        lastVaultSyncAt = new Date().toISOString();
-        lastIndexOutcome = { outcome: 'error', at: lastVaultSyncAt };
+        lastIndexOutcome = { outcome: 'error', at: new Date().toISOString() };
         throw error;
-      })
-      .finally(() => { synchronization = undefined; });
+        })
+        .finally(() => { synchronization = undefined; });
+    }
     return synchronization;
   }
 
@@ -1704,6 +1713,13 @@ export function createVaultModule(options: {
     id: 'vault',
     tools,
     synchronize,
+    syncStatus() {
+      return {
+        outcome: lastIndexOutcome.outcome,
+        latestAttemptAt: lastVaultSyncAt,
+        lastSuccessfulAt: lastSuccessfulSyncAt,
+      };
+    },
     reembed,
     registerRoutes: async (app) => {
       const ownerOnly = (request: FastifyRequest, reply: import('fastify').FastifyReply): boolean => {
@@ -2343,6 +2359,8 @@ export function createVaultModule(options: {
         }
         return {
           lastVaultSyncAt,
+          latestSyncAttemptAt: lastVaultSyncAt,
+          lastSuccessfulSyncAt,
           notesByFolder: counts,
           lastIndexOutcome,
         };

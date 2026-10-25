@@ -1,10 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createFoundryInvocationConversationAgent, type ConversationAgent } from './core/chat-agent.js';
 import { createChatAcceptanceProbes } from './core/chat-canary.js';
-import { chatAgentFailureReasons, createSystemSmokeReader, createSystemStatusReader, summarizeSystemStatus, systemSmokeHttpResponse } from './system-status.js';
+import { assessVaultIndex, chatAgentFailureReasons, createSystemSmokeReader, createSystemStatusReader, summarizeSystemStatus, systemSmokeHttpResponse } from './system-status.js';
 import { isSystemSmokeStatus, systemSmokeCheckIds } from '@jarvis/contracts';
 
 const smokeCheckedAt = '2026-10-14T01:03:29.169Z';
+const vaultStatusNow = Date.parse('2026-10-25T12:00:00.000Z');
+const oldVaultChunks = {
+  notes: 1,
+  chunks: 2,
+  embeddedChunks: 2,
+  latestIndexedAt: new Date('2026-09-25T12:00:00.000Z'),
+};
 
 async function runChatSmoke(agent: ConversationAgent | undefined) {
   const now = () => Date.parse(smokeCheckedAt);
@@ -40,6 +47,76 @@ function expectSmokeFailures(
 }
 
 describe('system status reader', () => {
+  it('uses a verified no-op sync as fresh evidence when indexed chunks have not changed', () => {
+    const result = assessVaultIndex(oldVaultChunks, {
+      outcome: 'ok',
+      latestAttemptAt: '2026-10-25T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-25T11:59:30.000Z',
+    }, vaultStatusNow);
+
+    expect(result).toMatchObject({
+      status: 'ok',
+      details: {
+        latestIndexedAt: '2026-09-25T12:00:00.000Z',
+        latestSyncAttemptAt: '2026-10-25T11:59:00.000Z',
+        lastSuccessfulSyncAt: '2026-10-25T11:59:30.000Z',
+        syncOutcome: 'ok',
+        syncFresh: true,
+      },
+    });
+  });
+
+  it('keeps incomplete embedding coverage degraded after a fresh sync', () => {
+    expect(assessVaultIndex({ ...oldVaultChunks, embeddedChunks: 1 }, {
+      outcome: 'ok',
+      latestAttemptAt: '2026-10-25T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-25T11:59:30.000Z',
+    }, vaultStatusNow)).toMatchObject({
+      status: 'degraded',
+      details: { embeddingCoveragePercent: 50, syncFresh: true },
+    });
+  });
+
+  it('keeps a failed latest attempt degraded without overwriting the last success', () => {
+    expect(assessVaultIndex(oldVaultChunks, {
+      outcome: 'error',
+      latestAttemptAt: '2026-10-25T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-25T11:00:00.000Z',
+    }, vaultStatusNow)).toMatchObject({
+      status: 'degraded',
+      details: {
+        syncOutcome: 'error',
+        latestSyncAttemptAt: '2026-10-25T11:59:00.000Z',
+        lastSuccessfulSyncAt: '2026-10-25T11:00:00.000Z',
+      },
+    });
+  });
+
+  it('does not infer success from existing chunks after process restart or without a sync', () => {
+    expect(assessVaultIndex(oldVaultChunks, {
+      outcome: 'pending', latestAttemptAt: null, lastSuccessfulAt: null,
+    }, vaultStatusNow)).toMatchObject({
+      status: 'unknown',
+      details: {
+        latestSyncAttemptAt: null,
+        lastSuccessfulSyncAt: null,
+        syncOutcome: 'pending',
+        syncFresh: null,
+      },
+    });
+  });
+
+  it('ages the last successful sync rather than the latest changed chunk', () => {
+    expect(assessVaultIndex({ ...oldVaultChunks, latestIndexedAt: new Date(vaultStatusNow) }, {
+      outcome: 'ok',
+      latestAttemptAt: '2026-10-24T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-24T11:59:30.000Z',
+    }, vaultStatusNow)).toMatchObject({
+      status: 'degraded',
+      details: { syncFresh: false },
+    });
+  });
+
   it('preserves the legacy HTTP smoke shape without mutating retained diagnostics', async () => {
     const now = () => Date.parse(smokeCheckedAt);
     const status = createSystemStatusReader({}, undefined, now);

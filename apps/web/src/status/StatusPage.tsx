@@ -54,8 +54,41 @@ function readableKey(key: string): string {
 }
 
 function reason(entry: SystemStatusEntry): string | undefined {
-  if (typeof entry.details?.reason === 'string' && entry.details.reason.trim()) return readableKey(entry.details.reason);
-  if (entry.details?.configured === false) return 'This check is not configured.';
+  const details = entry.details;
+  if (entry.id.startsWith('foundry.')) {
+    if (details?.catalogue === 'fallback') return 'The model catalogue uses fallback configuration; live deployment availability is not verified.';
+    if (details?.catalogue === 'live' && details.deploymentAvailable === false) {
+      return 'No deployment for this capability was found in the live model catalogue.';
+    }
+    if (details?.catalogue === 'live' && details.deploymentAvailable === true) {
+      return 'A compatible deployment is listed, but this check did not run a model request.';
+    }
+    if (details?.configured === true) return 'The required model deployment could not be confirmed.';
+  }
+  if (entry.id === 'runner' && details?.healthProbe === 'not_run') {
+    return 'The runner is configured, but its runtime health has not been probed.';
+  }
+  if (entry.id === 'vault_index') {
+    if (details?.syncOutcome === 'error') return 'The latest vault sync attempt failed.';
+    if (details?.syncOutcome === 'pending') {
+      return details.latestSyncAttemptAt
+        ? 'The latest vault sync is still running; its outcome is not verified yet.'
+        : 'No completed vault sync is verified since this backend process started.';
+    }
+    if (entry.status === 'unknown' && details?.chunks === 0) {
+      return 'The latest sync completed, but the vault index has no content chunks.';
+    }
+    if (entry.status === 'degraded') {
+      const reasons = [
+        details?.syncFresh === false ? 'The last successful vault sync is older than 24 hours.' : null,
+        typeof details?.embeddingCoveragePercent === 'number' && details.embeddingCoveragePercent < 100
+          ? `Embedding coverage is incomplete (${details.embeddingCoveragePercent}%).` : null,
+      ].filter((value): value is string => value !== null);
+      if (reasons.length) return reasons.join(' ');
+    }
+  }
+  if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
+  if (details?.configured === false) return 'This check is not configured.';
   if (entry.status === 'unknown') return 'Runtime health is not established by this check.';
   if (entry.status === 'down') return entry.id === 'pc_bridge' && entry.details?.connected === false
     ? undefined : 'The check failed; no further reason was reported.';
@@ -81,11 +114,17 @@ function StatusBadge({ value }: { value: SystemStatusValue }) {
   return <span className="system-status-badge" data-status={value}>{statuses[value]}</span>;
 }
 
-function CheckedAt({ value, now }: { value: string; now: number }) {
+function CheckedAt({ value, now, label = 'Checked' }: { value: string; now: number; label?: string }) {
   return <span className="system-status-time">
+    {label}{' '}
     <time dateTime={value} title={formatDateTime(value)}>{formatDateTime(value)}</time>
     {now - Date.parse(value) >= staleAfterMs && <span className="system-status-stale">Stale</span>}
   </span>;
+}
+
+function EvidenceTime({ label, value }: { label: string; value: unknown }) {
+  if (typeof value !== 'string' || !isTime(value)) return null;
+  return <p className="system-status-reason">{label}: <time dateTime={value}>{formatDateTime(value)}</time></p>;
 }
 
 type Result = { backendUrl: string | null; data?: SystemStatus; error?: string; pending: boolean };
@@ -185,7 +224,12 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
                 entry.details?.connected === false ? 'Disconnected at check time.' : 'Connection state was not reported.'}
               {typeof entry.details?.controlPaused === 'boolean' && (entry.details.controlPaused ? ' PC control is paused.' : ' PC control is not paused.')}
             </p>}
-            <CheckedAt value={entry.checkedAt} now={now} />
+            <CheckedAt value={entry.checkedAt} now={now} label="Status check" />
+            {entry.id === 'vault_index' && <>
+              <EvidenceTime label="Latest sync attempt" value={entry.details?.latestSyncAttemptAt} />
+              <EvidenceTime label="Last successful sync" value={entry.details?.lastSuccessfulSyncAt} />
+              <EvidenceTime label="Latest content indexed" value={entry.details?.latestIndexedAt} />
+            </>}
             {entry.details && Object.keys(entry.details).length > 0 && <details className="system-status-details">
               <summary>Recorded details</summary>
               <dl>{Object.entries(entry.details).map(([key, value]) => <div key={key}>
