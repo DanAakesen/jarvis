@@ -1,5 +1,32 @@
 # Agent context
 
+## Natural food confirmation checks (#1277; 25 October 2026)
+
+Use synthetic food records only. Focused checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/owner-interactions.test.ts src/core/approval-interpreter.test.ts src/daily/tools/food-review.test.ts src/core/conversation.test.ts src/core/chat-agent.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts
+npm test --workspace @jarvis/web -- src/conversation-history.test.ts
+```
+
+Text steering and persisted English/Danish browser-voice transcripts resolve
+only the current session's pending estimate; Now remains available. Stream
+readers use the existing hosting budgets (browser 240 seconds, backend 210 seconds
+below ingress), not a new food lifetime.
+Local HTTP/WebSocket fixtures are not live microphone, provider or device evidence.
+
+The SQL nutrition review fixture uses `createConversationStore(pool)` for both
+the tool request and owner-interaction service, with persisted source/reply
+messages. Its nutrition clock follows the source timestamp. Keep the real SQL
+approval/replay assertions for both browser-button and natural estimate replies:
+
+```sh
+npm run test:database --workspace @jarvis/backend -- src/database/nutrition.integration.test.ts
+```
+
+This command requires the isolated loopback SQL Server configuration used by
+Database CI; never point it at production.
+
 ## Research result recovery (#1237; 25 October 2026)
 
 Focused offline checks from the repository root:

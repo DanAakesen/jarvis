@@ -1,5 +1,45 @@
 # Decisions
 
+## Natural food-estimate confirmation reuses one-time browser approval (25 October 2026; #1277)
+
+Only pending `log_estimate` reviews accept the owner's next later reply in the
+same text/browser-voice session. Bind the exact summary, source message and
+confirmation server-side; use the existing bounded approval interpreter and
+one-time persisted consumption. Unrelated or conditional replies remove this
+conversational authority; Now remains the fallback. Multiple pending estimates
+in one session fail closed. Corrections, deletions and unrelated approvals are
+unchanged. Never restage from a yes or claim success before the original tool's
+committed receipt.
+
+Use the existing 240-second ingress ceiling for the browser stream and reuse the
+210-second food read budget for the backend Foundry reader, leaving hosting
+headroom. Keep food's 180-second operation and 120-second approval limits,
+and ordinary browser requests' 120-second deadline. Sanitize transport-read
+failures and direct the owner to check status before retrying. Synthetic checks
+do not establish live provider, microphone, device or deployment acceptance.
+
+## Compact camera preview and attachment menu order (#1265; 25 October 2026)
+
+Keep the existing Camera preview workspace identity and lifecycle, but make the
+live video the only visible window surface, use its existing refracted glass rim,
+and overlay the camera-switch and close controls. Keep its accessible heading,
+workspace commands and media teardown; retain touch-only switching and the
+established preview recovery behavior. Use **Enable video** consistently for the
+camera-on action. Put **Attach file or photo** first in the typing More menu,
+reusing the existing validated upload/picker flow. This does not change camera
+capture, permissions, or image-input behavior.
+
+## Generic text questions use an active screen share (#1266; 25 October 2026)
+
+Text submission and turn execution resolve generic English/Danish visual
+questions against the active screen share before requiring the camera. Keep
+camera-specific wording and active camera-conversation priority unchanged.
+Screen inspection still supplies bounded, untrusted context through the existing
+chat path; visual asks queue rather than steer without that context. Voice
+routing is unchanged. Local tests and synthetic Chromium checks at 390 and
+1280 px pass; live display capture and authenticated phone acceptance remain
+unverified.
+
 ## Research completion is independent of Workspace delivery (25 October 2026; #1237)
 
 After a validated research artifact, its owner-scoped Folio entry, and the

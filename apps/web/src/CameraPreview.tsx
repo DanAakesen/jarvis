@@ -37,16 +37,17 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
   const playbackError = playback && playback.stream === stream ? playback.error : '';
   const live = Boolean(stream && camera.sharing && playback && playback.stream === stream && !playback.error);
   return <div className="camera-preview" data-inactive={!camera.sharing && !camera.starting}>
-    <div className="camera-preview-picture" data-facing={camera.facing}>
+    <div className="camera-preview-picture luminous-glass" data-facing={camera.facing}>
       <video ref={video} autoPlay muted playsInline aria-label="Live camera preview" data-readback="off" />
       {(!stream || camera.starting) && <p role="status">{camera.starting ? 'Starting camera...' : 'No camera frame available.'}</p>}
       {live && !camera.starting && <span className="camera-preview-live" role="status">Live</span>}
+      {(camera.sharing || camera.starting) && <CameraStatus camera={camera} />}
     </div>
     {playbackError && <div className="camera-preview-error" role="alert">
       <span>{playbackError}</span>
       <button className="secondary-button" type="button" onClick={() => setAttempt((current) => current + 1)}>Retry preview</button>
     </div>}
-    <CameraStatus camera={camera} />
+    {!camera.sharing && !camera.starting && <CameraStatus camera={camera} />}
     {camera.observationNotice && <p className="camera-preview-notice" role="status">{camera.observationNotice}</p>}
     {!camera.sharing && !camera.starting && <button type="button" className="secondary-button camera-preview-retry" onClick={() => { void camera.start(); }}>
       Retry camera

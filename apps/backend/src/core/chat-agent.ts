@@ -90,7 +90,8 @@ export interface ConversationAgent {
 }
 
 const maxStreamBytes = 1024 * 1024;
-const requestTimeoutMs = 120_000;
+// Reuse the food tool's read budget below the 240-second hosting ingress ceiling.
+const requestTimeoutMs = 210_000;
 const maxDiagnosticDurationMs = 600_000;
 export const FOUNDRY_AGENT_SCOPE = 'https://ai.azure.com/.default';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;

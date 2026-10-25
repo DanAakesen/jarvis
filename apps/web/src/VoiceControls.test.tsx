@@ -471,10 +471,10 @@ describe('VoiceControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Language', 'Mute microphone', 'Look at screen', 'Watch the screen', 'Stop sharing screen', 'Turn on camera',
+      'Language', 'Mute microphone', 'Look at screen', 'Watch the screen', 'Stop sharing screen', 'Enable video',
     ]);
     expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBeNull();
-    const cameraItem = screen.getByRole('menuitem', { name: 'Turn on camera' });
+    const cameraItem = screen.getByRole('menuitem', { name: 'Enable video' });
     expect(cameraItem.getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Look at screen' }));
     expect(screen.queryByRole('menu')).toBeNull();
@@ -496,7 +496,7 @@ describe('VoiceControls', () => {
     expect(screenShare.start).toHaveBeenCalledOnce();
     expect(screenShare.inspect).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enable video' }));
     expect(camera.start).toHaveBeenCalledOnce();
     expect(camera.inspect).not.toHaveBeenCalled();
     rerender(<VoiceControls {...props} screenShare={{ ...screenShare, sharing: true }} camera={{ ...camera, sharing: true }} />);
@@ -516,7 +516,7 @@ describe('VoiceControls', () => {
     const { container } = render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
     startVoice().listen();
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enable video' }));
     const toast = screen.getByRole('alert').closest('.conversation-toast');
     expect(toast?.parentElement?.id).toBe('jarvis-toast-stack');
     expect(container.contains(toast)).toBe(false);

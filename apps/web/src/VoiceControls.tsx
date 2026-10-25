@@ -498,7 +498,7 @@ export function VoiceControls({
     onSelect: () => camera.stop(),
   }] : [{
     id: 'camera',
-    label: camera?.starting ? 'Starting camera…' : 'Turn on camera',
+    label: camera?.starting ? 'Starting camera…' : 'Enable video',
     icon: <MenuGlyph name="camera" />,
     // Request permission directly in the click gesture; capture errors become toasts.
     onSelect: () => { void camera?.start((message) => notify(message, true)); },
