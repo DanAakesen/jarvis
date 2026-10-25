@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { CodeView } from './CodeView';
 
@@ -23,5 +23,30 @@ describe('CodeView', () => {
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByText('<img src=x onerror=alert(1)>')).not.toBeNull();
     expect(document.querySelector('img')).toBeNull();
+  });
+
+  it('wraps long lines by default and preserves exact content, marks and line numbers when toggled', () => {
+    const content = `README prose ${'identifier'.repeat(12)} and https://${'long-path/'.repeat(8)}\nsecond line\n`;
+    const { container } = render(<CodeView title="Reading README" data={{
+      repo: 'DanAakesen/jarvis', path: 'README.md', content, startLine: 20, highlight: [{ from: 21, to: 21 }], query: 'identifier',
+    }} />);
+    const figure = container.querySelector('.code-view');
+    const lineText = () => Array.from(container.querySelectorAll('.code-line-text'), (line) => line.textContent).join('\n');
+    const wrap = screen.getByRole('checkbox', { name: 'Wrap lines' }) as HTMLInputElement;
+
+    expect(wrap.checked).toBe(true);
+    expect(figure?.classList.contains('code-view--wrap')).toBe(true);
+    expect(lineText()).toBe(content);
+    expect(document.querySelector('[data-line="21"]')?.hasAttribute('data-highlighted')).toBe(true);
+    expect(document.querySelectorAll('mark.code-match')).toHaveLength(12);
+
+    fireEvent.click(wrap);
+    expect(wrap.checked).toBe(false);
+    expect(figure?.classList.contains('code-view--wrap')).toBe(false);
+    expect(lineText()).toBe(content);
+
+    fireEvent.click(wrap);
+    expect(wrap.checked).toBe(true);
+    expect(lineText()).toBe(content);
   });
 });

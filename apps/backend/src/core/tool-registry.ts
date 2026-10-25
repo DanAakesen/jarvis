@@ -5,6 +5,8 @@ export interface JarvisTool {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: Readonly<Record<string, unknown>>;
+  /** Non-authorizing execution semantics shared with chat and voice capability adapters. */
+  readonly execution?: ToolExecutionMetadata;
   /** Persist only outcome metadata for tools whose arguments or results contain private data. */
   readonly sensitive?: boolean;
   /** The reflex may execute this tool directly after a high-confidence, no-confirmation decision. */
@@ -24,6 +26,16 @@ export interface JarvisTool {
   readonly validateInput?: (input: unknown) => boolean;
   /** The core dispatcher supplies validated input, the request and a cancellation signal. */
   readonly execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) => Promise<unknown>;
+}
+
+export type ToolEffect = 'read' | 'action' | 'unclassified';
+
+export interface ToolExecutionMetadata {
+  readonly defaultEffect: ToolEffect;
+  readonly operation?: {
+    readonly field: string;
+    readonly effects: Readonly<Record<string, Exclude<ToolEffect, 'unclassified'>>>;
+  };
 }
 
 /**
@@ -66,6 +78,24 @@ function freezeSchema(value: unknown): void {
   }
 }
 
+function validExecutionMetadata(value: unknown): value is ToolExecutionMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const metadata = value as Record<string, unknown>;
+  if (Object.keys(metadata).some((key) => !['defaultEffect', 'operation'].includes(key))) return false;
+  if (!['read', 'action', 'unclassified'].includes(String(metadata.defaultEffect))) return false;
+  if (metadata.operation === undefined) return true;
+  if (!metadata.operation || typeof metadata.operation !== 'object' || Array.isArray(metadata.operation)) {
+    return false;
+  }
+  const operation = metadata.operation as Record<string, unknown>;
+  if (Object.keys(operation).some((key) => !['field', 'effects'].includes(key))) return false;
+  if (typeof operation.field !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/u.test(operation.field) ||
+      !operation.effects || typeof operation.effects !== 'object' || Array.isArray(operation.effects)) return false;
+  const effects = Object.entries(operation.effects);
+  return effects.length > 0 && effects.every(([name, effect]) =>
+    /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(name) && (effect === 'read' || effect === 'action'));
+}
+
 /** agents/jarvis/limits.json is the single source; a test fails if these limits drift from it. */
 export const MAX_TOOL_DESCRIPTION_CHARACTERS = 4_000;
 export const MAX_CATALOGUE_BYTES = 1024 * 1024;
@@ -81,16 +111,24 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       if (tool.inputSchema.type !== 'object' || typeof tool.execute !== 'function') {
         throw new Error('Invalid Jarvis tool contract');
       }
+      if (tool.execution !== undefined && !validExecutionMetadata(tool.execution)) {
+        throw new Error('Invalid Jarvis tool execution metadata');
+      }
       if (tool.description.length > MAX_TOOL_DESCRIPTION_CHARACTERS) {
         throw new Error(`Jarvis tool ${tool.name} description exceeds ${MAX_TOOL_DESCRIPTION_CHARACTERS} characters`);
       }
       const inputSchema = structuredClone(tool.inputSchema);
       freezeSchema(inputSchema);
-      tools.set(tool.name, Object.freeze({ ...tool, execute: guardGmailAccess(tool), inputSchema, moduleId: module.id }));
+      const execution = tool.execution === undefined ? undefined : structuredClone(tool.execution);
+      if (execution) freezeSchema(execution);
+      tools.set(tool.name, Object.freeze({
+        ...tool, execute: guardGmailAccess(tool), inputSchema, ...(execution ? { execution } : {}),
+        moduleId: module.id,
+      }));
     }
   }
-  const catalogueBytes = Buffer.byteLength(JSON.stringify([...tools.values()].map(({ name, description, inputSchema }) => ({
-    name, description, inputSchema,
+  const catalogueBytes = Buffer.byteLength(JSON.stringify([...tools.values()].map(({ name, description, inputSchema, execution }) => ({
+    name, description, inputSchema, ...(execution ? { execution } : {}),
   }))));
   if (catalogueBytes > MAX_CATALOGUE_BYTES) {
     throw new Error(`Jarvis tool catalogue is ${catalogueBytes} bytes; the agent accepts at most ${MAX_CATALOGUE_BYTES}.`);

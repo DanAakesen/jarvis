@@ -204,6 +204,43 @@ async def test_loads_and_maps_every_tool_above_the_former_global_count_limit() -
     await client.close()
 
 
+async def test_catalogue_execution_effects_support_unlisted_and_multiplexed_operations() -> None:
+    metadata = {
+        "defaultEffect": "unclassified",
+        "operation": {
+            "field": "operation",
+            "effects": {"read": "read", "update": "action"},
+        },
+    }
+    backend = Backend(catalogue=[{
+        "name": "new_capability",
+        "description": "A new read or update capability.",
+        "inputSchema": {"type": "object"},
+        "execution": metadata,
+    }])
+    client = make_client(backend)
+    (tool,) = await client.tools()
+
+    assert tool.execution.effect_for('{"operation":"read"}') == "read"
+    assert tool.execution.effect_for('{"operation":"update"}') == "action"
+    assert tool.execution.effect_for('{"operation":"new_read_operation"}') == "unclassified"
+    assert model_tools((tool,))[0]["parameters"] == {"type": "object"}
+    await client.close()
+
+
+async def test_catalogue_without_execution_metadata_is_unclassified() -> None:
+    backend = Backend(catalogue=[{
+        "name": "future_capability",
+        "description": "A future capability.",
+        "inputSchema": {"type": "object"},
+    }])
+    client = make_client(backend)
+    (tool,) = await client.tools()
+
+    assert tool.execution.effect_for("{}") == "unclassified"
+    await client.close()
+
+
 async def test_new_backend_tools_appear_after_the_cache_expires() -> None:
     now = [0.0]
     backend = Backend()

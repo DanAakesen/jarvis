@@ -34,6 +34,10 @@ function mediaBlocks(source: string): Array<{ query: string; body: string }> {
 }
 
 describe('responsive stylesheet contract', () => {
+  it('does not force document overflow below the narrow-phone width at high zoom', () => {
+    expect(ruleDeclaration(sharedStyles, /(?:^|\n)body\s*\{([^}]*)\}/, 'min-width')).toBe('min(280px, 100%)');
+  });
+
   it('uses only the canonical viewport breakpoints and documented narrow-phone exception', () => {
     const values = new Set<number>();
     for (const source of stylesheets) {
@@ -140,6 +144,25 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }');
     expect(source).toContain('@media (max-width: 700px) {\n  .button-group, .settings-actions, .task-dialog-actions, .settings-save');
     expect(source).toContain('width: 100%; max-width: 100%;');
+  });
+
+  it('keeps generated content within its window and localizes intentional horizontal scrolling', () => {
+    expect(ruleDeclaration(sharedStyles, /\.workspace-view-content\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(sharedStyles, /\.code-view\s*\{([^}]*)\}/, 'max-width')).toBe('100%');
+    expect(ruleDeclaration(sharedStyles, /\.code-view-path\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+    expect(ruleDeclaration(sharedStyles, /\.code-view-body\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(sharedStyles, /\.code-view--wrap \.code-view-body code\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(sharedStyles, /\.code-view--wrap \.code-line-text\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
+    expect(ruleDeclaration(sharedStyles, /\.generated-view-table\s*\{([^}]*)\}/, 'overflow')).toBe('auto');
+    expect(ruleDeclaration(sharedStyles, /\.generated-view-details\s*\{([^}]*)\}/, 'grid-template-columns'))
+      .toBe('minmax(5rem, 12rem) minmax(0, 1fr)');
+    expect(ruleDeclaration(sharedStyles, /\.workspace-view-content \.activity-meta\s*\{([^}]*)\}/, 'grid-template-columns'))
+      .toBe('minmax(0, 35%) minmax(0, 1fr)');
+    expect(ruleDeclaration(sharedStyles, /\.generated-view-images img\s*\{([^}]*)\}/, 'height')).toBe('auto');
+    expect(ruleDeclaration(sharedStyles, /\.generated-chart-plot\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
+    expect(ruleDeclaration(sharedStyles, /\.generated-chart-plot:focus-visible\s*\{([^}]*)\}/, 'outline'))
+      .toBe('3px solid var(--focus)');
+    expect(ruleDeclaration(sharedStyles, /\.html-app-frame\s*\{([^}]*)\}/, 'max-width')).toBe('100%');
   });
 
   it('keeps Daily phone navigation, detail spacing, focus and reduced motion consistent', () => {

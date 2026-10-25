@@ -44,6 +44,7 @@ CHAT_AGENT_FAILURE_REASONS = frozenset({
     "error_permissiondeniederror",
     "error_badrequesterror",
     "error_internalservererror",
+    "tool_loop_stalled",
 })
 CHAT_AGENT_INVOCATION_REASONS = frozenset({
     "agent_auth_unavailable",

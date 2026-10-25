@@ -324,7 +324,7 @@
 }
 body {
   margin: 0;
-  min-width: 280px;
+  min-width: min(280px, 100%);
   background: var(--page);
   color: var(--text);
   transition: background-color var(--motion-panel) var(--ease-standard), color var(--motion-panel) var(--ease-standard);
@@ -927,7 +927,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 .workspace-view-content .task-window-actions, .workspace-view-content .timeline-artifacts { padding-top: var(--space-3); }
 .workspace-view-content [role="alert"] { color: var(--error); }
-.generated-view-table { max-width: 100%; overflow: auto; }
+.generated-view-table { min-width: 0; max-width: 100%; overflow: auto; overscroll-behavior: contain; }
 .generated-view-table:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .generated-view-table table { width: 100%; border-collapse: collapse; text-align: left; }
 /* Cells keep words and numbers whole: a wide table scrolls inside its wrapper instead of splitting a value across lines. */
@@ -935,8 +935,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .generated-view-table th { background: var(--surface-muted); font-weight: 650; }
 .generated-view-table .generated-view-number { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 700px) { .generated-view-table th, .generated-view-table td { padding-inline: var(--space-1); } }
-.generated-view-details { display: grid; grid-template-columns: minmax(5rem, max-content) minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
+.generated-view-details { display: grid; grid-template-columns: minmax(5rem, 12rem) minmax(0, 1fr); gap: var(--space-2) var(--space-3); }
 .generated-view-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.workspace-view-content .activity-meta { grid-template-columns: minmax(0, 35%) minmax(0, 1fr); }
+.workspace-view-content .activity-meta dt { min-width: 0; overflow-wrap: anywhere; }
 .generated-view-text { white-space: pre-wrap; }
 .generated-view-timeline { display: grid; gap: var(--space-3); padding-inline-start: var(--space-5); }
 .generated-view-timeline time, .generated-view-timeline strong { display: block; margin-bottom: var(--space-1); }
@@ -3224,21 +3226,27 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .folio-search input::placeholder { color: var(--text-muted); opacity: 1; }
 /* Code view (P9-41): the file Jarvis is reading, read-only. Highlighted ranges are tinted cyan with a brighter line
    number; query matches are marked amber. Switching files fades the body in. */
-.code-view { display: flex; flex-direction: column; height: 100%; min-height: 0; margin: 0; }
-.code-view-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-2); padding: 0 0 var(--space-3); font-size: var(--type-small); }
-.code-view-path { flex: 1 1 220px; min-width: 0; overflow: hidden; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; }
+.code-view { display: flex; min-width: 0; max-width: 100%; flex-direction: column; height: 100%; min-height: 0; margin: 0; }
+.code-view-header { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-2); padding: 0 0 var(--space-3); font-size: var(--type-small); }
+.code-view-path { flex: 1 1 220px; min-width: 0; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-caption); overflow-wrap: anywhere; }
 .code-view-path strong { color: var(--text); font-weight: 650; }
-.code-view-chip { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-caption); }
+.code-view-chip { min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-caption); overflow-wrap: anywhere; }
 .code-view-link { color: var(--glass-edge-cool); font-size: var(--type-caption); font-weight: 600; text-decoration: none; }
 .code-view-link:hover { text-decoration: underline; }
-.code-view-body { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--code-surface) 70%, transparent);
+.code-view-wrap { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; gap: var(--space-2); padding-inline: var(--space-2); border-radius: var(--radius-control); color: var(--text-muted); font-size: var(--type-caption); cursor: pointer; }
+.code-view-wrap:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.code-view-wrap input { accent-color: var(--glass-edge-cool); }
+.code-view-body { flex: 1; min-width: 0; max-width: 100%; min-height: 0; overflow: auto; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--code-surface) 70%, transparent);
   overscroll-behavior: contain; animation: code-view-in 360ms var(--ease-enter) both; }
 .code-view-body:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .code-view pre { margin: 0; padding: var(--space-3) 0; font-family: var(--font-mono); font-size: var(--type-caption); line-height: var(--line-body); tab-size: 2; }
 .code-view code { display: block; min-width: max-content; }
+.code-view--wrap .code-view-body code { min-width: 0; }
 .code-line { display: inline-block; width: 100%; padding-right: var(--space-4); transition: background-color var(--motion-state) var(--ease-standard); }
+.code-view--wrap .code-line { display: grid; grid-template-columns: max-content minmax(0, 1fr); }
 .code-line-number { display: inline-block; width: 4.5ch; margin-right: var(--space-4); padding-right: var(--space-3); color: color-mix(in srgb, var(--text-muted) 70%, transparent); text-align: right; user-select: none; }
 .code-line-text { white-space: pre; color: var(--text); }
+.code-view--wrap .code-line-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .code-line[data-highlighted] { background: color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
 .code-line[data-highlighted] .code-line-number { color: var(--glass-edge-cool); font-weight: 650; }
 .code-match { border-radius: var(--radius-control); background: color-mix(in srgb, var(--glass-glow-warm) 32%, transparent); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
@@ -3777,8 +3785,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .wake-status:is([data-outcome="error"], [data-outcome="needs-click"], [data-outcome="unavailable"]) span { color: var(--error); }
 /* Reports share one opaque surface with their host; only the window carries the outer rim. */
 .workspace-window.luminous-glass:has(.html-app) { background: var(--report-surface); backdrop-filter: none; }
-.html-app { display: grid; gap: var(--space-2); min-width: 0; }
-.html-app-frame { display: block; width: 100%; min-height: 160px; border: 0; border-radius: 0; background: var(--report-surface); color-scheme: inherit; }
+.html-app { display: grid; min-width: 0; max-width: 100%; gap: var(--space-2); }
+.html-app-frame { display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 160px; border: 0; border-radius: 0; background: var(--report-surface); color-scheme: inherit; }
 .html-app-notice { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
 .html-app-state { display: grid; justify-items: start; gap: var(--space-3); color: var(--text-muted); }
 .html-app-state p { margin: 0; }
@@ -3834,7 +3842,10 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* Charts (8 October): generated `chart` views are drawn, not tabulated. Hairline grid, cyan then amber series, lines
    draw in once; the values stay one click away under "Show values". */
 .generated-chart { display: grid; gap: var(--space-2); margin: 0; min-width: 0; }
-.generated-chart svg { display: block; width: 100%; max-width: 100%; height: auto; overflow: visible; }
+.generated-chart-plot { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.generated-chart-plot:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.generated-chart-scroll-hint { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
+.generated-chart svg { display: block; width: auto; max-width: none; height: auto; overflow: visible; }
 .generated-chart .chart-grid line { stroke: color-mix(in srgb, var(--text) 10%, transparent); stroke-width: 1; }
 .generated-chart text { fill: var(--text-muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; }
 .generated-chart .chart-line { fill: none; stroke: currentColor; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round;
@@ -3844,9 +3855,9 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .generated-chart .chart-bars rect { opacity: .88; transition: opacity var(--motion-press) var(--ease-standard); }
 .generated-chart .chart-bars rect:hover, .generated-chart .chart-series circle:hover { opacity: 1; stroke-width: 3; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: 0; padding: 0; list-style: none; font-size: var(--type-caption); }
-.chart-legend li { display: inline-flex; align-items: center; gap: var(--space-1); }
+.chart-legend li { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: var(--space-1); }
 .chart-legend li::before { width: 10px; height: 10px; border-radius: 0; background: currentColor; content: ""; }
-.chart-legend span { color: var(--text-muted); }
+.chart-legend span { min-width: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .chart-values summary { width: fit-content; color: var(--text-muted); font-size: var(--type-caption); cursor: pointer; }
 .chart-values summary:hover { color: var(--text); }
 .chart-values[open] summary { margin-bottom: var(--space-2); }

@@ -5,6 +5,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import type { ToolCallRecord } from './tool-calls.js';
 import { coreModule } from './index.js';
+import type { BackendModule } from '../modules.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -24,14 +25,18 @@ function createStore(write: SettingsStore['write'] = async () => {}): SettingsSt
   };
 }
 
-function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () => ({
+function fixture(
+  settingsStore?: SettingsStore,
+  auth: TokenVerifier = async () => ({
   kind: 'jarvis-agent',
   objectId: '00000000-0000-0000-0000-000000000001',
   tenantId: config.auth.tenantId,
-})) {
+  }),
+  extraModules: BackendModule[] = [],
+) {
   const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
   const app = buildApp(config, undefined, {
-    modules: [coreModule],
+    modules: [coreModule, ...extraModules],
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     toolCallStore: { record },
@@ -41,6 +46,28 @@ function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () =
 }
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+
+it('publishes execution metadata at the shared tool catalogue boundary', async () => {
+  const execution = { defaultEffect: 'read' } as const;
+  const module: BackendModule = {
+    id: 'execution-metadata-test',
+    registerRoutes: async () => {},
+    tools: [{
+      name: 'new_read_capability',
+      description: 'Read synthetic capability data.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execution,
+      execute: async () => ({}),
+    }],
+  };
+  const { app } = fixture(undefined, undefined, [module]);
+
+  const response = await app.inject({ url: '/tools', headers });
+  expect(response.statusCode).toBe(200);
+  expect(response.json()).toEqual(expect.arrayContaining([expect.objectContaining({
+    name: 'new_read_capability', execution,
+  })]));
+});
 
 describe('set_theme tool', () => {
   it('registers and persists only accepted appearance tokens', async () => {
