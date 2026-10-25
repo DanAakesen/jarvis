@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
-import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../core/owner-interactions.js';
+import { createOwnerInteractionService, type BrowserConfirmationDelivery, type ConfirmationActionKind } from '../../core/owner-interactions.js';
+import { approvalDeciderFor } from '../../core/approval-interpreter.js';
+import type { ConfirmationStore } from '../../database/confirmation-store.js';
 import type { MealInput } from '../nutrition/model.js';
 import { createToolRegistry, ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { fridaReference, type FridaLookup, type LookupComponent } from '../nutrition/frida.js';
@@ -88,7 +90,7 @@ function fixture() {
   const staged = Promise.withResolvers<void>();
   const runConfirmed = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
     operationSignal?: AbortSignal, delivery?: BrowserConfirmationDelivery): Promise<T> => {
-    expect(delivery).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
+    expect(delivery).toMatchObject({ channel: 'browser', lifetimeSeconds: 120 });
     staged.resolve();
     const answer = await decision.promise;
     operationSignal?.throwIfAborted();
@@ -101,6 +103,7 @@ function fixture() {
   const conversationStore = {
     getSession: vi.fn(async () => session),
     getHistory: vi.fn(async () => ({ messages: [{ ...source, attachments }], nextCursor: null })),
+    getDanMessagesAfter: vi.fn(async () => [] as { id: string; text: string; language: 'en' }[]),
   };
   const request = {
     server: { ownerObjectId: owner, conversationStore,
@@ -118,7 +121,7 @@ function fixture() {
       confidence: 'accurate', captureMethod: 'mixed', provenance: { energyKcal: { source: 'user-exact' } }, ...overrides });
     rows.set('retained-key', saved); return saved;
   };
-  return { tool, request, store, nutrition, rows, runConfirmed, staged: staged.promise,
+  return { tool, request, store, conversationStore, nutrition, rows, runConfirmed, staged: staged.promise,
     approve: () => decision.resolve('approve'), reject: () => decision.resolve('reject'), mode, session, seed, lookup,
     setAttachments: (value: typeof photo[]) => { attachments = value; } };
 }
@@ -143,12 +146,89 @@ async function executeThroughVoiceCapability(
 }
 
 describe('inactive internal food proposal review', () => {
+  it('does not stage an estimate superseded by cancellation during reference preparation', async () => {
+    const f = fixture();
+    f.lookup.mockImplementation(async components => {
+      f.conversationStore.getDanMessagesAfter.mockResolvedValue([{ id: '43', text: 'Cancel that.', language: 'en' }]);
+      return syntheticLookup(components);
+    });
+    await expect(f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
+      referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } }, f.request, signal()))
+      .rejects.toThrow('superseded');
+    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.store.log).not.toHaveBeenCalled();
+  });
+
+  it.each([110_000, 121_000])('keeps preparation plus review inside the existing operation budget (%d ms review)', async reviewMs => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), ms);
+      return controller.signal;
+    });
+    try {
+      const f = fixture();
+      f.lookup.mockImplementation(async components => {
+        await new Promise(resolve => setTimeout(resolve, 60_000));
+        return syntheticLookup(components);
+      });
+      const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
+        referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } };
+      const result = f.tool.execute(input, f.request, signal());
+      const checked = reviewMs > 120_000 ? expect(result).rejects.toThrow() :
+        expect(result).resolves.toMatchObject({ status: 'committed', record: { energy_kcal: 200 } });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await f.staged;
+      expect(f.store.log).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(reviewMs);
+      f.approve();
+      await checked;
+      expect(f.store.log).toHaveBeenCalledTimes(reviewMs > 120_000 ? 0 : 1);
+      expect(timeout).toHaveBeenCalledWith(180_000);
+    } finally {
+      timeout.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['chat', 'voice'])('commits the pending %s estimate from a natural reply once and recovers the receipt on retry', async channel => {
+    const f = fixture();
+    f.session.channel = channel;
+    const confirmations: ConfirmationStore = {
+      createConfirmation: vi.fn(async () => {}),
+      resolveConfirmation: vi.fn(async (_id, _owner, _conversation, decision) => decision === 'approve' ? 'approved' : 'rejected'),
+      consumeApproval: vi.fn(async () => true),
+      cancelConfirmation: vi.fn(async () => {}),
+      expireConfirmation: vi.fn(async () => false),
+      expirePendingConfirmations: vi.fn(async () => {}),
+    };
+    const service = createOwnerInteractionService({ ownerObjectId: owner, store: confirmations,
+      conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) } });
+    f.runConfirmed.mockImplementation((...args) => service.runConfirmed(...args));
+    const result = channel === 'voice' ? executeThroughVoiceCapability(f.tool, f.request, estimate())
+      : f.tool.execute(estimate(), f.request, signal());
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    expect(f.store.log).not.toHaveBeenCalled();
+    const reply = { id: '43', sessionId: f.session.id, role: 'dan' as const,
+      text: 'yes, log that', model: null, at: new Date() };
+    expect(await service.resolveFoodEstimateReply!(reply, approvalDeciderFor(f.request), signal())).toBe(true);
+    const receipt = await result;
+    expect(channel === 'voice' ? JSON.parse(receipt as string).result : receipt).toMatchObject({
+      status: 'committed', record: { meal_name: 'Synthetic portion', energy_kcal: 200, capture_method: channel === 'chat' ? 'text' : 'voice' },
+    });
+    expect(await service.resolveFoodEstimateReply!({ ...reply, id: '44' }, approvalDeciderFor(f.request), signal())).toBe(false);
+    expect(await f.tool.execute(estimate(), f.request, signal())).toMatchObject({ status: 'committed' });
+    expect(f.store.log).toHaveBeenCalledOnce();
+    expect(confirmations.consumeApproval).toHaveBeenCalledOnce();
+  });
+
   it('keeps estimate and correction writes behind browser approval through compact voice dispatch', async () => {
     const estimateFixture = fixture();
     const estimateResult = executeThroughVoiceCapability(estimateFixture.tool, estimateFixture.request, estimate());
     await estimateFixture.staged;
     expect(estimateFixture.store.log).not.toHaveBeenCalled();
-    expect(estimateFixture.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
+    expect(estimateFixture.runConfirmed.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
+      foodEstimate: { sessionId: 'session', sourceMessageId: '42' } });
     estimateFixture.approve();
     expect(JSON.parse(await estimateResult)).toMatchObject({
       tool: 'daily_food_review', outcome: 'ok', result: { status: 'committed' },
@@ -193,7 +273,8 @@ describe('inactive internal food proposal review', () => {
     const result = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.store.log).not.toHaveBeenCalled();
-    expect(f.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
+    expect(f.runConfirmed.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
+      foodEstimate: { sessionId: 'session', sourceMessageId: '42' } });
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 200 kcal');
     input.change.food.energyKcal = 999;
     f.approve();

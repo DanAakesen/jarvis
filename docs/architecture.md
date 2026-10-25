@@ -5378,7 +5378,7 @@ flowchart LR
   to the existing builder rather than investigating logs or reproducing bugs.
 - Commits are not stored; the release view fetches them from GitHub on demand.
 - Authenticated `GET /factory/projects/:id/releases` returns the active project's bounded persisted release, PR, workflow-run, and deployment records together with an on-demand graph. Refresh fetches the graph again; a GitHub graph failure leaves the persisted records available with `graph: null`. `GET /factory/releases/:id` resolves an existing release activity link to its project.
-- The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/1 MiB with a 10-second request deadline. No matching run returns `null`; provider failures are sanitized and the token is never returned.
+- The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/4 MiB with a 10-second request deadline; the byte cap applies to both declared content length and streamed bytes. No matching run returns `null`; provider failures are sanitized and the token is never returned. A lookup failure does not establish deployment failure.
 - The graph reader uses a repository-scoped installation token with `contents:read`, at most 20 branches and 30 commits per branch, and a 25-second overall deadline; it does not persist GitHub commit data. The UI exposes keyboard-focusable, 44-pixel commit links and keeps a wide graph in its own horizontal scroll region.
 - Copy-ready managed-project examples live in [`templates/github-actions/`](../templates/github-actions/), with Azure OIDC setup and customization steps in [github-actions-templates.md](github-actions-templates.md). PR checks have read-only permissions; the release build and tests precede an artifact upload, and only the `main`-gated deploy job receives `id-token: write`. Azure federation and deployment in an adopting project remain unverified.
 
@@ -6455,11 +6455,26 @@ staging and in the action callback. Existing Now owner-authenticated approval,
 persisted one-time consumption supplies authority. Food cards have an explicit
 120-second lifetime shared by SQL, visible expiry and the service timer;
 default confirmations for all other callers remain five minutes.
+For `log_estimate` only, private pending metadata binds the exact confirmation to
+the source message and session. The authenticated chat steering route and persisted
+browser-voice end-of-turn path interpret the next later owner reply against that
+summary, then resolve the same persisted one-time approval. No new food tool or
+model-supplied authority is added. Wrong-session, stale, ambiguous and superseded
+replies fail closed. Persisted session replies must contain exactly the approving
+message after the source, both before and after interpretation; a correction or
+cancellation during preparation cannot be skipped. An unrelated reply removes conversational authority, leaving
+Now controls available. A handled chat reply is consumed without aborting or
+replaying the active tool round. Voice uses the original tool result as its receipt.
 Per-tool pending target keys prevent duplicate concurrent cards; cancellation
 bounds the entire food operation to 180 seconds from execution entry.
 No global proposal manager, detached writer or new table is added.
 The hosted agent gives only this tool a 210-second response-read deadline,
 below the externally ingressed Container App's 240-second HTTP limit.
+The browser chat stream uses the existing 240-second ingress ceiling; the backend
+Foundry invocation reader reuses the 210-second food read budget below that ceiling,
+rather than cutting off approval at 120 seconds.
+Nonstreaming browser requests remain bounded at 120 seconds; stream-read failures
+show a stable uncertain-delivery recovery instead of raw transport diagnostics.
 Configured research/ordinary deadlines and connection/write/pool limits remain
 unchanged. Generated input uses one number/null nutrient type, not a coercible
 numeric-first union; strict domain validation still follows HTTP validation.

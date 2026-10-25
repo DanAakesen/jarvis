@@ -8,7 +8,7 @@ import { classifyApprovalReply } from './approval.js';
  */
 export type ApprovalVerdict = 'approve' | 'decline' | 'neither';
 export type ApprovalPath = 'fast' | 'model' | 'failed';
-export type ApprovalFamily = 'calendar' | 'mail' | 'factory' | 'github' | 'proactive_preferences';
+export type ApprovalFamily = 'calendar' | 'mail' | 'factory' | 'github' | 'proactive_preferences' | 'food';
 
 export interface ApprovalQuestion {
   /** Dan's verified reply. */
@@ -202,6 +202,10 @@ export function createApprovalInterpreter(options: ApprovalInterpreterOptions = 
   return async (question, signal) => {
     if (signal?.aborted) return failed;
     const preference = question.family === 'proactive_preferences';
+    if (question.family === 'food' &&
+        /^(?:(?:yes|yeah|yep|sure|okay|ok)[,\s]+)?(?:please\s+)?log\s+(?:that|it)(?:[,\s]+please)?[.!]*$|^(?:ja(?:\s+tak)?[,\s]+)?log\s+(?:det|den)(?:[,\s]+tak)?[.!]*$/iu.test(question.reply.trim())) {
+      return { verdict: 'approve', path: 'fast' };
+    }
     const fast = classifyApprovalReply(question.reply);
     if (preference && fast !== undefined) return { verdict: 'neither', path: 'fast' };
     if (fast !== undefined) return { verdict: fast, path: 'fast' };

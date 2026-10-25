@@ -1,5 +1,33 @@
 # Decisions
 
+## Bound deployment-status responses at 4 MiB (25 October 2026; #1267)
+
+The GitHub Actions deployment reader requests up to 100 workflow runs. Allow
+4 MiB instead of 1 MiB so the reported 1,215,280-byte response fits with headroom,
+while retaining a finite per-request memory bound. Enforce the cap on both the
+declared content length and actual streamed bytes; retain the 100-run validation
+and 10-second request timeout. Synthetic regression tests cover the reported
+size with and without a content-length header, acceptance at the cap, and
+rejection/cancellation above it. A lookup error is not a failed deployment.
+
+## Natural food-estimate confirmation reuses one-time browser approval (25 October 2026; #1277)
+
+Only pending `log_estimate` reviews accept the owner's next later reply in the
+same text/browser-voice session. Bind the exact summary, source message and
+confirmation server-side; use the existing bounded approval interpreter and
+one-time persisted consumption. Unrelated or conditional replies remove this
+conversational authority; Now remains the fallback. Multiple pending estimates
+in one session fail closed. Corrections, deletions and unrelated approvals are
+unchanged. Never restage from a yes or claim success before the original tool's
+committed receipt.
+
+Use the existing 240-second ingress ceiling for the browser stream and reuse the
+210-second food read budget for the backend Foundry reader, leaving hosting
+headroom. Keep food's 180-second operation and 120-second approval limits,
+and ordinary browser requests' 120-second deadline. Sanitize transport-read
+failures and direct the owner to check status before retrying. Synthetic checks
+do not establish live provider, microphone, device or deployment acceptance.
+
 ## Compact camera preview and attachment menu order (#1265; 25 October 2026)
 
 Keep the existing Camera preview workspace identity and lifecycle, but make the
