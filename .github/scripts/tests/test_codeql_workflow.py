@@ -64,7 +64,7 @@ class CodeQlWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(backend_setup)
         self.assertIsNotNone(csharp_setup)
         self.assertEqual(csharp_setup.group(1), backend_setup.group(1))
-        self.assertEqual(csharp_setup.group(2), "10.0.x")
+        self.assertEqual(csharp_setup.group(2), "10.0.402")
 
         self.assertIn(
             "run: dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj "
