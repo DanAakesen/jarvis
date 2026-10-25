@@ -19,6 +19,8 @@ describe('html app document', () => {
     const doc = htmlAppDocument(html, { scheme: 'light', tokens: { '--background': '#f0f5f7', '--text': '#17202a' } });
     expect(doc).toContain('--jarvis-background: #f0f5f7 !important;');
     expect(doc).toContain('html, body { background: var(--jarvis-background) !important;');
+    expect(doc).toContain('html, body { min-width: 0 !important; max-width: 100% !important; overflow-wrap: anywhere !important; }');
+    expect(doc).toContain('img, video, svg, canvas { max-width: 100% !important; height: auto; }');
     expect(doc).toContain('[data-jarvis-document-root] { background: transparent !important; border: 0 !important;');
     expect(doc).toContain('<section style="border:1px solid red">Findings</section>');
     expect(doc).toContain("event.source !== parent");

@@ -6,6 +6,7 @@ import {
   type BackgroundJob,
   type BackgroundJobDetails,
   type BackgroundJobKind,
+  type BackgroundJobResultDelivery,
   type BackgroundJobStep,
 } from '@jarvis/contracts';
 import type { JarvisActivityHub } from './activity.js';
@@ -33,10 +34,25 @@ export interface BackgroundJobStartOptions {
   retryOf?: string;
 }
 
+export function workspaceResultDelivery(error: unknown): BackgroundJobResultDelivery {
+  if (error instanceof ToolRefusal) {
+    return /^No .+ workspace is connected\./u.test(error.message) ? 'pending' : 'failed';
+  }
+  if (error instanceof Error && /may already have been applied|did not acknowledge the command/u.test(error.message)) {
+    return 'unknown';
+  }
+  return 'failed';
+}
+
 export interface BackgroundJobHandle {
   readonly jobId: string;
   progress(step: number, detail?: string): Promise<void>;
-  done(viewId: string, detail?: string): Promise<void>;
+  done(
+    viewId: string,
+    detail?: string,
+    result?: { resultId: string; resultDelivery: BackgroundJobResultDelivery },
+  ): Promise<void>;
+  setResultDelivery(resultDelivery: BackgroundJobResultDelivery): Promise<void>;
   fail(detail: string): Promise<void>;
 }
 
@@ -148,16 +164,44 @@ export class BackgroundJobRegistry {
           ...(stepDetail ? { detail: stepDetail } : {}),
         });
       },
-      done: async (viewId, doneDetail) => {
+      done: async (viewId, doneDetail, result) => {
         await this.update(tracked, {
           status: 'done',
           step: tracked.job.steps,
           viewId,
           ...(doneDetail ? { detail: doneDetail } : {}),
+          ...(result ? { ...result } : {}),
         });
+      },
+      setResultDelivery: async (resultDelivery) => {
+        await this.updateResultDelivery(tracked, resultDelivery);
       },
       fail: async (failDetail) => { await this.update(tracked, { status: 'failed', detail: failDetail }); },
     };
+  }
+
+  private updateResultDelivery(
+    tracked: TrackedJob,
+    resultDelivery: BackgroundJobResultDelivery,
+  ): Promise<boolean> {
+    let changed = false;
+    const operation = tracked.pending.then(async () => {
+      if (tracked.job.status !== 'done' || !tracked.job.resultId ||
+          tracked.job.resultDelivery === resultDelivery ||
+          tracked.job.resultDelivery === 'delivered' && resultDelivery !== 'delivered') return;
+      const next: BackgroundJob = {
+        ...tracked.job,
+        resultDelivery,
+        updatedAt: new Date(this.now()).toISOString(),
+      };
+      const job = this.store ? await this.store.updateResultDelivery(next.jobId, resultDelivery) : next;
+      if (!job) return;
+      tracked.job = job;
+      changed = true;
+      this.publish(job);
+    });
+    tracked.pending = operation.catch(() => {});
+    return operation.then(() => changed);
   }
 
   async recentFailures(from: Date, to: Date, signal: AbortSignal): Promise<{ count: number; retryable: boolean } | undefined> {
@@ -216,6 +260,21 @@ export class BackgroundJobRegistry {
     if (!changed) return 'finished';
     tracked.cancel();
     return 'cancelled';
+  }
+
+  async setResultDelivery(jobId: string, resultDelivery: BackgroundJobResultDelivery): Promise<void> {
+    const normalizedId = jobId.toLowerCase();
+    if (!jobIdPattern.test(normalizedId)) return;
+    const tracked = this.jobs.get(normalizedId);
+    if (tracked) {
+      await this.updateResultDelivery(tracked, resultDelivery);
+      return;
+    }
+    if (!this.store) return;
+    const stored = await this.store.get(normalizedId);
+    if (stored?.details.job.status !== 'done' || !stored.details.job.resultId) return;
+    const updated = await this.store.updateResultDelivery(normalizedId, resultDelivery);
+    if (updated) this.publish(updated);
   }
 
   private update(tracked: TrackedJob, change: Partial<BackgroundJob>): Promise<boolean> {
@@ -358,6 +417,8 @@ function describeJob(job: BackgroundJob, now: number): Record<string, unknown> {
     progress: `${job.step}/${job.steps}`,
     ...(job.detail ? { detail: job.detail } : {}),
     ...(job.viewId ? { resultWindow: job.viewId } : {}),
+    ...(job.resultId ? { resultId: job.resultId } : {}),
+    ...(job.resultDelivery ? { resultDelivery: job.resultDelivery } : {}),
     startedSecondsAgo: ageSeconds,
   };
 }

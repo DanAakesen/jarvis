@@ -32,9 +32,10 @@ describe('HTML artifact store', () => {
   it('stores bounded HTML and source metadata under the authenticated owner', async () => {
     const fake = fakePool([{ recordset: [row] }]);
     const store = new HtmlArtifactStore(fake.pool);
-    const result = await store.create(owner, 'Research report', row.html, sources, new AbortController().signal);
+    const result = await store.create(owner, 'Research report', row.html, sources, new AbortController().signal, artifactId);
 
     expect(result).toMatchObject({ id: artifactId, kind: 'html', title: 'Research report', sources });
+    expect(fake.input).toHaveBeenCalledWith('id', sql.UniqueIdentifier, artifactId);
     expect(fake.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, owner);
     expect(fake.input).toHaveBeenCalledWith('size', sql.Int, Buffer.byteLength(row.html, 'utf8'));
     expect(fake.input).toHaveBeenCalledWith('sources', sql.NVarChar(sql.MAX), JSON.stringify(sources));
@@ -48,6 +49,8 @@ describe('HTML artifact store', () => {
     await expect(store.create(owner, 'Report', '<script src="https://example.com/a.js"></script>', sources, new AbortController().signal))
       .rejects.toThrow('HTML artifact is invalid or exceeds its size limit');
     await expect(store.create(owner, 'Report', `<p>${'é'.repeat(270_000)}</p>`, sources, new AbortController().signal))
+      .rejects.toThrow('HTML artifact is invalid or exceeds its size limit');
+    await expect(store.create(owner, 'Report', row.html, sources, new AbortController().signal, 'bad-id'))
       .rejects.toThrow('HTML artifact is invalid or exceeds its size limit');
     expect(fake.pool.request).not.toHaveBeenCalled();
   });

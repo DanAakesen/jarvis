@@ -130,7 +130,7 @@ function parseEvents(buffer: string): { events: { event: string; data: string }[
 }
 
 export class ChatAgentError extends Error {
-  constructor(readonly code: string | undefined) {
+  constructor(readonly code: string | undefined, readonly retryAfterMs?: number) {
     super(code ? `Chat agent failed (${code})` : 'Chat agent failed');
     this.name = 'ChatAgentError';
   }
@@ -184,8 +184,23 @@ function invocationFailure(
   return new ChatAgentInvocationError(message, reason, { cause: error });
 }
 
-function deltaFromEvent(event: { event: string; data: string }): string | undefined {
-  if (event.event === 'error') throw new ChatAgentError(errorCode(event.data));
+function deltaFromEvent(event: { event: string; data: string }, headers: Headers): string | undefined {
+  if (event.event === 'error') {
+    let retryAfterMs: number | undefined;
+    const retryAfter = headers.get('retry-after');
+    if (retryAfter !== null) {
+      const seconds = Number(retryAfter);
+      const ms = Number.isFinite(seconds) ? seconds * 1_000 : Date.parse(retryAfter) - Date.now();
+      if (Number.isFinite(ms) && ms >= 0) retryAfterMs = ms;
+    }
+    try {
+      const payload = JSON.parse(event.data) as Record<string, unknown>;
+      if (typeof payload?.retry_after === 'number' && Number.isFinite(payload.retry_after) && payload.retry_after >= 0) {
+        retryAfterMs = payload.retry_after * 1_000;
+      }
+    } catch { /* Invalid error metadata is ignored. */ }
+    throw new ChatAgentError(errorCode(event.data), retryAfterMs);
+  }
   if (event.event !== 'delta') return undefined;
   let payload: unknown;
   try {
@@ -411,7 +426,7 @@ export function createFoundryInvocationConversationAgent(
           for (const event of parsed.events) {
             finish(event);
             if (completed) break;
-            const delta = deltaFromEvent(event);
+            const delta = deltaFromEvent(event, response.headers);
             if (delta !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
               yield delta;
@@ -425,7 +440,7 @@ export function createFoundryInvocationConversationAgent(
           for (const event of finalEvents) {
             finish(event);
             if (completed) break;
-            const delta = deltaFromEvent(event);
+            const delta = deltaFromEvent(event, response.headers);
             if (delta !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
               yield delta;

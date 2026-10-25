@@ -3091,8 +3091,14 @@ names, schemas, descriptions and serialized size, and builds the same
 `/agent/settings` payload used by the route, then verifies the shape accepted by
 the agent. It imposes no catalogue-count ceiling. The cached
 `chat_canary` suite uses the backend's agent identity and runs seven fixed
-acceptance prompts under the existing `smoke` usage role. It has one 55-second
-suite deadline, a 25-second per-prompt deadline and a 60-second result cache.
+acceptance prompts under the existing `smoke` usage role. Its acceptance-only
+queue admits at most three active hosted calls and spaces starts at least eight
+seconds apart, including the approval follow-up and retries. Eight hosted calls
+(roughly 15 model calls) span at least 56 seconds; expect 60–90 seconds normally.
+It has one 240-second suite deadline, a 25-second deadline per active hosted
+call (queue time excluded), and a 60-second result cache. Deploy allows 250
+seconds for the request inside the unchanged five-minute acceptance job.
+Normal chat and retained Status reads do not use the queue.
 Smoke requests omit user history and running-task context, do not persist
 conversation messages or tool-call audits, and limit each model invocation to
 two rounds, one tool call and 256 output tokens. The agent receives only
@@ -3140,13 +3146,17 @@ keeps its cause in-process only. A hosted error event without a safe code or wit
 an unlisted code reports `agent_error_code_missing` or `agent_error_code_unlisted`;
 any other unexpected exception remains `agent_error`. These
 `chatAgentInvocationReasons` are mirrored by the Python formatter with a parity
-test, and cancellation is never relabelled. The canary re-runs a conversation
-check once when its first attempt threw one of these failures. Assertion failures
-and timeouts are never retried. The retry starts only if the first wave finished
-within 25 seconds of the suite start, runs concurrently in a 25-second window
-inside the unchanged 55-second suite deadline, and replaces the first result only
-when it passes. Smoke prompts are read-only or no-op, so repeating them has no
-side effects; a rescued first failure is not recorded in the report.
+test, and cancellation is never relabelled by the invocation client.
+`rate_limit_exceeded` is explicitly allowed in hosted, canary, smoke-log and
+artifact reasons. Only that failure retries its check once: wait 60 seconds
+after rejection by default, or use a numeric SSE `retry_after` (seconds) /
+HTTP `Retry-After` hint clamped to 30–60 seconds, then re-enter the same queue.
+The second result is final; a second throttle names `rate_limit_exceeded` on
+both the check and aggregate canary. Other errors, assertion failures and
+timeouts never retry. Smoke prompts are read-only or no-op, so repeating them
+has no side effects; a rescued throttle is not recorded in the report.
+Capacity remains unchanged. Two consecutive production releases with first-attempt
+acceptance and zero throttled spans remain required live verification.
 Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
 non-mutating HTTP projection that omits non-down reasons. This preserves the
 legacy validator in already-open clients during parallel web/backend deploys.
@@ -5084,12 +5094,26 @@ defaults to 305 seconds and can be tuned up to 320 seconds, the configured long
 tool read timeout. The overall job remains bounded at 15 minutes.
 
 The report is persisted in owner-scoped SQL metadata in
-`dbo.workspace_html_artifacts` (migrations 0026/0027), then the same workspace
-window is updated to renderer `html-app` with the artifact ID. Reads and pin
-changes are Dan-authorized; report bytes remain within the 512 KiB contract.
-The background job has bounded concurrency, shutdown cancellation and visible
-terminal failures; voice announces a short findings summary or fixed failure
-update without invoking tools again.
+`dbo.workspace_html_artifacts` (migrations 0026/0027), then its Folio entry and
+job reference are saved. Migration 0066 adds that reference and an independent
+Workspace delivery state (`pending`, `unknown`, `failed` or `delivered`) to the
+completed job. The artifact uses the research job UUID, so the progress and
+report share one stable `research-<compact UUID>` view ID. The job becomes
+`done` after artifact, Folio and job metadata persist, before Workspace delivery
+is attempted. Only an applied-command acknowledgement marks delivery `delivered`;
+it does not prove the owner saw the report. Missing Workspace stays `pending`,
+ambiguous acknowledgement stays `unknown`, and an explicit refusal is `failed`.
+None changes successful research to a failed job.
+
+The owner-only `POST /jobs/:jobId/open-result` route resolves the stored Folio
+entry, validates and reads its artifact under the owner identity, and opens it
+through the existing Workspace broker using the same stable view ID. Reconnect,
+reload, a closed progress window and a lost acknowledgement can therefore offer
+or reopen the saved report without invoking the research provider or creating a
+second result window. Reads and pin changes remain Dan-authorized; report bytes
+remain within the 512 KiB contract. The background job retains bounded
+concurrency, shutdown cancellation and visible generation/persistence failures;
+voice announces the saved findings summary independently of presentation.
 
 The web `html-app` renderer (`HtmlAppView`, 8 October) reads the artifact from
 owner-only `GET /factory/workspace-artifacts/html/:id`, validates it with

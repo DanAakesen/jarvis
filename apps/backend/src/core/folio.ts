@@ -24,6 +24,7 @@ import {
 } from '../database/workspace-html-artifact-store.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { workspaceResultDelivery } from './jobs.js';
 
 const itemIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
 
@@ -58,6 +59,7 @@ function graphView(item: FolioItem, payload: { query: string; highlight: readonl
 
 function viewId(item: FolioItem, sourceId: string): string {
   if (item.kind === 'knowledge_graph') return `knowledge-graph-${sourceId.replaceAll('-', '')}`;
+  if (item.kind === 'research') return `research-${sourceId.replaceAll('-', '')}`;
   return `${item.kind === 'image' ? 'image' : 'html'}-${sourceId.replaceAll('-', '')}`;
 }
 
@@ -252,6 +254,7 @@ export function createFolioModule(
     id: 'folio',
     tools: folioTools(store, htmlArtifacts, imageArtifacts),
     registerRoutes: async (app: FastifyInstance) => {
+      const openingResults = new Map<string, Promise<FolioItem>>();
       const isOwner = (request: FastifyRequest) =>
         request.principal?.objectId.toLowerCase() === app.ownerObjectId.toLowerCase();
 
@@ -295,6 +298,57 @@ export function createFolioModule(
           if (lifecycle.signal.aborted) return reply.code(499).send({ error: 'Request cancelled' });
           request.log.warn('folio.open_failed');
           return reply.code(503).send({ error: 'Folio item could not be opened' });
+        } finally {
+          lifecycle.dispose();
+        }
+      });
+
+      app.post<{ Params: { jobId: string } }>('/jobs/:jobId/open-result', {
+        schema: {
+          params: {
+            type: 'object',
+            properties: { jobId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$' } },
+            required: ['jobId'], additionalProperties: false,
+          },
+        },
+      }, async (request, reply) => {
+        if (!isOwner(request)) return reply.code(403).send({ error: 'Forbidden' });
+        const lifecycle = requestLifecycle(request, reply);
+        const jobId = request.params.jobId.toLowerCase();
+        try {
+          const existing = openingResults.get(jobId);
+          if (existing) {
+            await existing;
+          } else {
+            const opening = (async () => {
+              const stored = await app.backgroundJobs.details(jobId);
+              const job = stored?.details.job;
+              if (!job || job.kind !== 'research' || job.status !== 'done' ||
+                  job.resultId !== `research:${jobId}`) throw new FolioItemNotFound();
+              const item = await openItem(store, htmlArtifacts, imageArtifacts, request, job.resultId, lifecycle.signal);
+              await app.backgroundJobs.setResultDelivery(jobId, 'delivered');
+              return item;
+            })();
+            openingResults.set(jobId, opening);
+            try {
+              await opening;
+            } finally {
+              if (openingResults.get(jobId) === opening) openingResults.delete(jobId);
+            }
+          }
+          reply.header('Cache-Control', 'no-store');
+          return { opened: true as const };
+        } catch (error) {
+          const stored = await app.backgroundJobs.details(jobId).catch(() => null);
+          if (stored?.details.job.resultId && (error instanceof ToolRefusal || error instanceof ToolFailure)) {
+            await app.backgroundJobs.setResultDelivery(jobId, workspaceResultDelivery(error)).catch(() => undefined);
+          }
+          if (error instanceof FolioItemNotFound || error instanceof WorkspaceHtmlArtifactNotFound ||
+              error instanceof WorkspaceArtifactNotFound) return reply.code(404).send({ error: 'Saved research report was not found' });
+          if (error instanceof ToolRefusal) return reply.code(409).send({ error: error.message });
+          if (lifecycle.signal.aborted) return reply.code(499).send({ error: 'Request cancelled' });
+          request.log.warn('folio.research_result_open_failed');
+          return reply.code(503).send({ error: 'Saved research report could not be opened' });
         } finally {
           lifecycle.dispose();
         }

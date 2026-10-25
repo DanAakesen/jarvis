@@ -705,6 +705,7 @@ export function workspaceCommandProblems(
 
 export type BackgroundJobKind = 'research' | 'image' | 'html_app' | 'embedding' | 'proactive';
 export type BackgroundJobStatus = 'running' | 'done' | 'failed' | 'cancelled';
+export type BackgroundJobResultDelivery = 'pending' | 'unknown' | 'failed' | 'delivered';
 /** A slow Jarvis task running in the background; the shell shows it as a job chip until its window is ready. */
 export interface BackgroundJob {
   jobId: string;
@@ -719,6 +720,10 @@ export interface BackgroundJob {
   detail?: string;
   /** Workspace view that holds the result; present when status is done. */
   viewId?: string;
+  /** Owner-authorized Folio entry for a saved research report. */
+  resultId?: string;
+  /** Acknowledged Workspace delivery state for a saved research report. */
+  resultDelivery?: BackgroundJobResultDelivery;
   startedAt: string;
   updatedAt: string;
 }

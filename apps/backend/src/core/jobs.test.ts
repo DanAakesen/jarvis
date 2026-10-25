@@ -4,9 +4,9 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from './event-hub.js';
-import { BackgroundJobRegistry, cancelJobTool, getJobTool, listJobsTool } from './jobs.js';
+import { BackgroundJobRegistry, cancelJobTool, getJobTool, listJobsTool, workspaceResultDelivery } from './jobs.js';
 import type { FastifyRequest } from 'fastify';
-import { ToolRefusal } from './tool-registry.js';
+import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import type { JarvisActivityHub } from './activity.js';
 import type { BackgroundJobStore } from '../database/background-job-store.js';
 
@@ -38,6 +38,12 @@ function dismissalFixture() {
   const store: BackgroundJobStore = {
     create: vi.fn(async () => true),
     update: vi.fn(async (job) => job),
+    updateResultDelivery: vi.fn(async (jobId, resultDelivery) => {
+      const job = jobs.find((candidate) => candidate.jobId === jobId);
+      if (!job?.resultId) return null;
+      Object.assign(job, { resultDelivery });
+      return job;
+    }),
     list: vi.fn(async () => jobs),
     get: vi.fn(async (id) => {
       const job = jobs.find((candidate) => candidate.jobId === id);
@@ -66,6 +72,50 @@ afterEach(async () => {
 
 
 describe('background jobs', () => {
+  it('keeps successful research completion separate from persisted result delivery acknowledgement', async () => {
+    const hub: JarvisActivityHub = createEventHub();
+    const events: BackgroundJob[] = [];
+    hub.subscribe((event) => { if (event.type === 'job') events.push(event.job); });
+    let persisted: BackgroundJob | null = null;
+    const store: BackgroundJobStore = {
+      create: vi.fn(async () => true),
+      update: vi.fn(async (job) => { persisted = job; return job; }),
+      updateResultDelivery: vi.fn(async (_jobId, resultDelivery) => {
+        if (!persisted?.resultId || persisted.resultDelivery === 'delivered' && resultDelivery !== 'delivered') return null;
+        persisted = { ...persisted, resultDelivery };
+        return persisted;
+      }),
+      list: vi.fn(async () => persisted ? [persisted] : []),
+      get: vi.fn(async () => null),
+      reconcileInterrupted: vi.fn(async () => []),
+      prune: vi.fn(async () => {}),
+    };
+    const registry = new BackgroundJobRegistry(hub, Date.now, store);
+    const job = await registry.start('research', 'Research: Saved result', 2);
+    const resultId = 'research:11111111-1111-4111-8111-111111111111';
+
+    await job.done(`research-${job.jobId.replaceAll('-', '')}`, 'Report saved', {
+      resultId, resultDelivery: 'pending',
+    });
+    await job.setResultDelivery('delivered');
+    await job.setResultDelivery('unknown');
+
+    expect(events.map(({ status, resultDelivery }) => [status, resultDelivery])).toEqual([
+      ['running', undefined], ['done', 'pending'], ['done', 'delivered'],
+    ]);
+    expect(persisted).toMatchObject({ status: 'done', resultId, resultDelivery: 'delivered' });
+    expect(store.updateResultDelivery).toHaveBeenCalledOnce();
+  });
+
+  it('distinguishes missing Workspace delivery, explicit refusal and ambiguous acknowledgement', () => {
+    expect(workspaceResultDelivery(new ToolRefusal('No active signed-in workspace is connected.')))
+      .toBe('pending');
+    expect(workspaceResultDelivery(new ToolRefusal('The workspace refused the report.'))).toBe('failed');
+    expect(workspaceResultDelivery(new ToolFailure(
+      'The workspace did not acknowledge the command within 10 seconds; it may already have been applied.',
+    ))).toBe('unknown');
+  });
+
   it('publishes bounded, contract-valid job changes and ignores updates after the job ends', async () => {
     const hub: JarvisActivityHub = createEventHub();
     const events: BackgroundJob[] = [];
@@ -420,6 +470,12 @@ describe('background jobs', () => {
     const store: BackgroundJobStore = {
       create: vi.fn(async () => true),
       update: vi.fn(async (job) => job),
+      updateResultDelivery: vi.fn(async (jobId, resultDelivery) => {
+        const job = jobs.find((candidate) => candidate.jobId === jobId);
+        if (!job?.resultId) return null;
+        Object.assign(job, { resultDelivery });
+        return job;
+      }),
       list: vi.fn(async () => jobs),
       get: vi.fn(async (jobId) => {
         const job = jobs.find((candidate) => candidate.jobId === jobId);
@@ -481,6 +537,7 @@ describe('background jobs', () => {
       update: vi.fn()
         .mockRejectedValueOnce(new Error('database unavailable'))
         .mockImplementation(async (job: BackgroundJob) => job),
+      updateResultDelivery: vi.fn(async () => null),
       list: vi.fn(async () => []),
       get: vi.fn(async () => null),
       reconcileInterrupted: vi.fn(async () => []),

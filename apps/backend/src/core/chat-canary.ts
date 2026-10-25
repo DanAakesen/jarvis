@@ -11,12 +11,25 @@ import {
 } from '../system-status.js';
 import type { SystemSmokeCheckId, SystemStatusValue } from '@jarvis/contracts';
 
-const chatCanaryTimeoutMs = 55_000;
+const chatCanaryTimeoutMs = 240_000;
 const chatCanaryCacheMs = 60_000;
 const perPromptTimeoutMs = 25_000;
-// A failed check may run once more, but only while that second attempt still ends inside the suite deadline.
-const retryPhaseTimeoutMs = perPromptTimeoutMs;
-const retryStartLimitMs = chatCanaryTimeoutMs - retryPhaseTimeoutMs - 5_000;
+const callSpacingMs = 8_000;
+
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new Error('suite_timeout'));
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, ms);
+    if (signal.aborted) abort();
+    else signal.addEventListener('abort', abort, { once: true });
+  });
+}
 
 type AcceptanceCheckId =
   | 'chat_identity'
@@ -27,7 +40,7 @@ type AcceptanceCheckId =
   | 'chat_no_timestamp'
   | 'chat_plain_approval';
 type SuiteCheckId = AcceptanceCheckId | 'chat_canary';
-type CheckResult = { readonly status: SystemStatusValue; readonly reason?: string };
+type CheckResult = { readonly status: SystemStatusValue; readonly reason?: string; readonly retryAfterMs?: number };
 type SuiteResult = Record<SuiteCheckId, CheckResult>;
 
 const prompts = {
@@ -84,26 +97,51 @@ function failureReason(error: unknown): string {
   return error instanceof Error && error.message === 'prompt_timeout' ? 'timeout' : 'agent_error';
 }
 
-// Only a check that threw may run again. A completed reply that fails its assertion, or a timeout, never does.
-function isRetryable(check: CheckResult): boolean {
-  const { reason } = check;
-  return check.status !== 'ok' && reason !== undefined && (
-    reason === 'agent_error' || chatAgentFailureReasons.has(reason) || chatAgentInvocationReasons.has(reason)
-  );
-}
-
-function boundedSignal(parent: AbortSignal, ms: number): { readonly signal: AbortSignal; readonly dispose: () => void } {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  const timer = setTimeout(abort, ms);
-  timer.unref?.();
-  if (parent.aborted) abort();
-  else parent.addEventListener('abort', abort, { once: true });
+// This wrapper belongs to one acceptance suite, never to normal chat or retained Status reads.
+function pacedAgent(agent: ConversationAgent): ConversationAgent {
+  let admission = Promise.resolve();
+  let nextStart = 0;
+  let active = 0;
+  let releaseSlot: (() => void) | undefined;
   return {
-    signal: controller.signal,
-    dispose: () => {
-      clearTimeout(timer);
-      parent.removeEventListener('abort', abort);
+    async *stream(input, authorization, signal) {
+      const admitted = admission.then(async () => {
+        if (active >= 3) await new Promise<void>((resolve) => { releaseSlot = resolve; });
+        signal.throwIfAborted();
+        const wait = nextStart - Date.now();
+        if (wait > 0) await delay(wait, signal);
+        signal.throwIfAborted();
+        active++;
+        nextStart = Date.now() + callSpacingMs;
+      });
+      admission = admitted.catch(() => {});
+      await admitted;
+      const controller = new AbortController();
+      let rejectDeadline: (error: Error) => void = () => {};
+      const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
+      const abort = () => {
+        rejectDeadline(new Error('prompt_timeout'));
+        controller.abort();
+      };
+      const timer = setTimeout(abort, perPromptTimeoutMs);
+      signal.addEventListener('abort', abort, { once: true });
+      let iterator: AsyncIterator<string> | undefined;
+      try {
+        iterator = agent.stream(input, authorization, controller.signal)[Symbol.asyncIterator]();
+        while (true) {
+          const chunk = await Promise.race([iterator.next(), deadline]);
+          if (chunk.done) break;
+          yield chunk.value;
+        }
+      } finally {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', abort);
+        controller.abort();
+        void iterator?.return?.().catch(() => {});
+        active--;
+        releaseSlot?.();
+        releaseSlot = undefined;
+      }
     },
   };
 }
@@ -122,27 +160,7 @@ async function checkPrompt(
   signal: AbortSignal,
 ): Promise<CheckResult> {
   try {
-    const promptController = new AbortController();
-    let rejectDeadline: ((error: Error) => void) | undefined;
-    const deadline = new Promise<never>((_resolve, reject) => { rejectDeadline = reject; });
-    const onSuiteAbort = () => {
-      promptController.abort();
-      rejectDeadline?.(new Error('suite_timeout'));
-    };
-    const timeout = setTimeout(() => {
-      promptController.abort();
-      rejectDeadline?.(new Error('prompt_timeout'));
-    }, perPromptTimeoutMs);
-    timeout.unref?.();
-    if (signal.aborted) onSuiteAbort();
-    else signal.addEventListener('abort', onSuiteAbort, { once: true });
-    let response: Awaited<ReturnType<typeof runPrompt>>;
-    try {
-      response = await Promise.race([runPrompt(agent, prompts[id], promptController.signal), deadline]);
-    } finally {
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', onSuiteAbort);
-    }
+    const response = await runPrompt(agent, prompts[id], signal);
     const text = response.text.toLowerCase();
     switch (id) {
       case 'chat_identity':
@@ -216,11 +234,15 @@ async function checkPrompt(
         return failed(id, 'agent_error');
     }
   } catch (error) {
-    return failed(id, failureReason(error));
+    return {
+      ...failed(id, failureReason(error)),
+      ...(error instanceof ChatAgentError && error.retryAfterMs !== undefined
+        ? { retryAfterMs: error.retryAfterMs } : {}),
+    };
   }
 }
 
-async function runSuite(agent: ConversationAgent | undefined, now: () => number): Promise<SuiteResult> {
+async function runSuite(agent: ConversationAgent | undefined): Promise<SuiteResult> {
   const ids = Object.keys(prompts) as AcceptanceCheckId[];
   if (!agent) {
     return Object.fromEntries([
@@ -230,7 +252,6 @@ async function runSuite(agent: ConversationAgent | undefined, now: () => number)
   }
 
   const controller = new AbortController();
-  const startedAt = now();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
     timeout = setTimeout(() => {
@@ -239,28 +260,28 @@ async function runSuite(agent: ConversationAgent | undefined, now: () => number)
     }, chatCanaryTimeoutMs);
     timeout.unref?.();
   });
-  const attempt = async (selected: readonly AcceptanceCheckId[], signal: AbortSignal) =>
-    Promise.all(selected.map(async (id) => [id, await checkPrompt(id, agent, signal)] as const));
+  const acceptanceAgent = pacedAgent(agent);
   const settle = async (): Promise<Record<AcceptanceCheckId, CheckResult>> => {
-    const entries = Object.fromEntries(await attempt(ids, controller.signal)) as Record<AcceptanceCheckId, CheckResult>;
-    const retryIds = ids.filter((id) => isRetryable(entries[id]));
-    if (retryIds.length === 0 || controller.signal.aborted || now() - startedAt > retryStartLimitMs) return entries;
-    // A second attempt can only turn a failure into a pass; if it fails too, the first failure stands.
-    const retryWindow = boundedSignal(controller.signal, retryPhaseTimeoutMs);
-    try {
-      for (const [id, check] of await attempt(retryIds, retryWindow.signal)) {
-        if (check.status === 'ok') entries[id] = check;
+    return Object.fromEntries(await Promise.all(ids.map(async (id) => {
+      let check = await checkPrompt(id, acceptanceAgent, controller.signal);
+      if (check.reason === 'rate_limit_exceeded') {
+        // A full minute is the conservative fallback; provider hints are bounded to 30–60 seconds.
+        const wait = Number.isFinite(check.retryAfterMs)
+          ? Math.min(60_000, Math.max(30_000, check.retryAfterMs!)) : 60_000;
+        await delay(wait, controller.signal);
+        check = await checkPrompt(id, acceptanceAgent, controller.signal);
       }
-    } finally {
-      retryWindow.dispose();
-    }
-    return entries;
+      const safe = { status: check.status, ...(check.reason ? { reason: check.reason } : {}) };
+      return [id, safe];
+    }))) as Record<AcceptanceCheckId, CheckResult>;
   };
   try {
     const entries = await Promise.race([settle(), deadline]);
     const hasFailure = ids.some((id) => id !== 'chat_identity' && id !== 'chat_no_timestamp' &&
       entries[id].status !== 'ok');
-    return { ...entries, chat_canary: hasFailure ? result('down', 'acceptance_check_failed') : result('ok') };
+    const throttled = ids.some((id) => entries[id].reason === 'rate_limit_exceeded');
+    return { ...entries, chat_canary: throttled ? result('down', 'rate_limit_exceeded')
+      : hasFailure ? result('down', 'acceptance_check_failed') : result('ok') };
   } catch {
     controller.abort();
     return Object.fromEntries([
@@ -281,7 +302,7 @@ export function createChatAcceptanceProbes(
   let pending: Promise<SuiteResult> | undefined;
   const getResult = async (id: SuiteCheckId): Promise<CheckResult> => {
     if (!pending && cached && now() - cachedAt < chatCanaryCacheMs) return cached[id];
-    pending ??= runSuite(agent, now);
+    pending ??= runSuite(agent);
     try {
       cached = await pending;
       cachedAt = now();
