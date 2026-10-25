@@ -88,6 +88,34 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
+  it('delivers only food invitations bound to the active source and removes its event subscription', async () => {
+    const confirmation = { id: 'a'.repeat(43), actionKind: 'other' as const,
+      summary: 'Synthetic estimate: 200 kcal.', expiresAt: new Date(Date.now() + 120_000).toISOString() };
+    const app = createApp(storeFixture({
+      addMessage: vi.fn(async input => ({ ...message, ...input })),
+    }), { conversationAgent: { stream: async function* () {
+      app.nowEventHub.publish({ type: 'food_estimate_pending', sessionId: '99', sourceMessageId: '42',
+        confirmation: { ...confirmation, summary: 'Other session secret' } });
+      app.nowEventHub.publish({ type: 'food_estimate_pending', sessionId: '41', sourceMessageId: '40',
+        confirmation: { ...confirmation, summary: 'Earlier source secret' } });
+      app.nowEventHub.publish({ type: 'food_estimate_pending', sessionId: '41', sourceMessageId: '42', confirmation });
+      yield 'No food has been logged.';
+    } } });
+    const originalSubscribe = app.nowEventHub.subscribe.bind(app.nowEventHub);
+    const unsubscribe = vi.fn();
+    vi.spyOn(app.nowEventHub, 'subscribe').mockImplementation(listener => {
+      const stop = originalSubscribe(listener);
+      return () => { unsubscribe(); stop(); };
+    });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+      headers, payload: { text: 'Estimate this portion.' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(`event: food_invitation\ndata: ${JSON.stringify(confirmation)}`);
+    expect(response.body).not.toContain('Other session secret');
+    expect(response.body).not.toContain('Earlier source secret');
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { outcome: 'image', path: 'image', reason: 'image_accepted' },
     { outcome: 'rejected', path: 'caption', reason: 'image_rejected' },
