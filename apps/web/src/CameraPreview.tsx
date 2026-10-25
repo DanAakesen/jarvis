@@ -15,13 +15,21 @@ export const cameraPreviewViewId = 'camera-preview';
 
 export function CameraPreview({ camera }: { camera: CameraController }) {
   const video = useRef<HTMLVideoElement>(null);
+  const container = useRef<HTMLDivElement>(null);
+  const measuredStream = useRef<MediaStream | null>(null);
   const [playback, setPlayback] = useState<{ stream: MediaStream; error: string } | null>(null);
+  const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
+  const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   const [attempt, setAttempt] = useState(0);
   const stream = camera.previewStream;
   useEffect(() => {
     const element = video.current;
     if (!element || !stream) return;
     let active = true;
+    if (measuredStream.current !== stream) {
+      measuredStream.current = stream;
+      setVideoSize(null);
+    }
     element.srcObject = stream;
     void element.play().then(() => {
       if (active) setPlayback({ stream, error: '' });
@@ -34,11 +42,30 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
       element.srcObject = null;
     };
   }, [attempt, stream]);
+  useEffect(() => {
+    const element = container.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setPreviewSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const scale = videoSize && previewSize.width > 0 && previewSize.height > 0
+    ? Math.min(previewSize.width / videoSize.width, previewSize.height / videoSize.height)
+    : 0;
+  const pictureSize = scale > 0 && videoSize
+    ? { width: videoSize.width * scale, height: videoSize.height * scale }
+    : videoSize ? { width: '100%', aspectRatio: `${videoSize.width} / ${videoSize.height}` } : undefined;
   const playbackError = playback && playback.stream === stream ? playback.error : '';
   const live = Boolean(stream && camera.sharing && playback && playback.stream === stream && !playback.error);
-  return <div className="camera-preview" data-inactive={!camera.sharing && !camera.starting}>
-    <div className="camera-preview-picture luminous-glass" data-facing={camera.facing}>
-      <video ref={video} autoPlay muted playsInline aria-label="Live camera preview" data-readback="off" />
+  return <div ref={container} className="camera-preview" data-inactive={!camera.sharing && !camera.starting}>
+    <div className="camera-preview-picture" data-facing={camera.facing} style={pictureSize}>
+      <video ref={video} autoPlay muted playsInline aria-label="Live camera preview" data-readback="off"
+        onLoadedMetadata={(event) => {
+          const { videoWidth, videoHeight } = event.currentTarget;
+          if (videoWidth > 0 && videoHeight > 0) setVideoSize({ width: videoWidth, height: videoHeight });
+        }} />
       {(!stream || camera.starting) && <p role="status">{camera.starting ? 'Starting camera...' : 'No camera frame available.'}</p>}
       {live && !camera.starting && <span className="camera-preview-live" role="status">Live</span>}
       {(camera.sharing || camera.starting) && <CameraStatus camera={camera} />}

@@ -12,7 +12,21 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+function setPreviewBounds(width: number, height: number) {
+  vi.stubGlobal('ResizeObserver', class {
+    private readonly callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) { this.callback = callback; }
+    observe(target: Element) {
+      this.callback([{ target, contentRect: { width, height } } as ResizeObserverEntry], this as unknown as ResizeObserver);
+    }
+    disconnect() {}
+  });
+}
 
 describe('Camera preview', () => {
   it('shows camera limit freshness without changing the composer or pretending a cached image is live', () => {
@@ -30,12 +44,27 @@ describe('Camera preview', () => {
     })));
     const { container } = render(<CameraPreview camera={controller} />);
     const picture = container.querySelector<HTMLDivElement>('.camera-preview-picture')!;
-    expect(picture.classList.contains('luminous-glass')).toBe(true);
+    expect(picture.classList.contains('luminous-glass')).toBe(false);
     expect(picture.querySelector('.camera-status')).not.toBeNull();
     fireEvent.click(within(picture).getByRole('button', { name: 'Switch to back camera' }));
     expect(controller.switchCamera).toHaveBeenCalledOnce();
     fireEvent.click(within(picture).getByRole('button', { name: 'Close camera preview' }));
     expect(controller.stop).toHaveBeenCalledOnce();
+  });
+  it.each([
+    { width: 360, height: 640, expectedWidth: '168.75px', expectedHeight: '300px' },
+    { width: 640, height: 360, expectedWidth: '400px', expectedHeight: '225px' },
+  ])('fits a $width×$height video to the available preview without changing its aspect ratio', ({ width, height, expectedWidth, expectedHeight }) => {
+    setPreviewBounds(400, 300);
+    const { container } = render(<CameraPreview camera={camera()} />);
+    const video = screen.getByLabelText('Live camera preview');
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: width });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: height });
+    fireEvent.loadedMetadata(video);
+    const picture = container.querySelector<HTMLElement>('.camera-preview-picture')!;
+    expect(picture.style.width).toBe(expectedWidth);
+    expect(picture.style.height).toBe(expectedHeight);
+    expect(picture.querySelector('video')).toBe(video);
   });
   it('plays the existing muted stream locally and detaches without stopping capture on unmount', async () => {
     const controller = camera();
@@ -65,16 +94,22 @@ describe('Camera preview', () => {
     expect((screen.getByLabelText('Live camera preview') as HTMLVideoElement).srcObject).toBe(rear.previewStream);
   });
   it('shows playback failure with a working retry, never claiming Live before playback succeeds', async () => {
+    setPreviewBounds(400, 300);
     vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new Error('Autoplay unavailable.'));
     const controller = camera();
     render(<CameraPreview camera={controller} />);
     await screen.findByRole('alert');
     expect(screen.queryByText('Live')).toBeNull();
+    const video = screen.getByLabelText('Live camera preview');
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 360 });
+    fireEvent.loadedMetadata(video);
     const retryPreview = screen.getByRole('button', { name: 'Retry preview' });
     expect(retryPreview.classList.contains('secondary-button')).toBe(true);
     fireEvent.click(retryPreview);
     await screen.findByText('Live');
     expect(screen.queryByRole('alert')).toBeNull();
+    expect(document.querySelector('.camera-preview-picture')?.getAttribute('style')).toContain('width: 400px; height: 225px;');
     expect(controller.start).not.toHaveBeenCalled();
   });
   it('keeps startup and capture failures visible with retry, without a manual inspection button', () => {
