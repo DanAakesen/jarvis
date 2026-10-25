@@ -182,6 +182,57 @@ describe('loadConversationHistory', () => {
         expect(fetch).not.toHaveBeenCalled();
       });
 
+      it('keeps streaming through preparation and the food review window within the existing ingress limit', async () => {
+        vi.useFakeTimers();
+        const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+          const controller = new AbortController();
+          setTimeout(() => controller.abort(), ms);
+          return controller.signal;
+        });
+        try {
+          let stream!: ReadableStreamDefaultController<Uint8Array>;
+          let requestSignal!: AbortSignal;
+          const user = { id: '51', sessionId: '41', role: 'dan', text: 'Synthetic estimate', model: null,
+            at: '2026-10-25T12:00:00Z' };
+          const committed = { ...user, id: '52', role: 'jarvis', text: 'Logged.' };
+          const encoder = new TextEncoder();
+          const event = (name: string, value: unknown) => encoder.encode(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`);
+          vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+            requestSignal = init.signal!;
+            return new Response(new ReadableStream<Uint8Array>({ start(controller) {
+              stream = controller;
+              stream.enqueue(event('user', user));
+            } }));
+          }));
+          const result = sendChatTurn(createClient(), config, { id: '41', language: 'en' }, user.text, vi.fn(), vi.fn());
+          await vi.advanceTimersByTimeAsync(60_000); // Estimate preparation.
+          expect(requestSignal.aborted).toBe(false);
+          await vi.advanceTimersByTimeAsync(110_000); // Still inside the pending review window.
+          expect(requestSignal.aborted).toBe(false);
+          expect(timeout).toHaveBeenCalledWith(240_000);
+          stream.enqueue(event('done', committed));
+          stream.close();
+          expect(await result).toEqual(committed);
+          await vi.advanceTimersByTimeAsync(70_000);
+          expect(requestSignal.aborted).toBe(true);
+        } finally {
+          timeout.mockRestore();
+          vi.useRealTimers();
+        }
+      });
+
+      it('sanitizes stream-read failures and marks delivery uncertain without replaying the turn', async () => {
+        const fetch = vi.fn(async () => new Response(new ReadableStream({
+          start(controller) { controller.error(new Error('private transport diagnostics')); },
+        })));
+        vi.stubGlobal('fetch', fetch);
+        const uncertain = vi.fn();
+        await expect(sendChatTurn(createClient(), config, { id: '41', language: 'en' }, 'Synthetic estimate',
+          vi.fn(), vi.fn(), uncertain)).rejects.toThrow('A food entry or another action may already have completed');
+        expect(uncertain).toHaveBeenCalledOnce();
+        expect(fetch).toHaveBeenCalledOnce();
+      });
+
       it('creates a session and reads streamed user and assistant messages', async () => {
         const client = createClient();
         const userMessage = {

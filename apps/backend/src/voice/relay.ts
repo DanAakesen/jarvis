@@ -6,6 +6,7 @@ import {
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { runModelToolCall } from '../core/tool-origin.js';
+import { approvalDeciderFor } from '../core/approval-interpreter.js';
 import { modeContext } from '../core/presence-instructions.js';
 import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -928,6 +929,9 @@ function registerVoiceRoute(
         await transcriptQueue;
         if (cameraTurn && (generation !== cameraGeneration || cameraItemId !== providerItemId)) return;
         const message = savedUserMessages.get(itemId);
+        if (message && await app.ownerInteractions?.resolveFoodEstimateReply?.(
+          message, approvalDeciderFor(request), controller.signal,
+        )) return;
         const ledger = reflexLedger.get(itemId) ?? [];
         const calendarContext = calendarTurnContext(calendarConversation, text);
         calendarConversation = calendarContext.explicit || calendarContext.followup;
