@@ -222,8 +222,6 @@
 .app-shell[data-voice-active="true"] .conversation-input[data-voice-active="true"] { position: static; width: auto; max-width: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .app-shell[data-voice-active="true"] .voice-controls[data-active="true"] { position: fixed; inset: 0; z-index: 3; display: block; width: 100vw; height: 100vh; height: 100dvh; pointer-events: none; }
 .app-shell[data-voice-active="true"] .voice-bar { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: var(--jarvis-orb-x, var(--voice-anchor-x)); width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); pointer-events: auto; }
-.app-shell[data-voice-active="true"] .voice-attachment-status { position: absolute; bottom: calc(max(24px, env(safe-area-inset-bottom)) + var(--voice-bar-height, 52px) + var(--space-2)); left: 50%; width: min(480px, calc(100vw - 24px)); margin: 0; padding: var(--space-2) var(--space-3); transform: translateX(-50%); border-radius: var(--radius-control); background: var(--surface); color: var(--text); font-size: var(--type-caption); text-align: center; pointer-events: none; }
-.app-shell[data-voice-active="true"] .voice-attachment-status[role="alert"] { color: var(--error); }
 .app-shell[data-voice-active="true"] .workspace-shell-area[hidden],
 .app-shell[data-voice-active="true"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
 .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; z-index: 2; top: 11vh; right: 3vw; display: block; width: min(48vw, 920px); height: 78vh; overflow: auto; }
@@ -287,7 +285,6 @@
   .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input::before,
   .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input::after { content: none; }
   .app-shell[data-phone="true"][data-voice-active="true"] .voice-controls[data-active="true"] { position: fixed; inset: auto 12px var(--phone-dock-bottom); z-index: var(--z-voice-controls); display: block; width: auto; height: calc(var(--voice-dock-top) - var(--phone-dock-bottom)); background: transparent; backdrop-filter: none; pointer-events: none; }
-  .app-shell[data-phone="true"][data-voice-active="true"] .voice-attachment-status { bottom: calc(var(--voice-bar-height, 60px) + var(--space-2)); }
   .app-shell[data-voice-active="true"] .voice-bar,
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: calc((100vw + env(safe-area-inset-left) - env(safe-area-inset-right)) / 2); width: max-content; max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px); transform: translateX(-50%); }
   .app-shell[data-phone="true"][data-voice-active="true"] .voice-bar { position: absolute; bottom: 0; left: 50%; pointer-events: auto; }

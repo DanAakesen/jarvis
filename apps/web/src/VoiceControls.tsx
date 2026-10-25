@@ -55,8 +55,6 @@ export function VoiceControls({
   disabled = false,
   screenShare,
   camera,
-  attachmentAction,
-  attachmentStatus,
 }: {
   client: PublicClientApplication;
   getAccessToken?: () => Promise<string>;
@@ -68,8 +66,6 @@ export function VoiceControls({
   disabled?: boolean;
   screenShare?: ScreenShareController;
   camera?: CameraController;
-  attachmentAction?: MoreMenuAction;
-  attachmentStatus?: { message: string; error: boolean };
 }) {
   const tokenProvider = getAccessToken ?? missingAccessToken;
   const { voiceActivity } = useJarvisActivity();
@@ -543,8 +539,7 @@ export function VoiceControls({
           </div>
           <div ref={voiceBar} className="voice-bar luminous-glass" role="group" aria-label="Voice controls"
             data-state={presentation.state}>
-            <ConversationMoreMenu language={selectedLanguage} onLanguageChange={changeLanguage}
-              leadingActions={attachmentAction ? [attachmentAction] : []} actions={menuActions}
+            <ConversationMoreMenu language={selectedLanguage} onLanguageChange={changeLanguage} actions={menuActions}
               {...(languageNote ? { languageNote } : {})} />
             <span className="voice-bar-divider" aria-hidden="true" />
             <button ref={stopButton} className="voice-end-control" type="button"
@@ -553,8 +548,6 @@ export function VoiceControls({
               End voice
             </button>
           </div>
-          {attachmentStatus && <p className="voice-attachment-status"
-            role={attachmentStatus.error ? 'alert' : 'status'}>{attachmentStatus.message}</p>}
         </>
       ) : (
         <div className="action-row">

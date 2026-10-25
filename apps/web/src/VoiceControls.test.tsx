@@ -1,5 +1,5 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -191,24 +191,6 @@ describe('VoiceControls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     view.rerender(<VoiceControls {...props} camera={camera} />);
     expect(instance.client.setCameraState).toHaveBeenLastCalledWith(false);
-  });
-
-  it('puts the attachment action first and enables video with consistent wording', () => {
-    const onSelect = vi.fn();
-    const camera = { sharing: false, conversation: false, starting: false, inspecting: false, error: '',
-      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn() };
-    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera}
-      attachmentAction={{ id: 'attach-file', label: 'Attach file or photo', icon: <span aria-hidden="true">+</span>, onSelect }}
-      attachmentStatus={{ message: '1 file ready for your next typed message.', error: false }} />);
-    startVoice().listen();
-    expect(screen.getByText('1 file ready for your next typed message.')).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    const items = within(screen.getByRole('menu')).getAllByRole('menuitem');
-    expect(items[0]?.textContent).toContain('Attach file or photo');
-    expect(items[1]?.textContent).toContain('Language');
-    expect(screen.getByRole('menuitem', { name: 'Enable video' })).not.toBeNull();
-    fireEvent.click(items[0]!);
-    expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it.each(['budget_exhausted', 'budget_unavailable'] as const)('shows only the current camera item %s without echoing a relay event', async code => {
