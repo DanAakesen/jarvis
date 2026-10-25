@@ -179,7 +179,11 @@ describe('inactive internal food proposal review', () => {
       getDanMessagesAfter: vi.fn(async ({ after }) => messages.filter(message => message.role === 'dan' && BigInt(message.id) > BigInt(after))
         .map(({ id, text }) => ({ id, text, language: 'en' as const }))),
     };
-    const service = createOwnerInteractionService({ ownerObjectId: owner, conversationStore, store: {
+    const service = createOwnerInteractionService({ ownerObjectId: owner, conversationStore,
+      onConfirmationsChanged: () => app.nowEventHub.publish({ type: 'refresh' }),
+      onConfirmationPending: (confirmation, foodEstimate) => {
+        if (foodEstimate) app.nowEventHub.publish({ type: 'food_estimate_pending', ...foodEstimate, confirmation });
+      }, store: {
       createConfirmation: vi.fn(async () => {}),
       resolveConfirmation: vi.fn(async () => 'approved'),
       consumeApproval: vi.fn(async () => true),
@@ -220,26 +224,38 @@ describe('inactive internal food proposal review', () => {
         dismiss: vi.fn(async () => false) },
     });
     try {
-      const turn = app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
-        headers: ownerHeaders, payload: { text: 'Estimate this synthetic food portion.' } }).then(response => response);
-      await vi.waitFor(async () => {
-        const feed = await app.inject({ method: 'GET', url: '/now', headers: ownerHeaders });
-        expect(feed.statusCode).toBe(200);
-        expect(feed.json().confirmations).toEqual([expect.objectContaining({
-          summary: expect.stringContaining('Review this exact food estimate for logging in Now. Nothing has changed.'),
-        })]);
-        expect(feed.json().confirmations[0].summary).toContain('Synthetic portion');
-        expect(feed.json().confirmations[0].summary).toContain('200 kcal');
-        expect(feed.json().confirmations[0].summary).toContain('Uncertainty:');
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const response = await fetch(`${address}/conversation/sessions/41/turns`, {
+        method: 'POST', headers: { ...ownerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Estimate this synthetic food portion.' }),
+        signal: AbortSignal.timeout(10_000),
       });
+      expect(response.status).toBe(200);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let body = '';
+      while (!body.includes('event: food_invitation\n')) {
+        const chunk = await reader.read();
+        expect(chunk.done).toBe(false);
+        body += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(body).toContain('Review this exact food estimate for logging in Now. Nothing has changed.');
+      expect(body).toContain('Synthetic portion');
+      expect(body).toContain('200 kcal');
+      expect(body).toContain('Uncertainty:');
+      expect(body).not.toContain('committed');
       expect(f.store.log).not.toHaveBeenCalled();
       const reply = await app.inject({ method: 'POST', url: '/conversation/sessions/41/steer',
         headers: ownerHeaders, payload: { text: 'Log it', language: 'en' } });
       expect(reply.statusCode).toBe(202);
-      const response = await turn;
-      expect(response.statusCode).toBe(200);
-      expect(response.body).toContain('committed');
-      expect(response.body).not.toContain('event: error');
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        body += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(body).toContain('committed');
+      expect(body).toContain('event: food_invitation\ndata: null');
+      expect(body).not.toContain('event: error');
       expect(f.store.log).toHaveBeenCalledOnce();
       expect(service.pendingBrowserConfirmations()).toEqual([]);
     } finally { await app.close(); }

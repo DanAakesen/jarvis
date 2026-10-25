@@ -1546,6 +1546,8 @@ inviting confirmation: prose estimates and reference lookups create no pending
 approval. Without a pending proposal, prepare a new review and obtain a new reply;
 historical agreement cannot authorize it. Only a committed tool receipt proves logging.
 While the tool waits, the authenticated Now feed exposes the exact review.
+Typed chat also streams that source-bound review into the active conversation,
+with a direct invitation to reply; opening the separate Now popover is not required.
 Present-mode browser voice also requests a tool-free spoken estimate and invitation
 from that same staged summary, even though the food tool is still pending.
 An initial spoken acknowledgement is not that invitation or proof of logging.

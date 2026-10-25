@@ -91,6 +91,16 @@ settings, speech and presence gating and discard obsolete queued presentations.
 This adds no second confirmation state or authority. #1259 acknowledgement
 delivery remains distinct from the estimate/invitation.
 
+Typed-chat review follow-up: an unopened Now popover is not a delivered chat
+invitation. Forward the same persisted proposal over the active conversation
+stream, bound to its session and source message, and render it in the existing
+live bubble before the tool returns. Use plain text and existing reply/steering
+controls; retain expiry, withdrawal and shared approval/duplicate guards.
+Synthetic HTTP and rendered-client checks verify delivery before a new reply.
+Scratch Chromium at 1440px and 390px verified the visible invitation and synthetic
+reply receipt without Now, overflow or browser errors; this is not live-provider
+or signed-in production acceptance.
+
 Synthetic HTTP and English/Danish WebSocket tests exercise discovery, staging,
 public review/invitation delivery, new natural replies and committed receipts
 with isolated in-memory storage. Voice fixtures forward synthetic transcript and

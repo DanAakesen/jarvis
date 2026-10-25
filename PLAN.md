@@ -13,7 +13,14 @@ The pending food call now publishes its exact Now review and a session-bound voi
 invitation. Voice presentation can proceed during tool work without bypassing
 speech, response, settings or presence gates. Expired queued invitations are
 discarded; interruption preserves the original tool's result continuation.
-Synthetic HTTP tests read the public review before steering; English/Danish
+Typed-chat follow-up now streams the source/session-bound proposal into the active
+conversation while the tool waits, rather than relying on an unopened Now popover.
+The existing bubble shows the exact plain-text summary and invites a reply;
+withdrawal, expiry and completion remove its transient presentation.
+Synthetic HTTP tests read the live invitation before steering; renderer tests
+require the visible review before `Log it`. Scratch Chromium at desktop/mobile
+widths verified invitation, composer reply and synthetic receipt without overflow.
+English/Danish
 direct/discovery WebSocket tests receive invitation transcript/audio frames before
 a new owner reply and then receive the committed result once. Focused tests and
 backend build/lint pass. Full-tree qualification covers workspace lint/tests/builds,

@@ -596,7 +596,7 @@ try {
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
       onConfirmationPending: (confirmation, foodEstimate) => nowEventHub.publish(foodEstimate
-        ? { type: 'food_estimate_pending', sessionId: foodEstimate.sessionId, confirmation }
+        ? { type: 'food_estimate_pending', ...foodEstimate, confirmation }
         : { type: 'status', kind: 'approval_pending' }),
     })
     : undefined;

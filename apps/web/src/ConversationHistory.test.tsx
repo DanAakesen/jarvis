@@ -613,7 +613,62 @@ describe('ConversationHistory', () => {
       undefined,
       undefined,
       expect.any(Function),
+      expect.any(Function),
     );
+  });
+
+  it('shows the exact staged food invitation in chat before accepting a new reply and committed receipt', async () => {
+    let finish!: (value: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      (args[4] as (message: typeof userMessage) => void)(userMessage);
+      (args[14] as (invitation: unknown) => void)({
+        id: 'a'.repeat(43),
+        summary: 'Synthetic portion\nNutrition: 200 kcal\nUncertainty: estimated grams. Nothing has changed.',
+        expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      });
+      return new Promise(resolve => { finish = resolve; });
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Estimate this synthetic food portion.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    const invitation = await screen.findByRole('status', { name: 'Food estimate awaiting your reply' });
+    expect(invitation.textContent).toContain('Synthetic portion');
+    expect(invitation.textContent).toContain('200 kcal');
+    expect(invitation.textContent).toContain('Uncertainty: estimated grams');
+    expect(invitation.textContent).toContain('Would you like to log this estimate? Reply here');
+    expect(screen.queryByText('Logged Synthetic portion: 200 kcal.')).toBeNull();
+    fireEvent.change(input, { target: { value: 'Log it' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(steerChatTurn).toHaveBeenCalled());
+    expect(steerChatTurn.mock.calls[0]?.[3]).toBe('Log it');
+    await act(async () => finish({ ...assistantMessage, text: 'Logged Synthetic portion: 200 kcal.' }));
+    expect(await screen.findByText('Logged Synthetic portion: 200 kcal.')).not.toBeNull();
+    expect(screen.queryByRole('status', { name: 'Food estimate awaiting your reply' })).toBeNull();
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+  });
+
+  it('removes a withdrawn food invitation without treating it as a committed result', async () => {
+    let publish!: (invitation: unknown) => void;
+    let finish!: (value: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      (args[4] as (message: typeof userMessage) => void)(userMessage);
+      publish = args[14] as typeof publish;
+      return new Promise(resolve => { finish = resolve; });
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Estimate this portion.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(publish).toBeDefined());
+    await act(async () => publish({ id: 'a'.repeat(43), summary: 'Synthetic portion: 200 kcal.',
+      expiresAt: new Date(Date.now() + 120_000).toISOString() }));
+    expect(screen.getByRole('status', { name: 'Food estimate awaiting your reply' })).not.toBeNull();
+    await act(async () => publish(null));
+    expect(screen.queryByRole('status', { name: 'Food estimate awaiting your reply' })).toBeNull();
+    expect(steerChatTurn).not.toHaveBeenCalled();
+    await act(async () => finish({ ...assistantMessage, text: 'No food was logged.' }));
+    expect(await screen.findByText('No food was logged.')).not.toBeNull();
   });
 
   it('shows the acknowledgment separately while tools run and replaces it with the final answer', async () => {
@@ -1072,6 +1127,7 @@ describe('ConversationHistory', () => {
       expect.any(Function),
       undefined,
       undefined,
+      expect.any(Function),
       expect.any(Function),
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();

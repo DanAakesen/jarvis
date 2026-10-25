@@ -300,6 +300,16 @@ successful terminal response delivery from #1259; acknowledgement is not invitat
 delivery. Natural replies and committed receipts retain the shared lifecycle,
 persisted immediate-reply checks and one-time SQL consumption.
 
+Typed chat multiplexes that same internal invitation event into the open turn's
+SSE stream while the model iterator waits for the blocking tool. Both session
+and source message must match the active round. A refresh withdrawing the
+confirmation emits a null presentation; subscriptions end with the round.
+The browser validates the bounded `food_invitation` payload, shows the exact
+summary as plain text in the active conversation and invites a natural reply.
+It reveals/follows the conversation without opening Now, and removes the live
+presentation on withdrawal, expiry or turn completion. This transient view is
+not a persisted assistant answer, a new confirmation store or write authority.
+
 Integration checkpoint (25 October): #1264 at `fa3de91` adds
 `PendingProjectClarification`, `rememberProjectClarification`,
 `resolveCreateIssueProject` and typed `ProjectClarification`. Its candidate
