@@ -1,5 +1,27 @@
 # Architecture
 
+## Natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+The existing agent stream carries an `AcknowledgmentBoundary` after its streamed
+first-person intent text and immediately before the first tool handoff. Direct
+answers do not emit the boundary; continuation after steering suppresses another
+acknowledgment. This reuses the active model request and normal stream rather than
+adding a planning request or display delay.
+
+Hosted chat relays the boundary as a distinct SSE event. The backend checks that
+it matches the streamed prefix, forwards it to the live conversation UI, and
+persists only the final answer. The UI does not replay the transient segment from
+history. Hosted voice closes the first text output item before continuing and
+persists/speaks the separate final item. Realtime voice uses the same English and
+Danish first-person intent guidance; tool execution waits for the matching
+response terminal event to be accepted by the browser WebSocket send callback.
+Cancellation or failed delivery does not authorize queued tool execution. This is
+transport acceptance, not proof that a physical speaker played the audio.
+
+Synthetic fixtures verify the ordering `streamed intent → boundary → tool work →
+final result` and direct turns without a boundary. No live model latency or
+physical-device playback was measured.
+
 ## Vault mirror status consumption (19 October 2026; P14-29)
 
 The backend reads private `vault-mirror-status/status.json` with its existing

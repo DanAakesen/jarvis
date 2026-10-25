@@ -523,17 +523,53 @@ describe('BrowserVoiceClient', () => {
 
     client.start();
     await until(() => statuses.includes('listening'));
-    socket?.receive({ type: 'response.created' });
+    socket?.receive({ type: 'response.created', response: { id: 'voice-response' } });
     socket?.receive({ type: 'response.audio.delta', delta: 'AQID' });
     audio.startPlayback();
     audio.hasPlayback.mockReturnValue(true);
-    socket?.receive({ type: 'response.done' });
+    socket?.receive({ type: 'response.done', response: { id: 'voice-response' } });
     expect(statuses.at(-1)).toBe('speaking');
+    expect(socket?.sent).not.toContainEqual(expect.objectContaining({
+      type: 'jarvis.voice.playback.completed',
+    }));
 
     audio.hasPlayback.mockReturnValue(false);
     audio.finishPlayback();
     expect(statuses.at(-1)).toBe('listening');
+    expect(socket?.sent).toContainEqual({
+      type: 'jarvis.voice.playback.completed',
+      responseId: 'voice-response',
+      audible: true,
+    });
     expect(client.playbackLevel()).toBe(0);
+    client.stop();
+  });
+
+  it('reports a response without audio as not audibly delivered', async () => {
+    const audio = audioAdapter();
+    let socket: MockSocket | undefined;
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      language: 'da',
+      createAudio: () => audio,
+      createSocket: (url, protocols) => {
+        socket = new MockSocket(url, protocols);
+        return socket;
+      },
+    });
+    clients.push(client);
+
+    client.start();
+    await until(() => client.state === 'ready');
+    socket?.receive({ type: 'response.created', response: { id: 'silent-response' } });
+    socket?.receive({ type: 'response.done', response: { id: 'silent-response' } });
+
+    expect(socket?.sent).toContainEqual({
+      type: 'jarvis.voice.playback.completed',
+      responseId: 'silent-response',
+      audible: false,
+    });
     client.stop();
   });
 

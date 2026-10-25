@@ -86,8 +86,15 @@ export interface ConversationVisualResult {
 }
 
 export interface ConversationAgent {
-  stream(input: ConversationAgentInput, authorization: string, signal: AbortSignal): AsyncIterable<string>;
+  stream(input: ConversationAgentInput, authorization: string, signal: AbortSignal): AsyncIterable<ConversationAgentChunk>;
 }
+
+export interface ConversationAgentAcknowledgment {
+  readonly type: 'acknowledgment';
+  readonly text: string;
+}
+
+export type ConversationAgentChunk = string | ConversationAgentAcknowledgment;
 
 const maxStreamBytes = 1024 * 1024;
 const requestTimeoutMs = 120_000;
@@ -184,9 +191,9 @@ function invocationFailure(
   return new ChatAgentInvocationError(message, reason, { cause: error });
 }
 
-function deltaFromEvent(event: { event: string; data: string }): string | undefined {
+function chunkFromEvent(event: { event: string; data: string }): ConversationAgentChunk | undefined {
   if (event.event === 'error') throw new ChatAgentError(errorCode(event.data));
-  if (event.event !== 'delta') return undefined;
+  if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
   let payload: unknown;
   try {
     payload = JSON.parse(event.data);
@@ -194,10 +201,13 @@ function deltaFromEvent(event: { event: string; data: string }): string | undefi
     throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
   }
   if (typeof payload !== 'object' || payload === null || !('text' in payload) ||
-      typeof payload.text !== 'string' || payload.text.length === 0) {
+      typeof payload.text !== 'string' || payload.text.length === 0 ||
+      (event.event === 'acknowledgment' && Array.from(payload.text).length > 500)) {
     throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
   }
-  return payload.text;
+  return event.event === 'acknowledgment'
+    ? { type: 'acknowledgment', text: payload.text }
+    : payload.text;
 }
 
 export function createFoundryInvocationsEndpoint(
@@ -411,10 +421,10 @@ export function createFoundryInvocationConversationAgent(
           for (const event of parsed.events) {
             finish(event);
             if (completed) break;
-            const delta = deltaFromEvent(event);
-            if (delta !== undefined) {
+            const chunk = chunkFromEvent(event);
+            if (chunk !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
-              yield delta;
+              yield chunk;
             }
           }
           buffer = parsed.pending;
@@ -425,10 +435,10 @@ export function createFoundryInvocationConversationAgent(
           for (const event of finalEvents) {
             finish(event);
             if (completed) break;
-            const delta = deltaFromEvent(event);
-            if (delta !== undefined) {
+            const chunk = chunkFromEvent(event);
+            if (chunk !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
-              yield delta;
+              yield chunk;
             }
           }
         }

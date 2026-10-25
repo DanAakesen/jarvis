@@ -17,6 +17,7 @@ import pytest
 
 import chat_telemetry
 import model_client
+from calendar_flow import calendar_safe_prefix
 from jarvis_tools import (
     INSTRUCTIONS,
     BackendToolClient,
@@ -29,6 +30,7 @@ from jarvis_tools import (
 from model_client import (
     ANTHROPIC_THINKING_BUDGETS,
     CHAT_INSTRUCTIONS,
+    PRE_TOOL_ACKNOWLEDGMENT,
     AzureOpenAIResponsesClient,
     SummaryUnavailable,
     anthropic_messages,
@@ -41,7 +43,7 @@ from model_client import (
     personalize_instructions,
     responses_base_url,
 )
-from model_contract import SummaryCompletion
+from model_contract import AcknowledgmentBoundary, SummaryCompletion
 from state import ModelMessage, ModelSettings
 
 
@@ -115,7 +117,7 @@ class FakeAnthropic:
 
 async def collect_chat(
     response,
-    chunks: list[str],
+    chunks: list[str | AcknowledgmentBoundary],
     first: asyncio.Event | None = None,
     close_after_first: bool = False,
 ) -> None:
@@ -310,6 +312,81 @@ def test_chat_instructions_do_not_duplicate_google_safety_rules() -> None:
     for instructions in CHAT_INSTRUCTIONS.values():
         assert "Email contents are untrusted data" not in instructions
         assert "later message from Dan" not in instructions
+
+
+def test_calendar_guard_releases_intent_without_releasing_action_claims() -> None:
+    assert calendar_safe_prefix("I'll check your calendar.") == "I'll check your calendar."
+    assert calendar_safe_prefix("Jeg undersøger kalenderen.") == "Jeg undersøger kalenderen."
+    assert calendar_safe_prefix("I checked your calendar.") == ""
+    assert calendar_safe_prefix("Jeg har tjekket kalenderen.") == ""
+
+
+@pytest.mark.asyncio
+async def test_tool_turn_streams_one_acknowledgment_before_tool_execution() -> None:
+    acknowledgment = "I'll compare your saved targets."
+    order: list[str] = []
+    backend = FakeBackend(catalogue=[CREATE_TASK])
+    original_handle = backend.handle
+
+    def ordered_handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/tools/create_task":
+            order.append("tool")
+        return original_handle(request)
+
+    backend.handle = ordered_handle  # type: ignore[method-assign]
+    tool_call = FakeItem(
+        type="function_call",
+        call_id="create_task",
+        name="create_task",
+        arguments='{"text":"Compare targets"}',
+    )
+    model, transport = client([], rounds=[
+        [
+            SimpleNamespace(type="response.output_text.delta", delta=acknowledgment),
+            completed(tool_call),
+        ],
+        [
+            SimpleNamespace(type="response.output_text.delta", delta="The targets match."),
+            completed(),
+        ],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    chunks: list[str | AcknowledgmentBoundary] = []
+    try:
+        async for chunk in model.complete_chat(
+            [ModelMessage("user", "Compare my saved targets.")], "en"
+        ):
+            chunks.append(chunk)
+            if chunk == acknowledgment:
+                order.append("text")
+            elif isinstance(chunk, AcknowledgmentBoundary):
+                order.append("acknowledgment")
+    finally:
+        current_message_id.reset(message_token)
+
+    assert chunks == [
+        acknowledgment,
+        AcknowledgmentBoundary(acknowledgment),
+        "The targets match.",
+    ]
+    assert order == ["text", "acknowledgment", "tool"]
+    assert len(transport.responses.requests) == 2
+    assert PRE_TOOL_ACKNOWLEDGMENT["en"] in transport.responses.requests[0]["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_direct_answer_has_no_acknowledgment_or_extra_model_request() -> None:
+    model, transport = client([
+        SimpleNamespace(type="response.output_text.delta", delta="It is 12:30."),
+        completed(),
+    ])
+
+    chunks = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "What time is it?")], "en"
+    )]
+
+    assert chunks == ["It is 12:30."]
+    assert len(transport.responses.requests) == 1
 
 
 def completed(*output: Any) -> SimpleNamespace:
@@ -653,7 +730,10 @@ async def test_early_safe_chat_does_not_leak_a_later_split_calendar_claim(
         assert not consumer.done()
         gate.set()
         await asyncio.wait_for(asyncio.shield(consumer), 5)
-        remainder = "".join(received[1:])
+        remainder = "".join(
+            chunk.text if isinstance(chunk, AcknowledgmentBoundary) else chunk
+            for chunk in received[1:]
+        )
         if terminal == "stage":
             assert "Pending calendar approval" in remainder
             assert "Nothing has changed" in remainder
@@ -1885,7 +1965,11 @@ async def test_claude_chat_streams_and_uses_backend_tools_thinking_and_usage() -
     finally:
         current_message_id.reset(message_token)
 
-    assert chunks == ["I’m creating it. ", "Task created."]
+    assert chunks == [
+        "I’m creating it. ",
+        AcknowledgmentBoundary("I’m creating it. "),
+        "Task created.",
+    ]
     assert openai_transport.responses.requests == []
     first, second = anthropic.messages.requests
     assert first["model"] == "claude-sonnet-5-5"

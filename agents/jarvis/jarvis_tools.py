@@ -217,6 +217,9 @@ current_chat_session_id: contextvars.ContextVar[str | None] = contextvars.Contex
 current_chat_turn_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_chat_turn_id", default=None
 )
+current_chat_acknowledgment_enabled: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "jarvis_chat_acknowledgment_enabled", default=True
+)
 current_steering_fetcher: contextvars.ContextVar[
     Callable[[], Awaitable[Sequence[tuple[str, str, str]]]] | None
 ] = contextvars.ContextVar("jarvis_steering_fetcher", default=None)

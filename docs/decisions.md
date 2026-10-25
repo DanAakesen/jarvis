@@ -1,5 +1,24 @@
 # Decisions
 
+## Reuse the stream for a natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+- For a tool-backed request, Jarvis should give one short, truthful first-person
+  sentence in the captured conversation language, then continue the same turn and
+  deliver the actual result. Direct questions stay direct and do not incur an
+  additional model request or artificial delay.
+- Keep the acknowledgment an ordinary user-facing intent statement, not internal
+  reasoning. Do not claim a check or action has already succeeded, invent an ETA,
+  repeat it in the final answer/history, or narrate later tool calls.
+- Reuse the existing streamed text and add a typed boundary at the first tool
+  handoff. Chat shows the boundary as a distinct transient segment; hosted voice
+  finishes it as a separate text item. Realtime tools wait until the matching
+  terminal event has been accepted by the browser WebSocket. Cancellation,
+  approvals, authorization and idempotency remain unchanged.
+- Fixture ordering confirms streamed intent before tool work and final result after
+  it; direct turns have no boundary. No live latency or physical audio playback is
+  claimed. Owner acceptance remains separate; this task authorizes no merge or
+  deployment.
+
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
 - Keep one immediate switch for automatic proactive suggestions and a compact

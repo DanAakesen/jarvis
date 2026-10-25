@@ -192,6 +192,7 @@ export async function sendChatTurn(
   onInterrupted?: (message: ChatMessage) => void,
   attachmentIds?: readonly string[],
   visualContext?: VisualTurnContext,
+  onAcknowledgment?: (text: string) => void,
 ): Promise<ChatMessage> {
   if (visualContext !== undefined && screenContext !== undefined) {
     throw new Error('Send visual context or legacy screen context, not both.');
@@ -221,6 +222,7 @@ export async function sendChatTurn(
   let userMessage: ChatMessage | null = null;
   let assistantMessage: ChatMessage | null = null;
   const processFrame = (frame: string) => {
+    if (signal?.aborted) return;
     const event = parseEvent(frame);
     if (!event) return;
     let payload: unknown;
@@ -242,6 +244,12 @@ export async function sendChatTurn(
         throw new Error('Jarvis returned an invalid chat stream.');
       }
       onDelta(payload.text);
+    } else if (event.event === 'acknowledgment') {
+      if (!isRecord(payload) || typeof payload.text !== 'string' ||
+          !payload.text.trim() || Array.from(payload.text).length > 500) {
+        throw new Error('Jarvis returned an invalid chat stream.');
+      }
+      onAcknowledgment?.(payload.text);
     } else if (event.event === 'interrupted') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
       onInterrupted?.(chatMessageResult(payload));

@@ -366,6 +366,7 @@ describe('conversation routes', () => {
         return message;
       }),
     });
+
     const agent = { stream: vi.fn(async function* () { yield 'One answer.'; }) };
     const app = createApp(store, { conversationAgent: agent });
     const payload = { text: 'What?', visualContext: { source: 'screen',
@@ -373,6 +374,39 @@ describe('conversation routes', () => {
     expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(409);
     expect(agent.stream).toHaveBeenCalledOnce();
+  });
+  it('streams the acknowledgment before the final reply without persisting it as part of that reply', async () => {
+    const stored: { role: string; text: string }[] = [];
+    const store = storeFixture({
+      addMessage: vi.fn(async (input) => {
+        stored.push({ role: input.role, text: input.text });
+        return { ...message, role: input.role, text: input.text };
+      }),
+    });
+    const acknowledgment = "I'll check the saved targets.";
+    const agent = {
+      stream: vi.fn(async function* () {
+        yield acknowledgment;
+        yield { type: 'acknowledgment' as const, text: acknowledgment };
+        yield 'The targets match.';
+      }),
+    };
+    const app = createApp(store, { conversationAgent: agent });
+
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Compare my saved targets.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.indexOf(`event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}`))
+      .toBeLessThan(response.body.indexOf(`event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}`));
+    expect(response.body.indexOf('event: acknowledgment'))
+      .toBeLessThan(response.body.indexOf(`event: delta\ndata: {"text":"The targets match."}`));
+    expect(stored).toEqual([
+      { role: 'dan', text: 'Compare my saved targets.' },
+      { role: 'jarvis', text: 'The targets match.' },
+    ]);
   });
   it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
     const visualContext = {

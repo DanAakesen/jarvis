@@ -18,6 +18,7 @@ from azure.ai.agentserver.invocations.voice import InputTextPart
 from starlette.testclient import TestClient
 
 from jarvis_tools import current_phone_session_id
+from model_contract import AcknowledgmentBoundary
 from response_coordinator import ResponseCoordinator
 from scripts.smoke_test import ResponseValidator
 from state import (
@@ -34,6 +35,7 @@ from state import (
     InputOrigin,
     ModelMessage,
     ModelSettings,
+    SessionPhase,
     SessionState,
 )
 from visual_context import visual_context_text
@@ -245,6 +247,56 @@ def test_streams_model_output_and_commits_history() -> None:
         ("user", "Second question"),
     ]
     assert model.closed
+
+
+@pytest.mark.asyncio
+async def test_voice_finishes_acknowledgment_segment_before_tool_work_and_final_speech() -> None:
+    acknowledgment = "I'll check your saved targets."
+    order: list[str] = []
+
+    class OrderedModel:
+        model_name = "fixture"
+        server_address = "fixture"
+
+        async def complete(self, messages, *, settings=None):
+            del messages, settings
+            yield acknowledgment
+            yield AcknowledgmentBoundary(acknowledgment)
+            order.append("tool")
+            yield "The targets match."
+
+        async def session_settings(self):
+            return DEFAULT_MODEL_SETTINGS
+
+        async def close(self):
+            return None
+
+    class OrderedSession(RecordingSession):
+        async def send(self, event: Any) -> None:
+            if event.__class__.__name__ == "ResponseOutputTextDelta":
+                order.append("delta")
+            elif event.__class__.__name__ == "ResponseOutputTextDone":
+                order.append("ack_done" if event.text == acknowledgment else "final_done")
+            await super().send(event)
+
+    state = SessionState(phase=SessionPhase.ACTIVE)
+    session = OrderedSession(state)
+    coordinator = ResponseCoordinator(OrderedModel())  # type: ignore[arg-type]
+    assert coordinator.start_response(
+        session, state, "input", text="Compare my saved targets.", use_model=True,
+        streaming=True, voice=None, origin=InputOrigin.USER,
+    )
+    operation = next(iter(state.responses.values()))
+    assert operation.task is not None
+    await asyncio.wait_for(operation.task, 2)
+
+    assert order == ["delta", "ack_done", "tool", "delta", "final_done"]
+    completed_items = [
+        event for event in session.sent if event.__class__.__name__ == "ResponseOutputTextDone"
+    ]
+    assert [event.text for event in completed_items] == [acknowledgment, "The targets match."]
+    assert completed_items[0].item_id != completed_items[1].item_id
+    assert state.history.create_request("Next question")[-2].content == "The targets match."
 
 
 def test_hosted_voice_text_context_retains_real_image_provenance_on_next_turn() -> None:

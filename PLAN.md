@@ -1,5 +1,17 @@
 # Project plan
 
+## P9-124: Natural first reply before tool work in chat and voice (#1258)
+
+Reuses the active model stream to deliver one contextual first-person
+acknowledgment before tool work; direct answers stay immediate. Chat keeps the
+acknowledgment as a transient segment, hosted voice separates its spoken text item,
+and realtime voice gates tools on terminal-event delivery. Synthetic ordering
+fixtures cover English/Danish guidance, final-answer separation and failure paths.
+The selected approach adds no model request or artificial delay; fixture order is
+verified, while live model timing and physical audio acceptance remain unmeasured.
+Next: final-head aggregate CI and owner-run live/device acceptance. No merge or
+deployment is authorized.
+
 ## Per-finding chat and voice feedback (#1240)
 
 Implemented the shared `proactive_item_feedback` capability, UI/tool feedback

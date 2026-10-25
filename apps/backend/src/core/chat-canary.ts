@@ -64,7 +64,9 @@ async function runPrompt(
     ...options,
     onAgentToolCalls: (calls) => { toolCalls = calls; },
   }, '', signal);
-  for await (const chunk of response) output.push(chunk);
+  for await (const chunk of response) {
+    if (typeof chunk === 'string') output.push(chunk);
+  }
   return { text: output.join(''), toolCalls };
 }
 

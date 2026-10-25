@@ -480,6 +480,18 @@ describe('English realtime session', () => {
     expect(english).toContain(capabilityInstructions(defaultSettings.memory));
   });
 
+  it('requests one first-person intent sentence before tools in both voice languages', () => {
+    const english = createEnglishSessionUpdate(registry).session.instructions;
+    const danish = createRealtimeSessionUpdate(registry, undefined, false, 'da').session.instructions;
+
+    expect(english).toContain('one brief, natural first-person sentence');
+    expect(english).toContain('without claiming success or giving an ETA');
+    expect(english).toContain('Answer direct questions without an unnecessary acknowledgment');
+    expect(danish).toContain('én kort, naturlig sætning i første person');
+    expect(danish).toContain('uden at påstå, at det allerede er lykkedes');
+    expect(danish).toContain('Besvar direkte spørgsmål uden en unødvendig');
+  });
+
   it('explains installed-app, Chrome-only website and media controls in voice instructions', () => {
     const instructions = createEnglishSessionUpdate(registry).session.instructions;
     expect(instructions).toContain('pc_open opens installed Windows apps with target "app"');

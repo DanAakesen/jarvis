@@ -73,6 +73,52 @@ const CAMERA_UNAVAILABLE_REASONS = new Set([
   'budget_unavailable',
 ]);
 
+interface ResponseCompletion {
+  readonly promise: Promise<boolean>;
+  readonly resolve: (completed: boolean) => void;
+  responseId?: string;
+  terminalDelivered?: boolean;
+  playbackCompleted?: boolean;
+}
+
+const RESPONSE_PLAYBACK_TIMEOUT_MS = 30_000;
+
+function responseCompletion(): ResponseCompletion {
+  let resolve!: (completed: boolean) => void;
+  const promise = new Promise<boolean>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function settleResponseCompletion(completion: ResponseCompletion): boolean {
+  if (completion.terminalDelivered === false || completion.playbackCompleted === false) {
+    completion.resolve(false);
+    return true;
+  }
+  if (completion.terminalDelivered === true && completion.playbackCompleted === true) {
+    completion.resolve(true);
+    return true;
+  }
+  return false;
+}
+
+async function waitForResponseCompletion(
+  completion: ResponseCompletion,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (signal.aborted) return false;
+  return new Promise((resolve) => {
+    const finish = (completed: boolean) => {
+      clearTimeout(timeout);
+      signal.removeEventListener('abort', aborted);
+      resolve(completed);
+    };
+    const aborted = () => finish(false);
+    const timeout = setTimeout(() => finish(false), RESPONSE_PLAYBACK_TIMEOUT_MS);
+    signal.addEventListener('abort', aborted, { once: true });
+    void completion.promise.then(finish);
+  });
+}
+
 function sharedBrowserIntent(text: string): boolean {
   return /\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu
     .test(text);
@@ -406,6 +452,7 @@ function registerVoiceRoute(
     let calendarConversation = false;
     let toolCallsInResponse = false;
     let responseDone = false;
+    let responseCompletionState: ResponseCompletion | undefined;
     let presence: AwayModeState = defaultAwayModeState;
     let awayMode = false;
     let projects: ProjectContextEntry[] = [];
@@ -1565,6 +1612,8 @@ function registerVoiceRoute(
       pendingResponseCreate = undefined;
       responseCreateActive = true;
       assistantResponding = true;
+      responseDone = false;
+      responseCompletionState = responseCompletion();
       responseImageUsageItem = pendingImageUsageItem;
       pendingImageUsageItem = undefined;
       const response = next.response as Record<string, unknown> | undefined;
@@ -1776,6 +1825,7 @@ function registerVoiceRoute(
     };
 
     const runToolCall = (call: RealtimeFunctionCall) => {
+      const completion = responseCompletionState;
       if (call.name === 'research') request.announceResearchCompletion = announceResearchCompletion;
       if (!/^[A-Za-z0-9_-]{1,128}$/u.test(call.call_id) ||
           typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name) ||
@@ -1844,6 +1894,14 @@ function registerVoiceRoute(
         }
         await transcriptQueue;
         if (controller.signal.aborted) {
+          if (toolTiming) toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
+          finishToolActivity('interrupted');
+          return;
+        }
+        if (!completion || !await waitForResponseCompletion(completion, controller.signal)) {
+          if (completion && responseCompletionState === completion) {
+            responseCompletionState = undefined;
+          }
           if (toolTiming) toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
           finishToolActivity('interrupted');
           return;
@@ -1962,6 +2020,21 @@ function registerVoiceRoute(
       if (event?.type === 'jarvis.microphone.muted') {
         microphoneMuted = true;
         stopPartialRecognition();
+        return;
+      }
+      if (event?.type === 'jarvis.voice.playback.completed') {
+        if (typeof event.responseId !== 'string' ||
+            !/^[A-Za-z0-9_-]{1,128}$/u.test(event.responseId) ||
+            typeof event.audible !== 'boolean') {
+          close(1008, 'Invalid voice playback receipt');
+          return;
+        }
+        const completion = responseCompletionState;
+        if (!completion || completion.responseId !== event.responseId) return;
+        completion.playbackCompleted = event.audible;
+        if (settleResponseCompletion(completion) && responseCompletionState === completion) {
+          responseCompletionState = undefined;
+        }
         return;
       }
       if (event?.type === 'jarvis.screen.context.unavailable') {
@@ -2353,6 +2426,7 @@ function registerVoiceRoute(
           });
           socket.on('message', (data, binary) => {
             if (socket !== upstream) return;
+            let completionForDelivery: { state: ResponseCompletion; completed: boolean } | undefined;
             const event = parseVoiceEvent(data, binary);
             diagnostics.event(event?.type);
             if (event?.type === 'session.updated') {
@@ -2485,6 +2559,11 @@ function registerVoiceRoute(
             }
             if (event?.type === 'response.created') {
               const response = event.response as { id?: unknown } | undefined;
+              if (!responseCompletionState) responseCompletionState = responseCompletion();
+              if (typeof response?.id === 'string' &&
+                  response.id.length <= 128) {
+                responseCompletionState.responseId = response.id;
+              }
               if (responseImageUsageItem && typeof response?.id === 'string' &&
                   response.id.length <= 128) {
                 imageUsageResponses.set(response.id, responseImageUsageItem);
@@ -2501,6 +2580,15 @@ function registerVoiceRoute(
                   input_token_details?: { image_tokens?: unknown };
                   input_tokens_details?: { image_tokens?: unknown } };
               } | undefined;
+              const completion = responseCompletionState;
+              if (completion &&
+                  (completion.responseId === undefined ||
+                    completion.responseId === response?.id)) {
+                completionForDelivery = {
+                  state: completion,
+                  completed: event.type === 'response.done',
+                };
+              }
               const usageItem = typeof response?.id === 'string' ? imageUsageResponses.get(response.id) : undefined;
               if (usageItem) imageUsageResponses.delete(response!.id as string);
               if (usageItem && recordImageUsage && sessionId) {
@@ -2547,8 +2635,13 @@ function registerVoiceRoute(
             }
             if (english && (event?.type === 'response.done' || event?.type === 'response.cancelled') &&
                 toolCallsInResponse) {
-              responseDone = true;
-              if (!speakBrowserProgress()) resumeAfterTools();
+              if (event.type === 'response.cancelled') {
+                toolCallsInResponse = false;
+                responseDone = false;
+              } else {
+                responseDone = true;
+                if (!speakBrowserProgress()) resumeAfterTools();
+              }
             }
             if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
               statusAnnouncer?.flush();
@@ -2594,8 +2687,28 @@ function registerVoiceRoute(
             }
             if (browser.readyState === WebSocket.OPEN) {
               browser.send(data, { binary }, (error) => {
-                if (error) close(1011, 'Voice connection failed');
+                if (error) {
+                  if (completionForDelivery) {
+                    completionForDelivery.state.terminalDelivered = false;
+                    settleResponseCompletion(completionForDelivery.state);
+                  }
+                  close(1011, 'Voice connection failed');
+                  return;
+                }
+                if (completionForDelivery) {
+                  completionForDelivery.state.terminalDelivered = completionForDelivery.completed;
+                  if (settleResponseCompletion(completionForDelivery.state) &&
+                      responseCompletionState === completionForDelivery.state) {
+                    responseCompletionState = undefined;
+                  }
+                }
               });
+            } else if (completionForDelivery) {
+              completionForDelivery.state.terminalDelivered = false;
+              settleResponseCompletion(completionForDelivery.state);
+              if (responseCompletionState === completionForDelivery.state) {
+                responseCompletionState = undefined;
+              }
             }
           });
           socket.on('close', (code, reason) => {

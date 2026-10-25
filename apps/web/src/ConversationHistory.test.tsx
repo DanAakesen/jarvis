@@ -609,6 +609,57 @@ describe('ConversationHistory', () => {
       undefined,
       expect.any(AbortSignal),
       expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it('shows the acknowledgment separately while tools run and replaces it with the final answer', async () => {
+    let finish!: (value: typeof assistantMessage) => void;
+    const acknowledgment = "I'll compare your saved targets.";
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      const onUser = args[4] as (message: typeof userMessage) => void;
+      const onDelta = args[5] as (text: string) => void;
+      const onAcknowledgment = args.at(-1) as (text: string) => void;
+      onUser(userMessage);
+      onDelta(acknowledgment);
+      onAcknowledgment(acknowledgment);
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Compare my targets.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect((await screen.findByLabelText("Jarvis's initial reply")).textContent).toContain(
+      acknowledgment,
+    );
+    expect(screen.queryByLabelText('Jarvis reply in progress')).toBeNull();
+    expect(screen.queryByText('Jarvis is thinking…')).toBeNull();
+    await act(async () => finish(assistantMessage));
+
+    expect(await screen.findByText(assistantMessage.text)).not.toBeNull();
+    expect(screen.queryByLabelText("Jarvis's initial reply")).toBeNull();
+  });
+
+  it('keeps the acknowledgment with an honest failure after tool work', async () => {
+    const acknowledgment = "I'll check your saved targets.";
+    sendChatTurn.mockImplementationOnce(async (...args: unknown[]) => {
+      const onUser = args[4] as (message: typeof userMessage) => void;
+      const onDelta = args[5] as (text: string) => void;
+      const onAcknowledgment = args.at(-1) as (text: string) => void;
+      onUser(userMessage);
+      onDelta(acknowledgment);
+      onAcknowledgment(acknowledgment);
+      throw new Error('The reply could not be completed.');
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Check my saved targets.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    expect(await screen.findByText(acknowledgment)).not.toBeNull();
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'The reply could not be completed.',
     );
   });
 
@@ -978,6 +1029,7 @@ describe('ConversationHistory', () => {
       'A red mug in Dan’s hand.',
       undefined,
       expect.any(AbortSignal),
+      expect.any(Function),
       expect.any(Function),
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();
