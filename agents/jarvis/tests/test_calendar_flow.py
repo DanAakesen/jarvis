@@ -27,6 +27,7 @@ from calendar_flow import (
     pending_calendar,
 )
 from jarvis_tools import current_message_id, current_steering_fetcher
+from model_client import _tool_call_fingerprint, _uncertain_action_result
 from state import ModelMessage
 
 SUMMARY = (
@@ -198,6 +199,24 @@ class CalendarBatchBackend(CalendarBackend):
             return httpx.Response(200, json={"outcome": "ok", "result": {
                 "status": "none", "reply": self.reply, "lastChange": self.last_change,
             }})
+        return super().handle(request)
+
+
+class UncertainCalendarBatchBackend(CalendarBatchBackend):
+    def __init__(self):
+        super().__init__()
+        self.batch_attempts = 0
+
+    def handle(self, request):
+        name = request.url.path.rsplit("/", 1)[-1]
+        if request.method == "POST" and name == "calendar_create_events":
+            self.requests.append(request)
+            self.batch_attempts += 1
+            assert json.loads(request.content) == {"events": HOTEL_EVENTS}
+            return httpx.Response(200, json={
+                "outcome": "error",
+                "result": {"error": "Calendar provider outcome is uncertain."},
+            })
         return super().handle(request)
 
 
@@ -712,6 +731,49 @@ async def test_unsupported_completion_claims_are_blocked_even_without_recovery_t
 def batch_call():
     return FakeItem(type="function_call", name="calendar_create_events",
                     arguments=json.dumps({"events": HOTEL_EVENTS}), call_id="both-hotels")
+
+
+async def test_uncertain_combined_calendar_retry_with_new_ids_does_not_dispatch_batch_again():
+    backend = UncertainCalendarBatchBackend()
+    model, _ = client([], backend=backend)
+    try:
+        catalogue = await model._tools.tools()
+        execution_metadata = {tool.name: tool.execution for tool in catalogue}
+        initial_result = await model._tools.call(
+            "calendar_create_events", json.dumps({"events": HOTEL_EVENTS}), "42",
+        )
+        uncertain_action_results = {
+            (
+                "42", _tool_call_fingerprint("calendar_create_event", json.dumps(event)),
+            ): initial_result
+            for event in HOTEL_EVENTS
+        }
+        retry_calls = [
+            FakeItem(
+                type="function_call", name="calendar_create_event", call_id=f"retry-{index}",
+                arguments=json.dumps(event),
+            )
+            for index, event in enumerate(HOTEL_EVENTS)
+        ]
+        replayed = [
+            _uncertain_action_result(
+                call.name, call.arguments, "42", execution_metadata, uncertain_action_results,
+            )
+            for call in retry_calls
+        ]
+        if not any(result is not None for result in replayed):
+            await model._tools.call(
+                "calendar_create_events", json.dumps({"events": HOTEL_EVENTS}), "42",
+            )
+
+        assert backend.batch_attempts == 1
+        assert all(result == initial_result for result in replayed)
+        assert initial_result["outcome"] == "error"
+        assert initial_result["result"] == {
+            "error": "Calendar provider outcome is uncertain.",
+        }
+    finally:
+        await model.close()
 
 
 @pytest.mark.parametrize(("text", "multiple"), [

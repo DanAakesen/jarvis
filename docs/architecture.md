@@ -340,8 +340,11 @@ both stage and receipt. No SQL migration, replica or permission change is added.
 The hosted adapter consolidates multiple proposed single-create calls before
 dispatch when the batch tool exists. For an explicit multiple-event request,
 it locally refuses an isolated single-create call before staging and bounds
-continuation to the complete batch. Failed/incomplete continuation therefore
-cannot leave a hidden first-event proposal. Approval recovery compares the latest
+continuation to the complete batch. Before coalescing, it checks each event's
+same-message uncertain action identity; any uncertain member prevents another
+batch dispatch and preserves that event's original outcome. Failed/incomplete
+continuation therefore cannot leave a hidden first-event proposal. Approval
+recovery compares the latest
 request's canonical server-verified message ID with the existing staged
 `sourceMessageId`, exposed only by trusted pending/receipt results. Optional
 `ModelMessage.source_message_id` retains that identity through verified history,

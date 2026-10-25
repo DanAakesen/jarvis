@@ -358,6 +358,21 @@ def _tool_call_fingerprint(name: str, arguments: str) -> tuple[str, str]:
     return name, normalized
 
 
+def _uncertain_action_result(
+    name: str,
+    arguments: str,
+    source_message_id: str,
+    execution_metadata: dict[str, Any],
+    uncertain_action_results: dict[tuple[str, tuple[str, str]], dict[str, Any]],
+) -> dict[str, Any] | None:
+    effect = execution_metadata.get(name)
+    if effect is not None and effect.effect_for(arguments) == "read":
+        return None
+    return uncertain_action_results.get(
+        (source_message_id, _tool_call_fingerprint(name, arguments))
+    )
+
+
 def model_message_input(message: ModelMessage) -> dict[str, Any]:
     content: Any = message.content
     if message.images:
@@ -1372,6 +1387,13 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         )
                         for call, arguments in normalized_calls
                     ]
+                    uncertain_calendar_replay = any(
+                        _uncertain_action_result(
+                            call.name, arguments, call_key[0],
+                            execution_metadata, uncertain_action_results,
+                        ) is not None
+                        for call, arguments, call_key in normalized_calls_with_keys
+                    )
                     ambiguous_calendar_proposals = (
                         "calendar_create_events" in definitions
                         and (
@@ -1393,6 +1415,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             call_key in completed_tool_calls
                             for _, _, call_key in normalized_calls_with_keys
                         )
+                        and not uncertain_calendar_replay
                     ):
                         events = [
                             json.loads(arguments) for _, arguments, _ in normalized_calls_with_keys
@@ -1418,7 +1441,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             None if effect_name == "read" else completed_tool_calls.get(call_key)
                         )
                         if cached_entry is None and effect_name != "read":
-                            uncertain_result = uncertain_action_results.get(uncertain_action_key)
+                            uncertain_result = _uncertain_action_result(
+                                call.name, arguments, call_key[0],
+                                execution_metadata, uncertain_action_results,
+                            )
                             if uncertain_result is not None:
                                 cached_entry = (fingerprint, uncertain_result)
                         if cached_entry is not None:
