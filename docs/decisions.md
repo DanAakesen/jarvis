@@ -9,10 +9,16 @@ Keep SQL browser approval consumption and tool-specific permission, presence
 and revision checks; consolidating lifecycle logic must not broaden authority.
 Receipt acknowledgments and project clarification are not action approval.
 Browser-only proposals have no conversational source binding and cannot be
-approved by spoken/text agreement. Related in-flight food reply/timing work
-must use the same lifecycle rather than a food-specific confirmation state
-machine. Synthetic regressions verify the boundary; live voice/model/device
-acceptance is separate.
+approved by spoken/text agreement. Preserve #1278's opt-in food-estimate
+owner-interactions API and immediate persisted-reply guards, adapting them to
+the shared lifecycle rather than creating a second food approval path. Keep
+its call-site wiring, language handling and timing work in that PR.
+Project clarification (#1264) selects/revalidates a target and does not consume
+action approval. Acknowledgment delivery (#1259) does not require affirmative
+playback receipts; actual delivery failures and explicit cancellation remain
+dispatch stops. These are compatibility constraints, not new product policy.
+Synthetic regressions verify the boundary; live voice/model/device acceptance
+and combined-head qualification are separate.
 
 ## Generic text questions use an active screen share (#1266; 25 October 2026)
 

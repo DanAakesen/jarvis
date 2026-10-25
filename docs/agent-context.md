@@ -12,6 +12,10 @@ npm test --workspace @jarvis/backend -- src/factory/pending-action-tools.test.ts
 These use synthetic stores/providers, not live account mutations or physical
 voice acceptance. `core/pending-action.ts` owns confirmation transitions;
 adapters keep permission checks, routing indexes and result receipts.
+Food API compatibility tests exercise opt-in `foodEstimate` delivery and
+`resolveFoodEstimateReply` with synthetic persisted replies and injected
+decisions. They do not qualify #1278's unmerged call-site, phrase or streaming
+changes, #1264's target clarification, or #1259's response delivery changes.
 
 ## Research result recovery (#1237; 25 October 2026)
 

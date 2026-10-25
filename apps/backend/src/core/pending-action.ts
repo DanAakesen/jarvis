@@ -51,7 +51,10 @@ export class PendingAction {
       validId(this.proposal.sourceMessageId) && Boolean(this.proposal.sourceSessionId) &&
       message.sessionId === this.proposal.sourceSessionId &&
       BigInt(message.id) > BigInt(this.proposal.sourceMessageId) &&
-      Number.isFinite(message.at.getTime()) && message.at.getTime() > this.proposal.createdAt;
+      message.at instanceof Date && Number.isFinite(message.at.getTime()) &&
+      (this.proposal.family === 'food'
+        ? message.at.getTime() >= this.proposal.createdAt && message.at.getTime() < this.expiresAt
+        : message.at.getTime() > this.proposal.createdAt);
   }
 
   async decision(

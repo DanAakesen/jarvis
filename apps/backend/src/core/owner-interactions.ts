@@ -2,6 +2,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { PendingAction } from './pending-action.js';
+import type { ConversationMessage, ConversationStore } from './conversation-store.js';
+import type { ApprovalDecider } from './approval-interpreter.js';
 import type {
   ConfirmationDecision,
   ConfirmationStore,
@@ -47,6 +49,7 @@ export interface BrowserConfirmation {
 export interface BrowserConfirmationDelivery {
   readonly channel: 'browser';
   readonly lifetimeSeconds?: number;
+  readonly foodEstimate?: { readonly sessionId: string; readonly sourceMessageId: string };
 }
 
 export interface OwnerInteractionService {
@@ -54,6 +57,11 @@ export interface OwnerInteractionService {
   expirePendingConfirmations(): Promise<void>;
   pendingBrowserConfirmations(): readonly BrowserConfirmation[];
   resolveBrowserConfirmation(id: string, decision: ConfirmationDecision): Promise<boolean>;
+  resolveFoodEstimateReply?(
+    message: ConversationMessage,
+    decide: ApprovalDecider,
+    signal: AbortSignal,
+  ): Promise<boolean>;
   requestConfirmation(
     actionKind: ConfirmationActionKind,
     summary: string,
@@ -81,6 +89,7 @@ function validText(value: unknown): value is string {
 export interface OwnerInteractionOptions {
   readonly ownerObjectId: string;
   readonly store: ConfirmationStore;
+  readonly conversationStore?: Pick<ConversationStore, 'getDanMessagesAfter'>;
   readonly onWebNotification?: (kind: NotificationKind, text: string) => Promise<void>;
   readonly onConfirmationPending?: () => void;
   readonly onConfirmationsChanged?: () => void;
@@ -89,11 +98,13 @@ export interface OwnerInteractionOptions {
 export function createOwnerInteractionService({
   ownerObjectId,
   store,
+  conversationStore,
   onWebNotification,
   onConfirmationPending,
   onConfirmationsChanged = () => {},
 }: OwnerInteractionOptions): OwnerInteractionService {
   const waiters = new Map<string, (result: WaitResult) => void>();
+  const foodEstimates = new Map<string, { readonly action: PendingAction; deciding?: boolean }>();
   const browserConfirmations = new Map<string, {
     readonly view: BrowserConfirmation;
     readonly action: PendingAction;
@@ -135,6 +146,7 @@ export function createOwnerInteractionService({
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       waiters.delete(id);
+      foodEstimates.delete(id);
       if (browserConfirmations.delete(id)) onConfirmationsChanged();
     }
   }
@@ -156,9 +168,15 @@ export function createOwnerInteractionService({
       throw new ToolRefusal('There are too many pending browser confirmations.');
     }
     const id = randomBytes(32).toString('base64url');
-    const action = new PendingAction({
+    const proposal = {
       key: id, summary, createdAt: Date.now(), lifetimeMs: lifetimeSeconds * 1000,
-    });
+      ...(delivery?.foodEstimate && {
+        family: 'food' as const,
+        sourceSessionId: delivery.foodEstimate.sessionId,
+        sourceMessageId: delivery.foodEstimate.sourceMessageId,
+      }),
+    };
+    let action = new PendingAction(proposal);
     try {
       const phoneSessionId = phoneSessionContext.getStore();
       if (phoneSessionId === undefined) {
@@ -182,6 +200,8 @@ export function createOwnerInteractionService({
     } catch {
       throw new ToolRefusal('Browser confirmation is unavailable.');
     }
+    // Validate before persistence, but bind food replies only after the browser request is persisted.
+    if (delivery?.foodEstimate) action = new PendingAction({ ...proposal, createdAt: Date.now() });
     const waiterController = new AbortController();
     const waitSignal = signal
       ? AbortSignal.any([signal, waiterController.signal])
@@ -191,6 +211,7 @@ export function createOwnerInteractionService({
       view: { id, actionKind, summary: action.presentation.summary, expiresAt: action.presentation.expiresAt },
       action,
     });
+    if (delivery?.foodEstimate) foodEstimates.set(id, { action });
     onConfirmationsChanged();
     onConfirmationPending?.();
     try {
@@ -244,6 +265,42 @@ export function createOwnerInteractionService({
       }
       if (status === 'expired') waiters.get(id)?.('expired');
       return false;
+    },
+    async resolveFoodEstimateReply(message, decide, signal) {
+      if (message.role !== 'dan' || signal.aborted) return false;
+      const candidates = [...foodEstimates].filter(([, { action }]) =>
+        action.proposal.sourceSessionId === message.sessionId);
+      if (candidates.length !== 1) {
+        for (const [id] of candidates) foodEstimates.delete(id);
+        return false;
+      }
+      const [id, estimate] = candidates[0]!;
+      const { action } = estimate;
+      if (!waiters.has(id) || !action.eligible(message)) return false;
+      if (estimate.deciding) {
+        foodEstimates.delete(id);
+        const verdict = await action.decision(message, decide, signal);
+        return !signal.aborted && verdict === 'decline' && this.resolveBrowserConfirmation(id, 'reject');
+      }
+      estimate.deciding = true;
+      try {
+        const isCurrentReply = async () => {
+          const replies = await conversationStore?.getDanMessagesAfter({
+            sessionId: message.sessionId, after: action.proposal.sourceMessageId!, limit: 2,
+          });
+          return replies?.length === 1 && replies[0]!.id === message.id;
+        };
+        if (!await isCurrentReply()) return false;
+        const verdict = await action.decision(message, decide, signal);
+        if (verdict === undefined || verdict === 'neither' || foodEstimates.get(id) !== estimate ||
+            !await isCurrentReply() || signal.aborted || foodEstimates.get(id) !== estimate) return false;
+        return this.resolveBrowserConfirmation(id, verdict === 'approve' ? 'approve' : 'reject');
+      } catch {
+        return false;
+      } finally {
+        // A subsequent turn loses conversational authority, but the exact browser card remains usable.
+        foodEstimates.delete(id);
+      }
     },
     async notify(kind, text) {
       if (!notificationKinds.has(kind) || !validText(text)) throw new TypeError('Invalid notification');

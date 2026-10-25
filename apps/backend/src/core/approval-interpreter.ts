@@ -8,7 +8,7 @@ import { classifyApprovalReply } from './approval.js';
  */
 export type ApprovalVerdict = 'approve' | 'decline' | 'neither';
 export type ApprovalPath = 'fast' | 'model' | 'failed';
-export type ApprovalFamily = 'calendar' | 'mail' | 'factory' | 'github' | 'proactive_preferences';
+export type ApprovalFamily = 'calendar' | 'mail' | 'factory' | 'github' | 'proactive_preferences' | 'food';
 
 export interface ApprovalQuestion {
   /** Dan's verified reply. */

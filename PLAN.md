@@ -10,6 +10,15 @@ Focused synthetic text/voice and browser regressions pass; live owner/device
 acceptance remains unverified. The related food reply/timing, project
 clarification and acknowledgment PRs are still in flight and are not merged
 by this change. Backend build/lint, secret scanning and read-only review passed.
+Coordination review inspected #1278 `a09dfc1`, #1264 `fa3de91` (including
+`dc742dd` clarification behavior) and #1259 `f229ec7`. Preserve the food
+owner-interactions API on the shared lifecycle; no stream deadline or playback
+gate changes belong here. The overlapping Factory merge must retain
+clarification-specific provenance and target revalidation separately from
+action approval. Final combined-head qualification remains pending integration.
+Food API reconciliation passed 622 targeted tests (one skipped), backend build,
+scoped lint and read-only review. It preserves the immediate-reply and
+same-millisecond food timestamp behavior without changing other action families.
 JavaScript CodeQL analysis was skipped because the database exceeded its size
 limit; this is not a clean automated security result. Next: PR qualification
 and live owner/device acceptance.

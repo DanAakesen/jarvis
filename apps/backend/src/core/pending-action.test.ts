@@ -119,4 +119,19 @@ describe('shared pending-action lifecycle', () => {
       key: 'bad', summary: 'Do this.', sourceMessageId: '10', createdAt: start, lifetimeMs: 1000,
     })).toThrow('bound');
   });
+
+  it('uses the persisted ID to order same-millisecond food replies and bounds their timestamps', async () => {
+    const action = new PendingAction({
+      key: 'food', summary: 'Log the reviewed portion.', family: 'food',
+      sourceMessageId: '10', sourceSessionId: '7', createdAt: start, lifetimeMs: 1000, now: () => start,
+    });
+    const { reply } = fixture();
+    const decide = vi.fn(async () => 'approve' as const);
+    expect(await action.decision(reply({ at: new Date(start) }), decide, new AbortController().signal)).toBe('approve');
+    for (const at of [new Date(start - 1), new Date(start + 1000), 'invalid' as unknown as Date]) {
+      expect(action.eligible(reply({ at }))).toBe(false);
+    }
+    expect(action.eligible(reply({ id: '10', at: new Date(start) }))).toBe(false);
+    expect(decide).toHaveBeenCalledOnce();
+  });
 });
