@@ -53,15 +53,12 @@ from jarvis_tools import (
     current_steering_fetcher,
     current_turn,
 )
-<<<<<<< HEAD
 from model_contract import (
     MAX_ACKNOWLEDGMENT_CHARACTERS,
     AcknowledgmentBoundary,
     StreamingModelClient,
+    ToolLoopStalled,
 )
-=======
-from model_contract import StreamingModelClient, ToolLoopStalled
->>>>>>> origin/main
 from state import ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,

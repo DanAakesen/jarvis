@@ -61,17 +61,14 @@ from jarvis_tools import (
     current_turn,
     model_tools,
 )
-<<<<<<< HEAD
 from model_contract import (
     MAX_ACKNOWLEDGMENT_CHARACTERS,
     AcknowledgmentBoundary,
     ModelStreamChunk,
     StreamingModelClient,
     SummaryCompletion,
+    ToolLoopStalled,
 )
-=======
-from model_contract import StreamingModelClient, SummaryCompletion, ToolLoopStalled
->>>>>>> origin/main
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
 from visual_context import (
     ImageInputRejected,

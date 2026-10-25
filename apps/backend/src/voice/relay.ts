@@ -1830,11 +1830,7 @@ function registerVoiceRoute(
     };
 
     const runToolCall = (call: RealtimeFunctionCall) => {
-<<<<<<< HEAD
       const completion = responseCompletionState;
-      if (call.name === 'research') request.announceResearchCompletion = announceResearchCompletion;
-=======
->>>>>>> origin/main
       if (!/^[A-Za-z0-9_-]{1,128}$/u.test(call.call_id) ||
           typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name) ||
           typeof call.arguments !== 'string' ||

@@ -43,11 +43,7 @@ from model_client import (
     personalize_instructions,
     responses_base_url,
 )
-<<<<<<< HEAD
-from model_contract import AcknowledgmentBoundary, SummaryCompletion
-=======
-from model_contract import SummaryCompletion, ToolLoopStalled
->>>>>>> origin/main
+from model_contract import AcknowledgmentBoundary, SummaryCompletion, ToolLoopStalled
 from state import ModelMessage, ModelSettings
 
 

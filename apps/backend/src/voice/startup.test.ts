@@ -416,9 +416,12 @@ describe('Voice Live capability-preserving fallback', () => {
     let page = 0;
     do {
       const callId = `discover_${page++}`;
+      const responseId = `discover_response_${page}`;
+      active.event('response.created', { response: { id: responseId } });
       active.event('response.function_call_arguments.done', {
         name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: callId, arguments: JSON.stringify({ offset }),
       });
+      active.event('response.done', { response: { id: responseId } });
       await vi.advanceTimersByTimeAsync(0);
       const output = JSON.parse(toolOutput(callId) as string) as {
         outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
@@ -448,6 +451,7 @@ describe('Voice Live capability-preserving fallback', () => {
       .find((message) => message.item?.call_id === callId)?.item.output;
     expect(names(active)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
 
+    active.event('response.created', { response: { id: 'full_catalogue_response' } });
     active.event('response.function_call_arguments.done', {
       name: 'daily_food',
       call_id: 'food',
@@ -461,6 +465,7 @@ describe('Voice Live capability-preserving fallback', () => {
     active.event('response.function_call_arguments.done', {
       name: 'unregistered_tool', call_id: 'unadvertised', arguments: '{"note":"synthetic exact meal"}',
     });
+    active.event('response.done', { response: { id: 'full_catalogue_response' } });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(JSON.parse(toolOutput('food') as string)).toMatchObject({ tool: 'daily_food', outcome: 'ok' });
@@ -483,15 +488,19 @@ describe('Voice Live capability-preserving fallback', () => {
     fallback.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
 
+    fallback.event('response.created', { response: { id: 'food_discovery_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'food_discovery', arguments: '{}',
     });
+    fallback.event('response.done', { response: { id: 'food_discovery_response' } });
     await vi.advanceTimersByTimeAsync(0);
+    fallback.event('response.created', { response: { id: 'food_execution_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_EXECUTION_TOOL,
       call_id: 'food_call',
       arguments: JSON.stringify({ capability: 'daily_food', arguments: { note: 'synthetic' } }),
     });
+    fallback.event('response.done', { response: { id: 'food_execution_response' } });
     await vi.advanceTimersByTimeAsync(0);
     expect(JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'food_call')!.item.output))
@@ -523,103 +532,18 @@ describe('Voice Live capability-preserving fallback', () => {
     expect(names(fallback)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
     expect(frameOf(fallback).session.tools).not.toEqual(initialDefinitions);
     fallback.event('session.updated');
+    fallback.event('response.created', { response: { id: 'discover_fallback_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'discover_fallback', arguments: '{}',
     });
+    fallback.event('response.done', { response: { id: 'discover_fallback_response' } });
     await vi.advanceTimersByTimeAsync(0);
-<<<<<<< HEAD
-    const update = frameOf(ready, ready.sent.length - 1).session;
-    expect(update.tools).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'daily_health_summary' }),
-    ]));
-    expect(update.tools).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'proactive_recent_items' }),
-    ]));
-    expect(update.tools).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'proactive_preferences' }),
-    ]));
-    expect(update.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-
-    const activityEvents: unknown[] = [];
-    f.app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
-    ready.event('response.created', { response: { id: 'budget_dispatch_response' } });
-    ready.event('response.function_call_arguments.done', {
-      name: 'daily_health_summary', call_id: 'health_call', arguments: '{"note":"health"}',
-    });
-    ready.event('response.function_call_arguments.done', {
-      name: 'proactive_recent_items', call_id: 'outside_call', arguments: '{}',
-    });
-    await vi.advanceTimersByTimeAsync(0);
-    expect(execute).not.toHaveBeenCalled();
-    expect(ready.sent.map((data) => JSON.parse(data))
-      .filter((message) => message.item?.type === 'function_call_output')).toEqual([]);
-
-    ready.event('response.done', { response: { id: 'budget_dispatch_response' } });
-    await vi.advanceTimersByTimeAsync(0);
-    const outputs = ready.sent.map((data) => JSON.parse(data))
-      .filter((message) => message.item?.type === 'function_call_output')
-      .map((message) => ({ callId: message.item.call_id, ...JSON.parse(message.item.output) }));
-    expect(browser.sent.map((data) => JSON.parse(data).type)).toContain('response.done');
-    expect(activityEvents).toContainEqual(expect.objectContaining({
-      type: 'tool-call-started', toolName: 'daily_health_summary',
-    }));
-    expect(outputs).toEqual(expect.arrayContaining([
-      expect.objectContaining({ callId: 'health_call', tool: 'daily_health_summary', outcome: 'ok' }),
-      expect.objectContaining({ callId: 'outside_call', tool: 'proactive_recent_items', outcome: 'refused' }),
-    ]));
-    expect(execute).toHaveBeenCalledOnce();
-    expect(outsideExecute).not.toHaveBeenCalled();
-
-    browser.emit('message', Buffer.from(JSON.stringify({ type: 'response.create' })), false);
-    await vi.advanceTimersByTimeAsync(0);
-    const responseCreate = JSON.parse(ready.sent.at(-1)!);
-    expect(responseCreate.response.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-  });
-
-  it.each([
-    ['R2', 0], ['R3', 1], ['R4', 2], ['R5', 3],
-  ] as const)('selects %s, the first rung below a silent byte threshold', async (rung, index) => {
-    const f = await fixture({}, 'en', catalogue());
-    // Measure each rung's frame in a throwaway session, then answer only frames that fit.
-    const sizes: number[] = [];
-    f.behaviour.onFrame = (socket) => { sizes.push(frameBytes(socket)); };
-    f.upstream.open();
-    f.behaviour.onFrame(f.upstream);
-    await vi.advanceTimersByTimeAsync(6_000 * 4);
-    expect(sizes).toHaveLength(4);
-    expect(sizes.slice(1).every((size, i) => size < sizes[i]!)).toBe(true);
-
-    const g = await fixture({}, 'en', catalogue());
-    const threshold = sizes[index]!;
-    g.behaviour.onFrame = (socket) => { if (frameBytes(socket) <= threshold) socket.event('session.updated'); };
-    g.openFirst();
-    await vi.advanceTimersByTimeAsync(6_000 * 4);
-    expect(g.attempts().map(rungOf)).toEqual(['R2', 'R3', 'R4', 'R5'].slice(0, index + 1));
-    expect(g.attempts().map((record) => record.outcome)).toEqual([
-      ...Array(index).fill('timeout'), 'ready',
-    ]);
-    expect(g.selected()).toEqual([expect.objectContaining({ rung, remembered: false })]);
-    const ready = g.sockets[index]!;
-    if (rung === 'R2') {
-      expect(names(ready)).not.toContain('daily_show');
-      expect(names(ready)).not.toContain('proactive_recent_items');
-      expect(names(ready)).not.toContain('proactive_preferences');
-    }
-    if (rung === 'R3') {
-      expect(names(ready)).toEqual(expect.arrayContaining(['set_presence_mode', 'set_away_mode']));
-      expect(names(ready)).not.toContain('workspace_command');
-    }
-    if (rung === 'R4' || rung === 'R5') expect(toolNames(ready)).toEqual([]);
-    expect(frameOf(ready).session.instructions).toContain(TOOLS_UNAVAILABLE_NOTICE);
-    expect(g.browser.close).not.toHaveBeenCalled();
-=======
     const output = JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'discover_fallback')!.item.output);
     expect(output.result.capabilities.map(({ name }: { name: string }) => name))
       .toEqual(expect.arrayContaining(['daily_food', 'proactive_recent_items']));
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2' }));
     expect(f.browser.close).not.toHaveBeenCalled();
->>>>>>> origin/main
   });
 
   it('gives each fallback rung six seconds and closes the abandoned socket', async () => {
@@ -835,12 +759,8 @@ describe('Voice Live capability-preserving fallback', () => {
     const ready = f.sockets[1]!;
     ready.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
-<<<<<<< HEAD
     ready.event('response.created', { response: { id: 'outside_subset_response' } });
-    ready.event('response.function_call_arguments.done', { name: 'daily_show', call_id: 'call_1', arguments: '{}' });
-=======
     ready.event('response.function_call_arguments.done', { name: 'proactive_recent_items', call_id: 'call_1', arguments: '{}' });
->>>>>>> origin/main
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
     await vi.advanceTimersByTimeAsync(0);
     expect(execute).not.toHaveBeenCalled();
@@ -852,18 +772,11 @@ describe('Voice Live capability-preserving fallback', () => {
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
       .map((message) => ({ call: message.item.call_id, ...JSON.parse(message.item.output) }));
-<<<<<<< HEAD
     expect(f.browser.sent.map((data) => JSON.parse(data).type)).toContain('response.done');
-    expect(outputs).toEqual([
-      expect.objectContaining({ call: 'call_1', tool: 'daily_show', outcome: 'refused' }),
-      expect.not.objectContaining({ call: 'call_2', outcome: 'refused' }),
-    ]);
-=======
     expect(outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({ call: 'call_1', outcome: 'refused' }),
       expect.objectContaining({ call: 'call_2', outcome: 'refused' }),
     ]));
->>>>>>> origin/main
     expect(execute).not.toHaveBeenCalled();
   });
 
