@@ -671,6 +671,17 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Voice state: connecting, waiting for microphone, listening, thinking, tool work, speaking, muted and reconnecting; accessible status beneath the orb. History and composer hide during voice; exit restores the draft and typing focus | Start voice requests microphone permission and prepares audio; capture begins after permission and authenticated session readiness. End voice; interrupt by speaking; mute/unmute or exceptional microphone retry in More |
 | Header attention (P9-120): undismissed task-attention, credential-warning and alert items, plus every pending browser confirmation; background-work history stays reachable for every non-dismissed job, including interrupted jobs | Open a linked task, release or project; dismiss an item or finished job; approve or reject a browser confirmation |
 
+For tool-backed turns, Jarvis gives one brief, truthful first-person sentence in the
+conversation language before tool work. Chat shows it as a distinct interim segment.
+Hosted voice emits a separate initial text item before resuming the model stream;
+its transport does not acknowledge that a user heard it. Browser realtime voice
+waits for browser playback completion only when the initial turn response contains
+audio and tool calls; tool-only responses and later silent tool rounds need no
+playback receipt. A browser receipt is not proof of physical-speaker output. The
+final answer contains only the useful result, and a failed or partial turn retains
+an honest terminal outcome. Direct answers and greetings remain single, immediate
+replies without a preamble.
+
 #### Proactive page (P13-10; default off)
 
 The `/proactive` page has one headline and separate Status, Open items, Sources,

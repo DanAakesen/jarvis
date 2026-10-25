@@ -62,6 +62,21 @@ not start because this environment has no isolated loopback SQL Server
 configuration. Next: scan secrets, run CodeQL and review the final diff.
 Physical phone acceptance remains separate.
 
+## P9-124: Natural first reply before tool work in chat and voice (#1258)
+
+Reuses the active model stream to deliver one contextual first-person
+acknowledgment before tool work; direct answers stay immediate. Chat keeps the
+acknowledgment as a transient segment, and hosted voice emits a separate text
+item before resuming the model stream. Realtime voice proceeds with a received
+request after terminal-response delivery even when initial acknowledgment
+playback is missing or negative; cancellation, barge-in and genuine delivery
+failures remain authoritative. No playback receipt proves physical-speaker
+output. Synthetic fixtures cover ordering, cancellation, stale receipts and
+silent rounds. The approach adds no model request or artificial delay; live
+timing and physical audio acceptance remain unmeasured. Next: final-head
+aggregate CI and owner-run live/device acceptance. No merge or deployment is
+authorized.
+
 ## Per-finding chat and voice feedback (#1240)
 
 Implemented the shared `proactive_item_feedback` capability, UI/tool feedback

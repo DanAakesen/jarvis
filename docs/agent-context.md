@@ -17,7 +17,8 @@ Food API compatibility tests exercise opt-in `foodEstimate` delivery and
 decisions. The reconciled tree includes #1278's merged call-site, phrase and
 streaming changes and retains its real SQL fixture below. The focused combined
 checks do not establish live-device acceptance or qualify branch-only #1264
-target clarification or #1259 response delivery changes.
+target clarification. The reconciled tree also includes #1259's reviewed
+acknowledgment and response-delivery changes.
 
 ## Natural food confirmation checks (#1277; 25 October 2026)
 
