@@ -167,7 +167,21 @@ describe('post-deploy chat acceptance suite', () => {
         { role: 'assistant', text: 'I need your confirmation before running the no-op action.' },
       ],
     });
+
     expect(inputs.every(({ smoke }) => smoke === true)).toBe(true);
+  });
+
+  it('does not stringify transient acknowledgment boundaries in canary replies', async () => {
+    const agent: ConversationAgent = {
+      stream: vi.fn(async function* () {
+        yield 'I am Jarvis, Dan’s broad personal AI assistant.';
+        yield { type: 'acknowledgment', text: 'I will check the available tools.' };
+        yield 'I can help with your tools.';
+      }),
+    };
+
+    const suite = await probes(agent);
+    await expect(suite.chat_identity!()).resolves.toEqual({ status: 'ok' });
   });
 
   it('fails the matching deterministic check when a required tool call is missing', async () => {
