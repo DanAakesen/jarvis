@@ -1586,10 +1586,21 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 "outcome plainly."
                             ),
                         })
-                    if calendar_guard and calendar_results:
+                    if (
+                        calendar_guard and calendar_results
+                        and not (repeated_action_call and repeated_action_only_round)
+                    ):
                         calendar_mutation = calendar_results[-1]
                         name, result = calendar_mutation
-                        if (
+                        if name == "calendar_create_events" and result.get("outcome") == "error":
+                            model_input.append({
+                                "role": "user",
+                                "content": (
+                                    "The calendar batch returned an error, so creation is not "
+                                    "confirmed. Preserve this result and do not claim success."
+                                ),
+                            })
+                        elif (
                             multiple_calendar_events and name == "calendar_create_event"
                             and (
                                 role != "smoke"

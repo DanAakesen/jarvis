@@ -343,9 +343,11 @@ it locally refuses an isolated single-create call before staging and bounds
 continuation to the complete batch. Before coalescing, it checks each event's
 same-message uncertain action identity; any uncertain member prevents another
 batch dispatch and preserves that event's original outcome. Failed/incomplete
-continuation therefore cannot leave a hidden first-event proposal. Approval
-recovery compares the latest
-request's canonical server-verified message ID with the existing staged
+continuation therefore cannot leave a hidden first-event proposal. An uncertain
+batch error continues through model synthesis with an explicit no-success
+instruction; if the provider retries the same events with new call IDs, the
+cached outcomes reach synthesis without another dispatch. Approval recovery
+compares the latest request's canonical server-verified message ID with the existing staged
 `sourceMessageId`, exposed only by trusted pending/receipt results. Optional
 `ModelMessage.source_message_id` retains that identity through verified history,
 the current request, steering and caption fallback, but is not serialized into
@@ -4242,7 +4244,9 @@ side-effecting tool call reuses its original result rather than replaying the
 action. If an action returns an uncertain error, a new provider call ID for the
 same canonical tool input in that same source message reuses the uncertain result
 instead of dispatching a second write; a later source message starts a new action
-scope. Recognized read-only tools execute afresh, including repeated status reads
+scope. An uncertain combined calendar batch also continues into model synthesis;
+the original error is retained for same-event retries and no success is inferred.
+Recognized read-only tools execute afresh, including repeated status reads
 and read-after-write verification. A replayed action permits a tool-free
 final-synthesis attempt only when the round contains no other fresh work; another
 tool request then fails with the content-free `tool_loop_stalled` code.
