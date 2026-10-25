@@ -59,23 +59,28 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
     : videoSize ? { width: '100%', aspectRatio: `${videoSize.width} / ${videoSize.height}` } : undefined;
   const playbackError = playback && playback.stream === stream ? playback.error : '';
   const live = Boolean(stream && camera.sharing && playback && playback.stream === stream && !playback.error);
+  const updateVideoSize = (element: HTMLVideoElement) => {
+    if (element.videoWidth > 0 && element.videoHeight > 0) {
+      setVideoSize({ width: element.videoWidth, height: element.videoHeight });
+    }
+  };
   return <div ref={container} className="camera-preview" data-inactive={!camera.sharing && !camera.starting}>
     <div className="camera-preview-picture" data-facing={camera.facing} style={pictureSize}>
       <video ref={video} autoPlay muted playsInline aria-label="Live camera preview" data-readback="off"
-        onLoadedMetadata={(event) => {
-          const { videoWidth, videoHeight } = event.currentTarget;
-          if (videoWidth > 0 && videoHeight > 0) setVideoSize({ width: videoWidth, height: videoHeight });
-        }} />
+        onLoadedMetadata={(event) => updateVideoSize(event.currentTarget)}
+        onResize={(event) => updateVideoSize(event.currentTarget)} />
       {(!stream || camera.starting) && <p role="status">{camera.starting ? 'Starting camera...' : 'No camera frame available.'}</p>}
       {live && !camera.starting && <span className="camera-preview-live" role="status">Live</span>}
       {(camera.sharing || camera.starting) && <CameraStatus camera={camera} />}
+      {(playbackError || camera.observationNotice) && <div className="camera-preview-feedback">
+        {playbackError && <div className="camera-preview-error" role="alert">
+          <span>{playbackError}</span>
+          <button className="secondary-button" type="button" onClick={() => setAttempt((current) => current + 1)}>Retry preview</button>
+        </div>}
+        {camera.observationNotice && <p className="camera-preview-notice" role="status">{camera.observationNotice}</p>}
+      </div>}
     </div>
-    {playbackError && <div className="camera-preview-error" role="alert">
-      <span>{playbackError}</span>
-      <button className="secondary-button" type="button" onClick={() => setAttempt((current) => current + 1)}>Retry preview</button>
-    </div>}
     {!camera.sharing && !camera.starting && <CameraStatus camera={camera} />}
-    {camera.observationNotice && <p className="camera-preview-notice" role="status">{camera.observationNotice}</p>}
     {!camera.sharing && !camera.starting && <button type="button" className="secondary-button camera-preview-retry" onClick={() => { void camera.start(); }}>
       Retry camera
     </button>}

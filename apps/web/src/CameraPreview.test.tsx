@@ -30,10 +30,13 @@ function setPreviewBounds(width: number, height: number) {
 
 describe('Camera preview', () => {
   it('shows camera limit freshness without changing the composer or pretending a cached image is live', () => {
-    render(<CameraPreview camera={camera({ conversation: true, observationNotice: 'Camera capture limit reached. Using an observation from 20 seconds ago.' })} />);
+    const { container } = render(<CameraPreview camera={camera({ conversation: true, observationNotice: 'Camera capture limit reached. Using an observation from 20 seconds ago.' })} />);
     expect(screen.getByText(/Camera capture limit reached/u).getAttribute('role')).toBe('status');
     expect(screen.getByText(/each chat or voice turn/u)).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull();
+    const picture = container.querySelector<HTMLElement>('.camera-preview-picture')!;
+    expect(within(picture).getByText(/Camera capture limit reached/u)).not.toBeNull();
+    expect(within(picture).getByRole('button', { name: 'Close camera preview' })).not.toBeNull();
   });
   it('overlays switch and close controls on the preview and closes capture', () => {
     const controller = camera({ switchCamera: vi.fn(async () => {}) });
@@ -66,7 +69,7 @@ describe('Camera preview', () => {
     expect(picture.style.height).toBe(expectedHeight);
     expect(picture.querySelector('video')).toBe(video);
   });
-  it('resizes the preview when video metadata reports a new orientation', () => {
+  it('resizes the preview when a playing video reports changed dimensions', () => {
     setPreviewBounds(400, 300);
     const { container } = render(<CameraPreview camera={camera()} />);
     const video = screen.getByLabelText('Live camera preview');
@@ -78,9 +81,14 @@ describe('Camera preview', () => {
     expect(picture.style.height).toBe('300px');
     Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640, writable: true });
     Object.defineProperty(video, 'videoHeight', { configurable: true, value: 360, writable: true });
-    fireEvent.loadedMetadata(video);
+    fireEvent.resize(video);
     expect(picture.style.width).toBe('400px');
     expect(picture.style.height).toBe('225px');
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 360, writable: true });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 640, writable: true });
+    fireEvent.resize(video);
+    expect(picture.style.width).toBe('168.75px');
+    expect(picture.style.height).toBe('300px');
   });
   it('plays the existing muted stream locally and detaches without stopping capture on unmount', async () => {
     const controller = camera();
@@ -116,6 +124,8 @@ describe('Camera preview', () => {
     render(<CameraPreview camera={controller} />);
     await screen.findByRole('alert');
     expect(screen.queryByText('Live')).toBeNull();
+    const picture = document.querySelector<HTMLElement>('.camera-preview-picture')!;
+    expect(within(picture).getByRole('button', { name: 'Retry preview' })).not.toBeNull();
     const video = screen.getByLabelText('Live camera preview');
     Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
     Object.defineProperty(video, 'videoHeight', { configurable: true, value: 360 });
@@ -127,6 +137,15 @@ describe('Camera preview', () => {
     expect(screen.queryByRole('alert')).toBeNull();
     expect(document.querySelector('.camera-preview-picture')?.getAttribute('style')).toContain('width: 400px; height: 225px;');
     expect(controller.start).not.toHaveBeenCalled();
+  });
+  it('keeps the complete unavailable-direction label in the preview status', () => {
+    const controller: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      previewStream: {} as MediaStream, start: vi.fn(async () => true), stop: vi.fn(),
+      inspect: vi.fn(async () => ({ description: 'Fixture.' })),
+    };
+    render(<CameraPreview camera={controller} />);
+    expect(screen.getByText('Camera on - direction unavailable')).not.toBeNull();
   });
   it('keeps startup and capture failures visible with retry, without a manual inspection button', () => {
     const controller = camera({ sharing: false, previewStream: null, error: 'No camera available.' });
