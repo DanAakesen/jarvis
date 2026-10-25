@@ -5012,21 +5012,27 @@ conversation. The browser checks extension, size (images 10 MB, others 20 MB) an
 count (five) before uploading, then sends each file as its own authenticated
 `POST /conversation/attachments` multipart request using XMLHttpRequest for
 upload progress. The backend repeats every check and remains authoritative.
-Chips show name, type, size, progress, a "Jarvis couldn't read this file" note
-when extraction failed, and per-file errors; removal aborts an upload or deletes
-the private file. Send stays disabled while an upload runs; failed uploads are
-never sent. Sending passes `attachmentIds` on the existing turn request. Messages
-with files queue instead of steering, because steering carries text only; if the
-turn is not saved the files return to the composer. Uploads older than 23 hours
-are not sent (the backend expires unsent files at 24 hours).
+Pending files are rendered inside the composer above the text input. Images use a
+compact preview pill; the local object URL supplies the pre-send thumbnail and is
+revoked when removed, sent or unmounted. A restored image without a local preview
+uses the existing authenticated URL request. Other files retain their name, type,
+size and upload state. Unreadable-file notes and per-file errors remain visible;
+removal aborts an upload or deletes the private file. Send stays disabled while an
+upload runs; failed uploads are never sent. Sending passes `attachmentIds` on the
+existing turn request. Messages with files queue instead of steering, because
+steering carries text only; if the turn is not saved the files return to the
+composer. Uploads older than 23 hours are not sent (the backend expires unsent
+files at 24 hours).
 
-History and live messages list their files; opening one requests
-`GET /conversation/attachments/:id/url` on demand and opens the signed Azure Blob
-URL in a new tab (or a link if the browser blocks the tab). A 404 shows an
-"expired or removed" state. When Jarvis's reply contains the P9-67 confirmation
-phrase `confirm <code> publish <filename>` and the earlier message carries that
-image, the reply also shows the image and a "This repository is public" note
-before Dan approves. If the preview cannot load, the note says not to approve.
+History and live messages render sent image previews in the message; they request
+`GET /conversation/attachments/:id/url` through the existing authenticated helper
+and display the returned short-lived signed Blob URL. Clicking an image still
+opens it on demand in a new tab (or a link if the browser blocks the tab). Other
+files keep the existing on-demand open flow. A 404 shows an "expired or removed"
+state. When Jarvis's reply contains the P9-67 confirmation phrase
+`confirm <code> publish <filename>` and the earlier message carries that image,
+the reply also shows the image and a "This repository is public" note before Dan
+approves. If the preview cannot load, the note says not to approve.
 No backend, contract, migration or infrastructure change. Offline Vitest and
 Chromium checks (stubbed auth/API) cover the flow; live backend, Blob and
 provider acceptance remain unverified.
