@@ -770,6 +770,7 @@ export const factoryTools: readonly JarvisTool[] = [
   {
     name: 'get_task',
     description: 'Get a task and bounded event summaries without exposing event payloads.',
+    execution: { defaultEffect: 'read' },
     inputSchema: {
       type: 'object',
       properties: {
@@ -869,6 +870,7 @@ export const factoryTools: readonly JarvisTool[] = [
   {
     name: 'create_task',
     description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. For project-code changes, use create_issue so P11 allocation and executor handoff run.',
+    execution: { defaultEffect: 'action' },
     inputSchema: {
       type: 'object',
       properties: {

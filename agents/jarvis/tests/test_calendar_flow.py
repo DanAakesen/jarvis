@@ -3,6 +3,7 @@
 import json
 import re
 from dataclasses import replace
+from itertools import count
 from types import SimpleNamespace
 
 import httpx
@@ -63,8 +64,13 @@ def delta(text):
     return FakeItem(type="response.output_text.delta", delta=text)
 
 
+_tool_call_ids = count()
+
+
 def tool_call(name):
-    return FakeItem(type="function_call", name=name, arguments="{}", call_id="call-1")
+    return FakeItem(
+        type="function_call", name=name, arguments="{}", call_id=f"call-{next(_tool_call_ids)}",
+    )
 
 
 class CalendarBackend(FakeBackend):

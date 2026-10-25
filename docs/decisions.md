@@ -8289,10 +8289,13 @@ Normal chat and voice keep requesting model responses after tool-bearing rounds
 until the provider returns a final answer; do not impose a replacement round
 count. Retain the provider's per-response output/context constraints, backend
 tool outcomes, authorization and confirmation checks, and caller cancellation.
-Scope exact-call result reuse to the originating stored message and canonical
-arguments so a repeated side-effecting request cannot replay a completed or
-uncertain action. Recognized read-only tools execute afresh, including repeated
-status reads and read-after-write verification. A replayed action permits a
+Use the shared `JarvisTool.execution` contract in
+`apps/backend/src/core/tool-registry.ts` and expose it through `GET /tools`.
+Read effects execute fresh; action and unclassified effects reuse results only
+for the same provider-issued call ID within the originating stored message.
+Different call IDs remain distinct even when arguments match. Metadata never
+grants permission; backend authorization, validation, confirmation and
+owner-isolation checks remain authoritative. A replayed invocation permits a
 tool-free synthesis attempt only when the round contains no other fresh work; if
 the provider then requests a tool, fail explicitly as `tool_loop_stalled`. Keep
 smoke invocation's separate bounded behavior. This removes only the

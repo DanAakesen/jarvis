@@ -465,12 +465,68 @@ def _projects(value: Any) -> tuple[tuple[str, str, str], ...]:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolExecutionMetadata:
+    default_effect: str
+    operation_field: str | None = None
+    operation_effects: dict[str, str] | None = None
+
+    def effect_for(self, arguments: str) -> str:
+        if self.operation_field is None or self.operation_effects is None:
+            return self.default_effect
+        try:
+            payload = json.loads(arguments)
+        except (TypeError, ValueError):
+            return self.default_effect
+        if not isinstance(payload, dict):
+            return self.default_effect
+        operation = payload.get(self.operation_field)
+        if isinstance(operation, str):
+            return self.operation_effects.get(operation, "unclassified")
+        return "unclassified"
+
+
+def _execution_metadata(value: Any) -> ToolExecutionMetadata:
+    if value is None:
+        return ToolExecutionMetadata("unclassified")
+    if not isinstance(value, dict) or set(value) - {"defaultEffect", "operation"}:
+        raise ValueError("invalid tool execution metadata")
+    default_effect = value.get("defaultEffect")
+    if (
+        not isinstance(default_effect, str)
+        or default_effect not in {"read", "action", "unclassified"}
+    ):
+        raise ValueError("invalid tool execution metadata")
+    operation = value.get("operation")
+    if operation is None:
+        return ToolExecutionMetadata(default_effect)
+    if not isinstance(operation, dict) or set(operation) != {"field", "effects"}:
+        raise ValueError("invalid tool execution metadata")
+    field, effects = operation.get("field"), operation.get("effects")
+    if (
+        not isinstance(field, str)
+        or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", field)
+        or not isinstance(effects, dict)
+        or not effects
+        or any(
+            not isinstance(name, str)
+            or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", name)
+            or not isinstance(effect, str)
+            or effect not in {"read", "action"}
+            for name, effect in effects.items()
+        )
+    ):
+        raise ValueError("invalid tool execution metadata")
+    return ToolExecutionMetadata(default_effect, field, dict(effects))
+
+
+@dataclass(frozen=True, slots=True)
 class BackendTool:
     """One tool descriptor from ``GET /tools``."""
 
     name: str
     description: str
     input_schema: dict[str, Any]
+    execution: ToolExecutionMetadata
 
     def model_schema(self) -> dict[str, Any]:
         """Return the Responses API function-tool definition."""
@@ -674,6 +730,7 @@ class BackendToolClient:
                 entry.get("description"),
                 entry.get("inputSchema"),
             )
+            execution = _execution_metadata(entry.get("execution"))
             if (
                 not isinstance(name, str)
                 or not _TOOL_NAME.match(name)
@@ -685,7 +742,7 @@ class BackendToolClient:
                 or schema.get("type") != "object"
             ):
                 raise ValueError("invalid tool descriptor")
-            tools[name] = BackendTool(name, description, schema)
+            tools[name] = BackendTool(name, description, schema, execution)
         return tuple(tools.values())
 
     async def context(self) -> dict[str, Any]:

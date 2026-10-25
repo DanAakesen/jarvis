@@ -4247,6 +4247,19 @@ outcomes are not recovered into that reply. The provider-incomplete regression
 verifies no blind tool replay, not partial-result recovery. The browser never
 receives agent credentials.
 
+Shared execution-effect metadata is owned by `JarvisTool.execution` in
+`apps/backend/src/core/tool-registry.ts`, returned by `GET /tools`, and parsed as
+`BackendTool.execution` in `agents/jarvis/jarvis_tools.py`. Voice adapters use
+the same registered-tool contract through `ToolRegistry`; #1188/#1261 should
+consume this field rather than maintain a second classification list. Metadata
+has an optional default effect (`read`, `action` or `unclassified`) and optional
+operation-field effect map. It describes replay handling only and never grants
+execution permission. Reads always execute fresh. Actions and unclassified calls
+reuse a result only for the same provider-issued call ID and stored source
+message; equal arguments with different call IDs are distinct invocations.
+Backend authorization, validation, confirmation and owner isolation remain the
+execution boundary.
+
 **Conversation summary (P9-105).** Older chat messages are folded into an
 append-only, owner-bound summary so decisions survive the window.
 `dbo.conversation_summaries` (migration 0051) holds one row per version with the

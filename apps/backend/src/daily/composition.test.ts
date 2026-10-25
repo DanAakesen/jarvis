@@ -173,6 +173,16 @@ describe('Daily composition', () => {
     expect(module.tools.map(({ name }) => name)).toEqual(dailyToolNames);
     expect(module.tools.map(({ name }) => name)).not.toContain('daily_food_lookup');
     expect(module.tools.find(({ name }) => name === 'daily_food_review')?.description).toContain('lookup_components');
+    expect(module.tools.find(({ name }) => name === 'daily_saved_food')?.execution).toEqual({
+      defaultEffect: 'unclassified',
+      operation: {
+        field: 'operation',
+        effects: {
+          lookup_saved: 'read', read_preferences: 'read', save_favorite: 'action',
+          save_plan: 'action', delete_plan: 'action', set_feedback: 'action',
+        },
+      },
+    });
 
     const baseline = fixture();
     const on = fixture(module);

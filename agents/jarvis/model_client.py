@@ -73,20 +73,6 @@ DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
 SMOKE_MAX_TOOL_ROUNDS = 2
-READ_ONLY_TOOL_NAMES = frozenset({
-    "attachment_list", "attachment_read", "calendar_find_free_slots", "calendar_get_pending_change",
-    "calendar_list_events", "calendar_next_event", "calendar_today_agenda", "checks_list",
-    "ci_log", "conversation_search", "daily_feed", "daily_food_lookup", "daily_query",
-    "daily_show", "get_deployment_status", "get_job", "get_settings", "get_status_summary",
-    "get_task", "get_usage", "get_work_status", "github_read", "issue_comments", "issue_get",
-    "issue_search", "labels_list", "list_capabilities", "list_jobs", "list_projects",
-    "list_releases",
-    "list_tasks", "mail_list_drafts", "mail_search", "milestones_list", "memory_history",
-    "memory_list", "memory_search", "pins_list", "pr_comments", "pr_diff", "pr_get", "pr_list",
-    "pr_reviews", "pr_search", "repo_branches", "repo_commits", "repo_compare", "repo_issues",
-    "repo_list", "repo_overview", "repo_read", "repo_search", "vault_read", "vault_search",
-    "weather", "web_research",
-})
 # Headroom for a summary call: the answer is capped at ~9k characters by the parser, and a
 # model that reasons by default needs room before its first visible word.
 SUMMARY_MAX_OUTPUT_TOKENS = 6_000
@@ -357,34 +343,19 @@ def image_input_rejected(exc: BaseException) -> bool:
 
 
 def _tool_call_key(
-    source_message_id: str, name: str, arguments: str,
-) -> tuple[str, str, str]:
+    source_message_id: str, invocation_id: str,
+) -> tuple[str, str]:
+    return source_message_id, invocation_id
+
+
+def _tool_call_fingerprint(name: str, arguments: str) -> tuple[str, str]:
     try:
         normalized = json.dumps(
             json.loads(arguments), ensure_ascii=False, sort_keys=True, separators=(",", ":")
         )
     except (TypeError, ValueError):
         normalized = arguments
-    return source_message_id, name, normalized
-
-
-def _tool_call_is_read_only(name: str, arguments: str) -> bool:
-    if name in READ_ONLY_TOOL_NAMES:
-        return True
-    try:
-        payload = json.loads(arguments)
-    except (TypeError, ValueError):
-        return False
-    if not isinstance(payload, dict):
-        return False
-    operation = payload.get("operation")
-    if name == "proactive_preferences":
-        return operation in {"help", "read"}
-    if name == "get_system_health":
-        return operation in {None, "list_capabilities"}
-    if name == "daily_saved_food":
-        return operation == "lookup_saved"
-    return False
+    return name, normalized
 
 
 def model_message_input(message: ModelMessage) -> dict[str, Any]:
@@ -904,6 +875,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     definitions = {
                         tool["name"]: tool for tool in model_tools(catalogue)
                     }
+                    execution_metadata = {tool.name: tool.execution for tool in catalogue}
                     if role == "smoke":
                         smoke_parameters = {
                             "get_system_health": {
@@ -1009,7 +981,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 smoke_tool_call_count = 0
                 calendar_evidence = []
                 calendar_mutation = None
-                completed_tool_calls: dict[tuple[str, str, str], dict[str, Any]] = {}
+                completed_tool_calls: dict[
+                    tuple[str, str], tuple[tuple[str, str], dict[str, Any]]
+                ] = {}
                 force_final_synthesis = False
                 while role != "smoke" or round_number < SMOKE_MAX_TOOL_ROUNDS:
                     round_number += 1
@@ -1388,7 +1362,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     normalized_calls_with_keys = [
                         (
                             call, arguments,
-                            _tool_call_key(source_message_id, call.name, arguments),
+                            _tool_call_key(
+                                source_message_id,
+                                call.id if use_anthropic else call.call_id,
+                            ),
                         )
                         for call, arguments in normalized_calls
                     ]
@@ -1430,16 +1407,22 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     repeated_action_only_round = bool(calls)
                     for call, arguments, call_key in normalized_calls_with_keys:
                         confirmation_refused = False
-                        read_only = _tool_call_is_read_only(call.name, arguments)
-                        cached_result = (
-                            None if read_only else completed_tool_calls.get(call_key)
+                        effect = execution_metadata.get(call.name)
+                        effect_name = effect.effect_for(arguments) if effect else "unclassified"
+                        fingerprint = _tool_call_fingerprint(call.name, arguments)
+                        cached_entry = (
+                            None if effect_name == "read" else completed_tool_calls.get(call_key)
                         )
-                        if cached_result is not None:
-                            result = cached_result
+                        if cached_entry is not None:
+                            cached_fingerprint, result = cached_entry
+                            if cached_fingerprint != fingerprint:
+                                raise ToolLoopStalled(
+                                    "The provider reused a tool invocation identity."
+                                )
                             repeated_action_call = True
                         else:
                             repeated_action_only_round = False
-                        if cached_result is None and (
+                        if cached_entry is None and (
                             call.name == "calendar_confirm_change"
                             and not ambiguous_calendar_proposals
                         ):
@@ -1466,7 +1449,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     )
                                 )
                         if (
-                            cached_result is None
+                            cached_entry is None
                             and ambiguous_calendar_proposals
                             and call.name in CALENDAR_MUTATIONS
                         ):
@@ -1478,7 +1461,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "proposals or confirmation in the same round."
                                 )},
                             }
-                        elif cached_result is None and confirmation_refused:
+                        elif cached_entry is None and confirmation_refused:
                             result = {
                                 "tool": call.name, "outcome": "refused",
                                 "result": {"refused": (
@@ -1486,7 +1469,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "this request. No calendar confirmation was dispatched."
                                 )},
                             }
-                        elif cached_result is None and (
+                        elif cached_entry is None and (
                             multiple_calendar_events and call.name == "calendar_create_event"
                             and combined_calendar is None
                             and "calendar_create_events" in definitions
@@ -1498,7 +1481,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "request. Use calendar_create_events with the complete list."
                                 )},
                             }
-                        elif cached_result is None:
+                        elif cached_entry is None:
                             result = (
                                 combined_calendar if combined_calendar is not None else
                                 await self._tools.call(
@@ -1508,8 +1491,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             result = calendar_unsettled_confirmation(
                                 call.name, result, calendar_state,
                             )
-                        if cached_result is None and not read_only:
-                            completed_tool_calls[call_key] = result
+                        if cached_entry is None and effect_name != "read":
+                            completed_tool_calls[call_key] = (fingerprint, result)
                         if legacy_multiple:
                             yield calendar_reply(call.name, result, danish)
                             yield (

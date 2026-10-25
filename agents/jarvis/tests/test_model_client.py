@@ -365,6 +365,7 @@ CREATE_TASK = {
     "name": "create_task",
     "description": "Start a new coding task.",
     "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
+    "execution": {"defaultEffect": "action"},
 }
 PC_OPEN = {
     "name": "pc_open",
@@ -384,6 +385,7 @@ GET_TASK = {
     "name": "get_task",
     "description": "Read one task.",
     "inputSchema": {"type": "object", "properties": {"taskId": {"type": "string"}}},
+    "execution": {"defaultEffect": "read"},
 }
 PROACTIVE_PREFERENCES = {
     "name": "proactive_preferences",
@@ -396,6 +398,19 @@ PROACTIVE_PREFERENCES = {
         },
         "required": ["operation"],
     },
+    "execution": {
+        "defaultEffect": "unclassified",
+        "operation": {
+            "field": "operation",
+            "effects": {"help": "read", "read": "read", "update": "action"},
+        },
+    },
+}
+PROACTIVE_RECENT_ITEMS = {
+    "name": "proactive_recent_items",
+    "description": "Read recent proactive items.",
+    "inputSchema": {"type": "object", "properties": {"state": {"type": "string"}}},
+    "execution": {"defaultEffect": "read"},
 }
 
 
@@ -1956,7 +1971,7 @@ async def test_repeated_tool_call_for_new_steering_message_is_not_deduplicated()
     writes = [
         request for request in backend.requests if request.url.path == "/tools/create_task"
     ]
-    assert [request.headers["x-jarvis-message-id"] for request in writes] == ["42", "43"]
+    assert [request.headers["x-jarvis-message-id"] for request in writes] == ["42", "42", "43"]
 
 
 @pytest.mark.asyncio
@@ -2023,6 +2038,55 @@ async def test_read_update_read_returns_fresh_proactive_preferences() -> None:
 
 
 @pytest.mark.asyncio
+async def test_new_read_capability_uses_catalogue_effect_not_a_tool_name_list() -> None:
+    backend = FakeBackend(catalogue=[PROACTIVE_RECENT_ITEMS])
+    original_handle = backend.handle
+    observed = 0
+
+    def recent_items(request: httpx.Request) -> httpx.Response:
+        nonlocal observed
+        if request.url.path != "/tools/proactive_recent_items":
+            return original_handle(request)
+        backend.requests.append(request)
+        observed += 1
+        return httpx.Response(200, json={
+            "tool": "proactive_recent_items", "outcome": "ok", "result": {"version": observed},
+        })
+
+    backend.handle = recent_items
+    model, transport = client([], rounds=[
+        [completed(FakeItem(
+            type="function_call", call_id="recent_1", name="proactive_recent_items",
+            arguments='{"state":"open"}',
+        ))],
+        [completed(FakeItem(
+            type="function_call", call_id="recent_2", name="proactive_recent_items",
+            arguments='{"state":"open"}',
+        ))],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Check my recent proactive items twice")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    reads = [
+        request for request in backend.requests
+        if request.url.path == "/tools/proactive_recent_items"
+    ]
+    assert len(reads) == 2
+    second_result = [
+        item for item in transport.responses.requests[2]["input"]
+        if item.get("type") == "function_call_output" and item.get("call_id") == "recent_2"
+    ]
+    assert json.loads(second_result[0]["output"])["result"]["version"] == 2
+
+
+@pytest.mark.asyncio
 async def test_repeated_status_reads_execute_fresh_and_observe_progress() -> None:
     backend = FakeBackend(catalogue=[GET_TASK])
     original_handle = backend.handle
@@ -2082,7 +2146,7 @@ async def test_replayed_action_and_new_work_continue_productive_rounds() -> None
     )
     model, transport = client([], rounds=[
         [completed(action("first", "Create first"))],
-        [completed(action("duplicate", "Create first"), status)],
+        [completed(action("first", "Create first"), status)],
         [completed(action("second", "Create second"))],
         [completed()],
     ], backend=backend)
@@ -2105,6 +2169,65 @@ async def test_replayed_action_and_new_work_continue_productive_rounds() -> None
     assert len(status_reads) == 1
     assert len(transport.responses.requests) == 4
     assert all("tools" in transport.responses.requests[index] for index in (2, 3))
+
+
+@pytest.mark.asyncio
+async def test_equal_arguments_with_distinct_action_ids_are_distinct_actions() -> None:
+    backend = FakeBackend()
+
+    def call(call_id: str) -> FakeItem:
+        return FakeItem(
+            type="function_call", call_id=call_id, name="create_task",
+            arguments='{"text":"Create same task"}',
+        )
+
+    model, _ = client([], rounds=[
+        [completed(call("first"))],
+        [completed(call("second"))],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Create the same task twice")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert len(writes) == 2
+
+
+@pytest.mark.asyncio
+async def test_reused_action_id_with_different_arguments_fails_without_second_write() -> None:
+    backend = FakeBackend()
+    model, _ = client([], rounds=[
+        [completed(FakeItem(
+            type="function_call", call_id="same", name="create_task",
+            arguments='{"text":"First"}',
+        ))],
+        [completed(FakeItem(
+            type="function_call", call_id="same", name="create_task",
+            arguments='{"text":"Different"}',
+        ))],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        with pytest.raises(ToolLoopStalled):
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Create a task")], "en",
+            )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert len(writes) == 1
 
 
 @pytest.mark.asyncio
@@ -2131,7 +2254,7 @@ async def test_repeated_uncertain_tool_result_is_reused_for_final_synthesis(prov
         arguments='{"text":"Create once"}',
     )
     repeated_call = FakeItem(
-        type="function_call", call_id="repeated", name="create_task",
+        type="function_call", call_id="first", name="create_task",
         arguments='{ "text" : "Create once" }',
     )
     if provider == "openai":
@@ -2164,7 +2287,7 @@ async def test_repeated_uncertain_tool_result_is_reused_for_final_synthesis(prov
             )),
             FakeAnthropicStream([], anthropic_final(
                 FakeItem(
-                    type="tool_use", id="repeated", name="create_task",
+                    type="tool_use", id="first", name="create_task",
                     input={"text": "Create once"},
                 ),
             )),
@@ -2212,7 +2335,7 @@ async def test_repeated_tool_calls_that_ignore_final_only_retry_fail_without_rep
         type="function_call", call_id="call", name="create_task", arguments='{"text":"Once"}',
     )
     repeated_call = FakeItem(
-        type="function_call", call_id="repeated", name="create_task",
+        type="function_call", call_id="call", name="create_task",
         arguments='{"text":"Once"}',
     )
     backend = FakeBackend()
