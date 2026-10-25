@@ -56,9 +56,10 @@ from jarvis_tools import (
     current_message_id,
     current_smoke_invocation,
     current_steering_fetcher,
+    current_turn,
     model_tools,
 )
-from model_contract import StreamingModelClient, SummaryCompletion
+from model_contract import StreamingModelClient, SummaryCompletion, ToolLoopStalled
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
 from visual_context import (
     ImageInputRejected,
@@ -71,7 +72,7 @@ FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
-MAX_TOOL_ROUNDS = 5
+SMOKE_MAX_TOOL_ROUNDS = 2
 # Headroom for a summary call: the answer is capped at ~9k characters by the parser, and a
 # model that reasons by default needs room before its first visible word.
 SUMMARY_MAX_OUTPUT_TOKENS = 6_000
@@ -352,6 +353,37 @@ def image_input_rejected(exc: BaseException) -> bool:
     return code in {"unsupported_image", "invalid_image", "invalid_image_format"} or (
         "image" in message
         and any(part in message for part in ("unsupported", "not support", "invalid image"))
+    )
+
+
+def _tool_call_key(
+    source_message_id: str, invocation_id: str,
+) -> tuple[str, str]:
+    return source_message_id, invocation_id
+
+
+def _tool_call_fingerprint(name: str, arguments: str) -> tuple[str, str]:
+    try:
+        normalized = json.dumps(
+            json.loads(arguments), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
+    except (TypeError, ValueError):
+        normalized = arguments
+    return name, normalized
+
+
+def _uncertain_action_result(
+    name: str,
+    arguments: str,
+    source_message_id: str,
+    execution_metadata: dict[str, Any],
+    uncertain_action_results: dict[tuple[str, tuple[str, str]], dict[str, Any]],
+) -> dict[str, Any] | None:
+    effect = execution_metadata.get(name)
+    if effect is not None and effect.effect_for(arguments) == "read":
+        return None
+    return uncertain_action_results.get(
+        (source_message_id, _tool_call_fingerprint(name, arguments))
     )
 
 
@@ -872,6 +904,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     definitions = {
                         tool["name"]: tool for tool in model_tools(catalogue)
                     }
+                    execution_metadata = {tool.name: tool.execution for tool in catalogue}
                     if role == "smoke":
                         smoke_parameters = {
                             "get_system_health": {
@@ -973,17 +1006,27 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         current_message_id.set(message_id)
                     return bool(steering_messages)
 
-                max_rounds = 2 if role == "smoke" else MAX_TOOL_ROUNDS
+                round_number = 0
                 smoke_tool_call_count = 0
                 calendar_evidence = []
                 calendar_mutation = None
-                for round_number in range(1, max_rounds + 1):
+                completed_tool_calls: dict[
+                    tuple[str, str], tuple[tuple[str, str], dict[str, Any]]
+                ] = {}
+                uncertain_action_results: dict[
+                    tuple[str, tuple[str, str]], dict[str, Any]
+                ] = {}
+                force_final_synthesis = False
+                while role != "smoke" or round_number < SMOKE_MAX_TOOL_ROUNDS:
+                    round_number += 1
                     first_model_started = current_model_started_at.get()
                     with latency_span("model_coordination"):
-                        await append_steering()
+                        if await append_steering():
+                            force_final_synthesis = False
                         if phase_setter is not None and turn_id is not None:
                             await phase_setter("model")
-                        await append_steering()
+                        if await append_steering():
+                            force_final_synthesis = False
                     image_request = round_number == 1 and any(
                         message.images for message in messages
                     )
@@ -1022,6 +1065,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         and calendar_mutation is None and not calendar_evidence
                     )
                     final = None
+                    round_tools = [] if force_final_synthesis else tools
                     request: dict[str, Any] = {
                         "model": model_name,
                         "instructions": instructions,
@@ -1030,8 +1074,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         "store": False,
                         "stream": True,
                     }
-                    if tools:
-                        request["tools"] = tools
+                    if round_tools:
+                        request["tools"] = round_tools
                     if reasoning_effort and reasoning_effort != "none":
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
@@ -1045,8 +1089,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     reasoning_effort, max_output_tokens
                                 ),
                             }
-                            if tools:
-                                anthropic_request["tools"] = anthropic_tools(tools)
+                            if round_tools:
+                                anthropic_request["tools"] = anthropic_tools(round_tools)
                             accepted = False
                             try:
                                 with ExitStack() as request_timings:
@@ -1189,6 +1233,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         if use_anthropic
                         else [item for item in final.output if item.type == "function_call"]
                     )
+                    if force_final_synthesis and calls:
+                        raise ToolLoopStalled(
+                            "The model requested tools again after a final-only retry."
+                        )
                     usage = final.usage
                     input_tokens = getattr(usage, "input_tokens", None)
                     output_tokens = getattr(usage, "output_tokens", None)
@@ -1262,6 +1310,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                     if not calls:
                         if await append_steering():
+                            force_final_synthesis = False
                             if emitted_text:
                                 yield "\n\n"
                             continue
@@ -1328,6 +1377,37 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         await phase_setter("tools")
                     tool_results = []
                     calendar_results = []
+                    normalized_calls = [
+                        (
+                            call,
+                            (
+                                json.dumps(
+                                    call.input, ensure_ascii=False, separators=(",", ":")
+                                )
+                                if use_anthropic
+                                else call.arguments
+                            ),
+                        )
+                        for call in calls
+                    ]
+                    source_message_id = current_message_id.get() or current_turn.get()
+                    normalized_calls_with_keys = [
+                        (
+                            call, arguments,
+                            _tool_call_key(
+                                source_message_id,
+                                call.id if use_anthropic else call.call_id,
+                            ),
+                        )
+                        for call, arguments in normalized_calls
+                    ]
+                    uncertain_calendar_replay = any(
+                        _uncertain_action_result(
+                            call.name, arguments, call_key[0],
+                            execution_metadata, uncertain_action_results,
+                        ) is not None
+                        for call, arguments, call_key in normalized_calls_with_keys
+                    )
                     ambiguous_calendar_proposals = (
                         "calendar_create_events" in definitions
                         and (
@@ -1339,13 +1419,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     )
                     combined_calendar = None
                     if (
-                        calendar_guard and len(calls) > 1
+                        calendar_guard
+                        and len({
+                            call_key for _, _, call_key in normalized_calls_with_keys
+                        }) > 1
                         and all(call.name == "calendar_create_event" for call in calls)
                         and "calendar_create_events" in definitions
+                        and not any(
+                            call_key in completed_tool_calls
+                            for _, _, call_key in normalized_calls_with_keys
+                        )
+                        and not uncertain_calendar_replay
                     ):
                         events = [
-                            call.input if use_anthropic else json.loads(call.arguments)
-                            for call in calls
+                            json.loads(arguments) for _, arguments, _ in normalized_calls_with_keys
                         ]
                         combined_calendar = await self._tools.call(
                             "calendar_create_events", json.dumps({"events": events}),
@@ -1356,14 +1443,34 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         and all(call.name == "calendar_create_event" for call in calls)
                         and "calendar_create_events" not in definitions
                     )
-                    for call in calls:
-                        arguments = (
-                            json.dumps(call.input, ensure_ascii=False, separators=(",", ":"))
-                            if use_anthropic
-                            else call.arguments
-                        )
+                    repeated_action_call = False
+                    repeated_action_only_round = bool(calls)
+                    for call, arguments, call_key in normalized_calls_with_keys:
                         confirmation_refused = False
-                        if (
+                        effect = execution_metadata.get(call.name)
+                        effect_name = effect.effect_for(arguments) if effect else "unclassified"
+                        fingerprint = _tool_call_fingerprint(call.name, arguments)
+                        uncertain_action_key = (call_key[0], fingerprint)
+                        cached_entry = (
+                            None if effect_name == "read" else completed_tool_calls.get(call_key)
+                        )
+                        if cached_entry is None and effect_name != "read":
+                            uncertain_result = _uncertain_action_result(
+                                call.name, arguments, call_key[0],
+                                execution_metadata, uncertain_action_results,
+                            )
+                            if uncertain_result is not None:
+                                cached_entry = (fingerprint, uncertain_result)
+                        if cached_entry is not None:
+                            cached_fingerprint, result = cached_entry
+                            if cached_fingerprint != fingerprint:
+                                raise ToolLoopStalled(
+                                    "The provider reused a tool invocation identity."
+                                )
+                            repeated_action_call = True
+                        else:
+                            repeated_action_only_round = False
+                        if cached_entry is None and (
                             call.name == "calendar_confirm_change"
                             and not ambiguous_calendar_proposals
                         ):
@@ -1389,7 +1496,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                         calendar_messages, proposal,
                                     )
                                 )
-                        if ambiguous_calendar_proposals and call.name in CALENDAR_MUTATIONS:
+                        if (
+                            cached_entry is None
+                            and ambiguous_calendar_proposals
+                            and call.name in CALENDAR_MUTATIONS
+                        ):
                             result = {
                                 "tool": call.name, "outcome": "refused",
                                 "result": {"refused": (
@@ -1398,7 +1509,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "proposals or confirmation in the same round."
                                 )},
                             }
-                        elif confirmation_refused:
+                        elif cached_entry is None and confirmation_refused:
                             result = {
                                 "tool": call.name, "outcome": "refused",
                                 "result": {"refused": (
@@ -1406,7 +1517,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "this request. No calendar confirmation was dispatched."
                                 )},
                             }
-                        elif (
+                        elif cached_entry is None and (
                             multiple_calendar_events and call.name == "calendar_create_event"
                             and combined_calendar is None
                             and "calendar_create_events" in definitions
@@ -1418,7 +1529,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "request. Use calendar_create_events with the complete list."
                                 )},
                             }
-                        else:
+                        elif cached_entry is None:
                             result = (
                                 combined_calendar if combined_calendar is not None else
                                 await self._tools.call(
@@ -1428,6 +1539,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             result = calendar_unsettled_confirmation(
                                 call.name, result, calendar_state,
                             )
+                        if effect_name != "read":
+                            completed_tool_calls[call_key] = (fingerprint, result)
+                            if result.get("outcome") == "error":
+                                uncertain_action_results[uncertain_action_key] = result
                         if legacy_multiple:
                             yield calendar_reply(call.name, result, danish)
                             yield (
@@ -1474,12 +1589,37 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             )
                     if use_anthropic and tool_results:
                         model_input.append({"role": "user", "content": tool_results})
-                    if calendar_guard and calendar_results:
+                    if repeated_action_call and repeated_action_only_round:
+                        force_final_synthesis = True
+                        model_input.append({
+                            "role": "user",
+                            "content": (
+                                "An exact tool call in this turn was already completed. Its "
+                                "original result is included above; do not repeat the action. "
+                                "Answer now using the available results, and state any uncertain "
+                                "outcome plainly."
+                            ),
+                        })
+                    if (
+                        calendar_guard and calendar_results
+                        and not (repeated_action_call and repeated_action_only_round)
+                    ):
                         calendar_mutation = calendar_results[-1]
                         name, result = calendar_mutation
-                        if (
+                        if name == "calendar_create_events" and result.get("outcome") == "error":
+                            model_input.append({
+                                "role": "user",
+                                "content": (
+                                    "The calendar batch returned an error, so creation is not "
+                                    "confirmed. Preserve this result and do not claim success."
+                                ),
+                            })
+                        elif (
                             multiple_calendar_events and name == "calendar_create_event"
-                            and round_number < max_rounds
+                            and (
+                                role != "smoke"
+                                or round_number < SMOKE_MAX_TOOL_ROUNDS
+                            )
                             and "calendar_create_events" in definitions
                         ):
                             model_input.append({
@@ -1521,8 +1661,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 "Do not invent new visual details."
                             ),
                         })
-                    await append_steering()
-                raise RuntimeError("Jarvis tool loop exceeded its round limit")
+                    if await append_steering():
+                        force_final_synthesis = False
+                raise RuntimeError("Smoke tool loop exceeded its round limit")
             except (asyncio.CancelledError, GeneratorExit):
                 raise
             except BaseException as exc:

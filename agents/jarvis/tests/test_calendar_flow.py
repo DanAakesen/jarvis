@@ -3,6 +3,7 @@
 import json
 import re
 from dataclasses import replace
+from itertools import count
 from types import SimpleNamespace
 
 import httpx
@@ -63,8 +64,13 @@ def delta(text):
     return FakeItem(type="response.output_text.delta", delta=text)
 
 
+_tool_call_ids = count()
+
+
 def tool_call(name):
-    return FakeItem(type="function_call", name=name, arguments="{}", call_id="call-1")
+    return FakeItem(
+        type="function_call", name=name, arguments="{}", call_id=f"call-{next(_tool_call_ids)}",
+    )
 
 
 class CalendarBackend(FakeBackend):
@@ -192,6 +198,32 @@ class CalendarBatchBackend(CalendarBackend):
             return httpx.Response(200, json={"outcome": "ok", "result": {
                 "status": "none", "reply": self.reply, "lastChange": self.last_change,
             }})
+        return super().handle(request)
+
+
+class UncertainCalendarBatchBackend(CalendarBatchBackend):
+    def __init__(self):
+        super().__init__()
+        self.batch_attempts = 0
+        for tool in self.catalogue:
+            tool["execution"] = {
+                "defaultEffect": (
+                    "read" if tool["name"] in {
+                        "calendar_get_pending_change", "calendar_list_events",
+                    } else "action"
+                ),
+            }
+
+    def handle(self, request):
+        name = request.url.path.rsplit("/", 1)[-1]
+        if request.method == "POST" and name == "calendar_create_events":
+            self.requests.append(request)
+            self.batch_attempts += 1
+            assert json.loads(request.content) == {"events": HOTEL_EVENTS}
+            return httpx.Response(200, json={
+                "outcome": "error",
+                "result": {"error": "Calendar provider outcome is uncertain."},
+            })
         return super().handle(request)
 
 
@@ -706,6 +738,79 @@ async def test_unsupported_completion_claims_are_blocked_even_without_recovery_t
 def batch_call():
     return FakeItem(type="function_call", name="calendar_create_events",
                     arguments=json.dumps({"events": HOTEL_EVENTS}), call_id="both-hotels")
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+async def test_uncertain_combined_calendar_retry_with_new_ids_does_not_dispatch_batch_again(
+    provider,
+):
+    backend = UncertainCalendarBatchBackend()
+    initial_calls = [
+        FakeItem(
+            type="function_call", name="calendar_create_event", call_id=f"initial-{index}",
+            arguments=json.dumps(event),
+        )
+        for index, event in enumerate(HOTEL_EVENTS)
+    ]
+    retry_calls = [
+        FakeItem(
+            type="function_call", name="calendar_create_event", call_id=f"retry-{index}",
+            arguments=json.dumps(event),
+        )
+        for index, event in enumerate(HOTEL_EVENTS)
+    ]
+    model, transport = provider_client(provider, backend, [
+        [completed(*initial_calls)],
+        [completed(*retry_calls)],
+        [delta("The calendar result remains uncertain."), completed()],
+    ])
+    history = [
+        ModelMessage("user", "Add both hotel bookings to my calendar", source_message_id="20"),
+        ModelMessage("assistant", "Synthetic Hotel Alpha and Synthetic Hotel Beta."),
+        ModelMessage("user", "Add those two.", source_message_id="42"),
+    ]
+    try:
+        reply = await turn(model, history)
+        assert backend.batch_attempts == 1
+        assert "uncertain" in reply.lower()
+        assert "created" not in reply.lower()
+
+        requests = (
+            model._anthropic_client.messages.requests if provider == "anthropic"
+            else transport.responses.requests
+        )
+        assert len(requests) == 3
+
+        def results_for(request, call_ids):
+            if provider == "anthropic":
+                return {
+                    item["tool_use_id"]: json.loads(item["content"])
+                    for message in request["messages"]
+                    if message["role"] == "user" and isinstance(message["content"], list)
+                    for item in message["content"]
+                    if item.get("type") == "tool_result"
+                    and item["tool_use_id"] in call_ids
+                }
+            return {
+                item["call_id"]: json.loads(item["output"])
+                for item in request["input"]
+                if item.get("type") == "function_call_output"
+                and item["call_id"] in call_ids
+            }
+
+        for continuation_index, call_ids in [
+            (1, {"initial-0", "initial-1"}),
+            (2, {"retry-0", "retry-1"}),
+        ]:
+            result_by_call = results_for(requests[continuation_index], call_ids)
+            assert set(result_by_call) == call_ids
+            assert all(result["outcome"] == "error" for result in result_by_call.values())
+            assert all(
+                result["result"] == {"error": "Calendar provider outcome is uncertain."}
+                for result in result_by_call.values()
+            )
+    finally:
+        await model.close()
 
 
 @pytest.mark.parametrize(("text", "multiple"), [

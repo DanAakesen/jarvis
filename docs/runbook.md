@@ -69,13 +69,15 @@ After deployment, the owner should make one voice attempt, end it, and find its
 milliseconds since `request.started`: session creation, credential, settings,
 away mode, project context, upstream connecting/open, update sent and readiness.
 `session_update_sent` means the socket send completed, not that Azure accepted
-the configuration. English waits for `session.updated`; Danish accepts
-`session.created` or `session.updated`.
+the configuration. Both Danish and English Voice Live wait for `session.updated`;
+the hosted Danish voice-agent fallback retains its native `session.created`
+readiness contract.
 
-On the Danish route `voice.stage_timeout` warns after 15 seconds connecting or
-awaiting readiness; English uses the tool-budget attempts below instead. On
-either route a readiness failure closes the browser with **4010**, “Voice service
-did not become ready”; the client shows a plain retry message and keeps its existing backoff.
+Voice Live uses the bounded tool-budget attempts below for connecting and
+readiness. The hosted Danish fallback warns after 15 seconds connecting or
+awaiting readiness. A readiness failure closes the browser with **4010**, “Voice
+service did not become ready”; the client shows a plain retry message and keeps
+its existing backoff.
 Settings plus model-catalogue, away-mode and project-context reads each have a
 five-second fallback deadline. Session creation has a ten-second deadline and
 ends with `voice.connection_failed` rather than falling back.
@@ -87,43 +89,37 @@ the five largest tool definitions (server-owned names and UTF-8 bytes).
 It survives browser-first closure and cancellation. No transcripts, instructions,
 tool arguments, payloads or close-reason text belong in these new diagnostics.
 
-English tool-budget fallback. A new process starts at **R2**, which is the
-known-good frame measured on 21 October under its previous name, R1 (R0 stalled
-at 8,001 ms; the reduced frame became ready in 1,341 ms). **R1** is now a
-Daily-capable candidate that omits only `proactive_recent_items`. The backend
-uses R1 for later sessions only after its independent `no_proactive` probe
-receives `session.updated`; otherwise the known-good R2 start and fallbacks
-remain. Each foreground attempt uses a fresh socket and logs
-`voice.tool_budget_attempt` with `rung` (R0-R5), `toolCount`, `toolBytes`,
-`instructionsBytes`, `frameBytes`, `outcome` (`ready`, `timeout`, `error` or
-`closed`) and `elapsedMs` since connect (8 s at R0, 6 s at R1-R5).
-`voice.tool_budget_selected` names the rung that reached `session.updated`;
-`remembered: true` means that rung had already succeeded in this process.
-The summary carries `toolBudgetRung` and `toolBudgetAttempts`. A failed R1
-steps down to the known-good R2. `voice.tool_budget_exhausted` (close 4010,
-`toolBudgetRung: null`) means all foreground rungs failed; check Azure Monitor
-and Voice Live status.
+Voice Live capability startup applies to both browser languages. Each attempt
+uses a fresh socket and waits up to six seconds for `session.updated`:
 
-After a non-R0 session is ready, the backend may run one independent probe
-sequence per 30 minutes per process. Each `voice.tool_budget_probe` record
-contains only one of the fixed `probe` names (`full`, `no_proactive`,
-`no_daily`, `reduced_plus_copies`), tool/instruction/frame byte counts, tool
-count, outcome and elapsed milliseconds. Probes use separate sockets and do
-not send audio or affect the live session. The sequence stops at the first
-ready probe:
+- **R1** advertises direct schemas for the full configured registry.
+- **R2** advertises the bounded discovery/execution protocol backed by that same
+  registry. Discovery pages up to eight schemas, with a 1 MiB result limit.
+  Jarvis must discover a capability before execution; an unregistered or
+  undiscovered capability is refused. If a single schema cannot fit, discovery
+  reports an explicit error rather than silently omitting it.
 
-- **`full` ready** selects R0 for later sessions.
-- **`no_proactive` ready** selects R1 for later sessions. That exact frame
-  includes `daily_*` tools and excludes `proactive_recent_items`.
-- `no_daily` and `reduced_plus_copies` are diagnostic measurements only; they
-  do not change the selected rung.
+A pre-readiness timeout, provider error or close abandons that socket and tries
+the next representation. Only an acknowledged `session.updated` selects and
+remembers a representation for reconnect; the active session is not promoted
+later. Cancellation stops retries. If both attempts fail,
+`voice.tool_budget_exhausted` is logged and the browser receives close 4010 with
+its normal retry behavior.
 
-Readiness proves only that the measured frame received `session.updated` during
-that probe. It does not identify a tool-count, byte-size, context, or
-tool-content limit. The prior R0/R1 timings show a startup difference, not its
-cause. Set
-`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` to disable probes. No
-instructions, tool names, payloads or arguments appear in probe logs.
+`voice.tool_budget_attempt` records language, `rung` (R1/R2), tool and frame
+counts/sizes, outcome (`ready`, `timeout`, `error` or `closed`) and elapsed
+milliseconds. `voice.tool_budget_selected` records the acknowledged rung, and
+the session summary carries `toolBudgetRung` and `toolBudgetAttempts`. These
+diagnostics contain no conversation content, tool arguments or health records.
+There is no background probe setting or probe sequence. The hosted Danish
+voice-agent fallback is separate: it retains provider-owned setup and its
+`session.created` readiness contract rather than using the Voice Live rungs.
+
+Neither local readiness tests nor the earlier 21 October R0/R1 timings establish
+a provider schema/context limit or live responsiveness. For production
+acceptance, an owner must make a real browser voice attempt after deployment.
+Do not perform live health writes or extra provider canaries without separate
+approval.
 
 In the Voice Live resource's Azure Monitor metrics, compare `TotalCalls` split
 by operation for the same UTC window: `onHandshake` confirms accepted sockets;
@@ -227,7 +223,8 @@ configured). Backend-side failures report `agent_auth_unavailable`,
 `agent_request_failed`, `agent_http_<status>` (`agent_http_other` for an unlisted
 status), `agent_response_invalid`, `agent_stream_failed` or `agent_stream_ended`;
 a hosted error event without a safe code is `agent_error_code_missing` and one
-with an unlisted code is `agent_error_code_unlisted`. A conversation check that
+with an unlisted code is `agent_error_code_unlisted`; `tool_loop_stalled` is a
+fixed safe agent failure reason. A conversation check that
 threw one of these runs once more before its result is final, so a passing
 artifact may hide a rescued first failure; `system.smoke_check` records only the
 final result. Assertion failures and timeouts are not retried.
