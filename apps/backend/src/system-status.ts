@@ -6,12 +6,53 @@ import type {
   SystemSmokeCheckId,
   SystemSmokeStatus,
 } from '@jarvis/contracts';
+import type { VaultIndexSummary } from './database/memory-store.js';
 import { systemSmokeCheckIds, vaultMirrorStatusViewSchema } from '@jarvis/contracts';
 import { z } from 'zod';
 
 export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & { reason?: string };
 
 export type SystemStatusProbe = () => Promise<SystemStatusResult>;
+
+export interface VaultIndexSyncEvidence {
+  readonly outcome: 'pending' | 'ok' | 'error';
+  readonly latestAttemptAt: string | null;
+  readonly lastSuccessfulAt: string | null;
+}
+
+const vaultIndexStaleMs = 24 * 60 * 60_000;
+
+export function assessVaultIndex(
+  summary: VaultIndexSummary,
+  sync: VaultIndexSyncEvidence,
+  now = Date.now(),
+): SystemStatusResult {
+  const latestIndexedAt = summary.latestIndexedAt?.toISOString() ?? null;
+  const successAt = sync.lastSuccessfulAt === null ? null : Date.parse(sync.lastSuccessfulAt);
+  const syncFresh = successAt === null ? null :
+    Number.isFinite(successAt) && successAt <= now && now - successAt <= vaultIndexStaleMs;
+  const coveragePercent = summary.chunks === 0
+    ? null
+    : Math.round(summary.embeddedChunks / summary.chunks * 100);
+  const status = sync.outcome === 'error' || syncFresh === false ? 'degraded' :
+    syncFresh === null ? 'unknown' :
+      summary.chunks === 0 ? 'unknown' :
+        summary.embeddedChunks < summary.chunks ? 'degraded' : 'ok';
+  return {
+    status,
+    details: {
+      notes: summary.notes,
+      chunks: summary.chunks,
+      embeddedChunks: summary.embeddedChunks,
+      embeddingCoveragePercent: coveragePercent,
+      latestIndexedAt,
+      latestSyncAttemptAt: sync.latestAttemptAt,
+      lastSuccessfulSyncAt: sync.lastSuccessfulAt,
+      syncOutcome: sync.outcome,
+      syncFresh,
+    },
+  };
+}
 
 export interface SystemStatusProbes {
   readonly database?: SystemStatusProbe;

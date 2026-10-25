@@ -126,7 +126,7 @@ import { WorkspaceItemsStore } from './database/workspace-items-store.js';
 import { createWorkspacePinsModule } from './core/workspace-pins.js';
 import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
-import { createSystemStatusReader } from './system-status.js';
+import { assessVaultIndex, createSystemStatusReader } from './system-status.js';
 import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
 import { createProductionModules } from './production-modules.js';
 import { createPushStore } from './database/push-store.js';
@@ -1076,24 +1076,9 @@ try {
       }
       const model = await embeddingModel();
       const summary = await vaultIndexStore.summary(model, AbortSignal.timeout(2_000));
-      const latestIndexedAt = summary.latestIndexedAt?.toISOString() ?? null;
-      const stale = !summary.latestIndexedAt ||
-        Date.now() - summary.latestIndexedAt.getTime() > 24 * 60 * 60_000;
-      const coveragePercent = summary.chunks === 0
-        ? null
-        : Math.round(summary.embeddedChunks / summary.chunks * 100);
-      return {
-        status: summary.chunks === 0
-          ? 'unknown'
-          : stale || summary.embeddedChunks < summary.chunks ? 'degraded' : 'ok',
-        details: {
-          notes: summary.notes,
-          chunks: summary.chunks,
-          embeddedChunks: summary.embeddedChunks,
-          embeddingCoveragePercent: coveragePercent,
-          latestIndexedAt,
-        },
-      };
+      return assessVaultIndex(summary, vaultModule?.syncStatus() ?? {
+        outcome: 'pending', latestAttemptAt: null, lastSuccessfulAt: null,
+      });
     },
     github_app: async () => {
       if (!githubAppTokenIssuer) return { status: 'down', details: { configured: false } };
