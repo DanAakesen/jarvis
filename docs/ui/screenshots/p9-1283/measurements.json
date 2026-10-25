@@ -1,0 +1,780 @@
+{
+  "browser": "Chromium via playwright-core 1.64.1",
+  "source": "Generated CanvasCaptureMediaStreamTrack; no camera hardware or private image",
+  "checks": [
+    {
+      "case": "320x700 portrait source; initial phone preview",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 151.4,
+        "height": 29,
+        "top": 124,
+        "right": 244.1,
+        "bottom": 153,
+        "left": 92.7
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to back camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": null,
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-portrait.png"
+    },
+    {
+      "case": "320x700 landscape source after same-stream switch",
+      "source": "640x360",
+      "picture": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 158.4,
+        "top": 72,
+        "right": 320,
+        "bottom": 230.4,
+        "left": 38.4
+      },
+      "video": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 158.4,
+        "top": 72,
+        "right": 320,
+        "bottom": 230.4,
+        "left": 38.4
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Back camera on",
+      "statusBox": {
+        "x": 46.4,
+        "y": 124,
+        "width": 150.1,
+        "height": 29,
+        "top": 124,
+        "right": 196.5,
+        "bottom": 153,
+        "left": 46.4
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to front camera",
+          "x": 228,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 272,
+          "bottom": 120,
+          "left": 228
+        },
+        {
+          "name": "Close camera preview",
+          "x": 272,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 316,
+          "bottom": 120,
+          "left": 272
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": null,
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-landscape-after-switch.png"
+    },
+    {
+      "case": "320x700 portrait source after same-stream reverse switch",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 151.4,
+        "height": 29,
+        "top": 124,
+        "right": 244.1,
+        "bottom": 153,
+        "left": 92.7
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to back camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": null,
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-portrait-after-switch-back.png"
+    },
+    {
+      "case": "320x700 portrait with camera observation notice",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 151.4,
+        "height": 29,
+        "top": 124,
+        "right": 244.1,
+        "bottom": 153,
+        "left": 92.7
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to back camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": {
+        "box": {
+          "x": 92.7,
+          "y": 302.8,
+          "width": 173,
+          "height": 97.2,
+          "top": 302.8,
+          "right": 265.7,
+          "bottom": 400,
+          "left": 92.7
+        },
+        "scrollHeight": 97,
+        "clientHeight": 97,
+        "notice": "Camera capture limit reached. Using an observation from 20 seconds ago. ",
+        "noticeInPicture": true,
+        "noticeVisible": true,
+        "alertVisible": false,
+        "retryVisible": false
+      },
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-observation-notice.png"
+    },
+    {
+      "case": "320x700 portrait with playback recovery",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 151.4,
+        "height": 29,
+        "top": 124,
+        "right": 244.1,
+        "bottom": 153,
+        "left": 92.7
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to back camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": {
+        "box": {
+          "x": 92.7,
+          "y": 285.2,
+          "width": 173,
+          "height": 114.8,
+          "top": 285.2,
+          "right": 265.7,
+          "bottom": 400,
+          "left": 92.7
+        },
+        "scrollHeight": 115,
+        "clientHeight": 115,
+        "noticeInPicture": false,
+        "noticeVisible": false,
+        "alert": "The camera preview could not play. Retry the preview.Retry preview",
+        "alertVisible": true,
+        "retryVisible": true
+      },
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-playback-recovery.png"
+    },
+    {
+      "case": "320x700 portrait with observation notice and playback retry",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 151.4,
+        "height": 29,
+        "top": 124,
+        "right": 244.1,
+        "bottom": 153,
+        "left": 92.7
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to back camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": {
+        "box": {
+          "x": 92.7,
+          "y": 200,
+          "width": 173,
+          "height": 200,
+          "top": 200,
+          "right": 265.7,
+          "bottom": 400,
+          "left": 92.7
+        },
+        "scrollHeight": 200,
+        "clientHeight": 200,
+        "notice": "Camera capture limit reached. Using an observation from 20 seconds ago. ",
+        "noticeInPicture": true,
+        "noticeVisible": true,
+        "alert": "The camera preview could not play. Retry the preview.Retry preview",
+        "alertVisible": true,
+        "retryVisible": true
+      },
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-feedback-with-notice.png"
+    },
+    {
+      "case": "320x700 feedback panel scrolled while camera controls stay fixed",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 151.4,
+        "height": 29,
+        "top": 124,
+        "right": 244.1,
+        "bottom": 153,
+        "left": 92.7
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Switch to back camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": {
+        "box": {
+          "x": 92.7,
+          "y": 200,
+          "width": 173,
+          "height": 200,
+          "top": 200,
+          "right": 265.7,
+          "bottom": 400,
+          "left": 92.7
+        },
+        "scrollHeight": 200,
+        "clientHeight": 200,
+        "notice": "Camera capture limit reached. Using an observation from 20 seconds ago. ",
+        "noticeInPicture": true,
+        "noticeVisible": true,
+        "alert": "The camera preview could not play. Retry the preview.Retry preview",
+        "alertVisible": true,
+        "retryVisible": true
+      },
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-feedback-scrolled.png"
+    },
+    {
+      "case": "320x700 portrait with unknown camera direction",
+      "source": "360x640",
+      "picture": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "video": {
+        "x": 84.7,
+        "y": 72,
+        "width": 189,
+        "height": 336,
+        "top": 72,
+        "right": 273.7,
+        "bottom": 408,
+        "left": 84.7
+      },
+      "aspectError": 0,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Camera on - direction unavailable",
+      "statusBox": {
+        "x": 92.7,
+        "y": 124,
+        "width": 173,
+        "height": 68.4,
+        "top": 124,
+        "right": 265.7,
+        "bottom": 192.4,
+        "left": 92.7
+      },
+      "statusTextLineCount": 3,
+      "controls": [
+        {
+          "name": "Switch camera",
+          "x": 181.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 225.7,
+          "bottom": 120,
+          "left": 181.7
+        },
+        {
+          "name": "Close camera preview",
+          "x": 225.7,
+          "y": 76,
+          "width": 44,
+          "height": 44,
+          "top": 76,
+          "right": 269.7,
+          "bottom": 120,
+          "left": 225.7
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": null,
+      "workspaceWindow": {
+        "x": 38.4,
+        "y": 72,
+        "width": 281.6,
+        "height": 336,
+        "top": 72,
+        "right": 320,
+        "bottom": 408,
+        "left": 38.4
+      },
+      "screenshot": "phone-unknown-direction.png"
+    },
+    {
+      "case": "1440x1000 desktop with portrait source",
+      "source": "360x640",
+      "picture": {
+        "x": 444,
+        "y": 138.9,
+        "width": 379.1,
+        "height": 673.9,
+        "top": 138.9,
+        "right": 823.1,
+        "bottom": 812.8,
+        "left": 444
+      },
+      "video": {
+        "x": 444,
+        "y": 138.9,
+        "width": 379.1,
+        "height": 673.9,
+        "top": 138.9,
+        "right": 823.1,
+        "bottom": 812.8,
+        "left": 444
+      },
+      "aspectError": 0.000046,
+      "surfaceMatches": true,
+      "frame": {
+        "border": "0px",
+        "background": "rgba(0, 0, 0, 0)"
+      },
+      "status": "Front camera on",
+      "statusBox": {
+        "x": 452,
+        "y": 190.9,
+        "width": 151.4,
+        "height": 29,
+        "top": 190.9,
+        "right": 603.5,
+        "bottom": 219.9,
+        "left": 452
+      },
+      "statusTextLineCount": 1,
+      "controls": [
+        {
+          "name": "Close camera preview",
+          "x": 775.1,
+          "y": 142.9,
+          "width": 44,
+          "height": 44,
+          "top": 142.9,
+          "right": 819.1,
+          "bottom": 186.9,
+          "left": 775.1
+        }
+      ],
+      "controlsInsideVideo": true,
+      "feedback": null,
+      "workspaceWindow": {
+        "x": 115.2,
+        "y": 138.9,
+        "width": 1036.8,
+        "height": 673.9,
+        "top": 138.9,
+        "right": 1152,
+        "bottom": 812.8,
+        "left": 115.2
+      },
+      "screenshot": "desktop-portrait.png"
+    }
+  ]
+}
