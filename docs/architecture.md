@@ -4236,9 +4236,13 @@ provider returns a final response; they have no fixed round-count cutoff. Per-ca
 output limits, provider context limits, downstream tool outcomes and caller
 cancellation remains effective. Within one source message, an exact repeated
 side-effecting tool call reuses its original result rather than replaying the
-action. Recognized read-only tools execute afresh, including repeated status
-reads and read-after-write verification. A replayed action permits a tool-free final-synthesis attempt only when the round contains no other fresh
-work; another tool request then fails with the content-free `tool_loop_stalled` code.
+action. If an action returns an uncertain error, a new provider call ID for the
+same canonical tool input in that same source message reuses the uncertain result
+instead of dispatching a second write; a later source message starts a new action
+scope. Recognized read-only tools execute afresh, including repeated status reads
+and read-after-write verification. A replayed action permits a tool-free
+final-synthesis attempt only when the round contains no other fresh work; another
+tool request then fails with the content-free `tool_loop_stalled` code.
 The backend persists only a completed assistant response; an interrupted turn
 leaves Dan's message visible and the UI warns that an action may have completed.
 If the provider returns an incomplete response after tools ran, the turn still

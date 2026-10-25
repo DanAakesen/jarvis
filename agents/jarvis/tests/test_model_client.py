@@ -2330,6 +2330,131 @@ async def test_repeated_uncertain_tool_result_is_reused_for_final_synthesis(prov
 
 
 @pytest.mark.asyncio
+async def test_uncertain_new_id_retry_preserves_write_and_allows_status_read() -> None:
+    backend = FakeBackend(catalogue=[CREATE_TASK, GET_TASK])
+    original_handle = backend.handle
+
+    def uncertain_action(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/tools/create_task":
+            backend.requests.append(request)
+            return httpx.Response(200, json={
+                "tool": "create_task",
+                "outcome": "error",
+                "result": {"message": "The action may have completed; check its status."},
+            })
+        return original_handle(request)
+
+    backend.handle = uncertain_action
+    retry = FakeItem(
+        type="function_call", call_id="retry-with-new-id", name="create_task",
+        arguments='{ "text" : "Create once" }',
+    )
+    status = FakeItem(
+        type="function_call", call_id="check-status", name="get_task",
+        arguments='{"taskId":"7"}',
+    )
+    model, transport = client([], rounds=[
+        [completed(FakeItem(
+            type="function_call", call_id="first", name="create_task",
+            arguments='{"text":"Create once"}',
+        ))],
+        [completed(retry, status)],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Create and check the task")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    reads = [
+        request for request in backend.requests if request.url.path == "/tools/get_task"
+    ]
+    assert len(writes) == 1
+    assert len(reads) == 1
+    second_round = transport.responses.requests[2]["input"]
+    retry_result = next(
+        item for item in second_round
+        if item.get("type") == "function_call_output"
+        and item.get("call_id") == "retry-with-new-id"
+    )
+    status_result = next(
+        item for item in second_round
+        if item.get("type") == "function_call_output"
+        and item.get("call_id") == "check-status"
+    )
+    assert json.loads(retry_result["output"])["outcome"] == "error"
+    assert json.loads(status_result["output"])["outcome"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_uncertain_action_can_be_requested_again_by_a_new_owner_message() -> None:
+    backend = FakeBackend()
+    original_handle = backend.handle
+    writes = 0
+
+    def uncertain_then_successful(request: httpx.Request) -> httpx.Response:
+        nonlocal writes
+        if request.url.path != "/tools/create_task":
+            return original_handle(request)
+        backend.requests.append(request)
+        writes += 1
+        if writes == 1:
+            return httpx.Response(200, json={
+                "tool": "create_task",
+                "outcome": "error",
+                "result": {"message": "The action may have completed."},
+            })
+        return httpx.Response(200, json={
+            "tool": "create_task", "outcome": "ok", "result": {"created": True},
+        })
+
+    backend.handle = uncertain_then_successful
+    fetch_count = 0
+
+    async def fetch_steering():
+        nonlocal fetch_count
+        fetch_count += 1
+        return (
+            [("43", "Please create the task again.", "en")]
+            if fetch_count == 4 else []
+        )
+
+    model, _ = client([], rounds=[
+        [completed(FakeItem(
+            type="function_call", call_id="first", name="create_task",
+            arguments='{"text":"Create once"}',
+        ))],
+        [completed(FakeItem(
+            type="function_call", call_id="new-owner-request", name="create_task",
+            arguments='{"text":"Create once"}',
+        ))],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    steering_token = current_steering_fetcher.set(fetch_steering)
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Create once")], "en",
+        )]
+    finally:
+        current_steering_fetcher.reset(steering_token)
+        current_message_id.reset(message_token)
+        await model.close()
+
+    writes = [
+        request for request in backend.requests if request.url.path == "/tools/create_task"
+    ]
+    assert [request.headers["x-jarvis-message-id"] for request in writes] == ["42", "43"]
+
+
+@pytest.mark.asyncio
 async def test_repeated_tool_calls_that_ignore_final_only_retry_fail_without_replaying() -> None:
     call = FakeItem(
         type="function_call", call_id="call", name="create_task", arguments='{"text":"Once"}',

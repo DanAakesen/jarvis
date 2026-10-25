@@ -984,6 +984,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 completed_tool_calls: dict[
                     tuple[str, str], tuple[tuple[str, str], dict[str, Any]]
                 ] = {}
+                uncertain_action_results: dict[
+                    tuple[str, tuple[str, str]], dict[str, Any]
+                ] = {}
                 force_final_synthesis = False
                 while role != "smoke" or round_number < SMOKE_MAX_TOOL_ROUNDS:
                     round_number += 1
@@ -1410,9 +1413,14 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         effect = execution_metadata.get(call.name)
                         effect_name = effect.effect_for(arguments) if effect else "unclassified"
                         fingerprint = _tool_call_fingerprint(call.name, arguments)
+                        uncertain_action_key = (call_key[0], fingerprint)
                         cached_entry = (
                             None if effect_name == "read" else completed_tool_calls.get(call_key)
                         )
+                        if cached_entry is None and effect_name != "read":
+                            uncertain_result = uncertain_action_results.get(uncertain_action_key)
+                            if uncertain_result is not None:
+                                cached_entry = (fingerprint, uncertain_result)
                         if cached_entry is not None:
                             cached_fingerprint, result = cached_entry
                             if cached_fingerprint != fingerprint:
@@ -1491,8 +1499,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             result = calendar_unsettled_confirmation(
                                 call.name, result, calendar_state,
                             )
-                        if cached_entry is None and effect_name != "read":
+                        if effect_name != "read":
                             completed_tool_calls[call_key] = (fingerprint, result)
+                            if result.get("outcome") == "error":
+                                uncertain_action_results[uncertain_action_key] = result
                         if legacy_multiple:
                             yield calendar_reply(call.name, result, danish)
                             yield (
