@@ -18,6 +18,17 @@ and ordinary browser requests' 120-second deadline. Sanitize transport-read
 failures and direct the owner to check status before retrying. Synthetic checks
 do not establish live provider, microphone, device or deployment acceptance.
 
+## Generic text questions use an active screen share (#1266; 25 October 2026)
+
+Text submission and turn execution resolve generic English/Danish visual
+questions against the active screen share before requiring the camera. Keep
+camera-specific wording and active camera-conversation priority unchanged.
+Screen inspection still supplies bounded, untrusted context through the existing
+chat path; visual asks queue rather than steer without that context. Voice
+routing is unchanged. Local tests and synthetic Chromium checks at 390 and
+1280 px pass; live display capture and authenticated phone acceptance remain
+unverified.
+
 ## Research completion is independent of Workspace delivery (25 October 2026; #1237)
 
 After a validated research artifact, its owner-scoped Folio entry, and the

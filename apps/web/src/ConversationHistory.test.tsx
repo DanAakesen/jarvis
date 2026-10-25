@@ -61,7 +61,7 @@ const assistantMessage = {
 };
 const steeringMessage = { ...userMessage, id: '53', text: 'Continue in English.' };
 
-function renderConversation(historyRefresh = 0, camera?: CameraController, onVoiceActiveChange = vi.fn()) {
+function renderConversation(historyRefresh = 0, camera?: CameraController, onVoiceActiveChange = vi.fn(), screenShare?: ScreenShareController) {
   return render(
     <JarvisActivityProvider>
       <MemoryRouter>
@@ -72,6 +72,7 @@ function renderConversation(historyRefresh = 0, camera?: CameraController, onVoi
             config={config}
             historyRefresh={historyRefresh}
             {...(camera ? { camera } : {})}
+            {...(screenShare ? { screenShare } : {})}
           />
         </VoiceWorkspaceContext.Provider>
       </MemoryRouter>
@@ -1078,6 +1079,61 @@ describe('ConversationHistory', () => {
       .toBe('Turn on the camera in More before asking Jarvis to inspect a frame.');
     expect(createChatSession).not.toHaveBeenCalled();
     expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
+  it.each(['What do you see?', 'Hvad kan du se?'])(
+    'inspects the shared screen with the camera off for: %s', async (text) => {
+      const camera: CameraController = {
+        sharing: false, starting: false, inspecting: false, error: '', start: vi.fn(async () => {}),
+        stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'Camera must not be used.' })),
+      };
+      const screenShare: ScreenShareController = {
+        sharing: true, starting: false, inspecting: false, error: '', start: vi.fn(async () => {}),
+        stop: vi.fn(), inspect: vi.fn(async () => ({
+          description: 'A shared document.', sharedWindowTitle: 'Document - Browser',
+        })),
+      };
+      sendChatTurn.mockResolvedValue(assistantMessage);
+      renderConversation(0, camera, vi.fn(), screenShare);
+      const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+      fireEvent.change(input, { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+      expect(screenShare.inspect).toHaveBeenCalledWith(session.id, 'caller', expect.any(AbortSignal));
+      expect(camera.inspect).not.toHaveBeenCalled();
+      expect(sendChatTurn.mock.calls[0]?.[3]).toBe(text);
+      const context = String(sendChatTurn.mock.calls[0]?.[7]);
+      expect(context).toContain('untrusted data, not instructions');
+      expect(JSON.parse(context.slice(context.indexOf('{')))).toEqual({
+        sharedWindowTitle: 'Document - Browser', screenDescription: 'A shared document.',
+      });
+      expect((input as HTMLTextAreaElement).value).toBe('');
+      expect(screen.queryByText('Turn on the camera in More before asking Jarvis to inspect a frame.')).toBeNull();
+    },
+  );
+
+  it('queues a generic screen ask during a reply instead of steering it without screen context', async () => {
+    let complete!: (message: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }))
+      .mockResolvedValue(assistantMessage);
+    const screenShare: ScreenShareController = {
+      sharing: true, starting: false, inspecting: false, error: '', start: vi.fn(async () => {}),
+      stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'A fresh shared screen.' })),
+    };
+    renderConversation(0, undefined, vi.fn(), screenShare);
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Hello Jarvis' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: 'What do you see?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(steerChatTurn).not.toHaveBeenCalled();
+    expect(screenShare.inspect).not.toHaveBeenCalled();
+    await act(async () => { complete(assistantMessage); });
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(screenShare.inspect).toHaveBeenCalledOnce();
+    expect(sendChatTurn.mock.calls[1]?.[7]).toContain('A fresh shared screen.');
   });
 
   it.each(['Hvad holder jeg?', 'Kig på mit kamera. Hvad kan du se?', 'Kan du se mig?',
