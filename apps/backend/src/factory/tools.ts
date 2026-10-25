@@ -467,7 +467,7 @@ async function stageIssueCreation(
   if (input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
     throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
   }
-  const selectedProject = resolvedProject ?? (input.project
+  const selectedProject = resolvedProject ?? (!input.repository && input.project
     ? await resolveProjectForMessage(input.project, source.text, server.projectStore ?? null)
     : undefined);
   const preview = input.issueNumber === undefined ? await previewP11TaskCode({
@@ -815,10 +815,10 @@ export const factoryTools: readonly JarvisTool[] = [
             throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
           }
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
-          const selectedProject = input.project
+          const selectedProject = !input.repository && input.project
             ? await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null)
             : undefined;
-          const repository = selectedProject?.repo ?? input.repository ??
+          const repository = input.repository ?? selectedProject?.repo ??
             await resolveRepository(undefined, request.server.projectStore ?? null);
           if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
             throw new ToolRefusal('That repository name is invalid.');
