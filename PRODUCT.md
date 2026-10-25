@@ -1383,11 +1383,11 @@ complete a capability. Reuse existing general tools where they provide the
 equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
-English realtime voice now advertises configured Daily tools in its first R1
-frame. If that frame fails and the relay falls back to R2 or a smaller rung,
-Daily tools are unavailable in that session. A probe or passing CI is not
-production acceptance for Health parity or proof that the larger cold-start
-frame remains responsive.
+Both Danish and English Voice Live start with the configured Daily tools in R1;
+the capability-preserving R2 discovery transport is used if the direct schema
+frame does not become ready. R2 preserves catalogue access but does not bypass
+the existing server-side permissions or review requirements. Passing CI is not
+production acceptance for Health parity or proof of live provider responsiveness.
 
 Health and nutrition history (#1201) must be traversable beyond the first
 page. Each Health call reads at most 93 inclusive Copenhagen dates and 100

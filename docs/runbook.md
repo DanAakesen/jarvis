@@ -87,50 +87,37 @@ the five largest tool definitions (server-owned names and UTF-8 bytes).
 It survives browser-first closure and cancellation. No transcripts, instructions,
 tool arguments, payloads or close-reason text belong in these new diagnostics.
 
-English tool-budget fallback. A fresh process now starts at **R1**, which
-includes configured Daily tools and omits `proactive_recent_items` and
-`proactive_preferences`. This is a larger frame than the one measured on 21
-October: the old 1,341 ms result does not establish that this Daily-capable R1
-will be ready as quickly. If R1 does not become ready, the bounded ladder can
-step down to R2, which omits Daily tools, or smaller rungs. The session
-instructions say some tools are unavailable, and unadvertised calls are
-refused; do not report a missing capability as completed. Each foreground
-attempt uses a fresh socket and logs
-`voice.tool_budget_attempt` with `rung` (R0-R5), `toolCount`, `toolBytes`,
-`instructionsBytes`, `frameBytes`, `outcome` (`ready`, `timeout`, `error` or
-`closed`) and `elapsedMs` since connect (8 s at R0, 6 s at R1-R5).
-`voice.tool_budget_selected` names the rung that reached `session.updated`;
-`remembered: true` means that rung had already succeeded in this process.
-The summary carries `toolBudgetRung` and `toolBudgetAttempts`. A failed R1
-steps down to the known-good R2. `voice.tool_budget_exhausted` (close 4010,
-`toolBudgetRung: null`) means all foreground rungs failed; check Azure Monitor
-and Voice Live status.
+Voice Live capability startup applies to both browser languages. Each attempt
+uses a fresh socket and waits up to six seconds for `session.updated`:
 
-After a non-R0 session is ready, the backend may run one independent probe
-sequence per 30 minutes per process. Each `voice.tool_budget_probe` record
-contains only one of the fixed `probe` names (`full`, `no_proactive`,
-`no_daily`, `reduced_plus_copies`), tool/instruction/frame byte counts, tool
-count, outcome and elapsed milliseconds. Probes use separate sockets and do
-not send audio or affect the live session. The sequence stops at the first
-ready probe:
+- **R1** advertises direct schemas for the full configured registry.
+- **R2** advertises the bounded discovery/execution protocol backed by that same
+  registry. Discovery pages up to eight schemas, with a 1 MiB result limit.
+  Jarvis must discover a capability before execution; an unregistered or
+  undiscovered capability is refused. If a single schema cannot fit, discovery
+  reports an explicit error rather than silently omitting it.
 
-- **`full` ready** selects R0 for later sessions.
-- **`no_proactive` ready** selects R1 for later sessions. That exact frame
-  includes configured `daily_*` tools and excludes both proactive tools.
-- `no_daily` and `reduced_plus_copies` are diagnostic measurements only; they
-  do not change the selected rung.
+A pre-readiness timeout, provider error or close abandons that socket and tries
+the next representation. Only an acknowledged `session.updated` selects and
+remembers a representation for reconnect; the active session is not promoted
+later. Cancellation stops retries. If both attempts fail,
+`voice.tool_budget_exhausted` is logged and the browser receives close 4010 with
+its normal retry behavior.
 
-Readiness proves only that the measured frame received `session.updated` during
-that probe. It does not identify a tool-count, byte-size, context, or
-tool-content limit. A ready `full` or `no_proactive` probe also queues its
-capability update on the active relay; the active dispatcher changes only after
-that session update is acknowledged. If it is not acknowledged, the relay uses
-the existing reconnect path, and the promoted rung is tried on reconnect. The
-prior R0/R1 timings show a startup difference, not the cause or current R1
-readiness. Post-change production readiness and an English voice Health request
-still require owner verification. Set
-`JARVIS_VOICE_TOOL_BUDGET_PROBE_ENABLED=false` to disable probes. No
-instructions, tool names, payloads or arguments appear in probe logs.
+`voice.tool_budget_attempt` records language, `rung` (R1/R2), tool and frame
+counts/sizes, outcome (`ready`, `timeout`, `error` or `closed`) and elapsed
+milliseconds. `voice.tool_budget_selected` records the acknowledged rung, and
+the session summary carries `toolBudgetRung` and `toolBudgetAttempts`. These
+diagnostics contain no conversation content, tool arguments or health records.
+There is no background probe setting or probe sequence. The hosted Danish
+voice-agent fallback is separate: it retains provider-owned setup and its
+`session.created` readiness contract rather than using the Voice Live rungs.
+
+Neither local readiness tests nor the earlier 21 October R0/R1 timings establish
+a provider schema/context limit or live responsiveness. For production
+acceptance, an owner must make a real browser voice attempt after deployment.
+Do not perform live health writes or extra provider canaries without separate
+approval.
 
 In the Voice Live resource's Azure Monitor metrics, compare `TotalCalls` split
 by operation for the same UTC window: `onHandshake` confirms accepted sockets;
