@@ -63,7 +63,7 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
           ))}
         </nav>
         <div className="mobile-menu-actions">
-          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onFolio(); }}>Folio</button>
+          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onFolio(); }}>Workspaces</button>
           <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onContext(); }}>Context panel</button>
         </div>
       </div>

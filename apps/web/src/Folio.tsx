@@ -5,7 +5,7 @@ import { folioKinds as kinds, folioPageSize as pageSize, groupFolio, isFolioItem
 import { formatDateOnly, formatTimeOnly } from './format/date-time';
 
 /**
- * The Folio (P9-25, #519): everything Jarvis has pulled up, reopened from the left pane. Search and kind chips filter;
+ * Workspaces (P9-25, #519): everything Jarvis has pulled up, reopened from the left pane. Search and kind chips filter;
  * pinned items come first, then Today, This week and Earlier. Opening goes through the backend, which sends the window
  * back through the workspace broker like any other Jarvis window.
  */
@@ -64,7 +64,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
   const search = useRef<HTMLInputElement>(null);
 
   const call = useCallback(async (path: string, init?: { method?: 'POST' | 'PATCH' | 'DELETE'; body?: unknown; signal?: AbortSignal }) => {
-    if (!backendUrl) throw new Error('The Folio is unavailable.');
+    if (!backendUrl) throw new Error('Workspaces are unavailable.');
     const token = await getAccessToken();
     return backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
       method: init?.method ?? 'GET',
@@ -90,12 +90,12 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     if (kind) params.set('kind', kind);
     if (before) params.set('before', before);
     const response = await call(`/folio${params.size ? `?${params}` : ''}`, { signal });
-    if (response.status === 404) throw new Error('The Folio is unavailable.');
-    if (!response.ok) throw new Error(response.status === 503 ? 'The Folio is unavailable right now.' : `The Folio could not be loaded (${response.status}).`);
+    if (response.status === 404) throw new Error('Workspaces are unavailable.');
+    if (!response.ok) throw new Error(response.status === 503 ? 'Workspaces are unavailable right now.' : `Workspaces could not be loaded (${response.status}).`);
     const body: unknown = await response.json();
     const items = typeof body === 'object' && body !== null && Array.isArray((body as { items?: unknown }).items)
       ? (body as { items: unknown[] }).items : null;
-    if (!items || !items.every(isFolioItem)) throw new Error('Jarvis returned an invalid Folio list.');
+    if (!items || !items.every(isFolioItem)) throw new Error('Jarvis returned an invalid Workspaces list.');
     return items as FolioItem[];
   }, [call, debounced, kind]);
 
@@ -106,7 +106,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
       .then((items) => setList({ status: 'ready', items, more: items.length >= pageSize }))
       .catch(() => {
         if (controller.signal.aborted) return;
-        setList({ status: 'error', message: 'The Folio could not be loaded.' });
+        setList({ status: 'error', message: 'Workspaces could not be loaded.' });
       });
     return () => controller.abort();
   }, [fetchPage, open, reload, refreshKey]);
@@ -183,7 +183,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
       const response = await call(`/folio/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: { confirm: true } });
       if (response.ok || response.status === 404) {
         remove(item.id);
-        setNotice({ text: `Removed “${item.title}” from the Folio.`, tone: 'info' });
+        setNotice({ text: `Removed “${item.title}” from Workspaces.`, tone: 'info' });
       } else {
         setNotice({ id: item.id, text: 'It could not be removed.', tone: 'error' });
       }
@@ -202,13 +202,13 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     <aside id="folio-pane" className="area-sidebar folio-pane" hidden={!open} aria-labelledby="folio-heading"
       onKeyDown={(event) => { if (event.key === 'Escape' && !renaming && !confirmDelete) onClose(); }}>
       <div className="sidebar-heading">
-        <span id="folio-heading">Folio</span>
-        <button className="sidebar-close" type="button" aria-label="Close the Folio" onClick={onClose}><FolioIcon name="close" /></button>
+        <span id="folio-heading">Workspaces</span>
+        <button className="sidebar-close" type="button" aria-label="Close Workspaces" onClick={onClose}><FolioIcon name="close" /></button>
       </div>
       <div className="folio-body">
         <label className="folio-search">
           <FolioIcon name="search" />
-          <span className="visually-hidden">Search the Folio</span>
+          <span className="visually-hidden">Search Workspaces</span>
           <input ref={search} type="search" value={query} maxLength={120} placeholder="Search reports, apps, images…"
             onChange={(event) => setQuery(event.target.value)} />
         </label>
@@ -222,7 +222,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
         </div>
         {notice && !notice.id && <p className="folio-notice" role={notice.tone === 'error' ? 'alert' : 'status'} data-tone={notice.tone}>{notice.text}</p>}
         <div className="folio-results">
-          {list.status === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading the Folio" />}
+          {list.status === 'loading' && <StateMessage variant="loading" loaderVariant="rows" message="Loading Workspaces" />}
           {list.status === 'error' && <StateMessage variant="error" className="folio-state" message={list.message}
             actionLabel="Retry" onAction={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }} />}
           {list.status === 'ready' && !list.items.length && (filtered ? (

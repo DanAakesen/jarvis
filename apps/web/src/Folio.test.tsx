@@ -27,7 +27,7 @@ describe('Folio', () => {
     ]);
   });
 
-  it('searches, filters by kind, reopens, pins and removes after confirmation', async () => {
+  it('labels the pane Workspaces and searches, filters by kind, reopens, pins and removes after confirmation', async () => {
     const report = item(1, 'research', 'Ignite research', new Date().toISOString());
     const calls: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -42,6 +42,7 @@ describe('Folio', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<FolioPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
 
+    expect(screen.getByText('Workspaces')).not.toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Open Ignite research' }));
     await waitFor(() => expect(calls).toContain(`POST /folio/${encodeURIComponent(report.id)}/open`));
 
@@ -51,22 +52,22 @@ describe('Folio', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reports' }));
     await waitFor(() => expect(calls).toContain('GET /folio?kind=research'));
 
-    fireEvent.change(screen.getByLabelText('Search the Folio'), { target: { value: 'nothing' } });
+    fireEvent.change(screen.getByLabelText('Search Workspaces'), { target: { value: 'nothing' } });
     expect(await screen.findByText(/Nothing matches “nothing” in Reports/)).not.toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
     const confirmRow = await screen.findByRole('button', { name: 'Remove Ignite research' });
     fireEvent.click(confirmRow);
     const confirm = screen.getByRole('group', { name: 'Remove Ignite research' });
     fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }));
-    expect(await screen.findByText('Removed “Ignite research” from the Folio.')).not.toBeNull();
+    expect(await screen.findByText('Removed “Ignite research” from Workspaces.')).not.toBeNull();
     expect(calls).toContain(`DELETE /folio/${encodeURIComponent(report.id)}`);
   });
 
-  it('shows an empty Folio and offers retry on failure', async () => {
+  it('shows an empty Workspaces pane and offers retry on failure', async () => {
     let fail = true;
-    vi.stubGlobal('fetch', vi.fn(async () => fail ? json({ error: 'Folio is unavailable' }, 503) : json({ items: [] })));
+    vi.stubGlobal('fetch', vi.fn(async () => fail ? json({ error: 'Workspaces are unavailable' }, 503) : json({ items: [] })));
     render(<FolioPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
-    expect(await screen.findByText('The Folio could not be loaded.')).not.toBeNull();
+    expect(await screen.findByText('Workspaces could not be loaded.')).not.toBeNull();
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('No saved items.')).not.toBeNull();

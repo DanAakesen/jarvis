@@ -1,5 +1,13 @@
 # Design
 
+## Workspaces pane and phone chat times (#1279)
+
+The saved-item pane is labeled Workspaces in the rail, phone menu, pane heading,
+search and feedback. The existing `folio` API, storage and navigation identifiers
+remain internal compatibility details. On screens up to 700px wide, chat time
+metadata follows the message text inside the bubble and aligns to its right; on
+wider screens it remains on the bubble's top-right rim.
+
 ## Health area naming (20 October 2026)
 
 The owner-facing area is Health and its route is `/health`. Keep the legacy area
@@ -39,7 +47,7 @@ delivered by #1147.
 ## Entry-field focus (20 October 2026; P14-32)
 
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
-Folio and Tasks search bars) shares one focus treatment: no outline, a thin
+Workspaces and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
 light underneath (`--field-focus-glow`), echoing the composer. Fields in shared
 containers read the tint through `--field-rim`, so it applies at any specificity.

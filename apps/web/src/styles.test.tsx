@@ -679,12 +679,14 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
   });
 
-  it('keeps phone message times on the bubble rim rather than below the bubble', () => {
+  it('keeps phone message times below the bubble text instead of overlapping it', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('absolute');
+    const phoneRules = mediaBlocks(history).filter(({ query }) => /max-width:\s*700px/u.test(query)).map(({ body }) => body).join('\n');
+    expect(ruleDeclaration(phoneRules, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('static');
+    expect(ruleDeclaration(phoneRules, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'margin')).toBe('var(--space-2) 0 0 auto');
     const touchRules = mediaBlocks(history).filter(({ query }) => /hover:\s*none/u.test(query)).map(({ body }) => body).join('\n');
     expect(touchRules).toContain('.message-metadata { opacity: 1; }');
-    expect(touchRules).not.toMatch(/\.conversation-message \.message-metadata\s*\{[^}]*position:\s*static/su);
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {

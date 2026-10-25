@@ -164,7 +164,7 @@ export function useReadback<T>(collect: () => T, enabled: boolean, key: string):
 const pageTitles: Partial<Record<WorkspaceNavigationPage, string>> = { settings: 'Settings', knowledge: 'Graph', notes: 'Notes', status: 'Status', daily: 'Health', health: 'Health' };
 
 /**
- * The page Dan is on (Settings section, Graph, Notes, Status) and the Folio pane as snapshot windows, so `read_window` can
+ * The page Dan is on (Settings section, Graph, Notes, Status) and the Workspaces pane as snapshot windows, so `read_window` can
  * read them as `page-<page>` and `folio-pane`. Credentials are never read.
  */
 export function readPageWindows(page: WorkspaceNavigationPage, section: WorkspaceSettingsSection | undefined, folioOpen: boolean): WorkspaceSnapshotWindow[] {
@@ -179,6 +179,6 @@ export function readPageWindows(page: WorkspaceNavigationPage, section: Workspac
   } else if (page !== 'settings' && pageTitles[page]) {
     add(`page-${page}`, pageTitles[page]!, document.querySelector('main#content'), '.workspace-shell-area, .jarvis-page');
   }
-  if (folioOpen) add('folio-pane', 'Folio', document.getElementById('folio-pane'));
+  if (folioOpen) add('folio-pane', 'Workspaces', document.getElementById('folio-pane'));
   return windows;
 }

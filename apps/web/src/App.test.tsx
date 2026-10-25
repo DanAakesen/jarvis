@@ -603,7 +603,7 @@ describe('App shell', () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     render(<MemoryRouter><App config={config} dailyEnabled pushEnabled={false} /></MemoryRouter>);
     const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
-    const folio = rail.getByRole('button', { name: 'Folio' });
+    const folio = rail.getByRole('button', { name: 'Workspaces' });
     for (const control of [...rail.getAllByRole('link'), folio]) {
       const name = control.getAttribute('aria-label')!;
       expect(control.getAttribute('data-rail-tip'), name).toBeTruthy();
@@ -613,7 +613,7 @@ describe('App shell', () => {
     expect(new Set(rail.getAllByRole('link').map((link) => link.getAttribute('data-tone'))).size).toBe(rail.getAllByRole('link').length);
     fireEvent.pointerOver(folio, { pointerType: 'mouse' });
     const tip = document.body.querySelector('.rail-tip')!;
-    expect(tip.textContent).toBe('Folio');
+    expect(tip.textContent).toBe('Workspaces');
     expect(tip.getAttribute('data-open')).toBe('true');
   });
 
@@ -1592,9 +1592,9 @@ describe('App shell', () => {
       await renderSignedIn('/status');
       await waitFor(() => expect(activityStream).not.toBeNull());
       await act(async () => { workspace.ready(); });
-      fireEvent.click(screen.getByRole('button', { name: 'Folio' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }));
       const content = document.getElementById('content')!;
-      act(() => { screen.getByRole('button', { name: 'Close the Folio' }).focus(); });
+      act(() => { screen.getByRole('button', { name: 'Close Workspaces' }).focus(); });
       expect(document.activeElement?.closest('#folio-pane')).not.toBeNull();
       const startedAt = Date.now();
       const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
@@ -2002,11 +2002,11 @@ describe('App shell', () => {
     expect(await screen.findByRole('navigation', { name: 'Health' })).toBeTruthy();
   });
 
-  it('closes the Folio on a press outside it, as it does the area navigation, and not on a press inside it or on the rail', async () => {
+  it('closes Workspaces on a press outside it, as it does the area navigation, and not on a press inside it or on the rail', async () => {
     const user = userEvent.setup();
     await renderSignedIn('/');
     const shell = document.querySelector('.app-shell')!;
-    await user.click(screen.getByRole('button', { name: 'Folio' }));
+    await user.click(screen.getByRole('button', { name: 'Workspaces' }));
     expect(shell.getAttribute('data-folio-open')).toBe('true');
     const pane = document.getElementById('folio-pane')!;
     const content = document.getElementById('content')!;
@@ -2064,11 +2064,11 @@ describe('App shell', () => {
     ['Conversation', '/'],
     ['Jarvis home', '/'],
     ['Settings', '/'],
-  ])('closes the Folio when selecting %s from %s on desktop', async (name, path) => {
+  ])('closes Workspaces when selecting %s from %s on desktop', async (name, path) => {
     const user = userEvent.setup();
     await renderSignedIn(path);
     const shell = document.querySelector('.app-shell')!;
-    const folio = screen.getByRole('button', { name: 'Folio' });
+    const folio = screen.getByRole('button', { name: 'Workspaces' });
     await user.click(folio);
     expect(shell.getAttribute('data-folio-open')).toBe('true');
     await user.click(screen.getByRole('link', { name }));
@@ -2077,7 +2077,7 @@ describe('App shell', () => {
     expect(folio.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('closes the Folio when a phone menu selects the same page or a different page', async () => {
+  it('closes Workspaces when a phone menu selects the same page or a different page', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -2088,7 +2088,7 @@ describe('App shell', () => {
     const shell = document.querySelector('.app-shell')!;
     for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
       await user.click(menu);
-      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Folio' }));
+      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Workspaces' }));
       expect(shell.getAttribute('data-folio-open')).toBe('true');
       await user.click(menu);
       await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
@@ -2097,7 +2097,7 @@ describe('App shell', () => {
     }
   });
 
-  it('closes the Folio for Jarvis navigation even when the page does not change', async () => {
+  it('closes Workspaces for Jarvis navigation even when the page does not change', async () => {
     const user = userEvent.setup();
     streamWorkspaceCommands();
     await renderSignedIn();
@@ -2109,7 +2109,7 @@ describe('App shell', () => {
     });
     const shell = document.querySelector('.app-shell')!;
     for (const [index, page] of ['home', 'usage'].entries()) {
-      await user.click(screen.getByRole('button', { name: 'Folio' }));
+      await user.click(screen.getByRole('button', { name: 'Workspaces' }));
       expect(shell.getAttribute('data-folio-open')).toBe('true');
       const commandId = `leave-folio-${index}`;
       act(() => {
@@ -2126,14 +2126,14 @@ describe('App shell', () => {
     }
   });
 
-  it('does not reopen the Folio after history navigation returns to its previous page', async () => {
+  it('does not reopen Workspaces after history navigation returns to its previous page', async () => {
     const user = userEvent.setup();
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
     render(<MemoryRouter initialEntries={['/', '/usage']} initialIndex={1}>
       <App config={config} /><HistoryControls />
     </MemoryRouter>);
     await screen.findByRole('navigation', { name: 'Areas' });
-    await user.click(screen.getByRole('button', { name: 'Folio' }));
+    await user.click(screen.getByRole('button', { name: 'Workspaces' }));
     const shell = document.querySelector('.app-shell')!;
     expect(shell.getAttribute('data-folio-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Previous page' }));

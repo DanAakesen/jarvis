@@ -1,5 +1,12 @@
 # Product
 
+## Workspaces saved-item pane (#1279)
+
+The saved-item pane is labeled **Workspaces** throughout the web app, including
+its rail and phone-menu entries, heading, search, status and recovery messages.
+The existing `folio` navigation key and backend API/storage identifiers remain
+internal compatibility details. Workspace delivery remains a separate action.
+
 ## Conversational finding feedback (#1240)
 
 The owner can mark one proactive finding seen, dismiss it, snooze it, or rate it
@@ -436,7 +443,7 @@ Jarvis creates new repositories from a name and description; the Add project dia
 
 P9-40 lets Dan ask Jarvis by voice or chat to switch the visible page: Jarvis
 home, the Software Factory Kanban board or a specific task/issue, Settings (including
-named sections), Usage, Notes, the knowledge graph, Folio or Status. “Kanban”, “board”,
+named sections), Usage, Notes, the knowledge graph, Workspaces or Status. “Kanban”, “board”,
 “factory” and “tasks” select the Factory board; “go home” and “back to Jarvis”
 select home. Navigation is reversible and needs no confirmation. The backend
 delivers it to all open signed-in tabs through the existing workspace broker
@@ -445,8 +452,8 @@ remain visible. The navigation contract and backend are built offline; shell
 routing, the usual page transition and live acceptance belong to the UI session.
 Factory task navigation opens the task window over the board and focuses its
 card; issue-number navigation focuses that issue's card. The UI refuses missing
-tasks/issues with a reason. Status is a read-only shell page. Folio is a
-pane: navigating to `folio` opens it over the current page.
+tasks/issues with a reason. Status is a read-only shell page. Workspaces is a
+pane: the legacy `folio` navigation key opens it over the current page.
 
 P9-43 supplies a short, content-free workspace reference on every voice and chat
 turn. “This/that” identifies the focused window or task/issue; “go back” uses the
@@ -1153,8 +1160,8 @@ Dan approved these after a gap audit. They are planned, not built.
 
 - **Touch chat resize (P9-117, implemented):** phones have a visible, keyboard-accessible grip inside the Conversation heading. Dragging it changes chat height within the existing resize limits without scrolling or covering the composer; completed changes persist on the device separately from desktop placement. The composer open/close handle and desktop edge/corner resizing remain unchanged. Physical iPhone and Safari acceptance belongs to Dan, not automated browser emulation.
 - **Model control per role.** Settings lists the models actually deployed on the Foundry account and lets Dan pick one per role: chat, vision, research, voice, transcription, embedding, Codex and Copilot, each with a reasoning effort the model supports. Dan can add or remove Foundry deployments from Settings with a confirmation, and Claude models are allowed as the chat model. Jarvis can read and change these settings by voice or chat; model and budget changes need confirmation. Voice tuning (turn detection, barge-in, reply length), research depth, memory and retrieval thresholds, and timeouts are also adjustable. ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#507](https://github.com/DanAakesen/jarvis/issues/507))
-- **Folio.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in the Folio. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). Jarvis can also rename, pin/unpin or remove one entry by id or unique query; ambiguous matches require Dan to choose. Removal requires Now approval naming the item while Dan is present and retains its source artifact and history. ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#633](https://github.com/DanAakesen/jarvis/issues/633))
-  Selecting another page closes the pane rather than leaving Folio selected, including selecting the current page again. This applies to desktop links, the phone menu and Jarvis navigation; an area with multiple pages can open its own navigation instead.
+- **Workspaces.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in Workspaces. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). Jarvis can also rename, pin/unpin or remove one entry by id or unique query; ambiguous matches require Dan to choose. Removal requires Now approval naming the item while Dan is present and retains its source artifact and history. ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#633](https://github.com/DanAakesen/jarvis/issues/633))
+  Selecting another page closes the pane rather than leaving Workspaces selected, including selecting the current page again. This applies to desktop links, the phone menu and Jarvis navigation; an area with multiple pages can open its own navigation instead.
 - **Routines.** Task recipes (saved PC/browser action sequences Jarvis can replay) are renamed Routines and can be edited and renamed. ([#529](https://github.com/DanAakesen/jarvis/issues/529))
 - **Connected features.** Persisted background jobs, the jobs chip, the knowledge graph page, wake-word events, renew-credential, a system status page including the PC bridge, watch mode for screen and camera sharing, phone-call status, complete cost coverage, and conversation search.
 - **Show work (P9-41).** In voice, selected tools publish a short, safe activity description and open their own window; typed chat opens nothing on its own (the chat answer carries the data, and Dan asks for a window with "show me", "open" or "put it on screen"). Successful vault reads/searches update one knowledge graph, repository tools update one bounded, redacted Code view per turn, task creation/steering/retry focus the Factory card, and calendar/mail tools show a readable agenda or their staged preview without bypassing confirmation. Code wraps at its allocated window width by default; an accessible “Wrap lines” choice restores original horizontal code layout without changing the source text, line numbers, highlights or search marks. `presentation.showWork` defaults on and is suppressed in `on_the_move`; presentation is best effort and never blocks or fails a tool. The backend contract is implemented; status-line rendering, Code rendering, graph highlighting, and focus animation belong to the UI session.

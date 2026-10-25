@@ -184,7 +184,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const closeMenu = useCallback(() => setMenuOpen(false), [setMenuOpen]);
   // Jarvis switching the page Dan is looking at (P9-40): the route changes with the usual page transition, then the
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
-  // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
+  // The Workspaces pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
   const [folioOpen, setFolioOpen] = useState(false);
   const [folioPath, setFolioPath] = useState(pathname);
   if (folioPath !== pathname) {
@@ -247,7 +247,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     ...(frontViewId && location.issueNumber === undefined ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
-  // The page and Folio pane Dan is reading, reported as windows with their text (P9-63).
+  // The page and Workspaces pane Dan is reading, reported as windows with their text (P9-63).
   const pageKey = `${viewPage}|${viewSection ?? ''}|${folioOpen}`;
   const pageReadback = useReadback(() => ({ key: pageKey, windows: readPageWindows(viewPage, viewSection, folioOpen) }), signedIn, pageKey);
   const pageWindows = pageReadback?.key === pageKey ? pageReadback.windows : undefined;
@@ -591,7 +591,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const navigationAvailable = navigationItems.length > 1 || activeArea?.sections === true;
   const navigationShown = navigationOpen && navigationAvailable && !folioOpen;
 
-  // The left sidebar slot holds either the area navigation or the Folio, and whichever is open collapses on a press that starts
+  // The left sidebar slot holds either the area navigation or Workspaces, and whichever is open collapses on a press that starts
   // and ends outside it. The rail is exempt because its buttons toggle the panels themselves, and a press that starts inside
   // (resizing the panel) never closes it, wherever the pointer is released.
   const sidebarShown = navigationShown || folioOpen;
@@ -719,9 +719,9 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
-          <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} data-tone="folio" data-rail-tip="Folio" type="button" aria-label="Folio" aria-pressed={folioOpen}
+          <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} data-tone="folio" data-rail-tip="Workspaces" type="button" aria-label="Workspaces" aria-pressed={folioOpen}
             aria-controls="folio-pane" onClick={() => setFolioOpen((open) => !open)}>
-            <ShellIcon name="folio" /><span className="visually-hidden">Folio</span>
+            <ShellIcon name="folio" /><span className="visually-hidden">Workspaces</span>
           </button>
           {!home && (
             <button ref={railOrb} className="input-orb rail-chat-orb" type="button" aria-expanded={chatOut} aria-controls="conversation-composer"

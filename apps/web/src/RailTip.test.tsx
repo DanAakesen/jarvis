@@ -9,7 +9,7 @@ function Harness() {
     <>
       <nav aria-label="Areas" {...railTipProps}>
         <a href="#home" data-rail-tip="Jarvis" aria-label="Conversation">Home</a>
-        <button type="button" data-rail-tip="Folio">Folio</button>
+        <button type="button" data-rail-tip="Workspaces">Workspaces</button>
         <button type="button">Unlabelled</button>
       </nav>
       <button type="button">Outside</button>
@@ -19,7 +19,7 @@ function Harness() {
 }
 
 const tip = () => document.body.querySelector<HTMLElement>('.rail-tip')!;
-const folio = () => screen.getByRole('button', { name: 'Folio' });
+const folio = () => screen.getByRole('button', { name: 'Workspaces' });
 const mouse = { pointerType: 'mouse' };
 
 afterEach(cleanup);
@@ -35,7 +35,7 @@ describe('rail label', () => {
   it('shows the control name on hover and closes when the pointer leaves the rail', () => {
     render(<Harness />);
     fireEvent.pointerOver(folio(), mouse);
-    expect(tip().textContent).toBe('Folio');
+    expect(tip().textContent).toBe('Workspaces');
     expect(tip().getAttribute('data-open')).toBe('true');
     fireEvent.pointerOut(folio(), { ...mouse, relatedTarget: screen.getByRole('button', { name: 'Outside' }) });
     expect(tip().getAttribute('data-open')).toBe('false');
@@ -49,7 +49,7 @@ describe('rail label', () => {
     fireEvent.pointerOut(home, { ...mouse, relatedTarget: folio() });
     expect(tip().getAttribute('data-open')).toBe('true');
     fireEvent.pointerOver(folio(), mouse);
-    expect(tip().textContent).toBe('Folio');
+    expect(tip().textContent).toBe('Workspaces');
     expect(tip().getAttribute('data-open')).toBe('true');
   });
 
@@ -82,7 +82,7 @@ describe('rail label', () => {
       await user.tab();
       await user.tab();
       expect(document.activeElement).toBe(folio());
-      expect(tip().textContent).toBe('Folio');
+      expect(tip().textContent).toBe('Workspaces');
       expect(tip().getAttribute('data-open')).toBe('true');
       await user.tab();
       await user.tab();

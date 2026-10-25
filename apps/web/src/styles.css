@@ -3146,7 +3146,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); }
 @media (prefers-reduced-motion: reduce) { [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); } }
-/* Folio (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
+/* Workspaces (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
 .app-shell[data-folio-open="true"] { --sidebar-size: 320px; --sidebar-open: 320px; }
 @media (width > 700px) and (width <= 900px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
 .rail-folio[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
@@ -3221,7 +3221,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :root[data-motion="reduced"] :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; } }
 
-/* Dan, 8 October: the Folio search must stay readable over a busy room. */
+/* Dan, 8 October: the Workspaces search must stay readable over a busy room. */
 .folio-search { background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(10px) saturate(1.2); }
 .folio-search input::placeholder { color: var(--text-muted); opacity: 1; }
 /* Code view (P9-41): the file Jarvis is reading, read-only. Highlighted ranges are tinted cyan with a brighter line
