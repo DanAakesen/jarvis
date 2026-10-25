@@ -380,6 +380,23 @@ LIST_JOBS = {
     "description": "List running jobs.",
     "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
 }
+GET_TASK = {
+    "name": "get_task",
+    "description": "Read one task.",
+    "inputSchema": {"type": "object", "properties": {"taskId": {"type": "string"}}},
+}
+PROACTIVE_PREFERENCES = {
+    "name": "proactive_preferences",
+    "description": "Read or update proactive preferences.",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "operation": {"type": "string", "enum": ["help", "read", "update"]},
+            "intent": {"type": "object"},
+        },
+        "required": ["operation"],
+    },
+}
 
 
 class FakeBackend:
@@ -1940,6 +1957,154 @@ async def test_repeated_tool_call_for_new_steering_message_is_not_deduplicated()
         request for request in backend.requests if request.url.path == "/tools/create_task"
     ]
     assert [request.headers["x-jarvis-message-id"] for request in writes] == ["42", "43"]
+
+
+@pytest.mark.asyncio
+async def test_read_update_read_returns_fresh_proactive_preferences() -> None:
+    backend = FakeBackend(catalogue=[PROACTIVE_PREFERENCES])
+    original_handle = backend.handle
+    state = {"paused": False}
+
+    def preferences(request: httpx.Request) -> httpx.Response:
+        if request.url.path != "/tools/proactive_preferences":
+            return original_handle(request)
+        backend.requests.append(request)
+        arguments = json.loads(request.content)
+        if arguments["operation"] == "update":
+            state["paused"] = arguments["intent"]["paused"]
+        return httpx.Response(200, json={
+            "tool": "proactive_preferences",
+            "outcome": "ok",
+            "result": {"operation": arguments["operation"], "paused": state["paused"]},
+        })
+
+    backend.handle = preferences
+    calls = [
+        FakeItem(
+            type="function_call", call_id="read_before", name="proactive_preferences",
+            arguments='{"operation":"read"}',
+        ),
+        FakeItem(
+            type="function_call", call_id="update", name="proactive_preferences",
+            arguments='{"operation":"update","intent":{"paused":true}}',
+        ),
+        FakeItem(
+            type="function_call", call_id="read_after", name="proactive_preferences",
+            arguments='{ "operation" : "read" }',
+        ),
+    ]
+    model, transport = client([], rounds=[
+        [completed(calls[0])],
+        [completed(calls[1])],
+        [completed(calls[2])],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Pause proactive suggestions")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    reads_and_update = [
+        request for request in backend.requests
+        if request.url.path == "/tools/proactive_preferences"
+    ]
+    assert [json.loads(request.content)["operation"] for request in reads_and_update] == [
+        "read", "update", "read",
+    ]
+    read_after = [
+        item for item in transport.responses.requests[3]["input"]
+        if item.get("type") == "function_call_output" and item.get("call_id") == "read_after"
+    ]
+    assert json.loads(read_after[0]["output"])["result"]["paused"] is True
+
+
+@pytest.mark.asyncio
+async def test_repeated_status_reads_execute_fresh_and_observe_progress() -> None:
+    backend = FakeBackend(catalogue=[GET_TASK])
+    original_handle = backend.handle
+    states = iter(["running", "completed"])
+
+    def task_status(request: httpx.Request) -> httpx.Response:
+        if request.url.path != "/tools/get_task":
+            return original_handle(request)
+        backend.requests.append(request)
+        return httpx.Response(200, json={
+            "tool": "get_task", "outcome": "ok", "result": {"status": next(states)},
+        })
+
+    backend.handle = task_status
+
+    def call(call_id: str) -> FakeItem:
+        return FakeItem(
+            type="function_call", call_id=call_id, name="get_task",
+            arguments='{"taskId":"7"}',
+        )
+
+    model, transport = client([], rounds=[
+        [completed(call("poll_running"))],
+        [completed(call("poll_completed"))],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Check task 7 until it finishes")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    polls = [request for request in backend.requests if request.url.path == "/tools/get_task"]
+    assert len(polls) == 2
+    second_result = [
+        item for item in transport.responses.requests[2]["input"]
+        if item.get("type") == "function_call_output" and item.get("call_id") == "poll_completed"
+    ]
+    assert json.loads(second_result[0]["output"])["result"]["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_replayed_action_and_new_work_continue_productive_rounds() -> None:
+    backend = FakeBackend(catalogue=[CREATE_TASK, GET_TASK])
+
+    def action(call_id: str, text: str) -> FakeItem:
+        return FakeItem(
+            type="function_call", call_id=call_id, name="create_task",
+            arguments=json.dumps({"text": text}),
+        )
+
+    status = FakeItem(
+        type="function_call", call_id="status", name="get_task", arguments='{"taskId":"7"}',
+    )
+    model, transport = client([], rounds=[
+        [completed(action("first", "Create first"))],
+        [completed(action("duplicate", "Create first"), status)],
+        [completed(action("second", "Create second"))],
+        [completed()],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Create and verify tasks")], "en",
+        )]
+    finally:
+        current_message_id.reset(message_token)
+        await model.close()
+
+    actions = [request for request in backend.requests if request.url.path == "/tools/create_task"]
+    assert [json.loads(request.content)["text"] for request in actions] == [
+        "Create first", "Create second",
+    ]
+    status_reads = [
+        request for request in backend.requests if request.url.path == "/tools/get_task"
+    ]
+    assert len(status_reads) == 1
+    assert len(transport.responses.requests) == 4
+    assert all("tools" in transport.responses.requests[index] for index in (2, 3))
 
 
 @pytest.mark.asyncio

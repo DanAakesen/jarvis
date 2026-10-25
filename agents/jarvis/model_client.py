@@ -73,6 +73,20 @@ DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
 SMOKE_MAX_TOOL_ROUNDS = 2
+READ_ONLY_TOOL_NAMES = frozenset({
+    "attachment_list", "attachment_read", "calendar_find_free_slots", "calendar_get_pending_change",
+    "calendar_list_events", "calendar_next_event", "calendar_today_agenda", "checks_list",
+    "ci_log", "conversation_search", "daily_feed", "daily_food_lookup", "daily_query",
+    "daily_show", "get_deployment_status", "get_job", "get_settings", "get_status_summary",
+    "get_task", "get_usage", "get_work_status", "github_read", "issue_comments", "issue_get",
+    "issue_search", "labels_list", "list_capabilities", "list_jobs", "list_projects",
+    "list_releases",
+    "list_tasks", "mail_list_drafts", "mail_search", "milestones_list", "memory_history",
+    "memory_list", "memory_search", "pins_list", "pr_comments", "pr_diff", "pr_get", "pr_list",
+    "pr_reviews", "pr_search", "repo_branches", "repo_commits", "repo_compare", "repo_issues",
+    "repo_list", "repo_overview", "repo_read", "repo_search", "vault_read", "vault_search",
+    "weather", "web_research",
+})
 # Headroom for a summary call: the answer is capped at ~9k characters by the parser, and a
 # model that reasons by default needs room before its first visible word.
 SUMMARY_MAX_OUTPUT_TOKENS = 6_000
@@ -352,6 +366,25 @@ def _tool_call_key(
     except (TypeError, ValueError):
         normalized = arguments
     return source_message_id, name, normalized
+
+
+def _tool_call_is_read_only(name: str, arguments: str) -> bool:
+    if name in READ_ONLY_TOOL_NAMES:
+        return True
+    try:
+        payload = json.loads(arguments)
+    except (TypeError, ValueError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    operation = payload.get("operation")
+    if name == "proactive_preferences":
+        return operation in {"help", "read"}
+    if name == "get_system_health":
+        return operation in {None, "list_capabilities"}
+    if name == "daily_saved_food":
+        return operation == "lookup_saved"
+    return False
 
 
 def model_message_input(message: ModelMessage) -> dict[str, Any]:
@@ -1393,14 +1426,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         and all(call.name == "calendar_create_event" for call in calls)
                         and "calendar_create_events" not in definitions
                     )
-                    repeated_tool_call = False
+                    repeated_action_call = False
+                    repeated_action_only_round = bool(calls)
                     for call, arguments, call_key in normalized_calls_with_keys:
                         confirmation_refused = False
-                        cached_result = completed_tool_calls.get(call_key)
+                        read_only = _tool_call_is_read_only(call.name, arguments)
+                        cached_result = (
+                            None if read_only else completed_tool_calls.get(call_key)
+                        )
                         if cached_result is not None:
                             result = cached_result
-                            repeated_tool_call = True
-                        elif (
+                            repeated_action_call = True
+                        else:
+                            repeated_action_only_round = False
+                        if cached_result is None and (
                             call.name == "calendar_confirm_change"
                             and not ambiguous_calendar_proposals
                         ):
@@ -1469,7 +1508,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             result = calendar_unsettled_confirmation(
                                 call.name, result, calendar_state,
                             )
-                        if cached_result is None:
+                        if cached_result is None and not read_only:
                             completed_tool_calls[call_key] = result
                         if legacy_multiple:
                             yield calendar_reply(call.name, result, danish)
@@ -1517,7 +1556,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             )
                     if use_anthropic and tool_results:
                         model_input.append({"role": "user", "content": tool_results})
-                    if repeated_tool_call:
+                    if repeated_action_call and repeated_action_only_round:
                         force_final_synthesis = True
                         model_input.append({
                             "role": "user",

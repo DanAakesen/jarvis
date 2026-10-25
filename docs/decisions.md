@@ -8290,9 +8290,11 @@ until the provider returns a final answer; do not impose a replacement round
 count. Retain the provider's per-response output/context constraints, backend
 tool outcomes, authorization and confirmation checks, and caller cancellation.
 Scope exact-call result reuse to the originating stored message and canonical
-arguments so a repeated request cannot replay a completed or uncertain action.
-After a repeat, request one final synthesis without tools; if the provider still
-requests a tool, fail explicitly as `tool_loop_stalled`. Keep smoke invocation's
-separate bounded behavior. This removes only the ordinary-conversation cutoff;
-it does not establish the cause of the reported production failure or prove live
-provider acceptance.
+arguments so a repeated side-effecting request cannot replay a completed or
+uncertain action. Recognized read-only tools execute afresh, including repeated
+status reads and read-after-write verification. A replayed action permits a
+tool-free synthesis attempt only when the round contains no other fresh work; if
+the provider then requests a tool, fail explicitly as `tool_loop_stalled`. Keep
+smoke invocation's separate bounded behavior. This removes only the
+ordinary-conversation cutoff; it does not establish the cause of the reported
+production failure or prove live provider acceptance.
