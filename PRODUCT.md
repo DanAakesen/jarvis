@@ -636,7 +636,7 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains available. Only a current pending food estimate also accepts the owner's next natural reply in the same text/browser-voice session, without a separate button.
 
 P13-02 adds an optional web push opt-in, on in production since P13-03, for a
 visible alert that links to a durable owner-protected item. P13-21 includes
@@ -1509,7 +1509,12 @@ that cannot be shown completely and gives a rename-safe recovery. Model proposal
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
-approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Confirmations always remain in the browser app even if presence changes. Rejected,
+approval within its displayed two-minute window. For estimates only, a natural affirmative
+such as "yes, log that" in the same session consumes that exact pending approval.
+Unrelated/conditional replies, ambiguous proposals, stale replies and other sessions
+cannot authorize it; unrelated replies end conversational approval for that proposal.
+Corrections and deletions still require Now. Confirmations remain in the browser
+app even if presence changes, and present mode is rechecked before writing. Rejected,
 cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
 shared. No Health write, production activation or physical-phone acceptance is

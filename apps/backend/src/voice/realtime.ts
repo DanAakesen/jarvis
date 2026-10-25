@@ -172,8 +172,8 @@ ${additionalRealtimeInstructions(
 
 function voiceCapabilityGuidance(language: 'da' | 'en'): string {
   return language === 'da'
-      ? `Brug først jarvis_discover_capabilities for at finde den relevante kapabilitet og dens skema. Kald derefter jarvis_execute_capability med det nøjagtige kapabilitetsnavn og argumenterne. Skemaet er vejledning; backend validerer stadig alle argumenter og anvender den eksisterende adgangs- og godkendelsespolitik. En mundtlig accept erstatter aldrig godkendelse i Now.`
-      : `Use jarvis_discover_capabilities first to find the relevant capability and its schema. Then call jarvis_execute_capability with the exact capability name and arguments. The schema guides the call; the backend still validates every argument and applies the existing authorization and approval policy. Spoken agreement never replaces approval in Now.`;
+      ? `Brug først jarvis_discover_capabilities for at finde den relevante kapabilitet og dens skema. Kald derefter jarvis_execute_capability med det nøjagtige kapabilitetsnavn og argumenterne. Skemaet er vejledning; backend validerer stadig alle argumenter og anvender den eksisterende adgangs- og godkendelsespolitik. En mundtlig accept erstatter ikke godkendelse i Now, undtagen når backend knytter Dans næste svar til det aktuelle afventende madestimat. Opret aldrig estimatet igen fra et ja; bekræft kun det faktiske værktøjsresultat.`
+      : `Use jarvis_discover_capabilities first to find the relevant capability and its schema. Then call jarvis_execute_capability with the exact capability name and arguments. The schema guides the call; the backend still validates every argument and applies the existing authorization and approval policy. Spoken agreement does not replace approval in Now, except when the backend binds Dan's next reply to the current pending food estimate. Never restage an estimate from a yes; report only the actual tool result.`;
 }
 
 function compactInstructions(

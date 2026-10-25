@@ -43,6 +43,7 @@ import { normalizeVisualContext, visualContextSchema, persistedVisualContextSche
   persistedVisualContext, type VisualContext } from './visual-context.js';
 import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
+import { approvalDeciderFor } from './approval-interpreter.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -943,6 +944,16 @@ return {
         language: request.body.language,
       });
       if (!message) return reply.code(404).send({ error: 'Active chat session not found' });
+      const foodReplyHandled = await app.ownerInteractions?.resolveFoodEstimateReply?.(
+        message, approvalDeciderFor(request), AbortSignal.timeout(10_000),
+      );
+      if (activeTurns.get(sessionId) !== activeTurn || BigInt(message.id) <= BigInt(activeTurn.consumedThrough)) {
+        return reply.code(202).send({ ...message, language: request.body.language });
+      }
+      if (foodReplyHandled) {
+        activeTurn.consumedThrough = message.id;
+        return reply.code(202).send({ ...message, language: request.body.language });
+      }
       if (activeTurn.phase === 'model') activeTurn.roundController?.abort();
       return reply.code(202).send({ ...message, language: request.body.language });
     });

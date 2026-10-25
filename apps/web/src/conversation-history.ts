@@ -112,7 +112,8 @@ async function chatResponse(
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      signal: AbortSignal.any([AbortSignal.timeout(120_000), ...(signal ? [signal] : [])]),
+      // Streaming turns include tool work and approval; use the existing 240-second ingress ceiling.
+      signal: AbortSignal.any([AbortSignal.timeout(accept === 'text/event-stream' ? 240_000 : 120_000), ...(signal ? [signal] : [])]),
     });
   } catch {
     onDeliveryUncertain?.();
@@ -261,7 +262,12 @@ export async function sendChatTurn(
 
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try { chunk = await reader.read(); }
+      catch {
+        throw new Error('Connection interrupted. A food entry or another action may already have completed; check conversation and action status before trying again.');
+      }
+      const { done, value } = chunk;
       if (done) break;
       receivedBytes += value.byteLength;
       if (receivedBytes > 1024 * 1024) throw new Error('Jarvis returned a chat response that was too large.');

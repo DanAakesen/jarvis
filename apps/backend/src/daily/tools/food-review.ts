@@ -38,7 +38,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
   const pending = new Set<string>();
   return {
     name: 'daily_food_review',
-    description: 'For food photos, use the existing image input only to propose generic food components and estimated grams; Frida is a nutrient reference, not image or portion recognition. Never describe estimates as measured. If an image is unreadable or not food, say so and ask for a clearer photo or description. If Frida fails, report that reference failure without guessing nutrition and offer a retry or text description. Use lookup_components with 1-25 {name, grams|null, preparationMethod|null} values to resolve references. Present the component/portion estimates, Frida totals and uncertainty to Dan and invite edits. Ask about missing quantities or preparation where needed. If identity, preparation or grams change, look up the edited components again. Then use log_estimate with referenceComponents and a mealName; the server re-resolves Frida and calculates totals. Nothing writes until Dan approves the exact Now proposal. Never supply totals, provider provenance, capture method, owner or confirmation flags for a reference estimate. Use daily_food for exact labels/favourites. Corrections/deletions require the exact owned intake key/current revision. Present-mode chat/browser voice only; no phone, Teams, Health export or spoken-yes authority.',
+    description: 'For food photos, use the existing image input only to propose generic food components and estimated grams; Frida is a nutrient reference, not image or portion recognition. Never describe estimates as measured. If an image is unreadable or not food, say so and ask for a clearer photo or description. If Frida fails, report that reference failure without guessing nutrition and offer a retry or text description. Use lookup_components with 1-25 {name, grams|null, preparationMethod|null} values to resolve references. Present the component/portion estimates, Frida totals and uncertainty to Dan and invite edits. Ask about missing quantities or preparation where needed. If identity, preparation or grams change, look up the edited components again. Then use log_estimate with referenceComponents and a mealName; the server re-resolves Frida and calculates totals. Nothing writes until Dan approves the exact proposal; his next natural text/browser-voice reply can approve the current pending estimate, or he can use Now. Never restage an estimate from an affirmative reply; report only the committed tool result. Never supply totals, provider provenance, capture method, owner or confirmation flags for a reference estimate. Use daily_food for exact labels/favourites. Corrections/deletions require the exact owned intake key/current revision and Now approval. Present-mode chat/browser voice only; no phone, Teams or Health export.',
     inputSchema: foodReviewInputSchema,
     bodyLimit: 96 * 1024,
     sensitive: true,
@@ -138,6 +138,14 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
       } else after = change.operation === 'correct' ? reviewedCorrection(before!, change.changes, origin, requestTime) : null;
       const summary = foodReviewSummary(change.operation, before ? storedMeal(before) : null, after,
         change.operation === 'log_estimate' ? undefined : change.expectedRevision);
+      if (change.operation === 'log_estimate') {
+        const laterReplies = await request.server.conversationStore?.getDanMessagesAfter({
+          sessionId: source.sessionId, after: source.id, limit: 1,
+        });
+        operationSignal.throwIfAborted();
+        if (!laterReplies || laterReplies.length) throw new ToolRefusal('The food request was superseded while preparing the estimate. Review the current request; nothing was logged.');
+      }
+      if (pending.has(lock)) throw new ToolRefusal('This food entry is already awaiting review. Resolve that proposal first.');
       pending.add(lock);
       try {
         return await service.runConfirmed(change.operation === 'delete' ? 'delete' : 'other', summary, async () => {
@@ -169,7 +177,8 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
             throw new ToolFailure('The food change may have committed, but its receipt is unavailable. Read this exact intake before retrying.');
           }
           return { status: 'committed', operation: change.operation, record: projectNutritionRecord(row, 'history') };
-        }, operationSignal, { channel: 'browser', lifetimeSeconds: 120 });
+        }, operationSignal, { channel: 'browser', lifetimeSeconds: 120,
+          ...(change.operation === 'log_estimate' ? { foodEstimate: { sessionId: source.sessionId, sourceMessageId: source.id } } : {}) });
       } finally { pending.delete(lock); }
     },
   };

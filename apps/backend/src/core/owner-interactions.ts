@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import { ToolRefusal } from '../core/tool-registry.js';
+import type { ConversationMessage, ConversationStore } from './conversation-store.js';
+import { safeDecision, type ApprovalDecider } from './approval-interpreter.js';
 import type {
   ConfirmationDecision,
   ConfirmationStore,
@@ -46,6 +48,7 @@ export interface BrowserConfirmation {
 export interface BrowserConfirmationDelivery {
   readonly channel: 'browser';
   readonly lifetimeSeconds?: number;
+  readonly foodEstimate?: { readonly sessionId: string; readonly sourceMessageId: string };
 }
 
 export interface OwnerInteractionService {
@@ -53,6 +56,11 @@ export interface OwnerInteractionService {
   expirePendingConfirmations(): Promise<void>;
   pendingBrowserConfirmations(): readonly BrowserConfirmation[];
   resolveBrowserConfirmation(id: string, decision: ConfirmationDecision): Promise<boolean>;
+  resolveFoodEstimateReply?(
+    message: ConversationMessage,
+    decide: ApprovalDecider,
+    signal: AbortSignal,
+  ): Promise<boolean>;
   requestConfirmation(
     actionKind: ConfirmationActionKind,
     summary: string,
@@ -80,6 +88,7 @@ function validText(value: unknown): value is string {
 export interface OwnerInteractionOptions {
   readonly ownerObjectId: string;
   readonly store: ConfirmationStore;
+  readonly conversationStore?: Pick<ConversationStore, 'getDanMessagesAfter'>;
   readonly onWebNotification?: (kind: NotificationKind, text: string) => Promise<void>;
   readonly onConfirmationPending?: () => void;
   readonly onConfirmationsChanged?: () => void;
@@ -88,12 +97,14 @@ export interface OwnerInteractionOptions {
 export function createOwnerInteractionService({
   ownerObjectId,
   store,
+  conversationStore,
   onWebNotification,
   onConfirmationPending,
   onConfirmationsChanged = () => {},
 }: OwnerInteractionOptions): OwnerInteractionService {
   const waiters = new Map<string, (result: WaitResult) => void>();
   const browserConfirmations = new Map<string, BrowserConfirmation>();
+  const foodEstimates = new Map<string, { sessionId: string; sourceMessageId: string; stagedAt: number; deciding?: boolean }>();
 
   async function waitForDecision(
     id: string,
@@ -128,6 +139,7 @@ export function createOwnerInteractionService({
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
       waiters.delete(id);
+      foodEstimates.delete(id);
       if (browserConfirmations.delete(id)) onConfirmationsChanged();
     }
   }
@@ -183,6 +195,9 @@ export function createOwnerInteractionService({
       summary,
       expiresAt: new Date(Date.now() + lifetimeSeconds * 1000).toISOString(),
     });
+    if (delivery?.foodEstimate) {
+      foodEstimates.set(id, { ...delivery.foodEstimate, stagedAt: Date.now() });
+    }
     onConfirmationsChanged();
     onConfirmationPending?.();
     try {
@@ -224,6 +239,48 @@ export function createOwnerInteractionService({
       }
       if (status === 'expired') waiters.get(id)?.('expired');
       return false;
+    },
+    async resolveFoodEstimateReply(message, decide, signal) {
+      if (message.role !== 'dan' || !/^[1-9]\d{0,18}$/u.test(message.id) ||
+          !(message.at instanceof Date) || !Number.isFinite(message.at.getTime()) || signal.aborted) return false;
+      const candidates = [...foodEstimates].filter(([, estimate]) => estimate.sessionId === message.sessionId);
+      if (candidates.length !== 1) {
+        for (const [id] of candidates) foodEstimates.delete(id);
+        return false;
+      }
+      const [id, estimate] = candidates[0]!;
+      const confirmation = browserConfirmations.get(id);
+      if (!confirmation || !waiters.has(id) || !/^[1-9]\d{0,18}$/u.test(estimate.sourceMessageId) ||
+          BigInt(message.id) <= BigInt(estimate.sourceMessageId) || message.at.getTime() < estimate.stagedAt ||
+          Date.now() >= Date.parse(confirmation.expiresAt) || message.at.getTime() >= Date.parse(confirmation.expiresAt)) return false;
+      const question = {
+        reply: message.text, summary: confirmation.summary, family: 'food',
+        messageId: message.id, sessionId: message.sessionId, actionKey: id,
+      } as const;
+      if (estimate.deciding) {
+        foodEstimates.delete(id);
+        const verdict = await safeDecision(decide, question, signal);
+        return !signal.aborted && verdict === 'decline' && this.resolveBrowserConfirmation(id, 'reject');
+      }
+      estimate.deciding = true;
+      try {
+        const isCurrentReply = async () => {
+          const replies = await conversationStore?.getDanMessagesAfter({
+            sessionId: message.sessionId, after: estimate.sourceMessageId, limit: 2,
+          });
+          return replies?.length === 1 && replies[0]!.id === message.id;
+        };
+        if (!await isCurrentReply()) return false;
+        const verdict = await safeDecision(decide, question, signal);
+        if (signal.aborted || verdict === 'neither' || foodEstimates.get(id) !== estimate ||
+            !await isCurrentReply() || signal.aborted || foodEstimates.get(id) !== estimate) return false;
+        return this.resolveBrowserConfirmation(id, verdict === 'approve' ? 'approve' : 'reject');
+      } catch {
+        return false;
+      } finally {
+        // Unrelated turns end conversational authority; the exact Now card remains available.
+        foodEstimates.delete(id);
+      }
     },
     async notify(kind, text) {
       if (!notificationKinds.has(kind) || !validText(text)) throw new TypeError('Invalid notification');
