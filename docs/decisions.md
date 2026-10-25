@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-10-25 — Share confirmation transitions, retain tool authorization (#1281)
+
+Use `core/pending-action.ts` for exact immutable proposals, later-owner
+reply/session eligibility, expiry, cancellation, one-time consumption and
+execution. Google, Factory/GitHub and browser owner interactions adapt to it.
+Keep SQL browser approval consumption and tool-specific permission, presence
+and revision checks; consolidating lifecycle logic must not broaden authority.
+Receipt acknowledgments and project clarification are not action approval.
+Browser-only proposals have no conversational source binding and cannot be
+approved by spoken/text agreement. Preserve #1278's opt-in food-estimate
+owner-interactions API and immediate persisted-reply guards, adapting them to
+the shared lifecycle rather than creating a second food approval path. Keep
+its call-site wiring, language handling and timing work in that PR.
+Project clarification (#1264) selects/revalidates a target and does not consume
+action approval. Acknowledgment delivery (#1259) does not require affirmative
+playback receipts; actual delivery failures and explicit cancellation remain
+dispatch stops. These are compatibility constraints, not new product policy.
+Synthetic regressions verify the boundary; live voice/model/device acceptance
+and combined-head qualification are separate.
+
 ## Bound deployment-status responses at 4 MiB (25 October 2026; #1267)
 
 The GitHub Actions deployment reader requests up to 100 workflow runs. Allow
