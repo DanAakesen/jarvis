@@ -174,8 +174,8 @@ export async function resolveProjectForMessage(
 ): Promise<Project> {
   const project = await resolveProject(selector, projectStore);
   const messageName = ` ${normalizedName(message)} `;
-  const reference = normalizedName(selector);
-  const identified = reference.length > 0 && messageName.includes(` ${reference} `);
+  const references = [selector, project.name, project.repo].map(normalizedName).filter(Boolean);
+  const identified = references.some((reference) => messageName.includes(` ${reference} `));
   const selfIntent = project.repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US') &&
     /\b(?:your (?:code|repo|repository|source|issues)|yourself|jarvis(?:['’]s)? (?:own )?(?:code|repo|repository|source)|(?:din|dit|dine) (?:kode|repo|repository|kilde|issues)|dig selv)\b/iu
       .test(message);

@@ -85,6 +85,15 @@ describe('active project resolution', () => {
     expect(resolved).toMatchObject({ id: project.id, repo: project.repo });
   });
 
+  it('accepts an exact ID when the request names that project by its registered display name', async () => {
+    const project = registeredProject();
+    const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
+
+    await expect(resolveProjectForMessage(
+      project.id, 'Write to the greeting runner project.', store,
+    )).resolves.toMatchObject({ id: project.id, repo: project.repo });
+  });
+
   it('asks before using a weak description-only reference in English or Danish', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
