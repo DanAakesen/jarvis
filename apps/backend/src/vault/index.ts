@@ -799,6 +799,7 @@ export function createVaultModule(options: {
   let indexStatus: 'pending' | 'ready' | 'failed' = 'pending';
   let appMissing = false;
   let lastVaultSyncAt: string | null = null;
+  let latestSyncAttemptAt: string | null = null;
   let lastSuccessfulSyncAt: string | null = null;
   let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: null };
   let directoryTree: VaultDirectoryTree | undefined;
@@ -1002,23 +1003,25 @@ export function createVaultModule(options: {
 
   function synchronize(signal: AbortSignal) {
     if (!synchronization) {
-      lastVaultSyncAt = new Date().toISOString();
-      lastIndexOutcome = { outcome: 'pending', at: lastVaultSyncAt };
+      latestSyncAttemptAt = new Date().toISOString();
+      lastIndexOutcome = { outcome: 'pending', at: latestSyncAttemptAt };
       synchronization = performSynchronization(signal)
         .then(({ summary, directoryTree: nextDirectoryTree }) => {
-        indexStatus = 'ready';
-        appMissing = false;
-        lastSuccessfulSyncAt = new Date().toISOString();
-        lastIndexOutcome = { outcome: 'ok', at: lastSuccessfulSyncAt, ...summary };
-        directoryTree = { ...nextDirectoryTree, updatedAt: lastSuccessfulSyncAt };
-        graphCache = undefined;
-        return summary;
+          indexStatus = 'ready';
+          appMissing = false;
+          lastSuccessfulSyncAt = new Date().toISOString();
+          lastVaultSyncAt = lastSuccessfulSyncAt;
+          lastIndexOutcome = { outcome: 'ok', at: lastSuccessfulSyncAt, ...summary };
+          directoryTree = { ...nextDirectoryTree, updatedAt: lastSuccessfulSyncAt };
+          graphCache = undefined;
+          return summary;
         })
         .catch((error: unknown) => {
-        indexStatus = 'failed';
-        appMissing = error instanceof VaultAppNotInstalledError;
-        lastIndexOutcome = { outcome: 'error', at: new Date().toISOString() };
-        throw error;
+          indexStatus = 'failed';
+          appMissing = error instanceof VaultAppNotInstalledError;
+          lastVaultSyncAt = new Date().toISOString();
+          lastIndexOutcome = { outcome: 'error', at: lastVaultSyncAt };
+          throw error;
         })
         .finally(() => { synchronization = undefined; });
     }
@@ -1716,7 +1719,7 @@ export function createVaultModule(options: {
     syncStatus() {
       return {
         outcome: lastIndexOutcome.outcome,
-        latestAttemptAt: lastVaultSyncAt,
+        latestAttemptAt: latestSyncAttemptAt,
         lastSuccessfulAt: lastSuccessfulSyncAt,
       };
     },
@@ -2359,7 +2362,7 @@ export function createVaultModule(options: {
         }
         return {
           lastVaultSyncAt,
-          latestSyncAttemptAt: lastVaultSyncAt,
+          latestSyncAttemptAt,
           lastSuccessfulSyncAt,
           notesByFolder: counts,
           lastIndexOutcome,

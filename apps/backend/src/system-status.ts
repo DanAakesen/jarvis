@@ -34,10 +34,10 @@ export function assessVaultIndex(
   const coveragePercent = summary.chunks === 0
     ? null
     : Math.round(summary.embeddedChunks / summary.chunks * 100);
-  const status = sync.outcome === 'error' ? 'degraded' :
-    sync.outcome === 'pending' || syncFresh === null ? 'unknown' :
+  const status = sync.outcome === 'error' || syncFresh === false ? 'degraded' :
+    syncFresh === null ? 'unknown' :
       summary.chunks === 0 ? 'unknown' :
-        !syncFresh || summary.embeddedChunks < summary.chunks ? 'degraded' : 'ok';
+        summary.embeddedChunks < summary.chunks ? 'degraded' : 'ok';
   return {
     status,
     details: {

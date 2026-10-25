@@ -55,6 +55,8 @@ function readableKey(key: string): string {
 
 function reason(entry: SystemStatusEntry): string | undefined {
   const details = entry.details;
+  if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
+  if (details?.configured === false) return 'This check is not configured.';
   if (entry.id.startsWith('foundry.')) {
     if (details?.catalogue === 'fallback') return 'The model catalogue uses fallback configuration; live deployment availability is not verified.';
     if (details?.catalogue === 'live' && details.deploymentAvailable === false) {
@@ -65,30 +67,39 @@ function reason(entry: SystemStatusEntry): string | undefined {
     }
     if (details?.configured === true) return 'The required model deployment could not be confirmed.';
   }
-  if (entry.id === 'runner' && details?.healthProbe === 'not_run') {
+  if (entry.id === 'runner' && details?.configured === true && details.healthProbe === 'not_run') {
     return 'The runner is configured, but its runtime health has not been probed.';
   }
   if (entry.id === 'vault_index') {
-    if (details?.syncOutcome === 'error') return 'The latest vault sync attempt failed.';
     if (details?.syncOutcome === 'pending') {
-      return details.latestSyncAttemptAt
-        ? 'The latest vault sync is still running; its outcome is not verified yet.'
-        : 'No completed vault sync is verified since this backend process started.';
+      if (!details.lastSuccessfulSyncAt) {
+        return details.latestSyncAttemptAt
+          ? 'The latest vault sync is still running; no successful sync is verified yet.'
+          : 'No completed vault sync is verified since this backend process started.';
+      }
+      if (entry.status === 'ok') {
+        return 'A vault sync attempt is still running; status reflects the last successful sync.';
+      }
     }
     if (entry.status === 'unknown' && details?.chunks === 0) {
-      return 'The latest sync completed, but the vault index has no content chunks.';
+      return details.syncOutcome === 'pending'
+        ? 'The last successful sync found no content chunks; a newer sync is still running.'
+        : 'The latest sync completed, but the vault index has no content chunks.';
     }
-    if (entry.status === 'degraded') {
-      const reasons = [
-        details?.syncFresh === false ? 'The last successful vault sync is older than 24 hours.' : null,
-        typeof details?.embeddingCoveragePercent === 'number' && details.embeddingCoveragePercent < 100
-          ? `Embedding coverage is incomplete (${details.embeddingCoveragePercent}%).` : null,
-      ].filter((value): value is string => value !== null);
+    if (entry.status === 'degraded' || details?.syncOutcome === 'pending') {
+      const reasons = [];
+      if (details?.syncOutcome === 'error') reasons.push('The latest vault sync attempt failed.');
+      if (details?.syncOutcome === 'pending') reasons.push('A vault sync attempt is still running.');
+      if (details?.syncFresh === false) {
+        reasons.push('The last successful sync is over 24 hours old or has a future-dated timestamp.');
+      }
+      if (typeof details?.chunks === 'number' && typeof details.embeddedChunks === 'number' &&
+          details.embeddedChunks < details.chunks) {
+        reasons.push(`Embedding coverage is incomplete (${details.embeddedChunks} of ${details.chunks} chunks embedded).`);
+      }
       if (reasons.length) return reasons.join(' ');
     }
   }
-  if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
-  if (details?.configured === false) return 'This check is not configured.';
   if (entry.status === 'unknown') return 'Runtime health is not established by this check.';
   if (entry.status === 'down') return entry.id === 'pc_bridge' && entry.details?.connected === false
     ? undefined : 'The check failed; no further reason was reported.';

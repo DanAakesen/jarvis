@@ -106,6 +106,38 @@ describe('system status reader', () => {
     });
   });
 
+  it('keeps a freshly synced empty corpus unknown but still marks stale sync evidence degraded', () => {
+    const empty = { notes: 0, chunks: 0, embeddedChunks: 0, latestIndexedAt: null };
+    const freshSync = {
+      outcome: 'ok' as const,
+      latestAttemptAt: '2026-10-25T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-25T11:59:30.000Z',
+    };
+    expect(assessVaultIndex(empty, freshSync, vaultStatusNow).status).toBe('unknown');
+    expect(assessVaultIndex(empty, {
+      ...freshSync,
+      latestAttemptAt: '2026-10-24T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-24T11:59:30.000Z',
+    }, vaultStatusNow)).toMatchObject({ status: 'degraded', details: { syncFresh: false } });
+  });
+
+  it('uses the last verified success while a newer sync is pending', () => {
+    const pending = {
+      outcome: 'pending' as const,
+      latestAttemptAt: '2026-10-25T11:59:00.000Z',
+      lastSuccessfulAt: '2026-10-25T11:30:00.000Z',
+    };
+    expect(assessVaultIndex(oldVaultChunks, pending, vaultStatusNow)).toMatchObject({
+      status: 'ok', details: { syncOutcome: 'pending', syncFresh: true },
+    });
+    expect(assessVaultIndex(oldVaultChunks, {
+      ...pending,
+      lastSuccessfulAt: '2026-10-24T11:30:00.000Z',
+    }, vaultStatusNow)).toMatchObject({
+      status: 'degraded', details: { syncOutcome: 'pending', syncFresh: false },
+    });
+  });
+
   it('ages the last successful sync rather than the latest changed chunk', () => {
     expect(assessVaultIndex({ ...oldVaultChunks, latestIndexedAt: new Date(vaultStatusNow) }, {
       outcome: 'ok',

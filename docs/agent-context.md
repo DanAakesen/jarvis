@@ -1,5 +1,24 @@
 # Agent context
 
+## System status freshness checks (#1288; 25 October 2026)
+
+Focused synthetic checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/system-status.test.ts src/vault/vault.test.ts
+npm test --workspace @jarvis/web -- src/status/StatusPage.test.tsx
+npm run lint --workspace @jarvis/backend
+npm run lint --workspace @jarvis/web
+npm run build --workspace @jarvis/backend
+npm run build --workspace @jarvis/web
+```
+
+The backend cases cover no-change syncs with old chunk times, incomplete
+coverage, failed and stale attempts, and unknown evidence after restart. Status
+page fixtures cover Foundry/runner explanations, vault evidence times and
+ordinary refresh. These checks do not run live model/runner probes or access
+private vault data.
+
 ## Natural food confirmation checks (#1277; 25 October 2026)
 
 Use synthetic food records only. Focused checks from the repository root:

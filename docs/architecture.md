@@ -3063,7 +3063,14 @@ are offered. Recovery still uses each existing tool's validation/approval.
 The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
 entries compare configuration and the cached ARM catalogue, without claiming a
 successful model invocation. Vault status aggregates note/chunk counts, latest
-`indexed_at`, and embedding coverage without reading note text. GitHub App
+`indexed_at`, and embedding coverage without reading note text. Index freshness
+uses the vault module's process-local synchronization outcome: a completed
+no-change sync refreshes freshness, while a failed attempt remains degraded and
+retains the distinct last successful time. `latestIndexedAt` describes only the
+latest changed chunk and is not a freshness signal. Without a verified sync in
+the current process, including after restart, the index remains unknown even if
+chunk rows exist. The status check timestamp is independent of those evidence
+times; no sync outcome is persisted and no migration is added. GitHub App
 permissions come from the repository's installation metadata; Google uses a
 bounded Calendar list read. PC bridge state is live in process and reports
 connection, pause and wake-word state. Its current protocol does not provide
