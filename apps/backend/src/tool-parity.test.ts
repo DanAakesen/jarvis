@@ -226,7 +226,7 @@ describe('voice and chat tool parity', () => {
       fallback.event('response.created', { response: { id: responseId } });
       fallback.event('response.function_call_arguments.done', { name, call_id: callId, arguments: args });
       expect(toolOutput(callId)).toBeUndefined();
-      fallback.event('response.done', { response: { id: responseId } });
+      fallback.event('response.done', { response: { id: responseId, status: 'completed' } });
       await vi.waitFor(() => expect(toolOutput(callId)).toBeDefined());
     };
     await call('parity_probe', 'unadvertised', '{"value":"synthetic"}');

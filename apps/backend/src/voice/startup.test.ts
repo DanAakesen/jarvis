@@ -421,7 +421,7 @@ describe('Voice Live capability-preserving fallback', () => {
       active.event('response.function_call_arguments.done', {
         name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: callId, arguments: JSON.stringify({ offset }),
       });
-      active.event('response.done', { response: { id: responseId } });
+      active.event('response.done', { response: { id: responseId, status: 'completed' } });
       await vi.advanceTimersByTimeAsync(0);
       const output = JSON.parse(toolOutput(callId) as string) as {
         outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
@@ -465,7 +465,7 @@ describe('Voice Live capability-preserving fallback', () => {
     active.event('response.function_call_arguments.done', {
       name: 'unregistered_tool', call_id: 'unadvertised', arguments: '{"note":"synthetic exact meal"}',
     });
-    active.event('response.done', { response: { id: 'full_catalogue_response' } });
+    active.event('response.done', { response: { id: 'full_catalogue_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
 
     expect(JSON.parse(toolOutput('food') as string)).toMatchObject({ tool: 'daily_food', outcome: 'ok' });
@@ -492,7 +492,7 @@ describe('Voice Live capability-preserving fallback', () => {
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'food_discovery', arguments: '{}',
     });
-    fallback.event('response.done', { response: { id: 'food_discovery_response' } });
+    fallback.event('response.done', { response: { id: 'food_discovery_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     fallback.event('response.created', { response: { id: 'food_execution_response' } });
     fallback.event('response.function_call_arguments.done', {
@@ -500,7 +500,7 @@ describe('Voice Live capability-preserving fallback', () => {
       call_id: 'food_call',
       arguments: JSON.stringify({ capability: 'daily_food', arguments: { note: 'synthetic' } }),
     });
-    fallback.event('response.done', { response: { id: 'food_execution_response' } });
+    fallback.event('response.done', { response: { id: 'food_execution_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     expect(JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'food_call')!.item.output))
@@ -536,7 +536,7 @@ describe('Voice Live capability-preserving fallback', () => {
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'discover_fallback', arguments: '{}',
     });
-    fallback.event('response.done', { response: { id: 'discover_fallback_response' } });
+    fallback.event('response.done', { response: { id: 'discover_fallback_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     const output = JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'discover_fallback')!.item.output);
@@ -767,7 +767,7 @@ describe('Voice Live capability-preserving fallback', () => {
     expect(ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')).toEqual([]);
 
-    ready.event('response.done', { response: { id: 'outside_subset_response' } });
+    ready.event('response.done', { response: { id: 'outside_subset_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
