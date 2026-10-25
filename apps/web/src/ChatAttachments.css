@@ -2,7 +2,7 @@
 .composer-attachments:not(:has(.attachment-chips, .attachment-hint, .chat-error)) { display: contents; }
 .attachment-chips, .message-attachments { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-1) var(--space-1) var(--space-2); padding: 0; list-style: none; }
 .attachment-chip { position: relative; display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-2) var(--space-1) var(--space-2) var(--space-2); border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); }
-.attachment-chip--image { gap: var(--space-1); padding: 0; background: transparent; }
+.attachment-chip--image { align-self: flex-start; gap: var(--space-1); padding: 0; background: transparent; }
 .attachment-chip[data-status="failed"] { background: var(--error-wash); }
 .attachment-thumb { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-control); background: var(--surface-muted); object-fit: cover; color: var(--text-muted); }
 .attachment-chip--image .attachment-thumb { width: 44px; height: 44px; }
