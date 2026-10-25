@@ -26,6 +26,18 @@ notification. A recent transient failure stays quiet. Missing/unreadable status
 does not create a mirror finding. No new flag or change to default-off write-back is introduced.
 The mirror has reported live status since 20 October 2026.
 
+## System status evidence (#1288; 25 October 2026)
+
+System checks distinguish when a check ran from the evidence it evaluated.
+Vault-index freshness follows the latest verified successful synchronization,
+including no-change runs; the most recently changed content timestamp is labeled
+as such and does not establish corpus freshness. A failed sync remains degraded,
+incomplete embedding coverage remains visible, and no verified sync in the
+current backend process—including after restart—remains unknown. Show the latest
+attempt and last success separately. Foundry configuration or catalogue presence
+does not establish runtime health, and a configured runner remains unknown until
+probed. Refreshing Status does not trigger a model request or runner probe.
+
 ## Azure vault mirror safety boundary (19 October 2026; P14-27)
 
 The Azure mirror runner reconciles the owner's Obsidian vault with its private

@@ -54,8 +54,55 @@ function readableKey(key: string): string {
 }
 
 function reason(entry: SystemStatusEntry): string | undefined {
-  if (typeof entry.details?.reason === 'string' && entry.details.reason.trim()) return readableKey(entry.details.reason);
-  if (entry.details?.configured === false) return 'This check is not configured.';
+  const details = entry.details;
+  if (details?.configured === false) return 'This check is not configured.';
+  if (typeof details?.reason === 'string' && details.reason.trim()) return readableKey(details.reason);
+  if (entry.id.startsWith('foundry.')) {
+    if (details?.catalogue === 'fallback') return 'The model catalogue uses fallback configuration; live deployment availability is not verified.';
+    if (details?.catalogue === 'live' && details.deploymentAvailable === false) {
+      return 'No deployment for this capability was found in the live model catalogue.';
+    }
+    if (details?.catalogue === 'live' && details.deploymentAvailable === true) {
+      return 'A compatible deployment is listed, but this check did not run a model request.';
+    }
+    if (details?.configured === true) return 'The required model deployment could not be confirmed.';
+  }
+  if (entry.id === 'runner' && details?.configured === true && details.healthProbe === 'not_run') {
+    return 'The runner is configured, but its runtime health has not been probed.';
+  }
+  if (entry.id === 'vault_index') {
+    if (details?.syncOutcome === 'pending') {
+      if (!details.lastSuccessfulSyncAt) {
+        return details.latestSyncAttemptAt
+          ? 'The latest vault sync is still running; no successful sync is verified yet.'
+          : 'No completed vault sync is verified since this backend process started.';
+      }
+      if (entry.status === 'ok') {
+        return 'A vault sync attempt is still running; status reflects the last successful sync.';
+      }
+    }
+    if (entry.status === 'unknown' && details?.chunks === 0) {
+      if (details.syncOutcome === 'pending') {
+        return 'The last successful sync found no content chunks; a newer sync is still running.';
+      }
+      return details.syncOutcome === 'ok'
+        ? 'The latest recorded sync completed successfully, but the vault index has no content chunks.'
+        : 'The vault index has no content chunks, and this snapshot does not verify a successful sync.';
+    }
+    if (entry.status === 'degraded' || details?.syncOutcome === 'pending') {
+      const reasons = [];
+      if (details?.syncOutcome === 'error') reasons.push('The latest vault sync attempt failed.');
+      if (details?.syncOutcome === 'pending') reasons.push('A vault sync attempt is still running.');
+      if (details?.syncFresh === false) {
+        reasons.push('The last successful sync timestamp does not verify freshness.');
+      }
+      if (typeof details?.chunks === 'number' && typeof details.embeddedChunks === 'number' &&
+          details.embeddedChunks < details.chunks) {
+        reasons.push(`Embedding coverage is incomplete (${details.embeddedChunks} of ${details.chunks} chunks embedded).`);
+      }
+      if (reasons.length) return reasons.join(' ');
+    }
+  }
   if (entry.status === 'unknown') return 'Runtime health is not established by this check.';
   if (entry.status === 'down') return entry.id === 'pc_bridge' && entry.details?.connected === false
     ? undefined : 'The check failed; no further reason was reported.';
@@ -81,11 +128,17 @@ function StatusBadge({ value }: { value: SystemStatusValue }) {
   return <span className="system-status-badge" data-status={value}>{statuses[value]}</span>;
 }
 
-function CheckedAt({ value, now }: { value: string; now: number }) {
+function CheckedAt({ value, now, label = 'Checked' }: { value: string; now: number; label?: string }) {
   return <span className="system-status-time">
+    {label}{' '}
     <time dateTime={value} title={formatDateTime(value)}>{formatDateTime(value)}</time>
     {now - Date.parse(value) >= staleAfterMs && <span className="system-status-stale">Stale</span>}
   </span>;
+}
+
+function EvidenceTime({ label, value }: { label: string; value: unknown }) {
+  if (typeof value !== 'string' || !isTime(value)) return null;
+  return <p className="system-status-reason">{label}: <time dateTime={value}>{formatDateTime(value)}</time></p>;
 }
 
 type Result = { backendUrl: string | null; data?: SystemStatus; error?: string; pending: boolean };
@@ -185,7 +238,12 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
                 entry.details?.connected === false ? 'Disconnected at check time.' : 'Connection state was not reported.'}
               {typeof entry.details?.controlPaused === 'boolean' && (entry.details.controlPaused ? ' PC control is paused.' : ' PC control is not paused.')}
             </p>}
-            <CheckedAt value={entry.checkedAt} now={now} />
+            <CheckedAt value={entry.checkedAt} now={now} label="Status check" />
+            {entry.id === 'vault_index' && <>
+              <EvidenceTime label="Latest sync attempt" value={entry.details?.latestSyncAttemptAt} />
+              <EvidenceTime label="Last successful sync" value={entry.details?.lastSuccessfulSyncAt} />
+              <EvidenceTime label="Latest content indexed" value={entry.details?.latestIndexedAt} />
+            </>}
             {entry.details && Object.keys(entry.details).length > 0 && <details className="system-status-details">
               <summary>Recorded details</summary>
               <dl>{Object.entries(entry.details).map(([key, value]) => <div key={key}>
