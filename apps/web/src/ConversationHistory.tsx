@@ -1117,8 +1117,6 @@ export function ConversationHistory({
       />
       </div>
       <form id="conversation-composer" className="composer" hidden={voiceActive}
-        data-can-send={Boolean(draft.trim() || readyFiles > 0)}
-        data-dictating={dictating || undefined}
         onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
         <textarea

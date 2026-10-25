@@ -3304,8 +3304,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .mobile-bottom-nav { position: fixed; z-index: var(--z-dock); right: env(safe-area-inset-right); bottom: 0; left: env(safe-area-inset-left); display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); min-height: calc(var(--mobile-nav-height, 68px) + env(safe-area-inset-bottom)); padding: var(--space-1) 0 env(safe-area-inset-bottom); border-top: 1px solid var(--rule); background: var(--stage-slab); backdrop-filter: blur(var(--surface-blur)) saturate(1.15); }
 .mobile-bottom-nav-link { display: grid; min-width: 0; min-height: 60px; align-content: center; justify-items: center; gap: var(--space-1); padding: var(--space-1); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--type-caption); line-height: var(--line-tight); text-decoration: none; cursor: pointer; transition: color var(--motion-press) var(--ease-standard), background-color var(--motion-press) var(--ease-standard); }
 .mobile-bottom-nav-link svg { width: 24px; height: 24px; }
-.mobile-bottom-nav-link[aria-current="page"], .mobile-bottom-nav-link[aria-expanded="true"] { color: var(--focus); }
 .mobile-bottom-nav-link:hover { background: var(--glass-hover); color: var(--text); }
+.mobile-bottom-nav-link[aria-current="page"], .mobile-bottom-nav-link[aria-pressed="true"], .mobile-bottom-nav-link[aria-expanded="true"] { color: var(--focus); }
 .mobile-bottom-nav-link:active { background: var(--glass-pressed); }
 .mobile-bottom-nav-link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* The chat bar is the dock: full width at the bottom of every page, above the home indicator. */

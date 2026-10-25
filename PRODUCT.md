@@ -80,9 +80,11 @@ draft; it never starts a Jarvis voice turn or sends the draft. Make unavailable
 browser dictation and microphone failures clear.
 
 Keep Chat, optional Health, Workspaces and Menu reachable in the bottom
-navigation. Show the current destination through its color only, without an
-active-page dot. When the menu has more entries than fit, allow horizontal
-swiping between menu pages while retaining keyboard-accessible page controls.
+navigation. Workspaces opens the saved-window pane; Software Factory remains a
+separate menu destination. Show the current destination through its color only,
+without an active-page dot. When the menu has more entries than fit, allow
+horizontal swiping between menu pages while retaining keyboard-accessible page
+controls.
 Preserve existing attachment pills and image previews.
 
 ## Header background work (17 October 2026; P11-12)

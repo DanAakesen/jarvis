@@ -870,9 +870,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileBottomNav menuOpen={menuOpen} dailyEnabled={dailyEnabled}
+          <MobileBottomNav menuOpen={menuOpen} dailyEnabled={dailyEnabled} workspacesOpen={folioOpen}
+            onToggleWorkspaces={() => { setNavigationOpen(false); setFolioOpen((open) => !open); }}
             onOpenMenu={() => setMenuOpen((open) => !open)} onNavigate={closePagePanels} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels}
+            onWorkspaces={() => { closePagePanels(); setFolioOpen(true); }} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
             {...(sectionLinks && activeArea ? { sections: { label: activeArea.label, links: sectionLinks } } : {})} />
         </>
       )}

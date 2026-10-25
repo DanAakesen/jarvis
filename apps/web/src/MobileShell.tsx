@@ -10,7 +10,7 @@ import { ShellIcon, type ShellIconName } from './ShellIcon';
  */
 const pages = [
   { to: '/', label: 'Jarvis', icon: 'chat', end: true },
-  { to: '/factory/kanban', label: 'Workspaces', icon: 'workspaces' },
+  { to: '/factory/kanban', label: 'Software Factory', icon: 'workspaces' },
   { to: '/notes', label: 'Notes', icon: 'knowledge' },
   { to: '/usage', label: 'Usage', icon: 'usage' },
   { to: '/status', label: 'Status', icon: 'status' },
@@ -25,11 +25,11 @@ function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean): readonly M
   return proactiveEnabled ? [...list.slice(0, 2), { to: '/proactive', label: 'Proactive', icon: 'sparkle' }, ...list.slice(2)] : list;
 }
 
-export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
+export function MobileMenu({ open, onClose, onNavigate, onWorkspaces, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
-  onFolio: () => void;
+  onWorkspaces: () => void;
   onContext: () => void;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
@@ -42,8 +42,7 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
   const [pageIndex, setPageIndex] = useState(0);
   const { onKeyDown } = useModalLifecycle({ active: open, dialog: sheet, boundary: root, onDismiss: onClose });
   const entries = menuPages(dailyEnabled, proactiveEnabled).flatMap((page) => {
-    const currentSection = sections?.label === page.label ||
-      (page.label === 'Workspaces' && sections?.label === 'Software Factory');
+    const currentSection = sections?.label === page.label;
     return [
       { key: page.to, label: page.label, to: page.to, end: page.end, icon: page.icon, currentSection },
       ...(sections && currentSection ? sections.links.map((link) => ({
@@ -104,7 +103,7 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
             aria-label="Next menu page" onClick={() => selectPage(Math.min(entryPages.length - 1, pageIndex + 1))}>Next</button>
         </div>}
         <div className="mobile-menu-actions">
-          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onFolio(); }}>Folio</button>
+          <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onWorkspaces(); }}>Workspaces</button>
           <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onContext(); }}>Context panel</button>
         </div>
       </div>
@@ -112,17 +111,18 @@ export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext, dail
   );
 }
 
-export function MobileBottomNav({ menuOpen, dailyEnabled = false, onOpenMenu, onNavigate }: {
+export function MobileBottomNav({ menuOpen, dailyEnabled = false, workspacesOpen = false, onToggleWorkspaces, onOpenMenu, onNavigate }: {
   menuOpen: boolean;
   dailyEnabled?: boolean;
+  workspacesOpen?: boolean;
+  onToggleWorkspaces: () => void;
   onOpenMenu: () => void;
   onNavigate: () => void;
 }) {
   const { pathname } = useLocation();
   const isChat = pathname === '/';
   const isHealth = pathname === '/health' || pathname.startsWith('/health/');
-  const isWorkspace = pathname === '/factory' || pathname.startsWith('/factory/');
-  const isMenuPage = !isChat && !isHealth && !isWorkspace;
+  const isMenuPage = !isChat && !isHealth && !workspacesOpen;
 
   return (
     <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
@@ -132,9 +132,10 @@ export function MobileBottomNav({ menuOpen, dailyEnabled = false, onOpenMenu, on
       {dailyEnabled && <Link className="mobile-bottom-nav-link" to="/health" aria-current={isHealth ? 'page' : undefined} onClick={onNavigate}>
         <ShellIcon name="health" /><span>Health</span>
       </Link>}
-      <Link className="mobile-bottom-nav-link" to="/factory/kanban" aria-current={isWorkspace ? 'page' : undefined} onClick={onNavigate}>
+      <button className="mobile-bottom-nav-link" type="button" aria-pressed={workspacesOpen}
+        onClick={onToggleWorkspaces}>
         <ShellIcon name="workspaces" /><span>Workspaces</span>
-      </Link>
+      </button>
       <button className="mobile-bottom-nav-link" type="button" aria-expanded={menuOpen} aria-controls="mobile-menu"
         aria-current={isMenuPage ? 'page' : undefined} onClick={onOpenMenu}>
         <ShellIcon name="menu" /><span>Menu</span>

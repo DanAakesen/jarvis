@@ -3,9 +3,10 @@
 ## Phone navigation and draft-only dictation (#1287; 25 October 2026)
 
 Use the approved dark phone composition with the compact composer above a
-bottom Chat/Health/Workspaces/Menu navigation. Highlight the current destination
-by color only; the page sheet uses horizontally swipeable pages and keyboard
-Previous/Next controls. Keep message times below bubbles and preserve existing
+bottom Chat/Health/Workspaces/Menu navigation. Workspaces opens the renamed
+saved-window pane, distinct from the Software Factory page. Highlight the current
+destination by color only; the page sheet uses horizontally swipeable pages and
+keyboard Previous/Next controls. Keep message times below bubbles and preserve existing
 attachment and visual-capture actions. Voice remains the existing realtime
 assistant session under the plus menu.
 

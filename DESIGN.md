@@ -304,10 +304,22 @@ existing attachment, video and screen-sharing actions.
 
 Place message times below each bubble, never on its text or rim. Anchor the
 bottom navigation below the composer with Chat, Health when enabled, Workspaces
-and Menu. Use color alone for the current destination, with no dot. The Menu
-sheet pages horizontally with native touch scrolling and offers Previous/Next
+and Menu. Workspaces opens the saved-window pane; Software Factory remains a
+separate menu destination. Use color alone for the current destination, with no
+dot. The Menu sheet pages horizontally with native touch scrolling and offers Previous/Next
 controls for keyboard users; retain the established dark glass surfaces, shared
 control radius and focus treatment.
+
+The approved reference mockup was linked in PR #1292, but its reference-only
+commit is no longer available to this checkout; the captures below are not a
+pixel comparison. Synthetic Chromium captures at 390×844 and
+320×700 show the [phone shell](docs/ui/screenshots/mobile-navigation-1287/shell-390.jpg),
+[plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-390.jpg),
+[draft dictation](docs/ui/screenshots/mobile-navigation-1287/dictation-draft-390.jpg),
+[swiped menu page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-390.jpg), and
+[narrow layout](docs/ui/screenshots/mobile-navigation-1287/shell-320.jpg). The
+browser fixture stubs authentication and API responses and emits a simulated speech
+result; it does not verify a live microphone, iOS Safari, or a physical phone.
 
 ## Chat records and keyboard geometry (16 October 2026; local candidate)
 

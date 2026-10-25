@@ -168,7 +168,7 @@ describe('ConversationHistory', () => {
   it('dictates into the draft without starting or sending an assistant turn', async () => {
     vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
     const user = userEvent.setup();
-    renderConversation();
+    renderConversation(0, undefined, vi.fn(), undefined, true);
     const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
     await user.type(textbox, 'Remember');
     await user.click(screen.getByRole('button', { name: 'Dictate' }));
@@ -176,7 +176,8 @@ describe('ConversationHistory', () => {
     expect(screen.getByRole('button', { name: 'Stop dictation' }).getAttribute('aria-pressed')).toBe('true');
     act(() => MockDictationRecognition.instance.emitTranscript('the launch time'));
     expect(textbox).toHaveProperty('value', 'Remember the launch time');
-    expect(textbox.closest('form')?.getAttribute('data-dictating')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Stop dictation' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Send' })).not.toBeNull();
     expect(sendChatTurn).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
     expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();

@@ -477,10 +477,11 @@ No new geometry state, persistence format, API or voice behaviour is introduced.
 ## Mobile navigation, dictation and composer (25 October 2026; #1287)
 
 `App` renders the phone-only bottom navigation from the existing route state.
-Chat, enabled Health and Workspaces are direct destinations; Menu opens the
-existing page sheet, whose horizontal scroll-snap rail groups links into pages.
-`ConversationHistory` keeps existing attachment/capture actions in the plus
-menu and calls the existing VoiceControls start callback from the Voice entry.
+Chat and enabled Health navigate directly; Workspaces opens the existing Folio
+saved-window pane; Menu retains Software Factory and the other page routes in a
+horizontal scroll-snap sheet. `ConversationHistory` keeps existing attachment
+and capture actions in the plus menu and calls the existing VoiceControls start
+callback from the Voice entry.
 
 Draft-only Dictate uses the browser's `SpeechRecognition` API (with its WebKit
 alias where available), not `BrowserVoiceClient.onUserTurn`: realtime voice

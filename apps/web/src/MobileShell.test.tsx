@@ -15,7 +15,7 @@ function Harness({ onNavigate = () => {}, path = '/', ...flags }: {
   const [open, setOpen] = useState(false);
   return <MemoryRouter initialEntries={[path]}>
     <button onClick={() => setOpen(true)}>Open menu</button>
-    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onFolio={() => {}} onContext={() => {}} {...flags} />
+    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onWorkspaces={() => {}} onContext={() => {}} {...flags} />
   </MemoryRouter>;
 }
 
@@ -85,10 +85,10 @@ describe('mobile menu pages', () => {
 
   // The rail lists Conversation, then the areas with Proactive after the first one (`appAreas`); the menu adds Settings.
   it.each([
-    { dailyEnabled: false, proactiveEnabled: false, pages: ['Jarvis', 'Workspaces', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: false, pages: ['Jarvis', 'Health', 'Workspaces', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: false, proactiveEnabled: true, pages: ['Jarvis', 'Workspaces', 'Proactive', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: true, pages: ['Jarvis', 'Health', 'Proactive', 'Workspaces', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: false, proactiveEnabled: false, pages: ['Jarvis', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: false, pages: ['Jarvis', 'Health', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: false, proactiveEnabled: true, pages: ['Jarvis', 'Software Factory', 'Proactive', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: true, pages: ['Jarvis', 'Health', 'Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
   ])('lists the pages in rail order (daily $dailyEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
     const navigation = await openPages(flags);
     expect(navigation.getAllByRole('link').map((link) => link.textContent)).toEqual(pages);
@@ -116,7 +116,7 @@ describe('mobile menu pages', () => {
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const navigation = within(screen.getByRole('navigation', { name: 'Pages' }));
     expect(navigation.getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Jarvis', 'Health', 'Overview', 'Nutrition', 'Workspaces', 'Notes', 'Usage', 'Status', 'Settings']);
+      .toEqual(['Jarvis', 'Health', 'Overview', 'Nutrition', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
     expect(navigation.getByRole('link', { name: 'Health' }).getAttribute('aria-current')).toBe('location');
     expect(navigation.getByRole('link', { name: 'Nutrition' }).getAttribute('aria-current')).toBe('page');
     expect(navigation.getByRole('link', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false);
@@ -129,7 +129,7 @@ describe('mobile menu pages', () => {
   it('shows no sub-pages when the open area publishes none', async () => {
     const navigation = await openPages({ dailyEnabled: true });
     expect(navigation.getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Jarvis', 'Health', 'Workspaces', 'Notes', 'Usage', 'Status', 'Settings']);
+      .toEqual(['Jarvis', 'Health', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
   });
 
   it('pages horizontally through the menu links and exposes keyboard paging controls', async () => {
@@ -149,21 +149,34 @@ describe('mobile menu pages', () => {
 describe('mobile bottom navigation', () => {
   function BottomNavHarness({ path = '/', dailyEnabled = true }: { path?: string; dailyEnabled?: boolean }) {
     const [open, setOpen] = useState(false);
+    const [workspacesOpen, setWorkspacesOpen] = useState(false);
     return <MemoryRouter initialEntries={[path]}>
-      <MobileBottomNav menuOpen={open} dailyEnabled={dailyEnabled} onOpenMenu={() => setOpen((value) => !value)} onNavigate={() => {}} />
-      <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={() => {}} onFolio={() => {}} onContext={() => {}} dailyEnabled={dailyEnabled} />
+      <MobileBottomNav menuOpen={open} dailyEnabled={dailyEnabled} workspacesOpen={workspacesOpen}
+        onToggleWorkspaces={() => setWorkspacesOpen((value) => !value)}
+        onOpenMenu={() => setOpen((value) => !value)} onNavigate={() => {}} />
+      <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={() => {}} onWorkspaces={() => setWorkspacesOpen(true)} onContext={() => {}} dailyEnabled={dailyEnabled} />
+      <div role="region" aria-label="Workspaces pane" hidden={!workspacesOpen} />
     </MemoryRouter>;
   }
 
-  it('uses Chat, Health, Workspaces, and Menu destinations with a color-state current page', async () => {
+  it('opens the Workspaces pane and preserves Software Factory as a separate menu destination', async () => {
     const user = userEvent.setup();
     render(<BottomNavHarness path="/factory/kanban" />);
     const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
-    expect(within(navigation).getByRole('link', { name: 'Workspaces' }).getAttribute('aria-current')).toBe('page');
+    const workspaces = within(navigation).getByRole('button', { name: 'Workspaces' });
+    expect(workspaces.getAttribute('aria-pressed')).toBe('false');
+    expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-current')).toBe('page');
     expect(within(navigation).getByRole('link', { name: 'Chat' }).hasAttribute('aria-current')).toBe(false);
+    await user.click(workspaces);
+    expect(workspaces.getAttribute('aria-pressed')).toBe('true');
+    expect(within(navigation).getByRole('button', { name: 'Menu' }).hasAttribute('aria-current')).toBe(false);
+    expect(screen.getByRole('region', { name: 'Workspaces pane' })).not.toHaveProperty('hidden', true);
     await user.click(within(navigation).getByRole('button', { name: 'Menu' }));
     expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('dialog', { name: 'Go to' })).not.toBeNull();
+    expect(within(screen.getByRole('navigation', { name: 'Pages' })).getByRole('link', { name: 'Software Factory' }).getAttribute('href')).toBe('/factory/kanban');
+    await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Workspaces' }));
+    expect(screen.getByRole('region', { name: 'Workspaces pane' })).not.toHaveProperty('hidden', true);
   });
 
   it('omits Health when its destination is not enabled and highlights Menu on secondary pages', () => {

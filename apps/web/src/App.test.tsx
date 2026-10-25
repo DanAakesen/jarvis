@@ -595,7 +595,7 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'Menu' }));
     const pages = within(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('navigation', { name: 'Pages' }));
     const railPages = rail.getAllByRole('link').map((link) => link.getAttribute('aria-label')!
-      .replace('Conversation', 'Jarvis').replace('Software Factory', 'Workspaces'));
+      .replace('Conversation', 'Jarvis'));
     expect(pages.getAllByRole('link').map((link) => link.textContent)).toEqual([...railPages, 'Settings']);
     expect(pages.queryByRole('link', { name: 'Proactive' }) !== null).toBe(proactive);
   });
@@ -1760,7 +1760,7 @@ describe('App shell', () => {
     const sheet = screen.getByRole('dialog', { name: 'Go to' });
     const home = within(sheet).getByRole('link', { name: 'Jarvis' });
     const usage = within(sheet).getByRole('link', { name: 'Usage' });
-    const factory = within(sheet).getByRole('link', { name: 'Workspaces' });
+    const factory = within(sheet).getByRole('link', { name: 'Software Factory' });
     const notes = within(sheet).getByRole('link', { name: 'Notes' });
     expect(factory.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(sheet).queryByRole('link', { name: 'Tasks' })).toBeNull();
@@ -2089,7 +2089,7 @@ describe('App shell', () => {
     const shell = document.querySelector('.app-shell')!;
     for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
       await user.click(menu);
-      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Folio' }));
+      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Workspaces' }));
       expect(shell.getAttribute('data-folio-open')).toBe('true');
       await user.click(menu);
       await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
