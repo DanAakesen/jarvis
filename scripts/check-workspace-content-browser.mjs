@@ -40,11 +40,13 @@ async function foreground(page, title) {
   await page.getByRole('article', { name: title }).waitFor({ state: 'visible' });
 }
 
-async function capture(page, name) {
+async function capture(page, name, selector) {
   const controls = page.locator('.workspace-browser-fixture-controls');
   await controls.evaluate((element) => { element.hidden = true; });
   try {
-    await page.screenshot({ path: resolve(screenshotDirectory, name) });
+    const path = resolve(screenshotDirectory, name);
+    if (selector) await page.locator(selector).screenshot({ path });
+    else await page.screenshot({ path });
   } finally {
     await controls.evaluate((element) => { element.hidden = false; });
   }
@@ -58,6 +60,43 @@ async function verifyPage(page, width, height, label) {
   const isPhone = await workspace.getAttribute('data-phone');
   equal(isPhone, String(width <= 700 || (height <= 500 && width <= 900)), `${label}: workspace phone layout`);
   return noPageOverflow(page, label);
+}
+
+async function assertInitialChartData(page, label) {
+  const region = page.getByRole('region', { name: 'Scrollable chart plot: Long-label chart' });
+  await region.evaluate((element) => { element.scrollLeft = 0; });
+  await page.waitForFunction(() => {
+    const figure = document.querySelector('.generated-chart');
+    const svg = figure?.querySelector('svg');
+    return Boolean(figure?.clientWidth && svg && Number(svg.getAttribute('width')) < 500);
+  });
+  const geometry = await region.evaluate((element) => {
+    const viewport = element.getBoundingClientRect();
+    const marks = Array.from(element.querySelectorAll('.chart-bars rect'), (mark) => {
+      const rect = mark.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 && rect.right > viewport.left && rect.left < viewport.right
+        && rect.bottom > viewport.top && rect.top < viewport.bottom;
+    });
+    return {
+      scrollLeft: element.scrollLeft,
+      width: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      marks,
+    };
+  });
+  const labels = await page.locator('.chart-x-label').evaluateAll((elements) => elements.map((element) => ({
+    accessible: element.getAttribute('aria-label'),
+    rendered: Array.from(element.querySelectorAll('tspan'), (line) => line.textContent).join(''),
+    lines: element.querySelectorAll('tspan').length,
+  })));
+  assert.equal(geometry.scrollLeft, 0, `${label}: chart starts at its initial horizontal position`);
+  assert(geometry.scrollWidth > geometry.width, `${label}: dense chart scroll remains local`);
+  equal(geometry.marks.length, 12, `${label}: all plotted bars remain present`);
+  assert(geometry.marks.slice(0, 3).every(Boolean),
+    `${label}: first three plotted data marks are visible initially (${JSON.stringify(geometry)})`);
+  assert(labels.every(({ accessible, rendered }) => accessible === rendered),
+    `${label}: wrapped visible labels retain their complete accessible and rendered text`);
+  assert(labels.some(({ lines }) => lines > 1), `${label}: long chart labels wrap onto multiple lines`);
 }
 
 await mkdir(screenshotDirectory, { recursive: true });
@@ -125,6 +164,10 @@ try {
   await verifyPage(page, 320, 700, '320x700 phone');
   await capture(page, 'workspace-320-code.png');
 
+  const chartTitle = 'Long-label chart';
+  await foreground(page, chartTitle);
+  await assertInitialChartData(page, '320x700 phone');
+
   const tableTitle = 'Wide synthetic table';
   await foreground(page, tableTitle);
   const tableRegion = page.getByRole('region', { name: `Scrollable table: ${tableTitle}` });
@@ -142,17 +185,19 @@ try {
   await tableRegion.evaluate((element) => { element.scrollLeft = 0; });
   await foreground(page, tableTitle);
   await verifyPage(page, 375, 812, '375x812 phone');
+  await foreground(page, chartTitle);
+  await assertInitialChartData(page, '375x812 phone');
+  await foreground(page, tableTitle);
   await capture(page, 'workspace-375-table.png');
 
-  const chartTitle = 'Long-label chart';
   await foreground(page, chartTitle);
   const chartRegion = page.getByRole('region', { name: `Scrollable chart plot: ${chartTitle}` });
+  await assertInitialChartData(page, '390x844 phone');
   await chartRegion.focus();
   equal(await chartRegion.evaluate((element) => element === document.activeElement), true, 'chart scroll region can receive keyboard focus');
-  equal(await page.locator('.chart-x-label').count(), 3, 'all chart category labels remain present');
-  equal(await page.locator('.chart-values tbody tr').count(), 3,
+  equal(await page.locator('.chart-x-label').count(), 4, 'complete labels for visible axis ticks are retained');
+  equal(await page.locator('.chart-values tbody tr').count(), 12,
     'chart values remain available in the table');
-  assert(await chartRegion.evaluate((element) => element.scrollWidth > element.clientWidth), 'long chart labels scroll locally');
   await chartRegion.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
   assert(await chartRegion.evaluate((element) => element.scrollLeft > 0), 'chart is horizontally explorable');
   await chartRegion.evaluate((element) => { element.scrollLeft = 0; });
@@ -193,7 +238,7 @@ try {
   await foreground(page, 'Synthetic README');
   const narrowWidth = await page.locator('.workspace-window[data-view-id="readme"]').evaluate((element) => element.clientWidth);
   assert(narrowWidth > 0 && narrowWidth < 520, `narrow desktop window should have a constrained content width, got ${narrowWidth}`);
-  await capture(page, 'workspace-520-narrow-desktop.png');
+  await capture(page, 'workspace-520-narrow-desktop.png', '.workspace');
   await page.getByTestId('expand-workspace').click();
   await page.setViewportSize({ width: 1024, height: 900 });
   await noPageOverflow(page, 'desktop viewport resized after opening windows');
@@ -207,7 +252,7 @@ try {
   console.log(JSON.stringify({
     browser: await browser.version(),
     viewportChecks: ['320x700', '375x812', '390x844', '844x390 touch landscape', '160x350 CSS viewport at DPR 2', '1440x1000 desktop', '520px embedded workspace on 1440px desktop', '1024x900 resized after opening'],
-    checks: ['page overflow', 'wrapped/unwrapped repository text', 'exact selected code and clipboard copy', 'line highlight and search marks', 'focusable local table/chart scrolling and retained values', 'foreground switching', 'close/reopen', 'light/dark', 'container-width resize'],
+    checks: ['page overflow', 'wrapped/unwrapped repository text', 'exact selected code and clipboard copy', 'line highlight and search marks', 'first three chart marks visible at initial scroll at 320/375/390px', 'focusable local table/chart scrolling and retained values', 'foreground switching', 'close/reopen', 'light/dark', 'container-width resize'],
     screenshots: [
       'workspace-320-code.png', 'workspace-375-table.png', 'workspace-390-chart.png',
       'workspace-1440-desktop.png', 'workspace-520-narrow-desktop.png',

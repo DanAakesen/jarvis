@@ -3588,7 +3588,7 @@ Workspace content responsiveness (#1260) has a synthetic Chromium fixture at
 does not sign in or call live services. Install `playwright-core@1.64.1` into a
 scratch directory, set `PLAYWRIGHT_CORE_MODULE` to its `index.mjs`, and run the
 script from the repository root; the exact command, viewport matrix, screenshot
-links, and known limits are in
+links, initial-phone chart-mark assertion, and known limits are in
 `docs/ui/screenshots/workspace-content/README.md`.
 
 P9-73 fixture checks used Chromium and WebKit at 390×844, 1280×900 and

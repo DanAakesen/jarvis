@@ -52,7 +52,7 @@ describe('GeneratedViewRenderer timeline', () => {
     expect(screen.getByRole('table', { name: 'Revenue values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(4);
   });
 
-  it('keeps long chart labels intact in a local scroll region and retains every value', () => {
+  it('wraps long chart labels and retains their full text and values', () => {
     const labels = ['2026 autumn harvest with an extended category label', '2026 winter planning with another extended category label'];
     const view = {
       version: 1, title: 'Seasonal output', renderer: 'chart',
@@ -60,14 +60,32 @@ describe('GeneratedViewRenderer timeline', () => {
       data: { kind: 'bar', series: [{ name: 'Reported', points: labels.map((x, index) => ({ x, y: index + 1 })) }] },
     } as unknown as GeneratedView;
     const { container } = render(<GeneratedViewRenderer view={view} />);
-    const plot = screen.getByRole('region', { name: 'Scrollable chart plot: Seasonal output' });
+    const plot = screen.getByRole('region', { name: 'Chart plot: Seasonal output' });
+
+    expect(plot.hasAttribute('tabindex')).toBe(false);
+    expect(plot.hasAttribute('aria-describedby')).toBe(false);
+    const renderedLabels = Array.from(container.querySelectorAll('.chart-x-label'));
+    expect(renderedLabels.map((label) => label.getAttribute('aria-label'))).toEqual(labels);
+    expect(renderedLabels.map((label) => Array.from(label.querySelectorAll('tspan'), (line) => line.textContent).join(''))).toEqual(labels);
+    expect(renderedLabels.some((label) => label.querySelectorAll('tspan').length > 1)).toBe(true);
+    expect(Number(container.querySelector('svg')?.getAttribute('width'))).toBeLessThanOrEqual(640);
+    expect(screen.getByRole('table', { name: 'Seasonal output values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(2);
+  });
+
+  it('keeps dense chart labels in a local scroll region when points need more room', () => {
+    const labels = Array.from({ length: 30 }, (_, index) => `Category ${index + 1} with an extended label`);
+    const view = {
+      version: 1, title: 'Dense categories', renderer: 'chart',
+      source: { id: 'usage', status: 'complete', updatedAt: '2026-10-08T16:00:00.000Z' },
+      data: { kind: 'bar', series: [{ name: 'Reported', points: labels.map((x, index) => ({ x, y: index + 1 })) }] },
+    } as unknown as GeneratedView;
+    const { container } = render(<GeneratedViewRenderer view={view} />);
+    const plot = screen.getByRole('region', { name: 'Scrollable chart plot: Dense categories' });
 
     expect(plot.getAttribute('tabindex')).toBe('0');
-    expect(plot.getAttribute('aria-describedby')).toBeTruthy();
     expect(screen.getByText('Scroll horizontally to read all chart labels.')).not.toBeNull();
-    expect(Array.from(container.querySelectorAll('.chart-x-label'), (label) => label.textContent)).toEqual(labels);
     expect(Number(container.querySelector('svg')?.getAttribute('width'))).toBeGreaterThan(640);
-    expect(screen.getByRole('table', { name: 'Seasonal output values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(screen.getByRole('table', { name: 'Dense categories values', hidden: true }).querySelectorAll('tbody tr')).toHaveLength(30);
   });
 
   it('keeps long prose, list, detail, task-card and status content intact', () => {

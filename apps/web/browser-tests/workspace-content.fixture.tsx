@@ -43,11 +43,13 @@ const tableView = {
   },
 } as unknown as GeneratedView;
 
-const chartLabels = [
-  'Autumn harvest observation with a long category label',
-  'Winter planning observation with another long category label',
-  'Spring readiness observation with a third long category label',
-];
+const chartLabels = Array.from({ length: 12 }, (_, index) => (
+  `${[
+    'Autumn harvest observation with a long category label',
+    'Winter planning observation with another long category label',
+    'Spring readiness observation with a third long category label',
+  ][index % 3]} (${index + 1})`
+));
 const chartView = {
   version: 1,
   title: 'Long-label chart',

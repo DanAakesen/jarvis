@@ -58,9 +58,12 @@
   at DPR 2; 1440×1000 desktop; a 520px allocated Workspace container; and
   resizing open windows through 1024×900. It checks exact selected-code
   clipboard text, wrapping/original lines, highlights/search marks, local
-  focusable table/chart scrolling and values, page overflow, theme changes,
-  foreground switching and close/reopen. Durable captures and the reproduction
-  command are in `docs/ui/screenshots/workspace-content/README.md`. Component
+  focusable table/chart scrolling and values, and verifies chart marks are visible
+  at the initial scroll position at each phone width. The 520px capture targets
+  the Workspace element to avoid retained page scroll clipping the window. It also
+  checks page overflow, theme changes, foreground switching and close/reopen.
+  Durable captures and the reproduction command are in
+  `docs/ui/screenshots/workspace-content/README.md`. Component
   suites cover list/detail/timeline/image renderers and sandbox/CSP/bridge
   contracts; those were not exercised in this browser fixture. DPR 2 is not
   actual 200% browser zoom, and Chromium emulation is not physical iPhone or
