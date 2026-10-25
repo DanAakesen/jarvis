@@ -51,13 +51,22 @@
 - Keep the document from forcing a 280px minimum width below that CSS width at
   high zoom. This preserves the surrounding workspace and foreground-window
   transitions while preventing page-level horizontal overflow.
-- **Evidence:** component tests cover code wrapping and exact text, highlights
-  and marks; wide tables, chart labels and values; prose/list/detail/task/status,
-  image and timeline renderers; the knowledge graph and sandbox contract have
-  their existing focused suites. Synthetic Chromium covers 320/375/390px,
-  desktop and a narrow window, landscape, 200% effective CSS width, theme
-  changes, local scrolling, selection, foreground switching and close/reopen.
-  Physical iPhone acceptance remains with the owner; keep #1260 open until it.
+- **Evidence:** `scripts/check-workspace-content-browser.mjs` reuses the web
+  Vite setup with the synthetic fixture in
+  `apps/web/browser-tests/workspace-content.fixture.tsx`. It checks 320×700,
+  375×812 and 390×844 portrait; 844×390 touch landscape; a 160 CSS px viewport
+  at DPR 2; 1440×1000 desktop; a 520px allocated Workspace container; and
+  resizing open windows through 1024×900. It checks exact selected-code
+  clipboard text, wrapping/original lines, highlights/search marks, local
+  focusable table/chart scrolling and values, page overflow, theme changes,
+  foreground switching and close/reopen. Durable captures and the reproduction
+  command are in `docs/ui/screenshots/workspace-content/README.md`. Component
+  suites cover list/detail/timeline/image renderers and sandbox/CSP/bridge
+  contracts; those were not exercised in this browser fixture. DPR 2 is not
+  actual 200% browser zoom, and Chromium emulation is not physical iPhone or
+  iOS Safari acceptance. Dark mode was exercised but not captured. Voice/chat
+  transitions and live services were not tested. Physical iPhone acceptance
+  remains with the owner; keep #1260 open until it.
 
 ## Owner-requested reminders reuse proactive delivery (#1239; 23 October 2026)
 
