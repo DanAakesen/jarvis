@@ -394,7 +394,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       view: { page: 'factory', taskId: '10', focusedViewId: 'report', folioOpen: true },
     });
     const firstDone = once(browser, 'message');
-    upstream.send(JSON.stringify({ type: 'response.done' }));
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
     await firstDone;
     browser.send(JSON.stringify({ type: 'response.create' }));
     await vi.waitFor(() => expect(contextLines()).toHaveLength(2));
@@ -402,7 +402,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(contextLines()[1]).toContain('"Ignite\\nreport" [viewId=report] (focused)');
     connection.close();
     const secondDone = once(browser, 'message');
-    upstream.send(JSON.stringify({ type: 'response.done' }));
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
     await secondDone;
     browser.send(JSON.stringify({ type: 'response.create' }));
     await vi.waitFor(() => expect(contextLines()).toHaveLength(3));
@@ -459,10 +459,12 @@ describe('backend-relayed Voice Live WebSocket', () => {
             name: 'greet',
             arguments: '{"name":"Dan"}',
           }));
-          socket.send(JSON.stringify({ type: 'response.done', response: { id: 'greet-response' } }));
+          socket.send(JSON.stringify({
+            type: 'response.done', response: { id: 'greet-response', status: 'completed' },
+          }));
         } else if (event.type === 'response.create') {
           vi.advanceTimersByTime(4);
-          socket.send(JSON.stringify({ type: 'response.done' }));
+          socket.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
         }
       });
     });
@@ -717,7 +719,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(readsBeforeSave + 3));
     expect(sessionUpdates).toHaveLength(1);
 
-    upstream.send(JSON.stringify({ type: 'response.done' }));
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
     await vi.waitFor(() => expect(sessionUpdates).toHaveLength(2));
     expect(String(sessionUpdates[1]?.instructions)).toContain('"Synthetic updated identity."');
 
@@ -1067,13 +1069,13 @@ describe('backend-relayed Voice Live WebSocket', () => {
           };
           browser.on('message', onMessage);
         });
-        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
         await delivered;
       }
       await vi.waitFor(() => expect(kind === 'reflex' ? classify : execute).toHaveBeenCalledOnce());
       if (kind === 'reflex') {
         const done = once(browser, 'message');
-        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
         await done;
       }
       expect(speak('Use chat while the operation is pending.')).toBe(false);
@@ -1083,7 +1085,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     }
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
     const done = once(browser, 'message');
-    upstream.send(JSON.stringify({ type: 'response.done' }));
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
     await done;
     expect(speak('The download has finished.')).toBe(true);
   });
@@ -1226,9 +1228,82 @@ describe('backend-relayed Voice Live WebSocket', () => {
       name: 'tool_only_test',
       arguments: '{}',
     }));
-    upstream.send(JSON.stringify({ type: 'response.done', response: { id: 'tool_only_response' } }));
+    upstream.send(JSON.stringify({
+      type: 'response.done', response: { id: 'tool_only_response', status: 'completed' },
+    }));
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
   });
+
+  it.each(['cancelled', 'failed', 'incomplete'] as const)(
+    'does not execute queued tools when response.done has status %s',
+    async (status) => {
+      const received: Record<string, unknown>[] = [];
+      let upstream!: WebSocket;
+      const execute = vi.fn(async () => ({ ok: true }));
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      });
+      const toolModule: BackendModule = {
+        id: 'unsuccessful-response-status-test',
+        tools: [{
+          name: 'unsuccessful_response_status_test',
+          description: 'Return a test result.',
+          inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+          execute,
+        }],
+        registerRoutes: async () => {},
+      };
+      const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      }), undefined, [], [toolModule]);
+      const activity = vi.spyOn(app.jarvisActivityHub, 'publish');
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+      await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+      const speechStopped = new Promise<void>((resolve) => {
+        const onMessage = (data: RawData) => {
+          if ((JSON.parse(data.toString()) as Record<string, unknown>).type !== 'input_audio_buffer.speech_stopped') return;
+          browser.off('message', onMessage);
+          resolve();
+        };
+        browser.on('message', onMessage);
+      });
+      upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
+      await speechStopped;
+      browser.send(JSON.stringify({ type: 'response.create' }));
+      await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+      upstream.send(JSON.stringify({ type: 'response.created', response: { id: 'unsuccessful_response' } }));
+      upstream.send(JSON.stringify({
+        type: 'response.function_call_arguments.done',
+        call_id: 'unsuccessful_response_call',
+        name: 'unsuccessful_response_status_test',
+        arguments: '{}',
+      }));
+      const terminalDelivered = new Promise<void>((resolve) => {
+        const onMessage = (data: RawData) => {
+          if ((JSON.parse(data.toString()) as Record<string, unknown>).type !== 'response.done') return;
+          browser.off('message', onMessage);
+          resolve();
+        };
+        browser.on('message', onMessage);
+      });
+      upstream.send(JSON.stringify({
+        type: 'response.done',
+        response: { id: 'unsuccessful_response', status },
+      }));
+      await terminalDelivered;
+      await vi.waitFor(() => {
+        expect(activity.mock.calls.some(([event]) => event.type === 'interrupted')).toBe(true);
+      });
+      expect(execute).not.toHaveBeenCalled();
+      expect(received.some((event) =>
+        (event.item as Record<string, unknown> | undefined)?.type === 'function_call_output')).toBe(false);
+      expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+    },
+  );
 
   it.each(['missing', 'negative'] as const)(
     'continues the received request when initial acknowledgment playback is %s',
@@ -1293,7 +1368,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
         };
         browser.on('message', onMessage);
       });
-      upstream.send(JSON.stringify({ type: 'response.done', response: { id: 'failed_ack' } }));
+      upstream.send(JSON.stringify({
+        type: 'response.done', response: { id: 'failed_ack', status: 'completed' },
+      }));
       await terminalDelivered;
       await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
       await vi.waitFor(() => expect(received.some((event) =>
@@ -1426,7 +1503,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
       browser.on('message', onMessage);
     });
     order.push('response.done');
-    upstream.send(JSON.stringify({ type: 'response.done', response: { id: responseId } }));
+    upstream.send(JSON.stringify({
+      type: 'response.done', response: { id: responseId, status: 'completed' },
+    }));
     await responseDoneDelivered;
     await vi.waitFor(() => {
       expect(activity.mock.calls.some(([event]) =>
@@ -1455,7 +1534,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
         name: 'response_queue_test',
         arguments: '{}',
       }));
-      upstream.send(JSON.stringify({ type: 'response.done', response: { id: silentResponseId } }));
+      upstream.send(JSON.stringify({
+        type: 'response.done', response: { id: silentResponseId, status: 'completed' },
+      }));
       await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(index));
     }
     expect(received.filter((event) =>
@@ -1485,7 +1566,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
         if (event.type === 'input_audio_buffer.append') sendTimedPartialTranscript(socket, itemId);
         if (event.type === 'response.create') {
           if (String((event.response as Record<string, unknown> | undefined)?.instructions).includes('provenance-labelled')) {
-            socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+            socket.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
             return;
           }
           socket.send(JSON.stringify({ type: 'response.created' }));
@@ -2285,7 +2366,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(JSON.stringify(received)).not.toContain(frameId);
       expect(JSON.stringify(conversationStore.setVisualContext.mock.calls)).not.toContain(frameId);
       expect(records.join('')).not.toContain(frameId);
-      upstream.send(JSON.stringify({ type: 'response.done' }));
+      upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
       const retryImage = await sharp({ create: {
         width: 1, height: 1, channels: 3, background: '#ffffff',
       } }).jpeg().toBuffer();
@@ -2372,7 +2453,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
         if (outcome === 'queued') {
           await vi.waitFor(() => expect(conversationStore.setVisualContext).toHaveBeenCalledOnce());
           expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
-          upstream.send(JSON.stringify({ type: 'response.done', response: { id: 'previous_response' } }));
+          upstream.send(JSON.stringify({
+            type: 'response.done', response: { id: 'previous_response', status: 'completed' },
+          }));
         }
         await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1),
           { timeout: 3_000 });
@@ -2382,6 +2465,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
           const done = {
             type: 'response.done', response: {
               id: 'image_response',
+              status: 'completed',
               usage: { input_tokens: 120, output_tokens: 15, input_token_details: { image_tokens: 100 } },
             },
           };
@@ -2623,7 +2707,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     if (phase === 'queued_image') {
       expect(received.some((event) => event.type === 'conversation.item.delete' && event.item_id === imageItemId)).toBe(false);
       upstream.send(JSON.stringify({ type: 'response.created', response: { id: 'camera_response' } }));
-      upstream.send(JSON.stringify({ type: 'response.done', response: { id: 'camera_response' } }));
+      upstream.send(JSON.stringify({
+        type: 'response.done', response: { id: 'camera_response', status: 'completed' },
+      }));
       await vi.waitFor(() => expect(received).toContainEqual(expect.objectContaining({
         type: 'conversation.item.delete', item_id: imageItemId,
       })));
@@ -2720,7 +2806,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
         upstream.send(JSON.stringify({ type: 'response.created', response: { id: 'new_image_response' } }));
         upstream.send(JSON.stringify({
           type: 'response.done',
-          response: { id: 'new_image_response', usage: { input_tokens: 12, output_tokens: 3,
+          response: { id: 'new_image_response', status: 'completed', usage: { input_tokens: 12, output_tokens: 3,
             input_token_details: { image_tokens: 10 } } },
         }));
         await vi.waitFor(() => expect(recordUsage).toHaveBeenCalledWith({
@@ -2902,7 +2988,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       type: 'conversation.item.input_audio_transcription.completed', item_id: 'early_turn', transcript: 'What is it?',
     }));
     await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
-    upstream.send(JSON.stringify({ type: 'response.done' }));
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
     upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'new_turn' }));
     upstream.send(JSON.stringify({
       type: 'conversation.item.input_audio_transcription.completed', item_id: 'new_turn', transcript: 'What changed?',
@@ -3172,7 +3258,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await vi.waitFor(() => expect(received).toContainEqual({
       type: 'session.update', session: { turn_detection: turnDetection },
     }));
-    provider.send(JSON.stringify({ type: 'response.done' }));
+    provider.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
     provider.send(JSON.stringify({
       type: 'user.message', item_id: 'legacy_hosted', content: [{ type: 'input_text', text: 'Tak.' }],
     }));
@@ -3353,10 +3439,14 @@ describe('backend-relayed Voice Live WebSocket', () => {
               name: toolName,
               arguments: JSON.stringify({ goal: 'Fill in my name' }),
             }));
-            socket.send(JSON.stringify({ type: 'response.done', event_id: 'shared-response-done', response: {} }));
+            socket.send(JSON.stringify({
+              type: 'response.done', event_id: 'shared-response-done', response: { status: 'completed' },
+            }));
           } else if (instructions?.includes('I’m working in the shared tab')) {
             markProgressSpoken();
-            socket.send(JSON.stringify({ type: 'response.done', event_id: 'progress-done', response: {} }));
+            socket.send(JSON.stringify({
+              type: 'response.done', event_id: 'progress-done', response: { status: 'completed' },
+            }));
           }
           return;
         }
@@ -3762,7 +3852,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
               name,
               arguments: '{"name":"Dan"}',
             }));
-            socket.send(JSON.stringify({ type: 'response.done', event_id: 'response-done', response: {} }));
+            socket.send(JSON.stringify({
+              type: 'response.done', event_id: 'response-done', response: { status: 'completed' },
+            }));
             return;
           }
           if (event.type === 'conversation.item.create') {
@@ -3828,7 +3920,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
       const recordedTool = JSON.parse(toolOutput.output as string) as Record<string, unknown>;
       expect(recordedTool).toMatchObject({ tool: name, outcome });
       expect(browserEvents.some((event) => event.type === 'response.function_call_arguments.done')).toBe(false);
-      expect(browserEvents).toContainEqual({ type: 'response.done', event_id: 'response-done', response: {} });
+      expect(browserEvents).toContainEqual({
+        type: 'response.done', event_id: 'response-done', response: { status: 'completed' },
+      });
       expect(activityEvents).toMatchObject([
         { type: 'listening', source: 'voice' },
         { type: 'thinking', source: 'voice' },
@@ -3888,7 +3982,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
             name: 'research',
             arguments: '{"topic":"Evidence"}',
           }));
-          socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+          socket.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
           return;
         }
         if (event.type === 'conversation.item.create' &&
@@ -3900,7 +3994,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
           const response = (event.response ?? {}) as Record<string, unknown>;
           responseCalls.push(response);
           if (response.tool_choice === 'none') resolveAnnouncement(response);
-          socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+          socket.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
         }
       });
     });
@@ -4004,7 +4098,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
               arguments: JSON.stringify(call.arguments),
             }));
           }
-          socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+          socket.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
           return;
         }
         const item = event.item as Record<string, unknown> | undefined;
@@ -4013,7 +4107,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
           if (outputs.size === calls.length) resolveOutputs();
           return;
         }
-        if (event.type === 'response.create') socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+        if (event.type === 'response.create') {
+          socket.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
+        }
       });
     });
     const { app } = appFor((token, signal) => new WebSocket(upstreamUrl, {
@@ -4092,7 +4188,7 @@ describe('calendar confirmation turns', () => {
     // Wait for end-of-turn processing before the later approval.
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
     for (const itemId of ['approval-1', 'approval-2']) {
-      upstream.send(JSON.stringify({ type: 'response.done' }));
+      upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
       upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
         item_id: itemId, transcript: 'yes' }));
       await vi.waitFor(() => expect(state).toHaveBeenCalledTimes(itemId === 'approval-1' ? 1 : 2));
@@ -4144,7 +4240,7 @@ describe('calendar confirmation turns', () => {
       await vi.waitFor(() => expect(upstream).toBeDefined());
       const sendTurn = async (id: string, transcript: string) => {
         const count = received.filter(({ type }) => type === 'response.create').length;
-        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
         upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
           item_id: id, transcript }));
         await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
@@ -4202,7 +4298,7 @@ describe('calendar confirmation turns', () => {
       await vi.waitFor(() => expect(upstream).toBeDefined());
       const sendTurn = async (id: string, transcript: string) => {
         const count = received.filter(({ type }) => type === 'response.create').length;
-        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
         upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
           item_id: id, transcript }));
         await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
@@ -4265,7 +4361,7 @@ describe('calendar confirmation turns', () => {
     await vi.waitFor(() => expect(upstream).toBeDefined());
     const sendTurn = async (id: string, transcript: string) => {
       const count = received.filter(({ type }) => type === 'response.create').length;
-      upstream.send(JSON.stringify({ type: 'response.done' }));
+      upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
       upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
         item_id: id, transcript }));
       await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));

@@ -2561,17 +2561,20 @@ function registerVoiceRoute(
             if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
               const response = event.response as {
                 id?: unknown;
+                status?: unknown;
                 usage?: { input_tokens?: unknown; output_tokens?: unknown;
                   input_token_details?: { image_tokens?: unknown };
                   input_tokens_details?: { image_tokens?: unknown } };
               } | undefined;
+              const responseCompleted = event.type === 'response.done' &&
+                response?.status === 'completed';
               const completion = responseCompletionState;
               if (completion &&
                   (completion.responseId === undefined ||
                     completion.responseId === response?.id)) {
                 completionForDelivery = {
                   state: completion,
-                  completed: event.type === 'response.done',
+                  completed: responseCompleted,
                 };
               }
               const usageItem = typeof response?.id === 'string' ? imageUsageResponses.get(response.id) : undefined;
@@ -2620,7 +2623,8 @@ function registerVoiceRoute(
             }
             if (english && (event?.type === 'response.done' || event?.type === 'response.cancelled') &&
                 toolCallsInResponse) {
-              if (event.type === 'response.cancelled') {
+              const response = event.response as { status?: unknown } | undefined;
+              if (event.type === 'response.cancelled' || response?.status !== 'completed') {
                 toolCallsInResponse = false;
                 responseDone = false;
               } else {

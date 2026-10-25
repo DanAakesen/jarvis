@@ -17,18 +17,22 @@ ordered transport send, not a provider/client receipt or proof that speech was
 played; this transport exposes no playback-completion contract.
 
 Realtime voice uses the same English and Danish acknowledgment intent guidance
-with a transport-specific adapter. A tool call waits for terminal-event
-browser-send acceptance, but not for confirmation that initial acknowledgment
-audio played. Missing or negative playback receipts therefore do not block a
-received request. Cancellation, barge-in, required approvals, authorization or
-failed terminal delivery still prevent unauthorized tool execution. First
+with a transport-specific adapter. A tool call waits for a matching successful
+(`response.status: completed`) terminal event to be accepted by the browser
+transport, but not for confirmation that initial acknowledgment audio played.
+The provider emits `response.done` for completed, cancelled, failed and
+incomplete outcomes, so terminal delivery alone cannot release a queued tool.
+Missing or negative playback receipts do not block a received request;
+cancellation, barge-in, required approvals, authorization and failed or
+non-successful terminal delivery/status still prevent tool execution. First
 tool-only responses and later silent tool rounds also need no playback receipt.
 Browser playback completion is not proof of physical-speaker output.
 
 Synthetic fixtures verify the ordering `streamed intent → boundary → tool work →
 final result`, continued tool execution after missing or negative initial playback
-receipts, cancellation, later silent tool rounds, and direct turns without a
-boundary. No live model latency or physical-device playback was measured.
+receipts, rejection of non-completed terminal statuses, cancellation, later
+silent tool rounds, and direct turns without a boundary. No live model latency or
+physical-device playback was measured.
 
 ## Vault mirror status consumption (19 October 2026; P14-29)
 
