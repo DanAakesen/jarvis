@@ -17,6 +17,18 @@ backend transcription route. Browser support and permission errors remain
 visible; audio processing follows the browser's speech-recognition
 implementation, which may use its provider. No new API or storage contract.
 
+## Base vault-index freshness on successful sync evidence (#1288; 25 October 2026)
+
+Use the vault module's existing synchronization outcome rather than the newest
+changed chunk to establish index freshness. This allows a successful no-change
+run to refresh evidence, keeps a failed latest attempt degraded, and retains
+incomplete embedding coverage as degraded. Report the latest attempt and last
+successful sync separately; label `latestIndexedAt` as content-index time only.
+The outcome is process-local, so restart or no verified sync reports unknown
+until a sync completes. Do not infer success from retained chunks or introduce
+new persistence or active model/runner probes. Status-page refresh reads the
+existing status endpoint; its check timestamp does not advance sync evidence.
+
 ## 2026-10-25 — Share confirmation transitions, retain tool authorization (#1281)
 
 Use `core/pending-action.ts` for exact immutable proposals, later-owner
