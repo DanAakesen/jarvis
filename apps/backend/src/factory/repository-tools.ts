@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
-import { resolveRepository } from './project-context.js';
+import { projectSelectorSchema, resolveRepository } from './project-context.js';
 
 const githubApi = 'https://api.github.com';
 const maxApiResponseBytes = 2 * 1024 * 1024;
@@ -306,8 +306,8 @@ async function issueReadToken(request: FastifyRequest, repository: string, issue
 
 const projectProperty = {
   project: {
-    type: 'string', minLength: 1, maxLength: 140,
-    description: 'Omit for Jarvis\'s own code ("your code"). Otherwise an added project ID or owner/name.',
+    ...projectSelectorSchema,
+    description: 'Omit for Jarvis\'s own code ("your code"). Otherwise use an active project ID, full owner/repo, project name, or a natural reference supported by the active registry.',
   },
 };
 const objectSchema = (properties: Record<string, unknown>, required: string[] = []) => ({

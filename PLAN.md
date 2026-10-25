@@ -5,7 +5,7 @@
 Clarified mobile/desktop browser versus telephone-call tool guidance and trusted
 runtime channel instructions. Guidance now requires backend estimate staging
 before inviting confirmation, with no authority from historical agreement.
-Merged latest main `5231117` with #1259 acknowledgement and #1282 shared
+Merged main `dd929aa` with #1259 acknowledgement, #1264 project clarification and #1282 shared
 `PendingAction` lifecycle. Food approval retains that lifecycle and exact-proposal
 authority; no second confirmation state or parser/phone permission change.
 
@@ -16,7 +16,8 @@ discarded; interruption preserves the original tool's result continuation.
 Synthetic HTTP tests read the public review before steering; English/Danish
 direct/discovery WebSocket tests receive invitation transcript/audio frames before
 a new owner reply and then receive the committed result once. Focused tests and
-backend build/lint pass. Fresh full-tree qualification and security review follow;
+backend build/lint pass. Full-tree qualification covers workspace lint/tests/builds,
+Python components, isolated SQL contracts and security review;
 real-SQL, live-provider and physical mobile-device acceptance remain separate.
 Next acceptance requires live invitation/recognition/playback, not acknowledgement
 alone. No production food writes.

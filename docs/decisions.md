@@ -1,5 +1,35 @@
 # Decisions
 
+## Resolve project references against the active registry (25 October 2026; #1263)
+
+- Resolve explicit project IDs and full repository names exactly; normalize
+  display names conservatively and match natural references only against current
+  active registered-project candidates. Never select the first plausible match.
+- Ask one short natural-language question before a write when the reference is
+  ambiguous or absent. A missing project in the active-only list does not prove
+  that it was archived; registry read failures remain distinct from project and
+  GitHub App permission failures.
+- Pin the selected project ID and repository and revalidate them before issue,
+  label, comment, task or generic GitHub App writes. Do not fall back from a named
+  non-self project, register/unarchive projects or change permissions to make a
+  request succeed.
+- Keep `create_issue` as the code-change path and reuse existing approval and
+  tool replay ownership. This change adds no confirmation, execution or replay
+  loop of its own.
+- For a one-project clarification, accept only an immediate clear affirmation
+  bound to the same verified session and unchanged issue request; ambiguity,
+  denial/uncertainty (including replies that also name a candidate), intervening
+  replies, changed targets and stale registrations fail closed. A clear named
+  selection remains valid when multiple candidates were listed.
+  The shared pending-action lifecycle owns clarification reply eligibility,
+  expiry, cancellation and one-time selection; selecting a project is not issue
+  approval.
+  Explicit raw-repository issue comments remain supported without registration.
+- **Verification:** synthetic resolver and canonical dispatch tests cover English
+  and Danish requests, ambiguity, no-write refusals, permission denial and project
+  archive/rename races at factory and GitHub App write boundaries. Provider,
+  production and physical voice acceptance remain unverified.
+
 ## Base vault-index freshness on successful sync evidence (#1288; 25 October 2026)
 
 Use the vault module's existing synchronization outcome rather than the newest
@@ -85,7 +115,6 @@ headroom. Keep food's 180-second operation and 120-second approval limits,
 and ordinary browser requests' 120-second deadline. Sanitize transport-read
 failures and direct the owner to check status before retrying. Synthetic checks
 do not establish live provider, microphone, device or deployment acceptance.
-
 ## Compact camera preview and attachment menu order (#1265; 25 October 2026)
 
 Keep the existing Camera preview workspace identity and lifecycle, but make the
@@ -96,7 +125,6 @@ established preview recovery behavior. Use **Enable video** consistently for the
 camera-on action. Put **Attach file or photo** first in the typing More menu,
 reusing the existing validated upload/picker flow. This does not change camera
 capture, permissions, or image-input behavior.
-
 ## Generic text questions use an active screen share (#1266; 25 October 2026)
 
 Text submission and turn execution resolve generic English/Danish visual
