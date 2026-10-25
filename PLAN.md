@@ -15,6 +15,13 @@ WebSocket regressions pass locally, along with backend/web builds and lint.
 Read-only review found no remaining significant issues. Chromium transport smoke
 checks at 1440px and 390px verified the streamed receipt and sanitized disconnect
 recovery with synthetic responses, not the signed-in production workflow.
+Qualification repair: merged main `5c0a61c` and retained both decision-log entries.
+The failing real-SQL review fixture now supplies the SQL conversation store and
+persisted source/replies instead of a session-only stub. Its clock follows the
+persisted source; browser and natural approval variants retain rejection,
+one-time consumption, intake replay, correction and deletion assertions.
+Full combined-tree qualification is being rerun; earlier-head CI is not acceptance
+of this repaired candidate.
 Next: live hosted-provider, microphone recognition and physical-device acceptance;
 these remain unverified. No personal food data or production writes are part of
 this change.

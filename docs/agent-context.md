@@ -15,6 +15,18 @@ readers use the existing hosting budgets (browser 240 seconds, backend 210 secon
 below ingress), not a new food lifetime.
 Local HTTP/WebSocket fixtures are not live microphone, provider or device evidence.
 
+The SQL nutrition review fixture uses `createConversationStore(pool)` for both
+the tool request and owner-interaction service, with persisted source/reply
+messages. Its nutrition clock follows the source timestamp. Keep the real SQL
+approval/replay assertions for both browser-button and natural estimate replies:
+
+```sh
+npm run test:database --workspace @jarvis/backend -- src/database/nutrition.integration.test.ts
+```
+
+This command requires the isolated loopback SQL Server configuration used by
+Database CI; never point it at production.
+
 ## Research result recovery (#1237; 25 October 2026)
 
 Focused offline checks from the repository root:
