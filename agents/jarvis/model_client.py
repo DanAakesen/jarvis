@@ -56,6 +56,7 @@ from jarvis_tools import (
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
+    current_phone_session_id,
     current_smoke_invocation,
     current_steering_fetcher,
     current_turn,
@@ -912,6 +913,22 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 with latency_span("prompt_build") as prompt_span:
                     if role == "chat":
                         instructions = f"{instructions}\n\n{CHAT_FORMAT_INSTRUCTIONS}"
+                    if role != "smoke":
+                        channel = (
+                            "telephone call" if current_phone_session_id.get()
+                            else "browser chat" if role == "chat" else "browser voice"
+                        )
+                        instructions += (
+                            f"\n\nTrusted runtime channel: {channel}. Browser chat and browser "
+                            "voice on mobile or desktop are not telephone calls. Use this "
+                            "current channel, not device wording or earlier refusals in history. "
+                            "Backend permissions and approval checks still apply. Food estimates "
+                            "must be staged with daily_food_review log_estimate before inviting "
+                            "confirmation; prose or lookup alone creates no pending proposal. "
+                            "Only a new reply bound by the backend to the exact pending proposal "
+                            "can approve it; never use historical agreement or claim a write "
+                            "without a committed tool receipt."
+                        )
                     instructions += (
                         "\n\nFor an overall capability overview, after get_system_health with "
                         "operation list_capabilities succeeds, briefly name every "

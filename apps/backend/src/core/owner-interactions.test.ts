@@ -62,6 +62,7 @@ function fixture(withConversationStore = true) {
   };
   const onWebNotification = vi.fn(async () => {});
   const onConfirmationsChanged = vi.fn();
+  const onConfirmationPending = vi.fn();
   const conversationStore = {
     getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes', language: 'en' as const }]),
   };
@@ -71,8 +72,9 @@ function fixture(withConversationStore = true) {
     ...(withConversationStore && { conversationStore }),
     onWebNotification,
     onConfirmationsChanged,
+    onConfirmationPending,
   });
-  return { service, store, rows, onWebNotification, onConfirmationsChanged, conversationStore };
+  return { service, store, rows, onWebNotification, onConfirmationsChanged, onConfirmationPending, conversationStore };
 }
 
 describe('food natural language owner interactions', () => {
@@ -85,6 +87,33 @@ describe('food natural language owner interactions', () => {
   });
   const interpreter = createApprovalInterpreter();
   const decide: ApprovalDecider = async (question, signal) => (await interpreter(question, signal)).verdict;
+
+  it('publishes the exact persisted proposal and source binding while waiting for a new reply', async () => {
+    const { service, store, onConfirmationPending } = fixture();
+    const action = vi.fn(async () => 'committed');
+    const operation = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
+    await vi.waitFor(() => expect(onConfirmationPending).toHaveBeenCalledOnce());
+    expect(store.createConfirmation).toHaveBeenCalledOnce();
+    expect(onConfirmationPending).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: 'Log synthetic portion: 200 kcal.' }), delivery.foodEstimate,
+    );
+    expect(action).not.toHaveBeenCalled();
+    expect(await service.resolveFoodEstimateReply!(reply(), decide, new AbortController().signal)).toBe(true);
+    expect(await operation).toBe('committed');
+    expect(action).toHaveBeenCalledOnce();
+    expect(store.consumeApproval).toHaveBeenCalledOnce();
+  });
+
+  it('cancels the shared proposal if invitation publication fails', async () => {
+    const { service, store, onConfirmationPending } = fixture();
+    onConfirmationPending.mockImplementation(() => { throw new Error('Synthetic delivery failure'); });
+    const action = vi.fn();
+    await expect(service.runConfirmed('other', 'Log synthetic portion.', action, undefined, delivery))
+      .rejects.toThrow('Browser confirmation could not be completed.');
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
+    expect(store.cancelConfirmation).toHaveBeenCalled();
+    expect(action).not.toHaveBeenCalled();
+  });
 
   it.each(['yes, log that', 'ja tak, log det', 'yes', 'no', 'cancel'])('resolves only the food estimate for %s', async text => {
     const { service, store, conversationStore } = fixture();

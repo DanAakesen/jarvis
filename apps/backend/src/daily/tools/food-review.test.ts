@@ -10,6 +10,11 @@ import { fridaReference, type FridaLookup, type LookupComponent } from '../nutri
 import type { DailyFoodLookup } from '../query.js';
 import { dailyFoodReviewTool } from './food-review.js';
 import { foodReviewSchema } from '../nutrition/review.js';
+import { buildApp } from '../../app.js';
+import { loadConfig } from '../../config.js';
+import { coreModule } from '../../core/index.js';
+import { conversationModule } from '../../core/conversation.js';
+import type { ConversationHistoryMessage, ConversationStore } from '../../core/conversation-store.js';
 import {
   executeRealtimeCapabilityCall, VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL,
 } from '../../voice/realtime.js';
@@ -146,6 +151,116 @@ async function executeThroughVoiceCapability(
 }
 
 describe('inactive internal food proposal review', () => {
+  it.each([false, true])('routes mobile browser estimate → Log it through discovered tools (earlier refusal: %s)', async earlierRefusal => {
+    const f = fixture();
+    f.session.channel = 'chat';
+    f.session.id = '41';
+    const config = { ...loadConfig({}), logLevel: 'silent' as const };
+    config.auth.ownerObjectId = owner;
+    const messages: ConversationHistoryMessage[] = earlierRefusal ? [{
+      id: '40', sessionId: '41', role: 'jarvis', text: 'Unavailable in a phone session. Use browser approval.',
+      model: null, at, channel: 'chat', language: 'en', interrupted: false, voiceMinutes: null,
+      toolCalls: [], attachments: [],
+    }] : [];
+    let nextId = 42;
+    const conversationStore: ConversationStore = {
+      createSession: vi.fn(async () => ({ ...f.session, channel: 'chat', language: 'en' })),
+      endSession: vi.fn(async () => true),
+      getSession: vi.fn(async () => ({ ...f.session, channel: 'chat', language: 'en' })),
+      getDanMessageIdBySourceItemId: vi.fn(async () => null),
+      addMessage: vi.fn(async input => {
+        const message: ConversationHistoryMessage = { ...input, id: String(nextId++), at: new Date(),
+          channel: 'chat', language: 'en', interrupted: false, voiceMinutes: null, toolCalls: [], attachments: [] };
+        messages.push(message);
+        return message;
+      }),
+      getHistory: vi.fn(async ({ limit }) => ({ messages: [...messages].reverse().slice(0, limit), nextCursor: null })),
+      readRecentUserMessages: vi.fn(async () => []),
+      getDanMessagesAfter: vi.fn(async ({ after }) => messages.filter(message => message.role === 'dan' && BigInt(message.id) > BigInt(after))
+        .map(({ id, text }) => ({ id, text, language: 'en' as const }))),
+    };
+    const service = createOwnerInteractionService({ ownerObjectId: owner, conversationStore,
+      onConfirmationsChanged: () => app.nowEventHub.publish({ type: 'refresh' }),
+      onConfirmationPending: (confirmation, foodEstimate) => {
+        if (foodEstimate) app.nowEventHub.publish({ type: 'food_estimate_pending', ...foodEstimate, confirmation });
+      }, store: {
+      createConfirmation: vi.fn(async () => {}),
+      resolveConfirmation: vi.fn(async () => 'approved'),
+      consumeApproval: vi.fn(async () => true),
+      cancelConfirmation: vi.fn(async () => {}),
+      expireConfirmation: vi.fn(async () => false),
+      expirePendingConfirmations: vi.fn(async () => {}),
+    } });
+    const tool = dailyFoodReviewTool(f.nutrition, Date.now, f.lookup);
+    const ownerHeaders = { authorization: ['Bearer', 'owner.payload.signature'].join(' '), 'user-agent': 'Synthetic Mobile Browser' };
+    const agentHeaders = { authorization: ['Bearer', 'agent.payload.signature'].join(' '), 'x-jarvis-message-id': '42' };
+    const app = buildApp(config, undefined, {
+      auth: async token => token.startsWith('agent.') ? { kind: 'jarvis-agent', objectId: 'agent', tenantId: config.auth.tenantId }
+        : { objectId: owner, tenantId: config.auth.tenantId, displayName: 'Synthetic owner' },
+      modules: [coreModule, conversationModule, { id: 'synthetic-food', registerRoutes: async () => {}, tools: [tool] }],
+      conversationStore, ownerInteractions: service, awayModeStore: f.request.server.awayModeStore!,
+      toolCallStore: { record: vi.fn(async () => {}) },
+      conversationAgent: { stream: async function* () {
+        const catalogue = await app.inject({ method: 'GET', url: '/tools', headers: agentHeaders });
+        expect(catalogue.json()).toContainEqual(expect.objectContaining({
+          name: 'daily_food_review', description: expect.stringContaining('a mobile browser is NOT a telephone call'),
+        }));
+        expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+        const lookup = await app.inject({ method: 'POST', url: '/tools/daily_food_review', headers: agentHeaders,
+          payload: { change: { operation: 'lookup_components', components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } });
+        expect(lookup.json()).toMatchObject({ outcome: 'ok', result: { intakeLogged: false } });
+        expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+        const pending = app.inject({ method: 'POST', url: '/tools/daily_food_review', headers: agentHeaders,
+          payload: { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
+            referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } } }).then(response => response.json());
+        const receipt = await pending;
+        expect(receipt).toMatchObject({ outcome: 'ok', result: { status: 'committed',
+          record: { energy_kcal: 200, capture_method: 'text' } } });
+        yield JSON.stringify(receipt.result);
+        expect(await service.resolveFoodEstimateReply!({ ...messages.find(message => message.id === '43')!, id: '44' },
+          approvalDeciderFor(f.request), signal())).toBe(false);
+      } },
+      nowFeedStore: { read: async () => ({ running: [], items: [], updatedAt: new Date().toISOString() }),
+        dismiss: vi.fn(async () => false) },
+    });
+    try {
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const response = await fetch(`${address}/conversation/sessions/41/turns`, {
+        method: 'POST', headers: { ...ownerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Estimate this synthetic food portion.' }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      expect(response.status).toBe(200);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let body = '';
+      while (!body.includes('event: food_invitation\n')) {
+        const chunk = await reader.read();
+        expect(chunk.done).toBe(false);
+        body += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(body).toContain('Review this exact food estimate for logging in Now. Nothing has changed.');
+      expect(body).toContain('Synthetic portion');
+      expect(body).toContain('200 kcal');
+      expect(body).toContain('Uncertainty:');
+      expect(body).not.toContain('committed');
+      expect(f.store.log).not.toHaveBeenCalled();
+      const reply = await app.inject({ method: 'POST', url: '/conversation/sessions/41/steer',
+        headers: ownerHeaders, payload: { text: 'Log it', language: 'en' } });
+      expect(reply.statusCode).toBe(202);
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        body += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(body).toContain('committed');
+      expect(body).toContain('event: food_invitation\ndata: null');
+      expect(body).not.toContain('event: error');
+      expect(f.store.log).toHaveBeenCalledOnce();
+      expect(service.pendingBrowserConfirmations()).toEqual([]);
+    } finally { await app.close(); }
+  });
+
   it('does not stage an estimate superseded by cancellation during reference preparation', async () => {
     const f = fixture();
     f.lookup.mockImplementation(async components => {
