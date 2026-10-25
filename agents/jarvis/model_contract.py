@@ -10,6 +10,18 @@ from typing import Protocol
 
 from state import ModelMessage, ModelSettings
 
+MAX_ACKNOWLEDGMENT_CHARACTERS = 500
+
+
+@dataclass(frozen=True, slots=True)
+class AcknowledgmentBoundary:
+    """Marks the streamed pre-tool intent sentence as an interim response segment."""
+
+    text: str
+
+
+ModelStreamChunk = str | AcknowledgmentBoundary
+
 
 class ToolLoopStalled(RuntimeError):
     """The model kept requesting already-completed tools after a final-only retry."""
@@ -47,7 +59,7 @@ class StreamingModelClient(Protocol):
 
     async def complete(
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         """Yield ordered assistant text chunks."""
         if False:
             yield ""
@@ -59,7 +71,7 @@ class StreamingModelClient(Protocol):
         *,
         settings: ModelSettings | None = None,
         reflex_note: str | None = None,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         """Yield ordered text-chat chunks, loading current settings when omitted."""
         if False:
             yield ""

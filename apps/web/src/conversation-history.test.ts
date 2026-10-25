@@ -331,6 +331,36 @@ describe('loadConversationHistory', () => {
         await expect(turn).resolves.toEqual(assistantMessage);
       });
 
+      it('delivers a distinct acknowledgment boundary before final text', async () => {
+        const userMessage = {
+          id: '61', sessionId: '41', role: 'dan', text: 'Compare my targets.', model: null,
+          at: '2026-10-12T06:17:18.000Z',
+        };
+        const assistantMessage = { ...userMessage, id: '62', role: 'jarvis', text: 'The targets match.' };
+        const acknowledgment = "I'll compare your saved targets.";
+        const fetch = vi.fn()
+          .mockResolvedValueOnce(new Response([
+            `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
+            `event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+            `event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+            `event: delta\ndata: ${JSON.stringify({ text: assistantMessage.text })}\n\n`,
+            `event: done\ndata: ${JSON.stringify(assistantMessage)}\n\n`,
+          ].join(''), { headers: { 'Content-Type': 'text/event-stream' } }));
+        vi.stubGlobal('fetch', fetch);
+        const onAcknowledgment = vi.fn();
+        const onDelta = vi.fn();
+
+        await sendChatTurn(
+          createClient() as never, config, { id: '41', language: 'en' },
+          userMessage.text, vi.fn(), onDelta, undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, onAcknowledgment,
+        );
+
+        expect(onDelta.mock.calls).toEqual([[acknowledgment], [assistantMessage.text]]);
+        expect(onAcknowledgment).toHaveBeenCalledExactlyOnceWith(acknowledgment);
+        expect(fetch).toHaveBeenCalledOnce();
+      });
+
       it('shows the backend refusal and does not retry a failed turn', async () => {
         const client = createClient();
         const fetch = vi.fn(async () => new Response(

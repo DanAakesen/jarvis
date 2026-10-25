@@ -1,5 +1,39 @@
 # Architecture
 
+## Natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+The existing agent stream carries an `AcknowledgmentBoundary` after its streamed
+first-person intent text and immediately before the first tool handoff. Direct
+answers do not emit the boundary; continuation after steering suppresses another
+acknowledgment. This reuses the active model request and normal stream rather than
+adding a planning request or display delay.
+
+Hosted chat relays the boundary as a distinct SSE event. The backend checks that
+it matches the streamed prefix, forwards it to the live conversation UI, and
+persists only the final answer. The UI does not replay the transient segment from
+history. Hosted voice sends the acknowledgment `ResponseOutputTextDone` item
+through the AgentServer session before resuming the same model stream. That is an
+ordered transport send, not a provider/client receipt or proof that speech was
+played; this transport exposes no playback-completion contract.
+
+Realtime voice uses the same English and Danish acknowledgment intent guidance
+with a transport-specific adapter. A tool call waits for a matching successful
+(`response.status: completed`) terminal event to be accepted by the browser
+transport, but not for confirmation that initial acknowledgment audio played.
+The provider emits `response.done` for completed, cancelled, failed and
+incomplete outcomes, so terminal delivery alone cannot release a queued tool.
+Missing or negative playback receipts do not block a received request;
+cancellation, barge-in, required approvals, authorization and failed or
+non-successful terminal delivery/status still prevent tool execution. First
+tool-only responses and later silent tool rounds also need no playback receipt.
+Browser playback completion is not proof of physical-speaker output.
+
+Synthetic fixtures verify the ordering `streamed intent → boundary → tool work →
+final result`, continued tool execution after missing or negative initial playback
+receipts, rejection of non-completed terminal statuses, cancellation, later
+silent tool rounds, and direct turns without a boundary. No live model latency or
+physical-device playback was measured.
+
 ## Vault mirror status consumption (19 October 2026; P14-29)
 
 The backend reads private `vault-mirror-status/status.json` with its existing

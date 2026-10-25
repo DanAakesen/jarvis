@@ -67,6 +67,34 @@ the approved delivery-boundary item only; the separate research-concurrency
 race is out of scope. Validation uses synthetic data; physical iPhone behavior
 remains a separate owner acceptance step.
 
+## Reuse the stream for a natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+- For a tool-backed request, Jarvis should give one short, truthful first-person
+  sentence in the captured conversation language, then continue the same turn and
+  deliver the actual result. Direct questions stay direct and do not incur an
+  additional model request or artificial delay.
+- Keep the acknowledgment an ordinary user-facing intent statement, not internal
+  reasoning. Do not claim a check or action has already succeeded, invent an ETA,
+  repeat it in the final answer/history, or narrate later tool calls.
+- Reuse the existing streamed text and add a typed boundary at the first tool
+  handoff. The same model-stream lifecycle serves hosted chat and hosted voice;
+  their adapters respectively emit a transient SSE segment and a separate
+  `ResponseOutputTextDone` item. The AgentServer transport send orders model
+  continuation but has no client/provider speech receipt, so it does not prove
+  the user heard the item before tool work.
+- Realtime voice uses the same bilingual intent policy through its provider
+  adapter. Tool work proceeds after the initial response's terminal event is
+  delivered, even if playback confirmation is missing or negative. Explicit
+  cancellation/barge-in, required approvals, authorization and genuine terminal
+  delivery failures remain authoritative. First tool-only responses and later
+  silent tool rounds do not require playback receipts. Browser receipts do not
+  prove physical-speaker output.
+- Fixtures cover streamed intent before tool work, final result afterward, direct
+  turns without a boundary, missing/negative playback receipts, cancellation,
+  stale receipts and silent rounds. No live latency or physical audio playback is
+  claimed. Owner acceptance remains separate; this task authorizes no merge or
+  deployment.
+
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
 - Keep one immediate switch for automatic proactive suggestions and a compact

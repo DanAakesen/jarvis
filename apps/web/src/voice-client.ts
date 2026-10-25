@@ -472,6 +472,10 @@ export class BrowserVoiceClient {
   private sessionReady = false;
   private playbackAllowed = false;
   private responseFinished = false;
+  private responseId: string | undefined;
+  private responseAudioQueued = false;
+  private responseAudioDrained = false;
+  private playbackCompletionSent = false;
   private stopping = false;
   private stopTimer: ReturnType<typeof setTimeout> | undefined;
   private stopOpenSocket: VoiceSocket | undefined;
@@ -490,7 +494,9 @@ export class BrowserVoiceClient {
       }
     });
     this.audio.setPlaybackEndedHandler(() => {
+      if (this.responseAudioQueued) this.responseAudioDrained = true;
       if (this.running && !this.stopping && this.microphoneOpen && this.responseFinished) {
+        this.sendPlaybackCompletion(this.responseAudioQueued && this.responseAudioDrained);
         this.publish('listening', 'Listening for your voice.');
       }
     });
@@ -857,11 +863,17 @@ export class BrowserVoiceClient {
         else this.options.onVisionRequest?.(source, event.transcript, itemId);
       }
     } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
+      this.sendPlaybackCompletion(false);
       this.audio.stopPlayback();
       this.playbackAllowed = false;
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('listening', 'Listening for your voice.');
     } else if (event.type === 'response.created') {
+      const response = event.response as { id?: unknown } | undefined;
+      this.responseId = typeof response?.id === 'string' ? response.id : undefined;
+      this.responseAudioQueued = false;
+      this.responseAudioDrained = false;
+      this.playbackCompletionSent = false;
       this.playbackAllowed = true;
       this.responseFinished = false;
       if (this.running && this.microphoneOpen) this.publish('thinking', 'Jarvis is thinking.');
@@ -869,13 +881,34 @@ export class BrowserVoiceClient {
       if (typeof event.delta === 'string' && this.running && this.microphoneOpen && this.playbackAllowed) {
         // Speaking is published by the audio adapter when this chunk actually becomes audible.
         this.audio.play(event.delta);
+        this.responseAudioQueued = true;
+        this.responseAudioDrained = false;
       }
-    } else if (event.type === 'response.done' && this.running && this.microphoneOpen) {
+    } else if ((event.type === 'response.done' || event.type === 'response.cancelled') &&
+               this.running && this.microphoneOpen) {
       this.responseFinished = true;
+      if (event.type === 'response.cancelled') {
+        this.audio.stopPlayback();
+        this.sendPlaybackCompletion(false);
+      } else if (!this.audio.hasPlayback()) {
+        this.sendPlaybackCompletion(this.responseAudioQueued && this.responseAudioDrained);
+      }
       if (!this.audio.hasPlayback()) {
         this.publish('listening', 'Listening for your voice.');
       }
     }
+  }
+
+  private sendPlaybackCompletion(audible: boolean): void {
+    if (this.playbackCompletionSent || !this.responseId) return;
+    const socket = this.socket;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    this.playbackCompletionSent = true;
+    socket.send(JSON.stringify({
+      type: 'jarvis.voice.playback.completed',
+      responseId: this.responseId,
+      audible,
+    }));
   }
 
   private finishStop(sessionEnded: boolean, failed = false): void {
