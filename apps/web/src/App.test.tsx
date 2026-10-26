@@ -2028,6 +2028,33 @@ describe('App shell', () => {
     expect(shell.getAttribute('data-navigation-open')).toBe('false');
   });
 
+  it('keeps untouched phone startup navigation available despite composer autofocus, then follows keyboard resize', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+    let height = 844;
+    vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('innerHeight', height);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockImplementation(() => height);
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    const shell = document.querySelector('.app-shell')!;
+    expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeTruthy();
+    expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+    viewport.height = height = 480;
+    vi.stubGlobal('innerHeight', height);
+    act(() => { window.dispatchEvent(new Event('resize')); viewport.dispatchEvent(new Event('resize')); });
+    expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    viewport.height = height = 844;
+    vi.stubGlobal('innerHeight', height);
+    act(() => { viewport.dispatchEvent(new Event('resize')); window.dispatchEvent(new Event('resize')); });
+    expect(document.activeElement).toBe(input);
+    expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+  });
+
   it('lists the Health pages under Health in the phone menu and nowhere else', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),

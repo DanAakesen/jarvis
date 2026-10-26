@@ -66,7 +66,7 @@ describe('phone chat viewport', () => {
       layoutHeight = 480;
       vi.stubGlobal('innerHeight', 480);
       act(() => { window.dispatchEvent(new Event('resize')); });
-      if (order === 'focus-first') expect(shell.dataset.keyboardOpen).toBe('true');
+      // A layout-first event alone has not yet changed the visual viewport.
       visible.height = 480;
       act(() => { visible.dispatchEvent(new Event('resize')); });
     };
@@ -80,13 +80,20 @@ describe('phone chat viewport', () => {
     await waitFor(() => expect(shell.dataset.keyboardOpen).toBe('false'));
   });
 
-  it('starts in typing mode when mounted after all viewports have already shrunk', () => {
+  it.each([844, 480])('keeps navigation available on autofocus without keyboard evidence at %ipx', (height) => {
     const visible = viewport();
-    visible.height = 480;
-    vi.stubGlobal('innerHeight', 480);
-    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    visible.height = height;
+    vi.stubGlobal('innerHeight', height);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(height);
     render(<Chat autoFocus />);
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Jarvis' }));
+    expect(screen.getByTestId('shell').dataset.keyboardOpen).toBe('false');
+  });
+
+  it('still detects a measurable keyboard inset on initial mount', () => {
+    const visible = viewport();
+    visible.height = 480;
+    render(<Chat autoFocus />);
     expect(screen.getByTestId('shell').dataset.keyboardOpen).toBe('true');
   });
 
@@ -110,7 +117,7 @@ describe('phone chat viewport', () => {
     expect(shell.dataset.keyboardOpen).toBe('false');
   });
 
-  it('handles enabling the phone dock with an already focused input and an already resized layout', () => {
+  it('does not infer a keyboard from existing focus on enable, then tracks dismissal and reopening', () => {
     const visible = viewport();
     visible.height = 480;
     vi.stubGlobal('innerHeight', 480);
@@ -120,7 +127,7 @@ describe('phone chat viewport', () => {
     input.focus();
     view.rerender(<Chat />);
     const shell = screen.getByTestId('shell');
-    expect(shell.dataset.keyboardOpen).toBe('true');
+    expect(shell.dataset.keyboardOpen).toBe('false');
     // Keyboard dismissal can enlarge the viewport without removing focus.
     for (const height of [510, 560, 620, 700, 844]) {
       visible.height = height;
@@ -140,15 +147,17 @@ describe('phone chat viewport', () => {
 
   it('keeps the dock steady while focus moves from typing to composer controls', () => {
     const visible = viewport();
-    visible.height = 480;
-    vi.stubGlobal('innerHeight', 480);
-    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    let height = 844;
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockImplementation(() => height);
     render(<Chat />);
     const shell = screen.getByTestId('shell');
     const control = screen.getByRole('button', { name: 'Composer action' });
     control.focus();
     expect(shell.dataset.keyboardOpen).toBe('false');
     screen.getByRole('textbox', { name: 'Message Jarvis' }).focus();
+    visible.height = height = 480;
+    vi.stubGlobal('innerHeight', 480);
+    act(() => { visible.dispatchEvent(new Event('resize')); });
     control.focus();
     expect(shell.dataset.keyboardOpen).toBe('true');
     screen.getByRole('button', { name: 'Language' }).focus();

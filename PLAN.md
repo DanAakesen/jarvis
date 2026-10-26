@@ -1,5 +1,14 @@
 # Project plan
 
+## Startup navigation correction (#1299; 26 October 2026)
+
+The owner reports bottom navigation missing at startup until a tap. The released
+hook interpreted programmatic composer focus as an open keyboard. The correction
+requires viewport evidence and preserves equal-height resize event ordering,
+keyboard dismissal/reopening and composer-control focus handoff. Actual-App
+untouched-startup and typing evidence is in `docs/ui/screenshots/startup-navigation-1299/`.
+Parent owns final review, merge/deployment and physical-device acceptance.
+
 ## iPhone keyboard follow-up (#1295; 26 October 2026)
 
 Owner acceptance of #1293 failed despite release: the dock remained above the

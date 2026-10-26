@@ -528,11 +528,12 @@ A measured composer stack includes external feedback and the inner composer
 surface, so transcript and page bounds account for errors/attachments. Phone
 VisualViewport geometry marks a keyboard inset above 120px (excluding toolbar
 insets and pinch zoom), hides covered bottom navigation, and removes its dock
-clearance. #1295 adds focused-composer fallback when both layout and visual
-viewports shrink together (including already-short mount/enable), cumulative
-expansion/shrink tracking for dismissal/reopen without blur, and a next-frame
-focusout recheck. Focus is a conservative typing-space signal, not proof of a
-software keyboard; geometry alone did not satisfy owner acceptance.
+clearance. #1295 tracks focused-composer viewport changes when both layout and
+visual viewports shrink together, cumulative expansion/shrink for dismissal/reopen
+without blur, and a next-frame focusout recheck. #1299 retains the earlier observed
+height across resize-before-focus but no longer treats initial focus as keyboard
+evidence. Startup autofocus can occur without a keyboard; a fresh already-short
+viewport without inset or earlier height history leaves navigation available.
 
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
