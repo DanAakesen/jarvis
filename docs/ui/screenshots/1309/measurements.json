@@ -1,0 +1,605 @@
+[
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "touch": false,
+    "states": [
+      {
+        "state": "normal",
+        "bounds": {
+          "window": {
+            "x": 378,
+            "y": 410.625,
+            "width": 740,
+            "height": 380,
+            "right": 1118,
+            "bottom": 790.625
+          },
+          "stack": {
+            "x": 378,
+            "y": 870,
+            "width": 740,
+            "height": 106,
+            "right": 1118,
+            "bottom": 976
+          },
+          "composer": {
+            "x": 378,
+            "y": 870,
+            "width": 740,
+            "height": 106,
+            "right": 1118,
+            "bottom": 976
+          },
+          "draft": {
+            "x": 387,
+            "y": 875,
+            "width": 722,
+            "height": 44,
+            "right": 1109,
+            "bottom": 919
+          },
+          "plus": {
+            "x": 387,
+            "y": 927,
+            "width": 44,
+            "height": 44,
+            "right": 431,
+            "bottom": 971
+          },
+          "dictate": {
+            "x": 1013,
+            "y": 927,
+            "width": 44,
+            "height": 44,
+            "right": 1057,
+            "bottom": 971
+          },
+          "send": {
+            "x": 1065,
+            "y": 927,
+            "width": 44,
+            "height": 44,
+            "right": 1109,
+            "bottom": 971
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      },
+      {
+        "state": "resized",
+        "bounds": {
+          "window": {
+            "x": 378,
+            "y": 410.625,
+            "width": 868,
+            "height": 380,
+            "right": 1246,
+            "bottom": 790.625
+          },
+          "stack": {
+            "x": 378,
+            "y": 788.625,
+            "width": 868,
+            "height": 106,
+            "right": 1246,
+            "bottom": 894.625
+          },
+          "composer": {
+            "x": 378,
+            "y": 788.625,
+            "width": 868,
+            "height": 106,
+            "right": 1246,
+            "bottom": 894.625
+          },
+          "draft": {
+            "x": 387,
+            "y": 793.625,
+            "width": 850,
+            "height": 44,
+            "right": 1237,
+            "bottom": 837.625
+          },
+          "plus": {
+            "x": 387,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 431,
+            "bottom": 889.625
+          },
+          "dictate": {
+            "x": 1141,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 1185,
+            "bottom": 889.625
+          },
+          "send": {
+            "x": 1193,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 1237,
+            "bottom": 889.625
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      },
+      {
+        "state": "maximized",
+        "bounds": {
+          "window": {
+            "x": 99.1875,
+            "y": 80,
+            "width": 1297.625,
+            "height": 710.625,
+            "right": 1396.8125,
+            "bottom": 790.625
+          },
+          "stack": {
+            "x": 99.1875,
+            "y": 788.625,
+            "width": 1297.625,
+            "height": 106,
+            "right": 1396.8125,
+            "bottom": 894.625
+          },
+          "composer": {
+            "x": 99.1875,
+            "y": 788.625,
+            "width": 1297.625,
+            "height": 106,
+            "right": 1396.8125,
+            "bottom": 894.625
+          },
+          "draft": {
+            "x": 108.1875,
+            "y": 793.625,
+            "width": 1279.625,
+            "height": 44,
+            "right": 1387.8125,
+            "bottom": 837.625
+          },
+          "plus": {
+            "x": 108.1875,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 152.1875,
+            "bottom": 889.625
+          },
+          "dictate": {
+            "x": 1291.8125,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 1335.8125,
+            "bottom": 889.625
+          },
+          "send": {
+            "x": 1343.8125,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 1387.8125,
+            "bottom": 889.625
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      },
+      {
+        "state": "restored",
+        "bounds": {
+          "window": {
+            "x": 378,
+            "y": 410.625,
+            "width": 868,
+            "height": 380,
+            "right": 1246,
+            "bottom": 790.625
+          },
+          "stack": {
+            "x": 378,
+            "y": 788.625,
+            "width": 868,
+            "height": 106,
+            "right": 1246,
+            "bottom": 894.625
+          },
+          "composer": {
+            "x": 378,
+            "y": 788.625,
+            "width": 868,
+            "height": 106,
+            "right": 1246,
+            "bottom": 894.625
+          },
+          "draft": {
+            "x": 387,
+            "y": 793.625,
+            "width": 850,
+            "height": 44,
+            "right": 1237,
+            "bottom": 837.625
+          },
+          "plus": {
+            "x": 387,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 431,
+            "bottom": 889.625
+          },
+          "dictate": {
+            "x": 1141,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 1185,
+            "bottom": 889.625
+          },
+          "send": {
+            "x": 1193,
+            "y": 845.625,
+            "width": 44,
+            "height": 44,
+            "right": 1237,
+            "bottom": 889.625
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      }
+    ],
+    "dictationStartStop": true,
+    "attachmentsAndFeedback": true,
+    "pageErrors": []
+  },
+  {
+    "viewport": [
+      900,
+      800
+    ],
+    "touch": false,
+    "states": [
+      {
+        "state": "normal",
+        "bounds": {
+          "window": {
+            "x": 108,
+            "y": 238.625,
+            "width": 740,
+            "height": 352,
+            "right": 848,
+            "bottom": 590.625
+          },
+          "stack": {
+            "x": 108,
+            "y": 670,
+            "width": 740,
+            "height": 106,
+            "right": 848,
+            "bottom": 776
+          },
+          "composer": {
+            "x": 108,
+            "y": 670,
+            "width": 740,
+            "height": 106,
+            "right": 848,
+            "bottom": 776
+          },
+          "draft": {
+            "x": 117,
+            "y": 675,
+            "width": 722,
+            "height": 44,
+            "right": 839,
+            "bottom": 719
+          },
+          "plus": {
+            "x": 117,
+            "y": 727,
+            "width": 44,
+            "height": 44,
+            "right": 161,
+            "bottom": 771
+          },
+          "dictate": {
+            "x": 743,
+            "y": 727,
+            "width": 44,
+            "height": 44,
+            "right": 787,
+            "bottom": 771
+          },
+          "send": {
+            "x": 795,
+            "y": 727,
+            "width": 44,
+            "height": 44,
+            "right": 839,
+            "bottom": 771
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      },
+      {
+        "state": "resized",
+        "bounds": {
+          "window": {
+            "x": 108,
+            "y": 238.625,
+            "width": 765,
+            "height": 352,
+            "right": 873,
+            "bottom": 590.625
+          },
+          "stack": {
+            "x": 108,
+            "y": 588.625,
+            "width": 765,
+            "height": 106,
+            "right": 873,
+            "bottom": 694.625
+          },
+          "composer": {
+            "x": 108,
+            "y": 588.625,
+            "width": 765,
+            "height": 106,
+            "right": 873,
+            "bottom": 694.625
+          },
+          "draft": {
+            "x": 117,
+            "y": 593.625,
+            "width": 747,
+            "height": 44,
+            "right": 864,
+            "bottom": 637.625
+          },
+          "plus": {
+            "x": 117,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 161,
+            "bottom": 689.625
+          },
+          "dictate": {
+            "x": 768,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 812,
+            "bottom": 689.625
+          },
+          "send": {
+            "x": 820,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 864,
+            "bottom": 689.625
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      },
+      {
+        "state": "maximized",
+        "bounds": {
+          "window": {
+            "x": 83,
+            "y": 80,
+            "width": 790,
+            "height": 510.625,
+            "right": 873,
+            "bottom": 590.625
+          },
+          "stack": {
+            "x": 83,
+            "y": 588.625,
+            "width": 790,
+            "height": 106,
+            "right": 873,
+            "bottom": 694.625
+          },
+          "composer": {
+            "x": 83,
+            "y": 588.625,
+            "width": 790,
+            "height": 106,
+            "right": 873,
+            "bottom": 694.625
+          },
+          "draft": {
+            "x": 92,
+            "y": 593.625,
+            "width": 772,
+            "height": 44,
+            "right": 864,
+            "bottom": 637.625
+          },
+          "plus": {
+            "x": 92,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 136,
+            "bottom": 689.625
+          },
+          "dictate": {
+            "x": 768,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 812,
+            "bottom": 689.625
+          },
+          "send": {
+            "x": 820,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 864,
+            "bottom": 689.625
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      },
+      {
+        "state": "restored",
+        "bounds": {
+          "window": {
+            "x": 108,
+            "y": 238.625,
+            "width": 765,
+            "height": 352,
+            "right": 873,
+            "bottom": 590.625
+          },
+          "stack": {
+            "x": 108,
+            "y": 588.625,
+            "width": 765,
+            "height": 106,
+            "right": 873,
+            "bottom": 694.625
+          },
+          "composer": {
+            "x": 108,
+            "y": 588.625,
+            "width": 765,
+            "height": 106,
+            "right": 873,
+            "bottom": 694.625
+          },
+          "draft": {
+            "x": 117,
+            "y": 593.625,
+            "width": 747,
+            "height": 44,
+            "right": 864,
+            "bottom": 637.625
+          },
+          "plus": {
+            "x": 117,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 161,
+            "bottom": 689.625
+          },
+          "dictate": {
+            "x": 768,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 812,
+            "bottom": 689.625
+          },
+          "send": {
+            "x": 820,
+            "y": 645.625,
+            "width": 44,
+            "height": 44,
+            "right": 864,
+            "bottom": 689.625
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      }
+    ],
+    "dictationStartStop": true,
+    "attachmentsAndFeedback": true,
+    "pageErrors": []
+  },
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "touch": true,
+    "states": [
+      {
+        "state": "normal",
+        "bounds": {
+          "window": {
+            "x": 8,
+            "y": 68,
+            "width": 374,
+            "height": 580,
+            "right": 382,
+            "bottom": 648
+          },
+          "stack": {
+            "x": 8,
+            "y": 646,
+            "width": 374,
+            "height": 114,
+            "right": 382,
+            "bottom": 760
+          },
+          "composer": {
+            "x": 8,
+            "y": 646,
+            "width": 374,
+            "height": 114,
+            "right": 382,
+            "bottom": 760
+          },
+          "draft": {
+            "x": 17,
+            "y": 655,
+            "width": 356,
+            "height": 44,
+            "right": 373,
+            "bottom": 699
+          },
+          "plus": {
+            "x": 17,
+            "y": 707,
+            "width": 44,
+            "height": 44,
+            "right": 61,
+            "bottom": 751
+          },
+          "dictate": {
+            "x": 277,
+            "y": 707,
+            "width": 44,
+            "height": 44,
+            "right": 321,
+            "bottom": 751
+          },
+          "send": {
+            "x": 329,
+            "y": 707,
+            "width": 44,
+            "height": 44,
+            "right": 373,
+            "bottom": 751
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true
+      }
+    ],
+    "dictationStartStop": true,
+    "attachmentsAndFeedback": true,
+    "pageErrors": []
+  }
+]

@@ -91,9 +91,9 @@ describe('responsive stylesheet contract', () => {
     expect(history).toContain('padding: var(--space-3); -webkit-mask-image: none; mask-image: none;');
   });
 
-  it('keeps a growing mobile message row and external feedback', () => {
+  it('keeps a growing shared message row and external feedback', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
-    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }');
+    expect(history).toContain('.app-shell .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }');
     expect(history).toContain('.composer-feedback > .composer-status { margin: 0 0 var(--space-2); padding: var(--space-2); border-radius: var(--radius-control); background: var(--surface-translucent); }');
   });
 
@@ -885,11 +885,12 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.markdown-content p\s*\{([^}]*)\}/, 'color')).toBe('inherit');
   });
 
-  it('widens only the visible maximised desktop conversation composer', () => {
+  it('lets the inner composer fill the measured stack and retains default dock width', () => {
     const source = readFileSync('src/ConversationHistory.css', 'utf8');
     const selector = '.app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page';
     expect(source).toContain(`${selector} { --chat-width: 100%; }`);
-    expect(ruleDeclaration(source, /\.conversation-input\s*\{([^}]*)\}/, 'max-width')).toBe('var(--chat-width)');
+    expect(ruleDeclaration(source, /\.conversation-input\s*\{([^}]*)\}/, 'max-width')).toBe('none');
+    expect(ruleDeclaration(source, /\.conversation-input-stack\s*\{([^}]*)\}/, 'max-width')).toBe('var(--chat-width)');
     expect(ruleDeclaration(source, /\.app-shell\[data-home="false"\]:not\(\.app-signed-out\) \.jarvis-page\s*\{([^}]*)\}/, 'max-width')).toBe('var(--chat-width)');
     expect(source).toContain(':root { --chat-width: 740px;');
   });

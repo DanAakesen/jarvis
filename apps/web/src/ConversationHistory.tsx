@@ -195,7 +195,6 @@ export function ConversationHistory({
   children,
   screenShare,
   camera,
-  phone = false,
 }: {
   client: PublicClientApplication;
   getAccessToken?: () => Promise<string>;
@@ -907,12 +906,12 @@ export function ConversationHistory({
     onSelect: () => fileInput.current?.click(),
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
-  }, ...(phone ? [{
+  }, {
     id: 'start-voice',
     label: 'Voice',
     icon: <ConversationIcon name="microphone" />,
     onSelect: () => voiceStart.current?.(),
-  }] : [])];
+  }];
   const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
   const fileDragHandlers = voiceActive ? {} : {
     onDragEnter: (event: React.DragEvent) => {
@@ -1143,8 +1142,8 @@ export function ConversationHistory({
           {dictationError || (dictating ? 'Listening. Tap Stop dictation to finish.' : "Dictation isn't supported in this browser.")}
         </p>}
         {screenShare?.error && <p className="composer-status chat-error" role="alert">{screenShare.error}</p>}
-        {phone && attachments.problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
-        {phone && attachments.items.filter((item) => item.status === 'failed').map((item) => (
+        {attachments.problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
+        {attachments.items.filter((item) => item.status === 'failed').map((item) => (
           <p key={item.key} className="composer-status chat-error" role="alert">{item.name}: {item.error}</p>
         ))}
       </div>}
@@ -1171,7 +1170,7 @@ export function ConversationHistory({
       <form id="conversation-composer" className="composer" hidden={voiceActive}
         onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
-        <ComposerAttachments items={attachments.items} problems={attachments.problems} showErrors={!phone} onRemove={attachments.remove}
+        <ComposerAttachments items={attachments.items} problems={attachments.problems} showErrors={false} onRemove={attachments.remove}
           getAccessToken={tokenProvider} config={config} />
         <textarea
           ref={input}

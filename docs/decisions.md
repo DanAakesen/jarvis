@@ -1,5 +1,12 @@
 # Decisions
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Apply the approved composer geometry and controls to desktop as requested,
+including Voice under Plus and Dictate beside Send. Keep the existing isolated
+workspace and dock stacking hierarchy: elevate the fixed outer stack, not its
+inner child. Do not extend the mobile Chat-only visibility rule to desktop.
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

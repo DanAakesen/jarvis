@@ -1,5 +1,14 @@
 # Design
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Reuse the phone composer's two-row layout and existing glass/control tokens on
+desktop. The outer measured stack owns width and dock stacking; the inner glass
+surface fills it without an independent chat-width cap. Workspace canvases isolate
+front/maximized windows, so the dock context clears them without exceeding modal
+layers. Voice moves into Plus, and errors use the shared above-surface feedback.
+Message timestamps already sit beneath bubbles; desktop navigation is unchanged.
+
 ## Settled glass correction (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

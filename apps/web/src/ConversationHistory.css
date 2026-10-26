@@ -70,7 +70,7 @@
 .conversation-loading, .conversation-history-error { padding-block: var(--space-3); }
 .conversation-loading > p, .conversation-empty { color: var(--text-muted); font-size: var(--type-small); }
 .conversation-history-error > p { color: var(--error); }
-.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: var(--space-5); flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
+.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: var(--space-5); flex: 0 0 auto; width: 100%; max-width: none; margin: 0 auto; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input-slot { display: contents; }
 .conversation-input-slot[data-positioned] { display: block; flex: 0 0 auto; height: var(--conversation-composer-height, 52px); }
 /* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
@@ -269,25 +269,25 @@
   .conversation-history .composer { gap: var(--space-1); }
 }
 
-.app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] { grid-template-columns: minmax(0, 1fr); }
-.app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: none; }
-.app-shell[data-phone="true"] .conversation-history .composer { grid-template-columns: 44px minmax(0, 1fr) 44px 44px; gap: var(--space-2); }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-more { grid-column: 1; grid-row: 1; padding: 0; }
-.app-shell[data-phone="true"] .conversation-history .composer > textarea,
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-prompt { grid-column: 1 / -1; }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-more,
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate,
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-send { grid-row: 2; }
-.app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger { width: 44px; height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--focus); }
-.app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger svg { width: 24px; height: 24px; }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { display: inline-flex; grid-column: 3; min-height: 44px; align-items: center; justify-content: center; gap: 0; padding: 0; border: 0; box-shadow: none; border-radius: var(--radius-control); background: transparent; color: var(--glass-glow-warm); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:hover:not(:disabled) { background: var(--glass-hover); }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:active:not(:disabled) { background: var(--glass-pressed); }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
-.app-shell[data-phone="true"] .conversation-history .composer-status { grid-column: 1 / -1; }
-.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:focus-visible { outline-offset: 0; }
+.app-shell .conversation-input[data-voice-active="false"] { grid-template-columns: minmax(0, 1fr); }
+.app-shell .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: none; }
+.app-shell .conversation-history .composer { grid-template-columns: 44px minmax(0, 1fr) 44px 44px; gap: var(--space-2); }
+.app-shell .conversation-history .composer > .composer-more { grid-column: 1; grid-row: 1; padding: 0; }
+.app-shell .conversation-history .composer > textarea,
+.app-shell .conversation-history .composer > .composer-prompt { grid-column: 1 / -1; }
+.app-shell .conversation-history .composer > .composer-more,
+.app-shell .conversation-history .composer > .composer-dictate,
+.app-shell .conversation-history .composer > .composer-send { grid-row: 2; }
+.app-shell .conversation-history .composer-more .more-menu-trigger { width: 44px; height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--focus); }
+.app-shell .conversation-history .composer-more .more-menu-trigger svg { width: 24px; height: 24px; }
+.app-shell .conversation-history .composer > .composer-dictate { display: inline-flex; grid-column: 3; min-height: 44px; align-items: center; justify-content: center; gap: 0; padding: 0; border: 0; box-shadow: none; border-radius: var(--radius-control); background: transparent; color: var(--glass-glow-warm); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
+.app-shell .conversation-history .composer > .composer-dictate:hover:not(:disabled) { background: var(--glass-hover); }
+.app-shell .conversation-history .composer > .composer-dictate:active:not(:disabled) { background: var(--glass-pressed); }
+.app-shell .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.app-shell .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
+.app-shell .conversation-history .composer-status { grid-column: 1 / -1; }
+.app-shell .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }
+.app-shell .conversation-history .composer > .composer-dictate:focus-visible { outline-offset: 0; }
 
 @media (max-width: 380px) {
   .conversation-greeting { padding: var(--space-2); }
@@ -761,11 +761,11 @@
 .composer-feedback:empty { display: none; }
 .composer-feedback { min-width: 0; }
 .composer-feedback > .composer-status { margin: 0 0 var(--space-2); padding: var(--space-2); border-radius: var(--radius-control); background: var(--surface-translucent); }
-.app-shell[data-phone="true"] .conversation-history .composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }
-.app-shell[data-phone="true"] .conversation-history .composer > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 2; }
-.app-shell[data-phone="true"] .conversation-history .composer-live { grid-row: 3; }
+.app-shell .conversation-history .composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }
+.app-shell .conversation-history .composer > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 2; }
+.app-shell .conversation-history .composer-live { grid-row: 3; }
 
 /* Attachment pills stay inside the composer; only their errors live in feedback. */
-.app-shell[data-phone="true"] .conversation-history .composer:has(.attachment-chips) > :is(textarea, .composer-prompt) { grid-row: 2; }
-.app-shell[data-phone="true"] .conversation-history .composer:has(.attachment-chips) > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 3; }
-.app-shell[data-phone="true"] .conversation-history .composer:has(.attachment-chips) > .composer-live { grid-row: 4; }
+.app-shell .conversation-history .composer:has(.attachment-chips) > :is(textarea, .composer-prompt) { grid-row: 2; }
+.app-shell .conversation-history .composer:has(.attachment-chips) > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 3; }
+.app-shell .conversation-history .composer:has(.attachment-chips) > .composer-live { grid-row: 4; }

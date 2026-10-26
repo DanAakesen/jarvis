@@ -1,5 +1,14 @@
 # Project plan
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Implemented shared two-row styling, desktop Dictate/Voice placement, aligned
+composer width and wrapper stacking, with attachment errors above the surface.
+Synthetic actual-App QA covers desktop normal/resized/maximized/restored states,
+repeated Plus interaction, Dictate start/stop, attachments/errors and phone layout.
+Draft publication and integration follow local checks. Coordinator owns the merge
+slot after #1308, #1304, #1305 and #1303; latest-main qualification remains required.
+
 ## Settled glass and dock selection (#1301; 26 October 2026)
 
 Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,

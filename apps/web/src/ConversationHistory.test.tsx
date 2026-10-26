@@ -1659,6 +1659,8 @@ describe('ConversationHistory', () => {
     await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Attach file or photo' }));
     await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Voice' }));
+    await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
     await user.keyboard('{ArrowRight}');
     expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'English' }));

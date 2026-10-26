@@ -141,10 +141,10 @@ describe('composer attachments', () => {
     expect(within(chips).queryByText(/Ready|image\/jpeg/u)).toBeNull();
   });
 
-  it('puts phone upload errors and selection problems above the composer while retaining removable pills inside', async () => {
+  it.each([false, true])('puts upload errors and selection problems above the composer while retaining removable pills inside (phone=%s)', async (phone) => {
     stubObjectUrl('blob:preview/failed.png');
     uploadAttachment.mockRejectedValueOnce(new Error('Synthetic upload failure'));
-    renderConversation(true);
+    renderConversation(phone);
     pick(new File(['image'], 'failed.png', { type: 'image/png' }));
     const error = await screen.findByText('failed.png: Synthetic upload failure');
     expect(error.closest('.composer-feedback')).not.toBeNull();
@@ -260,7 +260,8 @@ describe('composer attachments', () => {
     const menu = screen.getByRole('menu');
     const items = within(menu).getAllByRole('menuitem');
     expect(items[0]?.getAttribute('aria-label') ?? items[0]?.textContent).toContain('Attach file or photo');
-    expect(items[1]?.textContent).toContain('Language');
+    expect(items[1]?.textContent).toContain('Voice');
+    expect(items[2]?.textContent).toContain('Language');
   });
 });
 
