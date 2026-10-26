@@ -1,5 +1,17 @@
 # Decisions
 
+## Preserve the native attachment source (#1306; 26 October 2026)
+
+Source inspection confirmed that every More action closed the menu and focused
+its trigger before calling its handler. The attachment handler then clicked a
+clipped 1px input elsewhere in the form. Keep only the file-input action open,
+place its input beside the row, and close on selection after the existing file
+handler runs. This preserves native picker choices, cancel/retry, plus toggling,
+and unrelated actions without timers or a custom picker. Chromium verifies the
+DOM lifecycle and matching input/row bounds; exact iOS popover placement remains
+unverified on a physical iPhone. The private reference transfer failed and no
+private image is committed.
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

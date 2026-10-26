@@ -1,5 +1,14 @@
 # Design
 
+## Attachment chooser source (#1306; 26 October 2026)
+
+Keep the attachment row mounted when opening the system file/photo chooser.
+Its transparent native file input shares that row's bounds instead of a clipped
+1px position elsewhere in the composer. Selection closes the menu and restores
+plus focus; cancellation retains the source. Other actions keep their existing
+closure behavior. Synthetic actual-App evidence and physical-iPhone limits are
+in `docs/ui/screenshots/1306/README.md`.
+
 ## Settled glass correction (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is
