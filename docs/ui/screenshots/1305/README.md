@@ -39,7 +39,9 @@ npm run build --workspace @jarvis/web
   repeated the contrast timeout while the full suite was still running.
 - `npm test --workspace @jarvis/web -- src/contrast-audit.test.ts` alone: all
   seven tests passed with unchanged assertions/timeouts. The complete suite was
-  not rerun after this isolated pass; do not report the aggregate run as green.
+  then rerun without concurrent browser work: all 153 files and 2,379 tests passed
+  in 177.69 seconds at commit `456f0526f1fdb6766b7bcbdff7a5d7a4413fcac2`.
+  The contrast timeout did not reproduce; assertions and timeouts were unchanged.
 - `git diff --check`: passed.
 
 An initial unit assertion checked localStorage instead of existing sessionStorage;
