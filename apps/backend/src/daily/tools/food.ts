@@ -1,3 +1,4 @@
+import { nutritionSummary } from '../nutrition/review.js';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationAttachmentReference, ConversationMessage } from '../../core/conversation-store.js';
@@ -83,12 +84,16 @@ export function foodReceipt(row: Record<string, unknown>, key: string, sourceFin
       (origin as Record<string, unknown>).sourceFingerprint !== sourceFingerprint ||
       (origin as Record<string, unknown>).operation !== operation ||
       proposalFingerprint !== undefined && (origin as Record<string, unknown>).proposalFingerprint !== proposalFingerprint) throw new ToolRefusal('This message has a different committed intake. Read it before correcting it; no new intake was logged.');
-  return { status: 'committed', record: projectNutritionRecord(row, 'history') };
+  const quantity = (key: string): number | null => typeof row[key] === 'number' && Number.isFinite(row[key]) ? row[key] : null;
+  return { status: 'committed', record: projectNutritionRecord(row, 'history'),
+    presentation: `Logged nutrition:\n${nutritionSummary({ energyKcal: quantity('energy_kcal'),
+      proteinGrams: quantity('protein_grams'), fatGrams: quantity('fat_grams'),
+      carbohydratesGrams: quantity('carbohydrates_grams'), fiberGrams: quantity('fiber_grams') })}` };
 }
 
 export function dailyFoodTool(nutrition: DirectNutrition, now: () => number = Date.now): JarvisTool {
   return {
-    name: 'daily_food',
+    name: 'health_food',
     description: 'Log intake only from the current verified Dan message. log_favorite derives the saved name/alias from an explicit "Log [my] [favourite] NAME" request; quantities come only from that owned favourite. log_exact derives all values from an explicit label such as "Log yoghurt: 200 kcal, protein 10 g, carbs 20 g". Supply only the operation: no food name, nutrients, IDs, dates or confirmation flags. No extra approval for these direct explicit requests. New photo/portion estimates, conditional/time-qualified requests and unsupported wording are refused. Repeating the same message cannot create another intake. Active browser chat/browser voice on desktop or mobile are supported; a mobile browser is NOT a telephone call. Telephone calls and Health export are unsupported.',
     inputSchema: {
       type: 'object',

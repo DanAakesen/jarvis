@@ -721,6 +721,18 @@ describe('ConversationHistory', () => {
     expect(screen.getByText('**voice transcript**').closest('[data-speaker="jarvis"]')?.querySelector('.markdown-content')).toBeNull();
   });
 
+  it.each(['- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 0 g',
+    '1. Protein: 10 g\n2. Calories: 200 kcal\n3. Fat: 0 g'])('renders nutrition as a list in saved voice history: %s', async nutrition => {
+    loadConversationHistory.mockResolvedValue({ messages: [{ ...message, channel: 'voice', role: 'jarvis',
+      text: `Checked it.\n\nEstimated nutrition:\n${nutrition}`, toolCalls: [] }], nextCursor: null });
+    renderConversation();
+    const item = await screen.findByText('Protein: 10 g');
+    expect(item.tagName).toBe('LI');
+    expect(['UL', 'OL']).toContain(item.parentElement?.tagName);
+    expect(item.parentElement?.textContent).toContain('Calories: 200 kcal');
+    expect(item.parentElement?.textContent).toContain('Fat: 0 g');
+  });
+
   it('renders the same booking table during streaming, completion and persisted-history reload', async () => {
     const text = [
       '**Two synthetic bookings** before 1 July 2031:',
@@ -1018,7 +1030,7 @@ describe('ConversationHistory', () => {
       (args[4] as (message: typeof userMessage) => void)(userMessage);
       (args[14] as (invitation: unknown) => void)({
         id: 'a'.repeat(43),
-        summary: 'Synthetic portion\nNutrition: 200 kcal\nUncertainty: estimated grams. Nothing has changed.',
+        summary: 'Synthetic portion\nNutrition:\n- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 20 g\nUncertainty: estimated grams. Nothing has changed.',
         expiresAt: new Date(Date.now() + 120_000).toISOString(),
       });
       return new Promise(resolve => { finish = resolve; });
@@ -1029,7 +1041,7 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     const invitation = await screen.findByRole('status', { name: 'Food estimate awaiting your reply' });
     expect(invitation.textContent).toContain('Synthetic portion');
-    expect(invitation.textContent).toContain('200 kcal');
+    expect([...invitation.querySelectorAll('ul > li')].map(item => item.textContent)).toEqual(['Protein: 10 g', 'Calories: 200 kcal', 'Fat: 20 g']);
     expect(invitation.textContent).toContain('Uncertainty: estimated grams');
     expect(invitation.textContent).toContain('Would you like to log this estimate? Reply here');
     expect(screen.queryByText('Logged Synthetic portion: 200 kcal.')).toBeNull();
@@ -1426,10 +1438,10 @@ describe('ConversationHistory', () => {
     expect(loadConversationHistory).toHaveBeenLastCalledWith(getAccessToken, config, '40');
   });
 
-  it('resets the camera idle timer on unrelated chat turns without uploading an unsolicited frame', async () => {
+  it('does not add an on-demand inspection for an unrelated chat turn', async () => {
     const camera: CameraController = {
       sharing: true, starting: false, inspecting: false, error: '',
-      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), recordActivity: vi.fn(),
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -1438,8 +1450,67 @@ describe('ConversationHistory', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
-    expect(camera.recordActivity).toHaveBeenCalledOnce();
     expect(camera.inspect).not.toHaveBeenCalled();
+  });
+
+  it('shows repeated persisted camera observations during silence without disturbing the draft', async () => {
+    const accepts: ((response: Response) => void)[] = [];
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => init.method === 'DELETE'
+      ? Promise.resolve(new Response(null, { status: 204 }))
+      : new Promise<Response>(resolve => { accepts.push(resolve); })));
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      captureFrame: vi.fn(async () => 'AAAA'),
+    };
+    renderConversation(0, camera);
+    await waitFor(() => expect(accepts).toHaveLength(1));
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Unsent draft' } });
+    input.focus();
+    const observation = { ...message, id: '99', text: 'The blue cup is now on the table.' };
+    loadConversationHistory.mockResolvedValue({ messages: [message, observation], nextCursor: null });
+    await act(async () => { accepts[0]!(new Response(JSON.stringify({
+      summary: 'A cup', speak: observation.text, budget: { usedUsd: 0.01, limitUsd: 1 },
+    }))); });
+    expect(await screen.findByText(observation.text)).not.toBeNull();
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    await waitFor(() => expect(accepts).toHaveLength(2), { timeout: 4_000 });
+    const next = { ...observation, id: '100', text: 'A hand moves the cup to the left.' };
+    loadConversationHistory.mockResolvedValue({ messages: [message, observation, next], nextCursor: null });
+    await act(async () => { accepts[1]!(new Response(JSON.stringify({
+      summary: 'Moved cup', speak: next.text, budget: { usedUsd: 0.02, limitUsd: 1 },
+    }))); });
+    expect(await screen.findByText(next.text)).not.toBeNull();
+    expect(screen.getAllByText(observation.text)).toHaveLength(1);
+    expect(transcript.scrollTop).toBe(100);
+    expect((input as HTMLTextAreaElement).value).toBe('Unsent draft');
+    expect(document.activeElement).toBe(input);
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
+  it('shares pending camera session startup with a typed turn instead of creating two sessions', async () => {
+    let finish!: (value: typeof session) => void;
+    createChatSession.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    sendChatTurn.mockResolvedValueOnce(assistantMessage);
+    const camera: CameraController = {
+      sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn(async () => ({ source: 'camera' as const, capturedAt: new Date().toISOString(), description: 'Fixture frame.' })),
+    };
+    renderConversation(0, camera);
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: 'Keep describing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await act(async () => { finish(session); });
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(createChatSession).toHaveBeenCalledOnce();
+    expect(sendChatTurn.mock.calls[0]?.[2]).toEqual(session);
+    expect(camera.inspectTurn).toHaveBeenCalledWith(session.id, 'Keep describing', expect.any(AbortSignal));
   });
 
   it('captures arbitrary camera-on turns when they execute, queues instead of steering, and forwards fresh handles', async () => {
@@ -1495,7 +1566,6 @@ describe('ConversationHistory', () => {
       start: vi.fn(async () => {}),
       stop: vi.fn(),
       inspect: vi.fn(async () => ({ description: 'A red mug in Dan’s hand.' })),
-      recordActivity: vi.fn(),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -1506,7 +1576,6 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
-    expect(camera.recordActivity).toHaveBeenCalledOnce();
     expect(camera.inspect).toHaveBeenCalledWith(session.id, 'caller', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
       getAccessToken,

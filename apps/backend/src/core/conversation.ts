@@ -1,3 +1,4 @@
+import { includesNutritionList } from './food-presentation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { RecoverableChat } from './recoverable-chat.js';
 import { registerSseShutdown } from './sse.js';
@@ -768,10 +769,14 @@ return {
             let interrupted = false;
             let acknowledgmentSent = false;
             let invitationId: string | undefined;
+            let foodResult: string | undefined;
             const invitations: string[] = [];
             let wakeInvitation = () => {};
             let invitationReady = new Promise<void>(resolve => { wakeInvitation = resolve; });
             const unsubscribeInvitation = app.nowEventHub.subscribe(event => {
+              if (event.type === 'food_estimate_result' && event.sessionId === sessionId && event.sourceMessageId === turnMessageId) {
+                foodResult = event.summary;
+              }
               if (event.type === 'food_estimate_pending' && event.sessionId === sessionId &&
                   event.sourceMessageId === turnMessageId) {
                 invitationId = event.confirmation.id;
@@ -892,6 +897,11 @@ return {
 
             if (interrupted) {
               throw new Error('Chat turn was interrupted without a steering message');
+            }
+            if (foodResult && !includesNutritionList(partial, foodResult)) {
+              const resultText = `\n\n${foodResult}`;
+              partial += resultText;
+              yield streamEvent('delta', { text: resultText });
             }
             if (!partial.trim()) throw new Error('Chat response was empty');
             if (!isSteering && visualContext) {

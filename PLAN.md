@@ -6,8 +6,25 @@ Local validation: web 2,405 passed / one contrast timeout; unchanged contrast re
 7 passed; lint/build and Chromium scroll/type/Send passed. Next: hosted checks,
 coordinator queue integration after camera/Health, review and authorized release.
 Physical iOS acceptance remains unverified.
+## Unified camera delivery (#1317; 26 October 2026)
+
+Implementation on `fix/1317-unified-camera`: automatic sampled-frame delivery,
+truthful receiving status, explicit standing narration, approved removal of the
+user-inactivity cutoff, permission-checked Jarvis start/stop, obsolete camera action
+cleanup and bounded lifecycle. Local checks and synthetic browser evidence are
+in `docs/ui/screenshots/1317/README.md`. Rebased onto combined menu main `1c1029a3` without conflicts; independent integration
+review passed. Exact-head hosted qualification remains before the authorized normal
+merge/deployment workflow; no production release is claimed yet.
 
 # Project plan
+
+## Health meal estimate correction (#1321; 26 October 2026)
+
+Implement Health tool branding and server-derived protein/calorie/fat lists in
+lookup replies, proposal presentation and retained voice history. Preserve data
+namespaces and approval protections. Synthetic checks and browser evidence are in
+`docs/ui/screenshots/1321/`. Draft PR #1322 is rebased onto plus-menu main
+`1c1029a3`; review, CI and camera/release coordination remain parent-owned. No production meal replay or write is part of this work.
 
 ## Composer Plus readability (#1319; 26 October 2026)
 

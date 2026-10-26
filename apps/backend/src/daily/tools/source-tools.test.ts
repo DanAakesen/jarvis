@@ -64,7 +64,7 @@ function fixture() {
 describe('source-selected Daily tool capabilities', () => {
   it('registers three bounded native tools for the nine requested names across ten operations', () => {
     const { tools } = fixture();
-    expect(tools.map(tool => tool.name)).toEqual(['daily_health_summary', 'daily_nutrition_history', 'daily_coach_status']);
+    expect(tools.map(tool => tool.name)).toEqual(['health_summary', 'health_nutrition_history', 'health_coach_status']);
     const descriptions = tools.map(tool => tool.description).join('\n');
     for (const capability of ['get_health_summary', 'get_health_history', 'get_nutrition_history', 'analyze_nutrition',
       'get_calorie_balance', 'get_coach_status', 'get_coach_profile', 'update_coach_profile', 'set_meal_preference', 'set_recovery_period']) {

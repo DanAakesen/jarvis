@@ -108,7 +108,9 @@ export function VoiceControls({
   const watchToken = useCallback(() => tokenProvider(), [tokenProvider]);
   const watchStopped = useCallback((message: string) => notify(message, true), [notify]);
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', screenSessionId, watchStopped);
-  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', screenSessionId, watchStopped);
+  const stopCamera = camera?.stop;
+  const cameraStopped = useCallback((message: string) => { stopCamera?.(); notify(message, true); }, [stopCamera, notify]);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', screenSessionId, cameraStopped);
 
   const [localLanguage, setLocalLanguage] = useState<VoiceLanguage>(language);
   const [sessionLanguage, setSessionLanguage] = useState<VoiceLanguage | null>(null);
@@ -247,9 +249,6 @@ export function VoiceControls({
             visualResultItem.current === null || itemId && visualResultItem.current !== itemId) return;
         notify('Jarvis could not confirm the visual input for this turn.', true);
       },
-      onUserTurn: () => {
-        if (client.current === voice) captures.current.camera?.recordActivity?.();
-      },
       onMicrophoneState: (state) => {
         if (client.current === voice) setMicrophone(state);
       },
@@ -260,7 +259,6 @@ export function VoiceControls({
           visualResultItem.current = null;
           visionController.current?.abort();
         }
-        if (nextStatus === 'listening') captures.current.camera?.recordActivity?.();
         setClientStatus(nextStatus);
         setClientMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
@@ -481,23 +479,10 @@ export function VoiceControls({
     disabled: !screenShare || screenShare.starting,
     ...(!screenShare ? { description: 'Screen sharing is unavailable.' } : {}),
   }];
-  const cameraActions: MoreMenuAction[] = camera?.sharing ? [...(!camera.conversation ? [{
-    id: 'camera',
-    label: camera.inspecting ? 'Looking at camera…' : 'Look at camera',
-    icon: <MenuGlyph name="camera" />,
-    onSelect: () => { void inspectAndSendVision('camera'); },
-    disabled: !screenSessionId || pending || camera.inspecting,
-    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
-  }] : []), {
-    id: 'camera-watch',
-    label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
-    icon: <MenuGlyph name="camera" />,
-    onSelect: () => { if (cameraWatch.watching) cameraWatch.stop(); else cameraWatch.start(); },
-    disabled: !screenSessionId || pending,
-    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
-  }, {
+  const cameraActions: MoreMenuAction[] = camera?.sharing ? [{
     id: 'stop-camera',
     label: 'Turn off camera',
+    description: cameraWatch.watching ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : cameraWatch.budget ? 'Camera updates delayed; retrying…' : 'Connecting camera updates…',
     icon: <MenuGlyph name="camera" />,
     onSelect: () => camera.stop(),
   }] : [{
@@ -540,6 +525,8 @@ export function VoiceControls({
         <>
           <div ref={voiceStatus} className="voice-status-region">
             <VoiceOrbStatus presentation={presentation} />
+            {camera?.sharing && <p className="composer-status" role="status">{cameraWatch.watching
+              ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : cameraWatch.budget ? 'Camera updates delayed; retrying…' : 'Connecting camera updates…'}</p>}
           </div>
           <div ref={voiceBar} className="voice-bar luminous-glass" role="group" aria-label="Voice controls"
             data-state={presentation.state}>

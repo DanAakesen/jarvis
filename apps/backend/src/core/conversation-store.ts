@@ -74,6 +74,8 @@ export interface ConversationStore {
   getSession(sessionId: string): Promise<ConversationSession | null>;
   endSession(sessionId: string): Promise<boolean>;
   addMessage(input: {
+    /** Cancels an uncommitted plain-text write; already committed messages remain history. */
+    readonly signal?: AbortSignal;
     readonly sessionId: string;
     readonly role: ConversationRole;
     readonly text: string;

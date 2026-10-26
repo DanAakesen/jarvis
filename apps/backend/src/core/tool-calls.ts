@@ -32,6 +32,10 @@ export interface ToolCallStore {
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'health_food' || tool === 'health_food_review' || tool === 'health_food_lookup') {
+      const presentation = (result as { presentation?: unknown } | null)?.presentation;
+      if (typeof presentation === 'string' && presentation.length <= 2000) return presentation;
+    }
     if (tool === 'calendar_confirm_change') {
       const change = result as { status?: unknown; detail?: unknown; items?: unknown } | null;
       if (change?.status === 'completed') {
@@ -56,7 +60,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
       return confirmation;
     }
     if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential' ||
-      tool === 'daily_feed' || tool === 'proactive_preferences' || tool === 'proactive_item_feedback') && typeof confirmation === 'string' &&
+      tool === 'health_feed' || tool === 'proactive_preferences' || tool === 'proactive_item_feedback') && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&
         !Array.from(confirmation).some((character) => {
           const code = character.charCodeAt(0);
