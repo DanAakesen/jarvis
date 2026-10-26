@@ -17,6 +17,18 @@ Check interim replacements, final replay, pause/end and no-speech restart,
 explicit stop, repeated toggles, draft editing, stale callbacks and fatal errors.
 These checks do not establish physical iPhone or real speech-provider acceptance.
 
+## Accepted chat recovery checks (#1311; 26 October 2026)
+
+Run focused backend `src/core/recoverable-chat.test.ts`, `src/core/conversation.test.ts`,
+`src/core/owner-interactions.test.ts`, `src/daily/tools/food-review.test.ts` and
+`src/daily/tools/food.test.ts`; web `src/conversation-history.test.ts` and
+`src/ConversationHistory.test.tsx`. Aggregate checks are `npm test`, `npm run lint`,
+`npm run build`, plus `bash .github/scripts/python-ci.sh agents/jarvis`.
+Use synthetic meals only. Replay is process-local under the existing single replica;
+completed replies use SQL history. Restart interrupts pending work and must never
+resubmit it. Keep deployment/restart limitations distinct from disconnect tests.
+
+
 ## Settled shell glass checks (#1301; 26 October 2026)
 
 Use `npm test --workspace @jarvis/web`, web lint and web build, plus the actual-App

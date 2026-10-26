@@ -94,7 +94,7 @@ describe('chat runtime activity events', () => {
     expect(JSON.stringify(events)).not.toMatch(/private|provider|response|transcript/iu);
   });
 
-  it('publishes interrupted when a connected chat stream is cancelled', async () => {
+  it('keeps thinking across disconnect and publishes interrupted only on explicit cancellation', async () => {
     let streamSignal: AbortSignal | undefined;
     const agent: ConversationAgent = {
       stream: async function* (_input, _authorization, signal) {
@@ -122,6 +122,9 @@ describe('chat runtime activity events', () => {
     await vi.waitFor(() => expect(events).toHaveLength(1));
     controller.abort();
     await reader.cancel().catch(() => {});
+    expect(streamSignal?.aborted).toBe(false);
+    expect(events.map((event) => (event as { type: string }).type)).toEqual(['thinking']);
+    await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns/1/cancel', headers });
     await vi.waitFor(() => expect(events.map((event) => (event as { type: string }).type))
       .toEqual(['thinking', 'interrupted']));
     expect(JSON.stringify(events)).not.toMatch(/private|transcript|partial/iu);

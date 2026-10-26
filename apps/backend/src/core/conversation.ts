@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { RecoverableChat } from './recoverable-chat.js';
 import { registerSseShutdown } from './sse.js';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationSearchPage } from '@jarvis/contracts';
@@ -387,6 +387,38 @@ return {
   tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
   registerRoutes: async (app) => {
     const activeTurns = new Map<string, ActiveChatTurn>();
+    const recoverableTurns = new Map<string, RecoverableChat>();
+    app.addHook('onClose', async () => {
+      for (const turn of recoverableTurns.values()) turn.controller.abort();
+    });
+    app.get('/conversation/turns/active', async () => ({
+      turns: [...activeTurns.values()].flatMap(active => {
+        const turn = recoverableTurns.get(active.rootMessageId);
+        return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId, language: turn.language }] : [];
+      }),
+    }));
+    app.get<{ Params: { sessionId: string; messageId: string } }>(
+      '/conversation/sessions/:sessionId/turns/:messageId/events', {
+        schema: { params: { type: 'object', properties: { sessionId: idSchema, messageId: idSchema },
+          required: ['sessionId', 'messageId'], additionalProperties: false } },
+      }, async (request, reply) => {
+        const turn = recoverableTurns.get(request.params.messageId);
+        if (!turn || turn.sessionId !== request.params.sessionId) {
+          return reply.code(404).send({ error: 'This reply cannot be reattached. Check saved conversation and action status before trying again.' });
+        }
+        return reply.header('Content-Type', 'text/event-stream; charset=utf-8')
+          .header('Cache-Control', 'no-cache, no-transform').header('X-Accel-Buffering', 'no').send(turn.stream());
+      });
+    app.post<{ Params: { sessionId: string; messageId: string } }>(
+      '/conversation/sessions/:sessionId/turns/:messageId/cancel', {
+        schema: { params: { type: 'object', properties: { sessionId: idSchema, messageId: idSchema },
+          required: ['sessionId', 'messageId'], additionalProperties: false } },
+      }, async (request, reply) => {
+        const turn = recoverableTurns.get(request.params.messageId);
+        if (!turn || turn.sessionId !== request.params.sessionId) return reply.code(404).send({ error: 'Chat turn not found' });
+        turn.controller.abort();
+        return { cancelled: true };
+      });
     app.post('/conversation/attachments', {
       bodyLimit: MAX_ATTACHMENT_REQUEST_BYTES,
       schema: {
@@ -613,6 +645,11 @@ return {
       }
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
+      if (recoverableTurns.size >= 20) {
+        const oldestCompleted = [...recoverableTurns.entries()].find(([, turn]) => turn.finished);
+        if (oldestCompleted) recoverableTurns.delete(oldestCompleted[0]);
+      }
+      if (recoverableTurns.size >= 20) return reply.code(429).send({ error: 'Too many recent replies. Try again shortly.' });
       if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
       const agentSessionId = createFoundryAgentSessionId(request.principal!.objectId, sessionId);
       const visualTurnKey = visualContext?.turnId ?? visualContext?.frameId;
@@ -682,7 +719,11 @@ return {
         }
       }
 
-      const controller = new AbortController();
+      const recovery = new RecoverableChat(sessionId, userMessage.id, session.language);
+      recoverableTurns.set(userMessage.id, recovery);
+      const controller = recovery.controller;
+      const deadline = setTimeout(() => controller.abort(), 15 * 60_000);
+      deadline.unref();
       const activityId = randomUUID();
       let activityFinished = false;
       const publishActivity = (type: 'thinking' | 'interrupted' | 'failed' | 'ended') => {
@@ -690,15 +731,10 @@ return {
         app.jarvisActivityHub.publish({ type, activityId, source: 'chat' });
         if (type !== 'thinking') activityFinished = true;
       };
-      const abortOnClose = () => {
-        if (!reply.raw.writableFinished) controller.abort();
-      };
-      request.raw.once('aborted', abortOnClose);
-      reply.raw.once('close', abortOnClose);
       reply.header('Content-Type', 'text/event-stream; charset=utf-8')
         .header('Cache-Control', 'no-cache, no-transform')
         .header('X-Accel-Buffering', 'no');
-      const stream = Readable.from((async function* () {
+      const source = (async function* () {
         yield streamEvent('user', userMessage);
         publishActivity('thinking');
         try {
@@ -899,9 +935,11 @@ return {
               } : {}) });
             break;
           }
+          if (controller.signal.aborted) yield streamEvent('error', { error: 'Reply stopped. Check conversation and action status before trying again.' });
         } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
+            yield streamEvent('error', { error: 'Reply stopped. An action may already have completed; check its status before trying again.' });
           } else {
             request.log.warn(
               { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown' },
@@ -920,15 +958,20 @@ return {
           activeTurn.roundController = null;
           if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
-          request.raw.removeListener('aborted', abortOnClose);
-          reply.raw.removeListener('close', abortOnClose);
         }
-      })());
-      const unregisterShutdown = registerSseShutdown(app, reply.raw, () => {
-        controller.abort();
-        stream.unpipe(reply.raw);
-        stream.destroy();
+      })();
+      const stop = () => controller.abort();
+      app.shutdownConnections.add(stop);
+      void recovery.run(source).catch(error => {
+        request.log.warn({ failure: error instanceof Error ? error.name : 'unknown' }, 'conversation.reply_failed');
+      }).finally(() => {
+        clearTimeout(deadline);
+        app.shutdownConnections.delete(stop);
+        const expiry = setTimeout(() => recoverableTurns.delete(userMessage.id), 10 * 60_000);
+        expiry.unref();
       });
+      const stream = recovery.stream();
+      const unregisterShutdown = registerSseShutdown(app, reply.raw, () => controller.abort());
       stream.once('close', unregisterShutdown);
       return reply.send(stream);
     });

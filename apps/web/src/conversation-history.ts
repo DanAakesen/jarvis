@@ -185,6 +185,38 @@ export interface ChatFoodInvitation {
   expiresAt: string;
 }
 
+export interface RecoverableTurn { sessionId: string; messageId: string; language: 'da' | 'en' }
+
+export async function loadActiveChatTurns(getAccessToken: () => Promise<string>, config: PublicConfig): Promise<RecoverableTurn[]> {
+  const response = await backendFetch(`${config.backendUrl?.replace(/\/+$/, '')}/conversation/turns/active`, {
+    headers: { Authorization: `Bearer ${await accessToken(getAccessToken)}` },
+  });
+  if (!response.ok) throw new Error('Could not check running replies.');
+  const body: unknown = await response.json();
+  if (!isRecord(body) || !Array.isArray(body.turns)) throw new Error('Invalid running replies.');
+  return body.turns.filter((turn): turn is RecoverableTurn => isRecord(turn) &&
+    typeof turn.sessionId === 'string' && /^[1-9]\d{0,18}$/.test(turn.sessionId) &&
+    typeof turn.messageId === 'string' && /^[1-9]\d{0,18}$/.test(turn.messageId) &&
+    (turn.language === 'da' || turn.language === 'en'));
+}
+
+export async function cancelChatTurn(getAccessToken: () => Promise<string>, config: PublicConfig, turn: RecoverableTurn): Promise<void> {
+  await chatResponse(getAccessToken, config,
+    `/conversation/sessions/${turn.sessionId}/turns/${turn.messageId}/cancel`, {}, 'application/json');
+}
+
+class RecoveryUnavailable extends Error {}
+
+async function recoveredChatResponse(getAccessToken: () => Promise<string>, config: PublicConfig,
+  sessionId: string, messageId: string, signal?: AbortSignal): Promise<Response> {
+  const response = await backendFetch(`${config.backendUrl?.replace(/\/+$/, '')}/conversation/sessions/${sessionId}/turns/${messageId}/events`, {
+    headers: { Authorization: `Bearer ${await accessToken(getAccessToken)}`, Accept: 'text/event-stream' },
+    signal: AbortSignal.any([AbortSignal.timeout(240_000), ...(signal ? [signal] : [])]),
+  });
+  if (!response.ok) throw new RecoveryUnavailable('This reply cannot be reattached. Check saved conversation and action status before trying again.');
+  return response;
+}
+
 export async function sendChatTurn(
   getAccessToken: () => Promise<string>,
   config: PublicConfig,
@@ -201,12 +233,16 @@ export async function sendChatTurn(
   visualContext?: VisualTurnContext,
   onAcknowledgment?: (text: string) => void,
   onFoodInvitation?: (invitation: ChatFoodInvitation | null) => void,
+  resumeMessageId?: string,
+  onReplay?: () => void,
 ): Promise<ChatMessage> {
   if (visualContext !== undefined && screenContext !== undefined) {
     throw new Error('Send visual context or legacy screen context, not both.');
   }
   const visual = visualContext === undefined ? undefined : parseVisualTurnContext(visualContext);
-  const response = await chatResponse(
+  let response = resumeMessageId
+    ? await recoveredChatResponse(getAccessToken, config, session.id, resumeMessageId, signal)
+    : await chatResponse(
     getAccessToken,
     config,
     `/conversation/sessions/${session.id}/turns`,
@@ -223,12 +259,14 @@ export async function sendChatTurn(
   );
   if (!response.body) throw new Error('Jarvis returned an empty chat stream.');
 
-  const reader = response.body.getReader();
+  let reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
   let receivedBytes = 0;
   let userMessage: ChatMessage | null = null;
   let assistantMessage: ChatMessage | null = null;
+  let acceptedId = resumeMessageId;
+  const recoveryDeadline = Date.now() + 15 * 60_000;
   const processFrame = (frame: string) => {
     if (signal?.aborted) return;
     const event = parseEvent(frame);
@@ -245,6 +283,7 @@ export async function sendChatTurn(
     }
     if (event.event === 'user') {
       if (!isChatMessage(payload, 'dan', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
+      acceptedId = payload.id;
       userMessage = chatMessageResult(payload);
       onUserMessage(userMessage);
     } else if (event.event === 'delta') {
@@ -266,7 +305,8 @@ export async function sendChatTurn(
             typeof payload.expiresAt !== 'string' || !Number.isFinite(Date.parse(payload.expiresAt))) {
           throw new Error('Jarvis returned an invalid chat stream.');
         }
-        onFoodInvitation?.({ id: payload.id, summary: payload.summary, expiresAt: payload.expiresAt });
+        onFoodInvitation?.(Date.parse(payload.expiresAt) > Date.now()
+          ? { id: payload.id, summary: payload.summary, expiresAt: payload.expiresAt } : null);
       }
     } else if (event.event === 'interrupted') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
@@ -277,12 +317,44 @@ export async function sendChatTurn(
     }
   };
 
+  // A suspended mobile socket can remain unreadable without reporting an error.
+  // Foreground/online replaces only the read transport, never the execution.
+  const reconnect = () => {
+    if (document.visibilityState !== 'hidden' && !assistantMessage) void reader.cancel().catch(() => {});
+  };
+  document.addEventListener('visibilitychange', reconnect);
+  window.addEventListener('online', reconnect);
   try {
     while (true) {
       let chunk: ReadableStreamReadResult<Uint8Array>;
-      try { chunk = await reader.read(); }
-      catch {
-        throw new Error('Connection interrupted. A food entry or another action may already have completed; check conversation and action status before trying again.');
+      try {
+        chunk = await reader.read();
+        if (chunk.done && !assistantMessage) throw new Error('Stream disconnected');
+      } catch {
+        if (assistantMessage) break;
+        if (signal?.aborted || !acceptedId || Date.now() >= recoveryDeadline) {
+          throw new Error('Connection interrupted. A food entry or another action may already have completed; check conversation and action status before trying again.');
+        }
+        await reader.cancel().catch(() => {});
+        await new Promise<void>(resolve => setTimeout(resolve, 2000));
+        signal?.throwIfAborted();
+        while (true) {
+          try {
+            response = await recoveredChatResponse(getAccessToken, config, session.id, acceptedId, signal);
+            break;
+          } catch (error) {
+            if (error instanceof RecoveryUnavailable || signal?.aborted || Date.now() >= recoveryDeadline) throw error;
+            await new Promise<void>(resolve => setTimeout(resolve, 2000));
+          }
+        }
+        if (!response.body) throw new Error('Jarvis returned an empty chat stream.');
+        reader = response.body.getReader();
+        buffer = '';
+        receivedBytes = 0;
+        decoder.decode();
+        onReplay?.();
+        onFoodInvitation?.(null);
+        continue;
       }
       const { done, value } = chunk;
       if (done) break;
@@ -299,6 +371,8 @@ export async function sendChatTurn(
     onDeliveryUncertain?.();
     throw error;
   } finally {
+    document.removeEventListener('visibilitychange', reconnect);
+    window.removeEventListener('online', reconnect);
     await reader.cancel().catch(() => {});
   }
   if (!userMessage) throw new Error('Jarvis did not save the message. Try again.');

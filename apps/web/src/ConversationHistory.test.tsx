@@ -13,7 +13,9 @@ import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
-const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+const { loadActiveChatTurns, cancelChatTurn, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+  loadActiveChatTurns: vi.fn(),
+  cancelChatTurn: vi.fn(),
   loadConversationHistory: vi.fn(),
   loadImageArtifactUrl: vi.fn(),
   createChatSession: vi.fn(),
@@ -24,6 +26,7 @@ const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendCh
 vi.mock('./conversation-history', async (importOriginal) => ({
   ...await importOriginal<typeof import('./conversation-history')>(),
   loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn,
+  loadActiveChatTurns, cancelChatTurn,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -158,6 +161,8 @@ function FactoryConversationActions() {
 beforeEach(() => {
   vi.clearAllMocks();
   MockDictationRecognition.failStart = false;
+  loadActiveChatTurns.mockResolvedValue([]);
+  cancelChatTurn.mockResolvedValue(undefined);
   loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -171,6 +176,35 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('reattaches on mount with original identity, and Stop reply cancels that execution', async () => {
+    const recovered = { sessionId: '41', messageId: '51', language: 'en' };
+    loadActiveChatTurns.mockResolvedValueOnce([recovered]);
+    sendChatTurn.mockImplementation(async (_token, _config, _session, _text, onUser, _delta,
+      _uncertain, _screen, _shared, signal) => {
+      onUser(userMessage);
+      return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Stopped'))));
+    });
+    renderConversation();
+    const stop = await screen.findByRole('button', { name: 'Stop reply' });
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+    expect(sendChatTurn.mock.calls[0]![2]).toEqual({ id: '41', language: 'en' });
+    expect(sendChatTurn.mock.calls[0]![15]).toBe('51');
+    expect(createChatSession).not.toHaveBeenCalled();
+    fireEvent.click(stop);
+    await waitFor(() => expect(cancelChatTurn).toHaveBeenCalledWith(getAccessToken, config, recovered));
+    await screen.findByText(/Reply stopped/);
+  });
+
+  it('refreshes persisted results on return without submitting another turn', async () => {
+    renderConversation();
+    await waitFor(() => expect(loadActiveChatTurns).toHaveBeenCalledOnce());
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    fireEvent(document, new Event('visibilitychange'));
+    expect(await screen.findByText(message.text)).not.toBeNull();
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    expect(createChatSession).not.toHaveBeenCalled();
+  });
+
   it('dictates into the draft without starting or sending an assistant turn', async () => {
     vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
     const user = userEvent.setup();
@@ -895,6 +929,8 @@ describe('ConversationHistory', () => {
       undefined,
       expect.any(Function),
       expect.any(Function),
+      undefined,
+      expect.any(Function),
     );
   });
 
@@ -1211,7 +1247,7 @@ describe('ConversationHistory', () => {
       getAccessToken, config, session, steeringMessage.text, 'en',
     ));
     expect(screen.getByText('Steering…')).not.toBeNull();
-    expect(screen.queryByRole('button', { name: 'Stop reply' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Stop reply' })).not.toBeNull();
     fireEvent.change(input, { target: { value: 'A later draft' } });
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
@@ -1409,6 +1445,8 @@ describe('ConversationHistory', () => {
       undefined,
       undefined,
       expect.any(Function),
+      expect.any(Function),
+      undefined,
       expect.any(Function),
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();

@@ -19,6 +19,16 @@ chooser is open. Cancellation leaves the menu available; selecting files closes
 it and continues the existing upload flow. Preserve plus toggling and ordinary
 menu-action dismissal. No custom photo chooser is introduced.
 
+## Accepted chat recovery (#1311; 26 October 2026)
+
+Leaving the app or losing its HTTP stream does not cancel an accepted chat turn.
+Returning recovers the running reply and its exact pending food invitation; completed
+replies load from conversation history. Recovery never resubmits a meal or approves
+an estimate. Explicit Stop reply cancels the running turn; actions already committed
+remain committed. Existing exact-proposal approval, expiry, presence/source checks
+and food receipt deduplication remain authoritative.
+
+
 ## Unified translucent chrome (#1301; 26 October 2026)
 
 Menu popups, composer, bottom navigation and header retain visible but partial

@@ -366,7 +366,7 @@ describe('loadConversationHistory', () => {
           model: null, at: '2026-10-12T06:17:18.000Z' };
         const assistant = { ...user, id: '62', role: 'jarvis', text: 'Committed.' };
         const invitation = { id: 'a'.repeat(43), summary: 'Synthetic portion: 200 kcal. Estimated grams.',
-          expiresAt: '2026-10-12T06:19:18.000Z' };
+          expiresAt: new Date(Date.now() + 120_000).toISOString() };
         let controller!: ReadableStreamDefaultController<Uint8Array>;
         const body = new ReadableStream<Uint8Array>({ start(value) { controller = value; } });
         vi.stubGlobal('fetch', vi.fn(async () => new Response(body)));
@@ -565,5 +565,35 @@ describe('chat steering API', () => {
 
     expect(onInterrupted).toHaveBeenCalledWith(partialReply);
     expect(onDelta.mock.calls).toEqual([['I was going to'], ['I’ll continue']]);
+  });
+});
+
+
+describe('accepted turn recovery', () => {
+  it.each(['disconnect', 'foreground'])('reattaches by original identity after %s without another POST', async reason => {
+    vi.useFakeTimers();
+    try {
+      const user = { id: '42', sessionId: '41', role: 'dan', text: 'Synthetic estimate', model: null, at: '2026-10-26T12:00:00Z' };
+      const answer = { ...user, id: '43', role: 'jarvis', text: 'Estimate only; not saved.' };
+      const frame = (event: string, value: unknown) => `event: ${event}\ndata: ${JSON.stringify(value)}\n\n`;
+      const fetch = vi.fn()
+        .mockResolvedValueOnce(new Response(new ReadableStream({ start(controller) {
+          controller.enqueue(new TextEncoder().encode(frame('user', user) + frame('delta', { text: 'Partial' })));
+          if (reason === 'disconnect') controller.close();
+        } })))
+        .mockResolvedValueOnce(new Response(frame('user', user) + frame('delta', { text: answer.text }) + frame('done', answer)));
+      vi.stubGlobal('fetch', fetch);
+      const reset = vi.fn();
+      const result = sendChatTurn(async () => 'token', config, { id: '41', language: 'en' }, user.text,
+        vi.fn(), vi.fn(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, reset);
+      await vi.advanceTimersByTimeAsync(0);
+      if (reason === 'foreground') document.dispatchEvent(new Event('visibilitychange'));
+      await vi.runAllTimersAsync();
+      expect(await result).toEqual(answer);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(String(fetch.mock.calls[1]![0])).toContain('/sessions/41/turns/42/events');
+      expect(fetch.mock.calls[1]![1].method).toBeUndefined();
+      expect(reset).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
   });
 });
