@@ -5,25 +5,25 @@
 - Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
   use Workspaces names; legacy Folio clients and data retain explicit
   compatibility aliases and reversible migration 0067.
-- Reconciled coordinated main `44e83808ba283e2e7cc1c46aaa96bfd6e6ccb9c1`
-  in two-parent merge `785ab38`. Workspaces, the mobile timestamp fix, food
-  invitation/composer behavior, compact attachment pills, image previews and
-  camera preview CSS remain together.
-- Focused combined-tree web checks passed: 317 conversation-history,
-  attachment, camera-preview, workspace and app tests. Web lint and production
-  build also passed; the build retains its existing large-chunk warning.
-- Actual-App Chromium with synthetic history and a picked image at 390×844
-  confirmed the Workspaces label, static timestamp 8 px below long message
-  text, and a 44 px image attachment pill above the composer input (12 px gap).
-  Document width remained 390 px; the image preview loaded. At 1440×900 the
-  timestamp remained absolute and document width remained 1440 px. No browser
-  errors were observed. Camera preview sizing/orientation and feedback tests
-  passed; coordinated main includes the related synthetic Chromium screenshots.
-- Exact-merge-head CI `40247640891` passed all 11 required jobs and the
-  aggregate gate, including SQL Server migration/database contracts; the
-  infrastructure job was skipped. GitHub CodeQL `40247640822` passed all four
-  analyses. The local CodeQL checker skipped JavaScript because the database
-  exceeded its size limit.
+- Reconciled coordinated main
+  `771c56d4f9c12891830f2313ce6d54c5d6477d2f` in two-parent merge `6be8f0b`.
+  The selected bottom Chat/Health/Workspaces/Menu navigation remains intact;
+  Workspaces opens the renamed saved-item pane, and Software Factory remains a
+  separate `/factory/kanban` destination. The food invitation/composer, compact
+  attachment pill, image previews, camera preview CSS and mobile timestamp fix
+  remain together.
+- Full web validation passed: 153 test files / 2,351 tests, lint and production
+  build. The build retains its existing large-chunk warning.
+- Actual-App Chromium with synthetic history at 390×844 confirmed the Workspaces
+  control opened `#workspaces-pane` without changing `/`, while Factory remained
+  linked to `/factory/kanban`. The timestamp was static 8 px below long message
+  text; document width stayed 390 px. A 47 px image attachment pill remained
+  above the composer input with 16 px spacing and no horizontal overflow. At
+  1440×900 the timestamp remained absolute and document width stayed 1440 px.
+  No browser errors were observed.
+- Exact-merge-head CI `40249598963` passed all required jobs and its aggregate
+  gate, including SQL Server migration/database contracts; infrastructure was
+  skipped. GitHub CodeQL `40249598917` passed all four analyses.
 
 ## Mobile browser food confirmation repair (#1290)
 
