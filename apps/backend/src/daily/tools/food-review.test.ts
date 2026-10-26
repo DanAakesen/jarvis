@@ -258,7 +258,7 @@ describe('inactive internal food proposal review', () => {
         expect(body).not.toContain('event: food_invitation');
         expect(messages.at(-1)?.text).toContain('Checked it.');
         expect(messages.at(-1)?.text).not.toContain('Wrong');
-        expect(messages.at(-1)?.text).toContain('- Protein: 7.5 g\n- Calories: 150 kcal\n- Fat: 15 g');
+        expect(messages.at(-1)?.text).toContain('- Protein: 8 g\n- Calories: 150 kcal\n- Fat: 15 g');
         expect(messages.at(-1)?.text.match(/Protein:/gu)).toHaveLength(1);
         expect(messages.at(-1)?.text).not.toContain('200 kcal');
         expect(f.store.log).not.toHaveBeenCalled();

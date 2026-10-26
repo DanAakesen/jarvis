@@ -1,4 +1,4 @@
-import { includesNutritionList } from '../core/food-presentation.js';
+import { presentNutritionList } from '../core/food-presentation.js';
 import { randomUUID } from 'node:crypto';
 import {
   createToolBudgetMemory, createToolBudgetRungs, TOOL_BUDGET_COLD_START_RUNG,
@@ -1312,7 +1312,7 @@ function registerVoiceRoute(
         itemId = event.item_id;
       }
       if (role === 'dan') foodResult = undefined;
-      if (role === 'jarvis' && foodResult && !includesNutritionList(text ?? '', foodResult)) text = `${text ?? ''}\n\n${foodResult}`;
+      if (role === 'jarvis' && foodResult) text = presentNutritionList(text ?? '', foodResult);
       if (!role || !text || !text.trim() || text.length > MAX_TRANSCRIPT_CHARACTERS ||
           savedTranscripts.size >= MAX_TRANSCRIPTS_PER_SESSION) return;
       if (role === 'dan') delete request.jarvisMemorySourceMessageId;
