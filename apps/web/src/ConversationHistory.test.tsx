@@ -174,6 +174,30 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it.each([false, true])('copies temporary phone Send metadata with safe feedback (failure=%s)', async (failure) => {
+    const writeText = failure ? vi.fn().mockRejectedValue(new Error('PRIVATE clipboard error')) : vi.fn().mockResolvedValue(undefined);
+    const readText = vi.fn();
+    const nav = Object.create(navigator) as Navigator;
+    Object.defineProperty(nav, 'clipboard', { value: { writeText, readText } });
+    vi.stubGlobal('navigator', nav);
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'PRIVATE draft photo token health' } });
+    input.focus();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Send' }), { pointerType: 'touch', button: 0 });
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy Send diagnostic' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(failure
+      ? 'Could not copy the Send diagnostic. Try Copy Send diagnostic again. Nothing was uploaded.'
+      : 'Send diagnostic copied. Share it only when you choose. Nothing was uploaded.')).toBeTruthy();
+    expect(String(writeText.mock.calls[0]![0])).not.toMatch(/PRIVATE|photo|token|health/);
+    expect(readText).not.toHaveBeenCalled();
+    expect(input).toHaveProperty('value', 'PRIVATE draft photo token health');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
   it('keeps the phone draft focused through Send and repeated pending sends without duplicating turns', async () => {
     const user = userEvent.setup();
     sendChatTurn.mockImplementation(() => new Promise(() => {}));
@@ -506,13 +530,13 @@ describe('ConversationHistory', () => {
     const plus = screen.getByRole('button', { name: 'More options' });
     await user.click(plus);
     const items = screen.getAllByRole('menuitem');
-    expect(items.map(item => item.textContent)).toEqual(['Language', 'Voice', 'Attach file or photo']);
+    expect(items.map(item => item.textContent)).toEqual(['Language', ...(phone ? ['Copy Send diagnostic'] : []), 'Voice', 'Attach file or photo']);
     expect(document.activeElement).toBe(items[0]);
     await user.keyboard('{End}');
-    expect(document.activeElement).toBe(items[2]);
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Attach file or photo' }));
     await user.keyboard('{ArrowUp}');
-    expect(document.activeElement).toBe(items[1]);
-    expect(items[1]?.querySelector('svg rect')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Voice' }));
+    expect(screen.getByRole('menuitem', { name: 'Voice' }).querySelector('svg rect')).toBeNull();
     expect(screen.getByRole('button', { name: 'Dictate' }).querySelector('svg rect')).not.toBeNull();
     await user.keyboard('{Home}{ArrowRight}');
     expect(screen.getByRole('menu', { name: 'Language' })).not.toBeNull();

@@ -1,4 +1,4 @@
-import { observeSendDiagnostic } from './send-diagnostic';
+import { copySendDiagnostic, observeSendDiagnostic } from './send-diagnostic';
 import { ReviewSummary } from './ReviewSummary';
 import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -996,7 +996,29 @@ export function ConversationHistory({
   ];
   // Files, photos and screenshots join the same menu; paste and drop work without it. On a phone the system picker
   // offers the photo library, the camera and files.
-  const primaryActions: MoreMenuAction[] = [{
+  const [copyingDiagnostic, setCopyingDiagnostic] = useState(false);
+  const [diagnosticFeedback, setDiagnosticFeedback] = useState<{ id: number; message: string; error: boolean } | null>(null);
+  const copyDiagnostic = async () => {
+    if (copyingDiagnostic) return;
+    setCopyingDiagnostic(true);
+    const result = await copySendDiagnostic();
+    setCopyingDiagnostic(false);
+    const messages = {
+      copied: 'Send diagnostic copied. Share it only when you choose. Nothing was uploaded.',
+      empty: 'No Send diagnostic is available yet. Try typing and tapping Send, then copy again.',
+      unavailable: 'Clipboard access is unavailable in this browser. Nothing was copied or uploaded.',
+      failed: 'Could not copy the Send diagnostic. Try Copy Send diagnostic again. Nothing was uploaded.',
+    };
+    setDiagnosticFeedback({ id: Date.now(), message: messages[result], error: result !== 'copied' });
+  };
+  const primaryActions: MoreMenuAction[] = [...(phone && !voiceActive ? [{
+    id: 'copy-send-diagnostic',
+    label: 'Copy Send diagnostic',
+    description: 'Temporary: copies only tap, focus and viewport metadata. No message text or photos.',
+    icon: <ShellIcon name="tasks" />,
+    onSelect: () => { void copyDiagnostic(); },
+    disabled: copyingDiagnostic,
+  }] : []), {
     id: 'start-voice',
     label: 'Voice',
     icon: <ShellIcon name="status" />,
@@ -1354,6 +1376,8 @@ export function ConversationHistory({
       </div>
       </div>
       </div>
+      {diagnosticFeedback && <ConversationToast notification={diagnosticFeedback}
+        onDismiss={() => setDiagnosticFeedback(null)} voiceActive={voiceActive} />}
       {historyError && messages.length > 0 && (
         <ConversationToast notification={{ id: historyErrorId, message: historyError, error: true }}
           onDismiss={dismissHistoryError} voiceActive={voiceActive}

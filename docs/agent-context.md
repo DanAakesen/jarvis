@@ -1,7 +1,7 @@
 ## Passive Send diagnostic checks (local)
 
 Run send-diagnostic, ConversationHistory and phone-chat-viewport tests plus web
-lint/build. Data allowlist, memory bound, lifecycle and pending retrieval approval
+lint/build. Data allowlist, memory bound, lifecycle and explicit copy retrieval
 are documented in `docs/ui/screenshots/send-diagnostic/README.md`. No publication.
 
 ## Unified camera delivery checks (#1317; 26 October 2026)

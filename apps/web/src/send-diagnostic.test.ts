@@ -35,7 +35,7 @@ describe('temporary Send diagnostic', () => {
     expect(storage).not.toHaveBeenCalled();
     expect(network).not.toHaveBeenCalled();
     expect(JSON.stringify(trace)).not.toMatch(/PRIVATE|payload|health|photo|token/);
-    expect(Object.keys(trace[0]!).sort()).toEqual(['ms', 'event', 'phase', 'target', 'focused', 'prevented', 'disabled', 'pointer', 'viewport', 'button'].sort());
+    expect(Object.keys(trace[0]!).sort()).toEqual(['ms', 'event', 'phase', 'target', 'focused', 'prevented', 'disabled', 'pointer', 'viewport', 'button', 'inComposer', 'pathInComposer'].sort());
     dispose();
   });
   it('bounds memory, returns copies and removes listeners and queued work', async () => {
@@ -59,4 +59,57 @@ describe('temporary Send diagnostic', () => {
       expect(remove).toHaveBeenCalledWith(type, listener, options);
     }
   });
+});
+
+describe('explicit diagnostic copy', () => {
+  it('writes only bounded allowlisted metadata and never reads the clipboard', async () => {
+    const { input, send } = fixture();
+    const dispose = observeSendDiagnostic(input, send);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const readText = vi.fn();
+    vi.stubGlobal('navigator', { clipboard: { writeText, readText } });
+    for (let i = 0; i < 200; i++) send.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    const { copySendDiagnostic } = await import('./send-diagnostic');
+    expect(writeText).not.toHaveBeenCalled();
+    expect(await copySendDiagnostic()).toBe('copied');
+    const copied = String(writeText.mock.calls[0]![0]);
+    expect(JSON.parse(copied).events).toHaveLength(128);
+    expect(copied).not.toMatch(/PRIVATE|payload|health|photo|token/);
+    expect(readText).not.toHaveBeenCalled();
+    dispose();
+    vi.unstubAllGlobals();
+  });
+  it('reports unavailable and rejected clipboard safely without copying empty traces', async () => {
+    const { input, send } = fixture();
+    const dispose = observeSendDiagnostic(input, send);
+    const { copySendDiagnostic } = await import('./send-diagnostic');
+    const writeText = vi.fn().mockRejectedValue(new Error('PRIVATE permission failure'));
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    expect(await copySendDiagnostic()).toBe('empty');
+    expect(writeText).not.toHaveBeenCalled();
+    send.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    expect(await copySendDiagnostic()).toBe('failed');
+    vi.stubGlobal('navigator', {});
+    expect(await copySendDiagnostic()).toBe('unavailable');
+    dispose();
+    vi.unstubAllGlobals();
+  });
+});
+
+
+it('classifies composer controls and containment paths without copying their labels', () => {
+  const { input, send, form } = fixture();
+  form.className = 'conversation-input';
+  const plus = document.createElement('button');
+  plus.className = 'composer-more';
+  plus.textContent = 'PRIVATE label';
+  form.append(plus);
+  const dispose = observeSendDiagnostic(input, send);
+  plus.dispatchEvent(new Event('pointerup', { bubbles: true, composed: true }));
+  const last = readSendDiagnostic().at(-1)!;
+  expect(last.target).toBe('plus');
+  expect(last.inComposer).toBe(true);
+  expect(last.pathInComposer).toBe(true);
+  expect(JSON.stringify(last)).not.toContain('PRIVATE');
+  dispose();
 });

@@ -1,8 +1,8 @@
 ## Temporary Send diagnostic (local, 26 October 2026)
 
-No visible control, layout, focus or input behavior changes. A passive in-memory
-trace observes Send/focus/viewport metadata; owner retrieval requires a separate
-coordinator decision.
+A temporary Copy Send diagnostic item in the phone Plus menu writes only the
+bounded trace on explicit press, using existing toast feedback. Attach remains
+nearest Plus. No typing-area geometry or Send behavior changes.
 
 # Design
 

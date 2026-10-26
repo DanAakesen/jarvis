@@ -2,7 +2,8 @@
 
 Owner approved content-free in-memory tap/focus/viewport diagnosis, not the
 speculative mouse fallback. Collect a bounded allowlist using passive listeners;
-add no storage, telemetry or retrieval control. Retrieval approval remains separate.
+add no storage or telemetry. Later owner approval permits an explicit phone Plus
+copy action and clipboard writing only, with safe feedback and no clipboard reads.
 
 # Decisions
 
