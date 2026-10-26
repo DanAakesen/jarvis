@@ -1,5 +1,15 @@
 # Agent context
 
+## Composer Plus checks (#1319; 26 October 2026)
+
+Run contracts/web lint, tests and build plus the selected shared Python checks.
+The actual-App dense-text browser fixture and reproduction are in
+`docs/ui/screenshots/1319/README.md`. Check dark/light mobile/desktop, popup
+readability, top-to-bottom keyboard order, repeated Plus toggle, Language,
+native attachment chooser anchoring/cancellation and the separate Dictate icon.
+Physical iPhone acceptance remains separate. Integrated main #1316; the revised
+queue places this fix before camera #1318. Do not import its unmerged changes.
+
 ## Mobile Send focus checks (#1315; 26 October 2026)
 
 Run the ConversationHistory and phone-chat-viewport suites for focused coverage;

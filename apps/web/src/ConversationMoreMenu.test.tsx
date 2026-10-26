@@ -28,6 +28,39 @@ function Harness({ onSelect = vi.fn(), disabled = false }: { onSelect?: () => vo
 }
 
 describe('ConversationMoreMenu', () => {
+  it('uses the top layer without moving the native picker or changing focus and toggle behavior', async () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'showPopover');
+    // jsdom has the closed-popover UA style but no native showPopover implementation.
+    const showPopover = vi.fn(function (this: HTMLElement) { this.style.display = 'grid'; });
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, value: showPopover });
+    const user = userEvent.setup();
+    const view = render(<ConversationMoreMenu topLayer icon="plus" language="en" onLanguageChange={vi.fn()}
+      actions={[{ id: 'attach', label: 'Attach', icon: <svg />, onSelect: vi.fn(), fileInput: <input type="file" aria-label="Files" /> }]} />);
+    try {
+      const trigger = screen.getByRole('button', { name: 'More options' });
+      await user.click(trigger);
+      const menu = screen.getByRole('menu', { name: 'More options' });
+      expect(menu.getAttribute('popover')).toBe('manual');
+      expect(showPopover).toHaveBeenCalled();
+      expect(trigger.parentElement?.contains(screen.getByLabelText('Files'))).toBe(true);
+      await user.keyboard('{ArrowRight}');
+      expect(screen.getByRole('menu', { name: 'Language' }).getAttribute('popover')).toBe('manual');
+      await user.click(trigger);
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+      await user.click(trigger);
+      await user.click(screen.getByRole('menuitem', { name: 'Attach' }));
+      expect(screen.getByRole('menu', { name: 'More options' })).not.toBeNull();
+      fireEvent.change(screen.getByLabelText('Files'));
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      view.unmount();
+      if (original) Object.defineProperty(HTMLElement.prototype, 'showPopover', original);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'showPopover');
+    }
+  });
+
   it('alternates on repeated plus taps, including while the language flyout is open', async () => {
     const user = userEvent.setup();
     render(<ConversationMoreMenu icon="plus" language="en" onLanguageChange={vi.fn()} />);

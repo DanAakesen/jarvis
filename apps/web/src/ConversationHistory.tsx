@@ -26,6 +26,7 @@ import { ComposerAttachments, MessageAttachments, PublicImageConfirmation } from
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, publicPublicationImage, type ChatAttachment } from './chat-attachments';
 import { useChatAttachments } from './useChatAttachments';
 import { Loader } from './Loader';
+import { ShellIcon } from './ShellIcon';
 import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 import {
@@ -963,7 +964,12 @@ export function ConversationHistory({
   ];
   // Files, photos and screenshots join the same menu; paste and drop work without it. On a phone the system picker
   // offers the photo library, the camera and files.
-  const attachActions: MoreMenuAction[] = [{
+  const primaryActions: MoreMenuAction[] = [{
+    id: 'start-voice',
+    label: 'Voice',
+    icon: <ShellIcon name="status" />,
+    onSelect: () => voiceStart.current?.(),
+  }, {
     id: 'attach-file',
     label: 'Attach file or photo',
     icon: <ConversationIcon name="attach" />,
@@ -976,11 +982,6 @@ export function ConversationHistory({
       }} />,
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
-  }, {
-    id: 'start-voice',
-    label: 'Voice',
-    icon: <ConversationIcon name="microphone" />,
-    onSelect: () => voiceStart.current?.(),
   }];
   const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
   const fileDragHandlers = voiceActive ? {} : {
@@ -1278,8 +1279,8 @@ export function ConversationHistory({
         />
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
-        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage}
-          leadingActions={attachActions} actions={captureActions} align="start" icon="plus" />
+        <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
+          actions={[...captureActions, ...primaryActions]} align="start" icon="plus" />
         <button className="composer-dictate" type="button" disabled={!dictationAvailable}
           aria-label={dictating ? 'Stop dictation' : 'Dictate'} aria-pressed={dictating}
           aria-describedby={`dictation-guidance${!dictationAvailable || dictating || dictationError ? ' dictation-status' : ''}`}
