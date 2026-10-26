@@ -1,3 +1,12 @@
+## Mobile keyboard scroll (#1323; 26 October 2026)
+
+Implementation and local review complete in PR #1325. Outside taps dismiss only
+after release; scrolling, cancellation and multi-touch retain composer focus.
+Local validation: web 2,405 passed / one contrast timeout; unchanged contrast rerun
+7 passed; lint/build and Chromium scroll/type/Send passed. Next: hosted checks,
+coordinator queue integration after camera/Health, review and authorized release.
+Physical iOS acceptance remains unverified.
+
 # Project plan
 
 ## Composer Plus readability (#1319; 26 October 2026)
