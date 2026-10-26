@@ -8,7 +8,8 @@ of SSE frames. Authenticated active-turn discovery and session/message-specific
 read-only replay attach to that same execution. POST cancellation aborts the
 original controller; transport closure does not. Shutdown and a 15-minute deadline
 still abort execution. At most 20 recent turns are retained; completed buffers
-expire after ten minutes, and completed replies remain in existing SQL history.
+expire after ten minutes (or earlier when the oldest completed buffer is evicted
+to admit another turn), and completed replies remain in existing SQL history.
 
 The browser reattaches by the original session/message IDs after stream loss,
 discovers active work on mount/foreground/online, and refreshes history on return.

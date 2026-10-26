@@ -28,6 +28,24 @@ Use synthetic meals only. Replay is process-local under the existing single repl
 completed replies use SQL history. Restart interrupts pending work and must never
 resubmit it. Keep deployment/restart limitations distinct from disconnect tests.
 
+Synthetic coverage includes disconnect while the model is running, while an exact
+food proposal is pending, and after an approved action commits but before its
+final response is emitted. Replaying that result twice asserts one agent execution
+and one action write. Expiry and explicit cancellation assert zero writes; existing
+food-tool tests cover source/proposal fingerprints, presence and committed receipts.
+The Chromium App fixture at 390×844 and 1440×900 recovered the exact proposal on
+reload, retained execution through ordinary navigation and cancelled the original
+turn without another turn POST. No screenshots or private meal data were published.
+
+The SQL nutrition integration command was attempted but refused to collect because
+no isolated loopback SQL Server is configured. Do not interpret synthetic action
+counters as real SQL transaction/concurrency or live-provider/device evidence.
+This executor uses Node 24.19.0/npm 11.9.0; pinned Node 22/npm 10 qualification stays
+with CI. Locked npm package installation needed temporary public npm tarball URLs
+for configured-feed 403s; the tracked lockfile, versions and integrity hashes are
+unchanged. Draft PR #1314 does not run aggregate hosted CI. Parent owns the final
+rebase, ready-state qualification, merge and deployment.
+
 
 ## Settled shell glass checks (#1301; 26 October 2026)
 

@@ -43,9 +43,9 @@ Implemented shared-material switch/close controls, removed visible camera badges
 
 Implementation: detached accepted chat execution, bounded replay, return-time
 reattachment/history refresh, explicit Stop reply, and synthetic disconnect,
-approval/expiry/cancellation and once-only replay coverage. Draft PR publication
-and final qualification follow local checks. Parent coordinates rebasing after
-parallel UI PRs and owns merge/deploy. No real meal retry or write is authorized.
+approval/expiry/cancellation and once-only replay coverage. Published as draft
+PR #1314. Next: final qualification and the parent-coordinated rebase after
+parallel UI PRs; the parent owns merge/deploy. No real meal retry or write is authorized.
 
 
 ## Settled glass and dock selection (#1301; 26 October 2026)
