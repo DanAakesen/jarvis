@@ -13,7 +13,8 @@ import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
-const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+const { loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+  loadActiveChatTurns: vi.fn(),
   loadConversationHistory: vi.fn(),
   loadImageArtifactUrl: vi.fn(),
   createChatSession: vi.fn(),
@@ -24,6 +25,7 @@ const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendCh
 vi.mock('./conversation-history', async (importOriginal) => ({
   ...await importOriginal<typeof import('./conversation-history')>(),
   loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn,
+  loadActiveChatTurns,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -158,6 +160,7 @@ function FactoryConversationActions() {
 beforeEach(() => {
   vi.clearAllMocks();
   MockDictationRecognition.failStart = false;
+  loadActiveChatTurns.mockResolvedValue([]);
   loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -171,6 +174,35 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('reattaches on mount with original identity without adding a Stop control', async () => {
+    const recovered = { sessionId: '41', messageId: '51', language: 'en' };
+    loadActiveChatTurns.mockResolvedValueOnce([recovered]);
+    let finish: ((value: typeof assistantMessage) => void) | undefined;
+    const result = new Promise<typeof assistantMessage>(resolve => { finish = resolve; });
+    sendChatTurn.mockImplementation(async (_token, _config, _session, _text, onUser) => {
+      onUser(userMessage);
+      return result;
+    });
+    renderConversation();
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(sendChatTurn.mock.calls[0]![2]).toEqual({ id: '41', language: 'en' });
+    expect(sendChatTurn.mock.calls[0]![15]).toBe('51');
+    expect(createChatSession).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Stop reply' })).toBeNull();
+    finish?.(assistantMessage);
+    await screen.findByText(assistantMessage.text);
+  });
+
+  it('refreshes persisted results on return without submitting another turn', async () => {
+    renderConversation();
+    await waitFor(() => expect(loadActiveChatTurns).toHaveBeenCalledOnce());
+    loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
+    fireEvent(document, new Event('visibilitychange'));
+    expect(await screen.findByText(message.text)).not.toBeNull();
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    expect(createChatSession).not.toHaveBeenCalled();
+  });
+
   it('dictates into the draft without starting or sending an assistant turn', async () => {
     vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
     const user = userEvent.setup();
@@ -895,6 +927,8 @@ describe('ConversationHistory', () => {
       undefined,
       expect.any(Function),
       expect.any(Function),
+      undefined,
+      expect.any(Function),
     );
   });
 
@@ -1409,6 +1443,8 @@ describe('ConversationHistory', () => {
       undefined,
       undefined,
       expect.any(Function),
+      expect.any(Function),
+      undefined,
       expect.any(Function),
     );
     expect(screen.queryByText('A red mug in Dan’s hand.')).toBeNull();

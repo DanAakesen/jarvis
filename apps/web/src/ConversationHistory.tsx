@@ -30,6 +30,8 @@ import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 import {
   createChatSession,
+  loadActiveChatTurns,
+  type RecoverableTurn,
   loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
@@ -67,7 +69,7 @@ type DictationWindow = Window & {
   webkitSpeechRecognition?: new () => DictationRecognition;
 };
 
-type QueuedMessage = { id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
+type QueuedMessage = { recovery?: RecoverableTurn; id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
 const followThreshold = 32;
 const draftKey = 'jarvis.chat.draft';
 
@@ -694,26 +696,27 @@ export function ConversationHistory({
     turnInFlight.current = true;
     setSending(true);
     setLiveTools([]);
-    setActiveMessage(queued);
+    setActiveMessage(queued.recovery ? null : queued);
+    if (queued.recovery) setFailedTurns(current => current.filter(turn => turn.messageId !== queued.recovery!.messageId));
     setHistoryError('');
     setStreamedText('');
     setStreamedAcknowledgment('');
     setFoodInvitation(null);
-    let userMessageSaved = false;
-    let messageId: string | undefined;
+    let userMessageSaved = Boolean(queued.recovery);
+    let messageId: string | undefined = queued.recovery?.messageId;
     let partialReply = '';
     let acknowledgment = '';
     let contextForTurn: string | undefined;
     let visualForTurn: VisualTurnContext | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
-      const screenRequest = isScreenRequest(text, screenShare?.sharing);
-      const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
-        (isCameraRequest(text) && !screenRequest);
+      const screenRequest = !queued.recovery && isScreenRequest(text, screenShare?.sharing);
+      const cameraRequest = !queued.recovery && (Boolean(camera?.conversation && camera.sharing) ||
+        (isCameraRequest(text) && !screenRequest));
       if (cameraRequest && !camera?.sharing) {
         throw new Error('Enable video in More before asking Jarvis to inspect a frame.');
       }
-      const activeSession = session?.language === language
+      const activeSession = queued.recovery ? { id: queued.recovery.sessionId, language } : session?.language === language
         ? session
         : await waitForChatSetup(() => createChatSession(tokenProvider, config, language, controller.signal), controller.signal);
       controller.signal.throwIfAborted();
@@ -747,7 +750,8 @@ export function ConversationHistory({
           userMessageSaved = true;
           messageId = message.id;
           setActiveMessage(null);
-          setMessages((current) => mergeMessages(current, [asHistoryMessage(message, activeSession.language, queuedFiles)]));
+          setMessages((current) => current.some(saved => saved.id === message.id) ? current
+            : mergeMessages(current, [asHistoryMessage(message, activeSession.language, queuedFiles)]));
         },
         (delta) => {
           partialReply += delta;
@@ -780,6 +784,13 @@ export function ConversationHistory({
           setStreamedText('');
         },
         setFoodInvitation,
+        queued.recovery?.messageId,
+        () => {
+          partialReply = '';
+          acknowledgment = '';
+          setStreamedText('');
+          setStreamedAcknowledgment('');
+        },
       );
       setMessages((current) => mergeMessages(current.map(message => message.id === messageId && assistant.visualResult
         ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant, activeSession.language)]));
@@ -825,6 +836,32 @@ export function ConversationHistory({
     setQueue((current) => current.filter((message) => message.id !== next.id));
     void runTurn(next);
   }, [queue, sending, voiceActive, runTurn]);
+
+  useEffect(() => {
+    let active = true;
+    const recover = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (turnInFlight.current) return;
+      void loadActiveChatTurns(tokenProvider, config).then(turns => {
+        if (!active || turnInFlight.current || !turns[0]) return;
+        const turn = turns[0];
+        void runTurn({ id: Date.now(), text: '', language: turn.language, recovery: turn });
+      }).catch(() => { /* History remains available; never resubmit a turn. */ });
+    };
+    recover();
+    const onReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      setReload(value => value + 1);
+      recover();
+    };
+    window.addEventListener('online', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    return () => {
+      active = false;
+      window.removeEventListener('online', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, [tokenProvider, config, runTurn]);
 
   function failedTurnFeedback(turn: FailedTurn) {
     return (

@@ -39,6 +39,15 @@ Physical iPhone acceptance remains pending.
 
 Implemented shared-material switch/close controls, removed visible camera badges, and retained/refreshed fitted geometry across stream replacement/resume. Synthetic mobile/desktop regression QA passed for dragging, repeated switching, pause/resume aspect changes and viewport restoration. Normal web checks are recorded in the PR; no physical-device acceptance or release claimed.
 
+## #1311 — Accepted meal request recovery (26 October 2026)
+
+Implementation: detached accepted chat execution, bounded replay, return-time
+reattachment/history refresh, explicit cancellation support, and synthetic disconnect,
+approval/expiry/cancellation and once-only replay coverage. Published as draft
+PR #1314. Rebased onto main `5dd52b07` after desktop #1313, preserving the
+merged UI changes. Next: exact-head qualification; the parent owns merge/deploy. No real meal retry or write is authorized.
+
+
 ## Settled glass and dock selection (#1301; 26 October 2026)
 
 Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,

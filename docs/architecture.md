@@ -1,5 +1,29 @@
 # Architecture
 
+## Accepted chat transport recovery (#1311; 26 October 2026)
+
+The backend owns accepted chat execution independently of response streams.
+`RecoverableChat` drains the existing agent generator once, retaining at most 1 MiB
+of SSE frames. Authenticated active-turn discovery and session/message-specific
+read-only replay attach to that same execution. POST cancellation aborts the
+original controller; transport closure does not. Shutdown and a 15-minute deadline
+still abort execution. At most 20 recent turns are retained; completed buffers
+expire after ten minutes (or earlier when the oldest completed buffer is evicted
+to admit another turn), and completed replies remain in existing SQL history.
+
+The browser reattaches by the original session/message IDs after stream loss,
+discovers active work on mount/foreground/online, and refreshes history on return.
+Replay resets transient text and merges saved messages by ID. Expired invitations
+are not displayed. Approval execution remains in the original owner-interaction
+and food receipt lifecycle; replay neither creates a message nor calls a tool.
+
+In-flight execution and replay are process-local, matching the current single
+backend replica. A restart/deployment interrupts in-flight work and clears pending
+approvals; it never restarts an action. A missing replay returns an explicit
+status-check error. This is browser-disconnect recovery, not restart-safe jobs or
+multi-replica routing. Completed SQL history remains recoverable after restart.
+
+
 ## Natural first reply before tool work (25 October 2026; P9-124 / #1258)
 
 The existing agent stream carries an `AcknowledgmentBoundary` after its streamed

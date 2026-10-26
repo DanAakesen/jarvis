@@ -44,6 +44,27 @@ DOM lifecycle and matching input/row bounds; exact iOS popover placement remains
 unverified on a physical iPhone. The private reference transfer failed and no
 private image is committed.
 
+## 26 October 2026 — Keep recovery within the no-Stop-button scope (#1311)
+
+The recovery draft initially interpreted preserving explicit cancellation as
+permission to add a visible Stop reply button. That was incorrect: Dan's P8-35
+choice on 5 October explicitly removed that control, and no later authorization
+was found. The parent confirmed removal before qualification. Keep the explicit
+cancellation endpoint and client mechanism, with owner-only authorization, while
+retaining steering and the existing visible controls. Browser-disconnect recovery
+is accepted for this scope; process-restart durability is not claimed.
+
+## 26 October 2026 — Preserve accepted chat execution across transport loss (#1311)
+
+Accepted: detach HTTP transport from the existing single execution, retain bounded
+SSE replay and discover active turns by original identity. Keep completed replies
+in SQL conversation history. Do not resubmit messages, retry meal writes, extend
+proposal expiry, or infer approval from reconnection. Explicit cancellation and
+shutdown retain the original abort path. This avoids introducing a queue or durable
+proposal executor for a browser-disconnect fix. Current deployment has one replica;
+restart and multi-replica continuation are outside this change.
+
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is
