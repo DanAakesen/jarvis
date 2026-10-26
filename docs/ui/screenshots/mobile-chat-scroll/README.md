@@ -80,3 +80,21 @@ The fixture imports `./src/phone-chat-viewport` directly when copied into
 above belongs to the initial commit, before this primary-touch guard.
 Web ESLint and TypeScript/Vite build also pass after the review correction;
 Vite retains its existing chunk-size advisory. `git diff --check` passes.
+
+## Draft publication integration (#1323)
+
+Integrated menu main `1c1029a31ce2c3008c9e721cdaf9ba2647a1febb` in
+`7599e62c`; four adjacent documentation conflicts retained both entries. Runtime
+scope remains only the viewport hook. Camera #1318 and Health #1322 are not
+included. The deployed Send guard and native menu popover are preserved.
+
+Integrated full web run: 2,405 passed, one contrast-audit test timed out at its
+unchanged 15-second limit (153 files). With other checks finished, the unchanged
+contrast suite passed all seven tests in 11.96 seconds. This is not a fully green
+single aggregate run. Web lint and TypeScript/Vite build passed. Chromium
+swipe/type/single-tap Send/outside button/link rerun passed with zero page errors.
+Earlier browser attempts hit a stopped dev server and premature fixture cleanup;
+only the completed rerun is acceptance evidence. Physical iOS remains unverified.
+Final pre-integration full run on `c8ce6b5`: 153 files / 2,403 tests passed.
+Draft remains held for coordinator integration after camera and Health, updated
+main validation, hosted checks and review before merge/deployment.
