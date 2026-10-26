@@ -115,7 +115,8 @@ Native-phone acceptance remains separate from controlled browser evidence.
 ## Mobile navigation and composer actions (#1287; 25 October 2026)
 
 On mobile, show the message composer only on the Chat screen (`/`), not on
-other pages (#1303). Desktop composer behavior is unchanged.
+other pages or the open Workspaces screen (#1303). Desktop composer behavior
+is unchanged.
 
 On phones, keep message times below the chat bubbles. Use the compact composer
 with a plus menu for existing attachments, video, screen sharing and realtime

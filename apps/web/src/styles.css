@@ -3311,7 +3311,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .mobile-bottom-nav-link:active svg { color: var(--focus); }
 .mobile-bottom-nav-link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* Other phone pages reserve navigation space only. */
-.app-shell[data-phone="true"][data-home="false"] { --dock-space: var(--phone-dock-bottom); }
+.app-shell[data-phone="true"]:is([data-home="false"], [data-workspaces-open="true"]) { --dock-space: var(--phone-dock-bottom); }
 /* The mounted chat/voice session retains its existing placement across routes. */
 .app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .jarvis-page { right: calc(env(safe-area-inset-right) + 8px); bottom: var(--phone-dock-bottom); left: calc(env(safe-area-inset-left) + 8px); max-width: none; }
 .app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(env(safe-area-inset-top) + var(--rail-size) + 8px); right: calc(env(safe-area-inset-right) + 8px); bottom: var(--dock-space); left: calc(env(safe-area-inset-left) + 8px); }

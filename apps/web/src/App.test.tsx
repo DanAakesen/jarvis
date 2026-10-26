@@ -2076,6 +2076,39 @@ describe('App shell', () => {
     }
   });
 
+  it('hides the mobile composer for Workspaces, restores it on close or Chat, and keeps Menu as an overlay', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Workspaces navigation draft' } });
+    const navigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
+    const shell = document.querySelector('.app-shell')!;
+    await user.click(navigation.getByRole('button', { name: 'Menu' }));
+    expect(input.closest('[hidden]')).toBeNull();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menu', { name: 'More options' })).toBeTruthy();
+    expect(input.closest('[hidden]')).toBeNull();
+    await user.keyboard('{Escape}');
+    for (const destination of ['close', 'Chat']) {
+      await user.click(navigation.getByRole('button', { name: 'Workspaces' }));
+      expect(shell.getAttribute('data-home')).toBe('true');
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+      expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(true);
+      expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+      expect(shell.hasAttribute('data-keyboard-open')).toBe(false);
+      if (destination === 'close') await user.click(screen.getByRole('button', { name: 'Close Workspaces' }));
+      else await user.click(navigation.getByRole('link', { name: 'Chat' }));
+      expect(shell.getAttribute('data-workspaces-open')).toBe('false');
+      expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+      expect(input).toHaveProperty('value', 'Workspaces navigation draft');
+    }
+  });
+
   it('keeps untouched phone startup navigation available despite composer autofocus, then follows keyboard resize', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),

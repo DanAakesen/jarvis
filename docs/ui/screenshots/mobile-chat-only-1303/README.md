@@ -6,13 +6,13 @@ account are used. Desktop behavior is also asserted at 1440px.
 
 ## Scope and behavior
 
-Use the same `/` predicate as the Chat navigation link. On phone routes other than
+Use `/` plus closed Workspaces pane state. On phone screens other than
 Chat, the message composer slot is hidden and the chat viewport hook is disabled.
 The conversation stays mounted to preserve drafts, attachments and session state.
 Hidden-input autofocus is suppressed; leaving while focused blurs it. The slot is
 remeasured and off-Chat pages reserve navigation clearance only. Desktop is unchanged. Voice sessions remain mounted internally, but their
-composer controls are also visible only on Chat. Workspaces and Menu remain overlays
-on the current route, not new page routes. Camera preview styling is untouched.
+composer controls are also visible only on Chat. Workspaces hides the composer even while the route remains `/`; Menu stays an
+overlay with the composer visible. Camera preview styling is untouched.
 
 ## Checks and inspected screenshots
 
@@ -30,7 +30,8 @@ All five images were visually inspected. `measurements.json` records each state,
 including zero page errors. Settings, Usage and Health show existing data-error
 panels because this limited navigation fixture intentionally supplies minimal
 synthetic responses; these are not live-backend failures or content validation.
-The mobile route regression failed on released main before the change, while its
+Workspaces open/close and return through Chat are checked using the actual pane
+and navigation buttons; both Menu overlays retain the composer. The mobile route regression failed on released main before the change, while its
 desktop counterpart passed. Final focused/full test counts and lint/build outcomes
 are in the PR receipt.
 

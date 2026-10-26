@@ -2,12 +2,13 @@
 
 ## Mobile Chat-only composer (#1303; 26 October 2026)
 
-The phone message composer is visible on the Chat route only. Other pages keep
+The phone message composer is visible on Chat only, with the Workspaces pane closed. Other pages keep
 their navigation clearance without reserving the hidden composer height. Keep
 the conversation mounted to retain drafts/session state; returning to Chat reveals
 the existing composer. Desktop is unchanged; voice sessions stay mounted but their composer controls
 are also visible only on Chat.
-Menu and Workspaces remain overlays on the current route.
+Workspaces is a separate browsing screen despite retaining the route. Menu remains
+an overlay on Chat and does not hide the composer.
 
 ## Settled glass correction (#1301; 26 October 2026)
 

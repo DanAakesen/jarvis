@@ -24,6 +24,15 @@ with sync_playwright() as p:
  input.fill('Keep this draft across mobile screens.')
  initial=geometry();assert initial['nav']=='visible' and not initial['slotHidden']
  page.screenshot(path=out+'chat-390.png')
+ nav=page.get_by_role('navigation',name='Mobile navigation')
+ nav.get_by_role('button',name='Workspaces',exact=True).click();page.wait_for_timeout(300)
+ assert geometry()['slotHidden'] and geometry()['height']=='0px'
+ page.get_by_role('button',name='Close Workspaces',exact=True).click();input.wait_for()
+ assert input.input_value()=='Keep this draft across mobile screens.'
+ nav.get_by_role('button',name='Workspaces',exact=True).click();page.wait_for_timeout(200)
+ nav.get_by_role('link',name='Chat',exact=True).click();input.wait_for()
+ assert not geometry()['slotHidden']
+ input.focus()
  page.set_viewport_size({'width':390,'height':480});page.wait_for_timeout(200)
  assert geometry()['keyboard']=='true'
  # Navigate while the input is focused, as a router command could do.
