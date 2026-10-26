@@ -17,17 +17,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setPreviewBounds(width: number, height: number, statusHeight = 36) {
+function setPreviewBounds(width: number, height: number) {
   vi.stubGlobal('ResizeObserver', class {
     private readonly callback: ResizeObserverCallback;
     constructor(callback: ResizeObserverCallback) { this.callback = callback; }
     observe(target: Element) {
-      const contentRect = target.classList.contains('camera-status-label')
-        ? { width, height: statusHeight }
-        : { width, height };
-      const borderBoxSize = target.classList.contains('camera-status-label')
-        ? [{ inlineSize: width, blockSize: statusHeight }]
-        : [];
+      const contentRect = { width, height };
+      const borderBoxSize: ResizeObserverSize[] = [];
       this.callback([{ target, contentRect, borderBoxSize } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver);
     }
     disconnect() {}
@@ -130,10 +126,34 @@ describe('Camera preview', () => {
     expect(picture.style.width).toBe('168.75px');
     expect(picture.style.height).toBe('300px');
   });
+  it('retains fitted geometry through stream replacement and refreshes dimensions on resumed playback', async () => {
+    setPreviewBounds(400, 300);
+    const view = render(<CameraPreview camera={camera()} />);
+    const video = screen.getByLabelText('Live camera preview');
+    const picture = document.querySelector<HTMLElement>('.camera-preview-picture')!;
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 360 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 640 });
+    fireEvent.loadedMetadata(video);
+    vi.mocked(HTMLMediaElement.prototype.play).mockReturnValueOnce(new Promise(() => {}));
+    view.rerender(<CameraPreview camera={camera({ facing: 'environment' })} />);
+    expect(picture.style.width).toBe('168.75px');
+    expect(picture.style.height).toBe('300px');
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 640 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 360 });
+    fireEvent.playing(video);
+    expect(picture.style.width).toBe('400px');
+    expect(picture.style.height).toBe('225px');
+    Object.defineProperty(video, 'videoWidth', { configurable: true, value: 0 });
+    Object.defineProperty(video, 'videoHeight', { configurable: true, value: 0 });
+    fireEvent.playing(video);
+    expect(picture.style.width).toBe('400px');
+    expect(picture.style.height).toBe('225px');
+    await act(async () => {});
+  });
   it('plays the existing muted stream locally and detaches without stopping capture on unmount', async () => {
     const controller = camera();
     const view = render(<CameraPreview camera={controller} />);
-    await screen.findByText('Live');
+    await act(async () => {});
     const video = screen.getByLabelText('Live camera preview') as HTMLVideoElement;
     expect(video.srcObject).toBe(controller.previewStream);
     expect(video.muted).toBe(true);
@@ -152,7 +172,7 @@ describe('Camera preview', () => {
     const view = render(<CameraPreview camera={camera()} />);
     const rear = camera({ facing: 'environment' });
     view.rerender(<CameraPreview camera={rear} />);
-    await screen.findByText('Live');
+    await act(async () => {});
     await act(async () => { reject(new Error('Old play failed.')); });
     expect(screen.queryByRole('alert')).toBeNull();
     expect((screen.getByLabelText('Live camera preview') as HTMLVideoElement).srcObject).toBe(rear.previewStream);
@@ -174,31 +194,18 @@ describe('Camera preview', () => {
     const retryPreview = screen.getByRole('button', { name: 'Retry preview' });
     expect(retryPreview.classList.contains('secondary-button')).toBe(true);
     fireEvent.click(retryPreview);
-    await screen.findByText('Live');
+    await act(async () => {});
     expect(screen.queryByRole('alert')).toBeNull();
     expect(document.querySelector('.camera-preview-picture')?.getAttribute('style')).toContain('width: 400px; height: 225px;');
     expect(controller.start).not.toHaveBeenCalled();
   });
-  it('keeps the complete unavailable-direction label in the preview status', () => {
-    const controller: CameraController = {
-      sharing: true, starting: false, inspecting: false, error: '',
-      previewStream: {} as MediaStream, start: vi.fn(async () => true), stop: vi.fn(),
-      inspect: vi.fn(async () => ({ description: 'Fixture.' })),
-    };
-    render(<CameraPreview camera={controller} />);
-    expect(screen.getByText('Camera on - direction unavailable')).not.toBeNull();
-  });
-  it('reserves feedback below the full wrapped camera status label', () => {
-    setPreviewBounds(400, 300, 68.4);
-    const controller: CameraController = {
-      sharing: true, starting: false, inspecting: false, error: '',
-      previewStream: {} as MediaStream, start: vi.fn(async () => true), stop: vi.fn(),
-      inspect: vi.fn(async () => ({ description: 'Fixture.' })),
-    };
-    const { container } = render(<CameraPreview camera={controller} />);
-    const picture = container.querySelector<HTMLElement>('.camera-preview-picture')!;
-    expect(within(picture).getByText('Camera on - direction unavailable')).not.toBeNull();
-    expect(picture.style.getPropertyValue('--camera-preview-status-height')).toBe('68.4px');
+  it('omits live and direction badges while retaining named overlay controls', async () => {
+    render(<CameraPreview camera={camera()} />);
+    await act(async () => {});
+    expect(screen.queryByText('Live')).toBeNull();
+    expect(screen.queryByText('Front camera on')).toBeNull();
+    expect(document.querySelector('.camera-status-label')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Close camera preview' })).not.toBeNull();
   });
   it('keeps startup and capture failures visible with retry, without a manual inspection button', () => {
     const controller = camera({ sharing: false, previewStream: null, error: 'No camera available.' });

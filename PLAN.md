@@ -1,5 +1,10 @@
 # Project plan
 
+## Preview follow-up #1304
+
+Implemented shared-material switch/close controls, removed visible camera badges, and retained/refreshed fitted geometry across stream replacement/resume. Synthetic mobile/desktop regression QA passed for dragging, repeated switching, pause/resume aspect changes and viewport restoration. Normal web checks are recorded in the PR; no physical-device acceptance or release claimed.
+
+
 ## Settled glass and dock selection (#1301; 26 October 2026)
 
 Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,
