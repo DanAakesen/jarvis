@@ -78,7 +78,12 @@ describe('shared overlay contract', () => {
     expect(declarations(styles, '.mobile-menu-backdrop').get('background')).toBe('transparent');
     expect(declarations(styles, '.mobile-menu-backdrop').get('backdrop-filter')).toBe('none');
     expect(styles).toContain('display var(--motion-state) allow-discrete');
-    expect(styles).toContain('.mobile-menu[hidden], .context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }');
+    expect(declarations(styles, '.mobile-menu[hidden]').get('display')).toBe('none');
+    expect(declarations(styles, '.mobile-menu').has('opacity')).toBe(false);
+    expect(styles).toContain('.context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }');
+    const entrance = styles.match(/@keyframes mobile-menu-enter\s*\{\s*from\s*\{([^}]*)\}/)?.[1];
+    expect(entrance).toContain('translate:');
+    expect(entrance).not.toContain('opacity');
     for (const preference of ['@media (prefers-reduced-motion: reduce)', ':root[data-motion="reduced"]']) {
       expect(styles.slice(styles.lastIndexOf(preference))).toContain('.context-panel-modal-backdrop');
       expect(styles.slice(styles.lastIndexOf(preference))).toContain('animation: none; transition: none;');

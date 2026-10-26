@@ -1,5 +1,27 @@
 # Design
 
+## Settled glass correction (#1301; 26 October 2026)
+
+Voice-mode follow-up: the typing composer is hidden and its wrapper is
+intentionally transparent. Runtime QA found the visible replacement voice bar
+still used the old 90% fill/24px blur; it now shares the chrome-glass material.
+The header already retained the shared material in voice mode. Actual-room
+SwiftShader and synthetic voice-state evidence are in the #1301 QA folder.
+
+The header joins the composer, bottom navigation and menu popups under the
+shared `--chrome-glass-surface` / `--chrome-glass-blur` tokens in `styles.css`.
+Use one stable partial fill and 10px blur rather than the phone cascade's old
+24px blur and the header's 90% fill. Menu entrance moves the sheet without
+fading its material opacity; removing the wrapper-plus-sheet fade prevents the
+transparent-first/filled-later appearance. Other overlay motion is unchanged.
+Dock current/pressed/expanded states use the existing focus color and a slightly
+stronger icon stroke, with plain item backgrounds and unchanged label color.
+Hover/press also act on the icon so touch hover cannot leave a filled box.
+Keyboard focus outlines remain. This supersedes #1296's header exclusion.
+Synthetic settled App captures and scene-transmission measurements are in
+`docs/ui/screenshots/1301/`; no physical-device acceptance is claimed.
+
+
 ## Camera and conversation surface refinement (#1296; 26 October 2026)
 
 Drag the camera video directly with touch or a pointer; switch/close remain

@@ -1,5 +1,17 @@
 # Project plan
 
+## Settled glass and dock selection (#1301; 26 October 2026)
+
+Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,
+and excluded header; it unifies requested chrome surfaces and makes dock
+selection icon-only. Started from main `df3fafa5`, preserving merged #1298 and
+#1300 keyboard/startup behavior. Actual-App Chromium tests cover settled and
+repeated opens, delayed settings, dark/light, reduced motion, focus outlines
+and pixel transmission through each named surface. Evidence and exact check
+results are in `docs/ui/screenshots/1301/README.md`. Coordinator owns review,
+hosted exact-head checks and release; no merge or deployment by this executor.
+
+
 ## Startup navigation correction (#1299; 26 October 2026)
 
 The owner reports bottom navigation missing at startup until a tap. The released

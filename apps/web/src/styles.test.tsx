@@ -1078,8 +1078,12 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'font-weight')).toBe('750');
     expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'background')).toBe('transparent');
     expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
-    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link\[aria-current="page"\], \.mobile-bottom-nav-link\[aria-pressed="true"\], \.mobile-bottom-nav-link\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
-    expect(source.indexOf('.mobile-bottom-nav-link[aria-current="page"]'))
+    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link:is\(\[aria-current="page"\], \[aria-pressed="true"\], \[aria-expanded="true"\]\) svg\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
+    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link\s*\{([^}]*)\}/, 'background')).toBe('transparent');
+    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link\s*\{([^}]*)\}/, 'border')).toBe('0');
+    expect(source).not.toMatch(/\.mobile-bottom-nav-link:(?:hover|active)\s*\{/);
+    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link:focus-visible\s*\{([^}]*)\}/, 'outline')).toBe('3px solid var(--focus)');
+    expect(source.indexOf('.mobile-bottom-nav-link:is([aria-current="page"]'))
       .toBeGreaterThan(source.indexOf('.mobile-bottom-nav-link:hover'));
     expect(source).toContain('--selection-hover: var(--state-selected-hover)');
     expect(source).toContain('--selection-pressed: var(--state-selected-pressed)');

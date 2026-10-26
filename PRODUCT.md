@@ -1,5 +1,14 @@
 # Product
 
+## Unified translucent chrome (#1301; 26 October 2026)
+
+Menu popups, composer, bottom navigation and header retain visible but partial
+translucency after opening settles. Dock selection highlights only the icon,
+without selected background/border effects; keyboard focus remains visible.
+This supersedes #1296's exclusion of the header. Existing icon colors and merged
+phone keyboard/startup behavior remain unchanged.
+
+
 ## Camera/menu follow-up (#1296; 26 October 2026)
 
 The camera preview can be repositioned with touch and desktop pointers, with

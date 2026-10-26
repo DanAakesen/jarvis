@@ -45,6 +45,8 @@
   --surface: #fffaf1;
   --surface-muted: rgb(226 234 237 / 90%);
   --surface-translucent: rgb(240 245 247 / 92%);
+  --chrome-glass-surface: color-mix(in srgb, var(--surface) 40%, transparent);
+  --chrome-glass-blur: 10px;
   --report-surface: #f0f5f7;
   --text-muted: #5c564f;
   --rule: #d8cfc2;
@@ -1338,8 +1340,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .more-menu-check { display: grid; width: 20px; place-items: center; color: var(--glass-edge-cool); visibility: hidden; }
 .more-menu-item[aria-checked="true"] .more-menu-check { visibility: visible; }
 @keyframes more-menu-enter {
-  from { opacity: 0; transform: translateY(4px) scale(.98); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(4px) scale(.98); }
+  to { transform: none; }
 }
 @media (max-width: 700px) {
   .more-menu-flyout { top: auto; bottom: calc(100% + 12px); left: -6px; }
@@ -3302,11 +3304,11 @@ a.task-chip:hover { background: var(--glass-pressed); }
   box-shadow: 3px -3px 0 -1.5px color-mix(in srgb, currentColor 55%, transparent); font-size: var(--type-caption); font-weight: 700; }
 .mobile-windows-button[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; }
 .mobile-bottom-nav { position: fixed; z-index: var(--z-dock); right: env(safe-area-inset-right); bottom: 0; left: env(safe-area-inset-left); display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); min-height: calc(var(--mobile-nav-height, 68px) + env(safe-area-inset-bottom)); padding: var(--space-1) 0 env(safe-area-inset-bottom); border-top: 1px solid var(--rule); background: var(--stage-slab); backdrop-filter: blur(var(--surface-blur)) saturate(1.15); }
-.mobile-bottom-nav-link { display: grid; min-width: 0; min-height: 60px; align-content: center; justify-items: center; gap: var(--space-1); padding: var(--space-1); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--type-caption); line-height: var(--line-tight); text-decoration: none; cursor: pointer; transition: color var(--motion-press) var(--ease-standard), background-color var(--motion-press) var(--ease-standard); }
+.mobile-bottom-nav-link { display: grid; min-width: 0; min-height: 60px; align-content: center; justify-items: center; gap: var(--space-1); padding: var(--space-1); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text-muted); font: inherit; font-size: var(--type-caption); line-height: var(--line-tight); text-decoration: none; cursor: pointer; transition: color var(--motion-press) var(--ease-standard); }
 .mobile-bottom-nav-link svg { width: 24px; height: 24px; }
-.mobile-bottom-nav-link:hover { background: var(--glass-hover); color: var(--text); }
-.mobile-bottom-nav-link[aria-current="page"], .mobile-bottom-nav-link[aria-pressed="true"], .mobile-bottom-nav-link[aria-expanded="true"] { color: var(--focus); }
-.mobile-bottom-nav-link:active { background: var(--glass-pressed); }
+.mobile-bottom-nav-link:hover svg { color: var(--focus); }
+.mobile-bottom-nav-link:is([aria-current="page"], [aria-pressed="true"], [aria-expanded="true"]) svg { color: var(--focus); stroke-width: 2.1; }
+.mobile-bottom-nav-link:active svg { color: var(--focus); }
 .mobile-bottom-nav-link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* The chat bar is the dock: full width at the bottom of every page, above the home indicator. */
 .app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .jarvis-page { right: calc(env(safe-area-inset-right) + 8px); bottom: var(--phone-dock-bottom); left: calc(env(safe-area-inset-left) + 8px); max-width: none; }
@@ -4399,8 +4401,10 @@ select.form-control {
   padding: var(--space-3);
   overscroll-behavior: contain;
   overflow-wrap: anywhere;
-  animation-duration: var(--motion-state);
+  animation: mobile-menu-enter var(--motion-state) var(--ease-enter);
 }
+/* Keep glass density constant; fading both the wrapper and sheet changes its fill. */
+@keyframes mobile-menu-enter { from { translate: 0 36px; } }
 .mobile-menu-sheet .mobile-menu-body { flex: 1 1 auto; }
 .mobile-menu-dots { display: flex; flex: 0 0 auto; justify-content: center; gap: var(--space-1); padding-block: var(--space-1); }
 .mobile-menu-dots span { width: 4px; height: 4px; border-radius: 50%; background: var(--text-muted); }
@@ -4416,13 +4420,13 @@ select.form-control {
   backdrop-filter: blur(6px);
 }
 .context-panel-modal-backdrop[hidden] { display: none; }
-.mobile-menu, .context-panel-modal-backdrop {
+.context-panel-modal-backdrop {
   opacity: 1;
   transition: opacity var(--motion-state) var(--ease-enter), display var(--motion-state) allow-discrete;
 }
-.mobile-menu[hidden], .context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }
+.context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }
 @starting-style {
-  .mobile-menu, .context-panel-modal-backdrop { opacity: 0; }
+  .context-panel-modal-backdrop { opacity: 0; }
 }
 :root .overlay-exit-ghost, :root .overlay-exit-ghost * { animation: none; transition: none; }
 .app-shell .context-panel[aria-modal="true"] {
@@ -4450,20 +4454,15 @@ select.form-control {
   :root :is(.modal, .modal-backdrop, .jobs-popover, .more-menu-list, .more-menu-flyout, .presence-menu, .mobile-menu, .mobile-menu-sheet, .mobile-menu-backdrop, .context-panel-modal-backdrop, .context-panel[aria-modal="true"]) { animation: none; transition: none; }
 }
 :root[data-motion="reduced"] :is(.modal, .modal-backdrop, .jobs-popover, .more-menu-list, .more-menu-flyout, .presence-menu, .mobile-menu, .mobile-menu-sheet, .mobile-menu-backdrop, .context-panel-modal-backdrop, .context-panel[aria-modal="true"]) { animation: none; transition: none; }
-/* Phone chrome shares the chat surface, without obscuring the chat behind an open menu. */
-.app-shell[data-phone="true"] :is(.mobile-menu-sheet, .app-topbar, .mobile-bottom-nav) {
-  background: var(--surface-translucent);
-  backdrop-filter: blur(var(--surface-blur));
-}
 .app-shell[data-phone="true"][data-keyboard-open="true"] { --phone-dock-bottom: var(--space-2); }
 .app-shell[data-phone="true"][data-keyboard-open="true"] .mobile-bottom-nav { visibility: hidden; pointer-events: none; }
 
-/* #1296: clearer conversation/navigation glass; header and keyboard geometry stay independent. */
-.app-shell :is(.conversation-input, .mobile-bottom-nav, .mobile-menu-sheet, .more-menu-list, .more-menu-flyout) {
-  --surface-translucent: color-mix(in srgb, var(--surface) 58%, transparent);
+/* One settled glass treatment for navigation and conversation surfaces.
+   Do not redefine inherited --surface-translucent: nested controls keep their own surfaces. */
+.app-shell:is([data-phone], :not(.app-signed-out)) :is(.app-topbar, .mobile-bottom-nav, .mobile-menu-sheet, .more-menu-list, .more-menu-flyout),
+.app-shell .conversation-input.luminous-glass[data-voice-active="false"],
+.app-shell .voice-bar.luminous-glass {
+  background: var(--chrome-glass-surface);
+  backdrop-filter: blur(var(--chrome-glass-blur));
+  -webkit-backdrop-filter: blur(var(--chrome-glass-blur));
 }
-.app-shell :is(.mobile-bottom-nav, .mobile-menu-sheet, .more-menu-list, .more-menu-flyout) {
-  background: var(--surface-translucent);
-  backdrop-filter: blur(10px);
-}
-.app-shell .conversation-input.luminous-glass { background: var(--surface-translucent); backdrop-filter: blur(10px); }
