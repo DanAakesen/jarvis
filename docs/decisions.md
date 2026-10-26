@@ -4,6 +4,16 @@
 
 Follow the clarified bottom-up order: Attach nearest Plus, Voice above it, remaining actions, Language at the top. Keep DOM and visual ordering aligned rather than reversing CSS flow. Reuse the app waveform icon for Voice, with the microphone reserved for Dictate. Strengthen only composer menu blur, retaining the existing translucent fill. Manual native popovers let that blur sample the underlying chat instead of stopping at the composer backdrop root; preserve DOM ancestry, picker anchoring and shared menu behavior.
 
+## 26 October 2026 — Preserve phone composer focus on Send (#1315)
+
+Use a guarded pointer-down default prevention on the existing Send button only
+while the phone textarea is focused. The native click remains the sole submit
+path. Controlled Chromium reproduced blur, simulated keyboard expansion, dock
+movement and a missed click without the guard; with it, focus and geometry stay
+stable and one tap submits once. This evidence does not establish physical iOS
+behavior. See `docs/ui/screenshots/1315/README.md`.
+
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Apply the approved composer geometry and controls to desktop as requested,

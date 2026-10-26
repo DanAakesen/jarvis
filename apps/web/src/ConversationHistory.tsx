@@ -199,6 +199,7 @@ export function ConversationHistory({
   screenShare,
   camera,
   composerVisible = true,
+  phone = false,
 }: {
   client: PublicClientApplication;
   getAccessToken?: () => Promise<string>;
@@ -1288,6 +1289,11 @@ export function ConversationHistory({
           <ConversationIcon name={dictating ? 'stop' : 'microphone'} />
         </button>
         <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
+          onPointerDown={(event) => {
+            // Keep the keyboard and dock steady until the native click submits.
+            // Do not send on pointer-down: a dragged/cancelled press must remain cancellable.
+            if (phone && event.button === 0 && document.activeElement === input.current) event.preventDefault();
+          }}
           aria-label="Send" title={uploadingFiles ? 'Waiting for uploads to finish' : 'Send message'}>
           {/* A new key per message restarts the one-off take-off animation, even when sends follow each other quickly. */}
           <span className="composer-send-glyph" key={sentCount} data-sent={sentCount > 0 || undefined}>
