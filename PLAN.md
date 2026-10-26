@@ -1,5 +1,13 @@
 # Project plan
 
+## Mobile Chat-only composer (#1303; 26 October 2026)
+
+Use the current route to show mobile typing controls only on Chat. Keep the
+conversation mounted, release hidden-input focus and keyboard state on departure,
+and remove unused composer clearance on other pages. Desktop stays unchanged.
+Synthetic actual-App navigation evidence is in `docs/ui/screenshots/mobile-chat-only-1303/`.
+Parent owns final qualification, review and release.
+
 ## Settled glass and dock selection (#1301; 26 October 2026)
 
 Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,

@@ -1,5 +1,13 @@
 # Decisions
 
+## Route-scoped phone composer (#1303; 26 October 2026)
+
+Use the same `/` route predicate as the Chat navigation control. Hide the phone
+typing slot rather than unmounting its conversation/session owner, so drafts and
+ongoing turns survive navigation. Disable the chat viewport hook off Chat and
+prevent hidden-input focus. Desktop and active voice controls are unchanged.
+Menu and Workspaces are existing overlays, not additional page routes.
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

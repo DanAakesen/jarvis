@@ -176,7 +176,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
   const shellElement = useRef<HTMLDivElement>(null);
-  usePhoneChatViewport(shellElement, signedIn && phone && !voiceActive);
+  usePhoneChatViewport(shellElement, signedIn && phone && home && !voiceActive);
   // Phone shell: the open windows list and the page menu are sheets opened from the top bar.
   const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
   const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
@@ -385,7 +385,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     setChatOutPath(pathname);
     if (chatOut) setChatOut(false);
   }
-  // On phones there is no rail: the chat bar is the dock at the bottom of every page (Dan, 8 October).
+  // Phone typing belongs to Chat; the mounted session still survives page navigation.
   const chatPlace: 'home' | 'out' | 'rail' = !signedIn || home ? 'home' : phone || chatOut ? 'out' : 'rail';
   const railOrb = useRef<HTMLButtonElement>(null);
   const { railTipProps, railTip } = useRailTip();
@@ -836,6 +836,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   screenShare={screenShare}
                   docked={chatPlace === 'rail'}
                   phone={phone}
+                  composerVisible={!phone || home}
                   {...(chatPlace === 'out' && !phone ? { onDismiss: collapseChat } : {})}
                 />
               )}

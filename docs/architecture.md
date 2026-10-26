@@ -535,6 +535,12 @@ height across resize-before-focus but no longer treats initial focus as keyboard
 evidence. Startup autofocus can occur without a keyboard; a fresh already-short
 viewport without inset or earlier height history leaves navigation available.
 
+#1303 passes route-derived composer visibility from Shell through JarvisPage.
+ConversationHistory remains mounted and hides its typing slot off Chat on phones;
+it suppresses hidden-input autofocus and remeasures the visible dock. The phone
+chat viewport hook is enabled only on Chat. Other pages reserve navigation space
+only; desktop and active voice controls retain their existing behavior.
+
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
 Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,
