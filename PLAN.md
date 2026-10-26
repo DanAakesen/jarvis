@@ -4,8 +4,9 @@ Implementation on `fix/1317-unified-camera`: automatic sampled-frame delivery,
 truthful receiving status, explicit standing narration, approved removal of the
 user-inactivity cutoff, permission-checked Jarvis start/stop, obsolete camera action
 cleanup and bounded lifecycle. Local checks and synthetic browser evidence are
-in `docs/ui/screenshots/1317/README.md`. Draft review and exact-head hosted CI
-remain before parent-coordinated integration; no merge or deployment authorized here.
+in `docs/ui/screenshots/1317/README.md`. Rebased onto combined main `496182bc` without conflicts; independent integration
+review passed. Exact-head hosted qualification remains before the authorized normal
+merge/deployment workflow; no production release is claimed yet.
 
 # Project plan
 

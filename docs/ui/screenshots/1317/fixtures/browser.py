@@ -23,6 +23,7 @@ with sync_playwright() as p:
    if '/settings' in u:data={'settings':{'appearance':{'theme':'dark'}}}
    if '/presence' in u:data={'mode':'available','updatedAt':'2026-10-26T06:00:00Z'}
    if '/conversation/sessions' in u:data={'id':'43','channel':'chat','language':'en'}
+   if '/conversation/turns/active' in u:data={'turns':[]}
    if '/vision/watch' in u:
     if r.request.method=='POST' and stall:held.append(r);return
     if r.request.method=='POST' and exhausted:r.fulfill(status=429,json={'error':'The daily vision budget is exhausted.'});return
@@ -34,7 +35,7 @@ with sync_playwright() as p:
   navigator.permissions.query=async()=>({state:window.fixturePermission});
   const originalFetch=window.fetch.bind(window);
   window.fetch=async(input,init)=>{
-    const url=typeof input==='string'?input:input.url;
+    const url=input instanceof Request?input.url:String(input);
     if(url.endsWith('/now/events')) return new Response(new ReadableStream({start(controller){
       const emit=(event,data)=>controller.enqueue(new TextEncoder().encode('event: '+event+'\\ndata: '+JSON.stringify(data)+'\\n\\n'));
       window.fixtureCommand=command=>emit('workspace-command',{command,expiresAt:Date.now()+10000});
@@ -57,6 +58,8 @@ with sync_playwright() as p:
   page.goto('http://localhost:5173/qaapp1296.html');page.get_by_role('textbox',name='Message Jarvis').wait_for();page.wait_for_timeout(1000)
   page.evaluate("document.documentElement.dataset.theme='dark'")
   if page.get_by_role('button',name='Show conversation',exact=True).count():page.get_by_role('button',name='Show conversation',exact=True).click()
+  page.get_by_text('Synthetic conversation for camera and menu verification.',exact=False).first.wait_for()
+  assert page.get_by_text('Jarvis could not load conversation history.',exact=False).count()==0
   trigger=page.locator('.composer-more .more-menu-trigger'); trigger.wait_for()
   press=lambda locator: locator.tap() if touch else locator.click()
   for i in range(3):

@@ -13,7 +13,7 @@ when requested; missing browser permission is refused explicitly.
 
 ## Local evidence
 
-- Final `npm test`: contracts 174 passed; web 153 files/2,388 passed; backend
+- Pre-integration `npm test`: contracts 174 passed; web 153 files/2,388 passed; backend
   297 files/6,685 passed with one skipped; vault mirror 13 files/237 passed.
 - Focused backend before review: 7 files, 161 tests passed (`vision`, capability instructions,
   visual context and tool parity). Covers typed and spoken tool dispatch,
@@ -99,5 +99,27 @@ explicit persistence-entry signal instead of a load-sensitive one-second polling
 limit. Final full aggregate completed successfully at 14:38 UTC with the counts
 above; lint and build passed across all four workspaces. Hosted CodeQL, PR title
 and Plan status passed on implementation commit `83a1d960`; aggregate hosted CI
-was skipped because the PR remains draft. Final-main rebase/revalidation remains
-with the parent integration queue.
+was skipped because the PR remains draft. The combined-main rebase and revalidation follow below.
+
+## Combined-main integration (26 October, 15:00 UTC)
+
+Rebased without conflicts onto `496182bc226bd3419a8e015ad7e2955e23abb4a1`.
+Reviewed preservation of meal recovery's original IDs and no-fresh-capture guards,
+the `phone = false` binding and focused-phone Send pointer handler, desktop
+Voice-under-Plus/layout, and mobile composer visibility. The camera PR does not
+change incoming composer CSS or conversation recovery transport.
+
+The repeated synthetic browser checks passed at all three widths: five accepted
+frames each, zero after stop, no page errors. The fixture now handles URL objects
+in its fetch wrapper and returns an empty active-turn list for the integrated
+recovery route; it explicitly asserts loaded synthetic history. Refreshed images
+contain only synthetic data. Browser command tests prove capture/stop and frame
+receipt through real application handlers, not live model natural-language intent
+selection. Physical iPhone and live-camera/model acceptance remain unverified.
+
+Combined-main `npm test` passed: contracts 174; web 153 files/2,400 tests;
+backend 298 files/6,695 tests with one existing skip; vault-mirror 13 files/237
+tests. All-workspace lint/build and Python Ruff/929 tests/byte compilation passed.
+The aggregate exited successfully at 15:06 UTC. No local check failed on the
+combined production tree. Hosted exact-head qualification follows readiness;
+reviewed integration authorization does not bypass required checks or policies.
