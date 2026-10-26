@@ -3,13 +3,13 @@ import { useRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { usePhoneChatViewport } from './phone-chat-viewport';
 
-function Chat({ enabled = true }: { enabled?: boolean }) {
+function Chat({ enabled = true, autoFocus = false }: { enabled?: boolean; autoFocus?: boolean }) {
   const shell = useRef<HTMLDivElement>(null);
   usePhoneChatViewport(shell, enabled);
   return (
     <div ref={shell} data-testid="shell">
       <div className="conversation-input">
-        <textarea id="message" aria-label="Message Jarvis" defaultValue="Unsent fixture draft" />
+        <textarea id="message" aria-label="Message Jarvis" defaultValue="Unsent fixture draft" autoFocus={autoFocus} />
         <button type="button">Composer action</button>
       </div>
       <div className="more-menu-flyout"><button type="button">Language</button></div>
@@ -53,6 +53,108 @@ describe('phone chat viewport', () => {
     visible.height = 400;
     act(() => { visible.dispatchEvent(new Event('resize')); });
     await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('400px'));
+  });
+
+  it.each(['focus-first', 'viewport-first'] as const)('removes dock clearance when all viewport heights shrink together (%s)', async (order) => {
+    const visible = viewport();
+    let layoutHeight = 844;
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockImplementation(() => layoutHeight);
+    render(<Chat />);
+    const shell = screen.getByTestId('shell');
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const shrink = () => {
+      layoutHeight = 480;
+      vi.stubGlobal('innerHeight', 480);
+      act(() => { window.dispatchEvent(new Event('resize')); });
+      if (order === 'focus-first') expect(shell.dataset.keyboardOpen).toBe('true');
+      visible.height = 480;
+      act(() => { visible.dispatchEvent(new Event('resize')); });
+    };
+    if (order === 'focus-first') input.focus();
+    shrink();
+    if (order === 'viewport-first') input.focus();
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('480px');
+    expect(input).toHaveProperty('value', 'Unsent fixture draft');
+    input.blur();
+    await waitFor(() => expect(shell.dataset.keyboardOpen).toBe('false'));
+  });
+
+  it('starts in typing mode when mounted after all viewports have already shrunk', () => {
+    const visible = viewport();
+    visible.height = 480;
+    vi.stubGlobal('innerHeight', 480);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    render(<Chat autoFocus />);
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message Jarvis' }));
+    expect(screen.getByTestId('shell').dataset.keyboardOpen).toBe('true');
+  });
+
+  it('keeps typing space through visual-first resize, panning, and the later layout resize', () => {
+    const visible = viewport();
+    let layoutHeight = 844;
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockImplementation(() => layoutHeight);
+    render(<Chat />);
+    screen.getByRole('textbox', { name: 'Message Jarvis' }).focus();
+    const shell = screen.getByTestId('shell');
+    visible.height = 480;
+    visible.offsetTop = 364;
+    act(() => { visible.dispatchEvent(new Event('resize')); visible.dispatchEvent(new Event('scroll')); });
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    layoutHeight = 480;
+    vi.stubGlobal('innerHeight', 480);
+    visible.offsetTop = 0;
+    act(() => { window.dispatchEvent(new Event('resize')); visible.dispatchEvent(new Event('scroll')); });
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    screen.getByRole('textbox', { name: 'Other editor' }).focus();
+    expect(shell.dataset.keyboardOpen).toBe('false');
+  });
+
+  it('handles enabling the phone dock with an already focused input and an already resized layout', () => {
+    const visible = viewport();
+    visible.height = 480;
+    vi.stubGlobal('innerHeight', 480);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    const view = render(<Chat enabled={false} />);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    input.focus();
+    view.rerender(<Chat />);
+    const shell = screen.getByTestId('shell');
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    // Keyboard dismissal can enlarge the viewport without removing focus.
+    for (const height of [510, 560, 620, 700, 844]) {
+      visible.height = height;
+      vi.stubGlobal('innerHeight', height);
+      act(() => { visible.dispatchEvent(new Event('resize')); });
+    }
+    expect(document.activeElement).toBe(input);
+    expect(shell.dataset.keyboardOpen).toBe('false');
+    // Reopening while the caret remains focused must hide navigation again.
+    visible.height = 480;
+    vi.stubGlobal('innerHeight', 480);
+    act(() => { visible.dispatchEvent(new Event('resize')); });
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    view.rerender(<Chat enabled={false} />);
+    expect(shell.hasAttribute('data-keyboard-open')).toBe(false);
+  });
+
+  it('keeps the dock steady while focus moves from typing to composer controls', () => {
+    const visible = viewport();
+    visible.height = 480;
+    vi.stubGlobal('innerHeight', 480);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    render(<Chat />);
+    const shell = screen.getByTestId('shell');
+    const control = screen.getByRole('button', { name: 'Composer action' });
+    control.focus();
+    expect(shell.dataset.keyboardOpen).toBe('false');
+    screen.getByRole('textbox', { name: 'Message Jarvis' }).focus();
+    control.focus();
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    screen.getByRole('button', { name: 'Language' }).focus();
+    expect(shell.dataset.keyboardOpen).toBe('true');
+    screen.getByRole('textbox', { name: 'Other editor' }).focus();
+    expect(shell.dataset.keyboardOpen).toBe('false');
   });
 
   it('dismisses touch taps outside only the composer, without swallowing the tap or blurring another editor', () => {

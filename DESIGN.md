@@ -336,6 +336,9 @@ and ready image thumbnails) stay inside the composer above the draft. Only
 draft/attachment errors and selection problems sit above the composer surface
 and participate in its dock measurement. A visible
 keyboard inset removes navigation clearance; navigation is hidden while covered.
+The #1295 follow-up also reclaims navigation space while the message is focused when
+layout and visual viewports shrink together. Navigation returns when focus leaves
+the composer/options or on observed viewport expansion; no browser mode is inferred from an owner image.
 
 Keep Chat, optional Health, Workspaces and Menu in the bottom navigation.
 The menu uses six entries per horizontal page, a compact three-dot swipe cue,

@@ -1,5 +1,14 @@
 # Decisions
 
+## Reserve phone typing space when geometry is inconclusive (#1295; 26 October 2026)
+
+The owner reports navigation still above the iPhone keyboard after #1294.
+Equal-height layout/visual viewports defeat the released gap-only detector;
+the previous synthetic fixture kept layout height fixed and missed that case.
+Use composer focus as a fallback, including already-focused mount, and restore
+navigation on focus departure or observed viewport expansion. Do not infer a
+particular iOS browser mode or claim physical acceptance from synthetic tests.
+
 ## Preview movement and menu glass (#1296; 26 October 2026)
 
 Use pointer capture on the camera video for both touch and mouse movement,
