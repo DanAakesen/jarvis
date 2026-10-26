@@ -233,7 +233,10 @@ export function ConversationMoreMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        onClick={() => (open ? close(false) : openMenu('first'))}
+        // Keep the focused menu item from blurring before a second trigger press
+        // reaches click (notably on touch browsers that do not focus buttons).
+        onPointerDown={(event) => { if (open) event.preventDefault(); }}
+        onClick={() => (open ? close(true) : openMenu('first'))}
         onKeyDown={onTriggerKeyDown}
       >
         <MenuIcon name={icon} />

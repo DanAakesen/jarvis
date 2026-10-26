@@ -26,6 +26,15 @@ viewport coordinates, inset detection, zoom handling and teardown remain intact.
 Only the viewport hook and its tests change runtime behavior. Composer controls,
 attachments, menu, dictation, preview dragging and plus-menu behavior are unchanged.
 
+## Combined-tree revalidation
+
+Refreshed all four captures after merging current main
+`912b90307ede3d2e8a953b451d3a356171e21392` (PR #1297). The preview/plus
+implementation is preserved. Actual-App assertions passed for equal-height resize,
+short reload, expansion with focus retained, reopening, blur restoration and opening
+the plus menu while typing. Geometry is unchanged; no page errors occurred.
+Full web tests, lint and build are recorded on the updated PR.
+
 ## Actual-App captures
 
 - `app-resized-layout-390x480.png`: focus first, then resize the actual browser

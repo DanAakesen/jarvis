@@ -1,5 +1,15 @@
 # Product
 
+## Camera/menu follow-up (#1296; 26 October 2026)
+
+The camera preview can be repositioned with touch and desktop pointers, with
+switch/close controls over the unframed video and subtle tinted blurred fills.
+Repeated composer plus presses alternate opening and closing its menu. The
+composer, bottom menu dock and menu popups are visibly more transparent while
+keeping text/icons readable. Composer icons remain borderless; chat remains
+undimmed behind the menu. Keyboard/navigation follow-up belongs to #1295.
+
+
 ## Workspaces saved-item pane (#1279)
 
 The saved-item pane is **Workspaces** throughout the app and implementation.
