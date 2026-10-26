@@ -258,6 +258,7 @@ export function ConversationHistory({
   const [dictating, setDictating] = useState(false);
   const [dictationError, setDictationError] = useState('');
   const dictationRecognition = useRef<DictationRecognition | null>(null);
+  const dictationStopRequested = useRef(false);
   const voiceStart = useRef<(() => void) | null>(null);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -329,7 +330,10 @@ export function ConversationHistory({
   }, []);
   const toggleDictation = () => {
     if (dictationRecognition.current) {
-      dictationRecognition.current.stop();
+      if (!dictationStopRequested.current) {
+        dictationStopRequested.current = true;
+        dictationRecognition.current.stop();
+      }
       return;
     }
     const Recognition = (window as DictationWindow).SpeechRecognition ??
@@ -340,10 +344,12 @@ export function ConversationHistory({
     }
     const recognition = new Recognition();
     dictationRecognition.current = recognition;
+    dictationStopRequested.current = false;
     recognition.lang = language === 'da' ? 'da-DK' : 'en-US';
     recognition.continuous = false;
     recognition.interimResults = false;
     recognition.onresult = (event) => {
+      if (dictationRecognition.current !== recognition) return;
       const parts: string[] = [];
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
@@ -352,7 +358,11 @@ export function ConversationHistory({
       appendDictation(parts.join(' '));
     };
     recognition.onerror = (event) => {
-      if (dictationRecognition.current === recognition) dictationRecognition.current = null;
+      if (dictationRecognition.current !== recognition) return;
+      // Stop may emit cancellation/no-speech before its final result and end.
+      // Keep this session alive until end so the final draft text is retained.
+      if (dictationStopRequested.current && (event.error === 'aborted' || event.error === 'no-speech')) return;
+      dictationRecognition.current = null;
       setDictating(false);
       setDictationError(event.error === 'not-allowed'
         ? 'Microphone permission was denied. Allow access and try Dictate again.'
@@ -361,7 +371,8 @@ export function ConversationHistory({
           : 'Dictation could not start. Check microphone access and try again.');
     };
     recognition.onend = () => {
-      if (dictationRecognition.current === recognition) dictationRecognition.current = null;
+      if (dictationRecognition.current !== recognition) return;
+      dictationRecognition.current = null;
       setDictating(false);
     };
     setDictationError('');
@@ -384,8 +395,9 @@ export function ConversationHistory({
     (window as DictationWindow).webkitSpeechRecognition);
 
   useEffect(() => () => {
-    dictationRecognition.current?.abort();
+    const recognition = dictationRecognition.current;
     dictationRecognition.current = null;
+    recognition?.abort();
   }, []);
   useLayoutEffect(() => {
     const textarea = input.current;

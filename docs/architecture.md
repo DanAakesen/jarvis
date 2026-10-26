@@ -517,6 +517,13 @@ is handled by the browser speech-recognition implementation and may be
 provider-backed; Jarvis does not send dictation audio through its realtime voice
 backend. No API, database or persisted-draft contract changes.
 
+The #1293 lifecycle correction retains recognition ownership until `end` after
+an explicit stop, allowing final transcript delivery. Requested-stop `aborted`
+and `no-speech` events do not become startup failures; genuine permission and
+service failures remain visible. Results/errors/end from retired recognizers
+cannot mutate the draft or a later session. Teardown retires ownership before
+calling abort, including synchronous abort callbacks.
+
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
 Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,

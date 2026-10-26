@@ -1,5 +1,21 @@
 # Project plan
 
+## Mobile corrections (#1293; partial, 26 October 2026)
+
+Dictation now distinguishes requested stop cancellation from genuine failures,
+accepts final results until end, and ignores callbacks from retired sessions.
+Regression fixtures cover cancellation before end, repeated stop, stale callbacks,
+and genuine errors after stop. `git diff --check` passes. Local Vitest, lint
+and build could not execute: frozen dependency installation returns HTTP 403
+for the configured feed's `pkce-challenge@5.0.1`; executables are absent.
+The executor also has Node 24.19.0/npm 11.9.0, not the pinned Node 22/npm 10.
+No browser or physical-phone acceptance is claimed.
+
+The four private reference images could not be downloaded with the current
+Library transfer helper in the consuming executor. Image-dependent composer,
+keyboard/navigation, carousel, chat visibility and translucency corrections
+remain blocked pending pixel inspection. No private images are committed.
+
 ## Workspaces identifier completion (#1279; 25 October 2026)
 
 - Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
