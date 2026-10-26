@@ -135,3 +135,22 @@ no duplicates, unchanged unsent draft/focus and preserved older-history position
 The browser fixture now checks multiple visible synthetic ongoing descriptions,
 rather than inferring visible narration from frame POST counts. Live model
 natural-language intent selection remains unverified.
+
+## Menu integration (26 October, 15:39 UTC)
+
+Rebased without conflicts onto menu main
+`1c1029a31ce2c3008c9e721cdaf9ba2647a1febb`. The camera patch leaves
+ConversationMoreMenu and its CSS unchanged; composer topLayer opt-in, native
+manual popovers, anchored animation-frame positioning, waveform icon and
+Language/capture/Voice/Attach ordering are retained.
+
+Camera browser checks passed again at 320/390px touch and 1440px desktop with
+three successive visible descriptions, five accepted frames each, zero after
+stop and no page errors. Refreshed screenshots show the combined menu. The
+unchanged #1319 browser regression also passed at 390/1440px in light/dark themes:
+rendered/keyboard order, native top layer, 24px popup blur and unchanged 10px
+composer blur/fill, hit testing, viewport anchoring, repeated toggles, Language
+flyout, file-picker anchoring/cancellation, reduced motion and zero page errors.
+Its measurements are copied as `menu-measurements.json`; only its output path
+and local Vite port were adapted. Final aggregate and exact-head hosted results
+are recorded in PR #1318 so the tested review head remains unchanged.
