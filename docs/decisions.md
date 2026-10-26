@@ -1,5 +1,16 @@
 # Decisions
 
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Keep browser dictation toggled on across natural recognition endings and silence,
+streaming interim hypotheses into the draft without duplicating finalized text.
+Use a fresh recognizer per automatic restart to isolate result indexes and stale
+callbacks. Explicit Stop allows trailing results but prevents restart. Permission,
+audio/service and unexpected abort errors remain visible and terminal; no-speech
+alone is a normal pause. Preserve typed draft edits and keep realtime voice,
+composer geometry and colors unchanged. Synthetic verification is separate from
+physical iPhone speech-service acceptance.
+
 ## 26 October 2026 — Preview controls (#1304)
 
 The owner requested existing app styling for preview controls and removal of Live/camera-direction badges. Reuse shared chrome glass tokens; preserve named switch/close actions and unframed movement. A reported changed preview after switching/typing motivates preserving valid geometry through stream replacement and updating it when playback resumes. The exact private-device lifecycle remains unverified.
