@@ -3,11 +3,11 @@ import type { InvocationAccepted, InvocationSnapshot } from '../foundry/client.j
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
-import { isBackgroundJob, isHtmlArtifact, isHtmlArtifactFrame, type BackgroundJob, type FolioItem, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
-import type { FolioStore } from '../database/folio-store.js';
+import { isBackgroundJob, isHtmlArtifact, isHtmlArtifactFrame, type BackgroundJob, type WorkspaceItem, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
+import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import type { WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
 import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWindowTitle } from './research.js';
-import { createFolioModule } from './folio.js';
+import { createWorkspacesModule } from './workspaces.js';
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WebResearchClient } from './web-research.js';
@@ -111,7 +111,7 @@ function fixture(
   const broker = new WorkspaceCommandBroker();
   const commands: WorkspaceCommand[] = [];
   const artifacts: HtmlArtifact[] = [];
-  const folioItems = new Map<string, FolioItem>();
+  const workspaceItems = new Map<string, WorkspaceItem>();
   const artifactStore = {
     create: vi.fn(async (owner: string, title: string, html: string, sources: HtmlArtifact['sources'], _signal: AbortSignal, artifactId?: string) => {
       const artifact: HtmlArtifact = {
@@ -128,19 +128,19 @@ function fixture(
       return artifact;
     }),
   };
-  const folioStore = {
-    record: vi.fn(async (_owner: string, value: Omit<FolioItem, 'pinned'>) => {
-      const item: FolioItem = { ...value, pinned: false };
-      folioItems.set(item.id, item);
+  const workspaceItemsStore = {
+    record: vi.fn(async (_owner: string, value: Omit<WorkspaceItem, 'pinned'>) => {
+      const item: WorkspaceItem = { ...value, pinned: false };
+      workspaceItems.set(item.id, item);
       return item;
     }),
     get: vi.fn(async (_owner: string, id: string) => {
-      const item = folioItems.get(id);
-      if (!item) throw new Error('Folio item was not found');
+      const item = workspaceItems.get(id);
+      if (!item) throw new Error('Workspace item was not found');
       return { item, sourceId: id.slice('research:'.length) };
     }),
-    search: vi.fn(async () => [...folioItems.values()]),
-  } as unknown as FolioStore;
+    search: vi.fn(async () => [...workspaceItems.values()]),
+  } as unknown as WorkspaceItemsStore;
   const htmlArtifacts = {
     read: vi.fn(async (id: string) => artifacts.find((artifact) => artifact.id === id)),
   } as unknown as WorkspaceHtmlArtifactStore;
@@ -149,11 +149,11 @@ function fixture(
     'gpt-5.5',
     artifactStore,
     { ...(invocationTimeoutMs === undefined ? {} : { invocationTimeoutMs }), pollIntervalMs: 1 },
-    folioStore,
+    workspaceItemsStore,
   );
   const module: BackendModule = researchModule;
   const app = buildApp(config, undefined, {
-    modules: [coreModule, module, createFolioModule(folioStore, htmlArtifacts)],
+    modules: [coreModule, module, createWorkspacesModule(workspaceItemsStore, htmlArtifacts)],
     auth: async (token) => token === 'owner.e30.sig'
       ? { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' }
       : {
@@ -187,7 +187,7 @@ function fixture(
     frame,
   });
   return {
-    app, broker, commands, artifacts, artifactStore, folioItems, folioStore, connection,
+    app, broker, commands, artifacts, artifactStore, workspaceItems, workspaceItemsStore, connection,
     disconnectOnHtml: () => { disconnectOnHtml = true; },
     reconnect: () => {
       connection = connect();
@@ -316,7 +316,7 @@ describe('background interactive research', () => {
     const searchGate = deferred();
     const reportGate = deferred();
     const runner = makeRunner(reportHtml(), searchGate.promise, reportGate.promise);
-    const { app, broker, commands, artifacts, folioItems, connection, reconnect } = fixture(runner);
+    const { app, broker, commands, artifacts, workspaceItems, connection, reconnect } = fixture(runner);
     const started = await startResearch(app);
     const jobId = started.json().result.jobId as string;
 
@@ -333,7 +333,7 @@ describe('background interactive research', () => {
     });
 
     expect(artifacts).toHaveLength(1);
-    expect(folioItems.size).toBe(1);
+    expect(workspaceItems.size).toBe(1);
     expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
 
     const reopenedConnection = reconnect();
@@ -390,7 +390,7 @@ describe('background interactive research', () => {
     expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
   });
 
-  it.each(['artifact', 'folio'] as const)('keeps a true %s persistence failure marked failed', async (failure) => {
+  it.each(['artifact', 'workspace items'] as const)('keeps a true %s persistence failure marked failed', async (failure) => {
     const runner = makeRunner();
     const fixtureData = fixture(runner);
     const completion = vi.fn();
@@ -401,7 +401,7 @@ describe('background interactive research', () => {
     if (failure === 'artifact') {
       fixtureData.artifactStore.create.mockRejectedValueOnce(new Error('Synthetic artifact persistence failure.'));
     } else {
-      vi.mocked(fixtureData.folioStore.record).mockRejectedValueOnce(new Error('Synthetic Folio persistence failure.'));
+      vi.mocked(fixtureData.workspaceItemsStore.record).mockRejectedValueOnce(new Error('Synthetic Workspaces persistence failure.'));
     }
 
     const response = await startResearch(fixtureData.app);
@@ -413,7 +413,7 @@ describe('background interactive research', () => {
 
     expect(completion).toHaveBeenCalledWith({ status: 'failed' });
     expect((await fixtureData.app.backgroundJobs.details(jobId))?.details.job.resultId).toBeUndefined();
-    expect(fixtureData.artifacts).toHaveLength(failure === 'folio' ? 1 : 0);
+    expect(fixtureData.artifacts).toHaveLength(failure === 'workspace items' ? 1 : 0);
   });
 
   it('marks the finished report partial only when searches failed', async () => {

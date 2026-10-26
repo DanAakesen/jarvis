@@ -19,7 +19,7 @@ content and all 70 loaders in the baseline were narrower than their message
 
 | Loader variant | Before | After |
 | --- | --- | --- |
-| `rows` (Folio, Proactive, Settings, Create project) | 59.6 to 68px, for example 68 of 866 in Proactive at 1440 | full message width: Proactive 866 (1440), 332 (390), 262 (320) |
+| `rows` (Workspaces, Proactive, Settings, Create project) | 59.6 to 68px, for example 68 of 866 in Proactive at 1440 | full message width: Proactive 866 (1440), 332 (390), 262 (320) |
 | `lines` (chat history, task origin, memory detail, Proactive item) | wrapper 0px, no bar visible | full width, 4 of 4 bars: chat history 680 (1440), 338 (390), 268 (320) |
 | `image` (generated image, image preview) | 2.7px | full width: 158.6 and 188.4 (320); the preview keeps its 320px cap on a 411.7px message at 1440 |
 | `panel` (task details) | about 24px | 981.5 (1440), 490.4 (768), 346.8 (390), 272 to 277 (320) |
@@ -40,7 +40,7 @@ a 1px `--rule` border, `--radius-panel`, `--space-3` inline padding) as a
 zero-specificity `:where()` default, so any class rule overrides it. A second
 `:where()` rule removes it inside the 17 containers that already supply a
 surface, so a message never becomes a card in a card: `.settings-section`,
-`.workspace-window`, `.folio-pane`, `.release-section`, `.release-trail`,
+`.workspace-window`, `.workspaces-pane`, `.release-section`, `.release-trail`,
 `.task-release-bar`, `.task-card`, `.memory-detail`, `.conversation-message`,
 `.context-panel`, `.knowledge-note`, `.proactive-page` (the list and the item
 page), `.kanban-column`, `.task-column`, `.modal`, `.project-dialog-part` and
@@ -57,7 +57,7 @@ boxless constellation (P14-32 result pills), while `.knowledge-status` stays a
 centred `max-content` message.
 
 Checked with the untracked scratch harness: the real app in headless Edge with
-sign-in stubbed and synthetic data, 34 empty and loading scenarios (Folio, chat
+sign-in stubbed and synthetic data, 34 empty and loading scenarios (Workspaces, chat
 history and images, Kanban, task window, projects, releases, Notes, Settings,
 Proactive list and item, Usage, Status), measured at 320, 390, 768 and 1440 in
 light and at 320, 390 and 1440 in dark, with coarse pointers emulated at 768 and
@@ -498,8 +498,8 @@ inventoried to identify route-specific exceptions.
 | Recurring element | Variants found (source and selector/component) | Canonical form and reason |
 | --- | --- | --- |
 | Button | `styles.css`: `.primary-button`, `.secondary-button`, `.ghost-button`, `.danger-button`, `.danger-button--filled`, `.button-group`, `.settings-back`, `.jobs-action`, `.workspace-control`; `ConversationHistory.css`: `.composer-send`, `.conversation-latest`; `proactive.css`: `.proactive-text-toggle`, `.proactive-snooze > summary`; Factory task/release actions; Daily keeps `.daily-page button` | Primary and filled danger use token-based tonal fills, real tinted borders and one restrained accent shadow; secondary and unfilled danger have visible boundaries; ghost stays text-only until hover/press. Shared focus, disabled, busy and reduced-motion states live in `styles.css`. `.jobs-action-primary` aliases shared primary styling while keeping its class and compact geometry, and the composer send is a bare icon with no fill, border or shadow (owner instruction, 19 October 2026); Factory Create task and Settings save already use shared primary. Factory Create project uses shared secondary. `.conversation-latest` stays a contextual utility with the same radius and focus. Action rows own spacing and wrap/stack at phone widths. Compact actions are 36px on fine pointers and at least 44px on coarse pointers. |
-| Icon button | `styles.css`: `.rail-button`, `.topbar-icon-button`, `.workspace-icon-control`, `.workspace-tab-close`, `.modal-close`, `.folio-action`, `.release-trail-button`; `ConversationToast.css`: toast dismiss; `CameraPreview.css`: camera controls | Use the shared quiet surface treatment, `--radius-control` and visible focus. Icon-only actions remain at least 44px on touch layouts and keep an accessible name. Drag handles and media controls remain semantic exceptions. |
-| Text input | `styles.css`: `.settings-field`, `.project-form`, `.task-form-field`, `.task-filter-field`, `.task-create-form`, `.task-control-form`, `.kanban-search`, `.usage-field`, `.role-controls`, `.folio-rename`; `.proactive-feed-input`; `.daily-page`; `NotesArea.css`: note title and folder-name fields | The shared field rule uses `--surface`, `--control-rule`, `--radius-control`, `--type-body`, one placeholder treatment and the `--focus` visible outline. Fine-pointer fields are 38px minimum; coarse-pointer fields are 44px minimum with 16px text. Integrated Knowledge, Folio and chat searches keep their transparent inner fields and host-provided boundary/focus. |
+| Icon button | `styles.css`: `.rail-button`, `.topbar-icon-button`, `.workspace-icon-control`, `.workspace-tab-close`, `.modal-close`, `.workspaces-action`, `.release-trail-button`; `ConversationToast.css`: toast dismiss; `CameraPreview.css`: camera controls | Use the shared quiet surface treatment, `--radius-control` and visible focus. Icon-only actions remain at least 44px on touch layouts and keep an accessible name. Drag handles and media controls remain semantic exceptions. |
+| Text input | `styles.css`: `.settings-field`, `.project-form`, `.task-form-field`, `.task-filter-field`, `.task-create-form`, `.task-control-form`, `.kanban-search`, `.usage-field`, `.role-controls`, `.workspaces-rename`; `.proactive-feed-input`; `.daily-page`; `NotesArea.css`: note title and folder-name fields | The shared field rule uses `--surface`, `--control-rule`, `--radius-control`, `--type-body`, one placeholder treatment and the `--focus` visible outline. Fine-pointer fields are 38px minimum; coarse-pointer fields are 44px minimum with 16px text. Integrated Knowledge, Workspaces and chat searches keep their transparent inner fields and host-provided boundary/focus. |
 | Select | `styles.css`: `.settings-field select`, `.timeline-toolbar select`, `.usage-field select`, `.role-controls select`, `.kanban-select select`; `.daily-page select` | Use the text-field height, surface, neutral boundary, radius and focus. A CSS arrow replaces browser-specific arrow geometry; inherited `color-scheme` follows light/dark themes while native option semantics and route widths remain. |
 | Textarea | `styles.css`: settings, project/task forms, task controls, and Daily fields; `NotesArea.css`: title-adjacent fields and source editor | Form textareas share the field surface and boundary, have a 120px minimum height and resize vertically. The Notes source editor retains its editor-specific font and layout; the chat composer retains its integrated surface. |
 | Checkbox and radio | `styles.css`: `.choice`, `.theme-choice-group`, `.project-policy-choice`; `SettingsPage.tsx` and `ProjectsPage.tsx` | Keep native semantics and checked marks, use a common 18px visual size and focus outline, and preserve a 44px coarse-pointer hit area through the labelled choice. Selected project policy remains explained in plain language. |
@@ -583,7 +583,7 @@ this pass prioritized the shell/header popovers, shared chat controls, Settings,
 Factory project policy, Daily, and Proactive as requested. The global shared
 button and shell tokens continue to style existing consumers, but this pass did
 not recast the distinct layouts and component-specific states for Knowledge and
-Folio, Notes editing, Usage and Status, camera/voice panels, Factory release and
+Workspaces, Notes editing, Usage and Status, camera/voice panels, Factory release and
 task-detail histories, or embedded generated views. Their workflow-specific
 geometry and behavior were not changed; they remain candidates for a separate
 visual review rather than being folded into this bounded patch.
@@ -601,7 +601,7 @@ keep their workflow layout and consume its existing tokens.
 | Recurring element | Variants found (source and selector/component) | Pass 1 match? | Pass 2 change |
 | --- | --- | --- | --- |
 | Panels and cards | `styles.css`: `.usage-hero`, `.usage-card`, `.usage-details`, `.usage-empty`, `.system-status-panel`, `.release-section`, `.task-meta`, `.task-detail-section`; `notes/NotesArea.css`: `.notes-conflict`, `.notes-comparison pre` | Partial. Usage and Status used stage slabs with oversized radii; Factory history used 8px panels; Notes comparison used unstructured one-off surfaces. | Moved Usage, Status, release and task panels to the shared translucent surface, neutral `--rule`, `--radius-panel`, `--panel-shadow`, and spacing tokens. Notes conflict/comparison now use structural rules and panel/control radii. |
-| Search, fields, and actions | `styles.css`: `.folio-search`, `.folio-rename input`, `.folio-action`, `.folio-kind`, `.knowledge-results`; `CameraPreview.tsx`: preview/camera retry buttons; `CameraPreview.css`: `.camera-status-control`; Usage segmented buttons | Partial. Shared button treatment was already present in most controls, but Folio search/rename were below 44px, Folio actions lacked a focus rule, and camera retries had a parallel style. | Raised Folio search/rename controls to 44px, added explicit Folio action focus, and reused `.secondary-button` for both camera retries. The Knowledge results surface now uses `--radius-panel`. Existing Usage selected, hover, pressed, and focus states remain. |
+| Search, fields, and actions | `styles.css`: `.workspaces-search`, `.workspaces-rename input`, `.workspaces-action`, `.workspaces-kind`, `.knowledge-results`; `CameraPreview.tsx`: preview/camera retry buttons; `CameraPreview.css`: `.camera-status-control`; Usage segmented buttons | Partial. Shared button treatment was already present in most controls, but Workspaces search/rename were below 44px, Workspaces actions lacked a focus rule, and camera retries had a parallel style. | Raised Workspaces search/rename controls to 44px, added explicit Workspaces action focus, and reused `.secondary-button` for both camera retries. The Knowledge results surface now uses `--radius-panel`. Existing Usage selected, hover, pressed, and focus states remain. |
 | Graph and timeline surfaces | `styles.css`: `.release-graph-scroll`, `.timeline-payload pre`, `.knowledge-results` | Partial. Graph scrolling had a hard-coded light background and 6px radius; timeline payloads used a second 6px radius. | The graph scroll surface now uses `--surface` and `--radius-control`; timeline payloads use the same control radius. Existing contained horizontal scrolling and focus indication remain. |
 | Typography and spacing | `styles.css`: Usage/Status headings, `.usage-page`, `.usage-results`, `.usage-grid`, `.usage-tiles li`; `CameraPreview.css`: `.camera-preview-live`; `VoiceControls.css`: `.voice-status-label` | Partial. Several Usage/Status sizes and gaps were raw values; camera status text used a one-off size; voice arrival used a fixed duration. | Reused the existing `--type-lead`, `--type-caption`, `--space-*`, and `--motion-state` tokens. Other text and spacing already use the canonical type roles and were left unchanged. |
 | Status, rows, and recovery | `daily/DailyOverview.tsx` / `daily-overview.css`: `.daily-overview-row`, `.daily-status`; `ProactiveArea.tsx` / `proactive.css`: `.proactive-item`, `.proactive-block`; `status/StatusPage.tsx`: `.system-status-row`, `.system-status-feedback`; `usage/UsagePage.tsx`: `.usage-empty` | Mostly. Daily and Proactive already use the shared status, row, empty/error, and tokenized control forms; Status feedback and Usage surfaces were the exception. | Status feedback now uses a neutral structural rule and `--error-surface` with an explicit error-text role. Usage empty/loading treatment is unchanged apart from its shared panel surface. Healthy Daily and Proactive states required no CSS changes. |
@@ -618,13 +618,13 @@ the work reuses visual choices already recorded by Pass 1.
 
 Compared the pre-change and current app in headless Chromium using scratch-only
 auth and API fixtures at 390×844 with touch emulation and 1440×900, in light and
-dark. Inspected Knowledge/Folio, Notes, Usage, Status, healthy Daily and
+dark. Inspected Knowledge/Workspaces, Notes, Usage, Status, healthy Daily and
 Proactive data, Factory release, and the attention popover at both sizes and
 themes. The fixtures used only synthetic notes, events, usage entries, status
 checks, Daily rows, Proactive findings, release records, and task history.
 
 Opened the Notes conflict/comparison and task-history workspace with synthetic
-responses in the same viewport/theme matrix. Exercised Folio open, Usage
+responses in the same viewport/theme matrix. Exercised Workspaces open, Usage
 grouping, Status refresh, opening a Daily record, expanding a Proactive finding,
 release details, and the attention popover. The expected synthetic Notes 409
 response produced the conflict state; no other page or browser-console errors

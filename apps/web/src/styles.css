@@ -183,7 +183,7 @@
   --rail-tone-notes: #663e9e;
   --rail-tone-usage: #695701;
   --rail-tone-status: #912964;
-  --rail-tone-folio: #0256a9;
+  --rail-tone-workspaces: #0256a9;
 }
 
 :root[data-theme="dark"] {
@@ -261,7 +261,7 @@
   --rail-tone-notes: #ceb5ff;
   --rail-tone-usage: #dec358;
   --rail-tone-status: #ffa3cf;
-  --rail-tone-folio: #9dc7fe;
+  --rail-tone-workspaces: #9dc7fe;
 }
 
 :root[data-theme="light"] {
@@ -422,7 +422,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
 .rail-link[data-tone="notes"] { --rail-tone: var(--rail-tone-notes); }
 .rail-link[data-tone="usage"] { --rail-tone: var(--rail-tone-usage); }
 .rail-link[data-tone="status"] { --rail-tone: var(--rail-tone-status); }
-.rail-link[data-tone="folio"] { --rail-tone: var(--rail-tone-folio); }
+.rail-link[data-tone="workspaces"] { --rail-tone: var(--rail-tone-workspaces); }
 /* Rail labels (P14-32): the control's name beside the hovered or keyboard-focused rail icon. It sits outside the rail so
    the rail's 3D tilt and glass never skew it, and its transparent bridge lets the pointer travel from the icon onto it. */
 .rail-tip {
@@ -3026,7 +3026,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* Inside a container that already has a surface the message stays flat, so a card never sits in a card.
    Add a container to this list when it gains a surface and hosts a state message. */
 :where(
-  .settings-section, .workspace-window, .folio-pane, .release-section, .release-trail, .task-release-bar,
+  .settings-section, .workspace-window, .workspaces-pane, .release-section, .release-trail, .task-release-bar,
   .task-card, .memory-detail, .conversation-message, .context-panel, .knowledge-note, .proactive-page,
   .kanban-column, .task-column, .modal, .project-dialog-part, .jobs-popover
 ) :where(.state-message--empty, .state-message--loading) {
@@ -3146,84 +3146,84 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); }
 @media (prefers-reduced-motion: reduce) { [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); } }
-/* Folio (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
-.app-shell[data-folio-open="true"] { --sidebar-size: 320px; --sidebar-open: 320px; }
-@media (width > 700px) and (width <= 900px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
-.rail-folio[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
-.rail-folio[aria-pressed="true"] svg {
+/* Workspaces (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
+.app-shell[data-workspaces-open="true"] { --sidebar-size: 320px; --sidebar-open: 320px; }
+@media (width > 700px) and (width <= 900px) { .app-shell[data-workspaces-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
+.rail-workspaces[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.rail-workspaces[aria-pressed="true"] svg {
   color: var(--state-selected-indicator);
   stroke-width: 2.1;
 }
-.folio-pane { display: flex; flex-direction: column; }
-.folio-body { display: flex; flex: 1; flex-direction: column; min-height: 0; gap: var(--space-3); }
-.folio-search { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control);
+.workspaces-pane { display: flex; flex-direction: column; }
+.workspaces-body { display: flex; flex: 1; flex-direction: column; min-height: 0; gap: var(--space-3); }
+.workspaces-search { display: flex; align-items: center; gap: var(--space-2); min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text-muted); }
-.folio-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }
-.app-shell .folio-search svg { width: 16px; height: 16px; flex: none; }
-.folio-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); outline: none; }
-.folio-kinds { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.folio-kind { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
+.workspaces-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }
+.app-shell .workspaces-search svg { width: 16px; height: 16px; flex: none; }
+.workspaces-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); outline: none; }
+.workspaces-kinds { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.workspaces-kind { display: inline-flex; align-items: center; min-height: 32px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text-muted); font: inherit; font-size: var(--type-caption); font-weight: 600; cursor: pointer;
   transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard); }
-.app-shell .folio-kind svg { width: 15px; height: 15px; }
-.folio-kind:hover { background: var(--glass-hover); color: var(--text); }
-.folio-kind:active { background: var(--glass-pressed); }
-.folio-kind[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; font-weight: 750; }
-.folio-results { flex: 1; min-height: 0; margin: 0 calc(var(--space-2) * -1); padding: 0 var(--space-2) var(--space-3); overflow-y: auto; overscroll-behavior: contain; }
-.folio-group { animation: page-enter calc(var(--motion-panel) * 1.1) var(--ease-enter) both; }
-.folio-group + .folio-group { animation-delay: 60ms; }
-.folio-group h3 { margin: var(--space-4) var(--space-2) var(--space-2); color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; }
-.folio-group ul { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
-.folio-item { position: relative; border-radius: var(--radius-control); }
-.folio-open { display: grid; width: 100%; min-height: 48px; padding: var(--space-2) var(--space-3); grid-template-columns: 28px minmax(0, 1fr) auto;
+.app-shell .workspaces-kind svg { width: 15px; height: 15px; }
+.workspaces-kind:hover { background: var(--glass-hover); color: var(--text); }
+.workspaces-kind:active { background: var(--glass-pressed); }
+.workspaces-kind[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; font-weight: 750; }
+.workspaces-results { flex: 1; min-height: 0; margin: 0 calc(var(--space-2) * -1); padding: 0 var(--space-2) var(--space-3); overflow-y: auto; overscroll-behavior: contain; }
+.workspaces-group { animation: page-enter calc(var(--motion-panel) * 1.1) var(--ease-enter) both; }
+.workspaces-group + .workspaces-group { animation-delay: 60ms; }
+.workspaces-group h3 { margin: var(--space-4) var(--space-2) var(--space-2); color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; }
+.workspaces-group ul { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.workspaces-item { position: relative; border-radius: var(--radius-control); }
+.workspaces-open { display: grid; width: 100%; min-height: 48px; padding: var(--space-2) var(--space-3); grid-template-columns: 28px minmax(0, 1fr) auto;
   grid-template-areas: "icon title time" "icon summary summary"; align-items: center; column-gap: var(--space-3); border: 0; border-radius: var(--radius-control);
   background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
   transition: background-color var(--motion-press) var(--ease-standard), opacity var(--motion-press) var(--ease-standard); }
-.folio-open:hover, .folio-item:focus-within .folio-open { background: var(--glass-hover); }
-.folio-open:active { background: var(--glass-pressed); }
-.folio-kind-icon { display: grid; width: 28px; height: 28px; grid-area: icon; place-items: center; border-radius: var(--radius-control);
+.workspaces-open:hover, .workspaces-item:focus-within .workspaces-open { background: var(--glass-hover); }
+.workspaces-open:active { background: var(--glass-pressed); }
+.workspaces-kind-icon { display: grid; width: 28px; height: 28px; grid-area: icon; place-items: center; border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text-muted); }
-.app-shell .folio-kind-icon svg { width: 16px; height: 16px; }
-.folio-title { grid-area: title; overflow: hidden; font-size: var(--type-small); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.folio-time { grid-area: time; color: var(--text-muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; transition: opacity var(--motion-press) var(--ease-standard); }
-.folio-summary { grid-area: summary; max-height: 0; overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; opacity: 0;
+.app-shell .workspaces-kind-icon svg { width: 16px; height: 16px; }
+.workspaces-title { grid-area: title; overflow: hidden; font-size: var(--type-small); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.workspaces-time { grid-area: time; color: var(--text-muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; transition: opacity var(--motion-press) var(--ease-standard); }
+.workspaces-summary { grid-area: summary; max-height: 0; overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; opacity: 0;
   transition: max-height var(--motion-state) var(--ease-enter), opacity var(--motion-state) var(--ease-standard); }
-.folio-open:hover .folio-summary, .folio-open:focus-visible .folio-summary { max-height: 1.6em; opacity: 1; }
-.folio-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: var(--space-1); opacity: 0; pointer-events: none; transition: opacity var(--motion-press) var(--ease-standard); }
-.folio-item:hover .folio-actions, .folio-item:focus-within .folio-actions { opacity: 1; pointer-events: auto; }
-.folio-item:hover .folio-time, .folio-item:focus-within .folio-time { opacity: 0; }
+.workspaces-open:hover .workspaces-summary, .workspaces-open:focus-visible .workspaces-summary { max-height: 1.6em; opacity: 1; }
+.workspaces-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: var(--space-1); opacity: 0; pointer-events: none; transition: opacity var(--motion-press) var(--ease-standard); }
+.workspaces-item:hover .workspaces-actions, .workspaces-item:focus-within .workspaces-actions { opacity: 1; pointer-events: auto; }
+.workspaces-item:hover .workspaces-time, .workspaces-item:focus-within .workspaces-time { opacity: 0; }
 /* Room for the three actions so they never sit on the title. */
-@media (hover: hover) { .folio-item:hover .folio-title, .folio-item:focus-within .folio-title { margin-right: 100px; } }
-.folio-action { display: grid; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-control);
+@media (hover: hover) { .workspaces-item:hover .workspaces-title, .workspaces-item:focus-within .workspaces-title { margin-right: 100px; } }
+.workspaces-action { display: grid; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--text-muted); cursor: pointer; backdrop-filter: blur(6px); }
-.app-shell .folio-action svg { width: 15px; height: 15px; }
-.folio-action:hover { background: var(--glass-hover); color: var(--text); }
-.folio-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.folio-action[aria-pressed="true"] { color: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--text)); }
-.folio-item[data-busy] .folio-open { opacity: .6; cursor: progress; }
-.folio-item[data-opened] .folio-open { animation: folio-opened 1.4s var(--ease-standard); }
-@keyframes folio-opened {
+.app-shell .workspaces-action svg { width: 15px; height: 15px; }
+.workspaces-action:hover { background: var(--glass-hover); color: var(--text); }
+.workspaces-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.workspaces-action[aria-pressed="true"] { color: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--text)); }
+.workspaces-item[data-busy] .workspaces-open { opacity: .6; cursor: progress; }
+.workspaces-item[data-opened] .workspaces-open { animation: workspaces-opened 1.4s var(--ease-standard); }
+@keyframes workspaces-opened {
   0% { background: var(--state-selected-bg); }
   100% { background: transparent; }
 }
-.folio-rename, .folio-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
-.folio-rename input { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
-.folio-confirm span { flex: 1 1 100%; font-size: var(--type-small); }
-.folio-notice { margin: var(--space-1) var(--space-3) var(--space-2); color: var(--text-muted); font-size: var(--type-caption); }
-.folio-notice[data-tone="error"] { color: var(--error); }
-.folio-state { display: grid; gap: var(--space-3); justify-items: start; padding: var(--space-4) var(--space-2); color: var(--text-muted); font-size: var(--type-small); }
-.folio-state p { margin: 0; }
-.folio-more { margin: var(--space-3) var(--space-2) 0; }
+.workspaces-rename, .workspaces-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+.workspaces-rename input { flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
+.workspaces-confirm span { flex: 1 1 100%; font-size: var(--type-small); }
+.workspaces-notice { margin: var(--space-1) var(--space-3) var(--space-2); color: var(--text-muted); font-size: var(--type-caption); }
+.workspaces-notice[data-tone="error"] { color: var(--error); }
+.workspaces-state { display: grid; gap: var(--space-3); justify-items: start; padding: var(--space-4) var(--space-2); color: var(--text-muted); font-size: var(--type-small); }
+.workspaces-state p { margin: 0; }
+.workspaces-more { margin: var(--space-3) var(--space-2) 0; }
 @media (hover: none) {
-  .folio-actions { position: static; justify-content: flex-end; padding: 0 var(--space-2) var(--space-2); opacity: 1; pointer-events: auto; }
-  .folio-item .folio-time { opacity: 1; }
+  .workspaces-actions { position: static; justify-content: flex-end; padding: 0 var(--space-2) var(--space-2); opacity: 1; pointer-events: auto; }
+  .workspaces-item .workspaces-time { opacity: 1; }
 }
-:root[data-motion="reduced"] :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; }
-@media (prefers-reduced-motion: reduce) { :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; } }
+:root[data-motion="reduced"] :is(.workspaces-group, .workspaces-item[data-opened] .workspaces-open) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.workspaces-group, .workspaces-item[data-opened] .workspaces-open) { animation: none; } }
 
-/* Dan, 8 October: the Folio search must stay readable over a busy room. */
-.folio-search { background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(10px) saturate(1.2); }
-.folio-search input::placeholder { color: var(--text-muted); opacity: 1; }
+/* Dan, 8 October: the Workspaces search must stay readable over a busy room. */
+.workspaces-search { background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(10px) saturate(1.2); }
+.workspaces-search input::placeholder { color: var(--text-muted); opacity: 1; }
 /* Code view (P9-41): the file Jarvis is reading, read-only. Highlighted ranges are tinted cyan with a brighter line
    number; query matches are marked amber. Switching files fades the body in. */
 .code-view { display: flex; min-width: 0; max-width: 100%; flex-direction: column; height: 100%; min-height: 0; margin: 0; }
@@ -3263,7 +3263,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 .app-shell[data-phone="true"] { --dock-space: calc(68px + var(--phone-dock-bottom)); grid-template-columns: minmax(0, 1fr); padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 .app-shell[data-phone="true"] .area-rail { display: none; }
-.app-shell[data-phone="true"] :is(.shell-main, .area-sidebar, .context-panel, .folio-pane) { grid-column: 1; }
+.app-shell[data-phone="true"] :is(.shell-main, .area-sidebar, .context-panel, .workspaces-pane) { grid-column: 1; }
 .app-shell[data-phone="true"][data-home="false"] .shell-main { padding-bottom: calc(var(--dock-space) + var(--space-4)); }
 .app-shell[data-phone="true"][data-home="true"] .jarvis-page { padding-bottom: var(--phone-dock-bottom); }
 .app-shell[data-phone="true"] #context-panel-toggle { display: none; }
@@ -3674,7 +3674,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
   .presence-chip-trigger, .presence-option, .presence-mode-card, .mobile-menu-link,
   .workspace-tab, .workspace-tab-item, .workspace-arrangement-options button,
-  .folio-kind, .memory-item, .knowledge-results button,
+  .workspaces-kind, .memory-item, .knowledge-results button,
   .usage-segmented button, .advanced-segmented button):is([aria-current="page"], [aria-current="true"], [aria-pressed="true"], [aria-expanded="true"], [data-state="front"]) {
   --selection-hover: var(--state-selected-hover);
   --selection-pressed: var(--state-selected-pressed);
@@ -3683,7 +3683,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   .app-shell :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
     .presence-chip-trigger, .presence-option, .presence-mode-card, .mobile-menu-link,
     .workspace-tab, .workspace-tab-item, .workspace-arrangement-options button,
-    .folio-kind, .memory-item, .knowledge-results button,
+    .workspaces-kind, .memory-item, .knowledge-results button,
     .usage-segmented button, .advanced-segmented button):hover:not(:disabled) {
     background: var(--selection-hover, var(--glass-hover));
     box-shadow: none;
@@ -3692,7 +3692,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
   .presence-chip-trigger, .presence-option, .presence-mode-card, .mobile-menu-link,
   .workspace-tab, .workspace-tab-item, .workspace-arrangement-options button,
-  .folio-kind, .memory-item, .knowledge-results button,
+  .workspaces-kind, .memory-item, .knowledge-results button,
   .usage-segmented button, .advanced-segmented button):active:not(:disabled) {
   background: var(--selection-pressed, var(--glass-pressed));
   box-shadow: none;
@@ -3700,7 +3700,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
   .presence-chip-trigger, .presence-option, .presence-mode-card, .mobile-menu-link,
   .workspace-tab, .workspace-arrangement-options button,
-  .folio-kind, .memory-item, .knowledge-results button,
+  .workspaces-kind, .memory-item, .knowledge-results button,
   .usage-segmented button, .advanced-segmented button):focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
@@ -3708,22 +3708,22 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .knowledge-legend li:has(> button[aria-pressed="true"]):hover { background: var(--state-selected-hover); }
 .knowledge-legend li:has(> button):active { background: var(--glass-pressed); }
 .knowledge-legend li:has(> button[aria-pressed="true"]):active { background: var(--state-selected-pressed); }
-:is(.settings-back, .release-trail-button, .release-trail-open, .knowledge-reset, .folio-action):active:not(:disabled) {
+:is(.settings-back, .release-trail-button, .release-trail-open, .knowledge-reset, .workspaces-action):active:not(:disabled) {
   background: var(--glass-pressed);
 }
 @media (pointer: coarse) {
   :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,
     .jobs-action, .workspace-control, .workspace-tab-close, .workspace-tab-pin, .modal-close,
-    .folio-action, .release-trail-button, .release-trail-open) { min-height: 44px; }
+    .workspaces-action, .release-trail-button, .release-trail-open) { min-height: 44px; }
   :is(.jobs-action-primary, .conversation-history .composer-send) { min-height: 44px; }
   .conversation-history .composer-send { width: 44px; height: 44px; }
-  :is(.workspace-tab-close, .workspace-tab-pin, .modal-close, .folio-action) {
+  :is(.workspace-tab-close, .workspace-tab-pin, .modal-close, .workspaces-action) {
     width: 44px; min-width: 44px; height: 44px; min-height: 44px;
   }
-  :is(.usage-segmented button, .advanced-segmented button, .folio-kind, .presence-option,
+  :is(.usage-segmented button, .advanced-segmented button, .workspaces-kind, .presence-option,
     .knowledge-results button, .knowledge-neighbours button, .knowledge-legend button,
     .project-dialog-repositories .secondary-button, .role-controls select, .task-release-actions .secondary-button) { min-height: 44px; }
-  .folio-action { width: 44px; height: 44px; }
+  .workspaces-action { width: 44px; height: 44px; }
   .release-trail-button { width: 44px; min-height: 44px; }
   .release-trail-open { min-height: 44px; }
 }
@@ -4010,7 +4010,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   select
@@ -4031,7 +4031,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) textarea {
   box-sizing: border-box;
   min-width: 0;
@@ -4060,7 +4060,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   select, textarea
@@ -4077,7 +4077,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   select, textarea
@@ -4088,7 +4088,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) select {
   appearance: none;
   --field-padding-end: var(--space-6);
@@ -4122,7 +4122,7 @@ select.form-control {
   }
   .app-shell :is(select, select.form-control)::picker-icon, select.form-control::picker-icon { margin-inline-start: auto; }
 }
-.app-shell :is(.knowledge-search input, .folio-search input) {
+.app-shell :is(.knowledge-search input, .workspaces-search input) {
   min-height: 38px;
   font: var(--type-body)/var(--line-body) var(--font-body);
 }
@@ -4137,7 +4137,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
   input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"],
     [type="button"], [type="submit"], [type="reset"], [type="image"])),
@@ -4149,7 +4149,7 @@ select.form-control {
   input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"],
     [type="button"], [type="submit"], [type="reset"], [type="image"]),
   select, textarea
-):focus-visible:where(:not(.composer textarea, .knowledge-search input, .folio-search input, .tasks-panel-search input)) {
+):focus-visible:where(:not(.composer textarea, .knowledge-search input, .workspaces-search input, .tasks-panel-search input)) {
   outline: none;
   --field-rim: var(--field-focus-rule);
   border-color: var(--field-focus-rule);
@@ -4161,13 +4161,13 @@ select.form-control {
       [type="button"], [type="submit"], [type="reset"], [type="image"]),
     select, textarea
   ):focus-visible, .form-control:focus-visible,
-  .knowledge-search:has(input:focus-visible), .folio-search:has(input:focus-visible),
+  .knowledge-search:has(input:focus-visible), .workspaces-search:has(input:focus-visible),
   .tasks-panel-search:has(input:focus-visible) { outline: 2px solid Highlight; outline-offset: 1px; }
 }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea):disabled {
   background-color: var(--disabled-surface);
   color: var(--disabled-text);
@@ -4185,7 +4185,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, textarea):read-only:not(:disabled) {
   background-color: var(--surface-muted);
   cursor: default;
@@ -4193,7 +4193,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea)[aria-invalid="true"] {
   border-color: var(--error);
   background-color: var(--error-surface);
@@ -4205,7 +4205,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea)[aria-busy="true"] {
   cursor: progress;
 }
@@ -4219,7 +4219,7 @@ select.form-control {
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
 }
-.app-shell :is(.knowledge-search input, .folio-search input):is(:autofill, :-webkit-autofill) {
+.app-shell :is(.knowledge-search input, .workspaces-search input):is(:autofill, :-webkit-autofill) {
   background-color: transparent !important;
   color: var(--text) !important;
   -webkit-text-fill-color: var(--text);
@@ -4228,12 +4228,12 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea):autofill,
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea):-webkit-autofill {
   background-color: var(--surface) !important;
   color: var(--text) !important;
@@ -4326,7 +4326,7 @@ select.form-control {
   .app-shell :is(
     .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
     .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-    .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+    .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
   ) :is(
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
     select
@@ -4337,7 +4337,7 @@ select.form-control {
   .app-shell :is(
     .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
     .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-    .daily-page, .notes-title-label, .notes-folder-input-row, .folio-rename
+    .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
   ) textarea {
     min-height: 120px;
     font-size: var(--type-body);
@@ -4346,7 +4346,7 @@ select.form-control {
     min-height: 44px;
     font-size: var(--type-body);
   }
-  .app-shell :is(.knowledge-search input, .folio-search input) {
+  .app-shell :is(.knowledge-search input, .workspaces-search input) {
     min-height: 44px;
     font-size: var(--type-body);
   }

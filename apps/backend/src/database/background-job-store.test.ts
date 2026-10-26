@@ -35,7 +35,7 @@ describe('SQL background job dismissals', () => {
       steps: 2,
       detail: 'Report saved',
       view_id: `research-${finishedId.replaceAll('-', '')}`,
-      result_folio_id: `research:${finishedId}`,
+      result_workspace_item_id: `research:${finishedId}`,
       result_delivery_status: 'delivered',
       started_at: new Date('2026-10-20T12:00:00.000Z'),
       updated_at: new Date('2026-10-20T12:01:00.000Z'),
@@ -52,7 +52,7 @@ describe('SQL background job dismissals', () => {
     });
     await expect(store.updateResultDelivery(finishedId, 'unknown')).resolves.toBeNull();
     const statement = request.query.mock.calls[0]?.[0] as string;
-    expect(statement).toContain("WHERE job_id = @jobId AND status = N'done' AND result_folio_id IS NOT NULL");
+    expect(statement).toContain("WHERE job_id = @jobId AND status = N'done' AND result_workspace_item_id IS NOT NULL");
     expect(statement).toContain("result_delivery_status <> N'delivered' OR @resultDeliveryStatus = N'delivered'");
     expect(request.input).toHaveBeenCalledWith('jobId', sql.NVarChar(36), finishedId);
     await expect(store.updateResultDelivery('bad-id', 'pending')).rejects.toThrow(TypeError);

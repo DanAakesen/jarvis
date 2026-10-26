@@ -131,8 +131,8 @@ describe('app-wide control contract', () => {
   it.each([
     'settings-back', 'signin-button',
     'presence-chip-trigger', 'presence-option', 'presence-mode-card',
-    'memory-item', 'modal-close', 'knowledge-reset', 'folio-search', 'folio-kind',
-    'folio-action', 'mobile-menu-link', 'kanban-filter-toggle', 'kanban-column-toggle',
+    'memory-item', 'modal-close', 'knowledge-reset', 'workspaces-search', 'workspaces-kind',
+    'workspaces-action', 'mobile-menu-link', 'kanban-filter-toggle', 'kanban-column-toggle',
     'collapsible-toggle', 'usage-segmented', 'advanced-segmented',
   ])('uses the existing action geometry for .%s', (name) => {
     expect(ruleDeclaration(source, new RegExp(`(?:^|\\n)\\.${name}\\s*\\{([^}]*)\\}`), 'border-radius'))
@@ -152,7 +152,7 @@ describe('app-wide control contract', () => {
     ];
     for (const styles of buttonStyles) {
       const buttonRules = [...styles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-        .filter(([, selectors]) => /\.((primary|secondary|ghost|danger)-button|settings-back|jobs-action|workspace-control|workspace-icon-control|workspace-tab-close|workspace-tab-pin|modal-close|folio-action|release-trail-button|release-trail-open|proactive-text-toggle|history-button)(?![\w-])/.test(selectors!));
+        .filter(([, selectors]) => /\.((primary|secondary|ghost|danger)-button|settings-back|jobs-action|workspace-control|workspace-icon-control|workspace-tab-close|workspace-tab-pin|modal-close|workspaces-action|release-trail-button|release-trail-open|proactive-text-toggle|history-button)(?![\w-])/.test(selectors!));
       for (const [, selectors, declarations] of buttonRules) {
         expect(declarations, selectors).not.toMatch(/(?:^|;)\s*margin(?:-[a-z-]+)?\s*:/);
         expect(declarations, selectors).not.toMatch(/box-shadow:\s*[^;]*(?:inset|glass-selected-glow)/);
@@ -326,7 +326,7 @@ describe('app-wide control contract', () => {
     expect(reset).not.toBeNull();
     const containers = (reset?.[1] ?? '').split(',').map((name) => name.trim()).filter(Boolean);
     expect(containers).toEqual(expect.arrayContaining([
-      '.settings-section', '.workspace-window', '.folio-pane', '.release-section', '.release-trail', '.task-release-bar',
+      '.settings-section', '.workspace-window', '.workspaces-pane', '.release-section', '.release-trail', '.task-release-bar',
       '.task-card', '.memory-detail', '.conversation-message', '.context-panel', '.knowledge-note', '.proactive-page',
       '.kanban-column', '.task-column', '.modal', '.project-dialog-part', '.jobs-popover',
     ]));
@@ -492,7 +492,7 @@ describe('app-wide control contract', () => {
     expect(source).toContain('.primary-button:focus-visible');
     expect(source).toContain('.danger-button--filled:focus-visible');
     expect(source).toContain('.knowledge-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
-    expect(source).toContain('.folio-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
+    expect(source).toContain('.workspaces-search:has(input:focus-visible) { border-color: var(--field-focus-rule); box-shadow: var(--field-focus-glow); }');
     expect(source).not.toContain(') :is(input, select, textarea):focus-visible');
     expect(source).toContain('border: 1px solid var(--field-rim, var(--control-rule));');
     expect(source).toContain('--field-rim: var(--field-focus-rule);');
@@ -551,10 +551,10 @@ describe('app-wide control contract', () => {
       expect(ruleDeclaration(source, selector, 'background')).toBe('var(--state-selected-bg)');
       expect(ruleDeclaration(source, selector, 'font-weight')).toBe('750');
     }
-    expect(source).toContain('.folio-kind, .memory-item, .knowledge-results button,');
+    expect(source).toContain('.workspaces-kind, .memory-item, .knowledge-results button,');
     expect(source).toContain('@media (pointer: coarse) {\n  :is(.primary-button, .secondary-button, .ghost-button, .danger-button, .settings-back,');
     expect(source).toContain('.knowledge-legend button,');
-    expect(source).toContain('.folio-action { width: 44px; height: 44px; }');
+    expect(source).toContain('.workspaces-action { width: 44px; height: 44px; }');
     expect(source).toContain('.release-trail-button { width: 44px; min-height: 44px; }');
     expect(source).toContain('.app-shell[data-phone="true"] .knowledge-legend button { min-height: 44px;');
   });
@@ -587,7 +587,7 @@ describe('app-wide control contract', () => {
     expect(coarsePointerFields).toContain('min-height: 120px;');
     expect(coarsePointerFields).toContain('font-size: var(--type-body);');
     expect(coarsePointerFields).toContain('.app-shell .composer textarea');
-    expect(sharedFields).toMatch(/\.app-shell :is\(\.knowledge-search input, \.folio-search input\)\s*\{\s*min-height: 38px;\s*font: var\(--type-body\)\/var\(--line-body\) var\(--font-body\);/);
+    expect(sharedFields).toMatch(/\.app-shell :is\(\.knowledge-search input, \.workspaces-search input\)\s*\{\s*min-height: 38px;\s*font: var\(--type-body\)\/var\(--line-body\) var\(--font-body\);/);
     expect(sharedFields).toContain('.form-control');
     expect(sharedFields).toContain('background-size: 5px 5px;');
     expect(ruleDeclaration(source, /\.form-control\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-control)');
@@ -710,6 +710,16 @@ describe('shared glass tokens', () => {
     const narrow = mediaBlocks(source).filter(({ query }) => /max-width:\s*380px/.test(query)).map(({ body }) => body).join('\n');
     expect(narrow).toMatch(/\.app-shell\[data-phone="true"\] \.presence-chip\s*\{\s*display:\s*none;\s*\}/);
     expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
+  });
+
+  it('keeps phone message times below the bubble text instead of overlapping it', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('absolute');
+    const phoneRules = mediaBlocks(history).filter(({ query }) => /max-width:\s*700px/u.test(query)).map(({ body }) => body).join('\n');
+    expect(ruleDeclaration(phoneRules, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('static');
+    expect(ruleDeclaration(phoneRules, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'margin')).toBe('var(--space-2) 0 0 auto');
+    const touchRules = mediaBlocks(history).filter(({ query }) => /hover:\s*none/u.test(query)).map(({ body }) => body).join('\n');
+    expect(touchRules).toContain('.message-metadata { opacity: 1; }');
   });
 
   it('keeps message times below the bubble without covering its text', () => {
@@ -1054,7 +1064,7 @@ describe('shared glass tokens', () => {
       /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.camera-control-button\[aria-pressed="true"\], \.topbar-icon-button\[aria-expanded="true"\], \.settings-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.workspace-arrangement-options \[aria-pressed="true"\]\s*\{([^}]*)\}/,
-      /\.folio-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.workspaces-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
       /\.usage-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
       /\.advanced-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
     ]) {
@@ -1081,7 +1091,7 @@ describe('shared glass tokens', () => {
 
   it('lights each rail icon in its own tone and floats its name flat beside it', () => {
     const source = readFileSync('src/styles.css', 'utf8');
-    const tones = ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'folio'];
+    const tones = ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'workspaces'];
     for (const tone of tones) {
       expect(tokenValue(source, ':root', `--rail-tone-${tone}`), tone).toMatch(/^#[0-9a-f]{6}$/);
       expect(source, tone).toContain(`--rail-tone-${tone}: #`);

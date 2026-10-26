@@ -485,6 +485,9 @@
 }
 .conversation-message[data-speaker="jarvis"] .message-metadata { right: auto; left: var(--space-2); }
 .conversation-message .message-metadata:has(> time:only-child:empty) { display: none; }
+@media (max-width: 700px) {
+  .conversation-message .message-metadata { position: static; width: fit-content; margin: var(--space-2) 0 0 auto; }
+}
 .conversation-message[data-speaker="dan"] > .message-visual-status {
   margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-small); white-space: normal;
 }

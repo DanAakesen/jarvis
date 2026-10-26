@@ -124,13 +124,13 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('"Go back" means navigate to view.previous');
     expect(instructions).toContain('If view.previous is unavailable, ask Dan');
     expect(instructions).toContain('Without snapshot/focus, ask rather than guess');
-    expect(instructions).toContain('The Folio is a pane');
+    expect(instructions).toContain('Workspaces opens in a pane');
     expect(instructions).not.toContain('The UI still refuses Status until its page exists');
     expect(instructions).toContain('Status uses workspace_command (operation "navigate", page "status")');
     expect(instructions).toContain('only claim success on an "ok" result');
     expect(instructions).toContain('never claim navigation succeeded on send');
     expect(instructions).toContain('relay unavailable-device refusals');
-    expect(instructions).not.toContain('refuses Folio and Status');
+    expect(instructions).not.toContain('refuses Workspaces and Status');
     expect(instructions).toContain('For "show me", focus an existing matching view');
     expect(instructions).toContain('use text/list for summaries, dates or proposals');
     expect(instructions).toContain('with the chart or timeline renderer only when requested');

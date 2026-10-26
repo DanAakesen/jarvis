@@ -100,7 +100,7 @@ Database CI; never point it at production.
 Focused offline checks from the repository root:
 
 ```sh
-npm test --workspace @jarvis/backend -- src/core/research.test.ts src/core/jobs.test.ts src/core/folio.test.ts src/database/background-job-store.test.ts src/database/html-artifact-store.test.ts
+npm test --workspace @jarvis/backend -- src/core/research.test.ts src/core/jobs.test.ts src/core/workspaces.test.ts src/database/background-job-store.test.ts src/database/html-artifact-store.test.ts
 npm test --workspace @jarvis/contracts -- src/index.test.js
 npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx
 ```

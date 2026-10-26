@@ -390,7 +390,7 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
         signal,
       );
       if (response.ok) return '';
-      if (response.status === 404) return 'The saved report is no longer available in Folio.';
+      if (response.status === 404) return 'The saved report is no longer available in Workspaces.';
       return 'Jarvis could not confirm opening the saved report. Try again.';
     } catch {
       return 'Jarvis could not confirm opening the saved report. Try again.';

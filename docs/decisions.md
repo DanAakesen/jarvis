@@ -8570,3 +8570,19 @@ production failure or prove live provider acceptance. A provider-incomplete
 response after tool execution remains a failure: no partial reply is synthesized
 from prior tool outputs, and the user-facing warning indicates that an action may
 have completed. Recovery of useful partial results is not implemented.
+
+## Workspaces naming and legacy compatibility (#1279; 25 October 2026)
+
+Use Workspaces for user-facing and canonical implementation names, including
+the `workspaces` navigation key, `workspacesOpen` snapshot field, `/workspaces`
+API, `workspaces_*` tools, and `dbo.workspace_items`/
+`result_workspace_item_id` storage. Preserve existing clients and integrations
+with legacy navigation/snapshot values, route/tool aliases, exported contract
+aliases, a `dbo.folio_items` synonym, and synchronized old/new job-result
+columns. Migration 0067 renames the table and backfills the new column without
+deleting saved items; its down migration restores the old identifiers. Writing
+NULL to only one result alias clears both aliases and delivery status; a mixed
+write with one NULL alias and a valid delivery status synchronizes both from the
+non-NULL identifier. Access controls and source-artifact retention do not change.
+The separate chat-time layout remains below message text on mobile widths up to
+700px and retains its desktop position.

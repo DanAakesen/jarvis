@@ -34,9 +34,24 @@ import {
   isJarvisWorkActivityDetail,
   jarvisWorkActivityKinds,
   jarvisWorkActivityDetailSchema,
+  workspaceItemKinds,
+  workspaceItemSchema,
+  workspaceItemsSearchSchema,
+  workspaceItemsSearchResponseSchema,
+  workspaceItemPatchSchema,
+  workspaceItemDeleteSchema,
+  workspaceItemsSearchToolSchema,
+  workspaceItemOpenToolSchema,
+  workspacesManageToolSchema,
+  isWorkspaceItem,
   folioKinds,
   folioItemSchema,
+  folioSearchSchema,
   folioSearchResponseSchema,
+  folioPatchSchema,
+  folioDeleteSchema,
+  folioSearchToolSchema,
+  folioOpenToolSchema,
   folioManageToolSchema,
   isFolioItem,
   htmlArtifactByteLimit,
@@ -122,7 +137,8 @@ test('workspace snapshots accept old clients and validate optional current and p
     assert.equal(isWorkspaceSnapshot({ ...snapshot, view: { page } }), true);
   }
   const view = {
-    page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report', folioOpen: true,
+    page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report',
+    workspacesOpen: true, folioOpen: true,
     previous: { page: 'settings', section: 'voice' },
   };
   assert.equal(isWorkspaceSnapshot({ ...snapshot, view }), true);
@@ -131,7 +147,8 @@ test('workspace snapshots accept old clients and validate optional current and p
     { page: 'settings', section: 'unknown' }, { page: 'home', taskId: '10' },
     { page: 'factory', taskId: '../10' }, { page: 'factory', issueNumber: 0 },
     { page: 'factory', issueNumber: Number.MAX_SAFE_INTEGER + 1 },
-    { page: 'home', folioOpen: 'true' }, { page: 'home', focusedViewId: '../report' },
+    { page: 'home', workspacesOpen: 'true' }, { page: 'home', folioOpen: 'true' },
+    { page: 'home', focusedViewId: '../report' },
     { page: 'home', previous: { page: 'home', previous: { page: 'factory' } } },
     { page: 'home', previous: { page: 'factory', issueNumber: -1 } },
   ]) {
@@ -209,7 +226,7 @@ test('timeline schema and validator accept precise dates and ordered period labe
   }
 });
 
-test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {
+test('Workspaces contracts use bounded searchable item metadata and preserve legacy aliases', () => {
   const item = {
     id: 'research:56a2b0bd-af47-46b5-8e15-c6e9a718ae93',
     title: 'Ignite report',
@@ -218,19 +235,29 @@ test('Folio contracts use bounded searchable item metadata and closed item kinds
     promptSummary: 'Research Ignite battery storage',
     pinned: false,
   };
-  assert.deepEqual(folioKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
-  assert.equal(folioItemSchema.properties.promptSummary.maxLength, 500);
-  assert.equal(folioSearchResponseSchema.properties.items.maxItems, 100);
-  assert.equal(isFolioItem(item), true);
-  assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
-  assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
-  assert.equal(folioManageToolSchema.type, 'object');
-  assert.deepEqual(folioManageToolSchema.required, ['action']);
-  assert.deepEqual(folioManageToolSchema.properties.action.enum, ['rename', 'pin', 'unpin', 'delete']);
-  assert.equal(folioManageToolSchema.properties.title.maxLength, 200);
-  assert.equal(folioManageToolSchema.properties.query.maxLength, 120);
-  assert.equal(folioManageToolSchema.additionalProperties, false);
-  for (const keyword of ['oneOf', 'anyOf', 'allOf']) assert.equal(folioManageToolSchema[keyword], undefined);
+  assert.deepEqual(workspaceItemKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
+  assert.equal(workspaceItemSchema.properties.promptSummary.maxLength, 500);
+  assert.equal(workspaceItemsSearchResponseSchema.properties.items.maxItems, 100);
+  assert.equal(isWorkspaceItem(item), true);
+  assert.equal(isWorkspaceItem({ ...item, kind: 'conversation' }), false);
+  assert.equal(isWorkspaceItem({ ...item, promptSummary: ' Research ' }), false);
+  assert.equal(workspacesManageToolSchema.type, 'object');
+  assert.deepEqual(workspacesManageToolSchema.required, ['action']);
+  assert.deepEqual(workspacesManageToolSchema.properties.action.enum, ['rename', 'pin', 'unpin', 'delete']);
+  assert.equal(workspacesManageToolSchema.properties.title.maxLength, 200);
+  assert.equal(workspacesManageToolSchema.properties.query.maxLength, 120);
+  assert.equal(workspacesManageToolSchema.additionalProperties, false);
+  for (const keyword of ['oneOf', 'anyOf', 'allOf']) assert.equal(workspacesManageToolSchema[keyword], undefined);
+  assert.equal(folioKinds, workspaceItemKinds);
+  assert.equal(folioItemSchema, workspaceItemSchema);
+  assert.equal(folioSearchSchema, workspaceItemsSearchSchema);
+  assert.equal(folioSearchResponseSchema, workspaceItemsSearchResponseSchema);
+  assert.equal(folioPatchSchema, workspaceItemPatchSchema);
+  assert.equal(folioDeleteSchema, workspaceItemDeleteSchema);
+  assert.equal(folioSearchToolSchema, workspaceItemsSearchToolSchema);
+  assert.equal(folioOpenToolSchema, workspaceItemOpenToolSchema);
+  assert.equal(folioManageToolSchema, workspacesManageToolSchema);
+  assert.equal(isFolioItem, isWorkspaceItem);
 });
 
 test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {
@@ -964,7 +991,7 @@ test('validates exact current-session actions and values', () => {
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
-    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily', 'health',
+    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'workspaces', 'folio', 'status', 'daily', 'health',
   ]);
   assert.deepEqual(workspaceSettingsSections, [
     'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',

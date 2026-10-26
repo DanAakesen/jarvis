@@ -95,3 +95,12 @@ in again. Deploy the migration before the backend revision that uses the table.
 `0066_research_result_recovery.sql` stores the Folio entry and Workspace delivery
 state on completed research jobs. The down batch removes only those references;
 saved reports and Folio entries remain untouched.
+
+`0067_workspaces_identifiers.sql` renames the saved-item table to
+`dbo.workspace_items` and adds `result_workspace_item_id`. A `dbo.folio_items`
+synonym and synchronization trigger preserve existing SQL callers; the down
+batch restores the old table/column names without deleting saved items. Updating
+one result column mirrors it to the other. Writing NULL to only one result alias
+clears both aliases and the delivery status; when both columns are written with
+one NULL and a valid delivery status, the trigger synchronizes from the non-NULL
+value.

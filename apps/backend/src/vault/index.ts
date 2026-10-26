@@ -785,7 +785,7 @@ export function createVaultModule(options: {
   readonly embeddingModel?: string;
   readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
   readonly settingsStore?: SettingsStore;
-  readonly recordFolioGraph?: (
+  readonly recordWorkspaceGraph?: (
     query: string,
     highlight: readonly string[],
     createdAt: string,
@@ -1517,7 +1517,7 @@ export function createVaultModule(options: {
           operation: 'focus',
           viewId: 'knowledge-graph',
         }, signal);
-        await options.recordFolioGraph?.(query, highlight, new Date().toISOString());
+        await options.recordWorkspaceGraph?.(query, highlight, new Date().toISOString());
         const summary = hits.length > 0
           ? `Found ${hits.length} vault match${hits.length === 1 ? '' : 'es'}; top hit: ${hits[0]!.path} — ${snippet(hits[0]!.content)}`
           : `No vault notes matched “${query}”.`;

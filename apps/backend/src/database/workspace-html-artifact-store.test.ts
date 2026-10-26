@@ -49,7 +49,7 @@ function row(overrides: Record<string, unknown> = {}) {
 }
 
 describe('workspace HTML artifact store', () => {
-  it('archives content and updates atomically without replacing identity, Folio or pin metadata', async () => {
+  it('archives content and updates atomically without replacing identity, Workspaces or pin metadata', async () => {
     const data = fixture([row({ id: artifactId.toUpperCase(), pinned: true, version_number: 2 })]);
     const result = await data.store.update(artifactId, ownerId, html, new AbortController().signal);
     expect(result).toMatchObject({ id: artifactId, version: 2, pinned: true, title: 'Example', sources });

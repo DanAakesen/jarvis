@@ -1,5 +1,30 @@
 # Project plan
 
+## Workspaces identifier completion (#1279; 25 October 2026)
+
+- Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
+  use Workspaces names; legacy Folio clients and data retain explicit
+  compatibility aliases and reversible migration 0067.
+- Reconciled coordinated main
+  `771c56d4f9c12891830f2313ce6d54c5d6477d2f` in two-parent merge `6be8f0b`.
+  The selected bottom Chat/Health/Workspaces/Menu navigation remains intact;
+  Workspaces opens the renamed saved-item pane, and Software Factory remains a
+  separate `/factory/kanban` destination. The food invitation/composer, compact
+  attachment pill, image previews, camera preview CSS and mobile timestamp fix
+  remain together.
+- Full web validation passed: 153 test files / 2,351 tests, lint and production
+  build. The build retains its existing large-chunk warning.
+- Actual-App Chromium with synthetic history at 390×844 confirmed the Workspaces
+  control opened `#workspaces-pane` without changing `/`, while Factory remained
+  linked to `/factory/kanban`. The timestamp was static 8 px below long message
+  text; document width stayed 390 px. A 47 px image attachment pill remained
+  above the composer input with 16 px spacing and no horizontal overflow. At
+  1440×900 the timestamp remained absolute and document width stayed 1440 px.
+  No browser errors were observed.
+- Exact-merge-head CI `40249598963` passed all required jobs and its aggregate
+  gate, including SQL Server migration/database contracts; infrastructure was
+  skipped. GitHub CodeQL `40249598917` passed all four analyses.
+
 ## Mobile browser food confirmation repair (#1290)
 
 Clarified mobile/desktop browser versus telephone-call tool guidance and trusted
@@ -46,13 +71,14 @@ Coordination review inspected #1278 `a09dfc1`, #1264 `fa3de91` (including
 owner-interactions API on the shared lifecycle; no stream deadline or playback
 gate changes belong here. The overlapping Factory merge must retain
 clarification-specific provenance and target revalidation separately from
-action approval. Combined-head qualification is now pending this reconciliation.
+action approval. Combined-head qualification passed on `c0aed2f`: exact-head CI
+`40239192479` and all four CodeQL analyses in `40239192419` succeeded.
 Food API reconciliation passed 622 targeted tests (one skipped), backend build,
 scoped lint and read-only review. It preserves the immediate-reply and
 same-millisecond food timestamp behavior without changing other action families.
-JavaScript CodeQL analysis was skipped because the database exceeded its size
-limit; this is not a clean automated security result. Next: PR qualification
-and live owner/device acceptance.
+Local JavaScript CodeQL analysis was skipped because the database exceeded its
+size limit; the exact-head GitHub CodeQL run passed all four analyses. Next: live
+owner/device acceptance.
 
 ## Natural food-estimate confirmation (#1277)
 

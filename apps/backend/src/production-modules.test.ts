@@ -5,7 +5,7 @@ import { FrameStore } from './vision/frame-store.js';
 import { createConversationModule } from './core/conversation.js';
 import { coreModule } from './core/index.js';
 import { createBrowserAgentModule } from './core/browser-agent.js';
-import { createFolioModule } from './core/folio.js';
+import { createWorkspacesModule } from './core/workspaces.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { createHtmlViewModule } from './core/html-view.js';
 import { createImageGenerationModule } from './core/image-generation.js';
@@ -68,7 +68,7 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
     imageGeneration: createImageGenerationModule({} as never),
     htmlView: createHtmlViewModule({} as never),
     weather: createWeatherModule({} as never),
-    folio: createFolioModule({} as never, {} as never),
+    workspaces: createWorkspacesModule({} as never, {} as never),
     workspacePins: createWorkspacePinsModule({} as never),
     screenVision: createScreenVisionModule({} as never, frameStore),
     visionWatch: createVisionWatchModule({} as never),
@@ -124,7 +124,7 @@ describe('production tool catalogue', () => {
     expect(modules.map(({ id }) => id)).toEqual([
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
-      'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
+      'browser-agent', 'image-generation', 'html-view', 'weather', 'workspaces', 'workspace-pins',
       'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive',
     ]);
   });
