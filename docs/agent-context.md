@@ -19,6 +19,15 @@ These checks do not establish physical iPhone or real speech-provider acceptance
 
 ## Accepted chat recovery checks (#1311; 26 October 2026)
 
+After integration onto `5dd52b07`, local aggregate lint/build, 9,487 JavaScript
+tests (one existing conditional skip) and 929 Python tests passed. Hosted Node 22
+exposed four fixture teardown timeouts after successful disconnect assertions;
+the same failure reproduced locally on Node 22. The HTTP fixture now closes its
+owned connections in `preClose`, after assertions, without changing production
+shutdown or increasing timeouts. All 221 focused backend tests passed on Node 22
+with that correction. Hosted SQL database contracts passed; final pinned CI is
+tracked on PR #1314.
+
 Review correction: retain Dan's P8-35 no-Stop-button choice. The explicit
 cancellation endpoint/client mechanism remains; no new visible cancellation control
 is introduced. Added signed-token coverage in `src/auth/auth.test.ts` verifies

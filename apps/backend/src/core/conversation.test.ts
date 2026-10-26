@@ -848,6 +848,9 @@ describe('conversation routes', () => {
       yield result;
     }) };
     const app = createApp(store, { conversationAgent: agent, ownerInteractions: service });
+    // Fetch may retain pooled sockets after abort/replay on Node 22. Dispose this
+    // fixture's transports only during teardown, after all recovery assertions.
+    app.addHook('preClose', async () => { app.server.closeAllConnections(); });
     const address = await app.listen({ port: 0, host: '127.0.0.1' });
     const transport = new AbortController();
     const response = await fetch(`${address}/conversation/sessions/41/turns`, {
