@@ -48,7 +48,11 @@ before committing or building. No production authentication or network is needed
 An early stylesheet test rejected a raw color literal; replacing it with the
 existing theme tokens fixed the failure. An early browser run had an ambiguous
 close locator matching a workspace tab too; the final script matches the exact
-camera overlay name. Neither failure remains in the final checks.
+camera overlay name. A repeat using zero-duration CDP drag steps intermittently delivered the next
+switch pointer events without a browser click. The final harness spaces the
+five move steps by 40ms and detaches the drag CDP session before ordinary taps;
+the complete run then passed. Application controls were not changed to bypass
+click handling. None of these failures remains in the final checks.
 
 ## Limits
 

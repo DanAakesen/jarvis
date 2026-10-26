@@ -43,8 +43,11 @@ with sync_playwright() as p:
   if touch:
    cdp=page.context.new_cdp_session(page)
    cdp.send('Input.dispatchTouchEvent',{'type':'touchStart','touchPoints':[{'x':x,'y':y}]})
-   for step in range(1,6):cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x-40*step/5,'y':y+70*step/5}]})
+   for step in range(1,6):
+    cdp.send('Input.dispatchTouchEvent',{'type':'touchMove','touchPoints':[{'x':x-40*step/5,'y':y+70*step/5}]})
+    page.wait_for_timeout(40)
    cdp.send('Input.dispatchTouchEvent',{'type':'touchEnd','touchPoints':[]})
+   cdp.detach()
   else:
    page.mouse.move(x,y);page.mouse.down();page.mouse.move(x-150,y+90,steps=8);page.mouse.up()
   after=picture.bounding_box();assert abs(after['x']-before['x'])>20,(before,after)
