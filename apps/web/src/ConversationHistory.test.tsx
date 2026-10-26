@@ -177,10 +177,11 @@ describe('ConversationHistory', () => {
   it('reattaches on mount with original identity without adding a Stop control', async () => {
     const recovered = { sessionId: '41', messageId: '51', language: 'en' };
     loadActiveChatTurns.mockResolvedValueOnce([recovered]);
-    const result = Promise.withResolvers<typeof assistantMessage>();
+    let finish: ((value: typeof assistantMessage) => void) | undefined;
+    const result = new Promise<typeof assistantMessage>(resolve => { finish = resolve; });
     sendChatTurn.mockImplementation(async (_token, _config, _session, _text, onUser) => {
       onUser(userMessage);
-      return result.promise;
+      return result;
     });
     renderConversation();
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
@@ -188,7 +189,7 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn.mock.calls[0]![15]).toBe('51');
     expect(createChatSession).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Stop reply' })).toBeNull();
-    result.resolve(assistantMessage);
+    finish?.(assistantMessage);
     await screen.findByText(assistantMessage.text);
   });
 
