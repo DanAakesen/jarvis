@@ -58,9 +58,10 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
     const outsideComposer = (target: EventTarget | null) => target instanceof Element &&
       !target.closest('.conversation-input, .more-menu-list, .more-menu-flyout');
     const startOutsidePress = (event: PointerEvent) => {
+      // A second finger abandons the tap rather than becoming a new candidate.
       cancelOutsidePress();
       const input = document.activeElement;
-      if (event.pointerType !== 'touch' || !(input instanceof HTMLTextAreaElement) ||
+      if (event.pointerType !== 'touch' || !event.isPrimary || !(input instanceof HTMLTextAreaElement) ||
         input.id !== 'message' || !element.contains(input) || !outsideComposer(event.target)) return;
       outsidePress = { id: event.pointerId, x: event.clientX, y: event.clientY, input };
     };

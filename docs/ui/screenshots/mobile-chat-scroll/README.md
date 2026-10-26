@@ -61,3 +61,22 @@ The runtime fix preserves menu DOM-ancestry exemptions, including a native
 popover that remains under the same menu nodes. Concurrent camera/menu branches
 were not merged or tested here. Documentation additions at the tops of shared
 files may require retaining both sides during integration.
+
+## Final local review follow-up
+
+Review found that a second finger could replace the pending touch candidate and
+blur the composer on release. A regression failed against `f292859b` (20 passed,
+1 failed). Only primary touches now become candidates; a secondary touch first
+cancels the existing candidate, so neither finger's release dismisses it.
+
+The revised focused suites pass 123 tests. New cases cover second-finger release
+and a later normal tap, a 5px intended tap with unprevented release, and exact
+global-listener removal plus pending-press abandonment on disable/re-enable and
+unmount. Existing cases cover move-away-and-back, release-distance-only movement,
+pointercancel, captured descendant scroll and focus transfer to another editor.
+The actual-component Chromium swipe/type/Send/button/link scenario passed again.
+The fixture imports `./src/phone-chat-viewport` directly when copied into
+`apps/web`; it does not contain a copy of the hook. The 2,400-test full-suite result
+above belongs to the initial commit, before this primary-touch guard.
+Web ESLint and TypeScript/Vite build also pass after the review correction;
+Vite retains its existing chunk-size advisory. `git diff --check` passes.

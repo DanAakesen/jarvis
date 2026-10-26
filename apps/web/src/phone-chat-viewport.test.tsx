@@ -171,21 +171,21 @@ describe('phone chat viewport', () => {
     render(<Chat />);
     const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
     input.focus();
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Composer action' }), { pointerType: 'touch' });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Composer action' }), { pointerType: 'touch', isPrimary: true });
     expect(document.activeElement).toBe(input);
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Language' }), { pointerType: 'touch' });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Language' }), { pointerType: 'touch', isPrimary: true });
     expect(document.activeElement).toBe(input);
     fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'mouse' });
     expect(document.activeElement).toBe(input);
-    const event = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' });
+    const event = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true });
     screen.getByTestId('outside').dispatchEvent(event);
     expect(document.activeElement).toBe(input);
-    fireEvent.pointerUp(screen.getByTestId('outside'), { pointerType: 'touch' });
+    fireEvent.pointerUp(screen.getByTestId('outside'), { pointerType: 'touch', isPrimary: true });
     expect(document.activeElement).not.toBe(input);
     expect(event.defaultPrevented).toBe(false);
     const editor = screen.getByRole('textbox', { name: 'Other editor' });
     editor.focus();
-    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch' });
+    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch', isPrimary: true });
     expect(document.activeElement).toBe(editor);
   });
 
@@ -197,7 +197,7 @@ describe('phone chat viewport', () => {
     input.focus();
     visible.height = 480;
     act(() => { visible.dispatchEvent(new Event('resize')); });
-    const down = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 1, clientY: 100 });
+    const down = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true, pointerId: 1, clientY: 100 });
     transcript.dispatchEvent(down);
     expect(document.activeElement).toBe(input);
     if (gesture === 'move') {
@@ -214,19 +214,73 @@ describe('phone chat viewport', () => {
     fireEvent.change(input, { target: { value: 'Unsent fixture draft continued' } });
     expect(input).toHaveProperty('value', 'Unsent fixture draft continued');
     // Cancellation must not poison the next intentional outside tap.
-    fireEvent.pointerDown(transcript, { pointerType: 'touch', pointerId: 2 });
-    fireEvent.pointerUp(transcript, { pointerType: 'touch', pointerId: 2 });
+    fireEvent.pointerDown(transcript, { pointerType: 'touch', isPrimary: true, pointerId: 2 });
+    fireEvent.pointerUp(transcript, { pointerType: 'touch', isPrimary: true, pointerId: 2 });
     expect(document.activeElement).not.toBe(input);
+  });
+
+  it('abandons dismissal for a second finger, then accepts the next primary tap', () => {
+    viewport();
+    render(<Chat />);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const outside = screen.getByTestId('outside');
+    input.focus();
+    fireEvent.pointerDown(outside, { pointerType: 'touch', isPrimary: true, pointerId: 1 });
+    fireEvent.pointerDown(outside, { pointerType: 'touch', isPrimary: false, pointerId: 2 });
+    fireEvent.pointerUp(outside, { pointerType: 'touch', pointerId: 2 });
+    expect(document.activeElement).toBe(input);
+    fireEvent.pointerUp(outside, { pointerType: 'touch', pointerId: 1 });
+    expect(document.activeElement).toBe(input);
+    fireEvent.pointerDown(outside, { pointerType: 'touch', isPrimary: true, pointerId: 3 });
+    fireEvent.pointerUp(outside, { pointerType: 'touch', pointerId: 3 });
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('dismisses a small intended tap without preventing its native events', () => {
+    viewport();
+    render(<Chat />);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const outside = screen.getByTestId('outside');
+    input.focus();
+    fireEvent.pointerDown(outside, { pointerType: 'touch', isPrimary: true, pointerId: 1, clientX: 20, clientY: 20 });
+    fireEvent.pointerMove(outside, { pointerId: 1, clientX: 23, clientY: 24 });
+    const up = new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 1, clientX: 23, clientY: 24 });
+    outside.dispatchEvent(up);
+    expect(document.activeElement).not.toBe(input);
+    expect(up.defaultPrevented).toBe(false);
+  });
+
+  it('removes each global gesture listener and abandons a pending press on disable/unmount', () => {
+    viewport();
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const view = render(<Chat />);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const outside = screen.getByTestId('outside');
+    input.focus();
+    fireEvent.pointerDown(outside, { pointerType: 'touch', isPrimary: true, pointerId: 1 });
+    view.rerender(<Chat enabled={false} />);
+    fireEvent.pointerUp(outside, { pointerId: 1 });
+    expect(document.activeElement).toBe(input);
+    view.rerender(<Chat />);
+    fireEvent.pointerUp(outside, { pointerId: 1 });
+    expect(document.activeElement).toBe(input);
+    view.unmount();
+    const types = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'scroll'];
+    for (const [type, listener, options] of add.mock.calls.filter(([type]) => types.includes(type))) {
+      if (options === undefined) expect(remove).toHaveBeenCalledWith(type, listener);
+      else expect(remove).toHaveBeenCalledWith(type, listener, options);
+    }
   });
 
   it('does not blur a newly focused editor when an outside touch finishes', () => {
     viewport();
     render(<Chat />);
     screen.getByRole('textbox', { name: 'Message Jarvis' }).focus();
-    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch', pointerId: 1 });
+    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch', isPrimary: true, pointerId: 1 });
     const editor = screen.getByRole('textbox', { name: 'Other editor' });
     editor.focus();
-    fireEvent.pointerUp(screen.getByTestId('outside'), { pointerType: 'touch', pointerId: 1 });
+    fireEvent.pointerUp(screen.getByTestId('outside'), { pointerType: 'touch', isPrimary: true, pointerId: 1 });
     expect(document.activeElement).toBe(editor);
   });
 
@@ -265,7 +319,7 @@ describe('phone chat viewport', () => {
     view.rerender(<Chat enabled={false} />);
     const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
     input.focus();
-    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch' });
+    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch', isPrimary: true });
     expect(document.activeElement).toBe(input);
   });
 
