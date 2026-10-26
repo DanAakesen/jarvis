@@ -41,6 +41,7 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
   const sheet = useRef<HTMLDivElement>(null);
   const pageRail = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const [pageIndex, setPageIndex] = useState(0);
   const entries: MenuEntry[] = menuPages(dailyEnabled, proactiveEnabled, sections?.label === 'Health').flatMap((page) => {
     const currentSection = sections?.label === page.label;
@@ -64,6 +65,8 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
     setPageIndex(index);
   };
 
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -73,14 +76,14 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
       if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      onClose();
+      onCloseRef.current();
       previous?.focus({ preventScroll: true });
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Element) || sheet.current?.contains(target) ||
         target.closest('.mobile-bottom-nav-link[aria-controls="mobile-menu"], .mobile-menu-backdrop')) return;
-      onClose();
+      onCloseRef.current();
       if (!target.closest('.mobile-bottom-nav-link, button, a[href], input, textarea, select, [contenteditable="true"]')) {
         previous?.focus({ preventScroll: true });
       }
@@ -91,7 +94,7 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
       document.removeEventListener('keydown', onKeyDown, true);
       document.removeEventListener('pointerdown', onPointerDown);
     };
-  }, [onClose, open]);
+  }, [open]);
 
   return (
     <div className="mobile-menu" hidden={!open} inert={!open}>

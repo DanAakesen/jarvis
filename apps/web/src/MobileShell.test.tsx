@@ -62,6 +62,17 @@ describe('mobile menu sheet behavior', () => {
     expect(document.activeElement).toBe(composer);
   });
 
+  it('preserves menu focus when its parent rerenders', async () => {
+    const user = userEvent.setup();
+    const view = render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const nextPage = screen.getByRole('button', { name: 'Next menu page' });
+    await user.click(nextPage);
+    expect(document.activeElement).toBe(nextPage);
+    view.rerender(<Harness />);
+    expect(document.activeElement).toBe(nextPage);
+  });
+
   it('preserves page navigation and closes the sheet', async () => {
     const user = userEvent.setup();
     const navigate = vi.fn();
