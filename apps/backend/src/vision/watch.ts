@@ -182,6 +182,7 @@ export class VisionWatchService {
       throw new ScreenVisionError(503, 'Vision watch settings are unavailable.');
     }
     this.busy.add(key);
+    let clearReceipt: (() => void) | undefined;
     try {
       const session = await this.conversations.getSession(input.sessionId);
       if (!session || session.endedAt) {
@@ -206,9 +207,14 @@ export class VisionWatchService {
       if (reservation.outcome === 'rate-limited') {
         throw new ScreenVisionError(429, 'Please wait 2.5 seconds before watching another frame from this source.');
       }
+      input.signal.throwIfAborted();
       const sourceState = state[input.source];
       sourceState.receivedAt = started;
       if (input.feedId) sourceState.feedId = input.feedId;
+      clearReceipt = () => {
+        if (sourceState.feedId === input.feedId && sourceState.receivedAt === started) sourceState.receivedAt = null;
+      };
+      input.signal.addEventListener('abort', clearReceipt, { once: true });
       const revision = sourceState.revision;
       const deliverySignal = AbortSignal.any([input.signal, sourceState.delivery.signal]);
       const result = await this.model.describe({
@@ -234,7 +240,7 @@ export class VisionWatchService {
       const observation = parseObservation(result.description);
       const usedDkk = await this.usage.readWatchBudget(new Date(this.now()));
       if (!Number.isFinite(usedDkk) || usedDkk < 0) throw new Error('Vision budget unavailable');
-      state[input.source].summary = observation.summary;
+      if (!deliverySignal.aborted && revision === sourceState.revision) sourceState.summary = observation.summary;
       let speak: string | null = null;
       const candidate = observation.speak;
       // Never announce once the shared daily budget is exhausted, or across UTC rollover.
@@ -277,9 +283,11 @@ export class VisionWatchService {
         latencyMs: this.now() - started, cost: result.costDkk });
       return { summary: observation.summary, speak, budget: { usedUsd: usedDkk / DKK_PER_USD, limitUsd: input.limitUsd } };
     } catch (error) {
+      clearReceipt?.();
       if (error instanceof ScreenVisionError) throw error;
       throw new ScreenVisionError(503, 'I could not watch the shared image.');
     } finally {
+      if (clearReceipt) input.signal.removeEventListener('abort', clearReceipt);
       this.busy.delete(key);
     }
   }

@@ -254,6 +254,16 @@ describe('continuous vision watching', () => {
     expect(f.service.feedStatus('42', 'camera')).toBe('unconfirmed');
   });
 
+  it('does not revive receiving status when a cancelled frame finishes session lookup', async () => {
+    const f = fixture();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(f.service.watch({ sessionId: '42', source: 'camera', image: Buffer.from('fixture'),
+      limitUsd: 1, signal: controller.signal, log: () => {} })).rejects.toThrow();
+    expect(f.model.describe).not.toHaveBeenCalled();
+    expect(f.service.feedStatus('42', 'camera')).toBe('unconfirmed');
+  });
+
   it('dedupes normalized repeated issues across sources for two minutes', async () => {
     const f = fixture();
     expect((await f.watch()).json().speak).toBe('The build failed.');
