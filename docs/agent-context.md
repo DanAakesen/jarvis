@@ -5598,3 +5598,17 @@ Focused checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/production-modules.test.ts src/database/proactive-store.test.ts src/proactive/store.test.ts src/core/capability-instructions.test.ts src/tool-parity.test.ts src/voice/realtime.test.ts src/core/settings.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
+
+
+## Mobile corrections validation (#1293; 26 October 2026)
+
+The full frozen install in this executor failed on configured-feed HTTP 403 for
+`pkce-challenge@5.0.1`. The existing web/contracts workspaces install successfully
+with `npm ci --ignore-scripts --workspace @jarvis/web --workspace @jarvis/contracts
+--cache /tmp/jarvis-npm-cache-1293`; no registry, lockfile or package versions change.
+This permits normal web Vitest/lint/build and local Vite browser fixtures.
+Local Node 24.19.0/npm 11.9.0 is not pinned CI Node 22/npm 10. Full-App synthetic
+Chromium capture instructions and explicit limits are in
+`docs/ui/screenshots/mobile-corrections-1293/README.md`.
+Aggregate CI skips drafts; `pipeline_evidence.py` also rejects a dispatched PR
+that remains draft. The parent owns readiness and normal exact-head qualification.

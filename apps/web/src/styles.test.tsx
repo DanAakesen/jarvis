@@ -78,9 +78,9 @@ describe('responsive stylesheet contract', () => {
     expect(sharedStyles).toContain('.mobile-menu { position: fixed; z-index: var(--z-sheet); inset: 0; pointer-events: none; }');
     expect(sharedStyles).toContain('animation: mobile-sheet-in 380ms var(--ease-enter) both; pointer-events: auto;');
     expect(sharedStyles).toContain('max-height: min(196px, calc(var(--overlay-viewport-height, 100dvh) - var(--phone-dock-bottom, 84px) - var(--conversation-composer-height, 52px) - env(safe-area-inset-top) - var(--space-4)));');
-    expect(sharedStyles).toContain('.mobile-menu-page .mobile-menu-link { min-height: 48px; gap: var(--space-1); padding-inline: var(--space-2); }');
-    expect(sharedStyles).toContain('.mobile-menu-sheet .modal-heading { order: 2; display: grid; grid-template-columns: 44px auto; gap: var(--space-1); margin: 0; }');
-    expect(sharedStyles).toContain('.mobile-menu-sheet .mobile-menu-body { order: 1; flex: 1 1 auto; }');
+    expect(sharedStyles).toContain('.mobile-menu-page .mobile-menu-link { grid-template-columns: 20px minmax(0, 1fr) 12px; min-height: 48px; gap: var(--space-1); padding-inline: var(--space-1); font-size: var(--type-small); }');
+    expect(sharedStyles).toContain('.mobile-menu-backdrop { animation-duration: var(--motion-state); backdrop-filter: none; }');
+    expect(sharedStyles).toContain('.mobile-menu-sheet .mobile-menu-body { flex: 1 1 auto; }');
   });
 
   it('uses the phone conversation canvas without the desktop window frame', () => {
@@ -91,11 +91,10 @@ describe('responsive stylesheet contract', () => {
     expect(history).toContain('padding: var(--space-3); -webkit-mask-image: none; mask-image: none;');
   });
 
-  it('keeps mobile dictation feedback concise and the draft field within the compact composer row', () => {
+  it('keeps a growing mobile message row and external feedback', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
-    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 44px; overflow-y: auto; }');
-    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer-status[data-dictating]');
-    expect(history).toContain('text-overflow: ellipsis; white-space: nowrap;');
+    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }');
+    expect(history).toContain('.composer-feedback > .composer-status { margin: 0 0 var(--space-2); padding: var(--space-2); border-radius: var(--radius-control); background: var(--surface-translucent); }');
   });
 
   it('keeps table scrolling focusable and the narrow action grid shrinkable', () => {
@@ -112,11 +111,11 @@ describe('responsive stylesheet contract', () => {
     expect(sharedStyles).toContain('.deployment-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }');
   });
 
-  it('keeps the Dictate label visible without squeezing the draft on narrow phones', () => {
+  it('keeps the Dictate icon visible on narrow phones', () => {
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
     const narrowRules = mediaBlocks(historyStyles).find(({ query }) => query.includes('max-width: 380px'))?.body ?? '';
-    expect(narrowRules).toContain('.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { gap: 0; padding-inline: var(--space-2); }');
-    expect(narrowRules).toContain('.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate svg { display: none; }');
+    expect(narrowRules).not.toContain('.composer-dictate svg { display: none; }');
+
   });
 });
 
@@ -731,11 +730,13 @@ describe('shared glass tokens', () => {
     expect(touchRules).toContain('.message-metadata { opacity: 1; }');
   });
 
-  it('keeps the phone Dictate and Send actions beside the draft field', () => {
+  it('keeps phone icon actions below a full-width draft', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
-    expect(history).toContain('grid-template-columns: 44px minmax(0, 1fr) auto 44px');
+    expect(history).toContain('grid-template-columns: 44px minmax(0, 1fr) 44px 44px');
     expect(history).toContain('.composer > .composer-dictate { display: inline-flex; grid-column: 3;');
     expect(history).toContain('.composer > .composer-send { display: grid; grid-column: 4;');
+    expect(history).toContain('.composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }');
+    expect(history).toContain('.composer > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 2; }');
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {

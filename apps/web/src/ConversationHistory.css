@@ -271,33 +271,28 @@
 
 .app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] { grid-template-columns: minmax(0, 1fr); }
 .app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: none; }
-.app-shell[data-phone="true"] .conversation-history .composer { grid-template-columns: 44px minmax(0, 1fr) auto 44px; gap: var(--space-2); }
+.app-shell[data-phone="true"] .conversation-history .composer { grid-template-columns: 44px minmax(0, 1fr) 44px 44px; gap: var(--space-2); }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-more { grid-column: 1; grid-row: 1; padding: 0; }
 .app-shell[data-phone="true"] .conversation-history .composer > textarea,
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-prompt { grid-column: 2; }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-prompt { grid-column: 1 / -1; }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-more,
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate,
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-send { grid-row: 1; }
-.app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger { width: 44px; height: 44px; border: 1px solid var(--glass-edge-cool); color: var(--focus); }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-send { grid-row: 2; }
+.app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger { width: 44px; height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--focus); }
 .app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger svg { width: 24px; height: 24px; }
-.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { display: inline-flex; grid-column: 3; min-height: 44px; align-items: center; justify-content: center; gap: var(--space-2); padding: 0 var(--space-3); border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 72%, transparent); border-radius: var(--radius-control); background: transparent; color: var(--glass-glow-warm); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { display: inline-flex; grid-column: 3; min-height: 44px; align-items: center; justify-content: center; gap: 0; padding: 0; border: 0; box-shadow: none; border-radius: var(--radius-control); background: transparent; color: var(--glass-glow-warm); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:hover:not(:disabled) { background: var(--glass-hover); }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:active:not(:disabled) { background: var(--glass-pressed); }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
 .app-shell[data-phone="true"] .conversation-history .composer-status { grid-column: 1 / -1; }
-.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 44px; overflow-y: auto; }
-.app-shell[data-phone="true"] .conversation-history .composer-status[data-dictating] {
-  min-width: 0; overflow: hidden; font-size: var(--type-caption); line-height: var(--line-tight); text-overflow: ellipsis; white-space: nowrap;
-}
+.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }
 .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:focus-visible { outline-offset: 0; }
 
 @media (max-width: 380px) {
   .conversation-greeting { padding: var(--space-2); }
   .conversation-greeting h2 { font-size: var(--type-subheading); line-height: var(--line-tight); }
   .conversation-greeting p { margin-top: var(--space-1); font-size: var(--type-caption); line-height: var(--line-tight); }
-  .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { gap: 0; padding-inline: var(--space-2); }
-  .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate svg { display: none; }
 }
 
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
@@ -761,3 +756,13 @@
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"] .workspace-shell-area .workspace-window {
   pointer-events: auto;
 }
+/* Feedback participates in dock measurement but stays above the composer surface. */
+.conversation-input-stack { width: 100%; max-width: var(--chat-width); margin-inline: auto; }
+.composer-feedback:empty { display: none; }
+.composer-feedback { min-width: 0; }
+.composer-feedback > .composer-status { margin: 0 0 var(--space-2); padding: var(--space-2); border-radius: var(--radius-control); background: var(--surface-translucent); }
+.app-shell[data-phone="true"] .composer-feedback > .composer-attachments { margin: 0; }
+.app-shell[data-phone="true"] .conversation-history .composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }
+.app-shell[data-phone="true"] .conversation-history .composer > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 2; }
+.app-shell[data-phone="true"] .conversation-history .composer-live { grid-row: 3; }
+.app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] { background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); }

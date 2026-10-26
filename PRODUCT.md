@@ -99,14 +99,18 @@ On phones, keep message times below the chat bubbles. Use the compact composer
 with a plus menu for existing attachments, video, screen sharing and realtime
 Voice. Dictate is a separate action that adds recognized speech to the unsent
 draft; it never starts a Jarvis voice turn or sends the draft. Make unavailable
-browser dictation and microphone failures clear.
+browser dictation and microphone failures clear. On phones, give the draft a
+full-width row and place borderless icon actions below it, preserving accessible
+names. Show errors above the composer surface. Keyboard-covered navigation must
+not reserve space above the keyboard.
 
 Keep Chat, optional Health, Workspaces and Menu reachable in the bottom
 navigation. Workspaces opens the saved-window pane; Software Factory remains a
 separate menu destination. Show the current destination through its color only,
 without an active-page dot. When the menu has more entries than fit, allow
-horizontal swiping between menu pages while retaining keyboard-accessible page
-controls.
+horizontal swiping between six-entry menu pages and arrow-key navigation,
+with three dots instead of Close/Previous/Next controls. Keep the chat visible
+behind the menu and use shared subtle translucency for header, menu and composer.
 Preserve existing attachment pills and image previews.
 
 ## Header background work (17 October 2026; P11-12)

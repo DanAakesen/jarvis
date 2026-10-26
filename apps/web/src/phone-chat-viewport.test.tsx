@@ -38,6 +38,7 @@ describe('phone chat viewport', () => {
     visible.height = 480;
     act(() => { visible.dispatchEvent(new Event('resize')); });
     await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('480px'));
+    expect(shell.dataset.keyboardOpen).toBe('true');
     visible.offsetTop = 60;
     act(() => { visible.dispatchEvent(new Event('scroll')); });
     await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-top')).toBe('60px'));
@@ -46,6 +47,7 @@ describe('phone chat viewport', () => {
     visible.offsetTop = 0;
     act(() => { visible.dispatchEvent(new Event('resize')); });
     await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('844px'));
+    expect(shell.dataset.keyboardOpen).toBe('false');
     expect(document.activeElement).toBe(input);
     expect(input).toHaveProperty('value', 'Unsent fixture draft');
     visible.height = 400;
@@ -115,6 +117,7 @@ describe('phone chat viewport', () => {
 
   it('publishes the same visible rectangle when innerHeight changes independently of the fixed containing viewport', () => {
     const visible = viewport();
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(844);
     render(<Chat />);
     const shell = screen.getByTestId('shell');
     visible.height = 400;
@@ -124,6 +127,7 @@ describe('phone chat viewport', () => {
     expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('400px');
     vi.stubGlobal('innerHeight', 440);
     act(() => { window.dispatchEvent(new Event('resize')); });
+    expect(shell.dataset.keyboardOpen).toBe('true');
     expect(shell.style.getPropertyValue('--phone-chat-top')).toBe('40px');
     expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('400px');
   });

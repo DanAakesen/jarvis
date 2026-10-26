@@ -1,20 +1,27 @@
 # Project plan
 
-## Mobile corrections (#1293; partial, 26 October 2026)
+## Mobile corrections (#1293; 26 October 2026)
 
-Dictation now distinguishes requested stop cancellation from genuine failures,
-accepts final results until end, and ignores callbacks from retired sessions.
-Regression fixtures cover cancellation before end, repeated stop, stale callbacks,
-and genuine errors after stop. `git diff --check` passes. Local Vitest, lint
-and build could not execute: frozen dependency installation returns HTTP 403
-for the configured feed's `pkce-challenge@5.0.1`; executables are absent.
-The executor also has Node 24.19.0/npm 11.9.0, not the pinned Node 22/npm 10.
-No browser or physical-phone acceptance is claimed.
+Implemented the requested full-width message row, lower borderless icon controls,
+external errors, keyboard-covered navigation clearance, six-entry menu pages with
+three dots, clear backdrop and shared subtle translucency. Dictation distinguishes
+requested stop cancellation from genuine failures, retains final text until end,
+and ignores callbacks from retired recognizers. Regression cases cover these
+lifecycle orderings, menu accessibility and viewport updates.
 
-The four private reference images could not be downloaded with the current
-Library transfer helper in the consuming executor. Image-dependent composer,
-keyboard/navigation, carousel, chat visibility and translucency corrections
-remain blocked pending pixel inspection. No private images are committed.
+Synthetic complete-App and actual-component Chromium captures at 320px/390px and
+1440px are in `docs/ui/screenshots/mobile-corrections-1293/`. The parent/coordinator
+inspected the four private source images; this executor's supported helper failed
+with `download failed`, without a diagnostic classifying denial versus connectivity.
+No private pixels were downloaded or published by this executor. Explicit text
+requirements were implemented under the parent's follow-up instruction.
+
+The scoped web/contracts frozen install succeeded without registry changes after
+the full repository install hit a configured-feed 403. Final local checks are
+recorded in the evidence README. Node 24.19.0/npm 11.9.0 differs from pinned CI
+Node 22/npm 10; normal hosted qualification remains required. PR #1294 stays draft
+for parent source-reference review. Physical iPhone/WebKit keyboard and real
+microphone acceptance remain unverified. No merge or deployment performed.
 
 ## Workspaces identifier completion (#1279; 25 October 2026)
 

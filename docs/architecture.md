@@ -524,6 +524,12 @@ service failures remain visible. Results/errors/end from retired recognizers
 cannot mutate the draft or a later session. Teardown retires ownership before
 calling abort, including synchronous abort callbacks.
 
+A measured composer stack includes external feedback and the inner composer
+surface, so transcript and page bounds account for errors/attachments. Phone
+VisualViewport geometry marks a keyboard inset above 120px (excluding toolbar
+insets and pinch zoom), hides covered bottom navigation, and removes its dock
+clearance. This is a browser geometry heuristic, not a physical-device guarantee.
+
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
 Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,

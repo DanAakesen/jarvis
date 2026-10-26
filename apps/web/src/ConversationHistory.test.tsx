@@ -264,6 +264,7 @@ describe('ConversationHistory', () => {
     await user.click(screen.getByRole('button', { name: 'Dictate' }));
     act(() => MockDictationRecognition.instance.onerror?.({ error: 'not-allowed' } as Event & { error: string }));
     expect(screen.getByRole('alert').textContent).toContain('Microphone permission was denied');
+    expect(screen.getByRole('alert').closest('.conversation-input')).toBeNull();
     expect(textbox).toHaveProperty('value', 'Keep this');
     expect(sendChatTurn).not.toHaveBeenCalled();
   });

@@ -9,6 +9,10 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
       // Pinch zoom is not a keyboard inset; leave the layout available for native panning.
       const normalScale = !viewport || Math.abs(viewport.scale - 1) < .01;
       const top = normalScale ? Math.max(0, viewport?.offsetTop ?? 0) : 0;
+      // Reserve bottom navigation only when it is not covered by the keyboard.
+      // Ignore small browser-toolbar insets and pinch-zoom viewport shrinkage.
+      const keyboardOpen = Boolean(normalScale && viewport && Math.max(window.innerHeight, document.documentElement.clientHeight) - viewport.height - top > 120);
+      element.setAttribute('data-keyboard-open', String(keyboardOpen));
       const height = normalScale && viewport ? `${viewport.height}px` : '100dvh';
       for (const [name, value] of [['--phone-chat-top', `${top}px`], ['--phone-chat-height', height]] as const) {
         if (element.style.getPropertyValue(name) !== value) element.style.setProperty(name, value);
@@ -37,6 +41,7 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
       document.removeEventListener('focusin', measure);
       document.removeEventListener('focusout', measure);
       document.removeEventListener('pointerdown', dismissOutside);
+      element.removeAttribute('data-keyboard-open');
       element.style.removeProperty('--phone-chat-top');
       element.style.removeProperty('--phone-chat-height');
     };
