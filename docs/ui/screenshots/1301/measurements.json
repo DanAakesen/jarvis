@@ -1,0 +1,319 @@
+[
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "theme": "dark",
+    "motion": "no-preference",
+    "delayedSettings": true,
+    "cycles": [
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-bottom-nav",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-menu-sheet",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ],
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-bottom-nav",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-menu-sheet",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ],
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-bottom-nav",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-menu-sheet",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ]
+    ],
+    "scenePixelDeltas": {
+      ".app-topbar": 141,
+      ".conversation-input": 137,
+      ".mobile-bottom-nav": 141,
+      ".mobile-menu-sheet": 141
+    },
+    "plus": {
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    },
+    "errors": []
+  },
+  {
+    "viewport": [
+      320,
+      700
+    ],
+    "theme": "light",
+    "motion": "reduce",
+    "delayedSettings": true,
+    "cycles": [
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-bottom-nav",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-menu-sheet",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ],
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-bottom-nav",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-menu-sheet",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ],
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-bottom-nav",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".mobile-menu-sheet",
+          "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ]
+    ],
+    "scenePixelDeltas": {
+      ".app-topbar": 132,
+      ".conversation-input": 132,
+      ".mobile-bottom-nav": 132,
+      ".mobile-menu-sheet": 114
+    },
+    "plus": {
+      "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    },
+    "errors": []
+  },
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "theme": "dark",
+    "motion": "no-preference",
+    "delayedSettings": true,
+    "cycles": [
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".more-menu-list",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ],
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".more-menu-list",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ],
+      [
+        {
+          "selector": ".app-topbar",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".conversation-input",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        },
+        {
+          "selector": ".more-menu-list",
+          "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+          "blur": "blur(10px)",
+          "opacity": "1",
+          "wrapperOpacity": "1"
+        }
+      ]
+    ],
+    "scenePixelDeltas": {
+      ".app-topbar": 141,
+      ".conversation-input": 122,
+      ".more-menu-list": 139
+    },
+    "plus": {
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    },
+    "errors": []
+  }
+]

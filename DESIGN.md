@@ -1,5 +1,21 @@
 # Design
 
+## Settled glass correction (#1301; 26 October 2026)
+
+The header joins the composer, bottom navigation and menu popups under the
+shared `--chrome-glass-surface` / `--chrome-glass-blur` tokens in `styles.css`.
+Use one stable partial fill and 10px blur rather than the phone cascade's old
+24px blur and the header's 90% fill. Menu entrance moves the sheet without
+fading its material opacity; removing the wrapper-plus-sheet fade prevents the
+transparent-first/filled-later appearance. Other overlay motion is unchanged.
+Dock current/pressed/expanded states use the existing focus color and a slightly
+stronger icon stroke, with plain item backgrounds and unchanged label color.
+Hover/press also act on the icon so touch hover cannot leave a filled box.
+Keyboard focus outlines remain. This supersedes #1296's header exclusion.
+Synthetic settled App captures and scene-transmission measurements are in
+`docs/ui/screenshots/1301/`; no physical-device acceptance is claimed.
+
+
 ## Camera and conversation surface refinement (#1296; 26 October 2026)
 
 Drag the camera video directly with touch or a pointer; switch/close remain

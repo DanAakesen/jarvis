@@ -1,5 +1,18 @@
 # Decisions
 
+## Stable menu material and shared chrome (#1301; 26 October 2026)
+
+Measured in the actual App: mobile menu wrapper and sheet opacity both rose
+from partial opacity to 1 while fill alpha stayed constant. The phone cascade
+selected 24px blur over the intended 10px; the header retained 90% fill. The
+scene already covered the header and dock, so no scene/layout relocation is
+needed. Use translation-only menu entrance and shared dedicated chrome-glass
+tokens, replacing local overrides of inherited `--surface-translucent`.
+The owner's explicit follow-up includes the header and removes selected dock
+boxes; preserve ARIA state and visible keyboard focus, highlighting only icons.
+Private reference materialization failed; synthetic App pixels were inspected.
+
+
 ## Startup focus is not keyboard evidence (#1299; 26 October 2026)
 
 Actual-App synthetic startup reproduced a focused composer and hidden navigation

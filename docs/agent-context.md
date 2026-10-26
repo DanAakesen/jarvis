@@ -1,5 +1,17 @@
 # Agent context
 
+## Settled shell glass checks (#1301; 26 October 2026)
+
+Use `npm test --workspace @jarvis/web`, web lint and web build, plus the actual-App
+browser fixture in `docs/ui/screenshots/1301/fixtures/browser.py`. Reproduction
+commands and limits are in that folder's README. It measures per-frame fill,
+blur and opacity, waits after three menu opens and deferred settings, and
+checks scene-color transmission under header/composer/dock/popup pixels.
+Only synthetic App data and the existing WebGL fallback are used. No private
+reference image or real device/media acceptance is included. Keep existing
+phone viewport and startup-autofocus tests intact.
+
+
 ## Camera/menu verification (#1296; 26 October 2026)
 
 Run `npm test --workspace @jarvis/web`, `npm run lint --workspace @jarvis/web`
