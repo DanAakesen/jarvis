@@ -1,5 +1,25 @@
 # Architecture
 
+## Health estimate presentation (#1321; 26 October 2026)
+
+Health tools use `health_*` names in discovery, dispatch and model prompts;
+`health_history` and `health_summary` replace `daily_health_history/summary`.
+The `daily` module, storage, `/daily` APIs, MCP connector and external Daily service
+remain unchanged. Legacy `/tools/daily_*` HTTP routes share the canonical handlers
+and are omitted from discovery. Old retained tool chips display Health.
+
+Food lookup results include a server-built nutrition list. The generic tool
+confirmation uses that presentation instead of an acknowledgment. A scoped internal
+`food_estimate_result` event carries only server-derived nutrition to the matching
+conversation/source; chat appends it to the saved reply and browser voice appends it
+to the saved assistant transcript. The exact staged proposal refreshes these values
+after server re-resolution. This presentation event grants no approval and performs
+no write. Existing food-invitation, approval, expiry, fingerprints and receipt replay
+remain authoritative. `ReviewSummary` renders literal text and bullet runs safely in
+chat, voice history and Now. Spoken output remains model-generated from explicit
+nutrition instructions; synthetic tests are not live speech acceptance.
+
+
 ## Accepted chat transport recovery (#1311; 26 October 2026)
 
 The backend owns accepted chat execution independently of response streams.

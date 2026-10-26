@@ -1,5 +1,13 @@
 # Project plan
 
+## Health meal estimate correction (#1321; 26 October 2026)
+
+Implement Health tool branding and server-derived protein/calorie/fat lists in
+lookup replies, proposal presentation and retained voice history. Preserve data
+namespaces and approval protections. Synthetic checks and browser evidence are in
+`docs/ui/screenshots/1321/`. Draft PR #1322 is rebased onto plus-menu main
+`1c1029a3`; review, CI and camera/release coordination remain parent-owned. No production meal replay or write is part of this work.
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 Implemented the scoped composer Plus readability, bottom-up action order and Voice waveform correction. Local verification is recorded in `docs/ui/screenshots/1319/README.md`. The first candidate passed 2,394 web tests. The transparency-preserving review correction passed 196 focused checks, contracts/web lint/build and synthetic Chromium visual QA; exact-head aggregate hosted qualification remains pending. Draft PR #1320 is open; a review correction preserves translucency using native top-layer popup blur. Final integration remains pending; integrated main 496182bc (meal recovery #1314 and Send #1316). The revised queue places this fix before camera #1318; no unmerged camera work is imported.

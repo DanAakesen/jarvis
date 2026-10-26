@@ -1,5 +1,13 @@
 # Agent context
 
+## Health meal estimate checks (#1321; 26 October 2026)
+
+Run backend daily, conversation, owner-interaction, realtime/relay/startup, registry,
+parity and production-module suites; web ReviewSummary, ConversationHistory,
+AttentionPopover and ToolCallChip suites; hosted-agent model-client/tool tests;
+backend/web build and lint. Use synthetic food only. Browser component fixtures and
+limits are in `docs/ui/screenshots/1321/README.md`. Hold integration pending parent camera/release coordination; #1320 is included via main `1c1029a3`.
+
 ## Composer Plus checks (#1319; 26 October 2026)
 
 Run contracts/web lint, tests and build plus the selected shared Python checks.

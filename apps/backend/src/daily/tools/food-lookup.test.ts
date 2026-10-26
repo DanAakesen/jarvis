@@ -26,7 +26,8 @@ describe('inactive internal Frida reference lookup', () => {
     const reference = result(); const lookup = vi.fn<DailyFoodLookup>().mockResolvedValue(reference);
     const tool = dailyFoodLookupTool(lookup); const req = request();
     const response = await tool.execute(input(), req, new AbortController().signal);
-    expect(response).toEqual({ ...reference, intakeLogged: false });
+    expect(response).toEqual({ ...reference, intakeLogged: false,
+      presentation: 'Estimated nutrition (Frida; not measured):\n- Protein: unknown (not zero) g\n- Calories: 0 kcal\n- Fat: unknown (not zero) g\n- Carbohydrates: unknown (not zero) g\n- Fiber: unknown (not zero) g' });
     expect(lookup).toHaveBeenCalledWith(input().components, req, expect.any(AbortSignal));
     expect(tool.sensitive).toBe(true); expect(tool.denyOnPhone).toBe(true);
     expect(tool.reflexSafe).not.toBe(true); expect(tool.publicAllowedOnPhone).not.toBe(true);

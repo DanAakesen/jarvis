@@ -366,7 +366,7 @@ export function createRealtimeSessionUpdate(
     session: {
       instructions: `${capabilityMode === 'discovery'
         ? `${instructions}\n\n${voiceCapabilityGuidance(language)}`
-        : instructions}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. Stage food estimates with daily_food_review log_estimate before inviting confirmation; prose or lookup alone creates no pending proposal. Only the backend can bind a new reply to that exact proposal. Never use historical agreement or claim a write without a committed tool receipt.`,
+        : instructions}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. Stage food estimates with health_food_review log_estimate before inviting confirmation; prose or lookup alone creates no pending proposal. Only the backend can bind a new reply to that exact proposal. Never use historical agreement or claim a write without a committed tool receipt.`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },

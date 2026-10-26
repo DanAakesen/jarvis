@@ -519,7 +519,7 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
       ));
     }
     if (input.operation === 'navigate' && (input.page === 'daily' || input.page === 'health') &&
-        request.server.jarvisTools.get('daily_query')?.moduleId !== 'daily') {
+        request.server.jarvisTools.get('health_query')?.moduleId !== 'daily') {
       throw new ToolRefusal('Health services are not enabled. No page was opened.');
     }
     await request.server.workspaceCommands.execute(request.server.ownerObjectId, input, signal);

@@ -65,9 +65,9 @@ describe('Daily training-target SQL persistence', () => {
       INSERT daily.training_targets (owner_object_id, daily_steps, updated_at)
       VALUES (@owner, 100001, SYSUTCDATETIME());`)).rejects.toThrow();
   });
-  it('reads owner targets through the production-registered daily_query handler without defaults or cross-owner access', async () => {
+  it('reads owner targets through the production-registered health_query handler without defaults or cross-owner access', async () => {
     const ownerModule = composeDaily({ enabled: true, pool, ownerObjectId: owner })!;
-    const ownerTool = createToolRegistry([ownerModule]).get('daily_query')!;
+    const ownerTool = createToolRegistry([ownerModule]).get('health_query')!;
     const query = { source: dailyQuerySources.trainingTargets };
     const empty = await ownerTool.execute(query, requestFor(owner), signal()) as Record<string, unknown>;
     expect(empty).toMatchObject({
@@ -95,7 +95,7 @@ describe('Daily training-target SQL persistence', () => {
     await expect(ownerTool.execute(query, requestFor(other), signal())).rejects.toThrow();
 
     const otherModule = composeDaily({ enabled: true, pool, ownerObjectId: other })!;
-    const otherTool = createToolRegistry([otherModule]).get('daily_query')!;
+    const otherTool = createToolRegistry([otherModule]).get('health_query')!;
     const otherResult = await otherTool.execute(query, requestFor(other), signal()) as Record<string, unknown>;
     expect(otherResult).toMatchObject({ items: [{ targets: {
       gymSessionsPerWeek: null, runSessionsPerWeek: 2, dailySteps: null,

@@ -41,8 +41,8 @@ const limits = JSON.parse(readFileSync(
 )) as { maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
 const dailyToolNames = [
-  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
-  'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
+  'health_query', 'health_show', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
+  'health_summary', 'health_nutrition_history', 'health_coach_status',
 ];
 const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback', 'owner_reminders'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
@@ -154,7 +154,7 @@ describe('production tool catalogue', () => {
     };
 
     expect(tools.map(({ name }) => name)).toEqual(expect.arrayContaining([
-      'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
+      'health_summary', 'health_nutrition_history', 'health_coach_status',
     ]));
     for (const tool of tools) {
       const schema = toModelToolSchema(tool.inputSchema) as Record<string, unknown>;

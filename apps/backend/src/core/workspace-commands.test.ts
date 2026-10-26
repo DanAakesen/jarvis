@@ -998,7 +998,7 @@ describe('workspace command delivery', () => {
       metric: 'step_count', display: 'chart',
     };
 
-    const creating = app.inject({ method: 'POST', url: '/tools/daily_show', headers: agentHeaders, payload: input });
+    const creating = app.inject({ method: 'POST', url: '/tools/health_show', headers: agentHeaders, payload: input });
     const update = await acknowledge(0, 'update', false, 'That view is not open.');
     const create = await acknowledge(1, 'create', true);
     expect(create.viewId).toBe(update.viewId);
@@ -1012,7 +1012,7 @@ describe('workspace command delivery', () => {
     });
 
     const refreshing = app.inject({
-      method: 'POST', url: '/tools/daily_show',
+      method: 'POST', url: '/tools/health_show',
       headers: { ...agentHeaders, 'x-jarvis-message-id': '102', 'x-jarvis-voice-item-id': 'voice-102' },
       payload: input,
     });

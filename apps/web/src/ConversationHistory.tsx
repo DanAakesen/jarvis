@@ -1,3 +1,4 @@
+import { ReviewSummary } from './ReviewSummary';
 import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { PublicClientApplication } from '@azure/msal-browser';
@@ -1051,7 +1052,8 @@ export function ConversationHistory({
                     <strong className="message-author visually-hidden">{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
                     {message.role === 'jarvis' && message.channel === 'chat'
                       ? <MarkdownContent source={message.text} gfm />
-                      : <p>{message.text}</p>}
+                      : message.role === 'jarvis' && /(?:^|\n)\s*(?:[-*]|\d+[.)])\s+(?:\*\*)?(?:Protein|Calories|Fat)(?:\*\*)?:/u.test(message.text)
+                        ? <MarkdownContent source={message.text} gfm /> : <p>{message.text}</p>}
                     {message.interrupted && <p className="interrupted-label">Interrupted</p>}
                     {message.role === 'dan' && message.visualResult &&
                       <p className="message-visual-status">{visualResultText(message.visualResult)}</p>}
@@ -1119,7 +1121,7 @@ export function ConversationHistory({
             )}
             {foodInvitation && (
               <div className="streaming-food-invitation" role="status" aria-live="polite" aria-label="Food estimate awaiting your reply">
-                <p>{foodInvitation.summary}</p>
+                <ReviewSummary text={foodInvitation.summary} />
                 <p>{language === 'da'
                   ? 'Vil du logge dette estimat? Svar her, eller brug godkendelsen i Now. Intet er logget endnu.'
                   : 'Would you like to log this estimate? Reply here, or use the approval in Now. Nothing has been logged yet.'}</p>

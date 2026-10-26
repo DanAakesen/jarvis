@@ -1730,7 +1730,7 @@ async def test_trusted_channel_does_not_infer_telephone_from_mobile_history(
     earlier_refusal: bool, channel: str,
 ) -> None:
     backend = FakeBackend(catalogue=[{
-        "name": "daily_food_review",
+        "name": "health_food_review",
         "description": "Browser chat/browser voice on mobile are not telephone calls.",
         "inputSchema": {"type": "object", "properties": {}},
     }])
@@ -1751,7 +1751,9 @@ async def test_trusted_channel_does_not_infer_telephone_from_mobile_history(
         assert "not device wording or earlier refusals" in request["instructions"]
         assert "prose or lookup alone creates no pending proposal" in request["instructions"]
         assert "committed tool receipt" in request["instructions"]
-        assert any(tool["name"] == "daily_food_review" for tool in request["tools"])
+        assert "protein (g), calories (kcal) and fat (g)" in request["instructions"]
+        assert "bulleted list; unknown stays unknown" in request["instructions"]
+        assert any(tool["name"] == "health_food_review" for tool in request["tools"])
         assert any(request.url.path == "/tools" for request in backend.requests)
     finally:
         current_phone_session_id.reset(token)

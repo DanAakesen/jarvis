@@ -1,5 +1,16 @@
 # Decisions
 
+## 2026-10-26 — Show actual Health meal estimates (#1321)
+
+Use server-derived nutrition lists for estimates and proposal presentation, including
+protein, calories and fat with units. The lookup description's absolute committed-only
+reporting instruction conflicted with its estimate instruction; remove that conflict
+and reserve committed-only wording for claims of logging. No production trace proves
+which model decision caused the reported symptom. Generic completed tool chips do
+not expose nutrition, so successful lookup results also reach the saved conversation
+independently of the model's acknowledgment. Keep legacy HTTP compatibility while
+advertising Health; do not migrate storage or the separate Daily Assistant service.
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 Follow the clarified bottom-up order: Attach nearest Plus, Voice above it, remaining actions, Language at the top. Keep DOM and visual ordering aligned rather than reversing CSS flow. Reuse the app waveform icon for Voice, with the microphone reserved for Dictate. Strengthen only composer menu blur, retaining the existing translucent fill. Manual native popovers let that blur sample the underlying chat instead of stopping at the composer backdrop root; preserve DOM ancestry, picker anchoring and shared menu behavior.

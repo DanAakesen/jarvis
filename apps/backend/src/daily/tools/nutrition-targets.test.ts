@@ -65,10 +65,10 @@ function fixture(initial: NutritionTargets = emptyNutritionTargets, options: { a
   return { tool, request, store, access, runConfirmed, begin };
 }
 
-describe('daily_nutrition_targets descriptor', () => {
+describe('health_nutrition_targets descriptor', () => {
   it('is private, phone-denied and carries no figures in its model-facing text', () => {
     const { tool } = fixture();
-    expect(tool.name).toBe('daily_nutrition_targets');
+    expect(tool.name).toBe('health_nutrition_targets');
     expect(tool.name).toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
     expect(tool.sensitive).toBe(true);
     expect(tool.denyOnPhone).toBe(true);
@@ -94,7 +94,7 @@ describe('daily_nutrition_targets descriptor', () => {
   });
 });
 
-describe('daily_nutrition_targets read', () => {
+describe('health_nutrition_targets read', () => {
   it('reports needs-configuration with every target missing and asks for no approval', async () => {
     const f = fixture();
     expect(await f.tool.execute({ operation: 'read' }, f.request, signal())).toEqual({
@@ -130,7 +130,7 @@ describe('daily_nutrition_targets read', () => {
   });
 });
 
-describe('daily_nutrition_targets input', () => {
+describe('health_nutrition_targets input', () => {
   it.each([
     ['null', null],
     ['an array', []],
@@ -162,7 +162,7 @@ describe('daily_nutrition_targets input', () => {
   });
 });
 
-describe('daily_nutrition_targets authority', () => {
+describe('health_nutrition_targets authority', () => {
   it('denies anyone who is not the owner before the store is opened', async () => {
     const f = fixture();
     const other = { ...f.request, principal: { objectId: stranger } } as unknown as FastifyRequest;
@@ -196,7 +196,7 @@ describe('daily_nutrition_targets authority', () => {
   });
 });
 
-describe('daily_nutrition_targets set_targets', () => {
+describe('health_nutrition_targets set_targets', () => {
   it('shows the exact change in the owner browser and writes only after approval', async () => {
     const f = fixture({ restingKcal: 1750, deficitKcal: null, proteinGrams: null });
     const review = await f.begin({ operation: 'set_targets', targets: { restingKcal: 1800, proteinGrams: 110 } });

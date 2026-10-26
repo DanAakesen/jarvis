@@ -721,6 +721,18 @@ describe('ConversationHistory', () => {
     expect(screen.getByText('**voice transcript**').closest('[data-speaker="jarvis"]')?.querySelector('.markdown-content')).toBeNull();
   });
 
+  it.each(['- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 0 g',
+    '1. Protein: 10 g\n2. Calories: 200 kcal\n3. Fat: 0 g'])('renders nutrition as a list in saved voice history: %s', async nutrition => {
+    loadConversationHistory.mockResolvedValue({ messages: [{ ...message, channel: 'voice', role: 'jarvis',
+      text: `Checked it.\n\nEstimated nutrition:\n${nutrition}`, toolCalls: [] }], nextCursor: null });
+    renderConversation();
+    const item = await screen.findByText('Protein: 10 g');
+    expect(item.tagName).toBe('LI');
+    expect(['UL', 'OL']).toContain(item.parentElement?.tagName);
+    expect(item.parentElement?.textContent).toContain('Calories: 200 kcal');
+    expect(item.parentElement?.textContent).toContain('Fat: 0 g');
+  });
+
   it('renders the same booking table during streaming, completion and persisted-history reload', async () => {
     const text = [
       '**Two synthetic bookings** before 1 July 2031:',
@@ -1018,7 +1030,7 @@ describe('ConversationHistory', () => {
       (args[4] as (message: typeof userMessage) => void)(userMessage);
       (args[14] as (invitation: unknown) => void)({
         id: 'a'.repeat(43),
-        summary: 'Synthetic portion\nNutrition: 200 kcal\nUncertainty: estimated grams. Nothing has changed.',
+        summary: 'Synthetic portion\nNutrition:\n- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 20 g\nUncertainty: estimated grams. Nothing has changed.',
         expiresAt: new Date(Date.now() + 120_000).toISOString(),
       });
       return new Promise(resolve => { finish = resolve; });
@@ -1029,7 +1041,7 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     const invitation = await screen.findByRole('status', { name: 'Food estimate awaiting your reply' });
     expect(invitation.textContent).toContain('Synthetic portion');
-    expect(invitation.textContent).toContain('200 kcal');
+    expect([...invitation.querySelectorAll('ul > li')].map(item => item.textContent)).toEqual(['Protein: 10 g', 'Calories: 200 kcal', 'Fat: 20 g']);
     expect(invitation.textContent).toContain('Uncertainty: estimated grams');
     expect(invitation.textContent).toContain('Would you like to log this estimate? Reply here');
     expect(screen.queryByText('Logged Synthetic portion: 200 kcal.')).toBeNull();
