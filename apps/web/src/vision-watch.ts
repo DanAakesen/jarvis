@@ -4,6 +4,7 @@ import { backendFetch } from './backend-request';
 import type { ScreenShareController } from './screen-sharing';
 
 export const WATCH_INTERVAL_MS = 2_600;
+export const WATCH_FRESHNESS_MS = 15_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
 export interface WatchBudget {
@@ -117,6 +118,7 @@ export function useVisionWatch(
     const activeSession = sessionId;
     const feedId = crypto.randomUUID();
     let token: string | undefined;
+    let freshnessTimer: ReturnType<typeof setTimeout> | undefined;
     const controller = new AbortController();
     const { signal } = controller;
     const run = async () => {
@@ -137,10 +139,13 @@ export function useVisionWatch(
             if (next.usedUsd >= next.limitUsd) throw new WatchRequestError(
               'Video stopped: the daily vision budget is exhausted. Enable video after the next UTC day begins.', 429);
             setDelivered(true);
+            clearTimeout(freshnessTimer);
+            freshnessTimer = setTimeout(() => setDelivered(false), WATCH_FRESHNESS_MS);
           }
           failures = 0;
         } catch (reason) {
           if (signal.aborted) return;
+          setDelivered(false);
           const failure = reason instanceof WatchRequestError ? reason : null;
           if (failure && (failure.status === 404 || (failure.status === 429 && /budget/iu.test(failure.message)))) {
             stoppedRef.current?.(failure.message);
@@ -164,6 +169,7 @@ export function useVisionWatch(
     void run();
     return () => {
       controller.abort();
+      clearTimeout(freshnessTimer);
       if (token) void backendFetch(`${backendUrl.replace(/\/+$/u, '')}/vision/watch`, {
         method: 'DELETE',
         headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, 'Content-Type': 'application/json' },

@@ -1442,6 +1442,26 @@ describe('ConversationHistory', () => {
     expect(camera.inspect).not.toHaveBeenCalled();
   });
 
+  it('shares pending camera session startup with a typed turn instead of creating two sessions', async () => {
+    let finish!: (value: typeof session) => void;
+    createChatSession.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    sendChatTurn.mockResolvedValueOnce(assistantMessage);
+    const camera: CameraController = {
+      sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn(async () => ({ source: 'camera' as const, capturedAt: new Date().toISOString(), description: 'Fixture frame.' })),
+    };
+    renderConversation(0, camera);
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledOnce());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: 'Keep describing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await act(async () => { finish(session); });
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(createChatSession).toHaveBeenCalledOnce();
+    expect(sendChatTurn.mock.calls[0]?.[2]).toEqual(session);
+    expect(camera.inspectTurn).toHaveBeenCalledWith(session.id, 'Keep describing', expect.any(AbortSignal));
+  });
+
   it('captures arbitrary camera-on turns when they execute, queues instead of steering, and forwards fresh handles', async () => {
     const camera: CameraController = {
       sharing: true, conversation: true, starting: false, inspecting: false, error: '',

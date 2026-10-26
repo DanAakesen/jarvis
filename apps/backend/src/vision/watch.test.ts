@@ -219,6 +219,41 @@ describe('continuous vision watching', () => {
     expect(f.record).toHaveBeenCalledOnce();
   });
 
+  it('cancels a comment write already awaiting persistence when its feed stops', async () => {
+    const f = fixture();
+    let finish!: () => void;
+    const held = new Promise<void>((resolve) => { finish = resolve; });
+    f.addMessage.mockImplementationOnce(async (input) => {
+      await held;
+      return { ...input, id: '99', at: new Date() };
+    });
+    const feedId = 'a1b2c3d4-1234-4123-8123-123456789012';
+    const response = f.app.inject({ method: 'POST', url: '/vision/watch', headers,
+      payload: { sessionId: '42', source: 'camera', frame: image, feedId } });
+    await vi.waitFor(() => expect(f.addMessage).toHaveBeenCalledOnce());
+    const signal = f.addMessage.mock.calls[0]![0].signal;
+    f.service.stopFeed('42', 'camera', feedId);
+    expect(signal?.aborted).toBe(true);
+    finish();
+    expect((await response).json().speak).toBeNull();
+  });
+
+  it('ignores an old DELETE after a replacement feed has delivered', async () => {
+    const f = fixture();
+    const oldFeed = 'a1b2c3d4-1234-4123-8123-123456789012';
+    const newFeed = 'a1b2c3d4-1234-4123-8123-123456789013';
+    for (const feedId of [oldFeed, newFeed]) {
+      await f.app.inject({ method: 'POST', url: '/vision/watch', headers,
+        payload: { sessionId: '42', source: 'camera', frame: image, feedId } });
+      f.advance(2_600);
+    }
+    await f.app.inject({ method: 'DELETE', url: '/vision/watch', headers,
+      payload: { sessionId: '42', source: 'camera', feedId: oldFeed } });
+    expect(f.service.feedStatus('42', 'camera')).toBe('receiving');
+    f.service.stopFeed('42', 'camera', newFeed);
+    expect(f.service.feedStatus('42', 'camera')).toBe('unconfirmed');
+  });
+
   it('dedupes normalized repeated issues across sources for two minutes', async () => {
     const f = fixture();
     expect((await f.watch()).json().speak).toBe('The build failed.');

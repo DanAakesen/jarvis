@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useVisionWatch, WATCH_INTERVAL_MS } from './vision-watch';
+import { useVisionWatch, WATCH_INTERVAL_MS, WATCH_FRESHNESS_MS } from './vision-watch';
 
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
 const getToken = async () => 'fixture-token';
@@ -65,6 +65,37 @@ describe('useVisionWatch', () => {
     expect(JSON.parse(String(post[1].body)).sessionId).toBe('43');
     unmount();
     expect(post[1].signal?.aborted).toBe(true);
+  });
+
+  it('expires receiving status while a later request is hung, then recovers on fresh acceptance', async () => {
+    vi.useFakeTimers();
+    let accept!: (value: Response) => void;
+    const fetchMock = vi.fn().mockResolvedValueOnce(ok(0.1))
+      .mockImplementation(() => new Promise<Response>((resolve) => { accept = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Harness source="camera" sharing sessionId="42" captureFrame={async () => 'AAAA'} />);
+    await tick(0);
+    expect(screen.getByRole('status').textContent).toBe('watching');
+    await tick(WATCH_FRESHNESS_MS);
+    expect(screen.getByRole('status').textContent).toBe('idle');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await act(async () => { accept(ok(0.2)); });
+    expect(screen.getByRole('status').textContent).toBe('watching');
+  });
+
+  it('clears receiving status on a transient failure and recovers without another enable', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn().mockResolvedValueOnce(ok(0.1))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Temporary failure' }), { status: 503 }))
+      .mockResolvedValueOnce(ok(0.2));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Harness source="camera" sharing sessionId="42" captureFrame={async () => 'AAAA'} />);
+    await tick(0);
+    expect(screen.getByRole('status').textContent).toBe('watching');
+    await tick();
+    expect(screen.getByRole('status').textContent).toBe('idle');
+    await tick();
+    expect(screen.getByRole('status').textContent).toBe('watching');
   });
 
   it('ends camera delivery after repeated capture failures and does not restart until toggled', async () => {

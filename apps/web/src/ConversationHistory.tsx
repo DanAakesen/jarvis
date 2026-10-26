@@ -226,6 +226,25 @@ export function ConversationHistory({
   const sessionCommands = useSessionCommandRegistry();
   useEffect(() => sessionCommands?.register({ setLanguage }), [sessionCommands]);
   const [session, setSession] = useState<ChatSession | null>(null);
+  const sessionSetup = useRef<{ language: 'da' | 'en'; controller: AbortController; promise: Promise<ChatSession> } | null>(null);
+  const ensureChatSession = useCallback((requestedLanguage: 'da' | 'en'): Promise<ChatSession> => {
+    if (session?.language === requestedLanguage) return Promise.resolve(session);
+    if (sessionSetup.current?.language === requestedLanguage) return sessionSetup.current.promise;
+    sessionSetup.current?.controller.abort();
+    const controller = new AbortController();
+    const promise = createChatSession(tokenProvider, config, requestedLanguage, controller.signal).then((created) => {
+      controller.signal.throwIfAborted();
+      setSession(created);
+      return created;
+    }).catch((error: unknown) => {
+      if (sessionSetup.current?.controller === controller) sessionSetup.current = null;
+      throw error;
+    });
+    sessionSetup.current = { language: requestedLanguage, controller, promise };
+    return promise;
+  }, [config, session, tokenProvider]);
+  useEffect(() => () => { sessionSetup.current?.controller.abort(); sessionSetup.current = null; }, []);
+
   const { latestActivity, workText } = useJarvisActivity();
   // Tools used in the current chat turn, collected from runtime activity as they start and finish.
   const [liveTools, setLiveTools] = useState<{ id: string; tool: string; state: ToolState }[]>([]);
@@ -266,14 +285,12 @@ export function ConversationHistory({
   const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', voiceActive ? null : session?.id ?? null, cameraStopped);
   useEffect(() => {
     if (!camera?.sharing || voiceActive || session) return;
-    const controller = new AbortController();
-    void createChatSession(tokenProvider, config, language, controller.signal).then((created) => {
-      if (!controller.signal.aborted) setSession(created);
-    }).catch(() => {
-      if (!controller.signal.aborted) cameraStopped('Video could not connect. Enable video to retry.');
+    let cancelled = false;
+    void ensureChatSession(language).catch(() => {
+      if (!cancelled) cameraStopped('Video could not connect. Enable video to retry.');
     });
-    return () => controller.abort();
-  }, [camera?.sharing, cameraStopped, config, language, session, tokenProvider, voiceActive]);
+    return () => { cancelled = true; };
+  }, [camera?.sharing, cameraStopped, ensureChatSession, language, session, voiceActive]);
   const [dictating, setDictating] = useState(false);
   const [dictationError, setDictationError] = useState('');
   const dictationRecognition = useRef<DictationRecognition | null>(null);
@@ -732,7 +749,7 @@ export function ConversationHistory({
       }
       const activeSession = queued.recovery ? { id: queued.recovery.sessionId, language } : session?.language === language
         ? session
-        : await waitForChatSetup(() => createChatSession(tokenProvider, config, language, controller.signal), controller.signal);
+        : await waitForChatSetup(() => ensureChatSession(language), controller.signal);
       controller.signal.throwIfAborted();
       setSession(activeSession);
       turnSession.current = activeSession;
@@ -842,7 +859,7 @@ export function ConversationHistory({
       turnInFlight.current = false;
       setSending(false);
     }
-  }, [session, config, camera, screenShare, restoreFiles, tokenProvider]);
+  }, [session, config, camera, screenShare, restoreFiles, tokenProvider, ensureChatSession]);
 
   useEffect(() => {
     if (sending || voiceActive || turnInFlight.current || queue.length === 0) return;
@@ -955,7 +972,7 @@ export function ConversationHistory({
     }] : []),
     ...(camera ? [{
       id: 'share-camera',
-      ...(camera.sharing ? { description: cameraWatch.watching ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : 'Connecting camera updates…' } : {}),
+      ...(camera.sharing ? { description: cameraWatch.watching ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : cameraWatch.budget ? 'Camera updates delayed; retrying…' : 'Connecting camera updates…' } : {}),
       label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Enable video',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
@@ -1215,7 +1232,7 @@ export function ConversationHistory({
         } : undefined}>
       {!voiceActive && <div className="composer-feedback">
         {camera?.sharing && <p className="composer-status" role="status">{cameraWatch.watching
-          ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : 'Connecting camera updates…'}</p>}
+          ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : cameraWatch.budget ? 'Camera updates delayed; retrying…' : 'Connecting camera updates…'}</p>}
         {(!dictationAvailable || dictating || dictationError) && <p id="dictation-status"
           className={dictating && !dictationError ? 'visually-hidden' : 'composer-status'}
           role={dictationError ? 'alert' : dictating ? 'status' : 'note'}>

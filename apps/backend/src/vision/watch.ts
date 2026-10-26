@@ -31,6 +31,7 @@ interface SourceState {
   continuousDescription: boolean;
   receivedAt: number | null;
   revision: number;
+  delivery: AbortController;
   feedId?: string;
 }
 
@@ -91,11 +92,15 @@ export class VisionWatchService {
   }
 
   forgetSession(sessionId: string): void {
+    const state = this.sessions.get(sessionId);
+    state?.camera.delivery.abort();
+    state?.screen.delivery.abort();
     this.sessions.delete(sessionId);
     this.voices.delete(sessionId);
   }
 
   close(): void {
+    for (const sessionId of this.sessions.keys()) this.forgetSession(sessionId);
     this.sessions.clear();
     this.voices.clear();
   }
@@ -105,8 +110,8 @@ export class VisionWatchService {
     let state = this.sessions.get(sessionId);
     if (!state) {
       if (this.sessions.size >= 128) throw new ScreenVisionError(429, 'Too many active watch sessions.');
-      state = { screen: { summary: '', instructions: [], continuousDescription: false, receivedAt: null, revision: 0 },
-        camera: { summary: '', instructions: [], continuousDescription: false, receivedAt: null, revision: 0 }, comments: new Map(), pendingComments: new Set() };
+      state = { screen: { summary: '', instructions: [], continuousDescription: false, receivedAt: null, revision: 0, delivery: new AbortController() },
+        camera: { summary: '', instructions: [], continuousDescription: false, receivedAt: null, revision: 0, delivery: new AbortController() }, comments: new Map(), pendingComments: new Set() };
       this.sessions.set(sessionId, state);
     }
     for (const [key, comment] of state.comments) {
@@ -128,6 +133,8 @@ export class VisionWatchService {
       throw new ToolRefusal('Stop an existing watch before adding more instructions.');
     }
     for (const selected of sources) {
+      state[selected].delivery.abort();
+      state[selected].delivery = new AbortController();
       state[selected].revision += 1;
       if (what === null) state[selected].continuousDescription = false;
       else if (continuousDescription !== undefined) state[selected].continuousDescription = continuousDescription;
@@ -145,6 +152,8 @@ export class VisionWatchService {
     state.summary = '';
     state.instructions = [];
     state.continuousDescription = false;
+    state.delivery.abort();
+    state.delivery = new AbortController();
     state.revision += 1;
   }
 
@@ -201,6 +210,7 @@ export class VisionWatchService {
       sourceState.receivedAt = started;
       if (input.feedId) sourceState.feedId = input.feedId;
       const revision = sourceState.revision;
+      const deliverySignal = AbortSignal.any([input.signal, sourceState.delivery.signal]);
       const result = await this.model.describe({
         image: input.image, model: input.model ?? VISION_MODEL_DEPLOYMENT,
         reasoningEffort: input.reasoningEffort ?? 'none', signal: input.signal,
@@ -247,10 +257,13 @@ export class VisionWatchService {
             }
             if (!deliveredByVoice) {
               const message = await this.conversations.addMessage({
-                sessionId: input.sessionId, role: 'jarvis', text: candidate,
+                signal: deliverySignal, sessionId: input.sessionId, role: 'jarvis', text: candidate,
                 model: VISION_MODEL_DEPLOYMENT, language: current.language,
               });
               if (!message) throw new Error('Vision comment could not be delivered');
+            }
+            if (deliverySignal.aborted || revision !== sourceState.revision) {
+              return { summary: observation.summary, speak: null, budget: { usedUsd: usedDkk / DKK_PER_USD, limitUsd: input.limitUsd } };
             }
             state.comments.set(commentKey(candidate), { text: candidate, at: this.now() });
             if (state.comments.size > 64) state.comments.delete(state.comments.keys().next().value!);

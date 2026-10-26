@@ -486,7 +486,7 @@ export function VoiceControls({
   const cameraActions: MoreMenuAction[] = camera?.sharing ? [{
     id: 'stop-camera',
     label: 'Turn off camera',
-    description: cameraWatch.watching ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : 'Connecting camera updates…',
+    description: cameraWatch.watching ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : cameraWatch.budget ? 'Camera updates delayed; retrying…' : 'Connecting camera updates…',
     icon: <MenuGlyph name="camera" />,
     onSelect: () => camera.stop(),
   }] : [{
@@ -530,7 +530,7 @@ export function VoiceControls({
           <div ref={voiceStatus} className="voice-status-region">
             <VoiceOrbStatus presentation={presentation} />
             {camera?.sharing && <p className="composer-status" role="status">{cameraWatch.watching
-              ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : 'Connecting camera updates…'}</p>}
+              ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : cameraWatch.budget ? 'Camera updates delayed; retrying…' : 'Connecting camera updates…'}</p>}
           </div>
           <div ref={voiceBar} className="voice-bar luminous-glass" role="group" aria-label="Voice controls"
             data-state={presentation.state}>

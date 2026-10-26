@@ -82,6 +82,7 @@ Synthetic settled App captures and scene-transmission measurements are in
 Enable video is the only camera start action. Remove separate Watch/Stop watching
 and manual Look at camera actions. Existing chat/voice status text says Connecting
 until a frame is accepted, then Receiving camera updates with the shared budget.
+A failed request or 15 seconds without acceptance shows delayed/retrying feedback.
 Turn camera off and preview Close remain the stop controls; errors use existing
 feedback and stop the camera. No new styling or animation system.
 

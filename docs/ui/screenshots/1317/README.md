@@ -10,8 +10,8 @@ to stop”; changing it needs a separate decision.
 
 ## Local evidence
 
-- Web suite: 153 files, 2,385 tests passed.
-- Focused backend: 7 files, 160 tests passed (`vision`, capability instructions,
+- Pre-review web suite: 153 files, 2,385 tests passed.
+- Pre-review focused backend: 7 files, 161 tests passed (`vision`, capability instructions,
   visual context and tool parity). Covers typed and spoken tool dispatch,
   repeated unchanged observations, acknowledgement before/after frame arrival,
   busy voice dropping, feed generation stop, authorization and budget limits.
@@ -30,8 +30,9 @@ Initial checks exposed stale test expectations, a prompt-length budget overrun
 and an unavailable tool name in the generic capability prompt. These were fixed
 without weakening limits. One concurrent focused run hit an existing one-second
 wait timeout; its isolated rerun passed. The first full `npm test` included those
-pre-fix failures and an unrelated synthetic Azurite startup failure. Final
-aggregate rerun results are recorded in the PR/handoff.
+pre-fix failures and an unrelated synthetic Azurite startup failure; its isolated
+rerun passed all 36 tests. The pre-review `npm test` passed contracts (174), web (2,385),
+backend (6,679 passed, one skipped), and vault mirror (237).
 
 ## Reproduce browser checks
 
@@ -59,3 +60,16 @@ Physical iPhone/WebKit, live camera/microphone, actual model intent selection,
 model narration and deployment are unverified. SQL integration and hosted
 exact-head CI require the repository CI environment. Draft PRs deliberately
 skip aggregate CI; parent coordinates readiness, integration and deployment.
+
+Review follow-up: receiving status expires 15 seconds after the last accepted
+frame and clears on request failure, with delayed/retrying feedback while the
+bounded loop recovers. Camera startup and typed turns share one pending session
+creation. A matching feed stop aborts pending plain-text comment writes through
+the existing SQL cancellation helper and rechecks state after awaits. A database
+write already committed before cancellation remains transcript history; stop
+does not delete historical messages. Old feed-generation DELETEs cannot stop a
+replacement feed. No database schema change.
+
+Review regressions: web focus passed 107 tests, backend focus passed 187 tests,
+and the final feed-generation/pending-write checks passed 51 tests. Full aggregate
+checks are being repeated for the review changes; final counts are in the handoff.

@@ -256,7 +256,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
     async addMessage(input) {
       if (input.attachmentIds?.length) return addMessageWithAttachments(pool, input);
-      const result = await pool.request()
+      const request = pool.request()
         .input('sessionId', sql.BigInt, BigInt(input.sessionId))
         .input('role', sql.NVarChar(16), input.role)
         .input('text', sql.NVarChar(sql.MAX), input.text)
@@ -265,8 +265,8 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         .input('interrupted', sql.Bit, input.interrupted ?? false)
         .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
         .input('allowEndedSession', sql.Bit, input.allowEndedSession ?? false)
-        .input('metadata', sql.NVarChar(sql.MAX), messageMetadata(input))
-        .query<MessageRow>(`INSERT INTO dbo.messages
+        .input('metadata', sql.NVarChar(sql.MAX), messageMetadata(input));
+      const write = () => request.query<MessageRow>(`INSERT INTO dbo.messages
             (jarvis_session_id, role, text, model, language, interrupted, source_item_id, metadata)
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
@@ -278,6 +278,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
               SELECT 1 FROM dbo.messages WITH (UPDLOCK, HOLDLOCK)
               WHERE source_item_id = @sourceItemId AND role = N'dan'
             ));`);
+      const result = input.signal ? await execute(request, input.signal, write) : await write();
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
     },

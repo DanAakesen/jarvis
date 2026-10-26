@@ -7601,3 +7601,12 @@ coverage disclosures keep detailed provenance available on demand, and
 Nutrition chart series use human-readable names and units. These are web-only
 changes: contracts, backend authorization and the original Daily write path
 remain unchanged.
+
+Review follow-up: receiving status expires 15 seconds after the last accepted
+frame and clears on request failure, with delayed/retrying feedback while the
+bounded loop recovers. Camera startup and typed turns share one pending session
+creation. A matching feed stop aborts pending plain-text comment writes through
+the existing SQL cancellation helper and rechecks state after awaits. A database
+write already committed before cancellation remains transcript history; stop
+does not delete historical messages. Old feed-generation DELETEs cannot stop a
+replacement feed. No database schema change.

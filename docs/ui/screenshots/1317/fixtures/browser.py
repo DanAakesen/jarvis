@@ -11,6 +11,8 @@ with sync_playwright() as p:
   page.route('**/src/useSignIn.ts',lambda r:r.fulfill(content_type='application/javascript',body="const token=async()=> 'synthetic'; const session={state:'signed-in',profile:{name:'Synthetic QA'},message:'',getAccessToken:token,getEntraAccessToken:token,hasOwnerSession:true,client:{getActiveAccount:()=>({homeAccountId:'synthetic'}),getAllAccounts:()=>[]},signIn:async()=>{},switchAccount:async()=>{},signOut:async()=>{},signOutAllDevices:async()=>{}}; export function useSignIn(){return session;}"))
   frames=[]
   exhausted=False
+  stall=False
+  held=[]
   def respond(r):
    u=r.request.url
    msg={'id':'42','sessionId':'41','channel':'voice','language':'en','role':'jarvis','text':'Synthetic conversation for camera and menu verification. Move the preview while keeping the conversation visible.','model':None,'voiceMinutes':None,'at':'2026-10-26T06:00:00.000Z','toolCalls':[]}
@@ -22,6 +24,7 @@ with sync_playwright() as p:
    if '/presence' in u:data={'mode':'available','updatedAt':'2026-10-26T06:00:00Z'}
    if '/conversation/sessions' in u:data={'id':'43','channel':'chat','language':'en'}
    if '/vision/watch' in u:
+    if r.request.method=='POST' and stall:held.append(r);return
     if r.request.method=='POST' and exhausted:r.fulfill(status=429,json={'error':'The daily vision budget is exhausted.'});return
     if r.request.method=='POST':frames.append(r.request.post_data_json);data={'summary':'Synthetic scene','speak':None,'budget':{'usedUsd':0.01,'limitUsd':1}}
     else:r.fulfill(status=204);return
@@ -48,6 +51,13 @@ with sync_playwright() as p:
   picture=page.locator('.camera-preview-picture');picture.wait_for();page.wait_for_timeout(600)
   page.wait_for_timeout(5800)
   assert len(frames)>=3, len(frames)
+  stall=True
+  page.locator('.composer-feedback').get_by_text('Camera updates delayed; retrying…',exact=True).wait_for(timeout=25000)
+  assert len(held)==1
+  stall=False
+  frames.append(held[0].request.post_data_json)
+  held.pop().fulfill(json={'summary':'Synthetic scene','speak':None,'budget':{'usedUsd':0.02,'limitUsd':1}})
+  page.locator('.composer-feedback').get_by_text('Receiving camera updates',exact=False).wait_for()
   press(trigger)
   assert page.get_by_role('menuitem',name='Watch the camera').count()==0
   assert page.locator('.composer-feedback').get_by_text('Receiving camera updates',exact=False).is_visible()
