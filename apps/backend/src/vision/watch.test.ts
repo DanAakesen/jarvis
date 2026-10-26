@@ -199,6 +199,26 @@ describe('continuous vision watching', () => {
     expect(vi.mocked(f.model.describe).mock.lastCall![0].watch?.instructions).toEqual([]);
   });
 
+  it('discards narration computed before the camera feed was stopped', async () => {
+    let finish!: () => void;
+    const held = new Promise<void>((resolve) => { finish = resolve; });
+    const f = fixture({ describe: async () => {
+      await held;
+      return { description: JSON.stringify({ summary: 'A room.', noteworthy: true, speak: 'I see a room.' }),
+        inputTokens: 100, outputTokens: 20, costDkk: 0.001 };
+    } });
+    await f.service.setInstruction('42', 'camera', 'Keep describing', true);
+    const feedId = 'a1b2c3d4-1234-4123-8123-123456789012';
+    const response = f.app.inject({ method: 'POST', url: '/vision/watch', headers,
+      payload: { sessionId: '42', source: 'camera', frame: image, feedId } });
+    await vi.waitFor(() => expect(f.model.describe).toHaveBeenCalledOnce());
+    f.service.stopFeed('42', 'camera', feedId);
+    finish();
+    expect((await response).json().speak).toBeNull();
+    expect(f.addMessage).not.toHaveBeenCalled();
+    expect(f.record).toHaveBeenCalledOnce();
+  });
+
   it('dedupes normalized repeated issues across sources for two minutes', async () => {
     const f = fixture();
     expect((await f.watch()).json().speak).toBe('The build failed.');
