@@ -84,7 +84,7 @@
 .conversation-input[data-voice-active="true"] { display: block; margin: auto; }
 .conversation-history > p, .history-feedback p, .history-error { font-size: var(--type-body); }
 .conversation-messages { margin: var(--space-5) 0; padding: 0; list-style: none; }
-.conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0; padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
+.conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0 calc(var(--space-4) + var(--space-2)); padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 75%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
 .conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -151,6 +151,9 @@
 .conversation-history .composer-send:active:not(:disabled) svg { transform: scale(.86); }
 .conversation-history .composer-send:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
 .conversation-history .composer-send:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.conversation-history .composer-dictate { display: none; }
+.conversation-history .composer-dictate svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.conversation-history .composer-dictate:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* The plane slides into place when sending becomes possible, and flies out then glides back in, dimmed, after a send. */
 @keyframes composer-send-arm { from { transform: translate(-3px, 3px) scale(.82); } }
 @keyframes composer-send-launch {
@@ -266,16 +269,50 @@
   .conversation-history .composer { gap: var(--space-1); }
 }
 
+.app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] { grid-template-columns: minmax(0, 1fr); }
+.app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: none; }
+.app-shell[data-phone="true"] .conversation-history .composer { grid-template-columns: 44px minmax(0, 1fr) auto 44px; gap: var(--space-2); }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-more { grid-column: 1; grid-row: 1; padding: 0; }
+.app-shell[data-phone="true"] .conversation-history .composer > textarea,
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-prompt { grid-column: 2; }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-more,
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate,
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-send { grid-row: 1; }
+.app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger { width: 44px; height: 44px; border: 1px solid var(--glass-edge-cool); color: var(--focus); }
+.app-shell[data-phone="true"] .conversation-history .composer-more .more-menu-trigger svg { width: 24px; height: 24px; }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { display: inline-flex; grid-column: 3; min-height: 44px; align-items: center; justify-content: center; gap: var(--space-2); padding: 0 var(--space-3); border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 72%, transparent); border-radius: var(--radius-control); background: transparent; color: var(--glass-glow-warm); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:hover:not(:disabled) { background: var(--glass-hover); }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:active:not(:disabled) { background: var(--glass-pressed); }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
+.app-shell[data-phone="true"] .conversation-history .composer-status { grid-column: 1 / -1; }
+.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 44px; overflow-y: auto; }
+.app-shell[data-phone="true"] .conversation-history .composer-status[data-dictating] {
+  min-width: 0; overflow: hidden; font-size: var(--type-caption); line-height: var(--line-tight); text-overflow: ellipsis; white-space: nowrap;
+}
+.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate:focus-visible { outline-offset: 0; }
+
 @media (max-width: 380px) {
   .conversation-greeting { padding: var(--space-2); }
   .conversation-greeting h2 { font-size: var(--type-subheading); line-height: var(--line-tight); }
   .conversation-greeting p { margin-top: var(--space-1); font-size: var(--type-caption); line-height: var(--line-tight); }
+  .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { gap: 0; padding-inline: var(--space-2); }
+  .app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate svg { display: none; }
 }
 
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-voice-active="false"] .shell-main { display: flex; flex-direction: column; }
   .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-shell-area { padding: var(--space-3) var(--space-3) 0; }
-  .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; height: var(--conversation-height, auto); max-height: min(var(--conversation-height, min(46dvh, 420px)), 100%); }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not([hidden], .workspace-window-minimized) {
+    position: relative; inset: auto; align-self: stretch; flex: 1 1 auto; width: 100%; height: auto; max-height: none; min-height: 0;
+    overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; animation: none;
+  }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation::before { content: none; }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation:focus-within { box-shadow: none; }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation .workspace-window-heading { display: none; }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation .conversation-window-host > .conversation-transcript {
+    padding: var(--space-3); -webkit-mask-image: none; mask-image: none;
+  }
   .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation .workspace-window-heading { position: relative; flex-shrink: 0; min-height: 50px; }
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
@@ -441,13 +478,12 @@
 .conversation-message.conversation-tools-only { padding: var(--space-2) var(--space-3); }
 .conversation-tools-only .message-tools { margin: 0; }
 
-/* Time on the bubble (Dan, 7 October): a small glass tag sitting on the top-right rim, shown on hover or focus. */
+/* Message times sit below the bubble, shown on hover or focus on pointer devices. */
 .conversation-message .message-metadata {
-  position: absolute; z-index: 1; top: -9px; right: 12px; display: block; margin: 0; padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill); background: var(--stage-slab); backdrop-filter: blur(10px);
-  border: 1px solid var(--rule);
+  position: absolute; top: calc(100% + var(--space-1)); right: var(--space-2); display: flex; margin: 0; padding: 0;
   color: var(--text-muted); font-size: var(--type-caption); line-height: var(--line-tight); white-space: nowrap; pointer-events: none;
 }
+.conversation-message[data-speaker="jarvis"] .message-metadata { right: auto; left: var(--space-2); }
 .conversation-message .message-metadata:has(> time:only-child:empty) { display: none; }
 @media (max-width: 700px) {
   .conversation-message .message-metadata { position: static; width: fit-content; margin: var(--space-2) 0 0 auto; }

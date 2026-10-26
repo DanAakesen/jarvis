@@ -45,7 +45,7 @@ import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
 import { FactoryIssueNavigationContext, NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useFocusedFactoryIssue, useVisibleSettingsSection, waitForFactoryIssue, type FactoryIssueNavigator, type NavigateRequest } from './page-navigation';
 import { WorkspacesPane } from './Workspaces';
-import { MobileCaption, MobileMenu } from './MobileShell';
+import { MobileBottomNav, MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
 import { readPageWindows, useReadback } from './window-readback';
@@ -802,12 +802,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             >
               <ShellIcon name="context" />
             </button>
-            {phone && (
-              <button className="topbar-icon-button mobile-menu-button" type="button" aria-label="Menu" aria-expanded={menuOpen}
-                aria-controls="mobile-menu" onClick={() => setMenuOpen((open) => !open)}>
-                <ShellIcon name="navigation" />
-              </button>
-            )}
             <NavLink className="settings-link" to="/settings" aria-label="Settings" title="Settings" onClick={closePagePanels}>
               <ShellIcon name="settings" />
             </NavLink>
@@ -841,6 +835,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   camera={camera}
                   screenShare={screenShare}
                   docked={chatPlace === 'rail'}
+                  phone={phone}
                   {...(chatPlace === 'out' && !phone ? { onDismiss: collapseChat } : {})}
                 />
               )}
@@ -876,7 +871,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onWorkspaces={() => setWorkspacesOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
+          <MobileBottomNav menuOpen={menuOpen} dailyEnabled={dailyEnabled} workspacesOpen={workspacesOpen}
+            onToggleWorkspaces={() => { setNavigationOpen(false); setWorkspacesOpen((open) => !open); }}
+            onOpenMenu={() => setMenuOpen((open) => !open)} onNavigate={closePagePanels} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels}
+            onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
             {...(sectionLinks && activeArea ? { sections: { label: activeArea.label, links: sectionLinks } } : {})} />
         </>
       )}

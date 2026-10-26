@@ -52,6 +52,7 @@ export function VoiceControls({
   onLanguageChange,
   onSessionEnded,
   onActiveChange,
+  onStartAvailable,
   disabled = false,
   screenShare,
   camera,
@@ -63,6 +64,7 @@ export function VoiceControls({
   onLanguageChange?: (language: VoiceLanguage) => void;
   onSessionEnded?: () => void;
   onActiveChange?: (active: boolean) => void;
+  onStartAvailable?: (start: (() => void) | null) => void;
   disabled?: boolean;
   screenShare?: ScreenShareController;
   camera?: CameraController;
@@ -376,6 +378,8 @@ export function VoiceControls({
   useEffect(() => {
     startRef.current = start;
     disabledRef.current = disabled;
+    onStartAvailable?.(start);
+    return () => onStartAvailable?.(null);
   });
   useEffect(() => {
     const pending = new Set<() => void>();

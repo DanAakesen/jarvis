@@ -15,10 +15,12 @@ export function JarvisPage({
   camera,
   screenShare,
   docked = false,
+  phone = false,
   onDismiss,
 }: {
   /** Off the home page the chat bar is tucked into the rail and cannot be reached until it pops out. */
   docked?: boolean;
+  phone?: boolean;
   /** Escape tucks a popped-out chat bar back into the rail. */
   onDismiss?: () => void;
   client: PublicClientApplication;
@@ -56,6 +58,7 @@ export function JarvisPage({
         config={config}
         screenShare={screenShare}
         camera={camera}
+        phone={phone}
       />
     </div>
   );

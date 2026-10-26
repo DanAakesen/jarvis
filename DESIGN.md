@@ -313,6 +313,39 @@ keyboard-height estimate, focus-scroll workaround or keyboard-fit animation.
 This narrows the earlier manual-placement descriptions to desktop. Controlled
 Chromium layout evidence does not establish physical iPhone/Safari acceptance.
 
+## Mobile navigation and composer actions (#1287; 25 October 2026)
+
+Follow Dan's selected dark Jarvis phone mockup with its signature glass rim.
+Keep the 44px plus control, compact message field, distinct Dictate action and
+existing send behavior in one row. Dictate appends browser speech recognition
+to the draft; realtime Voice remains a separate plus-menu action beside the
+existing attachment, video and screen-sharing actions.
+
+Place message times below each bubble, never on its text or rim. Anchor the
+bottom navigation below the composer with Chat, Health when enabled, Workspaces
+and Menu. Workspaces opens the saved-window pane; Software Factory remains a
+separate menu destination. Use color alone for the current destination, with no
+dot. The Menu sheet pages horizontally with native touch scrolling and offers Previous/Next
+controls for keyboard users; retain the established dark glass surfaces, shared
+control radius and focus treatment.
+
+The approved [reference mockup](https://github.com/DanAakesen/jarvis/blob/9cca3271948539828938f103442563811d3b526d/docs/design/1287-selected-mobile-reference.png)
+was fetched from its named reference branch and compared at a matching 390×844
+viewport. The 176px sheet sits immediately above the composer and dock; its
+two-row page starts at the top edge like the reference. The plus popover stays
+within both 320px and 390px viewports, and timestamps render below loaded
+bubbles. Synthetic Chromium captures show the [loaded conversation](docs/ui/screenshots/mobile-navigation-1287/shell-390.jpg),
+[390px plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-390.jpg),
+[320px plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-320.jpg),
+[draft dictation](docs/ui/screenshots/mobile-navigation-1287/dictation-draft-390.jpg),
+[first menu page](docs/ui/screenshots/mobile-navigation-1287/menu-open-390.jpg),
+[swiped second page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-390.jpg),
+[320px first page](docs/ui/screenshots/mobile-navigation-1287/menu-page1-320.jpg),
+[320px second page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-320.jpg),
+and [narrow shell](docs/ui/screenshots/mobile-navigation-1287/shell-320.jpg). The
+browser fixture stubs authentication and API responses and emits a simulated speech
+result; it does not verify a live microphone, iOS Safari, or a physical phone.
+
 ## Chat records and keyboard geometry (16 October 2026; local candidate)
 
 Keep the current glass chat, compact message type and readable composer.
