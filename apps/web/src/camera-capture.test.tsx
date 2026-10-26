@@ -60,7 +60,6 @@ function CameraHarness({ onError, token = async () => 'fixture-token', question,
       </button>
       {watchFrame && <p data-testid="watch-frame">{watchFrame}</p>}
       <button type="button" onClick={camera.stop}>Stop camera</button>
-      <button type="button" onClick={() => camera.recordActivity?.()}>User turn</button>
       <button type="button" onClick={() => void camera.switchCamera?.()}>Switch camera</button>
       <button type="button" onClick={() => void camera.selectFacing?.('environment', onError)}>Face rear</button>
       <button type="button" onClick={() => void camera.selectFacing?.('user', onError)}>Face front</button>
@@ -683,48 +682,30 @@ describe('camera frame capture', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('turns off camera access after ten idle minutes and reports why', async () => {
+  it('keeps video enabled through thirty minutes of silence until explicitly stopped', async () => {
     vi.useFakeTimers();
     const { track, stream } = cameraStream();
-    const getUserMedia = vi.fn(async () => stream);
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
-    render(<CameraHarness />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
-      await Promise.resolve();
-    });
-    expect(screen.getByRole('status').textContent).toBe('Camera is on');
-    act(() => { vi.advanceTimersByTime(10 * 60_000 - 1); });
-    expect(track.stop).not.toHaveBeenCalled();
-    act(() => { vi.advanceTimersByTime(1); });
-
-    expect(track.stop).toHaveBeenCalledOnce();
-    expect(screen.getByRole('status').textContent).toBe('Camera is off');
-    expect(screen.getByRole('alert').textContent).toContain('ten minutes without a user turn');
-  });
-
-  it('keeps a long conversation live, resets on each user turn and cancels the idle timer on stop', async () => {
-    vi.useFakeTimers();
-    const { track, stream } = cameraStream();
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
-      getUserMedia: vi.fn(async () => stream),
-    } });
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => stream } });
     render(<CameraHarness />);
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' })); });
-    for (let turn = 0; turn < 3; turn += 1) {
-      act(() => { vi.advanceTimersByTime(9 * 60_000); });
-      fireEvent.click(screen.getByRole('button', { name: 'User turn' }));
-    }
+    act(() => { vi.advanceTimersByTime(30 * 60_000); });
     expect(track.stop).not.toHaveBeenCalled();
     expect(screen.getByRole('status').textContent).toBe('Camera is on');
-    expect(fetchMock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Stop camera' }));
-    fireEvent.click(screen.getByRole('button', { name: 'User turn' }));
-    act(() => { vi.advanceTimersByTime(10 * 60_000); });
-    expect(track.stop).toHaveBeenCalledOnce();
     expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop camera' }));
+    expect(track.stop).toHaveBeenCalledOnce();
+    expect(screen.getByRole('status').textContent).toBe('Camera is off');
+  });
+
+  it('still releases silent video on owner unmount after the former cutoff', async () => {
+    vi.useFakeTimers();
+    const { track, stream } = cameraStream();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => stream } });
+    const view = render(<CameraHarness />);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' })); });
+    act(() => { vi.advanceTimersByTime(11 * 60_000); });
+    expect(track.stop).not.toHaveBeenCalled();
+    view.unmount();
+    expect(track.stop).toHaveBeenCalledOnce();
   });
 });

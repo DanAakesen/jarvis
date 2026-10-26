@@ -50,6 +50,7 @@ export interface ScreenVisionModel {
     readonly question?: string;
     readonly watch?: {
       readonly source: 'screen' | 'camera';
+      readonly continuousDescription?: boolean;
       readonly previousSummary: string;
       readonly instructions: readonly string[];
       readonly latestQuestion: string | null;

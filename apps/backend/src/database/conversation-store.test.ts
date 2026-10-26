@@ -5,13 +5,27 @@ import { createConversationStore } from './conversation-store.js';
 function fixture(queryResult = { recordset: [], recordsets: [], rowsAffected: [] as number[] }) {
   const query = vi.fn(async () => queryResult);
   const input = vi.fn();
-  const request = { input, query };
+  const cancel = vi.fn();
+  const request = { input, query, cancel };
   input.mockReturnValue(request);
   const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
-  return { store: createConversationStore(pool), pool, input, query };
+  return { store: createConversationStore(pool), pool, input, query, cancel };
 }
 
 describe('SQL conversation store', () => {
+  it('cancels a pending camera comment write and does not report completion after abort', async () => {
+    const { store, query, cancel } = fixture();
+    let finish!: (value: { recordset: never[]; recordsets: never[]; rowsAffected: number[] }) => void;
+    query.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const controller = new AbortController();
+    const pending = store.addMessage({ sessionId: '41', role: 'jarvis', text: 'A camera observation.', model: null, signal: controller.signal });
+    const rejected = expect(pending).rejects.toThrow();
+    controller.abort();
+    expect(cancel).toHaveBeenCalledOnce();
+    finish({ recordset: [], recordsets: [], rowsAffected: [] });
+    await rejected;
+  });
+
   it('reads only bounded recent user chat text, newest first, without other conversation fields', async () => {
     const { store, input, query } = fixture({
       recordset: [{ text: 'Latest question' }, { text: 'Earlier question' }],
