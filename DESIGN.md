@@ -1,5 +1,19 @@
 # Design
 
+## Camera and conversation surface refinement (#1296; 26 October 2026)
+
+Drag the camera video directly with touch or a pointer; switch/close remain
+overlaid, with a quiet theme-tinted translucent fill and 8px blur. Keep the
+preview free of an outer frame. Cancelled dragging restores its previous offset;
+viewport resizing restores the fitted starting placement. Repeated plus presses
+open/close its menu, including with the language flyout open. Composer icons
+stay borderless. Scope clearer glass to the composer, bottom navigation and
+menu popups (58% of the existing theme surface), retaining readable text and
+icons. Do not dim/blur the chat when opening menus or change the header.
+Private references could not be downloaded by this executor; synthetic actual-App
+screenshots in `docs/ui/screenshots/1296/` were inspected instead.
+
+
 ## Workspaces pane and phone chat times (#1279)
 
 The saved-item pane and its implementation are named Workspaces in the rail,

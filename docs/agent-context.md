@@ -1,5 +1,17 @@
 # Agent context
 
+## Camera/menu verification (#1296; 26 October 2026)
+
+Run `npm test --workspace @jarvis/web`, `npm run lint --workspace @jarvis/web`
+and `npm run build --workspace @jarvis/web`. The reproducible full-App fixture,
+Chromium browser assertions, synthetic screenshots and exact setup commands are
+in `docs/ui/screenshots/1296/README.md`. It supplies synthetic sign-in, HTTP
+responses and a canvas camera stream; WebGL is disabled to exercise the actual
+app's fallback without software-renderer contention. No private pixels, real
+camera, microphone or external provider is exercised. This executor uses
+Node 24.19.0/npm 11.9.0, not the pinned CI Node 22/npm 10.
+
+
 ## Mobile browser food confirmation checks (#1290; 25 October 2026)
 
 Use the existing natural-food checks below, plus backend

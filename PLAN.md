@@ -1,5 +1,16 @@
 # Project plan
 
+## Camera movement and clearer menus (#1296; 26 October 2026)
+
+Draft PR #1297 implements touch/pointer movement of the preview video, tinted
+translucent overlay controls, reliable repeated plus presses, and clearer
+composer/bottom-dock/menu surfaces. Composer icons remain borderless; header,
+chat backdrop and keyboard behavior are unchanged. Synthetic full-App Chromium
+QA covers 320px/390px touch and 1440px pointer layouts. Final evidence and limits
+are in `docs/ui/screenshots/1296/README.md`. Parent owns exact-head hosted checks,
+review and release; no physical iPhone acceptance or deployment is claimed.
+
+
 ## Mobile corrections (#1293; 26 October 2026)
 
 Implemented the requested full-width message row, lower borderless icon controls,

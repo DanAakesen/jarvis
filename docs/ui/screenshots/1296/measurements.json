@@ -1,0 +1,124 @@
+[
+  {
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "before": {
+      "x": 120.75,
+      "y": 76,
+      "width": 202.5,
+      "height": 360
+    },
+    "after": {
+      "x": 80.75,
+      "y": 146,
+      "width": 202.5,
+      "height": 360
+    },
+    "composer": {
+      "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+      "blur": "blur(16px)"
+    },
+    "surfaces": [
+      {
+        "class": "app-topbar",
+        "background": "rgba(240, 245, 247, 0.92)",
+        "blur": "blur(16px)"
+      },
+      {
+        "class": "conversation-input luminous-glass",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+        "blur": "blur(16px)"
+      },
+      {
+        "class": "mobile-bottom-nav",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+        "blur": "blur(16px)"
+      },
+      {
+        "class": "mobile-menu-sheet",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+        "blur": "blur(16px)"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "width": 320,
+    "height": 700,
+    "touch": true,
+    "before": {
+      "x": 76.703125,
+      "y": 76,
+      "width": 189,
+      "height": 336
+    },
+    "after": {
+      "x": 36.703125,
+      "y": 146,
+      "width": 189,
+      "height": 336
+    },
+    "composer": {
+      "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+      "blur": "blur(16px)"
+    },
+    "surfaces": [
+      {
+        "class": "app-topbar",
+        "background": "rgba(240, 245, 247, 0.92)",
+        "blur": "blur(16px)"
+      },
+      {
+        "class": "conversation-input luminous-glass",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+        "blur": "blur(16px)"
+      },
+      {
+        "class": "mobile-bottom-nav",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+        "blur": "blur(16px)"
+      },
+      {
+        "class": "mobile-menu-sheet",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.58)",
+        "blur": "blur(16px)"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "height": 1000,
+    "touch": false,
+    "before": {
+      "x": 1165.96875,
+      "y": 95.25,
+      "width": 137.265625,
+      "height": 244.03125
+    },
+    "after": {
+      "x": 1015.96875,
+      "y": 185.25,
+      "width": 137.265625,
+      "height": 244.03125
+    },
+    "composer": {
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.522)",
+      "blur": "blur(10px)"
+    },
+    "surfaces": [
+      {
+        "class": "app-topbar",
+        "background": "rgba(9, 16, 23, 0.9)",
+        "blur": "blur(6px) saturate(1.4)"
+      },
+      {
+        "class": "conversation-input luminous-glass",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.522)",
+        "blur": "blur(10px)"
+      }
+    ],
+    "errors": []
+  }
+]
