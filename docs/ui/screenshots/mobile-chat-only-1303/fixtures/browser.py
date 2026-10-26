@@ -40,6 +40,14 @@ with sync_playwright() as p:
  leaving=geometry()
  assert leaving['slotHidden'] and leaving['slotDisplay']=='none' and leaving['keyboard'] is None and leaving['focused']!='message',leaving
  assert not input.is_visible()
+ # Hidden must win even if positioned geometry is retained by a caller.
+ slot=page.locator('.conversation-input-slot')
+ assert not slot.evaluate("e=>e.hasAttribute('data-positioned')")
+ slot.evaluate("e=>e.setAttribute('data-positioned','true')")
+ positioned=slot.evaluate("e=>({hidden:e.hidden,positioned:e.hasAttribute('data-positioned'),display:getComputedStyle(e).display,rects:e.getClientRects().length})")
+ assert positioned=={'hidden':True,'positioned':True,'display':'none','rects':0},positioned
+ assert not input.is_visible()
+ slot.evaluate("e=>e.removeAttribute('data-positioned')")
  page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(200)
  settings=geometry();assert settings['height']=='0px' and settings['nav']=='visible',settings
  page.screenshot(path=out+'settings-390.png')
@@ -66,5 +74,5 @@ with sync_playwright() as p:
  page.set_viewport_size({'width':1440,'height':900});page.wait_for_timeout(300)
  desktop=geometry();assert not desktop['slotHidden'],desktop
  assert not errors,errors
- results={'initial':initial,'leavingWhileTyping':leaving,'settings':settings,'usage':usage,'health':health,'returned':returned,'typingAgain':typing,'directSettings':direct,'desktop':desktop,'pageErrors':errors}
+ results={'initial':initial,'leavingWhileTyping':leaving,'settings':settings,'usage':usage,'health':health,'returned':returned,'typingAgain':typing,'directSettings':direct,'desktop':desktop,'hiddenPositioned':positioned,'pageErrors':errors}
  open(out+'measurements.json','w').write(json.dumps(results,indent=2)+'\n');print(json.dumps(results));b.close()

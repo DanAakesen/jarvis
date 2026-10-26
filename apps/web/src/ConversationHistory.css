@@ -72,8 +72,8 @@
 .conversation-history-error > p { color: var(--error); }
 .conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: var(--space-5); flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input-slot { display: contents; }
-.conversation-input-slot[hidden] { display: none; }
 .conversation-input-slot[data-positioned] { display: block; flex: 0 0 auto; height: var(--conversation-composer-height, 52px); }
+.conversation-input-slot[hidden] { display: none; }
 /* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
 .app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page { --chat-width: 100%; }
 /* In typing mode the voice wrappers dissolve into the shared composer grid. Feedback is portalled outside the composer. */

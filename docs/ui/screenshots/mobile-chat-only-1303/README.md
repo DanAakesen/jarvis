@@ -11,6 +11,12 @@ including attachment #1308, preview #1312 and continuous dictation #1310.
 Runtime changes from this branch remain confined to composer visibility, focus
 and clearance. Exact final-head local and hosted results are recorded in PR #1307.
 
+The hidden/positioned cascade is also checked in the real browser: the ordinary
+phone provider supplies no position, but a defensive state with both `hidden`
+and `data-positioned` must still compute `display: none` with zero layout rects.
+The old rule order reproduced `display: block`; moving the hidden rule after
+the positioned rule fixes it without changing positioning behavior.
+
 ## Scope and behavior
 
 Use `/` plus closed Workspaces pane state. On phone screens other than
