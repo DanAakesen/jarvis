@@ -47,12 +47,12 @@ function stubObjectUrl(url: string) {
   return TestURL;
 }
 
-function renderConversation() {
+function renderConversation(phone = false) {
   return render(
     <JarvisActivityProvider>
       <MemoryRouter>
         <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
-          <ConversationHistory client={{} as never} config={config} />
+          <ConversationHistory client={{} as never} config={config} phone={phone} />
         </VoiceWorkspaceContext.Provider>
       </MemoryRouter>
     </JarvisActivityProvider>,
@@ -111,7 +111,7 @@ describe('composer attachments', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false));
   });
 
-  it('keeps image uploads compact while retaining progress and removal', async () => {
+  it.each([false, true])('keeps image pills inside the composer through upload and ready (phone=%s)', async (phone) => {
     const previewUrl = 'blob:preview/holiday.jpg';
     stubObjectUrl(previewUrl);
     let finish!: () => void;
@@ -120,10 +120,12 @@ describe('composer attachments', () => {
         options.onProgress(0.4);
         finish = () => resolve({ id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready' });
       }));
-    renderConversation();
+    renderConversation(phone);
     await screen.findByRole('textbox', { name: 'Message Jarvis' });
     pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
     const chips = await screen.findByRole('list', { name: 'Files to send' });
+    expect(chips.closest('form')?.id).toBe('conversation-composer');
+    expect(chips.closest('.conversation-input')).not.toBeNull();
     const chip = chips.querySelector('.attachment-chip');
     expect(chip?.classList.contains('attachment-chip--image')).toBe(true);
     expect(await within(chips).findByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', previewUrl);
@@ -134,8 +136,28 @@ describe('composer attachments', () => {
     expect(chips.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     finish();
     await waitFor(() => expect(within(chips).queryByRole('progressbar')).toBeNull());
+    expect(chips.closest('form')?.id).toBe('conversation-composer');
     expect(within(chips).getByText('holiday.jpg')).toBeTruthy();
     expect(within(chips).queryByText(/Ready|image\/jpeg/u)).toBeNull();
+  });
+
+  it('puts phone upload errors and selection problems above the composer while retaining removable pills inside', async () => {
+    stubObjectUrl('blob:preview/failed.png');
+    uploadAttachment.mockRejectedValueOnce(new Error('Synthetic upload failure'));
+    renderConversation(true);
+    pick(new File(['image'], 'failed.png', { type: 'image/png' }));
+    const error = await screen.findByText('failed.png: Synthetic upload failure');
+    expect(error.closest('.composer-feedback')).not.toBeNull();
+    expect(error.closest('.conversation-input')).toBeNull();
+    const chips = screen.getByRole('list', { name: 'Files to send' });
+    expect(chips.closest('form')?.id).toBe('conversation-composer');
+    expect(within(chips).queryByRole('alert')).toBeNull();
+    fireEvent.click(within(chips).getByRole('button', { name: 'Remove failed.png' }));
+    expect(screen.queryByText('failed.png: Synthetic upload failure')).toBeNull();
+    pick(new File(['binary'], 'program.exe', { type: 'application/x-msdownload' }));
+    const problem = await screen.findByRole('alert');
+    expect(problem.closest('.composer-feedback')).not.toBeNull();
+    expect(problem.closest('.conversation-input')).toBeNull();
   });
 
   it('restores an image preview after an unsaved send fails', async () => {

@@ -184,6 +184,57 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
   });
 
+  it.each(['aborted', 'no-speech'])('retains final text after requested stop and %s before end', async (error) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.type(textbox, 'Remember');
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const recognition = MockDictationRecognition.instance;
+    recognition.stop.mockImplementation(() => {});
+    act(() => recognition.emitTranscript('the launch'));
+    await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    expect(recognition.stop).toHaveBeenCalledTimes(1);
+    act(() => {
+      recognition.onerror?.({ error } as Event & { error: string });
+      recognition.emitTranscript('tomorrow');
+      recognition.onend?.();
+    });
+    expect(textbox).toHaveProperty('value', 'Remember the launch tomorrow');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    act(() => {
+      recognition.onerror?.({ error: 'aborted' } as Event & { error: string });
+      recognition.emitTranscript('stale result');
+      recognition.onend?.();
+    });
+    expect(screen.getByRole('button', { name: 'Stop dictation' })).not.toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(textbox).toHaveProperty('value', 'Remember the launch tomorrow');
+  });
+
+  it.each(['not-allowed', 'network'])('preserves genuine %s failures after stop', async (error) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const recognition = MockDictationRecognition.instance;
+    recognition.stop.mockImplementation(() => {});
+    act(() => recognition.emitTranscript('Keep this'));
+    await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    act(() => {
+      recognition.onerror?.({ error } as Event & { error: string });
+      recognition.onend?.();
+    });
+    expect(screen.getByRole('alert')).not.toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', 'Keep this');
+    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
+  });
+
   it('uses WebKit-prefixed speech recognition when the standard API is unavailable', async () => {
     vi.stubGlobal('SpeechRecognition', undefined);
     vi.stubGlobal('webkitSpeechRecognition', MockDictationRecognition);
@@ -213,6 +264,7 @@ describe('ConversationHistory', () => {
     await user.click(screen.getByRole('button', { name: 'Dictate' }));
     act(() => MockDictationRecognition.instance.onerror?.({ error: 'not-allowed' } as Event & { error: string }));
     expect(screen.getByRole('alert').textContent).toContain('Microphone permission was denied');
+    expect(screen.getByRole('alert').closest('.conversation-input')).toBeNull();
     expect(textbox).toHaveProperty('value', 'Keep this');
     expect(sendChatTurn).not.toHaveBeenCalled();
   });

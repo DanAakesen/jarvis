@@ -30,9 +30,9 @@ describe('mobile menu sheet behavior', () => {
     await user.click(trigger);
     const sheet = screen.getByRole('dialog', { name: 'Go to' }).parentElement!;
     expect(sheet.hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close menu' }));
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Software Factory' }));
     await user.tab({ shift: true });
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Composer action' }));
+    expect(document.activeElement).toBe(screen.getByRole('navigation', { name: 'Pages' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(sheet.hasAttribute('inert')).toBe(true);
@@ -45,7 +45,7 @@ describe('mobile menu sheet behavior', () => {
     expect(document.activeElement).toBe(trigger);
     expect(screen.queryByRole('dialog')).toBeNull();
     await user.click(trigger);
-    await user.click(screen.getByRole('button', { name: 'Close menu' }));
+    await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
@@ -66,8 +66,8 @@ describe('mobile menu sheet behavior', () => {
     const user = userEvent.setup();
     const view = render(<Harness />);
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
-    const nextPage = screen.getByRole('button', { name: 'Next menu page' });
-    await user.click(nextPage);
+    const nextPage = screen.getByRole('link', { name: 'Notes' });
+    nextPage.focus();
     expect(document.activeElement).toBe(nextPage);
     view.rerender(<Harness />);
     expect(document.activeElement).toBe(nextPage);
@@ -119,7 +119,7 @@ describe('mobile menu pages', () => {
     const navigation = await openPages(flags);
     expect(navigation.getAllByRole('link').map((link) => link.textContent)).toEqual(pages);
     expect(within(navigation.getByLabelText('Menu page 1')).getAllByRole('link').map((link) => link.textContent))
-      .toEqual(pages.slice(0, 4));
+      .toEqual(pages.slice(0, 6));
     expect(navigation.getByRole('button', { name: 'Context panel' })).not.toBeNull();
   });
 
@@ -161,17 +161,19 @@ describe('mobile menu pages', () => {
       .toEqual(['Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
   });
 
-  it('pages horizontally through the menu links and exposes keyboard paging controls', async () => {
-    const user = userEvent.setup();
-    await openPages();
+  it('reclaims the control row for six entries and keeps arrow-key paging', async () => {
+    await openPages({ proactiveEnabled: true });
     const rail = screen.getByRole('navigation', { name: 'Pages' });
+    expect(rail.querySelector('.mobile-menu-page')?.children).toHaveLength(6);
+    expect(screen.queryByRole('button', { name: 'Close menu' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next menu page' })).toBeNull();
+    expect(document.querySelectorAll('.mobile-menu-dots span')).toHaveLength(3);
     Object.defineProperty(rail, 'clientWidth', { configurable: true, value: 300 });
     Object.defineProperty(rail, 'scrollLeft', { configurable: true, writable: true, value: 300 });
     fireEvent.scroll(rail);
-    expect(screen.getByLabelText('Page 2 of 2')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Previous menu page' }).hasAttribute('disabled')).toBe(false);
-    await user.click(screen.getByRole('button', { name: 'Previous menu page' }));
-    expect(screen.getByLabelText('Page 1 of 2')).not.toBeNull();
+    expect(screen.getByRole('status').textContent).toContain('Page 2 of 2');
+    fireEvent.keyDown(rail, { key: 'ArrowLeft' });
+    expect(screen.getByRole('status').textContent).toContain('Page 1 of 2');
   });
 
   it('opens Context panel from the paged menu and closes the sheet', async () => {
@@ -179,8 +181,6 @@ describe('mobile menu pages', () => {
     const onContext = vi.fn();
     render(<Harness onContext={onContext} />);
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
-    await user.click(screen.getByRole('button', { name: 'Next menu page' }));
-    expect(screen.getByLabelText('Page 2 of 2')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Context panel' }));
     expect(onContext).toHaveBeenCalledOnce();
     expect(screen.queryByRole('dialog')).toBeNull();

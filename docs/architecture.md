@@ -517,6 +517,19 @@ is handled by the browser speech-recognition implementation and may be
 provider-backed; Jarvis does not send dictation audio through its realtime voice
 backend. No API, database or persisted-draft contract changes.
 
+The #1293 lifecycle correction retains recognition ownership until `end` after
+an explicit stop, allowing final transcript delivery. Requested-stop `aborted`
+and `no-speech` events do not become startup failures; genuine permission and
+service failures remain visible. Results/errors/end from retired recognizers
+cannot mutate the draft or a later session. Teardown retires ownership before
+calling abort, including synchronous abort callbacks.
+
+A measured composer stack includes external feedback and the inner composer
+surface, so transcript and page bounds account for errors/attachments. Phone
+VisualViewport geometry marks a keyboard inset above 120px (excluding toolbar
+insets and pinch zoom), hides covered bottom navigation, and removes its dock
+clearance. This is a browser geometry heuristic, not a physical-device guarantee.
+
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
 Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,

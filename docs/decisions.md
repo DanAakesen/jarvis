@@ -1,5 +1,19 @@
 # Decisions
 
+## Dictation stop lifecycle (#1293; 26 October 2026)
+
+An explicit stop is distinct from a failed start. Suppress only cancellation
+and no-speech errors during requested stop, retain final text until end, and
+ignore callbacks from retired recognizers. Keep genuine failures visible and
+leave the unsent draft intact. The owner device error code remains unobserved;
+controlled event-order tests cannot establish physical WebKit acceptance.
+
+The same correction implements the owner's explicit space requirements: full-width
+message row, second-row borderless icon controls, external errors, no keyboard
+clearance for covered navigation, six-item menu pages with three dots, clear
+backdrop and shared translucent chrome. The parent/coordinator inspected private
+references; this executor could not download them and makes no source-pixel claim.
+
 ## Phone navigation and draft-only dictation (#1287; 25 October 2026)
 
 Use the approved dark phone composition with the compact composer above a

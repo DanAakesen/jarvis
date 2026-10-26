@@ -315,19 +315,21 @@ Chromium layout evidence does not establish physical iPhone/Safari acceptance.
 
 ## Mobile navigation and composer actions (#1287; 25 October 2026)
 
-Follow Dan's selected dark Jarvis phone mockup with its signature glass rim.
-Keep the 44px plus control, compact message field, distinct Dictate action and
-existing send behavior in one row. Dictate appends browser speech recognition
-to the draft; realtime Voice remains a separate plus-menu action beside the
-existing attachment, video and screen-sharing actions.
+The #1293 correction gives the phone draft its own full-width row. Plus,
+Dictate and Send are borderless 44px icon controls in a second row; accessible
+names and focus indicators remain. Attachment pills (including upload progress
+and ready image thumbnails) stay inside the composer above the draft. Only
+draft/attachment errors and selection problems sit above the composer surface
+and participate in its dock measurement. A visible
+keyboard inset removes navigation clearance; navigation is hidden while covered.
 
-Place message times below each bubble, never on its text or rim. Anchor the
-bottom navigation below the composer with Chat, Health when enabled, Workspaces
-and Menu. Workspaces opens the saved-window pane; Software Factory remains a
-separate menu destination. Use color alone for the current destination, with no
-dot. The Menu sheet pages horizontally with native touch scrolling and offers Previous/Next
-controls for keyboard users; retain the established dark glass surfaces, shared
-control radius and focus treatment.
+Keep Chat, optional Health, Workspaces and Menu in the bottom navigation.
+The menu uses six entries per horizontal page, a compact three-dot swipe cue,
+and arrow-key paging. Escape, outside press and the Menu toggle dismiss it;
+there is no Close/Previous/Next row. The backdrop is clear without blur. Header,
+menu and composer use the existing subtly translucent chat surface token.
+
+The following captures document the earlier #1287 layout, superseded by #1293:
 
 The approved [reference mockup](https://github.com/DanAakesen/jarvis/blob/9cca3271948539828938f103442563811d3b526d/docs/design/1287-selected-mobile-reference.png)
 was fetched from its named reference branch and compared at a matching 390×844

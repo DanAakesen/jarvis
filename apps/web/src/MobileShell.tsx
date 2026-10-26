@@ -53,7 +53,7 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
     ];
   });
   entries.push({ kind: 'context', key: 'context', label: 'Context panel', icon: 'context' });
-  const pageSize = 4;
+  const pageSize = 6;
   const entryPages = Array.from({ length: Math.ceil(entries.length / pageSize) }, (_, index) =>
     entries.slice(index * pageSize, (index + 1) * pageSize));
 
@@ -71,7 +71,7 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
     if (!open) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     returnFocus.current = previous;
-    sheet.current?.querySelector<HTMLElement>('.modal-close')?.focus({ preventScroll: true });
+    sheet.current?.querySelector<HTMLElement>('.mobile-menu-link')?.focus({ preventScroll: true });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
       event.preventDefault();
@@ -103,21 +103,13 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
         returnFocus.current?.focus({ preventScroll: true });
       }} />
       <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-labelledby="mobile-menu-heading" tabIndex={-1}>
-          <header className="modal-heading">
-            <button className="modal-close" type="button" aria-label="Close menu" onClick={() => {
-              onClose();
-              returnFocus.current?.focus({ preventScroll: true });
-            }}><ShellIcon name="close" /></button>
-            <h2 id="mobile-menu-heading" className="visually-hidden">Go to</h2>
-            {entryPages.length > 1 && <div className="mobile-menu-pagination">
-              <button className="mobile-menu-page-button" type="button" disabled={pageIndex === 0}
-                aria-label="Previous menu page" onClick={() => selectPage(Math.max(0, pageIndex - 1))}><ShellIcon name="chevron" /></button>
-              <span aria-live="polite" aria-label={`Page ${pageIndex + 1} of ${entryPages.length}`}>{pageIndex + 1} / {entryPages.length}</span>
-              <button className="mobile-menu-page-button" type="button" disabled={pageIndex === entryPages.length - 1}
-                aria-label="Next menu page" onClick={() => selectPage(Math.min(entryPages.length - 1, pageIndex + 1))}><ShellIcon name="chevron" /></button>
-            </div>}
-          </header>
-        <nav ref={pageRail} className="mobile-menu-body" aria-label="Pages"
+        <h2 id="mobile-menu-heading" className="visually-hidden">Go to</h2>
+        <nav ref={pageRail} className="mobile-menu-body" aria-label="Pages" tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+            event.preventDefault();
+            selectPage(Math.max(0, Math.min(entryPages.length - 1, pageIndex + (event.key === 'ArrowRight' ? 1 : -1))));
+          }}
           onScroll={(event) => {
             const width = event.currentTarget.clientWidth;
             if (width > 0) setPageIndex(Math.round(event.currentTarget.scrollLeft / width));
@@ -142,6 +134,8 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
             </div>
           ))}
         </nav>
+        <div className="mobile-menu-dots" aria-hidden="true"><span /><span /><span /></div>
+        <span className="visually-hidden" role="status">Page {pageIndex + 1} of {entryPages.length}. Swipe or use arrow keys to browse.</span>
       </div>
     </div>
   );

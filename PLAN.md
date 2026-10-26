@@ -1,5 +1,31 @@
 # Project plan
 
+## Mobile corrections (#1293; 26 October 2026)
+
+Implemented the requested full-width message row, lower borderless icon controls,
+external errors, keyboard-covered navigation clearance, six-entry menu pages with
+three dots, clear backdrop and shared subtle translucency. Dictation distinguishes
+requested stop cancellation from genuine failures, retains final text until end,
+and ignores callbacks from retired recognizers. The review correction preserves
+attachment pills inside the composer, above the full-width draft; only attachment
+errors/problems render outside. A decoded 96×64 synthetic PNG verifies uploading,
+ready, and failed-upload layouts at 390px/320px. Regression cases cover these
+lifecycle orderings, menu accessibility and viewport updates.
+
+Synthetic complete-App and actual-component Chromium captures at 320px/390px and
+1440px are in `docs/ui/screenshots/mobile-corrections-1293/`. The parent/coordinator
+inspected the four private source images; this executor's supported helper failed
+with `download failed`, without a diagnostic classifying denial versus connectivity.
+No private pixels were downloaded or published by this executor. Explicit text
+requirements were implemented under the parent's follow-up instruction.
+
+The scoped web/contracts frozen install succeeded without registry changes after
+the full repository install hit a configured-feed 403. Final local checks are
+recorded in the evidence README. Node 24.19.0/npm 11.9.0 differs from pinned CI
+Node 22/npm 10; normal hosted qualification remains required. PR #1294 stays draft
+for parent source-reference review. Physical iPhone/WebKit keyboard and real
+microphone acceptance remain unverified. No merge or deployment performed.
+
 ## Workspaces identifier completion (#1279; 25 October 2026)
 
 - Canonical navigation/snapshot, API routes, tools, stores and SQL columns now
