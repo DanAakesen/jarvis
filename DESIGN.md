@@ -1,5 +1,15 @@
 # Design
 
+## Mobile Chat-only composer (#1303; 26 October 2026)
+
+The phone message composer is visible on Chat only, with the Workspaces pane closed. Other pages keep
+their navigation clearance without reserving the hidden composer height. Keep
+the conversation mounted to retain drafts/session state; returning to Chat reveals
+the existing composer. Desktop is unchanged; voice sessions stay mounted but their composer controls
+are also visible only on Chat.
+Workspaces is a separate browsing screen despite retaining the route. Menu remains
+an overlay on Chat and does not hide the composer.
+
 ## Preview controls and resumed video (#1304; 26 October 2026)
 
 Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.

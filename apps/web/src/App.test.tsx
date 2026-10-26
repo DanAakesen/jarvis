@@ -713,26 +713,29 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.queryByText('Waking Jarvis…')).toBeNull());
   });
 
-  it('keeps phone voice on the current page and leaves header controls available through entry and exit', async () => {
+  it('keeps phone voice running internally off Chat and restores its controls only on Chat', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
     })));
     const user = userEvent.setup();
-    await renderSignedIn('/settings');
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
+    await renderSignedIn();
     const shell = document.querySelector('.app-shell')!;
     expect(shell.getAttribute('data-phone')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: 'Settings' }));
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
     expect(shell.getAttribute('data-voice-active')).toBe('true');
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
-    await user.click(screen.getByRole('button', { name: 'Menu' }));
-    expect(screen.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
-    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('button', { name: 'End voice' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+    expect(document.querySelector('.conversation-input-slot')?.hasAttribute('hidden')).toBe(true);
+    await user.click(screen.getByRole('link', { name: 'Chat' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(shell.getAttribute('data-voice-active')).toBe('false');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
   });
 
   it('enters fullscreen voice immediately and restores the typing shell when voice ends', async () => {
@@ -1435,10 +1438,10 @@ describe('App shell', () => {
       }
       return original(input, init);
     });
+    sessionStorage.setItem('jarvis.chat.draft', 'Unsent navigation fixture');
     await renderSignedIn(path);
     await waitFor(() => expect(activityStream).not.toBeNull());
-    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
-    fireEvent.change(input, { target: { value: 'Unsent navigation fixture' } });
+    const input = document.getElementById('message')!;
     workspace.ready();
     workspace.publishCommand({ commandId: 'status-first', operation: 'navigate', page: 'status' });
     await waitFor(() => expect(workspace.ack('status-first')).toBeTruthy());
@@ -1446,7 +1449,8 @@ describe('App shell', () => {
       body: { sessionId: '12345678-1234-4234-8234-123456789abc', applied: true },
       heading: 'Status', current: 'page', home: 'false', draft: 'Unsent navigation fixture',
     }]);
-    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+    expect(document.getElementById('message')).toBe(input);
+    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBe(phone ? null : input);
     expect(input).toHaveProperty('value', 'Unsent navigation fixture');
     expect(screen.queryByRole('listitem', { name: 'SQL database' })).toBeNull();
     workspace.publishCommand({ commandId: 'status-follow-up', operation: 'navigate', page: 'status' });
@@ -2026,6 +2030,83 @@ describe('App shell', () => {
     press(content);
     await waitFor(() => expect(shell.getAttribute('data-workspaces-open')).toBe('false'));
     expect(shell.getAttribute('data-navigation-open')).toBe('false');
+  });
+
+  it.each([true, false])('keeps the composer on Chat only on phones and preserves its draft (phone=%s)', async (phone) => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: phone && query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('innerHeight', 844);
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Unsent navigation draft' } });
+    input.focus();
+    viewport.height = 480;
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    const shell = document.querySelector('.app-shell')!;
+    if (phone) expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    if (phone) {
+      fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: 'Settings' }));
+    } else fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
+    await waitFor(() => expect(shell.getAttribute('data-home')).toBe('false'));
+    expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(phone);
+    expect(input.isConnected).toBe(true);
+    expect(input).toHaveProperty('value', 'Unsent navigation draft');
+    if (phone) {
+      expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+      expect(document.activeElement).not.toBe(input);
+      expect(shell.hasAttribute('data-keyboard-open')).toBe(false);
+    }
+    viewport.height = 844;
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    fireEvent.click(screen.getByRole('link', { name: phone ? 'Chat' : 'Jarvis home' }));
+    await waitFor(() => expect(shell.getAttribute('data-home')).toBe('true'));
+    expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(false);
+    expect(input).toHaveProperty('value', 'Unsent navigation draft');
+    if (phone) {
+      expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+      input.focus();
+      viewport.height = 480;
+      act(() => { viewport.dispatchEvent(new Event('resize')); });
+      expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    }
+  });
+
+  it('hides the mobile composer for Workspaces, restores it on close or Chat, and keeps Menu as an overlay', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Workspaces navigation draft' } });
+    const navigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
+    const shell = document.querySelector('.app-shell')!;
+    await user.click(navigation.getByRole('button', { name: 'Menu' }));
+    expect(input.closest('[hidden]')).toBeNull();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menu', { name: 'More options' })).toBeTruthy();
+    expect(input.closest('[hidden]')).toBeNull();
+    await user.keyboard('{Escape}');
+    for (const destination of ['close', 'Chat']) {
+      await user.click(navigation.getByRole('button', { name: 'Workspaces' }));
+      expect(shell.getAttribute('data-home')).toBe('true');
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+      expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(true);
+      expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+      expect(shell.hasAttribute('data-keyboard-open')).toBe(false);
+      if (destination === 'close') await user.click(screen.getByRole('button', { name: 'Close Workspaces' }));
+      else await user.click(navigation.getByRole('link', { name: 'Chat' }));
+      expect(shell.getAttribute('data-workspaces-open')).toBe('false');
+      expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+      expect(input).toHaveProperty('value', 'Workspaces navigation draft');
+    }
   });
 
   it('keeps untouched phone startup navigation available despite composer autofocus, then follows keyboard resize', async () => {

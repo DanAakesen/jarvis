@@ -1,5 +1,14 @@
 # Project plan
 
+## Mobile Chat-only composer (#1303; 26 October 2026)
+
+Use the current route and Workspaces pane state to show mobile composer variants
+only on Chat, with Workspaces closed. Keep the
+conversation mounted, release hidden-input focus and keyboard state on departure,
+and remove unused composer clearance on other pages. Desktop stays unchanged.
+Synthetic actual-App navigation evidence is in `docs/ui/screenshots/mobile-chat-only-1303/`.
+Parent owns final qualification, review and release.
+
 ## Continuous draft dictation (#1305; 26 October 2026)
 
 Implemented on a separate branch from main `d7667964`: interim transcript

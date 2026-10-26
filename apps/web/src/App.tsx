@@ -176,7 +176,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
   const shellElement = useRef<HTMLDivElement>(null);
-  usePhoneChatViewport(shellElement, signedIn && phone && !voiceActive);
   // Phone shell: the open windows list and the page menu are sheets opened from the top bar.
   const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
   const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
@@ -186,6 +185,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
   // The Workspaces pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const mobileChatScreen = home && !workspacesOpen;
+  usePhoneChatViewport(shellElement, signedIn && phone && mobileChatScreen && !voiceActive);
   const [workspacesPath, setWorkspacesPath] = useState(pathname);
   if (workspacesPath !== pathname) {
     setWorkspacesPath(pathname);
@@ -385,7 +386,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     setChatOutPath(pathname);
     if (chatOut) setChatOut(false);
   }
-  // On phones there is no rail: the chat bar is the dock at the bottom of every page (Dan, 8 October).
+  // Phone typing belongs to Chat; the mounted session still survives page navigation.
   const chatPlace: 'home' | 'out' | 'rail' = !signedIn || home ? 'home' : phone || chatOut ? 'out' : 'rail';
   const railOrb = useRef<HTMLButtonElement>(null);
   const { railTipProps, railTip } = useRailTip();
@@ -836,6 +837,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   screenShare={screenShare}
                   docked={chatPlace === 'rail'}
                   phone={phone}
+                  composerVisible={!phone || mobileChatScreen}
                   {...(chatPlace === 'out' && !phone ? { onDismiss: collapseChat } : {})}
                 />
               )}
