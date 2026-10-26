@@ -55,8 +55,11 @@ counters as real SQL transaction/concurrency or live-provider/device evidence.
 This executor uses Node 24.19.0/npm 11.9.0; pinned Node 22/npm 10 qualification stays
 with CI. Locked npm package installation needed temporary public npm tarball URLs
 for configured-feed 403s; the tracked lockfile, versions and integrity hashes are
-unchanged. Draft PR #1314 does not run aggregate hosted CI. Parent owns the final
-rebase, ready-state qualification, merge and deployment.
+unchanged. PR #1314 is ready and rebased onto main `5dd52b07` after desktop
+#1313. Additive documentation and test-setup conflicts preserved both workstreams.
+Runtime/CSS comparison retains the merged desktop, composer, dictation, preview
+and attachment changes. Exact-head local and hosted qualification follows the
+rebase; parent owns merge and deployment.
 
 
 ## Settled shell glass checks (#1301; 26 October 2026)
