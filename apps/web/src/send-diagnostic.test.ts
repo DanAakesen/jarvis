@@ -114,3 +114,16 @@ it('classifies composer controls and containment paths without copying their lab
   expect(JSON.stringify(last)).not.toContain('PRIVATE');
   dispose();
 });
+
+it('retains only captured target categories when native event targets clear after dispatch', async () => {
+  const { input, send, form } = fixture();
+  form.className = 'conversation-input';
+  const dispose = observeSendDiagnostic(input, send);
+  const event = new Event('pointerdown', { bubbles: true, cancelable: true });
+  send.addEventListener('pointerdown', event => event.preventDefault());
+  send.dispatchEvent(event);
+  Object.defineProperty(event, 'target', { value: null });
+  await vi.waitFor(() => expect(readSendDiagnostic().some(row => row.event === 'pointerdown' && row.phase === 'settled' &&
+    row.target === 'send' && row.inComposer && row.pathInComposer && row.prevented)).toBe(true));
+  dispose();
+});

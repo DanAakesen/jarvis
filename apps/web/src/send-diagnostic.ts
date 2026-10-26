@@ -38,14 +38,15 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
     return inComposer(target) ? 'composer-surface' : 'other';
   };
   const finite = (value: number) => Number.isFinite(value) ? Math.round(value) : 0;
-  const record = (event: Event, phase: SendDiagnosticEntry['phase'], pathInComposer = event.composedPath().some(inComposer)) => {
+  const record = (event: Event, phase: SendDiagnosticEntry['phase'], pathInComposer = event.composedPath().some(inComposer),
+    target = classify(event.target), contained = inComposer(event.target)) => {
     if (disposed) return;
     const rect = send.getBoundingClientRect();
     const viewport = window.visualViewport;
     const pointer = 'pointerType' in event ? event.pointerType : '';
     entries.push({
       ms: finite(performance.now() - started), event: event.type, phase,
-      target: classify(event.target), inComposer: inComposer(event.target),
+      target, inComposer: contained,
       pathInComposer, focused: classify(document.activeElement),
       prevented: event.defaultPrevented, disabled: send.disabled,
       pointer: pointer === 'touch' || pointer === 'mouse' || pointer === 'pen' ? pointer : 'none',
@@ -60,13 +61,15 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
     if (!observing) return;
     // Never observe unrelated interactions before an active composer session.
     const pathInComposer = event.composedPath().some(inComposer);
-    record(event, 'capture', pathInComposer);
+    const target = classify(event.target);
+    const contained = inComposer(event.target);
+    record(event, 'capture', pathInComposer, target, contained);
     if (['pointerdown', 'mousedown', 'touchstart', 'click', 'submit'].includes(event.type)) {
       // Native dispatch can checkpoint microtasks between listeners. A task
       // runs after propagation/default actions, including React's cancellation.
       const timer = window.setTimeout(() => {
         pending.delete(timer);
-        record(event, 'settled', pathInComposer);
+        record(event, 'settled', pathInComposer, target, contained);
       }, 0);
       pending.add(timer);
     }

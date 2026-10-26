@@ -1,3 +1,12 @@
+## Diagnostic native-event sampling correction (#1315; local follow-up)
+
+Native Chromium confirmed that capture microtasks can label cancellation before
+React handles Send. Defer settled samples to a task and preserve only categorical
+target metadata that native SVG dispatch can clear. No new trace fields or input
+behavior changes. Based on combined main67b581dd; retain both merged features.
+Next: normal follow-up PR qualification, review and owner manual merge, then normal
+exact-tree release. No gate weakening or stale deployment retry.
+
 ## Temporary mobile composer diagnostic (#1315; 26 October 2026)
 
 Implementation and local validation complete: passive, bounded, content-free
