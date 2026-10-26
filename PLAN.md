@@ -6,6 +6,8 @@ Implemented shared two-row styling, desktop Dictate/Voice placement, aligned
 composer width and wrapper stacking, with attachment errors above the surface.
 Synthetic actual-App QA covers desktop normal/resized/maximized/restored states,
 repeated Plus interaction, Dictate start/stop, attachments/errors and phone layout.
+Follow-up fixed the initial vertical seam when the room fallback status is shown;
+the browser fixture now asserts vertical adjacency before any resize and after it.
 Draft publication and integration follow local checks. Coordinator owns the merge
 slot after #1308, #1304, #1305 and #1303; latest-main qualification remains required.
 

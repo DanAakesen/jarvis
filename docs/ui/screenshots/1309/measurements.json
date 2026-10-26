@@ -5,17 +5,18 @@
       1000
     ],
     "touch": false,
+    "realRoom": false,
     "states": [
       {
         "state": "normal",
         "bounds": {
           "window": {
             "x": 378,
-            "y": 410.625,
+            "y": 490,
             "width": 740,
             "height": 380,
             "right": 1118,
-            "bottom": 790.625
+            "bottom": 870
           },
           "stack": {
             "x": 378,
@@ -74,59 +75,59 @@
         "bounds": {
           "window": {
             "x": 378,
-            "y": 410.625,
+            "y": 490,
             "width": 868,
             "height": 380,
             "right": 1246,
-            "bottom": 790.625
+            "bottom": 870
           },
           "stack": {
             "x": 378,
-            "y": 788.625,
+            "y": 868,
             "width": 868,
             "height": 106,
             "right": 1246,
-            "bottom": 894.625
+            "bottom": 974
           },
           "composer": {
             "x": 378,
-            "y": 788.625,
+            "y": 868,
             "width": 868,
             "height": 106,
             "right": 1246,
-            "bottom": 894.625
+            "bottom": 974
           },
           "draft": {
             "x": 387,
-            "y": 793.625,
+            "y": 873,
             "width": 850,
             "height": 44,
             "right": 1237,
-            "bottom": 837.625
+            "bottom": 917
           },
           "plus": {
             "x": 387,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 431,
-            "bottom": 889.625
+            "bottom": 969
           },
           "dictate": {
             "x": 1141,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 1185,
-            "bottom": 889.625
+            "bottom": 969
           },
           "send": {
             "x": 1193,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 1237,
-            "bottom": 889.625
+            "bottom": 969
           }
         },
         "menuHitTests": 3,
@@ -137,59 +138,59 @@
         "bounds": {
           "window": {
             "x": 99.1875,
-            "y": 80,
+            "y": 159.375,
             "width": 1297.625,
             "height": 710.625,
             "right": 1396.8125,
-            "bottom": 790.625
+            "bottom": 870
           },
           "stack": {
             "x": 99.1875,
-            "y": 788.625,
+            "y": 868,
             "width": 1297.625,
             "height": 106,
             "right": 1396.8125,
-            "bottom": 894.625
+            "bottom": 974
           },
           "composer": {
             "x": 99.1875,
-            "y": 788.625,
+            "y": 868,
             "width": 1297.625,
             "height": 106,
             "right": 1396.8125,
-            "bottom": 894.625
+            "bottom": 974
           },
           "draft": {
             "x": 108.1875,
-            "y": 793.625,
+            "y": 873,
             "width": 1279.625,
             "height": 44,
             "right": 1387.8125,
-            "bottom": 837.625
+            "bottom": 917
           },
           "plus": {
             "x": 108.1875,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 152.1875,
-            "bottom": 889.625
+            "bottom": 969
           },
           "dictate": {
             "x": 1291.8125,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 1335.8125,
-            "bottom": 889.625
+            "bottom": 969
           },
           "send": {
             "x": 1343.8125,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 1387.8125,
-            "bottom": 889.625
+            "bottom": 969
           }
         },
         "menuHitTests": 3,
@@ -200,59 +201,59 @@
         "bounds": {
           "window": {
             "x": 378,
-            "y": 410.625,
+            "y": 490,
             "width": 868,
             "height": 380,
             "right": 1246,
-            "bottom": 790.625
+            "bottom": 870
           },
           "stack": {
             "x": 378,
-            "y": 788.625,
+            "y": 868,
             "width": 868,
             "height": 106,
             "right": 1246,
-            "bottom": 894.625
+            "bottom": 974
           },
           "composer": {
             "x": 378,
-            "y": 788.625,
+            "y": 868,
             "width": 868,
             "height": 106,
             "right": 1246,
-            "bottom": 894.625
+            "bottom": 974
           },
           "draft": {
             "x": 387,
-            "y": 793.625,
+            "y": 873,
             "width": 850,
             "height": 44,
             "right": 1237,
-            "bottom": 837.625
+            "bottom": 917
           },
           "plus": {
             "x": 387,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 431,
-            "bottom": 889.625
+            "bottom": 969
           },
           "dictate": {
             "x": 1141,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 1185,
-            "bottom": 889.625
+            "bottom": 969
           },
           "send": {
             "x": 1193,
-            "y": 845.625,
+            "y": 925,
             "width": 44,
             "height": 44,
             "right": 1237,
-            "bottom": 889.625
+            "bottom": 969
           }
         },
         "menuHitTests": 3,
@@ -269,17 +270,18 @@
       800
     ],
     "touch": false,
+    "realRoom": false,
     "states": [
       {
         "state": "normal",
         "bounds": {
           "window": {
             "x": 108,
-            "y": 238.625,
+            "y": 318,
             "width": 740,
             "height": 352,
             "right": 848,
-            "bottom": 590.625
+            "bottom": 670
           },
           "stack": {
             "x": 108,
@@ -338,59 +340,59 @@
         "bounds": {
           "window": {
             "x": 108,
-            "y": 238.625,
+            "y": 318,
             "width": 765,
             "height": 352,
             "right": 873,
-            "bottom": 590.625
+            "bottom": 670
           },
           "stack": {
             "x": 108,
-            "y": 588.625,
+            "y": 668,
             "width": 765,
             "height": 106,
             "right": 873,
-            "bottom": 694.625
+            "bottom": 774
           },
           "composer": {
             "x": 108,
-            "y": 588.625,
+            "y": 668,
             "width": 765,
             "height": 106,
             "right": 873,
-            "bottom": 694.625
+            "bottom": 774
           },
           "draft": {
             "x": 117,
-            "y": 593.625,
+            "y": 673,
             "width": 747,
             "height": 44,
             "right": 864,
-            "bottom": 637.625
+            "bottom": 717
           },
           "plus": {
             "x": 117,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 161,
-            "bottom": 689.625
+            "bottom": 769
           },
           "dictate": {
             "x": 768,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 812,
-            "bottom": 689.625
+            "bottom": 769
           },
           "send": {
             "x": 820,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 864,
-            "bottom": 689.625
+            "bottom": 769
           }
         },
         "menuHitTests": 3,
@@ -401,59 +403,59 @@
         "bounds": {
           "window": {
             "x": 83,
-            "y": 80,
+            "y": 159.375,
             "width": 790,
             "height": 510.625,
             "right": 873,
-            "bottom": 590.625
+            "bottom": 670
           },
           "stack": {
             "x": 83,
-            "y": 588.625,
+            "y": 668,
             "width": 790,
             "height": 106,
             "right": 873,
-            "bottom": 694.625
+            "bottom": 774
           },
           "composer": {
             "x": 83,
-            "y": 588.625,
+            "y": 668,
             "width": 790,
             "height": 106,
             "right": 873,
-            "bottom": 694.625
+            "bottom": 774
           },
           "draft": {
             "x": 92,
-            "y": 593.625,
+            "y": 673,
             "width": 772,
             "height": 44,
             "right": 864,
-            "bottom": 637.625
+            "bottom": 717
           },
           "plus": {
             "x": 92,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 136,
-            "bottom": 689.625
+            "bottom": 769
           },
           "dictate": {
             "x": 768,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 812,
-            "bottom": 689.625
+            "bottom": 769
           },
           "send": {
             "x": 820,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 864,
-            "bottom": 689.625
+            "bottom": 769
           }
         },
         "menuHitTests": 3,
@@ -464,59 +466,59 @@
         "bounds": {
           "window": {
             "x": 108,
-            "y": 238.625,
+            "y": 318,
             "width": 765,
             "height": 352,
             "right": 873,
-            "bottom": 590.625
+            "bottom": 670
           },
           "stack": {
             "x": 108,
-            "y": 588.625,
+            "y": 668,
             "width": 765,
             "height": 106,
             "right": 873,
-            "bottom": 694.625
+            "bottom": 774
           },
           "composer": {
             "x": 108,
-            "y": 588.625,
+            "y": 668,
             "width": 765,
             "height": 106,
             "right": 873,
-            "bottom": 694.625
+            "bottom": 774
           },
           "draft": {
             "x": 117,
-            "y": 593.625,
+            "y": 673,
             "width": 747,
             "height": 44,
             "right": 864,
-            "bottom": 637.625
+            "bottom": 717
           },
           "plus": {
             "x": 117,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 161,
-            "bottom": 689.625
+            "bottom": 769
           },
           "dictate": {
             "x": 768,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 812,
-            "bottom": 689.625
+            "bottom": 769
           },
           "send": {
             "x": 820,
-            "y": 645.625,
+            "y": 725,
             "width": 44,
             "height": 44,
             "right": 864,
-            "bottom": 689.625
+            "bottom": 769
           }
         },
         "menuHitTests": 3,
@@ -533,6 +535,7 @@
       844
     ],
     "touch": true,
+    "realRoom": false,
     "states": [
       {
         "state": "normal",

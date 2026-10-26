@@ -2,15 +2,18 @@
 Copy qaapp1301.{html,tsx} from ../1301/fixtures into apps/web; serve Vite on 5174.
 """
 import json
+import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-out = Path(__file__).resolve().parents[1]
+real_room = '--real-room' in sys.argv
+out = Path(__file__).resolve().parents[1] / ('real-room' if real_room else '.')
+out.mkdir(exist_ok=True)
 results = []
 with sync_playwright() as p:
-    browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox', '--disable-webgl'])
-    for width, height, touch in [(1440, 1000, False), (900, 800, False), (390, 844, True)]:
-        page = browser.new_page(viewport={'width': width, 'height': height}, is_mobile=touch, has_touch=touch, reduced_motion='reduce' if touch else 'no-preference')
+    browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'] + (['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] if real_room else ['--disable-webgl']))
+    for width, height, touch in ([(900, 800, False)] if real_room else [(1440, 1000, False), (900, 800, False), (390, 844, True)]):
+        page = browser.new_page(viewport={'width': width, 'height': height}, is_mobile=touch, has_touch=touch, reduced_motion='reduce' if touch or real_room else 'no-preference')
         errors = []
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.route('**/src/useSignIn.ts', lambda r: r.fulfill(content_type='application/javascript', body="const token=async()=> 'synthetic'; const session={state:'signed-in',profile:{name:'Synthetic QA'},message:'',getAccessToken:token,getEntraAccessToken:token,hasOwnerSession:true,client:{getActiveAccount:()=>({homeAccountId:'synthetic'}),getAllAccounts:()=>[]},signIn:async()=>{},switchAccount:async()=>{},signOut:async()=>{},signOutAllDevices:async()=>{}}; export function useSignIn(){return session;}"))
@@ -43,6 +46,7 @@ with sync_playwright() as p:
                 const rect=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom}};
                 return {window:rect('.workspace-window-conversation'),stack:rect('.conversation-input-stack'),composer:rect('.conversation-input'),draft:rect('.composer textarea'),plus:rect('.composer-more'),dictate:rect('.composer-dictate'),send:rect('.composer-send')};
             }""")
+            assert abs(bounds['stack']['y'] - bounds['window']['bottom']) <= 2, (state, 'vertical seam', bounds)
             if not touch:
                 for key in ['composer','stack']:
                     assert abs(bounds[key]['x']-bounds['window']['x']) < 2, bounds
@@ -63,7 +67,11 @@ with sync_playwright() as p:
             assert plus.get_attribute('aria-expanded') == 'false'
             states.append({'state':state,'bounds':bounds,'menuHitTests':3,'pickerClickable':True})
         inspect('normal')
-        if not touch:
+        if real_room:
+            assert page.locator('.jarvis-stage').get_attribute('data-failed') == 'false'
+            assert page.locator('.jarvis-stage canvas').is_visible()
+            assert page.locator('.jarvis-stage-fallback').count() == 0
+        if not touch and not real_room:
             resize = page.get_by_role('button',name='Resize Conversation from right border',exact=True)
             resize.focus(); resize.press('Shift+ArrowRight'); resize.press('Shift+ArrowRight')
             inspect('resized')
@@ -75,7 +83,7 @@ with sync_playwright() as p:
         assert dictate.is_visible() and dictate.is_enabled()
         dictate.click(); page.get_by_role('button',name='Stop dictation',exact=True).wait_for()
         page.evaluate("window.fixtureRecognition.current.onresult({resultIndex:0,results:[Object.assign([{transcript:'Synthetic dictated draft'}],{isFinal:true})]})")
-        assert 'Synthetic dictated draft' in draft.input_value()
+        page.wait_for_function("document.querySelector('.composer textarea').value.includes('Synthetic dictated draft')")
         page.get_by_role('button',name='Stop dictation',exact=True).click()
         assert page.get_by_role('button',name='Dictate',exact=True).is_visible()
         page.locator('[data-testid="attachment-input"]').set_input_files({'name':'synthetic.txt','mimeType':'text/plain','buffer':b'synthetic'})
@@ -87,8 +95,8 @@ with sync_playwright() as p:
         assert draft.bounding_box()['y'] + draft.bounding_box()['height'] <= plus.bounding_box()['y'] + 1
         page.screenshot(path=str(out/f'{width}-feedback-attachment.png'))
         assert not errors, errors
-        results.append({'viewport':[width,height],'touch':touch,'states':states,'dictationStartStop':True,'attachmentsAndFeedback':True,'pageErrors':errors})
+        results.append({'viewport':[width,height],'touch':touch,'realRoom':real_room,'states':states,'dictationStartStop':True,'attachmentsAndFeedback':True,'pageErrors':errors})
         page.close()
     browser.close()
 (out/'measurements.json').write_text(json.dumps(results,indent=2)+'\n')
-print('Passed desktop normal/resized/maximized/restored and phone composer checks')
+print('Passed actual-room initial desktop seam and controls' if real_room else 'Passed desktop normal/resized/maximized/restored and phone composer checks')

@@ -14,17 +14,29 @@ cp docs/ui/screenshots/1301/fixtures/qaapp1301.html apps/web/
 npm run dev --workspace @jarvis/web -- --host 0.0.0.0 --port 5174
 # Separate shell, from the repository root:
 python3 docs/ui/screenshots/1309/fixtures/browser.py
+# Optional actual-room initial-layout verification using SwiftShader:
+python3 docs/ui/screenshots/1309/fixtures/browser.py --real-room
 rm apps/web/qaapp1301.tsx apps/web/qaapp1301.html
 ```
 
 ## Rendered results
 
 1440×1000 and 900×800 desktop: normal, keyboard-resized, maximized and restored
-chat/composer left and right edges match within 2px. Resized widths are 868px and
-765px, exceeding the old 740px inner cap. Positioned states keep the existing
-2px seam overlap. The unpositioned default layout includes the existing WebGL
-fallback notice between history and composer; its extra clearance is unrelated
-to the fixed-wrapper width bug. Desktop rail remains visible.
+chat/composer left and right edges match within 2px. The vertical seam assertion
+also runs in every state, including the initial docked layout before any resize.
+Resized widths are 868px and 765px, exceeding the old 740px inner cap.
+
+Follow-up review correctly identified a real 79.375px initial gap with the room
+fallback notice. The old workspace flex order put the notice between history
+and composer; resize switched to fixed positioning and concealed the defect.
+`baseline-seam.json` preserves the old measurements, and the new vertical assertion
+failed before the correction. In desktop typing mode the notice now flows above
+the workspace, retaining its status content while keeping history and composer
+adjacent: both initial desktop gaps are now 0px. Positioned states retain the
+existing 2px overlap. A separate 900×800 actual-room SwiftShader run confirms
+the initial 0px seam with a visible canvas, `data-failed=false`, and no fallback
+notice; evidence is in `real-room/`. Desktop navigation
+and voice layout are unchanged.
 
 Each state opens and closes Plus three times with animation allowed to settle.
 Every enabled menu button passes `elementFromPoint` hit testing, including when
@@ -38,6 +50,7 @@ were visually inspected; the maximized popup was also inspected.
 
 `measurements.json` records bounds and assertion outcomes. Screenshots contain
 only the synthetic fixture message/files. Existing timestamp layout is retained.
+The fallback and actual-room initial-layout captures were visually inspected.
 These checks do not establish physical-device, WebKit, real microphone or live
 provider acceptance. The fixture recognition adapter has a synthetic stop event;
 continuous dictation behavior belongs to #1305 and must survive integration.
@@ -52,7 +65,9 @@ continuous dictation behavior belongs to #1305 and must survive integration.
 - `npm run lint`: passed across all four workspaces.
 - `npm run build`: contracts/web passed; backend/vault-mirror failed on missing packages after the blocked full install.
 - `npm test`: interrupted before completion to restore dependencies; contracts could not load `fastify`, and the concurrent web run hit one contrast-test timeout. The separate full web run passed.
-- `python3 docs/ui/screenshots/1309/fixtures/browser.py`: passed on final production code.
+- `python3 docs/ui/screenshots/1309/fixtures/browser.py`: passed on final production code, including the initial vertical seam.
+- `python3 docs/ui/screenshots/1309/fixtures/browser.py --real-room`: passed.
+- Focused `styles.test.tsx`, `stylesheets.test.tsx`, `JarvisStage.test.tsx`, `ConversationHistory.test.tsx` and `ConversationAttachments.test.tsx`: 5 files / 263 tests passed.
 - `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`: 144 tests, 141 passed; three setup-vault-mirror checks could not run because `pwsh` is absent.
 - `GITHUB_OUTPUT=/tmp/1309-impact-output python3 .github/scripts/pipeline_impact.py --base origin/main`: selects Web and shared Python checks.
 

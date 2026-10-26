@@ -7,7 +7,9 @@ desktop. The outer measured stack owns width and dock stacking; the inner glass
 surface fills it without an independent chat-width cap. Workspace canvases isolate
 front/maximized windows, so the dock context clears them without exceeding modal
 layers. Voice moves into Plus, and errors use the shared above-surface feedback.
-Message timestamps already sit beneath bubbles; desktop navigation is unchanged.
+The room-unavailable status flows above the desktop workspace in typing mode,
+so it cannot separate the initial docked history from the composer. Message
+timestamps already sit beneath bubbles; desktop navigation is unchanged.
 
 ## Settled glass correction (#1301; 26 October 2026)
 

@@ -25,6 +25,9 @@
 /* Typing mode on the Jarvis page: the workspace fills the stage above the composer without its own panel chrome. */
 .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) { display: flex; flex-direction: column; }
 .app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
+/* Keep the room failure notice above the desktop workspace, never between its
+   initially docked history and composer. Positioned history already shares a seam. */
+.app-shell[data-phone="false"][data-voice-active="false"] .jarvis-stage-fallback { order: -2; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area:not([hidden]):has(.workspace-tabs) { display: block; order: -1; flex: 0 0 auto; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .workspace-shell-area { order: -1; flex: 1; min-height: 0; overflow: hidden; }
