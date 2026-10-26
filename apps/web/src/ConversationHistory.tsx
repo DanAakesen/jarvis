@@ -195,6 +195,7 @@ export function ConversationHistory({
   children,
   screenShare,
   camera,
+  composerVisible = true,
 }: {
   client: PublicClientApplication;
   getAccessToken?: () => Promise<string>;
@@ -204,6 +205,7 @@ export function ConversationHistory({
   screenShare?: ScreenShareController;
   camera?: CameraController;
   phone?: boolean;
+  composerVisible?: boolean;
 }) {
   const tokenProvider = getAccessToken ?? missingAccessToken;
   const { onVoiceActiveChange } = useVoiceWorkspace();
@@ -301,14 +303,19 @@ export function ConversationHistory({
   const setComposerHeight = conversationWindow?.setComposerHeight;
   useLayoutEffect(() => {
     const bar = inputBar.current;
-    if (!bar || voiceActive || !setComposerHeight) return;
+    if (!bar || !setComposerHeight) return;
+    if (!composerVisible) { setComposerHeight(0); return; }
+    if (voiceActive) return;
     const measure = () => setComposerHeight(bar.offsetHeight);
     measure();
     if (typeof ResizeObserver !== 'function') return;
     const observer = new ResizeObserver(measure);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, [setComposerHeight, voiceActive]);
+  }, [setComposerHeight, voiceActive, composerVisible]);
+  useLayoutEffect(() => {
+    if (!composerVisible && document.activeElement === input.current) input.current?.blur();
+  }, [composerVisible]);
   useLayoutEffect(() => { setConversationAvailable?.(windowed); }, [setConversationAvailable, windowed]);
   useLayoutEffect(() => () => { setConversationAvailable?.(false); }, [setConversationAvailable]);
   const updateVoiceActive = useCallback((active: boolean) => {
@@ -523,14 +530,14 @@ export function ConversationHistory({
     // Closing the history window must leave typing usable: focus returns to the composer, not the page.
     // The workspace may first focus its own heading, which only blurs once the empty workspace hides
     // during the next rendering update, so check after that update.
-    if (!hosted || conversationWindow?.element) return;
+    if (!composerVisible || !hosted || conversationWindow?.element) return;
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
         if (!document.activeElement || document.activeElement === document.body) input.current?.focus({ preventScroll: true });
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [conversationWindow?.element, hosted]);
+  }, [conversationWindow?.element, hosted, composerVisible]);
 
   const revealHistory = useCallback(() => {
     // History is a shared workspace view, so it returns through the same restore command Jarvis uses.
@@ -564,12 +571,12 @@ export function ConversationHistory({
 
   useEffect(() => {
     const busy = voiceActive || sending;
-    if (!busy && (!hasFocusedInput.current || wasBusy.current)) {
+    if (composerVisible && !busy && (!hasFocusedInput.current || wasBusy.current)) {
       input.current?.focus({ preventScroll: true });
       hasFocusedInput.current = true;
     }
     wasBusy.current = busy;
-  }, [voiceActive, sending]);
+  }, [voiceActive, sending, composerVisible]);
 
   useEffect(() => {
     let active = true;
@@ -1154,7 +1161,7 @@ export function ConversationHistory({
         conversationWindow.element,
       )}
 
-      <div className="conversation-input-slot" data-positioned={Boolean(conversationWindow?.position) || undefined}>
+      <div className="conversation-input-slot" hidden={!composerVisible} data-positioned={Boolean(conversationWindow?.position) || undefined}>
       <div ref={inputBar} className="conversation-input-stack"
         style={conversationWindow?.position ? {
           position: 'fixed', left: conversationWindow.position.left, top: conversationWindow.position.top,

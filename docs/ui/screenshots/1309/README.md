@@ -102,3 +102,34 @@ Combined-tree `npm test --workspace @jarvis/web`: 153 files / 2,384 tests passed
 Composer and actual-room browser commands above passed; the unchanged preview
 fixture passed all three sizes. The final mobile composer #1307 baseline and
 parent merge slot remain pending.
+
+## Final integration against main 3688ef4e
+
+Merged `3688ef4e719888a85ee03ea9120eb746ef76fd62` (#1307). The prop conflict
+retains `composerVisible` while removing only the now-unused `phone` destructuring.
+The App predicate, zero measurement, autofocus/blur guards and the final
+`[hidden]`-after-positioned CSS order match main. Attachment anchoring, continuous
+Dictate and preview fixes are preserved.
+
+Final local web suite: 153 files / 2,387 tests passed. The desktop/phone composer
+fixture repeats initial/resized/maximized/restored seam and width checks, Plus hit
+tests, retained attachment-picker source and Dictate restart plus repeated explicit
+start/stop. The additional mobile fixture verifies Chat/Workspaces/non-Chat
+visibility, hidden-positioned zero rects, zero hidden height, draft retention,
+keyboard and autofocus guards, plus desktop off-Chat behavior. Voice controls
+start from Plus on both sizes; phone Settings and Workspaces hide the controls
+without ending the session, returning to Chat restores them, and explicit End
+voice returns to typing. Voice transport/audio remains synthetic.
+
+For the mobile and Voice checks, copy the existing
+`docs/ui/screenshots/mobile-chat-only-1303/fixtures/qa1303.{html,tsx}` into
+`apps/web/` alongside the composer fixture, use Vite port 5174, then run:
+
+```sh
+python3 docs/ui/screenshots/1309/fixtures/mobile-visibility.py
+python3 docs/ui/screenshots/1309/fixtures/voice-visibility.py
+```
+
+Remove temporary App entry files before lint/build. Regenerated synthetic mobile
+and Voice captures/measurements live in `final-mobile/`. The PR records final
+exact-head hosted qualification and the resulting release receipt.

@@ -1,0 +1,201 @@
+{
+  "initial": {
+    "home": "true",
+    "keyboard": "false",
+    "focused": "message",
+    "nav": "visible",
+    "slotHidden": false,
+    "slotDisplay": "contents",
+    "composer": {
+      "x": 8,
+      "y": 646,
+      "width": 374,
+      "height": 114,
+      "top": 646,
+      "right": 382,
+      "bottom": 760,
+      "left": 8
+    },
+    "height": "114px",
+    "dock": "calc(68px + calc(0px + 68px + 16px))",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "leavingWhileTyping": {
+    "home": "false",
+    "keyboard": null,
+    "focused": "",
+    "nav": "visible",
+    "slotHidden": true,
+    "slotDisplay": "none",
+    "composer": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    },
+    "height": "0px",
+    "dock": "calc(0px + 68px + 16px)",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "settings": {
+    "home": "false",
+    "keyboard": null,
+    "focused": "",
+    "nav": "visible",
+    "slotHidden": true,
+    "slotDisplay": "none",
+    "composer": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    },
+    "height": "0px",
+    "dock": "calc(0px + 68px + 16px)",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "usage": {
+    "home": "false",
+    "keyboard": null,
+    "focused": "",
+    "nav": "visible",
+    "slotHidden": true,
+    "slotDisplay": "none",
+    "composer": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    },
+    "height": "0px",
+    "dock": "calc(0px + 68px + 16px)",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "health": {
+    "home": "false",
+    "keyboard": null,
+    "focused": "",
+    "nav": "visible",
+    "slotHidden": true,
+    "slotDisplay": "none",
+    "composer": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    },
+    "height": "0px",
+    "dock": "calc(0px + 68px + 16px)",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "returned": {
+    "home": "true",
+    "keyboard": "false",
+    "focused": "",
+    "nav": "visible",
+    "slotHidden": false,
+    "slotDisplay": "contents",
+    "composer": {
+      "x": 8,
+      "y": 646,
+      "width": 374,
+      "height": 114,
+      "top": 646,
+      "right": 382,
+      "bottom": 760,
+      "left": 8
+    },
+    "height": "114px",
+    "dock": "calc(68px + calc(0px + 68px + 16px))",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "typingAgain": {
+    "home": "true",
+    "keyboard": "true",
+    "focused": "message",
+    "nav": "hidden",
+    "slotHidden": false,
+    "slotDisplay": "contents",
+    "composer": {
+      "x": 8,
+      "y": 358,
+      "width": 374,
+      "height": 114,
+      "top": 358,
+      "right": 382,
+      "bottom": 472,
+      "left": 8
+    },
+    "height": "114px",
+    "dock": "calc(68px + calc(8px * 1))",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "directSettings": {
+    "home": "false",
+    "keyboard": null,
+    "focused": "",
+    "nav": "visible",
+    "slotHidden": true,
+    "slotDisplay": "none",
+    "composer": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "top": 0,
+      "right": 0,
+      "bottom": 0,
+      "left": 0
+    },
+    "height": "0px",
+    "dock": "calc(0px + 68px + 16px)",
+    "overflow": 390,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "desktop": {
+    "home": "false",
+    "keyboard": null,
+    "focused": "",
+    "nav": null,
+    "slotHidden": false,
+    "slotDisplay": "contents",
+    "composer": {
+      "x": 378,
+      "y": 832,
+      "width": 740,
+      "height": 54,
+      "top": 832,
+      "right": 1118,
+      "bottom": 886,
+      "left": 378
+    },
+    "height": "54px",
+    "dock": "",
+    "overflow": 1440,
+    "draft": "Keep this draft across mobile screens."
+  },
+  "pageErrors": []
+}

@@ -11,7 +11,19 @@ the browser fixture now asserts vertical adjacency before any resize and after i
 Draft PR #1313 now incorporates main `83563177` (attachment #1308, preview
 #1312 and continuous Dictate #1310), preserving their implementations. Combined
 web tests and rendered composer/preview regressions pass. Coordinator owns the
-merge slot after mobile composer #1307; final qualification remains required.
+merge slot after mobile composer #1307. Final integration incorporates main
+`3688ef4e`, preserving mobile visibility/measurement/focus guards; 2,387 web tests
+and combined desktop/mobile/Voice QA pass. Exact-head hosted checks and accepted
+deployment remain release gates.
+
+## Mobile Chat-only composer (#1303; 26 October 2026)
+
+Use the current route and Workspaces pane state to show mobile composer variants
+only on Chat, with Workspaces closed. Keep the
+conversation mounted, release hidden-input focus and keyboard state on departure,
+and remove unused composer clearance on other pages. Desktop stays unchanged.
+Synthetic actual-App navigation evidence is in `docs/ui/screenshots/mobile-chat-only-1303/`.
+Parent owns final qualification, review and release.
 
 ## Continuous draft dictation (#1305; 26 October 2026)
 

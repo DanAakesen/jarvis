@@ -7,6 +7,16 @@ including Voice under Plus and Dictate beside Send. Keep the existing isolated
 workspace and dock stacking hierarchy: elevate the fixed outer stack, not its
 inner child. Do not extend the mobile Chat-only visibility rule to desktop.
 
+## Route-scoped phone composer (#1303; 26 October 2026)
+
+Use the `/` route plus closed Workspaces pane state: the full-width Workspaces
+browsing pane is a distinct user-facing screen even though it retains the URL. Hide the phone
+typing slot rather than unmounting its conversation/session owner, so drafts and
+ongoing turns survive navigation. Disable the chat viewport hook off Chat and
+prevent hidden-input focus. Desktop is unchanged. Voice sessions remain mounted; their composer controls
+are also visible only on Chat.
+Menu remains an overlay and does not hide its anchor composer.
+
 ## Continuous draft dictation (#1305; 26 October 2026)
 
 Keep browser dictation toggled on across natural recognition endings and silence,
