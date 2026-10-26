@@ -1,5 +1,12 @@
 # Decisions
 
+## 26 October 2026 — Defer phone outside-touch dismissal until tap release (local)
+
+The viewport hook blurred the composer on touch-down before a transcript pan
+could be recognized. Track the press until release; abandon it after movement,
+scroll or cancellation. Do not prevent native scrolling or button/link actions.
+The local Chromium comparison and limits are recorded in
+`ui/screenshots/mobile-chat-scroll/README.md`. No release authorization is implied.
 ## 2026-10-26 — Show actual Health meal estimates (#1321)
 
 Use server-derived nutrition lists for estimates and proposal presentation, including

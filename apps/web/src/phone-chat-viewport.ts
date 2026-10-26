@@ -53,12 +53,30 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
       cancelAnimationFrame(focusFrame);
       focusFrame = requestAnimationFrame(measure);
     };
-    const dismissOutside = (event: PointerEvent) => {
+    let outsidePress: { id: number; x: number; y: number; input: HTMLTextAreaElement } | null = null;
+    const cancelOutsidePress = () => { outsidePress = null; };
+    const outsideComposer = (target: EventTarget | null) => target instanceof Element &&
+      !target.closest('.conversation-input, .more-menu-list, .more-menu-flyout');
+    const startOutsidePress = (event: PointerEvent) => {
+      // A second finger abandons the tap rather than becoming a new candidate.
+      cancelOutsidePress();
       const input = document.activeElement;
-      if (event.pointerType !== 'touch' || !(input instanceof HTMLTextAreaElement) ||
-        input.id !== 'message' || !element.contains(input) || !(event.target instanceof Element) ||
-        event.target.closest('.conversation-input, .more-menu-list, .more-menu-flyout')) return;
-      input.blur();
+      if (event.pointerType !== 'touch' || !event.isPrimary || !(input instanceof HTMLTextAreaElement) ||
+        input.id !== 'message' || !element.contains(input) || !outsideComposer(event.target)) return;
+      outsidePress = { id: event.pointerId, x: event.clientX, y: event.clientY, input };
+    };
+    const moveOutsidePress = (event: PointerEvent) => {
+      if (outsidePress?.id === event.pointerId &&
+        Math.hypot(event.clientX - outsidePress.x, event.clientY - outsidePress.y) > 8) cancelOutsidePress();
+    };
+    const finishOutsidePress = (event: PointerEvent) => {
+      if (outsidePress?.id !== event.pointerId) return;
+      moveOutsidePress(event);
+      const press = outsidePress;
+      cancelOutsidePress();
+      // A touch down may start native scrolling. Dismiss only a completed tap,
+      // never a pan/cancel, and leave scrolling and control activation native.
+      if (press && document.activeElement === press.input && outsideComposer(event.target)) press.input.blur();
     };
     measure();
     viewport?.addEventListener('resize', measure);
@@ -67,7 +85,11 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
     window.addEventListener('pageshow', measure);
     document.addEventListener('focusin', focusChanged);
     document.addEventListener('focusout', focusChanged);
-    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('pointerdown', startOutsidePress);
+    document.addEventListener('pointermove', moveOutsidePress);
+    document.addEventListener('pointerup', finishOutsidePress);
+    document.addEventListener('pointercancel', cancelOutsidePress);
+    document.addEventListener('scroll', cancelOutsidePress, true);
     return () => {
       viewport?.removeEventListener('resize', measure);
       viewport?.removeEventListener('scroll', measure);
@@ -75,7 +97,11 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
       window.removeEventListener('pageshow', measure);
       document.removeEventListener('focusin', focusChanged);
       document.removeEventListener('focusout', focusChanged);
-      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('pointerdown', startOutsidePress);
+      document.removeEventListener('pointermove', moveOutsidePress);
+      document.removeEventListener('pointerup', finishOutsidePress);
+      document.removeEventListener('pointercancel', cancelOutsidePress);
+      document.removeEventListener('scroll', cancelOutsidePress, true);
       cancelAnimationFrame(focusFrame);
       element.removeAttribute('data-keyboard-open');
       element.style.removeProperty('--phone-chat-top');

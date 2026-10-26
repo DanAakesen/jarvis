@@ -13,6 +13,12 @@ see `docs/ui/screenshots/1317/README.md`. No physical-iPhone acceptance claimed.
 
 # Agent context
 
+## Mobile chat scroll verification (26 October 2026; local)
+
+Run the phone viewport and ConversationHistory tests, web lint and web build.
+`docs/ui/screenshots/mobile-chat-scroll/README.md` records the actual-component
+Chromium swipe comparison, continued typing and one-tap Send. Keyboard geometry
+is simulated; physical Safari remains unverified. No camera/menu changes.
 ## Health meal estimate checks (#1321; 26 October 2026)
 
 Run backend daily, conversation, owner-interaction, realtime/relay/startup, registry,

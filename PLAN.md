@@ -1,3 +1,11 @@
+## Mobile keyboard scroll (#1323; 26 October 2026)
+
+Implementation and local review complete in PR #1325. Outside taps dismiss only
+after release; scrolling, cancellation and multi-touch retain composer focus.
+Local validation: web 2,405 passed / one contrast timeout; unchanged contrast rerun
+7 passed; lint/build and Chromium scroll/type/Send passed. Next: hosted checks,
+coordinator queue integration after camera/Health, review and authorized release.
+Physical iOS acceptance remains unverified.
 ## Unified camera delivery (#1317; 26 October 2026)
 
 Implementation on `fix/1317-unified-camera`: automatic sampled-frame delivery,
