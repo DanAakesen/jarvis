@@ -219,7 +219,7 @@ describe('inactive shared Daily feed workflow', () => {
     expect(f.refresh).not.toHaveBeenCalled(); expect(pending.card.summary).toContain(range.from);
     const result = await pending.resolve();
     expect(result).toMatchObject({ refresh: { state: 'completed', sources: [{ status: 'error', error: 'semantic-unavailable' }] } });
-    expect(confirmToolCall('daily_feed', 'ok', result)).toContain('does not mean every source succeeded');
+    expect(confirmToolCall('health_feed', 'ok', result)).toContain('does not mean every source succeeded');
     const runId = f.refresh.mock.calls[0]![1]; expect(runId).toMatch(/^jarvis-feed:[a-f0-9]{64}$/u);
     f.store.completed.mockResolvedValueOnce(true);
     expect(await f.tool.execute(payload, f.request, signal())).toMatchObject({ refresh: { runId, state: 'completed', replayed: true } });
@@ -276,7 +276,7 @@ describe('inactive shared Daily feed workflow', () => {
     const f = fixture(); f.refresh.mockImplementationOnce(async (_request, runId) => ({ runId, state }));
     const result = await (await f.begin({ operation: 'refresh', ...range })).resolve();
     expect(result).toMatchObject({ refresh: { state } });
-    expect(confirmToolCall('daily_feed', 'ok', result)).not.toContain('succeeded');
+    expect(confirmToolCall('health_feed', 'ok', result)).not.toContain('succeeded');
   });
   it('keeps missing configuration, oversized reads and raw failures explicit', async () => {
     const f = fixture(false);

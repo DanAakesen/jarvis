@@ -1,5 +1,13 @@
 # Product
 
+## Health meal estimates (#1321; 26 October 2026)
+
+Jarvis advertises Health tools. Every meal estimate shows actual returned protein
+(g), calories (kcal), and fat (g) as a list, including lookup-only responses and
+pending proposals. Unknown values remain unknown; zero is shown only when returned.
+Estimates do not log food. Exact-proposal approval, expiry and deduplication remain
+required. The external Daily Assistant and internal data namespace are unchanged.
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 The chat composer Plus menu must stay readable over chat text. From the trigger upward, place Attach file or photo, Voice, the other available actions, then Language. Voice uses a waveform distinct from the Dictate microphone. Preserve the native attachment chooser anchor and desktop parity.

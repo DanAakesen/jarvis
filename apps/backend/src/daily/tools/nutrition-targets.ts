@@ -59,7 +59,7 @@ function present(stored: StoredNutritionTargets) {
 export function dailyNutritionTargetsTool(targets: NutritionTargetsAccess): JarvisTool {
   const pending = new Set<string>();
   return {
-    name: 'daily_nutrition_targets',
+    name: 'health_nutrition_targets',
     description: 'Read or change the owner\'s nutrition targets: resting energy burn (kcal), per-day deficit (kcal) and protein target (g). read needs no approval and returns each stored value, or null where none is set, with the allowed ranges. set_targets changes only the targets you name (null clears one) and every change needs the exact browser Now approval within two minutes. Never guess, default or estimate a value: ask for the number. The values are private health data; do not repeat them outside this conversation. No phone or Teams. They are the owner\'s own figures for the per-day food budget, not advice or a coaching plan.',
     inputSchema,
     bodyLimit: 2 * 1024,

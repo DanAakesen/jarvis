@@ -28,8 +28,8 @@ function parseLimit(raw: unknown): number {
 /** Read-only: the personalised remaining food budget for today and the saved favourites that fit it. */
 export function dailyNutritionSuggestTool(targets: NutritionTargetsAccess, sources: NutritionSuggestionSources): JarvisTool {
   return {
-    name: 'daily_nutrition_suggest',
-    description: 'Work out what is left of today\'s food budget and suggest saved favourites that fit it. Read only: it logs and changes nothing. It uses the owner\'s own nutrition targets (see daily_nutrition_targets), the active energy burned so far today from stored Apple Health data, and only meals logged in Jarvis, so food eaten but never logged is not counted. Trust the kcal figures only when kcal.state is ready; otherwise name the reason that is missing, never guess a number and never say a suggestion fits. Mention burn.ageMinutes when the Health reading is clearly old. Protein is partial when some logged meals have no protein value, so the remaining figure is an upper bound. Suggestions come only from saved favourites. The figures are private health data: no phone or Teams. This is the owner\'s own budget arithmetic, not advice or a coaching plan.',
+    name: 'health_nutrition_suggest',
+    description: 'Work out what is left of today\'s food budget and suggest saved favourites that fit it. Read only: it logs and changes nothing. It uses the owner\'s own nutrition targets (see health_nutrition_targets), the active energy burned so far today from stored Apple Health data, and only meals logged in Jarvis, so food eaten but never logged is not counted. Trust the kcal figures only when kcal.state is ready; otherwise name the reason that is missing, never guess a number and never say a suggestion fits. Mention burn.ageMinutes when the Health reading is clearly old. Protein is partial when some logged meals have no protein value, so the remaining figure is an upper bound. Suggestions come only from saved favourites. The figures are private health data: no phone or Teams. This is the owner\'s own budget arithmetic, not advice or a coaching plan.',
     inputSchema,
     bodyLimit: 1024,
     sensitive: true,

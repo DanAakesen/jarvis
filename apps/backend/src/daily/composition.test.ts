@@ -22,8 +22,8 @@ const owner = config.auth.ownerObjectId;
 const agent = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 const dailyToolNames = [
-  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
-  'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
+  'health_query', 'health_show', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
+  'health_summary', 'health_nutrition_history', 'health_coach_status',
 ];
 type App = ReturnType<typeof buildApp>;
 const apps: App[] = [];
@@ -162,7 +162,7 @@ describe('Daily composition', () => {
 
     for (const probe of dailyRoutes) expect((await send(off, probe, 'owner')).statusCode, `${probe.method} ${probe.url}`).toBe(404);
     expect((await off.inject({ url: '/daily/mcp', headers: headers() })).statusCode).toBe(404);
-    expect((await off.inject({ method: 'POST', url: '/tools/daily_nutrition_suggest', headers: toolHeaders(), payload: {} })).statusCode).toBe(404);
+    expect((await off.inject({ method: 'POST', url: '/tools/health_nutrition_suggest', headers: toolHeaders(), payload: {} })).statusCode).toBe(404);
     expect(await off.backgroundJobs.list()).toEqual([]);
   });
 
@@ -171,9 +171,9 @@ describe('Daily composition', () => {
     expect(Object.keys(module).sort()).toEqual(['id', 'registerRoutes', 'tools']);
     expect(module.id).toBe('daily');
     expect(module.tools.map(({ name }) => name)).toEqual(dailyToolNames);
-    expect(module.tools.map(({ name }) => name)).not.toContain('daily_food_lookup');
-    expect(module.tools.find(({ name }) => name === 'daily_food_review')?.description).toContain('lookup_components');
-    expect(module.tools.find(({ name }) => name === 'daily_saved_food')?.execution).toEqual({
+    expect(module.tools.map(({ name }) => name)).not.toContain('health_food_lookup');
+    expect(module.tools.find(({ name }) => name === 'health_food_review')?.description).toContain('lookup_components');
+    expect(module.tools.find(({ name }) => name === 'health_saved_food')?.execution).toEqual({
       defaultEffect: 'unclassified',
       operation: {
         field: 'operation',
@@ -190,7 +190,7 @@ describe('Daily composition', () => {
     const onRoutes = await routeTable(on);
     expect([...onRoutes].filter((url) => !baselineRoutes.has(url)).sort()).toEqual([
       '/daily/capabilities', '/daily/nutrition-targets', '/daily/training-targets', '/daily/query',
-      ...dailyToolNames.map((name) => `/tools/${name}`),
+      ...dailyToolNames.flatMap((name) => [`/tools/${name}`, `/tools/${name === 'health_summary' ? 'daily_health_summary' : name === 'health_history' ? 'daily_health_history' : name.replace(/^health_/u, 'daily_')}`]),
     ].sort());
     expect([...baselineRoutes].filter((url) => !onRoutes.has(url))).toEqual([]);
 
@@ -209,7 +209,7 @@ describe('Daily composition', () => {
 
   it('injects Frida lazily into the existing review tool without registering another catalogue name', async () => {
     const { module } = composed();
-    const review = module.tools.find(({ name }) => name === 'daily_food_review')!;
+    const review = module.tools.find(({ name }) => name === 'health_food_review')!;
     const lookup = vi.spyOn(FridaLookupAdapter.prototype, 'lookup').mockResolvedValue({
       status: 'complete', confirmationRequired: true, reference: fridaReference, components: [],
       totals: { energyKcal: null, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null },
@@ -231,7 +231,7 @@ describe('Daily composition', () => {
       await expect(review.execute({ change: { operation: 'lookup_components',
         components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } }, other, new AbortController().signal)).rejects.toThrow();
       expect(lookup).toHaveBeenCalledOnce();
-      expect(module.tools.map(({ name }) => name)).not.toContain('daily_food_lookup');
+      expect(module.tools.map(({ name }) => name)).not.toContain('health_food_lookup');
     } finally { lookup.mockRestore(); }
   });
 
@@ -256,7 +256,7 @@ describe('Daily composition', () => {
     const thrown: unknown[] = [];
     const calls: ToolCallRecord[] = [];
     // A tool route answers 503 before it runs the tool when the app has no call store, so this app gets a minimal one.
-    // daily_show refuses to read at all without an open workspace tab, so the app also gets one connected tab.
+    // health_show refuses to read at all without an open workspace tab, so the app also gets one connected tab.
     const broker = new WorkspaceCommandBroker();
     broker.connect(owner, () => true);
     const app = fixture(observed(module, thrown), { record: async (call) => { calls.push(call); } }, broker);
@@ -264,9 +264,9 @@ describe('Daily composition', () => {
       expect((await send(app, probe, 'owner')).statusCode, `${probe.method} ${probe.url}`).toBe(403);
     }
     const toolCalls: readonly (readonly [string, object])[] = [
-      ['daily_nutrition_suggest', {}],
-      ['daily_nutrition_targets', { operation: 'read' }],
-      ['daily_show', { source: dailyQuerySources.metrics, startDate: '2026-10-01', endDate: '2026-10-16' }],
+      ['health_nutrition_suggest', {}],
+      ['health_nutrition_targets', { operation: 'read' }],
+      ['health_show', { source: dailyQuerySources.metrics, startDate: '2026-10-01', endDate: '2026-10-16' }],
     ];
     for (const [name, payload] of toolCalls) {
       const response = await app.inject({ method: 'POST', url: `/tools/${name}`, headers: toolHeaders(), payload });

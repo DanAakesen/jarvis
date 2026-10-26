@@ -162,8 +162,15 @@ export const coreModule: BackendModule = {
           name, description, inputSchema, ...(execution ? { execution } : {}),
         }));
     });
-    for (const tool of app.jarvisTools.list()) {
-      app.post(`/tools/${tool.name}`, {
+    // Only Health is advertised. Retain the old tool HTTP addresses for cached clients.
+    const toolRoutes = app.jarvisTools.list().flatMap(tool => {
+      const legacy = tool.name === 'health_history' ? 'daily_health_history'
+        : tool.name === 'health_summary' ? 'daily_health_summary' : `daily_${tool.name.slice(7)}`;
+      const names = tool.moduleId === 'daily' && tool.name.startsWith('health_') ? [tool.name, legacy] : [tool.name];
+      return names.map(routeName => ({ tool, routeName }));
+    });
+    for (const { tool, routeName } of toolRoutes) {
+      app.post(`/tools/${routeName}`, {
         config: { jarvisAgent: true },
         ...(tool.bodyLimit ? { bodyLimit: tool.bodyLimit } : {}),
         schema: { body: tool.inputSchema },
