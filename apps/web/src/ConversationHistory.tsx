@@ -304,7 +304,9 @@ export function ConversationHistory({
   const setComposerHeight = conversationWindow?.setComposerHeight;
   useLayoutEffect(() => {
     const bar = inputBar.current;
-    if (!bar || voiceActive || !setComposerHeight) return;
+    if (!bar || !setComposerHeight) return;
+    if (!composerVisible) { setComposerHeight(0); return; }
+    if (voiceActive) return;
     const measure = () => setComposerHeight(bar.offsetHeight);
     measure();
     if (typeof ResizeObserver !== 'function') return;
@@ -1135,7 +1137,7 @@ export function ConversationHistory({
         conversationWindow.element,
       )}
 
-      <div className="conversation-input-slot" hidden={!composerVisible && !voiceActive} data-positioned={Boolean(conversationWindow?.position) || undefined}>
+      <div className="conversation-input-slot" hidden={!composerVisible} data-positioned={Boolean(conversationWindow?.position) || undefined}>
       <div ref={inputBar} className="conversation-input-stack"
         style={conversationWindow?.position ? {
           position: 'fixed', left: conversationWindow.position.left, top: conversationWindow.position.top,

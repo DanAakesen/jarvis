@@ -539,7 +539,7 @@ viewport without inset or earlier height history leaves navigation available.
 ConversationHistory remains mounted and hides its typing slot off Chat on phones;
 it suppresses hidden-input autofocus and remeasures the visible dock. The phone
 chat viewport hook is enabled only on Chat. Other pages reserve navigation space
-only; desktop and active voice controls retain their existing behavior.
+only; desktop stays unchanged and voice composer controls are also Chat-only.
 
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 

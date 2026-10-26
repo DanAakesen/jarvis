@@ -5,7 +5,8 @@
 Use the same `/` route predicate as the Chat navigation control. Hide the phone
 typing slot rather than unmounting its conversation/session owner, so drafts and
 ongoing turns survive navigation. Disable the chat viewport hook off Chat and
-prevent hidden-input focus. Desktop and active voice controls are unchanged.
+prevent hidden-input focus. Desktop is unchanged. Voice sessions remain mounted; their composer controls
+are also visible only on Chat.
 Menu and Workspaces are existing overlays, not additional page routes.
 
 ## Stable menu material and shared chrome (#1301; 26 October 2026)

@@ -5,7 +5,8 @@
 The phone message composer is visible on the Chat route only. Other pages keep
 their navigation clearance without reserving the hidden composer height. Keep
 the conversation mounted to retain drafts/session state; returning to Chat reveals
-the existing composer. Desktop and active voice controls retain their behavior.
+the existing composer. Desktop is unchanged; voice sessions stay mounted but their composer controls
+are also visible only on Chat.
 Menu and Workspaces remain overlays on the current route.
 
 ## Settled glass correction (#1301; 26 October 2026)

@@ -713,7 +713,7 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.queryByText('Waking Jarvis…')).toBeNull());
   });
 
-  it('keeps active phone voice available after leaving Chat and hides typing controls when voice ends off Chat', async () => {
+  it('keeps phone voice running internally off Chat and restores its controls only on Chat', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -728,13 +728,14 @@ describe('App shell', () => {
     const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
     expect(shell.getAttribute('data-voice-active')).toBe('true');
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
-    await user.click(screen.getByRole('button', { name: 'Menu' }));
-    expect(screen.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
-    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('button', { name: 'End voice' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+    expect(document.querySelector('.conversation-input-slot')?.hasAttribute('hidden')).toBe(true);
+    await user.click(screen.getByRole('link', { name: 'Chat' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(shell.getAttribute('data-voice-active')).toBe('false');
-    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
   });
 
   it('enters fullscreen voice immediately and restores the typing shell when voice ends', async () => {

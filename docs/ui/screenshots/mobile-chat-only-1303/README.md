@@ -10,8 +10,8 @@ Use the same `/` predicate as the Chat navigation link. On phone routes other th
 Chat, the message composer slot is hidden and the chat viewport hook is disabled.
 The conversation stays mounted to preserve drafts, attachments and session state.
 Hidden-input autofocus is suppressed; leaving while focused blurs it. The slot is
-remeasured and off-Chat pages reserve navigation clearance only. Desktop and active
-voice controls retain their previous behavior. Workspaces and Menu remain overlays
+remeasured and off-Chat pages reserve navigation clearance only. Desktop is unchanged. Voice sessions remain mounted internally, but their
+composer controls are also visible only on Chat. Workspaces and Menu remain overlays
 on the current route, not new page routes. Camera preview styling is untouched.
 
 ## Checks and inspected screenshots
