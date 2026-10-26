@@ -37,6 +37,15 @@ merge/deployment workflow; no production release is claimed yet.
 
 # Project plan
 
+## Chat bubble frost (#1324; local qualification, 26 October 2026)
+
+Integrated main 92fbd42c (video, Health lists, keyboard scroll and meal precision). Implemented
+shared lighter Plus/bubble/header frost, a mobile shown-state corner correction,
+and the existing desktop fade through cached item-level masks. Local evidence and check outcomes are recorded in
+`docs/ui/screenshots/chat-bubble-frost/`. Parent coordinates integration after
+camera, Health and keyboard-scroll work, then checked merge/deployment.
+
+
 ## Health meal estimate correction (#1321; 26 October 2026)
 
 Implement Health tool branding and server-derived protein/calorie/fat lists in

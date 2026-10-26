@@ -6,6 +6,15 @@ no clipboard read, automatic transmission or persistence. This is not a proven f
 
 # Product
 
+## Shared readability material (#1324; 26 October 2026)
+
+Use a moderately lighter shared blur on Plus, bubbles and header. Round both
+composer top-corner borders only on mobile with the chat window shown.
+
+## Chat bubble readability (#1324; 26 October 2026)
+
+Frost the background behind both speakers' chat bubbles like the Plus menu,
+retaining sharp text, translucency, existing layout and the desktop top-edge fade.
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical

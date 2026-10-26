@@ -1,0 +1,118 @@
+[
+  {
+    "width": 390,
+    "theme": "dark",
+    "mobileToggleCycles": 3,
+    "corners": [
+      [
+        "24px",
+        "24px"
+      ],
+      [
+        "24px",
+        "24px"
+      ],
+      [
+        "24px",
+        "24px"
+      ]
+    ],
+    "headerBlur": "16px",
+    "headerPixelDelta": 49.55555555555555,
+    "scrollProbe": {
+      "bubbles": 302,
+      "bubbleRectReads": 0,
+      "p50FrameMs": 17.600000001490116,
+      "p95FrameMs": 44.30000000074506,
+      "detachedObservedChildren": 0,
+      "fadeObservers": 0
+    }
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "mobileToggleCycles": 3,
+    "corners": [
+      [
+        "24px",
+        "24px"
+      ],
+      [
+        "24px",
+        "24px"
+      ],
+      [
+        "24px",
+        "24px"
+      ]
+    ],
+    "headerBlur": "16px",
+    "headerPixelDelta": 46.199999999999996,
+    "scrollProbe": {
+      "bubbles": 302,
+      "bubbleRectReads": 0,
+      "p50FrameMs": 16.900000002235174,
+      "p95FrameMs": 31.699999999254942,
+      "detachedObservedChildren": 0,
+      "fadeObservers": 0
+    }
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "mobileToggleCycles": null,
+    "corners": [
+      [
+        "0px",
+        "0px"
+      ],
+      [
+        "0px",
+        "0px"
+      ],
+      [
+        "0px",
+        "0px"
+      ]
+    ],
+    "headerBlur": "16px",
+    "headerPixelDelta": 44.544444444444444,
+    "scrollProbe": {
+      "bubbles": 302,
+      "bubbleRectReads": 0,
+      "p50FrameMs": 49,
+      "p95FrameMs": 86.90000000223517,
+      "detachedObservedChildren": 0,
+      "fadeObservers": 1
+    }
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "mobileToggleCycles": null,
+    "corners": [
+      [
+        "0px",
+        "0px"
+      ],
+      [
+        "0px",
+        "0px"
+      ],
+      [
+        "0px",
+        "0px"
+      ]
+    ],
+    "headerBlur": "16px",
+    "headerPixelDelta": 45.74444444444445,
+    "scrollProbe": {
+      "bubbles": 302,
+      "bubbleRectReads": 0,
+      "p50FrameMs": 25.800000000745058,
+      "p95FrameMs": 59.5,
+      "detachedObservedChildren": 0,
+      "fadeObservers": 1
+    }
+  }
+]

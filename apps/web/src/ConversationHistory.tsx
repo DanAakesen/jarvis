@@ -496,6 +496,79 @@ export function ConversationHistory({
   }, []);
 
   useLayoutEffect(() => {
+    const element = transcript.current;
+    if (!element || !hosted || (phone && !voiceActive)) return;
+    // A mask on the scrollport prevents bubble backdrops from sampling the room.
+    // Apply the same viewport-aligned fade to painted items instead.
+    let positions: { item: HTMLElement; top: number; bottom: number }[] = [];
+    const update = () => {
+      const scroll = element.scrollTop;
+      for (const { item, top, bottom } of positions) {
+        if (top - scroll < 64 && bottom - scroll > -64) {
+          item.style.setProperty('--transcript-fade-start', `${scroll - top + 16}px`);
+          item.dataset.transcriptFade = '';
+        } else if (item.hasAttribute('data-transcript-fade')) {
+          delete item.dataset.transcriptFade;
+          item.style.removeProperty('--transcript-fade-start');
+        }
+      }
+    };
+    const measure = () => {
+      const top = element.getBoundingClientRect().top;
+      const scroll = element.scrollTop;
+      const items = Array.from(element.querySelectorAll<HTMLElement>('.conversation-message, :scope > :not(.conversation-messages):not(:has(.conversation-message))'));
+      positions = items.map(item => {
+        const rect = item.getBoundingClientRect();
+        return { item, top: rect.top - top + scroll, bottom: rect.bottom - top + scroll };
+      });
+      update();
+    };
+    let frame = 0;
+    const trackEntrance = () => {
+      const entering = element.getAnimations?.({ subtree: true }).some(animation =>
+        'animationName' in animation && animation.animationName === 'conversation-enter' && animation.playState === 'running');
+      if (entering) measure();
+      else update();
+      frame = entering ? requestAnimationFrame(trackEntrance) : 0;
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(trackEntrance);
+    };
+    const animationChanged = (event: AnimationEvent) => {
+      if (event.animationName !== 'conversation-enter') return;
+      measure();
+      schedule();
+    };
+    measure();
+    element.addEventListener('animationstart', animationChanged);
+    element.addEventListener('animationend', animationChanged);
+    element.addEventListener('animationcancel', animationChanged);
+    element.addEventListener('scroll', schedule, { passive: true });
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    resize?.observe(element);
+    const watchChildren = () => {
+      resize?.disconnect();
+      resize?.observe(element);
+      for (const child of element.children) resize?.observe(child);
+      measure();
+    };
+    watchChildren();
+    const mutation = new MutationObserver(watchChildren);
+    mutation.observe(element, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', measure);
+    return () => {
+      element.removeEventListener('scroll', schedule);
+      element.removeEventListener('animationstart', animationChanged);
+      element.removeEventListener('animationend', animationChanged);
+      element.removeEventListener('animationcancel', animationChanged);
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', measure);
+      resize?.disconnect();
+      mutation.disconnect();
+    };
+  }, [hosted, conversationWindow?.element, phone, voiceActive]);
+
+  useLayoutEffect(() => {
     // Follow new content only while Dan is reading the latest message; scrolling up keeps his place.
     // A newly mounted window (first history or reopened after Close) starts at the latest message.
     const element = transcript.current;

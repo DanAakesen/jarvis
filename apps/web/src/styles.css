@@ -47,6 +47,7 @@
   --surface-translucent: rgb(240 245 247 / 92%);
   --chrome-glass-surface: color-mix(in srgb, var(--surface) 40%, transparent);
   --chrome-glass-blur: 10px;
+  --readability-glass-blur: 16px;
   --report-surface: #f0f5f7;
   --text-muted: #5c564f;
   --rule: #d8cfc2;
@@ -4474,12 +4475,12 @@ select.form-control {
   -webkit-backdrop-filter: blur(var(--chrome-glass-blur));
 }
 
-/* Composer Plus needs stronger separation from dense conversation text (#1319).
-   Keep the rest of the shell on its existing glass material. */
+/* Match the lighter readability frost on Plus, bubbles and header (#1324). */
+.app-shell:is([data-phone], :not(.app-signed-out)) .app-topbar,
 .app-shell .composer-more :is(.more-menu-list, .more-menu-flyout) {
   background: var(--chrome-glass-surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(var(--readability-glass-blur));
+  -webkit-backdrop-filter: blur(var(--readability-glass-blur));
 }
 
 /* Top-layer placement escapes only this popup's nested composer backdrop root. */
@@ -4488,4 +4489,31 @@ select.form-control {
   inset: auto;
   margin: 0;
   overflow: visible;
+}
+
+/* Frost the window on a sibling paint layer, not an ancestor backdrop root.
+   In-flow message bubbles can then sample the scene without becoming popovers. */
+.workspace-window-conversation.luminous-glass {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.workspace-window-conversation.luminous-glass > .workspace-conversation-content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--radius-window);
+  pointer-events: none;
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
+  -webkit-backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
+}
+/* The phone conversation has no window glass. */
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation.luminous-glass > .workspace-conversation-content::before { content: none; }
+}
+
+/* Only the shown phone history was squaring the composer border corners. */
+.app-shell[data-phone="true"][data-voice-active="false"][data-conversation-open="true"] .conversation-input.luminous-glass {
+  border-top-left-radius: var(--radius-window);
+  border-top-right-radius: var(--radius-window);
 }

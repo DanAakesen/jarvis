@@ -6,6 +6,16 @@ nearest Plus. No typing-area geometry or Send behavior changes.
 
 # Design
 
+## Chat bubble frost (#1324; 26 October 2026)
+
+Plus, bubbles and header share the lighter 16px readability blur and existing translucent fill.
+Only the shown mobile history state restores both composer top-corner radii,
+including border pseudo-elements. Desktop and the hidden state retain their existing treatment.
+Preserve bubble geometry, rims, tints, text and the desktop transcript's 64px
+fade. Apply that fade directly to painted transcript items with scrollport-aligned
+offsets, rather than masking their ancestor. Extend item masks to retain timestamp
+and focus overflow. Keep the window blur on a background pseudo-element so it
+does not intercept bubble backdrop sampling. Phone typing mode retains no fade.
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical

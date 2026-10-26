@@ -29,6 +29,18 @@ see `docs/ui/screenshots/1317/README.md`. No physical-iPhone acceptance claimed.
 
 # Agent context
 
+## Bubble frost checks (#1324; 26 October 2026)
+
+Run web tests, lint/build and aggregate repository checks. Actual-App synthetic
+browser reproduction and limitations are in `docs/ui/screenshots/chat-bubble-frost/`.
+Check actual scene blur, translucency, item-mask fade versus baseline, lists,
+scrolling, header and Plus menu across desktop/mobile and both themes. Run
+`fixtures/performance-corners.py` for observer replacement, long-history scrolling
+and repeated mobile history-toggle corner checks; desktop borders stay unchanged.
+Keep backdrop-filter and masks off bubble ancestors; preserve the visible fade
+through the item masks. No real data or private screenshots belong in fixtures.
+
+
 ## Mobile chat scroll verification (26 October 2026; local)
 
 Run the phone viewport and ConversationHistory tests, web lint and web build.

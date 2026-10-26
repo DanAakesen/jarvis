@@ -7,6 +7,16 @@ copy action and clipboard writing only, with safe feedback and no clipboard read
 
 # Decisions
 
+## 2026-10-26 — Preserve transcript fade with bubble frost (#1324)
+
+Use the lighter shared 16px blur on Plus, bubbles and header. Correct only shown
+mobile composer corners; desktop and hidden-state borders remain as before.
+A masked transcript and a backdrop-filtered window each block child backdrop
+sampling. Bubbles remain in scroll flow; move the window blur to its content's
+background pseudo-element and move the existing 64px fade to individual painted
+items. Track viewport-relative mask offsets on scroll, resize and content change.
+No popovers or list markup changes. Synthetic fade comparison and pixel evidence
+are in `docs/ui/screenshots/chat-bubble-frost/`. Physical Safari remains unverified.
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical
