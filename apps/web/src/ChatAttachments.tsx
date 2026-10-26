@@ -62,12 +62,14 @@ function ComposerImagePreview({ item, getAccessToken, config }: {
 export function ComposerAttachments({
   items,
   problems,
+  showErrors = true,
   onRemove,
   getAccessToken,
   config,
 }: {
   items: PendingAttachment[];
   problems: string[];
+  showErrors?: boolean;
   onRemove: (key: number) => void;
   getAccessToken: () => Promise<string>;
   config: PublicConfig;
@@ -89,7 +91,7 @@ export function ComposerAttachments({
                   {item.status === 'ready' && item.unreadable && (
                     <span className="attachment-note">Jarvis couldn’t read this file. It can still be sent, but Jarvis won’t see its contents.</span>
                   )}
-                  {item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
+                  {showErrors && item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
                 </>
               ) : (
                 <>
@@ -107,7 +109,7 @@ export function ComposerAttachments({
                     {item.status === 'ready' && item.unreadable && (
                       <span className="attachment-note">Jarvis couldn’t read this file. It can still be sent, but Jarvis won’t see its contents.</span>
                     )}
-                    {item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
+                    {showErrors && item.status === 'failed' && <span className="attachment-note" data-error role="alert">{item.error}</span>}
                   </span>
                 </>
               )}
@@ -126,7 +128,7 @@ export function ComposerAttachments({
           {`Uploading ${uploading} ${uploading === 1 ? 'file' : 'files'}. Send is available when uploads finish.`}
         </p>
       )}
-      {problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
+      {showErrors && problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
     </div>
   );
 }

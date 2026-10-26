@@ -6,7 +6,10 @@ Implemented the requested full-width message row, lower borderless icon controls
 external errors, keyboard-covered navigation clearance, six-entry menu pages with
 three dots, clear backdrop and shared subtle translucency. Dictation distinguishes
 requested stop cancellation from genuine failures, retains final text until end,
-and ignores callbacks from retired recognizers. Regression cases cover these
+and ignores callbacks from retired recognizers. The review correction preserves
+attachment pills inside the composer, above the full-width draft; only attachment
+errors/problems render outside. A decoded 96×64 synthetic PNG verifies uploading,
+ready, and failed-upload layouts at 390px/320px. Regression cases cover these
 lifecycle orderings, menu accessibility and viewport updates.
 
 Synthetic complete-App and actual-component Chromium captures at 320px/390px and

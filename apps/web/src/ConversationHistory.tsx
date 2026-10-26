@@ -1143,8 +1143,10 @@ export function ConversationHistory({
           {dictationError || (dictating ? 'Listening. Tap Stop dictation to finish.' : "Dictation isn't supported in this browser.")}
         </p>}
         {screenShare?.error && <p className="composer-status chat-error" role="alert">{screenShare.error}</p>}
-        {phone && <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove}
-          getAccessToken={tokenProvider} config={config} />}
+        {phone && attachments.problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
+        {phone && attachments.items.filter((item) => item.status === 'failed').map((item) => (
+          <p key={item.key} className="composer-status chat-error" role="alert">{item.name}: {item.error}</p>
+        ))}
       </div>}
       <div className={`conversation-input${voiceActive ? '' : ' luminous-glass'}`} data-voice-active={voiceActive}>
       {hosted && conversationWindow && !voiceActive && <ConversationHandle host={conversationWindow} />}
@@ -1169,8 +1171,8 @@ export function ConversationHistory({
       <form id="conversation-composer" className="composer" hidden={voiceActive}
         onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
-        {!phone && <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove}
-          getAccessToken={tokenProvider} config={config} />}
+        <ComposerAttachments items={attachments.items} problems={attachments.problems} showErrors={!phone} onRemove={attachments.remove}
+          getAccessToken={tokenProvider} config={config} />
         <textarea
           ref={input}
           id="message"

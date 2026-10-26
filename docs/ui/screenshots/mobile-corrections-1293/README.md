@@ -15,6 +15,28 @@ The parent/coordinator inspected the private references; this executor did not.
 - `app-desktop-1440.png`: 1440×900 full App, existing inline desktop composer retained.
 - `menu-page2-390.png` and `plus-390.png`: isolated actual-component fixtures exercise arrow paging and the existing action menu. Their header explicitly labels the fixture.
 
+## Attachment review correction
+
+`app-attachment-uploading-390.png`, `app-attachment-ready-390.png`,
+`app-attachment-ready-320.png` and `app-attachment-error-320.png` verify the
+preceding approved attachment contract: compact pills remain **inside** the
+composer above the message row. Only failed-upload messages and selection
+problems appear outside above it; failed pills remain removable inside.
+
+The browser uploaded a generated 96×64 PNG (colored geometric shapes), awaited
+`HTMLImageElement.decode()`, and asserted `naturalWidth=96`/`naturalHeight=64`.
+At 390px the ready pill is 44px high, ends at y=617, and the 356px-wide message
+field begins at y=633. The three 44px controls share y=707, below the field.
+The pill's enclosing form is `conversation-composer`; document width stays
+390px. Uploading/ready transitions and a separate 503 failure were verified with
+zero page errors. See `fixtures/1293-attachments-browser.py` for reproduction.
+
+After this correction, four affected suites passed all 254 tests, covering
+attachment ownership during upload/ready, error placement/removal, dictation,
+and stylesheet contracts. Web lint and TypeScript/Vite build passed (existing
+large-chunk advisory only).
+Earlier screenshots without attachments remain applicable.
+
 ## Observations
 
 At 390px, the message field spans 356px. Plus, Dictate and Send are 44×44px,

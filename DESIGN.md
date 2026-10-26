@@ -317,8 +317,10 @@ Chromium layout evidence does not establish physical iPhone/Safari acceptance.
 
 The #1293 correction gives the phone draft its own full-width row. Plus,
 Dictate and Send are borderless 44px icon controls in a second row; accessible
-names and focus indicators remain. Draft errors and attachment feedback sit
-above the composer surface and participate in its dock measurement. A visible
+names and focus indicators remain. Attachment pills (including upload progress
+and ready image thumbnails) stay inside the composer above the draft. Only
+draft/attachment errors and selection problems sit above the composer surface
+and participate in its dock measurement. A visible
 keyboard inset removes navigation clearance; navigation is hidden while covered.
 
 Keep Chat, optional Health, Workspaces and Menu in the bottom navigation.

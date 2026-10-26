@@ -761,8 +761,12 @@
 .composer-feedback:empty { display: none; }
 .composer-feedback { min-width: 0; }
 .composer-feedback > .composer-status { margin: 0 0 var(--space-2); padding: var(--space-2); border-radius: var(--radius-control); background: var(--surface-translucent); }
-.app-shell[data-phone="true"] .composer-feedback > .composer-attachments { margin: 0; }
 .app-shell[data-phone="true"] .conversation-history .composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }
 .app-shell[data-phone="true"] .conversation-history .composer > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 2; }
 .app-shell[data-phone="true"] .conversation-history .composer-live { grid-row: 3; }
 .app-shell[data-phone="true"] .conversation-input[data-voice-active="false"] { background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); }
+
+/* Attachment pills stay inside the composer; only their errors live in feedback. */
+.app-shell[data-phone="true"] .conversation-history .composer:has(.attachment-chips) > :is(textarea, .composer-prompt) { grid-row: 2; }
+.app-shell[data-phone="true"] .conversation-history .composer:has(.attachment-chips) > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 3; }
+.app-shell[data-phone="true"] .conversation-history .composer:has(.attachment-chips) > .composer-live { grid-row: 4; }
