@@ -1,3 +1,12 @@
+## Temporary mobile composer diagnostic (#1315; 26 October 2026)
+
+Implementation and local validation complete: passive, bounded, content-free
+in-memory tap/focus/viewport trace plus explicit Copy Send diagnostic in phone
+Plus. No speculative Send fallback. Full web: 155 files / 2,428 tests passed;
+lint/build and synthetic Chromium scroll/type/Send/copy/privacy checks passed.
+Next: draft PR, normal hosted qualification, review and owner manual merge.
+The actual first-tap keyboard-dismissal bug and physical iOS cause remain unresolved.
+
 ## Mobile keyboard scroll (#1323; 26 October 2026)
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
