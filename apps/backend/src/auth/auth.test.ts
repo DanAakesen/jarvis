@@ -296,6 +296,39 @@ function agentFixture(backendConfig = agentConfig) {
   return { app, record, seen, records, executed: () => executed };
 }
 
+describe('conversation recovery route authorization', () => {
+  const routes = [
+    { method: 'GET' as const, url: '/conversation/turns/active', ownerStatus: 200 },
+    { method: 'GET' as const, url: '/conversation/sessions/41/turns/42/events', ownerStatus: 404 },
+    { method: 'POST' as const, url: '/conversation/sessions/41/turns/42/cancel', ownerStatus: 404 },
+  ];
+  it.each(routes)('requires the owner for $method $url', async ({ method, url: path, ownerStatus }) => {
+    const app = buildApp(agentConfig, undefined, {
+      auth: createTokenVerifier(agentConfig.auth, createRemoteJWKSet(url)),
+    });
+    apps.push(app);
+    expect((await app.inject({ method, url: path })).statusCode).toBe(401);
+    for (const claims of [
+      { oid: '00000000-0000-0000-0000-000000000000' },
+      agentClaims,
+      { oid: '22222222-2222-4222-8222-222222222222', scp: undefined, roles: [runnerEventsRole], idtyp: 'app' },
+      { aud: 'https://management.azure.com/', iss: `https://sts.windows.net/${config.auth.tenantId}/`,
+        ver: '1.0', oid: config.auth.deployObjectId, scp: undefined, idtyp: 'app' },
+    ]) {
+      const response = await app.inject({ method, url: path, headers: { authorization: bearer(await token(claims)) } });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Forbidden' });
+    }
+    // Positive control proves these are registered business routes, not generic auth on a missing path.
+    const owner = await app.inject({ method, url: path, headers: { authorization: bearer(await token()) } });
+    expect(owner.statusCode).toBe(ownerStatus);
+    expect(owner.json()).toEqual(ownerStatus === 200 ? { turns: [] } : {
+      error: method === 'POST' ? 'Chat turn not found'
+        : 'This reply cannot be reattached. Check saved conversation and action status before trying again.',
+    });
+  });
+});
+
 describe('Jarvis agent identity on the tool routes', () => {
   it('lets the configured agent list and call tools as an app-only principal', async () => {
     const { app, record, seen } = agentFixture();

@@ -42,7 +42,7 @@ Implemented shared-material switch/close controls, removed visible camera badges
 ## #1311 — Accepted meal request recovery (26 October 2026)
 
 Implementation: detached accepted chat execution, bounded replay, return-time
-reattachment/history refresh, explicit Stop reply, and synthetic disconnect,
+reattachment/history refresh, explicit cancellation support, and synthetic disconnect,
 approval/expiry/cancellation and once-only replay coverage. Published as draft
 PR #1314. Next: final qualification and the parent-coordinated rebase after
 parallel UI PRs; the parent owns merge/deploy. No real meal retry or write is authorized.

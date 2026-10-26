@@ -19,6 +19,18 @@ These checks do not establish physical iPhone or real speech-provider acceptance
 
 ## Accepted chat recovery checks (#1311; 26 October 2026)
 
+Review correction: retain Dan's P8-35 no-Stop-button choice. The explicit
+cancellation endpoint/client mechanism remains; no new visible cancellation control
+is introduced. Added signed-token coverage in `src/auth/auth.test.ts` verifies
+401 for missing credentials and 403 for non-owner, hosted-agent, runner and deploy
+principals on discovery, replay and cancellation. Owner positive controls prove
+route registration. Conversation tests reject mismatched-session replay/cancel
+without aborting the original turn, and assert unchanged original message/turn IDs.
+The follow-up passed 221 selected backend tests and 252 selected web tests;
+Chromium rechecked reload, navigation, absence of Stop and explicit cancellation
+through the client API at 390×844 and 1440×900. This is author review evidence,
+not an independent reviewer trace or hosted exact-head CI.
+
 Run focused backend `src/core/recoverable-chat.test.ts`, `src/core/conversation.test.ts`,
 `src/core/owner-interactions.test.ts`, `src/daily/tools/food-review.test.ts` and
 `src/daily/tools/food.test.ts`; web `src/conversation-history.test.ts` and
@@ -34,8 +46,8 @@ final response is emitted. Replaying that result twice asserts one agent executi
 and one action write. Expiry and explicit cancellation assert zero writes; existing
 food-tool tests cover source/proposal fingerprints, presence and committed receipts.
 The Chromium App fixture at 390×844 and 1440×900 recovered the exact proposal on
-reload, retained execution through ordinary navigation and cancelled the original
-turn without another turn POST. No screenshots or private meal data were published.
+reload and retained execution through ordinary navigation without adding a Stop
+control or another turn POST. Explicit cancellation is tested through its API. No screenshots or private meal data were published.
 
 The SQL nutrition integration command was attempted but refused to collect because
 no isolated loopback SQL Server is configured. Do not interpret synthetic action

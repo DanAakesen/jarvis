@@ -37,8 +37,8 @@ in `docs/ui/screenshots/1306/README.md`.
 ## Chat return and cancellation (#1311; 26 October 2026)
 
 Reattachment uses the existing live conversation bubble, streamed text and exact
-food invitation. Stop reply is a shared ghost button inside the live bubble; it
-is disabled until the server accepts the source message. Leaving the page only
+food invitation. Preserve the existing no-Stop-button interaction; cancellation
+remains an explicit backend mechanism, not a new visible control. Leaving the page only
 detaches transport. Returning refreshes saved history and reattaches active work.
 No composer geometry, styling or dictation behavior changes.
 

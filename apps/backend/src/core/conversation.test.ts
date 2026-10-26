@@ -858,6 +858,12 @@ describe('conversation routes', () => {
     let wire = '';
     while (!wire.includes('food_invitation')) wire += new TextDecoder().decode((await reader.read()).value);
     const invitation = service.pendingBrowserConfirmations()[0]!;
+    for (const suffix of ['events', 'cancel']) {
+      const wrongSession = await app.inject({ method: suffix === 'events' ? 'GET' : 'POST',
+        url: `/conversation/sessions/99/turns/42/${suffix}`, headers });
+      expect(wrongSession.statusCode).toBe(404);
+    }
+    expect(agentSignal.aborted).toBe(false);
     expect(action).not.toHaveBeenCalled();
     if (decision === 'disconnect_after_commit') {
       await service.resolveBrowserConfirmation(invitation.id, 'approve');
@@ -885,6 +891,8 @@ describe('conversation routes', () => {
     const again = await app.inject({ method: 'GET', url: '/conversation/sessions/41/turns/42/events', headers });
     expect(again.body).toBe(recovered);
     expect(agent.stream).toHaveBeenCalledOnce();
+    expect(agent.stream).toHaveBeenCalledWith(expect.objectContaining({ messageId: '42', turnId: '42' }),
+      headers.authorization, expect.any(AbortSignal));
     expect(service.pendingBrowserConfirmations()).toHaveLength(0);
   });
 

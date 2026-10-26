@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createChatSession,
+  cancelChatTurn,
   loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
@@ -570,6 +571,15 @@ describe('chat steering API', () => {
 
 
 describe('accepted turn recovery', () => {
+  it('addresses explicit cancellation to the original turn without submitting a message', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ cancelled: true }));
+    vi.stubGlobal('fetch', fetch);
+    await cancelChatTurn(createClient(), config, { sessionId: '41', messageId: '42', language: 'en' });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(String(fetch.mock.calls[0]![0])).toBe('https://api.example.com/conversation/sessions/41/turns/42/cancel');
+    expect(fetch.mock.calls[0]![1]).toMatchObject({ method: 'POST', body: '{}' });
+  });
+
   it.each(['disconnect', 'foreground'])('reattaches by original identity after %s without another POST', async reason => {
     vi.useFakeTimers();
     try {

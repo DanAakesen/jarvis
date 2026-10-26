@@ -77,7 +77,6 @@ vi.mock('./auth', () => ({
 }));
 vi.mock('./conversation-history', () => ({
   loadActiveChatTurns: vi.fn(async () => []),
-  cancelChatTurn: vi.fn(async () => {}),
   loadConversationHistory,
   createChatSession,
   sendChatTurn,

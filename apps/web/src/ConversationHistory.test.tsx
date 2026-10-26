@@ -13,9 +13,8 @@ import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
-const { loadActiveChatTurns, cancelChatTurn, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+const { loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
   loadActiveChatTurns: vi.fn(),
-  cancelChatTurn: vi.fn(),
   loadConversationHistory: vi.fn(),
   loadImageArtifactUrl: vi.fn(),
   createChatSession: vi.fn(),
@@ -26,7 +25,7 @@ const { loadActiveChatTurns, cancelChatTurn, loadConversationHistory, loadImageA
 vi.mock('./conversation-history', async (importOriginal) => ({
   ...await importOriginal<typeof import('./conversation-history')>(),
   loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn,
-  loadActiveChatTurns, cancelChatTurn,
+  loadActiveChatTurns,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -162,7 +161,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   MockDictationRecognition.failStart = false;
   loadActiveChatTurns.mockResolvedValue([]);
-  cancelChatTurn.mockResolvedValue(undefined);
   loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -176,23 +174,22 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
-  it('reattaches on mount with original identity, and Stop reply cancels that execution', async () => {
+  it('reattaches on mount with original identity without adding a Stop control', async () => {
     const recovered = { sessionId: '41', messageId: '51', language: 'en' };
     loadActiveChatTurns.mockResolvedValueOnce([recovered]);
-    sendChatTurn.mockImplementation(async (_token, _config, _session, _text, onUser, _delta,
-      _uncertain, _screen, _shared, signal) => {
+    const result = Promise.withResolvers<typeof assistantMessage>();
+    sendChatTurn.mockImplementation(async (_token, _config, _session, _text, onUser) => {
       onUser(userMessage);
-      return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Stopped'))));
+      return result.promise;
     });
     renderConversation();
-    const stop = await screen.findByRole('button', { name: 'Stop reply' });
-    expect(sendChatTurn).toHaveBeenCalledOnce();
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
     expect(sendChatTurn.mock.calls[0]![2]).toEqual({ id: '41', language: 'en' });
     expect(sendChatTurn.mock.calls[0]![15]).toBe('51');
     expect(createChatSession).not.toHaveBeenCalled();
-    fireEvent.click(stop);
-    await waitFor(() => expect(cancelChatTurn).toHaveBeenCalledWith(getAccessToken, config, recovered));
-    await screen.findByText(/Reply stopped/);
+    expect(screen.queryByRole('button', { name: 'Stop reply' })).toBeNull();
+    result.resolve(assistantMessage);
+    await screen.findByText(assistantMessage.text);
   });
 
   it('refreshes persisted results on return without submitting another turn', async () => {
@@ -1247,7 +1244,7 @@ describe('ConversationHistory', () => {
       getAccessToken, config, session, steeringMessage.text, 'en',
     ));
     expect(screen.getByText('Steering…')).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Stop reply' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop reply' })).toBeNull();
     fireEvent.change(input, { target: { value: 'A later draft' } });
     expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);

@@ -31,7 +31,6 @@ import { formatDateTime } from './format/date-time';
 import {
   createChatSession,
   loadActiveChatTurns,
-  cancelChatTurn,
   type RecoverableTurn,
   loadImageArtifactUrl,
   loadConversationHistory,
@@ -296,7 +295,6 @@ export function ConversationHistory({
   useEffect(() => { writeDraft(draft); }, [draft]);
   const dismissHistoryError = useCallback(() => setHistoryError(''), []);
   const turnController = useRef<AbortController | null>(null);
-  const [acceptedTurn, setAcceptedTurn] = useState<RecoverableTurn | null>(null);
   const turnSession = useRef<ChatSession | null>(null);
 
   useEffect(() => () => { turnController.current?.abort(); }, []);
@@ -695,7 +693,6 @@ export function ConversationHistory({
     const controller = new AbortController();
     turnController.current = controller;
     turnSession.current = null;
-    setAcceptedTurn(queued.recovery ?? null);
     turnInFlight.current = true;
     setSending(true);
     setLiveTools([]);
@@ -751,7 +748,6 @@ export function ConversationHistory({
         text,
         (message) => {
           userMessageSaved = true;
-          setAcceptedTurn({ sessionId: activeSession.id, messageId: message.id, language });
           messageId = message.id;
           setActiveMessage(null);
           setMessages((current) => current.some(saved => saved.id === message.id) ? current
@@ -825,7 +821,6 @@ export function ConversationHistory({
       }
 
     } finally {
-      setAcceptedTurn(null);
       turnController.current = null;
       turnSession.current = null;
       setActiveMessage(null);
@@ -867,18 +862,6 @@ export function ConversationHistory({
       document.removeEventListener('visibilitychange', onReturn);
     };
   }, [tokenProvider, config, runTurn]);
-
-  async function stopReply() {
-    const turn = acceptedTurn;
-    const controller = turnController.current;
-    if (!turn) return;
-    try {
-      await cancelChatTurn(tokenProvider, config, turn);
-      controller?.abort();
-    } catch {
-      setTurnError('Could not stop the reply. Reconnect and try Stop reply again.');
-    }
-  }
 
   function failedTurnFeedback(turn: FailedTurn) {
     return (
@@ -1127,9 +1110,6 @@ export function ConversationHistory({
                 <span className="visually-hidden" role="status" aria-live="polite">Jarvis is thinking…</span>
               </p>
             )}
-            <button type="button" className="ghost-button" disabled={!acceptedTurn}
-              title={acceptedTurn ? undefined : 'Waiting for the message to be accepted'}
-              onClick={() => { void stopReply(); }}>Stop reply</button>
             {streamedAcknowledgment && (
               <p className="streaming-acknowledgment" aria-label="Jarvis's initial reply">
                 {streamedAcknowledgment}
