@@ -1,5 +1,16 @@
 # Product
 
+## Camera preview follow-up (#1304; 26 October 2026)
+
+Show only the unframed video and overlaid switch/close controls, using the existing app glass material. Remove visible Live and camera-direction badges. Preserve movement, camera switching and closing; retain fitted geometry through stream replacement and refresh it on playback resume.
+
+## Native attachment chooser continuity (#1306; 26 October 2026)
+
+Opening Attach file or photo retains the underlying plus menu while the native
+chooser is open. Cancellation leaves the menu available; selecting files closes
+it and continues the existing upload flow. Preserve plus toggling and ordinary
+menu-action dismissal. No custom photo chooser is introduced.
+
 ## Unified translucent chrome (#1301; 26 October 2026)
 
 Menu popups, composer, bottom navigation and header retain visible but partial
@@ -121,7 +132,9 @@ is unchanged.
 On phones, keep message times below the chat bubbles. Use the compact composer
 with a plus menu for existing attachments, video, screen sharing and realtime
 Voice. Dictate is a separate action that adds recognized speech to the unsent
-draft; it never starts a Jarvis voice turn or sends the draft. Make unavailable
+draft; it never starts a Jarvis voice turn or sends the draft. Dictate stays
+active through pauses until Stop, displays interim speech as it arrives, and
+can be toggled repeatedly. Genuine recognition failures stop it visibly. Make unavailable
 browser dictation and microphone failures clear. On phones, give the draft a
 full-width row and place borderless icon actions below it, preserving accessible
 names. Show errors above the composer surface. Keyboard-covered navigation must
@@ -581,7 +594,7 @@ a fallback when Voice Live is not configured.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
-Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video at its actual aspect ratio, fitted to available workspace space without a surrounding frame, plus the actual Front/Back label, Live status and overlaid Switch/Close controls; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it, and the full status remains readable. Observation notices and playback recovery stay over the video with retry reachable without scrolling the camera controls away. The larger phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow. Pending photos appear as compact preview pills above the text input inside the composer; sent photos show their image preview in the message.
+Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video at its actual aspect ratio, fitted to available workspace space without a surrounding frame, plus overlaid Switch/Close controls without visible Live or direction badges; Switch appears only on mobile touch input, not a narrow desktop window. Switch retains an accessible directional name when the browser reports facing direction. Observation notices and playback recovery stay over the video with retry reachable without scrolling the camera controls away. The larger phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow. Pending photos appear as compact preview pills above the text input inside the composer; sent photos show their image preview in the message.
 With a screen share active and the camera off, generic visual questions in text chat such as **What do you see?** inspect the shared screen and send its context with the message. Camera-specific questions still require the camera; camera-conversation mode keeps its existing priority while the camera is on.
 
 Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames; enabling or switching alone does not upload. There is no Look now button and conversation capture does not require watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.

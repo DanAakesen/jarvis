@@ -4,6 +4,13 @@ Actual App in Chromium mobile emulation, synthetic authentication/API responses,
 390px width. No private owner screenshots, real camera, microphone or production
 account are used. Desktop behavior is also asserted at 1440px.
 
+## Combined-tree validation
+
+Revalidated after merging main `83563177288aafccf8cee63f9f941ac3f6fed02c`,
+including attachment #1308, preview #1312 and continuous dictation #1310.
+Runtime changes from this branch remain confined to composer visibility, focus
+and clearance. Exact final-head local and hosted results are recorded in PR #1307.
+
 ## Scope and behavior
 
 Use `/` plus closed Workspaces pane state. On phone screens other than

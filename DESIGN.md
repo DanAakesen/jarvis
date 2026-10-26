@@ -10,6 +10,19 @@ are also visible only on Chat.
 Workspaces is a separate browsing screen despite retaining the route. Menu remains
 an overlay on Chat and does not hide the composer.
 
+## Preview controls and resumed video (#1304; 26 October 2026)
+
+Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.
+
+## Attachment chooser source (#1306; 26 October 2026)
+
+Keep the attachment row mounted when opening the system file/photo chooser.
+Its transparent native file input shares that row's bounds instead of a clipped
+1px position elsewhere in the composer. Selection closes the menu and restores
+plus focus; cancellation retains the source. Other actions keep their existing
+closure behavior. Synthetic actual-App evidence and physical-iPhone limits are
+in `docs/ui/screenshots/1306/README.md`.
+
 ## Settled glass correction (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is
@@ -363,7 +376,9 @@ Chromium layout evidence does not establish physical iPhone/Safari acceptance.
 
 The #1293 correction gives the phone draft its own full-width row. Plus,
 Dictate and Send are borderless 44px icon controls in a second row; accessible
-names and focus indicators remain. Attachment pills (including upload progress
+names and focus indicators remain. Dictate keeps its pressed Stop state through
+speech pauses; interim text updates the draft in place until finalized. Explicit
+Stop retains trailing recognition results without restarting. Attachment pills (including upload progress
 and ready image thumbnails) stay inside the composer above the draft. Only
 draft/attachment errors and selection problems sit above the composer surface
 and participate in its dock measurement. A visible

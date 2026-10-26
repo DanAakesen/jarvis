@@ -10,6 +10,33 @@ prevent hidden-input focus. Desktop is unchanged. Voice sessions remain mounted;
 are also visible only on Chat.
 Menu remains an overlay and does not hide its anchor composer.
 
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Keep browser dictation toggled on across natural recognition endings and silence,
+streaming interim hypotheses into the draft without duplicating finalized text.
+Use a fresh recognizer per automatic restart to isolate result indexes and stale
+callbacks. Explicit Stop allows trailing results but prevents restart. Permission,
+audio/service and unexpected abort errors remain visible and terminal; no-speech
+alone is a normal pause. Preserve typed draft edits and keep realtime voice,
+composer geometry and colors unchanged. Synthetic verification is separate from
+physical iPhone speech-service acceptance.
+
+## 26 October 2026 — Preview controls (#1304)
+
+The owner requested existing app styling for preview controls and removal of Live/camera-direction badges. Reuse shared chrome glass tokens; preserve named switch/close actions and unframed movement. A reported changed preview after switching/typing motivates preserving valid geometry through stream replacement and updating it when playback resumes. The exact private-device lifecycle remains unverified.
+
+## Preserve the native attachment source (#1306; 26 October 2026)
+
+Source inspection confirmed that every More action closed the menu and focused
+its trigger before calling its handler. The attachment handler then clicked a
+clipped 1px input elsewhere in the form. Keep only the file-input action open,
+place its input beside the row, and close on selection after the existing file
+handler runs. This preserves native picker choices, cancel/retry, plus toggling,
+and unrelated actions without timers or a custom picker. Chromium verifies the
+DOM lifecycle and matching input/row bounds; exact iOS popover placement remains
+unverified on a physical iPhone. The private reference transfer failed and no
+private image is committed.
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

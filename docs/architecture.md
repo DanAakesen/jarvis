@@ -508,9 +508,14 @@ callback from the Voice entry.
 
 Draft-only Dictate uses the browser's `SpeechRecognition` API (with its WebKit
 alias where available), not `BrowserVoiceClient.onUserTurn`: realtime voice
-transcripts are assistant turns and must not be repurposed as drafts. A final
-recognized segment is appended to the existing draft and saved through the
-existing draft effect; it is never submitted automatically. Recognition is
+transcripts are assistant turns and must not be repurposed as drafts. Continuous
+recognition streams interim/final result snapshots into the existing draft,
+replacing hypotheses rather than appending duplicates. Normal end and no-speech
+events start a fresh recognizer while the toggle remains on; an explicit stop
+retains ownership until end for trailing results, then stays off. Each new
+recognizer starts from the current draft. Typed edits take precedence over
+previously displayed segments; later segments still append. Text is saved
+through the existing draft effect and never submitted automatically. Recognition is
 requested only after the owner's Dictate click, follows the selected chat
 language, and reports unsupported browsers and microphone errors. Transcription
 is handled by the browser speech-recognition implementation and may be

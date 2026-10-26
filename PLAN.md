@@ -9,6 +9,21 @@ and remove unused composer clearance on other pages. Desktop stays unchanged.
 Synthetic actual-App navigation evidence is in `docs/ui/screenshots/mobile-chat-only-1303/`.
 Parent owns final qualification, review and release.
 
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Implemented on a separate branch from main `d7667964`: interim transcript
+replacement, automatic restart through pauses, repeatable explicit Stop, and
+visible fatal failures. Evidence and verification are in
+`docs/ui/screenshots/1305/README.md`. Reconciled attachment #1308 and preview
+#1312 from main `57ae85a0`, preserving their changes. Final exact-head checks
+and independent review precede the coordinator-authorized sequential merge.
+Physical iPhone acceptance remains pending.
+
+## Preview follow-up #1304
+
+Implemented shared-material switch/close controls, removed visible camera badges, and retained/refreshed fitted geometry across stream replacement/resume. Synthetic mobile/desktop regression QA passed for dragging, repeated switching, pause/resume aspect changes and viewport restoration. Normal web checks are recorded in the PR; no physical-device acceptance or release claimed.
+
+
 ## Settled glass and dock selection (#1301; 26 October 2026)
 
 Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,
