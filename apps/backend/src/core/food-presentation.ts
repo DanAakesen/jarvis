@@ -16,14 +16,17 @@ export function presentNutritionList(text: string, presentation: string): string
   if (!canonical.length) return text;
   const lines = text.split('\n');
   let fenced = false;
-  let inserted = false;
-  const result: string[] = [];
-  for (const line of lines) {
+  const blocks: { start: number; end: number }[] = [];
+  for (const [index, line] of lines.entries()) {
     if (/^\s*(?:```|~~~)/u.test(line)) fenced = !fenced;
-    const plain = line.replace(/\*\*/gu, '');
-    if (!fenced && /^\s*(?:[-*]|\d+[.)])\s+(?:Protein|Calories|Fat|Carbohydrates|Fiber):/iu.test(plain)) {
-      if (!inserted) { result.push(...canonical); inserted = true; }
-    } else result.push(line);
+    const nutrient = !fenced && /^\s*(?:[-*]|\d+[.)])\s+(?:Protein|Calories|Fat|Carbohydrates|Fiber):/iu.test(line.replace(/\*\*/gu, ''));
+    if (nutrient) {
+      const previous = blocks.at(-1);
+      if (previous?.end === index) previous.end = index + 1;
+      else blocks.push({ start: index, end: index + 1 });
+    }
   }
-  return inserted ? result.join('\n') : `${text}\n\n${presentation}`;
+  const selected = blocks.find(block => includesNutritionList(lines.slice(block.start, block.end).join('\n'), presentation));
+  if (!selected) return `${text}\n\n${presentation}`;
+  return [...lines.slice(0, selected.start), ...canonical, ...lines.slice(selected.end)].join('\n');
 }

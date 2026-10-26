@@ -733,6 +733,26 @@ describe('ConversationHistory', () => {
     expect(item.parentElement?.textContent).toContain('Fat: 0 g');
   });
 
+  it('reconciles a streamed three-nutrient list with the final canonical five-nutrient reply', async () => {
+    const initial = '- Protein: 37 g\n- Calories: 632 kcal\n- Fat: 19 g';
+    const final = `${initial}\n- Carbohydrates: 74 g\n- Fiber: 11 g`;
+    let finish!: (value: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser, onDelta) => {
+      onUser(userMessage); onDelta(initial);
+      return new Promise(resolve => { finish = resolve; });
+    });
+    renderConversation();
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Estimate synthetic meal' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Protein: 37 g');
+    await act(async () => finish({ ...assistantMessage, text: final }));
+    await screen.findByText('Fiber: 11 g');
+    expect(screen.getAllByText('Protein: 37 g')).toHaveLength(1);
+    expect(screen.getAllByText('Calories: 632 kcal')).toHaveLength(1);
+    expect(screen.getAllByText('Carbohydrates: 74 g')).toHaveLength(1);
+  });
+
   it('renders the same booking table during streaming, completion and persisted-history reload', async () => {
     const text = [
       '**Two synthetic bookings** before 1 July 2031:',

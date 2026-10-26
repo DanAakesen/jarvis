@@ -25,3 +25,12 @@ it('keeps one rounded list with every nutrient and preserves source precision', 
   expect(values).toEqual(before);
   expect(nutritionSummary({ ...values, proteinGrams: null, fatGrams: 0 })).toContain('- Protein: unknown (not zero) g\n- Calories: 632 kcal\n- Fat: 0 g');
 });
+
+it('preserves component nutrition and surrounding content outside the matching meal-summary list', () => {
+  const summary = '- Protein: 37 g\n- Calories: 632 kcal\n- Fat: 19 g\n- Carbohydrates: 74 g\n- Fiber: 11 g';
+  const text = 'Chicken component:\n- Protein: 30 g\n- Calories: 200 kcal\n- Fat: 5 g\nMeal total:\n- Protein: 37 g\n- Calories: 632 kcal\n- Fat: 19 g\nOil component:\n- Fat: 14 g';
+  const result = presentNutritionList(text, summary);
+  expect(result).toContain('Chicken component:\n- Protein: 30 g\n- Calories: 200 kcal\n- Fat: 5 g');
+  expect(result).toContain(`Meal total:\n${summary}`);
+  expect(result).toContain('Oil component:\n- Fat: 14 g');
+});
