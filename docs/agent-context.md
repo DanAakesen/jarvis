@@ -1,5 +1,15 @@
 # Agent context
 
+## Mobile Send focus checks (#1315; 26 October 2026)
+
+Run the ConversationHistory and phone-chat-viewport suites for focused coverage;
+full web tests, web lint and web build also pass locally. The actual-component
+Chromium touch reproduction, event traces, screenshot and instructions are in
+`docs/ui/screenshots/1315/README.md`. It controls keyboard viewport geometry and
+intercepts every external request with synthetic responses. Physical iPhone
+keyboard behavior and parent-owned final integration remain unverified.
+
+
 ## Continuous dictation checks (#1305; 26 October 2026)
 
 Run `npm test --workspace @jarvis/web`, web lint and web build. Focused regression

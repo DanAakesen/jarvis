@@ -1,5 +1,13 @@
 # Design
 
+## Mobile Send focus (#1315; 26 October 2026)
+
+When the phone message field is focused, prevent the Send primary pointer-down
+from transferring focus. Keep native click/form submission, keyboard activation
+and cancellation semantics; do not send on pointer-down or refocus after an
+asynchronous reply. Control geometry and desktop focus behavior stay unchanged.
+
+
 ## Preview controls and resumed video (#1304; 26 October 2026)
 
 Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.

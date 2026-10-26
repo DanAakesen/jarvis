@@ -1,0 +1,59 @@
+{
+  "active": "message",
+  "height": 480,
+  "keyboard": "true",
+  "trace": [
+    {
+      "type": "pointerdown",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "pointercancel",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "pointerdown",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "pointerup",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "click",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "submit",
+      "target": "conversation-composer",
+      "active": "message"
+    }
+  ],
+  "calls": [
+    "Synthetic touch send"
+  ],
+  "before": {
+    "x": 329,
+    "y": 419,
+    "width": 44,
+    "height": 44
+  },
+  "after": {
+    "x": 329,
+    "y": 419,
+    "width": 44,
+    "height": 44
+  },
+  "errors": [],
+  "repeated_reopened_desktop_calls": [
+    "Synthetic touch send",
+    "Synthetic repeated touch",
+    "Synthetic reopened draft",
+    "Synthetic desktop send"
+  ]
+}

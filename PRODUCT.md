@@ -1,5 +1,13 @@
 # Product
 
+## Mobile Send focus (#1315; 26 October 2026)
+
+A phone Send tap while the message field is focused sends once without dismissing
+the keyboard, leaving the field ready for the next draft. Cancelled presses do
+not send. Existing upload, empty-draft, pending/steering and failure recovery
+semantics remain in place. Physical iPhone acceptance remains unverified.
+
+
 ## Camera preview follow-up (#1304; 26 October 2026)
 
 Show only the unframed video and overlaid switch/close controls, using the existing app glass material. Remove visible Live and camera-direction badges. Preserve movement, camera switching and closing; retain fitted geometry through stream replacement and refresh it on playback resume.

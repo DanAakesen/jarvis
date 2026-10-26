@@ -1,0 +1,61 @@
+{
+  "active": "",
+  "height": 844,
+  "keyboard": "false",
+  "trace": [
+    {
+      "type": "pointerdown",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "pointercancel",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "pointerdown",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "pointerup",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "mousedown",
+      "target": {},
+      "active": "message"
+    },
+    {
+      "type": "blur",
+      "target": "message",
+      "active": ""
+    },
+    {
+      "type": "focus",
+      "target": "composer-send",
+      "active": ""
+    },
+    {
+      "type": "click",
+      "target": "app-shell",
+      "active": ""
+    }
+  ],
+  "calls": [],
+  "before": {
+    "x": 329,
+    "y": 419,
+    "width": 44,
+    "height": 44
+  },
+  "after": {
+    "x": 329,
+    "y": 707,
+    "width": 44,
+    "height": 44
+  },
+  "errors": []
+}

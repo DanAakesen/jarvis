@@ -1,5 +1,15 @@
 # Decisions
 
+## 26 October 2026 — Preserve phone composer focus on Send (#1315)
+
+Use a guarded pointer-down default prevention on the existing Send button only
+while the phone textarea is focused. The native click remains the sole submit
+path. Controlled Chromium reproduced blur, simulated keyboard expansion, dock
+movement and a missed click without the guard; with it, focus and geometry stay
+stable and one tap submits once. This evidence does not establish physical iOS
+behavior. See `docs/ui/screenshots/1315/README.md`.
+
+
 ## Continuous draft dictation (#1305; 26 October 2026)
 
 Keep browser dictation toggled on across natural recognition endings and silence,
