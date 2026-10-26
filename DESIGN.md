@@ -1653,6 +1653,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Enlarged chat (Dan, 10 October):** in desktop typing mode, the composer expands to the same left/right edges as the visible maximised conversation, on home and other pages. Restore, minimise and close return it to the normal dock width. Phone, voice and unrelated maximised windows keep their existing composer layout. `ConversationHistory.css` derives the width from the shared window state; no duplicate React state or new motion.
 - **Camera preview (P9-79, Dan, 11 October; local; compact layout requested in #1265):** Dan's supplied reference supersedes the camera row in typing/voice. Activating capture opens a compact upper-right preview-only workspace surface named Camera preview; its accessible workspace heading and lifecycle remain, but the visible window heading, actions and outer frame are omitted. The preview itself carries the existing refracted glass rim. It shows the actual local video without cropping, mirrored only for the front preview, with facing/Live labels and camera-switch/close controls overlaid on the video. On phones it stays a compact overlay beside the foreground window rather than replacing that window. Workspace minimising still keeps capture on; Close stops it. Switching remains mobile-touch-only; unknown direction is explicit. Startup, device and playback failures have visible recovery. The composer and voice bar keep their original geometry. Every-turn capture is enabled locally against deployed #702/#704/#706, including optional handles for chat and EN/DA realtime image input; actual model image acceptance remains unverified. Typed limits show ordinary age-labelled text below the preview, and the existing toast stack makes it visible without undocking. Local Live describes the video, not freshness at the model. The obsolete manual Look at camera voice action is absent when conversation capture is enabled; watch mode remains independent. Ten minutes without a user turn stops capture and restores explanation/retry even from a docked tab. The inactive preview omits its empty picture so recovery stays visible on short phones. **Enable video** is the camera-on label; **Attach file or photo** leads the typing More menu. Synthetic Chromium checks 1440x1000 desktop normal motion and 320x700 touch phone reduced motion, including fitting limit copy and both voice languages. No physical-camera or deployed-model acceptance is claimed. No Look now button or new animation system.
 
+- **Camera preview sizing follow-up (#1283; 25 October 2026):** the video itself is the preview surface, sized from its loaded dimensions and fitted to available workspace bounds without a surrounding picture frame. Same-stream dimension changes update the fit. The phone overlay is larger but bounded; switch/close remain over the actual video, while status, observation notices and playback recovery stay visible within it. Feedback starts below the measured full status-label box, including wrapped unknown-direction text. Synthetic Chromium checked portrait/landscape switching, recovery, and status at desktop and 320×700 phone sizes; inspect screenshots and measurements in `docs/ui/screenshots/p9-1283/`. No physical-camera imagery was used.
 - **Voice visual-source safety (11 October; local):** while camera conversation is on, the existing Look at screen menu row is disabled with the explanation "Turn off the camera to inspect the shared screen in voice." It retains the shared menu's keyboard focus, disabled styling and accessible description. Independent watch actions and Stop sharing screen are unchanged. No new composer geometry, controls or animation.
 
 - **Camera experience acceptance (Dan, 12 October):** camera-window updates are
@@ -1754,13 +1755,14 @@ Workspaces is where everything Jarvis has pulled up lives afterwards. It replace
 Attachments reuse the composer glass. **Attach file or photo** is the first
 item after Language in the More menu; paste and drop work without it, and a
 drop shows a focus-coloured rim and "Drop files to attach them". Pending files are
-chips under the message row: thumbnail or file glyph, name, type · size, a
-progress bar while uploading, a note when Jarvis cannot read the file, error text
-and a 44px Remove button. Sent files appear as compact glass buttons on the
-message and open on demand; an expired file is disabled with an explanation. A
-publication confirmation adds the image and a warm warning surface stating
-that the repository is public. Text, not colour alone, conveys every state; no
-new animation is introduced.
+inside the composer above the text input. Photos use a compact 44px-high pill with
+a 30px preview and Remove control; uploading photos retain a thin progress bar.
+Other files show their name and type · size. Unreadable and failed uploads keep
+their explanatory text. Sent images show a compact preview in the message and open
+on demand; other sent files remain compact glass buttons. An expired file is
+disabled with an explanation. A publication confirmation adds the image and a
+warm warning surface stating that the repository is public. Text, not colour alone,
+conveys every state; no new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 

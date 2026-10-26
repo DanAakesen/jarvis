@@ -58,6 +58,7 @@ export function useChatAttachments(getAccessToken: () => Promise<string>, config
     return () => {
       for (const controller of active.values()) controller.abort();
       active.clear();
+      for (const item of itemsRef.current) revoke(item);
     };
   }, []);
 

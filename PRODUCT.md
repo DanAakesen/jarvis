@@ -290,11 +290,13 @@ relayed by the coordinator. This supersedes earlier camera-release holds below.
 The coordinator reports live chat `visual.path=image` on every tested turn;
 live voice image acceptance and physical-phone checks remain separate.
 
-Camera preview is a compact, preview-only workspace surface showing the local video with
-overlaid camera-switch and close controls; its accessible workspace identity and
-lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
+Camera preview is a preview-only workspace surface sized to the local video's
+actual aspect ratio and the available workspace, with no surrounding frame around
+the video and overlaid camera-switch and close controls. Its accessible workspace
+identity and lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
 capture; Close/Turn off, session end and ten minutes without a user turn stop
-the tracks. Idle recovery stays visible. Camera controls never share or cover
+the tracks. Status, observation notices and playback recovery remain visible on
+the video without scrolling its controls away. Idle recovery stays visible. Camera controls never share or cover
 the composer. Camera-on chat and correlated EN/DA realtime turns upload a fresh
 frame using deployed #713 `mode: 'handle'`, then forward its single-use handle
 without requiring a caption. Legacy screen inspection stays caption-first.
@@ -536,7 +538,7 @@ a fallback when Voice Live is not configured.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
-Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a compact **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video, actual Front/Back label, Live status and overlaid Switch/Close controls; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it. The compact phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow.
+Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video at its actual aspect ratio, fitted to available workspace space without a surrounding frame, plus the actual Front/Back label, Live status and overlaid Switch/Close controls; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it, and the full status remains readable. Observation notices and playback recovery stay over the video with retry reachable without scrolling the camera controls away. The larger phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow. Pending photos appear as compact preview pills above the text input inside the composer; sent photos show their image preview in the message.
 With a screen share active and the camera off, generic visual questions in text chat such as **What do you see?** inspect the shared screen and send its context with the message. Camera-specific questions still require the camera; camera-conversation mode keeps its existing priority while the camera is on.
 
 Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames; enabling or switching alone does not upload. There is no Look now button and conversation capture does not require watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
