@@ -1,3 +1,4 @@
+import { ReviewSummary } from './ReviewSummary';
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
 import type { BrowserConfirmation, FeedAttention, ActivityItem } from './activity';
@@ -59,7 +60,7 @@ function ConfirmationList({
             <li key={confirmation.id} className="activity-item">
               <div>
                 <h4>{label}</h4>
-                <p className="confirmation-summary">{confirmation.summary}</p>
+                <ReviewSummary text={confirmation.summary} />
                 <p className="activity-time">
                   Expires <time dateTime={confirmation.expiresAt}>{formatDateTime(confirmation.expiresAt)}</time>
                 </p>

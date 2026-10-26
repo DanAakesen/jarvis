@@ -4,7 +4,7 @@ Actual App with synthetic history and an animated striped scene, mocked sign-in
 and HTTP. Chromium exercises the existing WebGL fallback. No private data,
 physical device, Safari, real media or provider is exercised.
 
-Both speaker bubbles share the Plus menu's 24px backdrop blur and chrome fill.
+Plus, both speaker bubbles and app header share a lighter 16px backdrop blur and the existing chrome fill.
 The window blur uses a background-only pseudo-element. The desktop transcript
 keeps its 64px top-edge fade through item masks aligned to the scrollport on
 scroll/resize/content changes. Masks extend beyond each item to retain timestamps
@@ -99,8 +99,64 @@ and cancels its animation frame on cleanup. The animation itself is unchanged.
   pass is claimed. Timeout identity remains `App shell > uses the same gated Daily
   page and existing refresh stream (phone=false)`; it passed in both focused reruns.
 
-Publication remains blocked: local git HTTPS credentials are invalid. GitHub
+Historical publication checkpoint: local git HTTPS credentials were invalid. GitHub
 `create_blob` for ConversationHistory.css was denied, then denied again after
 one evidence-backed retry with freshly verified owner approval. The reviewer
 said delegated approval did not establish a direct override of the earlier
-restriction. No retry, alternative upload, remote branch or draft PR followed.
+restriction. No bypass followed at that checkpoint. Subsequent direct file-level
+approval enabled the original draft PR #1326.
+
+## Integrated owner refinement
+
+Use 16px (previously 24px) on Plus, bubbles and header through one token; preserve existing fill.
+The history-open rule explicitly set composer top radii to zero; it now preserves
+the window radius, inherited by both gradient border pseudo-elements.
+Integrated main aa87c57e retains video #1318, Health #1322 and keyboard #1325.
+Documentation introduction conflicts retain both entries; production merged automatically.
+
+Review follow-up disables the unused fade observer during phone typing, coalesces
+scroll updates into animation frames, and resets ResizeObserver targets on
+replacement so removed direct children are not retained. Synthetic 300-bubble
+scroll/observer and corner checks are in fixtures/performance-corners.py.
+
+Corner clarification: only mobile with the history window shown is corrected;
+desktop and hidden-state borders remain as before. Publishing private owner communication as an issue comment was denied by
+approval review. No quote was posted or retained in these published artifacts.
+
+
+Final cached-mask and lighter-material probes pass all four viewport/theme cases.
+Header background A/B pixel deltas are 44–50/255. Desktop fade errors are
+0.25/255 dark and 0.23/255 light. Mobile shown/hidden corners and both gradient
+border pseudo-elements passed three hide/show cycles per theme; desktop retains
+its original zero top radius in the shown state. No private screenshot was used.
+
+The 302-bubble probe reports zero bubble rectangle reads during steady scrolling
+and zero retained detached direct children after replacement. Phone typing has
+zero fade observers. Measured frame times remain noisy under concurrent checks
+(p50 18–52ms, p95 36–217ms); these do not establish physical-device smoothness.
+The previous uncached probe performed 11,778 bubble rectangle reads in 40 frames.
+Position caches now refresh on content/size/entrance changes, not raw scrolling;
+only items intersecting the top fade receive masks. Offset state and observers
+are cleaned up on replacement/unmount.
+
+
+Final integration qualification (main aa87c57e): full web suite ran 154 files / 2420
+tests; 2418 passed and two hit the unchanged 15-second timeout under concurrent
+browser load. Failures were Camera preview's touch drag/cancel case and the
+app-wide contrast audit. No assertions or timeouts were weakened. Targeted
+uncontended rerun is recorded below. Previous focused Send timeout was also a
+15-second timeout under contention; subsequent history suites passed.
+
+
+- Final uncontended CameraPreview/contrast-audit/ConversationHistory/phone viewport
+  rerun: **4 files / 149 tests passed**, including both full-suite timeout cases.
+- Final web lint and TypeScript/Vite build passed. Aggregate repository lint also
+  passed; full backend/vault dependency and PowerShell limits above remain.
+- Final `browser.py`, `menu-regression.py` and `performance-corners.py` passed.
+  Final focus-overflow captures show the faded focus outline and timestamp beyond
+  the short bubble border. Timestamp checks wait for the existing opacity
+  transition to reach its unchanged visible state. Corners are verified on the
+  element and both border pseudo-elements across both themes and toggle states.
+- Latest 302-bubble steady-scroll probe: zero bubble rectangle reads; zero retained
+  detached observed children. Phone has no fade observer. Frame timings remain
+  hardware/environment dependent; no physical Safari smoothness claim is made.

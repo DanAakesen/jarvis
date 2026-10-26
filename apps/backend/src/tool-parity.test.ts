@@ -204,7 +204,7 @@ describe('voice and chat tool parity', () => {
     expect(catalogue.map(({ name }) => name)).toEqual(expect.arrayContaining([
       'mail_search', 'calendar_create_event', 'calendar_create_events',
       'calendar_get_pending_change', 'calendar_confirm_change', 'vault_search', 'get_system_health',
-      'daily_query', 'daily_food', 'daily_food_review',
+      'health_query', 'health_food', 'health_food_review',
     ]));
     expect(missingInstructionTools(capabilityInstructions(defaultSettings.memory), catalogue)).toEqual([]);
   });

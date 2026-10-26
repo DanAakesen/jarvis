@@ -1,0 +1,81 @@
+{
+  "active": "",
+  "height": 844,
+  "keyboard": "false",
+  "trace": [
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "pointerdown",
+      "target": "",
+      "active": "message"
+    },
+    {
+      "type": "blur",
+      "target": "message",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "pointermove",
+      "target": "",
+      "active": ""
+    },
+    {
+      "type": "pointercancel",
+      "target": "",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": ""
+    }
+  ],
+  "scroll_before": 5606,
+  "scroll_after": 5173,
+  "draft": "Draft before scroll",
+  "errors": []
+}

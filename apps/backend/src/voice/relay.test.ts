@@ -3794,14 +3794,14 @@ describe('backend-relayed Voice Live WebSocket', () => {
     { outcome: 'ok', name: 'greet', timeout: 30_000 },
     { outcome: 'refused', name: 'greet', timeout: 30_000 },
     { outcome: 'error', name: 'greet', timeout: 30_000 },
-    { outcome: 'ok', name: 'daily_food_review', timeout: 180_000 },
-    { outcome: 'ok', name: 'daily_saved_food', timeout: 180_000 },
-    { outcome: 'ok', name: 'daily_nutrition_targets', timeout: 180_000 },
-    { outcome: 'ok', name: 'daily_feed', timeout: 210_000 },
-    { outcome: 'ok', name: 'daily_food_lookup', timeout: 30_000 },
-    { outcome: 'ok', name: 'daily_health_summary', timeout: 30_000 },
-    { outcome: 'ok', name: 'daily_nutrition_history', timeout: 180_000 },
-    { outcome: 'ok', name: 'daily_coach_status', timeout: 180_000 },
+    { outcome: 'ok', name: 'health_food_review', timeout: 180_000 },
+    { outcome: 'ok', name: 'health_saved_food', timeout: 180_000 },
+    { outcome: 'ok', name: 'health_nutrition_targets', timeout: 180_000 },
+    { outcome: 'ok', name: 'health_feed', timeout: 210_000 },
+    { outcome: 'ok', name: 'health_food_lookup', timeout: 30_000 },
+    { outcome: 'ok', name: 'health_summary', timeout: 30_000 },
+    { outcome: 'ok', name: 'health_nutrition_history', timeout: 180_000 },
+    { outcome: 'ok', name: 'health_coach_status', timeout: 180_000 },
   ] as const)(
     'publishes the recorded $outcome realtime $name outcome with its exact budget and no private tool data',
     async ({ outcome, name, timeout }) => {
@@ -3885,7 +3885,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
         undefined,
         undefined,
         undefined,
-        name.startsWith('daily_'),
+        name.startsWith('health_'),
       );
       const activityEvents: unknown[] = [];
       app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
@@ -4179,12 +4179,14 @@ describe('food estimate confirmation turns', () => {
         if (event.type === 'response.create' && event.response?.instructions?.includes('Present this exact server-staged food estimate')) {
           expect(event.response).toMatchObject({ tools: [], tool_choice: 'none' });
           expect(event.response.instructions).toContain('Synthetic portion');
-          expect(event.response.instructions).toContain('200 kcal');
+          expect(event.response.instructions).toContain('- Calories: 200 kcal');
+          expect(event.response.instructions).toContain('- Protein: unknown (not zero) g');
+          expect(event.response.instructions).toContain('- Fat: unknown (not zero) g');
           expect(event.response.instructions).toContain('Uncertainty:');
           invitations.push(event.response.instructions);
           socket.send(JSON.stringify({ type: 'response.created', response: { id: 'food-invitation' } }));
           socket.send(JSON.stringify({ type: 'response.audio.delta', delta: Buffer.alloc(480).toString('base64') }));
-          socket.send(JSON.stringify({ type: 'response.audio_transcript.done', transcript: invitationText }));
+          socket.send(JSON.stringify({ type: 'response.audio_transcript.done', item_id: 'food-invitation-item', transcript: invitationText }));
           socket.send(JSON.stringify({ type: interrupt ? 'response.cancelled' : 'response.done',
             response: { id: 'food-invitation', status: interrupt ? 'cancelled' : 'completed' } }));
         } else if (event.type === 'response.create' && outputs.get('food-estimate')?.outcome === 'ok') {
@@ -4272,8 +4274,8 @@ describe('food estimate confirmation turns', () => {
     expect(invitations).toEqual([]);
     upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_started' }));
     const args = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion', energyKcal: 200 } } };
-    call(discovery ? 'jarvis_execute_capability' : 'daily_food_review', 'food-estimate',
-      discovery ? { capability: 'daily_food_review', arguments: args } : args);
+    call(discovery ? 'jarvis_execute_capability' : 'health_food_review', 'food-estimate',
+      discovery ? { capability: 'health_food_review', arguments: args } : args);
     await staged.promise;
     expect(invitations).toEqual([]);
     expect(log).not.toHaveBeenCalled();
@@ -4286,9 +4288,11 @@ describe('food estimate confirmation turns', () => {
       return;
     }
     await vi.waitFor(() => expect(delivered).toContainEqual({
-      type: 'response.audio_transcript.done', transcript: invitationText,
+      type: 'response.audio_transcript.done', item_id: 'food-invitation-item', transcript: invitationText,
     }));
     expect(delivered).toContainEqual(expect.objectContaining({ type: 'response.audio.delta' }));
+    await vi.waitFor(() => expect(messages.some(message => message.role === 'jarvis' &&
+      message.text.includes('- Protein: unknown (not zero) g\n- Calories: 200 kcal\n- Fat: unknown (not zero) g'))).toBe(true));
     expect(invitations).toHaveLength(1);
     expect(outputs.has('food-estimate')).toBe(false);
     expect(log).not.toHaveBeenCalled();

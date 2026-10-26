@@ -5,7 +5,7 @@
     "ancestors": [
       {
         "tag": "conversation-message",
-        "blur": "blur(24px)",
+        "blur": "blur(16px)",
         "mask": "none",
         "opacity": "1",
         "filter": "none"
@@ -102,10 +102,10 @@
         "filter": "none"
       }
     ],
-    "blurPixelDelta": 52.39137345679012,
+    "blurPixelDelta": 51.39688271604939,
     "unblurredVariation": 53.098533115259045,
-    "frostedVariation": 4.449063478935858,
-    "transmissionDelta": 72.02447530864198,
+    "frostedVariation": 6.06278800628155,
+    "transmissionDelta": 72.03348765432098,
     "geometryUnchanged": true,
     "animatedFramesDiffer": true,
     "lists": 2,
@@ -121,7 +121,7 @@
     "ancestors": [
       {
         "tag": "conversation-message",
-        "blur": "blur(24px)",
+        "blur": "blur(16px)",
         "mask": "none",
         "opacity": "1",
         "filter": "none"
@@ -218,10 +218,10 @@
         "filter": "none"
       }
     ],
-    "blurPixelDelta": 50.609027777777776,
+    "blurPixelDelta": 49.51688271604939,
     "unblurredVariation": 51.32217815890431,
-    "frostedVariation": 5.057835476643612,
-    "transmissionDelta": 70.35422839506172,
+    "frostedVariation": 6.904289515167527,
+    "transmissionDelta": 70.39799382716049,
     "geometryUnchanged": true,
     "animatedFramesDiffer": true,
     "lists": 2,
@@ -237,8 +237,8 @@
     "ancestors": [
       {
         "tag": "conversation-message",
-        "blur": "blur(24px)",
-        "mask": "linear-gradient(rgba(0, 0, 0, 0) 182.703px, rgb(0, 0, 0) 246.703px)",
+        "blur": "blur(16px)",
+        "mask": "linear-gradient(rgba(0, 0, 0, 0) 182.936px, rgb(0, 0, 0) 246.936px)",
         "opacity": "1",
         "filter": "none"
       },
@@ -334,9 +334,9 @@
         "filter": "none"
       }
     ],
-    "blurPixelDelta": 2.3187106918238993,
+    "blurPixelDelta": 2.1083682739343117,
     "unblurredVariation": 3.224266034667602,
-    "frostedVariation": 1.5038492748566454,
+    "frostedVariation": 1.7505019359703897,
     "transmissionDelta": 10.75567784765898,
     "geometryUnchanged": true,
     "animatedFramesDiffer": true,
@@ -344,7 +344,7 @@
     "scrollAndComposer": true,
     "menuTopLayer": true,
     "maskAlignmentAfterScrollResizeAppendReplaceReducedMotion": true,
-    "fadePixelError": 0.305091961852861,
+    "fadePixelError": 0.2973858991825613,
     "errors": []
   },
   {
@@ -353,8 +353,8 @@
     "ancestors": [
       {
         "tag": "conversation-message",
-        "blur": "blur(24px)",
-        "mask": "linear-gradient(rgba(0, 0, 0, 0) 182.703px, rgb(0, 0, 0) 246.703px)",
+        "blur": "blur(16px)",
+        "mask": "linear-gradient(rgba(0, 0, 0, 0) 182.936px, rgb(0, 0, 0) 246.936px)",
         "opacity": "1",
         "filter": "none"
       },
@@ -450,9 +450,9 @@
         "filter": "none"
       }
     ],
-    "blurPixelDelta": 1.5424965059399023,
+    "blurPixelDelta": 1.5124301187980433,
     "unblurredVariation": 2.278169195165489,
-    "frostedVariation": 1.2335288782384946,
+    "frostedVariation": 1.3307589130345712,
     "transmissionDelta": 8.038277428371769,
     "geometryUnchanged": true,
     "animatedFramesDiffer": true,
@@ -460,7 +460,7 @@
     "scrollAndComposer": true,
     "menuTopLayer": true,
     "maskAlignmentAfterScrollResizeAppendReplaceReducedMotion": true,
-    "fadePixelError": 0.2285919050862852,
+    "fadePixelError": 0.1929353996366939,
     "errors": []
   }
 ]

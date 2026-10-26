@@ -560,8 +560,8 @@
 .conversation-message[data-speaker="dan"],
 .conversation-message[data-speaker="jarvis"] {
   background: var(--chrome-glass-surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(var(--readability-glass-blur));
+  -webkit-backdrop-filter: blur(var(--readability-glass-blur));
   box-shadow: none;
 }
 .conversation-message[data-speaker="dan"] {

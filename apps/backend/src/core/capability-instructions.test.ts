@@ -80,8 +80,9 @@ describe('shared navigation capability instructions', () => {
   it('distinguishes fresh, earlier, and unavailable visual evidence without volunteering timestamps', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
     expect(instructions).toContain('no more than 60 seconds old, correlated with this turn\'s question');
-    expect(instructions).toContain('Answer naturally and directly as if seeing it now');
-    expect(instructions).toContain('Do not volunteer capture times, UTC timestamps');
+    expect(instructions).toContain('Answer directly; omit capture times');
+    expect(instructions).toContain('live-view disclaimers and input path unless asked');
+    expect(instructions).toContain('For “keep describing”, use the available watch tool with source=camera and continuousDescription=true');
     expect(instructions).toContain('source, capturedAt and visualPath');
     expect(instructions).toContain('visualPath=image');
     expect(instructions).toContain('human age (English: "about 2 minutes ago"; Danish: "for cirka 2 minutter siden")');

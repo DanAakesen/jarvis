@@ -1,3 +1,16 @@
+## Unified camera delivery checks (#1317; 26 October 2026)
+
+The 14:21–14:22 UTC approval supersedes older idle-expiry checks below: active
+video must survive silence beyond ten minutes, while preview Close, workspace
+start/stop, teardown, permission loss, fatal errors and budgets remain enforced.
+
+Run `npm test`, `npm run lint`, `npm run build` and
+`bash .github/scripts/python-ci.sh agents/jarvis`. Focused coverage is in
+web `vision-watch.test.tsx`, `camera-capture.test.tsx`, backend `vision/` and
+`core/capability-instructions.test.ts`. Actual-App synthetic browser checks
+cover repeated silent frames and camera stop at 320/390px touch and 1440px desktop;
+see `docs/ui/screenshots/1317/README.md`. No physical-iPhone acceptance claimed.
+
 # Agent context
 
 ## Bubble frost checks (#1324; 26 October 2026)
@@ -5,10 +18,26 @@
 Run web tests, lint/build and aggregate repository checks. Actual-App synthetic
 browser reproduction and limitations are in `docs/ui/screenshots/chat-bubble-frost/`.
 Check actual scene blur, translucency, item-mask fade versus baseline, lists,
-scrolling, composer and Plus menu across desktop/mobile and both themes.
+scrolling, header and Plus menu across desktop/mobile and both themes. Run
+`fixtures/performance-corners.py` for observer replacement, long-history scrolling
+and repeated mobile history-toggle corner checks; desktop borders stay unchanged.
 Keep backdrop-filter and masks off bubble ancestors; preserve the visible fade
 through the item masks. No real data or private screenshots belong in fixtures.
 
+
+## Mobile chat scroll verification (26 October 2026; local)
+
+Run the phone viewport and ConversationHistory tests, web lint and web build.
+`docs/ui/screenshots/mobile-chat-scroll/README.md` records the actual-component
+Chromium swipe comparison, continued typing and one-tap Send. Keyboard geometry
+is simulated; physical Safari remains unverified. No camera/menu changes.
+## Health meal estimate checks (#1321; 26 October 2026)
+
+Run backend daily, conversation, owner-interaction, realtime/relay/startup, registry,
+parity and production-module suites; web ReviewSummary, ConversationHistory,
+AttentionPopover and ToolCallChip suites; hosted-agent model-client/tool tests;
+backend/web build and lint. Use synthetic food only. Browser component fixtures and
+limits are in `docs/ui/screenshots/1321/README.md`. Hold integration pending parent camera/release coordination; #1320 is included via main `1c1029a3`.
 
 ## Composer Plus checks (#1319; 26 October 2026)
 

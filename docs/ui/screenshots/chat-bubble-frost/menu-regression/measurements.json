@@ -9,7 +9,7 @@
       "Voice",
       "Attach file or photo"
     ],
-    "blur": "24px",
+    "blur": "16px",
     "composerBlur": "10px",
     "nativeTopLayer": true,
     "chromeFillPreserved": true,
@@ -30,7 +30,7 @@
       "Voice",
       "Attach file or photo"
     ],
-    "blur": "24px",
+    "blur": "16px",
     "composerBlur": "10px",
     "nativeTopLayer": true,
     "chromeFillPreserved": true,
@@ -51,7 +51,7 @@
       "Voice",
       "Attach file or photo"
     ],
-    "blur": "24px",
+    "blur": "16px",
     "composerBlur": "10px",
     "nativeTopLayer": true,
     "chromeFillPreserved": true,
@@ -72,7 +72,7 @@
       "Voice",
       "Attach file or photo"
     ],
-    "blur": "24px",
+    "blur": "16px",
     "composerBlur": "10px",
     "nativeTopLayer": true,
     "chromeFillPreserved": true,

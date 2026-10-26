@@ -2,13 +2,28 @@
 
 ## Chat bubble frost (#1324; 26 October 2026)
 
-Bubbles share the Plus menu's 24px backdrop blur and translucent chrome fill.
+Plus, bubbles and header share the lighter 16px readability blur and existing translucent fill.
+Only the shown mobile history state restores both composer top-corner radii,
+including border pseudo-elements. Desktop and the hidden state retain their existing treatment.
 Preserve bubble geometry, rims, tints, text and the desktop transcript's 64px
 fade. Apply that fade directly to painted transcript items with scrollport-aligned
 offsets, rather than masking their ancestor. Extend item masks to retain timestamp
 and focus overflow. Keep the window blur on a background pseudo-element so it
 does not intercept bubble backdrop sampling. Phone typing mode retains no fade.
 
+
+## Mobile chat scroll focus (26 October 2026; local)
+
+Outside touch dismissal waits for a completed tap. Movement, native scrolling
+or pointer cancellation abandons dismissal without preventing browser defaults.
+Keep composer/menu exemptions and the mobile Send focus guard unchanged.
+## Meal estimate lists (#1321; 26 October 2026)
+
+Chat invitations and Now confirmations render server summary bullets as semantic
+lists, preserving literal proposal text and unknowns. Voice history also renders
+these nutrition bullets as lists. Existing Health tool chips translate retained
+Daily names for display. Reuse existing typography and surfaces without new controls.
+Synthetic component browser evidence is in `docs/ui/screenshots/1321/`.
 
 ## Composer Plus readability (#1319; 26 October 2026)
 
@@ -86,6 +101,15 @@ Keyboard focus outlines remain. This supersedes #1296's header exclusion.
 Synthetic settled App captures and scene-transmission measurements are in
 `docs/ui/screenshots/1301/`; no physical-device acceptance is claimed.
 
+
+## Unified video delivery (#1317; 26 October 2026)
+
+Enable video is the only camera start action. Remove separate Watch/Stop watching
+and manual Look at camera actions. Existing chat/voice status text says Connecting
+until a frame is accepted, then Receiving camera updates with the shared budget.
+A failed request or 15 seconds without acceptance shows delayed/retrying feedback.
+Turn camera off and preview Close remain the stop controls; errors use existing
+feedback and stop the camera. No new styling or animation system.
 
 ## Camera and conversation surface refinement (#1296; 26 October 2026)
 
@@ -882,8 +906,8 @@ statements below. Keep the agreed compact upper-right glass preview, contained
 local video, Front/Back and Live labels, existing window chrome, dock-to-tab
 motion and mobile-touch-only Switch. On phones the preview stays beside the
 foreground window; controls remain 44 px and the composer keeps its geometry.
-Close/Turn off stops capture. Ten-minute user-idle expiry restores explanation
-and Retry, hiding the inactive picture. Live means local playback, never a
+Close/Turn off stops capture. Active video has no user-idle expiry (#1317,
+26 October approval); failure recovery retains explanation and Retry. Live means local playback, never a
 claim that the model receives continuous video.
 
 The upload-only contract changes no layout or animation. Image/caption evidence
@@ -1793,7 +1817,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Chat everywhere:** the chat stays mounted on every page. Off the home page the chat bar and its conversation fly into a living orb at the foot of the rail. Pressing the orb pops the bar out bottom-centre over the current page; the orb or Escape tucks it back, and changing page parks it again. Returning home restores the normal position. Starting voice from another page returns home, because voice is the full room.
 - **Chat bar:** shorter (40 px orb) and narrower (740 px). The paperclip is gone: Look at screen and Look at camera moved into the ⋯ menu beside Language. One divider with room on both sides separates the orb from the message. Send is a small glass lens that warms to amber when there is a message, and its arrow lifts on hover. Hovering or focusing the orb wakes it: the amber core speeds up and brightens, the shell warms and a ripple breathes outwards.
 - **Enlarged chat (Dan, 10 October):** in desktop typing mode, the composer expands to the same left/right edges as the visible maximised conversation, on home and other pages. Restore, minimise and close return it to the normal dock width. Phone, voice and unrelated maximised windows keep their existing composer layout. `ConversationHistory.css` derives the width from the shared window state; no duplicate React state or new motion.
-- **Camera preview (P9-79, Dan, 11 October; local; compact layout requested in #1265):** Dan's supplied reference supersedes the camera row in typing/voice. Activating capture opens a compact upper-right preview-only workspace surface named Camera preview; its accessible workspace heading and lifecycle remain, but the visible window heading, actions and outer frame are omitted. The preview itself carries the existing refracted glass rim. It shows the actual local video without cropping, mirrored only for the front preview, with facing/Live labels and camera-switch/close controls overlaid on the video. On phones it stays a compact overlay beside the foreground window rather than replacing that window. Workspace minimising still keeps capture on; Close stops it. Switching remains mobile-touch-only; unknown direction is explicit. Startup, device and playback failures have visible recovery. The composer and voice bar keep their original geometry. Every-turn capture is enabled locally against deployed #702/#704/#706, including optional handles for chat and EN/DA realtime image input; actual model image acceptance remains unverified. Typed limits show ordinary age-labelled text below the preview, and the existing toast stack makes it visible without undocking. Local Live describes the video, not freshness at the model. The obsolete manual Look at camera voice action is absent when conversation capture is enabled; watch mode remains independent. Ten minutes without a user turn stops capture and restores explanation/retry even from a docked tab. The inactive preview omits its empty picture so recovery stays visible on short phones. **Enable video** is the camera-on label; **Attach file or photo** leads the typing More menu. Synthetic Chromium checks 1440x1000 desktop normal motion and 320x700 touch phone reduced motion, including fitting limit copy and both voice languages. No physical-camera or deployed-model acceptance is claimed. No Look now button or new animation system.
+- **Camera preview (P9-79, Dan, 11 October; local; compact layout requested in #1265):** Dan's supplied reference supersedes the camera row in typing/voice. Activating capture opens a compact upper-right preview-only workspace surface named Camera preview; its accessible workspace heading and lifecycle remain, but the visible window heading, actions and outer frame are omitted. The preview itself carries the existing refracted glass rim. It shows the actual local video without cropping, mirrored only for the front preview, with facing/Live labels and camera-switch/close controls overlaid on the video. On phones it stays a compact overlay beside the foreground window rather than replacing that window. Workspace minimising still keeps capture on; Close stops it. Switching remains mobile-touch-only; unknown direction is explicit. Startup, device and playback failures have visible recovery. The composer and voice bar keep their original geometry. Every-turn capture is enabled locally against deployed #702/#704/#706, including optional handles for chat and EN/DA realtime image input; actual model image acceptance remains unverified. Typed limits show ordinary age-labelled text below the preview, and the existing toast stack makes it visible without undocking. Local Live describes the video, not freshness at the model. The obsolete manual Look at camera voice action is absent when conversation capture is enabled; camera delivery starts automatically with Enable video (#1317); screen watching remains independent. Silence does not stop active video; Close/Turn off, session teardown, permission loss, fatal errors and spending limits remain stop conditions. The inactive preview omits its empty picture so recovery stays visible on short phones. **Enable video** is the camera-on label; **Attach file or photo** leads the typing More menu. Synthetic Chromium checks 1440x1000 desktop normal motion and 320x700 touch phone reduced motion, including fitting limit copy and both voice languages. No physical-camera or deployed-model acceptance is claimed. No Look now button or new animation system.
 
 - **Camera preview sizing follow-up (#1283; 25 October 2026):** the video itself is the preview surface, sized from its loaded dimensions and fitted to available workspace bounds without a surrounding picture frame. Same-stream dimension changes update the fit. The phone overlay is larger but bounded; switch/close remain over the actual video, while status, observation notices and playback recovery stay visible within it. Feedback starts below the measured full status-label box, including wrapped unknown-direction text. Synthetic Chromium checked portrait/landscape switching, recovery, and status at desktop and 320×700 phone sizes; inspect screenshots and measurements in `docs/ui/screenshots/p9-1283/`. No physical-camera imagery was used.
 - **Voice visual-source safety (11 October; local):** while camera conversation is on, the existing Look at screen menu row is disabled with the explanation "Turn off the camera to inspect the shared screen in voice." It retains the shared menu's keyboard focus, disabled styling and accessible description. Independent watch actions and Stop sharing screen are unchanged. No new composer geometry, controls or animation.

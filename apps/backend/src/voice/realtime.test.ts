@@ -62,9 +62,9 @@ describe('Voice Live model tool schemas', () => {
   const groupedTools = dailySourceTools({} as never, () => ({} as never), () => ({} as never));
 
   it.each([
-    ['daily_health_summary', ['get_health_summary', 'get_health_history']],
-    ['daily_nutrition_history', ['get_nutrition_history', 'analyze_nutrition', 'get_calorie_balance', 'set_meal_preference']],
-    ['daily_coach_status', ['get_coach_status', 'get_coach_profile', 'update_coach_profile', 'set_recovery_period']],
+    ['health_summary', ['get_health_summary', 'get_health_history']],
+    ['health_nutrition_history', ['get_nutrition_history', 'analyze_nutrition', 'get_calorie_balance', 'set_meal_preference']],
+    ['health_coach_status', ['get_coach_status', 'get_coach_profile', 'update_coach_profile', 'set_recovery_period']],
   ])('flattens %s and retains its operation-specific fields', (name, operations) => {
     const tool = groupedTools.find(({ name: toolName }) => toolName === name);
     expect(tool).toBeDefined();

@@ -2,6 +2,8 @@
 
 ## 2026-10-26 — Preserve transcript fade with bubble frost (#1324)
 
+Use the lighter shared 16px blur on Plus, bubbles and header. Correct only shown
+mobile composer corners; desktop and hidden-state borders remain as before.
 A masked transcript and a backdrop-filtered window each block child backdrop
 sampling. Bubbles remain in scroll flow; move the window blur to its content's
 background pseudo-element and move the existing 64px fade to individual painted
@@ -9,6 +11,23 @@ items. Track viewport-relative mask offsets on scroll, resize and content change
 No popovers or list markup changes. Synthetic fade comparison and pixel evidence
 are in `docs/ui/screenshots/chat-bubble-frost/`. Physical Safari remains unverified.
 
+## 26 October 2026 — Defer phone outside-touch dismissal until tap release (local)
+
+The viewport hook blurred the composer on touch-down before a transcript pan
+could be recognized. Track the press until release; abandon it after movement,
+scroll or cancellation. Do not prevent native scrolling or button/link actions.
+The local Chromium comparison and limits are recorded in
+`ui/screenshots/mobile-chat-scroll/README.md`. No release authorization is implied.
+## 2026-10-26 — Show actual Health meal estimates (#1321)
+
+Use server-derived nutrition lists for estimates and proposal presentation, including
+protein, calories and fat with units. The lookup description's absolute committed-only
+reporting instruction conflicted with its estimate instruction; remove that conflict
+and reserve committed-only wording for claims of logging. No production trace proves
+which model decision caused the reported symptom. Generic completed tool chips do
+not expose nutrition, so successful lookup results also reach the saved conversation
+independently of the model's acknowledgment. Keep legacy HTTP compatibility while
+advertising Health; do not migrate storage or the separate Daily Assistant service.
 
 ## Composer Plus readability (#1319; 26 October 2026)
 
@@ -8739,3 +8758,25 @@ write with one NULL alias and a valid delivery status synchronizes both from the
 non-NULL identifier. Access controls and source-artifact retention do not change.
 The separate chat-time layout remains below message text on mobile widths up to
 700px and retains its desktop position.
+
+## 26 October 2026 — One camera feature (#1317)
+
+Dan confirmed Enable video and camera watching were always intended as one
+feature, and requested removal of the obsolete separation. Enable video now
+automatically delivers sampled JPEGs, while ongoing narration requires a typed
+or spoken standing request. Tool acknowledgement distinguishes saved instructions
+from received frames. Keep screen watching independent, retain budget/privacy
+controls and the ten-minute inactivity cutoff, and never claim raw video.
+The cutoff limits “until I tell you to stop”; changing it remains unapproved.
+Local synthetic verification does not establish physical-iPhone or live-model acceptance.
+
+## 26 October 2026, 14:21–14:22 UTC — Video continues until stopped (#1317)
+
+Dan explicitly approved removing the ten-minute no-message camera cutoff while
+retaining the spending limit. This supersedes the earlier ten-minute decisions
+and the initial #1317 cutoff-preservation decision above. He added: “Or til I
+close it of course. And make sure Jarvis can also start and stop that video”.
+Close and user-requested workspace camera commands control the same continuous
+sampled delivery. Startup still needs browser permission; session/sign-out,
+permission loss, fatal errors and budget exhaustion still stop it. No guarantee
+of background iOS capture or uninterrupted device access is made.

@@ -39,7 +39,7 @@ function display(row: Row | null, kind: SavedKind): Row | null {
 export function dailySavedFoodTool(nutrition: InternalSavedNutrition, now: () => number = Date.now): JarvisTool {
   const pending = new Set<string>();
   return {
-    name: 'daily_saved_food',
+    name: 'health_saved_food',
     description: 'Read owned saved food by exact name/alias (lookup_saved) or canonical favourite preferences (read_preferences). Save favourite/aliases from an owned intake or a proposed definition; save a plan from owned favourites; soft-delete a plan; set like/dislike/null feedback on an exact favourite. Reads need no review; every mutation needs the exact browser Now approval within two minutes. Read current revisions first (0 means new); plans require one breakfast, lunch and dinner. Never supply operation IDs, owners, confidence, provenance or confirmation flags. Writes require a current verified present chat/browser-voice source; no phone or Teams. Definitions/plans/preferences never log intake or export Health. Keep the same source and revision on retry.',
     inputSchema: internalSavedInputSchema,
     execution: {

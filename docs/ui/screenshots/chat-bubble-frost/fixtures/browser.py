@@ -38,14 +38,14 @@ with sync_playwright() as p:
         page.add_style_tag(content="""
           .jarvis-stage { background-image: repeating-linear-gradient(0deg, #ffb800 0 16px, #1257bf 16px 32px) !important; background-size: 64px 64px !important; animation: qa-pan 2s linear infinite !important; }
           .jarvis-stage::after, .jarvis-stage > * { visibility: hidden; }
-          @keyframes qa-pan { to { background-position: 48px 24px; } }
+          @keyframes qa-pan { to { background-position: 48px 16px; } }
         """)
         page.wait_for_timeout(350)
         transcript=page.locator('.conversation-window-host > .conversation-transcript')
         transcript.evaluate('e=>e.scrollTop=e.scrollHeight')
         bubble=page.locator('.conversation-message[data-speaker="jarvis"]').last
         ancestors=bubble.evaluate("e=>{let a=[];for(let n=e;n;n=n.parentElement){const s=getComputedStyle(n);a.push({tag:n.className,blur:s.backdropFilter,mask:s.maskImage,opacity:s.opacity,filter:s.filter})}return a}")
-        assert bubble.evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(24px)'
+        assert bubble.evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(16px)'
         assert all(a['blur']=='none' and a['mask']=='none' and a['opacity']=='1' and a['filter']=='none' for a in ancestors[1:]), ancestors
         assert bubble.locator('ul li').count()==2
         assert page.locator('[popover].conversation-message').count()==0
@@ -108,10 +108,22 @@ with sync_playwright() as p:
             assert fade_error<2, fade_error
             baseline.evaluate('e=>e.remove()');uniform.evaluate('e=>e.remove()')
         transcript.evaluate('e=>e.scrollTop=e.scrollHeight')
+        if not touch:
+            transcript.evaluate("e=>{const b=e.querySelector('[data-speaker=dan]');e.scrollTop+=b.getBoundingClientRect().top-e.getBoundingClientRect().top-20}")
+            page.locator('.conversation-message[data-speaker=dan]').first.focus()
+            page.wait_for_timeout(200)
+            short=page.locator('.conversation-message[data-speaker=dan]').first
+            assert short.evaluate("e=>getComputedStyle(e).outlineStyle==='solid'")
+            page.wait_for_function("e=>getComputedStyle(e).opacity==='1'",arg=short.locator('.message-metadata').element_handle())
+            assert short.locator('.message-metadata').evaluate("e=>getComputedStyle(e).opacity")=='1'
+            assert short.evaluate("e=>getComputedStyle(e).maskClip==='no-clip'")
+            page.screenshot(path=str(out/f'{width}-{theme}-focused-mask-overflow.png'))
         # Probe the actual mounted observer after the mutations produced by
         # history append/replacement; these probes contain only synthetic DOM.
         def aligned():
-            return transcript.evaluate("e=>{const top=e.getBoundingClientRect().top;return [...e.querySelectorAll('.conversation-message')].every(b=>Math.abs(parseFloat(b.style.getPropertyValue('--transcript-fade-start'))-(top-b.getBoundingClientRect().top+16))<1)}")
+            if touch:
+                return transcript.locator('[data-transcript-fade]').count()==0
+            return transcript.evaluate("e=>{const top=e.getBoundingClientRect().top;return [...e.querySelectorAll('.conversation-message')].every(b=>{const r=b.getBoundingClientRect(),active=r.top-top<64&&r.bottom-top>-64;return active?Math.abs(parseFloat(b.style.getPropertyValue('--transcript-fade-start'))-(top-r.top+16))<1:!b.hasAttribute('data-transcript-fade')})}")
         page.wait_for_timeout(150)
         assert aligned()
         page.set_viewport_size({'width':width,'height':height-80})

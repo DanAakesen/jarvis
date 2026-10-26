@@ -41,10 +41,10 @@ function fixture(over: { favourites?: Record<string, unknown>[]; health?: () => 
 
 const untouched = (f: ReturnType<typeof fixture>) => [f.targets, f.nutrition, f.health, f.history, f.favorites, f.healthHistory, f.suggestions];
 
-describe('daily_nutrition_suggest descriptor', () => {
+describe('health_nutrition_suggest descriptor', () => {
   it('is private, phone-denied, small-bodied and carries no figures in its model-facing text', () => {
     const { tool } = fixture();
-    expect(tool.name).toBe('daily_nutrition_suggest');
+    expect(tool.name).toBe('health_nutrition_suggest');
     expect(tool.name).toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
     expect(tool.sensitive).toBe(true);
     expect(tool.denyOnPhone).toBe(true);
@@ -65,7 +65,7 @@ describe('daily_nutrition_suggest descriptor', () => {
   });
 });
 
-describe('daily_nutrition_suggest', () => {
+describe('health_nutrition_suggest', () => {
   const favourites = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((id, index) => favourite(id, 100 + index, 20 + index));
 
   it('returns the owner\'s remaining budget and fitting favourites, with a short default list', async () => {

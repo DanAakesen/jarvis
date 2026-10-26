@@ -60,6 +60,7 @@ export type NowFeedUpdate =
   | { type: 'mode_changed'; mode: PresenceMode; away: boolean }
   | { type: 'settings_changed' }
   | { type: 'status'; kind: NowFeedStatusKind }
+  | { type: 'food_estimate_result'; sessionId: string; sourceMessageId: string; summary: string }
   | { type: 'food_estimate_pending'; sessionId: string; sourceMessageId: string; confirmation: BrowserConfirmation }
   | { type: 'board'; projectId: string; version: number };
 

@@ -169,10 +169,10 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
       return bound(result);
     },
   });
-  const healthSummaryTool = readTool('daily_health_summary',
+  const healthSummaryTool = readTool('health_summary',
     'Read today’s retained Health metrics, sleep, workouts and upload freshness, plus seven-day workout rows and the owner’s configured training targets. Unset targets remain null and are listed as missing; no defaults are inferred. Unknown or absent data stays explicit; freshness is processing evidence, not proof of source completeness. No fixed renderer, estimate, or live-device claim.',
     schema(), async (_input, request, signal) => healthSummary(data, request, signal, now()));
-  const healthHistoryTool = readTool('daily_health_history',
+  const healthHistoryTool = readTool('health_history',
     'Read retained health metrics, sleep and workouts in at most one 93-date Europe/Copenhagen window per call. Replay coverage.continuation with the same explicit requested dates; exhausted categories are not replayed. Defaults to the latest 30 days. Future dates are refused.',
     schema({ ...rangeProperties, limit: { type: 'integer', minimum: 1, maximum: 100 }, continuation: continuationSchema }), async (raw, request, signal) => {
       const input = toolInput(raw, ['startDate', 'endDate', 'limit', 'continuation']);
@@ -200,7 +200,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
         sourceCompleteness: 'unknown',
       };
     });
-  const nutritionHistoryTool = readTool('daily_nutrition_history',
+  const nutritionHistoryTool = readTool('health_nutrition_history',
     'Read canonical named meals, exact occurrence/date, nutrients, provenance, revision and deletion state from the owner-scoped nutrition store. Traverse any valid non-future range in bounded keyset pages using coverage.continuation and the same explicit dates. Meal creation order and date filters remain unchanged. Health nutrient observations are not named meals.',
     schema({ ...rangeProperties, limit: { type: 'integer', minimum: 1, maximum: 100 }, continuation: continuationSchema }), async (raw, request, signal) => {
       const input = toolInput(raw, ['startDate', 'endDate', 'limit', 'continuation']);
@@ -218,7 +218,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
         sourceCompleteness: 'unknown',
       };
     });
-  const nutritionAnalyzeTool = readTool('daily_nutrition_analyze',
+  const nutritionAnalyzeTool = readTool('health_nutrition_analyze',
     'Analyze retained named-meal totals over at most 366 Europe/Copenhagen dates. Per-day, weekly and monthly series report only known nutrient values; unknown values stay null and partial totals are labelled lower bounds. Recovery dates are excluded. Not an estimate or a complete-source claim.',
     schema({ ...rangeProperties, granularity: { type: 'string', enum: ['auto', 'day', 'week', 'month'] } }), async (raw, request, signal) => {
       const input = toolInput(raw, ['startDate', 'endDate', 'granularity']);
@@ -264,7 +264,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
         coverage: { hasMore: page.next !== null, next: page.next, sourceCompleteness: 'unknown', denominator: 'days with retained meals and known nutrients' },
         units: { energy_kcal: 'kcal', '*_grams': 'g' } };
     });
-  const calorieBalanceTool = readTool('daily_calorie_balance',
+  const calorieBalanceTool = readTool('health_calorie_balance',
     'Compare canonical named-meal intake with retained active and resting Health energy in an inclusive date range of at most 366 days. Energy is converted only for recognized kcal/kJ units; unknown components remain null. Recovery dates are excluded from totals. Never infer expenditure, maintenance or calories remaining.',
     schema(rangeProperties), async (raw, request, signal) => {
       const input = toolInput(raw, ['startDate', 'endDate']);
@@ -316,7 +316,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
           sourceCompleteness: 'unknown' },
         units: { energy: 'kcal' } };
     });
-  const coachStatusTool = readTool('daily_coach_status',
+  const coachStatusTool = readTool('health_coach_status',
     'Read a conversational Status snapshot from retained health, canonical food, the saved owner profile and recovery markers. This is data for ordinary language-model reasoning, not a fixed renderer, score, judgment, order or commitment. Unknowns remain explicit; no Ready/Recomp/Review workflow is called.',
     schema(), async (_input, request, signal) => {
       const summary = await healthSummary(data, request, signal, now());
@@ -334,7 +334,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
         coachingJudgment: null, fixedRenderer: false, commitments: null };
     });
   const coachProfileTool: JarvisTool = {
-    name: 'daily_coach_profile',
+    name: 'health_coach_profile',
     description: 'Read the saved coach profile, or update only fields explicitly requested in ordinary conversation. Every update requires exact browser Now approval before persistence; caller-supplied confirmation flags are not accepted. An unconfigured profile stays unconfigured and is not filled with invented defaults.',
     inputSchema: schema({
       operation: { type: 'string', enum: ['read', 'update'] },
@@ -366,7 +366,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
     },
   };
   const mealPreferenceTool: JarvisTool = {
-    name: 'daily_meal_preference',
+    name: 'health_meal_preference',
     description: 'Set or clear the owner’s like/dislike for one exact favorite or meal key. This changes feedback only, never intake or Health. Every change requires exact browser Now approval; null clears the preference. No caller-supplied confirmation or owner fields.',
     inputSchema: schema({ mealKey: { type: 'string', minLength: 3, maxLength: 200 }, preference: { type: ['string', 'null'], enum: ['like', 'dislike', null] } }, ['mealKey', 'preference']),
     sensitive: true, denyOnPhone: true, bodyLimit: 2 * 1024,
@@ -394,7 +394,7 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
     },
   };
   const recoveryTool: JarvisTool = {
-    name: 'daily_recovery_period',
+    name: 'health_recovery_period',
     description: 'Mark or clear one to 365 past or current dates as recovery days, without modifying measured health, sleep, workout or food data. Recovery markers are excluded from selected analytical totals. Every write requires exact browser Now approval; clear cannot include context. No caller-supplied confirmation or owner fields.',
     inputSchema: schema({ startDate: dateSchema, endDate: dateSchema, state: { type: 'string', enum: ['sick', 'clear'] }, context: { type: 'string', minLength: 1, maxLength: 280 } }, ['startDate', 'endDate']),
     sensitive: true, denyOnPhone: true, bodyLimit: 2 * 1024,
@@ -455,17 +455,17 @@ export function dailySourceTools(data: DailyData, nutrition: NutritionAccess, co
     };
   };
   return [
-    grouped('daily_health_summary',
+    grouped('health_summary',
       'Read source-compatible health summary or historical health. Set operation to get_health_summary or get_health_history. Each history call reads one window of at most 93 dates/100 rows per category. For wider periods or more rows, replay coverage.continuation with the original explicit startDate/endDate until exhausted or the assistant tool/time budget is reached. Null category cursors mean exhausted, not restart. Fetch subsequent pages when the answer requires them; otherwise disclose actual loaded windows/records and remaining limits. A first page is not the full year/history; failed, interrupted or budget-limited traversal is partial. Source completeness stays unknown even after retained exhaustion.',
       [{ operation: 'get_health_summary', tool: healthSummaryTool },
         { operation: 'get_health_history', tool: healthHistoryTool }]),
-    grouped('daily_nutrition_history',
+    grouped('health_nutrition_history',
       'Read canonical named-meal history, analyze nutrition totals/trends, calculate known calorie balance, or set one meal preference. Use operation get_nutrition_history, analyze_nutrition, get_calorie_balance, or set_meal_preference. History reads one bounded window/page per call; replay coverage.continuation with the original explicit startDate/endDate when the requested answer needs more. Never call a first page the full year/history. Disclose actual loaded windows/records and remaining limits; stop at the assistant tool/time budget and label failed, interrupted or budget-limited traversal partial. Retained exhaustion is not source completeness, which stays unknown. Writes require exact browser Now approval. Health nutrient observations are not named meals; unknown values remain null.',
       [{ operation: 'get_nutrition_history', tool: nutritionHistoryTool },
         { operation: 'analyze_nutrition', tool: nutritionAnalyzeTool },
         { operation: 'get_calorie_balance', tool: calorieBalanceTool },
         { operation: 'set_meal_preference', tool: mealPreferenceTool }]),
-    grouped('daily_coach_status',
+    grouped('health_coach_status',
       'Read conversational Status, read or update the saved coach profile, or mark/clear recovery dates. Use get_coach_status, get_coach_profile, update_coach_profile, or set_recovery_period. Every write uses exact browser Now approval; no fixed Status renderer, commitments, defaults or measured-data changes.',
       [{ operation: 'get_coach_status', tool: coachStatusTool },
         { operation: 'get_coach_profile', tool: coachProfileTool, injected: { operation: 'read' }, exclude: ['patch'] },

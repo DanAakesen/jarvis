@@ -13,6 +13,11 @@ const origin = { sourceMessageId: '42', sourceFingerprint: 'source', operation: 
 const now = '2026-10-17T03:00:00Z';
 
 describe('internal nutrition review contracts', () => {
+  it('shows actual required nutrition as a list, including zero and unknown values', () => {
+    const summary = foodReviewSummary('log_estimate', null, storedMeal({ ...row(), fat_grams: 0 }));
+    expect(summary).toContain('Nutrition:\n- Protein: 10 g\n- Calories: 123 kcal\n- Fat: 0 g');
+    expect(summary).toContain('- Carbohydrates: unknown (not zero) g');
+  });
   it('uses one nullable numeric input type so HTTP validation cannot coerce unknowns to zero', () => {
     const nutrients = Object.fromEntries(['proteinGrams', 'carbohydratesGrams', 'fatGrams', 'fiberGrams']
       .map(key => [key, { type: ['number', 'null'], minimum: 0, maximum: 1000 }]));

@@ -184,12 +184,12 @@ describe('one shared Daily read contract', () => {
     f.sync.mockResolvedValue({ feeds: [], heartbeat: { last_received_at: '2026-10-16T07:31:00Z' }, inbox: {} });
     expect((await f.service.query(input, request(), signal())).freshness.sourceProcessedCommittedAt).toBeNull();
   });
-  it('reads explicit owner training targets through the registered daily_query handler', async () => {
+  it('reads explicit owner training targets through the registered health_query handler', async () => {
     const f = fixture();
     const data = { query: f.service, changes: createDailyChanges(),
       trainingTargets: () => ({ read: f.targetRead, write: vi.fn() }) };
     const module = createDailyModules(true, data)[0]!;
-    const tool = createToolRegistry([module]).get('daily_query')!;
+    const tool = createToolRegistry([module]).get('health_query')!;
     expect(tool.description).toMatch(/intent in Danish or English/iu);
     expect(tool.description).toMatch(/measurement history for the requested period and trainingTargets/iu);
     const query = { source: sources.trainingTargets };
@@ -490,7 +490,7 @@ describe('one shared Daily read contract', () => {
     await f.service.query(input, request({ principal: undefined, agentPrincipal: { kind: 'jarvis-agent' } }), signal());
   });
   it('shares the exact query and redacted registry metadata for tools, propagates cancellation and rejects oversized detail', async () => {
-    const f = fixture(); const tool = createToolRegistry([{ id: 'daily', tools: [dailyQueryTool(f.service)] }]).get('daily_query')!;
+    const f = fixture(); const tool = createToolRegistry([{ id: 'daily', tools: [dailyQueryTool(f.service)] }]).get('health_query')!;
     expect(tool.sensitive).toBe(true);
     expect(await tool.execute(input, request(), signal())).toEqual(await f.service.query(input, request(), signal()));
     const controller = new AbortController(); controller.abort();

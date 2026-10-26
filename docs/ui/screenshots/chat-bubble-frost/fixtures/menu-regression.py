@@ -51,7 +51,7 @@ with sync_playwright() as p:
         assert labels[0]=='Language' and labels[-2:]==['Voice','Attach file or photo'], labels
         positions=[item.bounding_box()['y'] for item in items.all()]
         assert positions==sorted(positions)
-        assert menu.evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(24px)'
+        assert menu.evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(16px)'
         assert menu.evaluate("e=>e.matches(':popover-open')")
         assert menu.evaluate("e=>getComputedStyle(e).backgroundColor===getComputedStyle(document.querySelector('.conversation-input')).backgroundColor")
         assert page.locator('.conversation-input').evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(10px)'
@@ -77,7 +77,7 @@ with sync_playwright() as p:
         page.emulate_media(reduced_motion='reduce')
         plus.click(); assert menu.is_visible(); page.keyboard.press('Escape')
         assert not errors, errors
-        results.append({'width':width,'theme':theme,'order':labels,'blur':'24px','composerBlur':'10px','nativeTopLayer':True,'chromeFillPreserved':True,'viewportAnchor':True,'keyboard':True,'toggleCycles':3,'nativePickerAnchor':True,'reducedMotion':True,'pageErrors':errors})
+        results.append({'width':width,'theme':theme,'order':labels,'blur':'16px','composerBlur':'10px','nativeTopLayer':True,'chromeFillPreserved':True,'viewportAnchor':True,'keyboard':True,'toggleCycles':3,'nativePickerAnchor':True,'reducedMotion':True,'pageErrors':errors})
         page.close()
     browser.close()
 (out/'measurements.json').write_text(json.dumps(results,indent=2)+'\n')

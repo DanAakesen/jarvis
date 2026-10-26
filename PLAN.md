@@ -1,12 +1,39 @@
+## Mobile keyboard scroll (#1323; 26 October 2026)
+
+Implementation and local review complete in PR #1325. Outside taps dismiss only
+after release; scrolling, cancellation and multi-touch retain composer focus.
+Local validation: web 2,405 passed / one contrast timeout; unchanged contrast rerun
+7 passed; lint/build and Chromium scroll/type/Send passed. Next: hosted checks,
+coordinator queue integration after camera/Health, review and authorized release.
+Physical iOS acceptance remains unverified.
+## Unified camera delivery (#1317; 26 October 2026)
+
+Implementation on `fix/1317-unified-camera`: automatic sampled-frame delivery,
+truthful receiving status, explicit standing narration, approved removal of the
+user-inactivity cutoff, permission-checked Jarvis start/stop, obsolete camera action
+cleanup and bounded lifecycle. Local checks and synthetic browser evidence are
+in `docs/ui/screenshots/1317/README.md`. Rebased onto combined menu main `1c1029a3` without conflicts; independent integration
+review passed. Exact-head hosted qualification remains before the authorized normal
+merge/deployment workflow; no production release is claimed yet.
+
 # Project plan
 
 ## Chat bubble frost (#1324; local qualification, 26 October 2026)
 
-Implemented bubble frost with the existing desktop fade preserved through
-item-level masks. Local evidence and check outcomes are recorded in
+Integrated main aa87c57e (video, Health lists and keyboard scroll). Implemented
+shared lighter Plus/bubble/header frost, a mobile shown-state corner correction,
+and the existing desktop fade through cached item-level masks. Local evidence and check outcomes are recorded in
 `docs/ui/screenshots/chat-bubble-frost/`. Parent coordinates integration after
 camera, Health and keyboard-scroll work, then checked merge/deployment.
 
+
+## Health meal estimate correction (#1321; 26 October 2026)
+
+Implement Health tool branding and server-derived protein/calorie/fat lists in
+lookup replies, proposal presentation and retained voice history. Preserve data
+namespaces and approval protections. Synthetic checks and browser evidence are in
+`docs/ui/screenshots/1321/`. Draft PR #1322 is rebased onto plus-menu main
+`1c1029a3`; review, CI and camera/release coordination remain parent-owned. No production meal replay or write is part of this work.
 
 ## Composer Plus readability (#1319; 26 October 2026)
 
