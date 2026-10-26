@@ -39,3 +39,10 @@ The Library reference was not inspected here: the materialization attempt left
 `/workspace/private-reference-1304` empty. No private input was committed or
 published. The second private attachment was not transferred; text requirements
 and the coordinator's inspection guided the scoped change.
+
+## Combined-tree verification
+
+Re-ran the same geometry/interaction fixture after merging attachment PR #1308
+(main `3ffdd5c08b42db4bad97ae649ee49b202a4ab125`). All three viewport cases passed
+with no browser errors; refreshed desktop captures were inspected. Mobile pixel
+captures and all recorded preview geometry remained unchanged.

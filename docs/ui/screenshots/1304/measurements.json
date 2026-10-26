@@ -391,7 +391,7 @@
     "surfaces": [
       {
         "class": "app-topbar",
-        "background": "oklab(0.24412 -0.0046442 -0.020353 / 0.361915)",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
         "blur": "blur(10px)"
       },
       {
