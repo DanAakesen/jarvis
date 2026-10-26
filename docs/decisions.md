@@ -10,6 +10,23 @@ stable and one tap submits once. This evidence does not establish physical iOS
 behavior. See `docs/ui/screenshots/1315/README.md`.
 
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Apply the approved composer geometry and controls to desktop as requested,
+including Voice under Plus and Dictate beside Send. Keep the existing isolated
+workspace and dock stacking hierarchy: elevate the fixed outer stack, not its
+inner child. Do not extend the mobile Chat-only visibility rule to desktop.
+
+## Route-scoped phone composer (#1303; 26 October 2026)
+
+Use the `/` route plus closed Workspaces pane state: the full-width Workspaces
+browsing pane is a distinct user-facing screen even though it retains the URL. Hide the phone
+typing slot rather than unmounting its conversation/session owner, so drafts and
+ongoing turns survive navigation. Disable the chat viewport hook off Chat and
+prevent hidden-input focus. Desktop is unchanged. Voice sessions remain mounted; their composer controls
+are also visible only on Chat.
+Menu remains an overlay and does not hide its anchor composer.
+
 ## Continuous draft dictation (#1305; 26 October 2026)
 
 Keep browser dictation toggled on across natural recognition endings and silence,
@@ -36,6 +53,27 @@ and unrelated actions without timers or a custom picker. Chromium verifies the
 DOM lifecycle and matching input/row bounds; exact iOS popover placement remains
 unverified on a physical iPhone. The private reference transfer failed and no
 private image is committed.
+
+## 26 October 2026 — Keep recovery within the no-Stop-button scope (#1311)
+
+The recovery draft initially interpreted preserving explicit cancellation as
+permission to add a visible Stop reply button. That was incorrect: Dan's P8-35
+choice on 5 October explicitly removed that control, and no later authorization
+was found. The parent confirmed removal before qualification. Keep the explicit
+cancellation endpoint and client mechanism, with owner-only authorization, while
+retaining steering and the existing visible controls. Browser-disconnect recovery
+is accepted for this scope; process-restart durability is not claimed.
+
+## 26 October 2026 — Preserve accepted chat execution across transport loss (#1311)
+
+Accepted: detach HTTP transport from the existing single execution, retain bounded
+SSE replay and discover active turns by original identity. Keep completed replies
+in SQL conversation history. Do not resubmit messages, retry meal writes, extend
+proposal expiry, or infer approval from reconnection. Explicit cancellation and
+shutdown retain the original abort path. This avoids introducing a queue or durable
+proposal executor for a browser-disconnect fix. Current deployment has one replica;
+restart and multi-replica continuation are outside this change.
+
 
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 

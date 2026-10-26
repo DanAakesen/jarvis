@@ -30,6 +30,8 @@ import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 import {
   createChatSession,
+  loadActiveChatTurns,
+  type RecoverableTurn,
   loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
@@ -67,7 +69,7 @@ type DictationWindow = Window & {
   webkitSpeechRecognition?: new () => DictationRecognition;
 };
 
-type QueuedMessage = { id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
+type QueuedMessage = { recovery?: RecoverableTurn; id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
 const followThreshold = 32;
 const draftKey = 'jarvis.chat.draft';
 
@@ -195,6 +197,7 @@ export function ConversationHistory({
   children,
   screenShare,
   camera,
+  composerVisible = true,
   phone = false,
 }: {
   client: PublicClientApplication;
@@ -205,6 +208,7 @@ export function ConversationHistory({
   screenShare?: ScreenShareController;
   camera?: CameraController;
   phone?: boolean;
+  composerVisible?: boolean;
 }) {
   const tokenProvider = getAccessToken ?? missingAccessToken;
   const { onVoiceActiveChange } = useVoiceWorkspace();
@@ -302,14 +306,19 @@ export function ConversationHistory({
   const setComposerHeight = conversationWindow?.setComposerHeight;
   useLayoutEffect(() => {
     const bar = inputBar.current;
-    if (!bar || voiceActive || !setComposerHeight) return;
+    if (!bar || !setComposerHeight) return;
+    if (!composerVisible) { setComposerHeight(0); return; }
+    if (voiceActive) return;
     const measure = () => setComposerHeight(bar.offsetHeight);
     measure();
     if (typeof ResizeObserver !== 'function') return;
     const observer = new ResizeObserver(measure);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, [setComposerHeight, voiceActive]);
+  }, [setComposerHeight, voiceActive, composerVisible]);
+  useLayoutEffect(() => {
+    if (!composerVisible && document.activeElement === input.current) input.current?.blur();
+  }, [composerVisible]);
   useLayoutEffect(() => { setConversationAvailable?.(windowed); }, [setConversationAvailable, windowed]);
   useLayoutEffect(() => () => { setConversationAvailable?.(false); }, [setConversationAvailable]);
   const updateVoiceActive = useCallback((active: boolean) => {
@@ -524,14 +533,14 @@ export function ConversationHistory({
     // Closing the history window must leave typing usable: focus returns to the composer, not the page.
     // The workspace may first focus its own heading, which only blurs once the empty workspace hides
     // during the next rendering update, so check after that update.
-    if (!hosted || conversationWindow?.element) return;
+    if (!composerVisible || !hosted || conversationWindow?.element) return;
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
         if (!document.activeElement || document.activeElement === document.body) input.current?.focus({ preventScroll: true });
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [conversationWindow?.element, hosted]);
+  }, [conversationWindow?.element, hosted, composerVisible]);
 
   const revealHistory = useCallback(() => {
     // History is a shared workspace view, so it returns through the same restore command Jarvis uses.
@@ -565,12 +574,12 @@ export function ConversationHistory({
 
   useEffect(() => {
     const busy = voiceActive || sending;
-    if (!busy && (!hasFocusedInput.current || wasBusy.current)) {
+    if (composerVisible && !busy && (!hasFocusedInput.current || wasBusy.current)) {
       input.current?.focus({ preventScroll: true });
       hasFocusedInput.current = true;
     }
     wasBusy.current = busy;
-  }, [voiceActive, sending]);
+  }, [voiceActive, sending, composerVisible]);
 
   useEffect(() => {
     let active = true;
@@ -688,26 +697,27 @@ export function ConversationHistory({
     turnInFlight.current = true;
     setSending(true);
     setLiveTools([]);
-    setActiveMessage(queued);
+    setActiveMessage(queued.recovery ? null : queued);
+    if (queued.recovery) setFailedTurns(current => current.filter(turn => turn.messageId !== queued.recovery!.messageId));
     setHistoryError('');
     setStreamedText('');
     setStreamedAcknowledgment('');
     setFoodInvitation(null);
-    let userMessageSaved = false;
-    let messageId: string | undefined;
+    let userMessageSaved = Boolean(queued.recovery);
+    let messageId: string | undefined = queued.recovery?.messageId;
     let partialReply = '';
     let acknowledgment = '';
     let contextForTurn: string | undefined;
     let visualForTurn: VisualTurnContext | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
-      const screenRequest = isScreenRequest(text, screenShare?.sharing);
-      const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
-        (isCameraRequest(text) && !screenRequest);
+      const screenRequest = !queued.recovery && isScreenRequest(text, screenShare?.sharing);
+      const cameraRequest = !queued.recovery && (Boolean(camera?.conversation && camera.sharing) ||
+        (isCameraRequest(text) && !screenRequest));
       if (cameraRequest && !camera?.sharing) {
         throw new Error('Enable video in More before asking Jarvis to inspect a frame.');
       }
-      const activeSession = session?.language === language
+      const activeSession = queued.recovery ? { id: queued.recovery.sessionId, language } : session?.language === language
         ? session
         : await waitForChatSetup(() => createChatSession(tokenProvider, config, language, controller.signal), controller.signal);
       controller.signal.throwIfAborted();
@@ -741,7 +751,8 @@ export function ConversationHistory({
           userMessageSaved = true;
           messageId = message.id;
           setActiveMessage(null);
-          setMessages((current) => mergeMessages(current, [asHistoryMessage(message, activeSession.language, queuedFiles)]));
+          setMessages((current) => current.some(saved => saved.id === message.id) ? current
+            : mergeMessages(current, [asHistoryMessage(message, activeSession.language, queuedFiles)]));
         },
         (delta) => {
           partialReply += delta;
@@ -774,6 +785,13 @@ export function ConversationHistory({
           setStreamedText('');
         },
         setFoodInvitation,
+        queued.recovery?.messageId,
+        () => {
+          partialReply = '';
+          acknowledgment = '';
+          setStreamedText('');
+          setStreamedAcknowledgment('');
+        },
       );
       setMessages((current) => mergeMessages(current.map(message => message.id === messageId && assistant.visualResult
         ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant, activeSession.language)]));
@@ -819,6 +837,32 @@ export function ConversationHistory({
     setQueue((current) => current.filter((message) => message.id !== next.id));
     void runTurn(next);
   }, [queue, sending, voiceActive, runTurn]);
+
+  useEffect(() => {
+    let active = true;
+    const recover = () => {
+      if (document.visibilityState === 'hidden') return;
+      if (turnInFlight.current) return;
+      void loadActiveChatTurns(tokenProvider, config).then(turns => {
+        if (!active || turnInFlight.current || !turns[0]) return;
+        const turn = turns[0];
+        void runTurn({ id: Date.now(), text: '', language: turn.language, recovery: turn });
+      }).catch(() => { /* History remains available; never resubmit a turn. */ });
+    };
+    recover();
+    const onReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      setReload(value => value + 1);
+      recover();
+    };
+    window.addEventListener('online', onReturn);
+    document.addEventListener('visibilitychange', onReturn);
+    return () => {
+      active = false;
+      window.removeEventListener('online', onReturn);
+      document.removeEventListener('visibilitychange', onReturn);
+    };
+  }, [tokenProvider, config, runTurn]);
 
   function failedTurnFeedback(turn: FailedTurn) {
     return (
@@ -932,12 +976,12 @@ export function ConversationHistory({
       }} />,
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
-  }, ...(phone ? [{
+  }, {
     id: 'start-voice',
     label: 'Voice',
     icon: <ConversationIcon name="microphone" />,
     onSelect: () => voiceStart.current?.(),
-  }] : [])];
+  }];
   const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
   const fileDragHandlers = voiceActive ? {} : {
     onDragEnter: (event: React.DragEvent) => {
@@ -1155,7 +1199,7 @@ export function ConversationHistory({
         conversationWindow.element,
       )}
 
-      <div className="conversation-input-slot" data-positioned={Boolean(conversationWindow?.position) || undefined}>
+      <div className="conversation-input-slot" hidden={!composerVisible} data-positioned={Boolean(conversationWindow?.position) || undefined}>
       <div ref={inputBar} className="conversation-input-stack"
         style={conversationWindow?.position ? {
           position: 'fixed', left: conversationWindow.position.left, top: conversationWindow.position.top,
@@ -1168,8 +1212,8 @@ export function ConversationHistory({
           {dictationError || (dictating ? 'Listening. Tap Stop dictation to finish.' : "Dictation isn't supported in this browser.")}
         </p>}
         {screenShare?.error && <p className="composer-status chat-error" role="alert">{screenShare.error}</p>}
-        {phone && attachments.problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
-        {phone && attachments.items.filter((item) => item.status === 'failed').map((item) => (
+        {attachments.problems.map((problem) => <p key={problem} className="composer-status chat-error" role="alert">{problem}</p>)}
+        {attachments.items.filter((item) => item.status === 'failed').map((item) => (
           <p key={item.key} className="composer-status chat-error" role="alert">{item.name}: {item.error}</p>
         ))}
       </div>}
@@ -1196,7 +1240,7 @@ export function ConversationHistory({
       <form id="conversation-composer" className="composer" hidden={voiceActive}
         onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
-        <ComposerAttachments items={attachments.items} problems={attachments.problems} showErrors={!phone} onRemove={attachments.remove}
+        <ComposerAttachments items={attachments.items} problems={attachments.problems} showErrors={false} onRemove={attachments.remove}
           getAccessToken={tokenProvider} config={config} />
         <textarea
           ref={input}

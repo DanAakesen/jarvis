@@ -1,6 +1,6 @@
 # Mobile Send focus — #1315
 
-The five-line runtime change prevents primary pointer-down focus transfer on
+The six-line runtime change prevents primary pointer-down focus transfer on
 Send only when the phone composer textarea already owns focus. Native click
 and form submission remain the sole submission path. No layout, send queue,
 attachment, dictation or recovery behavior is replaced.
@@ -36,7 +36,7 @@ dictation, queue and interrupted-stream behavior coverage.
 
 Install existing web/contracts workspaces using the repository lockfile:
 `npm ci --ignore-scripts --workspace @jarvis/web --workspace @jarvis/contracts`.
-Copy `../mobile-corrections-1293/fixtures/qa1293.html` and `qa1293.tsx` into
+Copy `fixtures/qa1315.html` and `qa1315.tsx` into
 `apps/web/`, run the normal web Vite server, then run
 `python docs/ui/screenshots/1315/send-browser.py`. The fixture imports the actual
 component and viewport hook. Remove the two temporary web fixture files before
@@ -48,11 +48,11 @@ intercepted. Browser script requires Python Playwright and `/usr/bin/chromium`.
 
 Physical iPhone/Safari keyboard behavior remains unverified. This is synthetic
 Chromium touch/component evidence, not full-App or live acceptance. Local Node
-24.19.0/npm 11.9.0 differs from pinned CI Node 22/npm 10. The branch starts at
-83563177 (includes continuous dictation); final integration and revalidation must
-wait for the parent's desktop/mobile composer and meal recovery queue.
+24.19.0/npm 11.9.0 differs from pinned CI Node 22/npm 10. The combined candidate integrates
+6ec8af1e (mobile composer visibility, desktop parity, continuous dictation and
+accepted meal recovery). Merge remains parent-owned after exact-head checks.
 
-## Local validation
+## Original local validation (83563177)
 
 - Full web suite: 153 files / 2,386 tests passed.
 - Focused ConversationHistory + phone viewport suites: 113 tests passed.
@@ -64,3 +64,31 @@ wait for the parent's desktop/mobile composer and meal recovery queue.
 
 JSDOM emitted existing canvas/media not-implemented notices. These checks are
 local verification, not pinned CI or physical-phone acceptance.
+
+## Combined baseline validation (6ec8af1e)
+
+Retained both sides of adjacent documentation/test additions. Desktop parity had
+removed the unused `phone` parameter binding, so restore `phone = false` for the
+Send guard. The complete runtime diff against main is this one binding plus the
+five-line handler; recovery, original turn identity, dictation and layout code
+are unchanged.
+
+The rerun exposed an old fixture limitation: it rendered MobileBottomNav at
+1440px even though the real desktop shell does not. The local `qa1315` fixture
+mounts that navigation only on phones and otherwise retains the actual component
+and viewport hook. Its route mocks now include active-turn discovery. These are
+fixture corrections, not application layout changes.
+
+Updated `browser.json` and `touch-focused.png` cover the combined component:
+cancel, touch send with stable 480px viewport/y=419 button, repeated send,
+interrupted stream, focus reopening and desktop click. On reload, active turn
+41/901 reattaches through GET `/conversation/sessions/41/turns/901/events`; the
+four prior intentional send POSTs remain exactly four. The recovered reply uses
+the original turn identity. Zero page errors; no real traffic or food writes.
+The original `baseline.json` remains the earlier controlled negative comparison.
+
+Combined-candidate local checks: full web suite 153 files / 2,395 tests passed;
+web ESLint and TypeScript/Vite build passed (existing chunk-size advisory).
+The first integrated run failed on the missing phone binding described above;
+the final full rerun passes with that correction. No failed run is used as
+qualification evidence. `git diff --check` passed.

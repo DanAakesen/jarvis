@@ -7,8 +7,17 @@ full web tests, web lint and web build also pass locally. The actual-component
 Chromium touch reproduction, event traces, screenshot and instructions are in
 `docs/ui/screenshots/1315/README.md`. It controls keyboard viewport geometry and
 intercepts every external request with synthetic responses. Physical iPhone
-keyboard behavior and parent-owned final integration remain unverified.
+keyboard behavior remains unverified; the combined baseline is 6ec8af1e and
+final hosted qualification/merge remain parent-owned.
 
+
+## Desktop composer checks (#1309; 26 October 2026)
+
+Run contracts/web lint, tests and build. Actual-App synthetic Chromium coverage
+and reproduction are in `docs/ui/screenshots/1309/README.md`. It checks desktop
+window geometry, popup hit targets, dictation controls, attachment/error rows and
+phone regression. Preserve the continuous dictation lifecycle from #1305 and the
+attachment submenu from #1308 when integrating; #1303 visibility stays phone-only.
 
 ## Continuous dictation checks (#1305; 26 October 2026)
 
@@ -18,6 +27,60 @@ browser check and reproduction steps are in `docs/ui/screenshots/1305/README.md`
 Check interim replacements, final replay, pause/end and no-speech restart,
 explicit stop, repeated toggles, draft editing, stale callbacks and fatal errors.
 These checks do not establish physical iPhone or real speech-provider acceptance.
+
+## Accepted chat recovery checks (#1311; 26 October 2026)
+
+After integration onto `5dd52b07`, local aggregate lint/build, 9,487 JavaScript
+tests (one existing conditional skip) and 929 Python tests passed. Hosted Node 22
+exposed four fixture teardown timeouts after successful disconnect assertions;
+the same failure reproduced locally on Node 22. The HTTP fixture now closes its
+owned connections in `preClose`, after assertions, without changing production
+shutdown or increasing timeouts. All 221 focused backend tests passed on Node 22
+with that correction. Hosted SQL database contracts passed; final pinned CI is
+tracked on PR #1314.
+
+Review correction: retain Dan's P8-35 no-Stop-button choice. The explicit
+cancellation endpoint/client mechanism remains; no new visible cancellation control
+is introduced. Added signed-token coverage in `src/auth/auth.test.ts` verifies
+401 for missing credentials and 403 for non-owner, hosted-agent, runner and deploy
+principals on discovery, replay and cancellation. Owner positive controls prove
+route registration. Conversation tests reject mismatched-session replay/cancel
+without aborting the original turn, and assert unchanged original message/turn IDs.
+The follow-up passed 221 selected backend tests and 252 selected web tests;
+Chromium rechecked reload, navigation, absence of Stop and explicit cancellation
+through the client API at 390×844 and 1440×900. This is author review evidence,
+not an independent reviewer trace or hosted exact-head CI.
+
+Run focused backend `src/core/recoverable-chat.test.ts`, `src/core/conversation.test.ts`,
+`src/core/owner-interactions.test.ts`, `src/daily/tools/food-review.test.ts` and
+`src/daily/tools/food.test.ts`; web `src/conversation-history.test.ts` and
+`src/ConversationHistory.test.tsx`. Aggregate checks are `npm test`, `npm run lint`,
+`npm run build`, plus `bash .github/scripts/python-ci.sh agents/jarvis`.
+Use synthetic meals only. Replay is process-local under the existing single replica;
+completed replies use SQL history. Restart interrupts pending work and must never
+resubmit it. Keep deployment/restart limitations distinct from disconnect tests.
+
+Synthetic coverage includes disconnect while the model is running, while an exact
+food proposal is pending, and after an approved action commits but before its
+final response is emitted. Replaying that result twice asserts one agent execution
+and one action write. Expiry and explicit cancellation assert zero writes; existing
+food-tool tests cover source/proposal fingerprints, presence and committed receipts.
+The Chromium App fixture at 390×844 and 1440×900 recovered the exact proposal on
+reload and retained execution through ordinary navigation without adding a Stop
+control or another turn POST. Explicit cancellation is tested through its API. No screenshots or private meal data were published.
+
+The SQL nutrition integration command was attempted but refused to collect because
+no isolated loopback SQL Server is configured. Do not interpret synthetic action
+counters as real SQL transaction/concurrency or live-provider/device evidence.
+This executor uses Node 24.19.0/npm 11.9.0; pinned Node 22/npm 10 qualification stays
+with CI. Locked npm package installation needed temporary public npm tarball URLs
+for configured-feed 403s; the tracked lockfile, versions and integrity hashes are
+unchanged. PR #1314 is ready and rebased onto main `5dd52b07` after desktop
+#1313. Additive documentation and test-setup conflicts preserved both workstreams.
+Runtime/CSS comparison retains the merged desktop, composer, dictation, preview
+and attachment changes. Exact-head local and hosted qualification follows the
+rebase; parent owns merge and deployment.
+
 
 ## Settled shell glass checks (#1301; 26 October 2026)
 

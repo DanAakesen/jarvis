@@ -1054,8 +1054,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 @media (pointer: coarse) {
   .sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 }
-/* The composer and its menus stay above workspace windows, so More and attach menus are never hidden. */
-.conversation-input.luminous-glass { z-index: var(--z-dock); }
+/* The fixed wrapper owns the stacking context. Workspace canvases isolate their
+   front/maximized windows, so the dock layer clears the entire window context
+   while staying below sheets and modal dialogs. */
+.conversation-input-stack:has(> .conversation-input.luminous-glass) { position: relative; z-index: var(--z-dock); }
 /* Shell panels keep their heading and resize handle in place while only the body scrolls. */
 @media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .area-sidebar, .context-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }
@@ -3313,7 +3315,9 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .mobile-bottom-nav-link:is([aria-current="page"], [aria-pressed="true"], [aria-expanded="true"]) svg { color: var(--focus); stroke-width: 2.1; }
 .mobile-bottom-nav-link:active svg { color: var(--focus); }
 .mobile-bottom-nav-link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
-/* The chat bar is the dock: full width at the bottom of every page, above the home indicator. */
+/* Other phone pages reserve navigation space only. */
+.app-shell[data-phone="true"]:is([data-home="false"], [data-workspaces-open="true"]) { --dock-space: var(--phone-dock-bottom); }
+/* The mounted chat/voice session retains its existing placement across routes. */
 .app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .jarvis-page { right: calc(env(safe-area-inset-right) + 8px); bottom: var(--phone-dock-bottom); left: calc(env(safe-area-inset-left) + 8px); max-width: none; }
 .app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(env(safe-area-inset-top) + var(--rail-size) + 8px); right: calc(env(safe-area-inset-right) + 8px); bottom: var(--dock-space); left: calc(env(safe-area-inset-left) + 8px); }
 .app-shell[data-phone="true"] .conversation-input .input-orb { width: 48px; height: 48px; }

@@ -1,0 +1,79 @@
+[
+  {
+    "viewport": [
+      900,
+      800
+    ],
+    "touch": false,
+    "realRoom": true,
+    "states": [
+      {
+        "state": "normal",
+        "bounds": {
+          "window": {
+            "x": 108,
+            "y": 318,
+            "width": 740,
+            "height": 352,
+            "right": 848,
+            "bottom": 670
+          },
+          "stack": {
+            "x": 108,
+            "y": 670,
+            "width": 740,
+            "height": 106,
+            "right": 848,
+            "bottom": 776
+          },
+          "composer": {
+            "x": 108,
+            "y": 670,
+            "width": 740,
+            "height": 106,
+            "right": 848,
+            "bottom": 776
+          },
+          "draft": {
+            "x": 117,
+            "y": 675,
+            "width": 722,
+            "height": 44,
+            "right": 839,
+            "bottom": 719
+          },
+          "plus": {
+            "x": 117,
+            "y": 727,
+            "width": 44,
+            "height": 44,
+            "right": 161,
+            "bottom": 771
+          },
+          "dictate": {
+            "x": 743,
+            "y": 727,
+            "width": 44,
+            "height": 44,
+            "right": 787,
+            "bottom": 771
+          },
+          "send": {
+            "x": 795,
+            "y": 727,
+            "width": 44,
+            "height": 44,
+            "right": 839,
+            "bottom": 771
+          }
+        },
+        "menuHitTests": 3,
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
+      }
+    ],
+    "dictationStartStop": true,
+    "attachmentsAndFeedback": true,
+    "pageErrors": []
+  }
+]

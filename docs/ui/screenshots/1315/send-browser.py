@@ -1,4 +1,4 @@
-"""Run with the existing qa1293 component fixtures copied into apps/web."""
+"""Run with the qa1315 component fixtures copied into apps/web."""
 import json, sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -7,11 +7,21 @@ baseline = '--baseline' in sys.argv
 with sync_playwright() as p:
     browser = p.chromium.launch(executable_path='/usr/bin/chromium', args=['--no-sandbox'])
     page = browser.new_page(viewport={'width':390,'height':844}, is_mobile=True, has_touch=True)
-    errors, calls = [], []
+    errors, calls, replays = [], [], []
+    recovery = {'enabled': False}
     page.on('pageerror', lambda e: errors.append(str(e)))
     def respond(route):
         path = route.request.url
-        if route.request.method == 'GET':
+        if path.endswith('/conversation/turns/active'):
+            route.fulfill(json={'turns':[{'sessionId':'41','messageId':'901','language':'en'}] if recovery['enabled'] else []})
+        elif path.endswith('/sessions/41/turns/901/events'):
+            assert route.request.method == 'GET'
+            replays.append(path)
+            recovery['enabled'] = False
+            msg = {'id':'901','sessionId':'41','role':'dan','text':'Synthetic original recovered message','model':None,'at':'2026-10-26T12:00:00Z'}
+            reply = {**msg,'id':'902','role':'jarvis','text':'Synthetic original recovered reply'}
+            route.fulfill(content_type='text/event-stream',body=''.join('event: '+event+'\ndata: '+json.dumps(data)+'\n\n' for event,data in [('user',msg),('done',reply)]))
+        elif route.request.method == 'GET':
             route.fulfill(json={'messages':[], 'nextCursor':None})
         elif path.endswith('/sessions'):
             route.fulfill(json={'id':'41','channel':'chat','language':'en'})
@@ -28,7 +38,7 @@ with sync_playwright() as p:
             route.fulfill(status=500, json={'error':'Unexpected synthetic endpoint'})
     # Every non-local request is intercepted; no real backend sends.
     page.route('**/*', lambda r: r.continue_() if r.request.url.startswith('http://localhost:5173/') else respond(r))
-    page.goto('http://localhost:5173/qa1293.html')
+    page.goto('http://localhost:5173/qa1315.html')
     box = page.get_by_role('textbox', name='Message Jarvis')
     send = page.get_by_role('button', name='Send', exact=True)
     box.fill('Synthetic touch send')
@@ -82,7 +92,14 @@ with sync_playwright() as p:
         send.click()
         page.wait_for_timeout(300)
         assert len(calls) == 4
-        result['repeated_reopened_desktop_calls'] = calls
+        result['repeated_reopened_desktop_calls'] = list(calls)
+        recovery['enabled'] = True
+        page.set_viewport_size({'width':390,'height':844})
+        page.reload()
+        page.get_by_text('Synthetic original recovered reply',exact=True).wait_for()
+        assert len(replays) == 1 and len(calls) == 4
+        result['original_identity_get_replays'] = replays
+        result['post_count_after_recovery'] = len(calls)
         assert errors == [], errors
     (out/('baseline.json' if baseline else 'browser.json')).write_text(json.dumps(result,indent=2))
     print(json.dumps(result,indent=2))

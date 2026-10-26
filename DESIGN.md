@@ -8,6 +8,27 @@ and cancellation semantics; do not send on pointer-down or refocus after an
 asynchronous reply. Control geometry and desktop focus behavior stay unchanged.
 
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Reuse the phone composer's two-row layout and existing glass/control tokens on
+desktop. The outer measured stack owns width and dock stacking; the inner glass
+surface fills it without an independent chat-width cap. Workspace canvases isolate
+front/maximized windows, so the dock context clears them without exceeding modal
+layers. Voice moves into Plus, and errors use the shared above-surface feedback.
+The room-unavailable status flows above the desktop workspace in typing mode,
+so it cannot separate the initial docked history from the composer. Message
+timestamps already sit beneath bubbles; desktop navigation is unchanged.
+
+## Mobile Chat-only composer (#1303; 26 October 2026)
+
+The phone message composer is visible on Chat only, with the Workspaces pane closed. Other pages keep
+their navigation clearance without reserving the hidden composer height. Keep
+the conversation mounted to retain drafts/session state; returning to Chat reveals
+the existing composer. Desktop is unchanged; voice sessions stay mounted but their composer controls
+are also visible only on Chat.
+Workspaces is a separate browsing screen despite retaining the route. Menu remains
+an overlay on Chat and does not hide the composer.
+
 ## Preview controls and resumed video (#1304; 26 October 2026)
 
 Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.
@@ -20,6 +41,15 @@ Its transparent native file input shares that row's bounds instead of a clipped
 plus focus; cancellation retains the source. Other actions keep their existing
 closure behavior. Synthetic actual-App evidence and physical-iPhone limits are
 in `docs/ui/screenshots/1306/README.md`.
+
+## Chat return and cancellation (#1311; 26 October 2026)
+
+Reattachment uses the existing live conversation bubble, streamed text and exact
+food invitation. Preserve the existing no-Stop-button interaction; cancellation
+remains an explicit backend mechanism, not a new visible control. Leaving the page only
+detaches transport. Returning refreshes saved history and reattaches active work.
+No composer geometry, styling or dictation behavior changes.
+
 
 ## Settled glass correction (#1301; 26 October 2026)
 

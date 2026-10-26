@@ -55,5 +55,9 @@
     "Synthetic repeated touch",
     "Synthetic reopened draft",
     "Synthetic desktop send"
-  ]
+  ],
+  "original_identity_get_replays": [
+    "http://fixture.invalid/conversation/sessions/41/turns/901/events"
+  ],
+  "post_count_after_recovery": 4
 }

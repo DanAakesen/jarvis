@@ -8,6 +8,14 @@ not send. Existing upload, empty-draft, pending/steering and failure recovery
 semantics remain in place. Physical iPhone acceptance remains unverified.
 
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Desktop uses the approved full-width draft and second row of borderless Plus,
+Dictate and Send controls; Voice is under Plus. Attachment errors stay above the
+composer, and attachment pills stay inside. The composer follows the history
+window when resized, maximized or restored, with its popup above history.
+Desktop navigation remains unchanged; Chat-only composer visibility is mobile-only.
+
 ## Camera preview follow-up (#1304; 26 October 2026)
 
 Show only the unframed video and overlaid switch/close controls, using the existing app glass material. Remove visible Live and camera-direction badges. Preserve movement, camera switching and closing; retain fitted geometry through stream replacement and refresh it on playback resume.
@@ -18,6 +26,16 @@ Opening Attach file or photo retains the underlying plus menu while the native
 chooser is open. Cancellation leaves the menu available; selecting files closes
 it and continues the existing upload flow. Preserve plus toggling and ordinary
 menu-action dismissal. No custom photo chooser is introduced.
+
+## Accepted chat recovery (#1311; 26 October 2026)
+
+Leaving the app or losing its HTTP stream does not cancel an accepted chat turn.
+Returning recovers the running reply and its exact pending food invitation; completed
+replies load from conversation history. Recovery never resubmits a meal or approves
+an estimate. Explicit cancellation still cancels the running turn; actions already committed
+remain committed. Existing exact-proposal approval, expiry, presence/source checks
+and food receipt deduplication remain authoritative.
+
 
 ## Unified translucent chrome (#1301; 26 October 2026)
 
@@ -132,6 +150,10 @@ focus, viewport pan/resize, keyboard dismissal and orientation changes.
 Native-phone acceptance remains separate from controlled browser evidence.
 
 ## Mobile navigation and composer actions (#1287; 25 October 2026)
+
+On mobile, show the message composer only on the Chat screen (`/`), not on
+other pages or the open Workspaces screen (#1303). Desktop composer behavior
+is unchanged.
 
 On phones, keep message times below the chat bubbles. Use the compact composer
 with a plus menu for existing attachments, video, screen sharing and realtime

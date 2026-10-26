@@ -16,11 +16,13 @@ export function JarvisPage({
   screenShare,
   docked = false,
   phone = false,
+  composerVisible = true,
   onDismiss,
 }: {
   /** Off the home page the chat bar is tucked into the rail and cannot be reached until it pops out. */
   docked?: boolean;
   phone?: boolean;
+  composerVisible?: boolean;
   /** Escape tucks a popped-out chat bar back into the rail. */
   onDismiss?: () => void;
   client: PublicClientApplication;
@@ -59,6 +61,7 @@ export function JarvisPage({
         screenShare={screenShare}
         camera={camera}
         phone={phone}
+        composerVisible={composerVisible}
       />
     </div>
   );
