@@ -1,3 +1,4 @@
+import { observeSendDiagnostic } from './send-diagnostic';
 import { ReviewSummary } from './ReviewSummary';
 import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -318,6 +319,12 @@ export function ConversationHistory({
   const transcript = useRef<HTMLDivElement>(null);
   const followedTranscript = useRef<HTMLDivElement | null>(null);
   const inputBar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const textarea = input.current;
+    const send = inputBar.current?.querySelector<HTMLButtonElement>('.composer-send');
+    if (!phone || !composerVisible || voiceActive || !textarea || !send) return;
+    return observeSendDiagnostic(textarea, send);
+  }, [phone, composerVisible, voiceActive]);
   const followLatest = useRef(true);
   const wasBusy = useRef(false);
   const hasFocusedInput = useRef(false);

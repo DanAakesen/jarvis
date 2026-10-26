@@ -1,3 +1,9 @@
+## Temporary Send diagnostic (local, 26 October 2026)
+
+Approved passive, bounded, content-free in-memory tracing supports investigation
+of the unresolved keyboard-open Send symptom. No retrieval UI or transmission
+is implemented; this is not a proven fix.
+
 # Product
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)

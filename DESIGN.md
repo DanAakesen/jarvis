@@ -1,3 +1,9 @@
+## Temporary Send diagnostic (local, 26 October 2026)
+
+No visible control, layout, focus or input behavior changes. A passive in-memory
+trace observes Send/focus/viewport metadata; owner retrieval requires a separate
+coordinator decision.
+
 # Design
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
