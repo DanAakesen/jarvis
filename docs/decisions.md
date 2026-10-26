@@ -1,5 +1,15 @@
 # Decisions
 
+## Startup focus is not keyboard evidence (#1299; 26 October 2026)
+
+Actual-App synthetic startup reproduced a focused composer and hidden navigation
+with unchanged 844px layout/visual viewports. Existing startup and restoration
+effects call focus programmatically. Require observed shrink or a measurable
+inset before hiding navigation; keep the earlier height across resize-before-focus.
+A fresh short viewport with no prior measurement is ambiguous, so keep navigation
+available. Preserve autofocus and existing controls; no physical iPhone browser
+mode is inferred from the screenshot. This corrects the focus-only #1295 choice.
+
 ## Reserve phone typing space when geometry is inconclusive (#1295; 26 October 2026)
 
 The owner reports navigation still above the iPhone keyboard after #1294.

@@ -5,6 +5,7 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
     const element = shell.current;
     if (!enabled || !element) return;
     const viewport = window.visualViewport;
+    let observedHeight = viewport?.height ?? window.innerHeight;
     let focusedHeight: number | null = null;
     let focusedTyping = false;
     let focusFrame = 0;
@@ -17,13 +18,15 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
       const composerFocused = input instanceof HTMLTextAreaElement && input.id === 'message' && element.contains(input);
       const composerControlFocused = focusedHeight !== null && input instanceof Element && element.contains(input) &&
         Boolean(input.closest('.conversation-input, .more-menu-list, .more-menu-flyout'));
-      // Layout and visual viewports can shrink together, including before this hook
-      // mounts. A focused composer must not depend on a measurable keyboard gap.
+      // Startup and focus restoration can focus the composer without opening a
+      // keyboard. Keep a pre-shrink height even when resize arrives before focus.
+      // An already-short viewport with no inset/history is ambiguous, not typing.
       if (!composerFocused && !composerControlFocused) {
         focusedHeight = null;
         focusedTyping = false;
       } else if (normalScale) {
-        if (focusedHeight === null || visibleHeight < focusedHeight - 120) {
+        focusedHeight ??= observedHeight;
+        if (visibleHeight < focusedHeight - 120) {
           focusedTyping = true;
           focusedHeight = visibleHeight;
         } else if (visibleHeight > focusedHeight + 120) {
@@ -33,6 +36,7 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
           focusedHeight = visibleHeight;
         }
       }
+      if (normalScale) observedHeight = Math.max(observedHeight, visibleHeight);
       const keyboardInset = viewport && Math.max(window.innerHeight, document.documentElement.clientHeight) - visibleHeight - top > 120;
       const keyboardOpen = normalScale && Boolean(focusedTyping || keyboardInset);
       element.setAttribute('data-keyboard-open', String(keyboardOpen));
