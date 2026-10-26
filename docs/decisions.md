@@ -1,5 +1,15 @@
 # Decisions
 
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
 ## 26 October 2026 — Defer phone outside-touch dismissal until tap release (local)
 
 The viewport hook blurred the composer on touch-down before a transcript pan

@@ -1,4 +1,4 @@
-import { includesNutritionList } from './food-presentation.js';
+import { presentNutritionList } from './food-presentation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { RecoverableChat } from './recoverable-chat.js';
 import { registerSseShutdown } from './sse.js';
@@ -898,10 +898,10 @@ return {
             if (interrupted) {
               throw new Error('Chat turn was interrupted without a steering message');
             }
-            if (foodResult && !includesNutritionList(partial, foodResult)) {
-              const resultText = `\n\n${foodResult}`;
-              partial += resultText;
-              yield streamEvent('delta', { text: resultText });
+            if (foodResult) {
+              const presented = presentNutritionList(partial, foodResult);
+              if (presented.startsWith(partial)) yield streamEvent('delta', { text: presented.slice(partial.length) });
+              partial = presented;
             }
             if (!partial.trim()) throw new Error('Chat response was empty');
             if (!isSteering && visualContext) {
