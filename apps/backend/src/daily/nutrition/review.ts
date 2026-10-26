@@ -123,13 +123,16 @@ function shown(value: unknown, missing = 'not set'): string {
   if (value === null || value === undefined) return missing;
   return typeof value === 'string' ? JSON.stringify(value) : JSON.stringify(value) ?? String(value);
 }
+export function shownNutrient(value: number | null): string {
+  return value === null ? 'unknown (not zero)' : String(Math.round(value));
+}
 export function nutritionSummary(input: { energyKcal: number | null; proteinGrams: number | null; carbohydratesGrams: number | null; fatGrams: number | null; fiberGrams: number | null }): string {
   return [
-    `Protein: ${shown(input.proteinGrams, 'unknown (not zero)')} g`,
-    `Calories: ${shown(input.energyKcal, 'unknown (not zero)')} kcal`,
-    `Fat: ${shown(input.fatGrams, 'unknown (not zero)')} g`,
-    `Carbohydrates: ${shown(input.carbohydratesGrams, 'unknown (not zero)')} g`,
-    `Fiber: ${shown(input.fiberGrams, 'unknown (not zero)')} g`,
+    `Protein: ${shownNutrient(input.proteinGrams)} g`,
+    `Calories: ${shownNutrient(input.energyKcal)} kcal`,
+    `Fat: ${shownNutrient(input.fatGrams)} g`,
+    `Carbohydrates: ${shownNutrient(input.carbohydratesGrams)} g`,
+    `Fiber: ${shownNutrient(input.fiberGrams)} g`,
   ].map(line => `- ${line}`).join('\n');
 }
 function referenceSummary(input: MealInput): string {
@@ -198,8 +201,8 @@ function correctionDetails(before: MealInput, after: MealInput): string[] {
   ] as const;
   const changedNutrients = nutrients.filter(([, key]) => before[key] !== after[key]);
   const nutritionChanges = nutrients.map(([name, key, unit]) => before[key] === after[key]
-    ? `${name} ${shown(after[key], 'unknown (not zero)')} ${unit} (unchanged)`
-    : `${name} ${shown(before[key], 'unknown (not zero)')} → ${shown(after[key], 'unknown (not zero)')} ${unit}`);
+    ? `${name} ${shownNutrient(after[key])} ${unit} (unchanged)`
+    : `${name} ${shownNutrient(before[key])} → ${shownNutrient(after[key])} ${unit}`);
   const beforeUncertainty = uncertaintySummary(before);
   const afterUncertainty = uncertaintySummary(after);
   const lines = [

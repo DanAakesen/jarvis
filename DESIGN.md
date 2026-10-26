@@ -10,6 +10,14 @@ fade. Apply that fade directly to painted transcript items with scrollport-align
 offsets, rather than masking their ancestor. Extend item masks to retain timestamp
 and focus overflow. Keep the window blur on a background pseudo-element so it
 does not intercept bubble backdrop sampling. Phone typing mode retains no fade.
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
 
 
 ## Mobile chat scroll focus (26 October 2026; local)

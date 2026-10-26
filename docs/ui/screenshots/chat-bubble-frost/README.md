@@ -160,3 +160,16 @@ uncontended rerun is recorded below. Previous focused Send timeout was also a
 - Latest 302-bubble steady-scroll probe: zero bubble rectangle reads; zero retained
   detached observed children. Phone has no fade observer. Frame timings remain
   hardware/environment dependent; no physical Safari smoothness claim is made.
+
+
+## Meal precision main integration
+
+Integrated main `92fbd42cf167962ecbd86e54ada3b22374080465` (#1328). Documentation
+introduction conflicts retain both entries. Backend food code, architecture notes
+and the new whole-number history tests match main exactly. The three blur/corner
+runtime files are byte-identical to local validated commit `89c45b28`, so the
+existing synthetic pixels, fade, corner, observer and performance evidence remains
+applicable; no fresh pixel run is claimed for this documentation/test integration.
+Focused history/menu/attachment/phone integration checks: **4 files / 158 tests
+passed**. The new tree requires its own hosted CI result; the prior tree's green
+run is not used as qualification for this integration. Manual merge only.

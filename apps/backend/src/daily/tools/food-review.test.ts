@@ -222,7 +222,7 @@ describe('inactive internal food proposal review', () => {
           await app.inject({ method: 'POST', url: `/tools/${tool.name}`, headers: agentHeaders, payload: lookupPayload(75) });
           app.nowEventHub.publish({ type: 'food_estimate_result', sessionId: 'another-session', sourceMessageId: '42', summary: 'Wrong session' });
           app.nowEventHub.publish({ type: 'food_estimate_result', sessionId: '41', sourceMessageId: 'other-source', summary: 'Wrong source' });
-          yield completeList ? 'Checked it.\n- Protein: 7.5 g\n- Calories: 150 kcal\n- Fat: 15 g' : 'Checked it.'; return;
+          yield completeList ? 'Checked it.\n- Protein: 8 g\n- Calories: 150 kcal\n- Fat: 15 g' : 'Checked it.'; return;
         }
         const pending = app.inject({ method: 'POST', url: '/tools/health_food_review', headers: agentHeaders,
           payload: { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
@@ -255,10 +255,15 @@ describe('inactive internal food proposal review', () => {
           body += decoder.decode(chunk.value, { stream: true });
         }
         expect(body).toContain('event: done');
+        const doneFrame = body.split('\n\n').find(frame => frame.startsWith('event: done\n'))!;
+        const delivered = JSON.parse(doneFrame.split('\ndata: ')[1]!);
+        expect(delivered.text).toBe(messages.at(-1)?.text);
+        expect(delivered.text).toContain('- Carbohydrates: 225 g\n- Fiber: 8 g');
+        expect(delivered.text.match(/Protein:/gu)).toHaveLength(1);
         expect(body).not.toContain('event: food_invitation');
         expect(messages.at(-1)?.text).toContain('Checked it.');
         expect(messages.at(-1)?.text).not.toContain('Wrong');
-        expect(messages.at(-1)?.text).toContain('- Protein: 7.5 g\n- Calories: 150 kcal\n- Fat: 15 g');
+        expect(messages.at(-1)?.text).toContain('- Protein: 8 g\n- Calories: 150 kcal\n- Fat: 15 g');
         expect(messages.at(-1)?.text.match(/Protein:/gu)).toHaveLength(1);
         expect(messages.at(-1)?.text).not.toContain('200 kcal');
         expect(f.store.log).not.toHaveBeenCalled();

@@ -9,6 +9,14 @@ composer top-corner borders only on mobile with the chat window shown.
 
 Frost the background behind both speakers' chat bubbles like the Plus menu,
 retaining sharp text, translucency, existing layout and the desktop top-edge fade.
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
 
 
 ## Mobile chat scrolling (26 October 2026; local)

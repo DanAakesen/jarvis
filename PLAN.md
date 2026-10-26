@@ -1,5 +1,15 @@
 ## Mobile keyboard scroll (#1323; 26 October 2026)
 
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
 Implementation and local review complete in PR #1325. Outside taps dismiss only
 after release; scrolling, cancellation and multi-touch retain composer focus.
 Local validation: web 2,405 passed / one contrast timeout; unchanged contrast rerun
@@ -20,7 +30,7 @@ merge/deployment workflow; no production release is claimed yet.
 
 ## Chat bubble frost (#1324; local qualification, 26 October 2026)
 
-Integrated main aa87c57e (video, Health lists and keyboard scroll). Implemented
+Integrated main 92fbd42c (video, Health lists, keyboard scroll and meal precision). Implemented
 shared lighter Plus/bubble/header frost, a mobile shown-state corner correction,
 and the existing desktop fade through cached item-level masks. Local evidence and check outcomes are recorded in
 `docs/ui/screenshots/chat-bubble-frost/`. Parent coordinates integration after
