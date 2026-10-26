@@ -357,6 +357,9 @@ export function ConversationHistory({
           base = draftValue.current;
           firstResult = seenResults;
         }
+        // Interim entries can disappear. Their indexes are then available for
+        // new speech, so do not keep suppressing indexes beyond this snapshot.
+        firstResult = Math.min(firstResult, event.results.length);
         seenResults = event.results.length;
         const parts: string[] = [];
         for (let index = firstResult; index < event.results.length; index += 1) {

@@ -49,6 +49,19 @@ it was corrected. Early browser harness runs had an invalid synthetic settings
 response and attempted to click the intentionally hidden desktop Dictate control;
 the fixture/checks were corrected without changing product behavior.
 
+## Inline review correction
+
+Review `discussion_r4377356371` identified lost new words when a manually edited
+interim result disappears and the browser reuses its index. Clamp the ignored
+edit boundary to each current result snapshot length. Two regression variants
+(shrink immediately after editing, or after an intervening snapshot) both failed
+before the correction and passed afterward, including interim-to-final updates,
+final snapshot replay, preservation of the edit and session draft storage.
+All 97 `ConversationHistory` tests passed after the correction. The subsequent
+full web suite passed all 153 files and 2,381 tests in 167.59 seconds. Web lint
+and build also passed (existing chunk-size advisory); no assertions or timeouts
+were weakened. Browser screenshots above predate this result-handler-only fix.
+
 ## Limits
 
 Node 24.19.0/npm 11.9.0 differs from pinned CI Node 22/npm 10. The jsdom suite

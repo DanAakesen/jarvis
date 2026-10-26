@@ -253,6 +253,33 @@ describe('ConversationHistory', () => {
     expect(textbox).toHaveProperty('value', 'My correction new wording');
   });
 
+  it.each([false, true])('keeps new speech after edited interim results disappear (prior snapshot: %s)', async (priorSnapshot) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const recognition = MockDictationRecognition.instance;
+    act(() => {
+      recognition.emitTranscript('hello');
+      recognition.emitTranscript('guess', false);
+    });
+    expect(textbox).toHaveProperty('value', 'hello guess');
+    fireEvent.change(textbox, { target: { value: 'My correction' } });
+    if (priorSnapshot) act(() => recognition.onresult?.({ resultIndex: 1, results: recognition.results } as never));
+    act(() => {
+      recognition.results.pop();
+      recognition.onresult?.({ resultIndex: 1, results: recognition.results } as never);
+    });
+    expect(textbox).toHaveProperty('value', 'My correction');
+    act(() => recognition.emitTranscript('new words', false));
+    expect(textbox).toHaveProperty('value', 'My correction new words');
+    act(() => recognition.emitTranscript('new wording'));
+    act(() => recognition.onresult?.({ resultIndex: 0, results: recognition.results } as never));
+    expect(textbox).toHaveProperty('value', 'My correction new wording');
+    expect(sessionStorage.getItem('jarvis.chat.draft')).toBe('My correction new wording');
+  });
+
   it.each(['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'aborted'])('stops on active %s failures without restarting', async (error) => {
     vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
     const user = userEvent.setup();
