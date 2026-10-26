@@ -1,5 +1,12 @@
 # Product
 
+## Native attachment chooser continuity (#1306; 26 October 2026)
+
+Opening Attach file or photo retains the underlying plus menu while the native
+chooser is open. Cancellation leaves the menu available; selecting files closes
+it and continues the existing upload flow. Preserve plus toggling and ordinary
+menu-action dismissal. No custom photo chooser is introduced.
+
 ## Unified translucent chrome (#1301; 26 October 2026)
 
 Menu popups, composer, bottom navigation and header retain visible but partial
