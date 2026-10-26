@@ -74,10 +74,21 @@ describe('responsive stylesheet contract', () => {
 
   it('keeps the phone page sheet compact above the composer and navigation dock', () => {
     expect(sharedStyles).toContain('bottom: calc(var(--phone-dock-bottom, 84px) + var(--conversation-composer-height, 52px) + var(--space-2));');
+    expect(sharedStyles).toContain('inset: 0 0 calc(var(--phone-dock-bottom, 84px) + var(--conversation-composer-height, 52px) + var(--space-2));');
+    expect(sharedStyles).toContain('.mobile-menu { position: fixed; z-index: var(--z-sheet); inset: 0; pointer-events: none; }');
+    expect(sharedStyles).toContain('animation: mobile-sheet-in 380ms var(--ease-enter) both; pointer-events: auto;');
     expect(sharedStyles).toContain('max-height: min(196px, calc(var(--overlay-viewport-height, 100dvh) - var(--phone-dock-bottom, 84px) - var(--conversation-composer-height, 52px) - env(safe-area-inset-top) - var(--space-4)));');
     expect(sharedStyles).toContain('.mobile-menu-page .mobile-menu-link { min-height: 48px; gap: var(--space-1); padding-inline: var(--space-2); }');
     expect(sharedStyles).toContain('.mobile-menu-sheet .modal-heading { order: 2; display: grid; grid-template-columns: 44px auto; gap: var(--space-1); margin: 0; }');
     expect(sharedStyles).toContain('.mobile-menu-sheet .mobile-menu-body { order: 1; flex: 1 1 auto; }');
+  });
+
+  it('uses the phone conversation canvas without the desktop window frame', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(history).toContain('.app-shell[data-phone="true"][data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not([hidden], .workspace-window-minimized)');
+    expect(history).toContain('align-self: stretch; flex: 1 1 auto; width: 100%; height: auto; max-height: none; min-height: 0;');
+    expect(history).toContain('.app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation .workspace-window-heading { display: none; }');
+    expect(history).toContain('padding: var(--space-3); -webkit-mask-image: none; mask-image: none;');
   });
 
   it('keeps mobile dictation feedback concise and the draft field within the compact composer row', () => {

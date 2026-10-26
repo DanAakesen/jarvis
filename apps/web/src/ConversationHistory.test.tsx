@@ -184,6 +184,20 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
   });
 
+  it('uses WebKit-prefixed speech recognition when the standard API is unavailable', async () => {
+    vi.stubGlobal('SpeechRecognition', undefined);
+    vi.stubGlobal('webkitSpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.type(textbox, 'Keep this draft');
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    expect(MockDictationRecognition.instance.lang).toBe('en-US');
+    act(() => MockDictationRecognition.instance.emitTranscript('from WebKit'));
+    expect(textbox).toHaveProperty('value', 'Keep this draft from WebKit');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
   it('shows a clear disabled explanation when browser dictation is unavailable', () => {
     renderConversation();
     expect(screen.getByRole('button', { name: 'Dictate' })).toHaveProperty('disabled', true);

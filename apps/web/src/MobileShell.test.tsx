@@ -8,6 +8,7 @@ import { MobileBottomNav, MobileMenu } from './MobileShell';
 function Harness({ onNavigate = () => {}, onContext = () => {}, path = '/', ...flags }: {
   onNavigate?: () => void;
   onContext?: () => void;
+  onComposer?: () => void;
   path?: string;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
@@ -16,12 +17,13 @@ function Harness({ onNavigate = () => {}, onContext = () => {}, path = '/', ...f
   const [open, setOpen] = useState(false);
   return <MemoryRouter initialEntries={[path]}>
     <button onClick={() => setOpen(true)}>Open menu</button>
+    <button type="button" aria-label="Composer action" onClick={flags.onComposer}>Composer action</button>
     <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onContext={onContext} {...flags} />
   </MemoryRouter>;
 }
 
-describe('mobile menu modal behavior', () => {
-  it('traps focus, preserves its working backdrop, and restores its trigger on Escape and backdrop', async () => {
+describe('mobile menu sheet behavior', () => {
+  it('keeps the composer reachable and returns focus on Escape and backdrop', async () => {
     const user = userEvent.setup();
     render(<Harness />);
     const trigger = screen.getByRole('button', { name: 'Open menu' });
@@ -30,7 +32,7 @@ describe('mobile menu modal behavior', () => {
     expect(sheet.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close menu' }));
     await user.tab({ shift: true });
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Context panel' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Composer action' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(sheet.hasAttribute('inert')).toBe(true);
@@ -46,6 +48,18 @@ describe('mobile menu modal behavior', () => {
     await user.click(screen.getByRole('button', { name: 'Close menu' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('dismisses when a composer control is used without stealing its focus or click', async () => {
+    const user = userEvent.setup();
+    const onComposer = vi.fn();
+    render(<Harness onComposer={onComposer} />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const composer = screen.getByRole('button', { name: 'Composer action' });
+    await user.click(composer);
+    expect(onComposer).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(composer);
   });
 
   it('preserves page navigation and closes the sheet', async () => {
@@ -199,5 +213,16 @@ describe('mobile bottom navigation', () => {
     const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(within(navigation).queryByRole('link', { name: 'Health' })).toBeNull();
     expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('keeps bottom navigation controls reachable while the menu sheet is open', async () => {
+    const user = userEvent.setup();
+    render(<BottomNavHarness />);
+    const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    await user.click(within(navigation).getByRole('button', { name: 'Menu' }));
+    expect(screen.getByRole('dialog', { name: 'Go to' })).not.toBeNull();
+    await user.click(within(navigation).getByRole('button', { name: 'Workspaces' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Workspaces pane' })).not.toHaveProperty('hidden', true);
   });
 });

@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import type { AreaSectionLink } from './area-sections';
-import { useModalLifecycle } from './useModalLifecycle';
 import { ShellIcon, type ShellIconName } from './ShellIcon';
 
 /**
@@ -40,10 +39,9 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
   sections?: { label: string; links: readonly AreaSectionLink[] };
 }) {
   const sheet = useRef<HTMLDivElement>(null);
-  const root = useRef<HTMLDivElement>(null);
   const pageRail = useRef<HTMLElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
-  const { onKeyDown } = useModalLifecycle({ active: open, dialog: sheet, boundary: root, onDismiss: onClose });
   const entries: MenuEntry[] = menuPages(dailyEnabled, proactiveEnabled, sections?.label === 'Health').flatMap((page) => {
     const currentSection = sections?.label === page.label;
     return [
@@ -66,12 +64,47 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
     setPageIndex(index);
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    returnFocus.current = previous;
+    sheet.current?.querySelector<HTMLElement>('.modal-close')?.focus({ preventScroll: true });
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+      previous?.focus({ preventScroll: true });
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || sheet.current?.contains(target) ||
+        target.closest('.mobile-bottom-nav-link[aria-controls="mobile-menu"], .mobile-menu-backdrop')) return;
+      onClose();
+      if (!target.closest('.mobile-bottom-nav-link, button, a[href], input, textarea, select, [contenteditable="true"]')) {
+        previous?.focus({ preventScroll: true });
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [onClose, open]);
+
   return (
-    <div ref={root} className="mobile-menu" hidden={!open} inert={!open}>
-      <div className="mobile-menu-backdrop" aria-hidden="true" onClick={onClose} />
-      <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-menu-heading" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div className="mobile-menu" hidden={!open} inert={!open}>
+      <div className="mobile-menu-backdrop" aria-hidden="true" onClick={() => {
+        onClose();
+        returnFocus.current?.focus({ preventScroll: true });
+      }} />
+      <div ref={sheet} id="mobile-menu" className="mobile-menu-sheet" role="dialog" aria-labelledby="mobile-menu-heading" tabIndex={-1}>
           <header className="modal-heading">
-            <button className="modal-close" type="button" aria-label="Close menu" onClick={onClose}><ShellIcon name="close" /></button>
+            <button className="modal-close" type="button" aria-label="Close menu" onClick={() => {
+              onClose();
+              returnFocus.current?.focus({ preventScroll: true });
+            }}><ShellIcon name="close" /></button>
             <h2 id="mobile-menu-heading" className="visually-hidden">Go to</h2>
             {entryPages.length > 1 && <div className="mobile-menu-pagination">
               <button className="mobile-menu-page-button" type="button" disabled={pageIndex === 0}
