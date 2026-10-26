@@ -1,5 +1,12 @@
 # Product
 
+## Mobile chat scrolling (26 October 2026; local)
+
+Scrolling the phone transcript while composing retains textarea focus and the
+unsent draft, allowing continued typing and one-tap Send. An intentional outside
+tap can still dismiss the keyboard. Physical iPhone acceptance remains unverified.
+
+
 ## Mobile Send focus (#1315; 26 October 2026)
 
 A phone Send tap while the message field is focused sends once without dismissing

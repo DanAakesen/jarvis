@@ -179,11 +179,54 @@ describe('phone chat viewport', () => {
     expect(document.activeElement).toBe(input);
     const event = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' });
     screen.getByTestId('outside').dispatchEvent(event);
+    expect(document.activeElement).toBe(input);
+    fireEvent.pointerUp(screen.getByTestId('outside'), { pointerType: 'touch' });
     expect(document.activeElement).not.toBe(input);
     expect(event.defaultPrevented).toBe(false);
     const editor = screen.getByRole('textbox', { name: 'Other editor' });
     editor.focus();
     fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch' });
+    expect(document.activeElement).toBe(editor);
+  });
+
+  it.each(['move', 'cancel', 'scroll', 'release-distance'] as const)('retains focus and the draft through a touch %s', (gesture) => {
+    const visible = viewport();
+    render(<Chat />);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const transcript = screen.getByTestId('outside');
+    input.focus();
+    visible.height = 480;
+    act(() => { visible.dispatchEvent(new Event('resize')); });
+    const down = new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 1, clientY: 100 });
+    transcript.dispatchEvent(down);
+    expect(document.activeElement).toBe(input);
+    if (gesture === 'move') {
+      fireEvent.pointerMove(transcript, { pointerId: 1, clientY: 150 });
+      fireEvent.pointerMove(transcript, { pointerId: 1, clientY: 100 });
+    }
+    if (gesture === 'cancel') fireEvent.pointerCancel(transcript, { pointerId: 1 });
+    if (gesture === 'scroll') fireEvent.scroll(transcript);
+    fireEvent.pointerUp(transcript, { pointerId: 1, clientY: gesture === 'release-distance' ? 150 : 100 });
+    expect(down.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(input);
+    expect(input).toHaveProperty('value', 'Unsent fixture draft');
+    expect(screen.getByTestId('shell').dataset.keyboardOpen).toBe('true');
+    fireEvent.change(input, { target: { value: 'Unsent fixture draft continued' } });
+    expect(input).toHaveProperty('value', 'Unsent fixture draft continued');
+    // Cancellation must not poison the next intentional outside tap.
+    fireEvent.pointerDown(transcript, { pointerType: 'touch', pointerId: 2 });
+    fireEvent.pointerUp(transcript, { pointerType: 'touch', pointerId: 2 });
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('does not blur a newly focused editor when an outside touch finishes', () => {
+    viewport();
+    render(<Chat />);
+    screen.getByRole('textbox', { name: 'Message Jarvis' }).focus();
+    fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch', pointerId: 1 });
+    const editor = screen.getByRole('textbox', { name: 'Other editor' });
+    editor.focus();
+    fireEvent.pointerUp(screen.getByTestId('outside'), { pointerType: 'touch', pointerId: 1 });
     expect(document.activeElement).toBe(editor);
   });
 

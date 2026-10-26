@@ -1,5 +1,12 @@
 # Design
 
+## Mobile chat scroll focus (26 October 2026; local)
+
+Outside touch dismissal waits for a completed tap. Movement, native scrolling
+or pointer cancellation abandons dismissal without preventing browser defaults.
+Keep composer/menu exemptions and the mobile Send focus guard unchanged.
+
+
 ## Mobile Send focus (#1315; 26 October 2026)
 
 When the phone message field is focused, prevent the Send primary pointer-down
