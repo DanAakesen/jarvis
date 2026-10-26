@@ -658,7 +658,6 @@ export function ConversationHistory({
     const hasFiles = withFiles && readyFiles > 0;
     const text = value.trim() || (hasFiles ? 'Please look at the attached files.' : '');
     if (!text) return;
-    camera?.recordActivity?.();
     const screenRequest = isScreenRequest(text, screenShare?.sharing);
     const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
       (isCameraRequest(text) && !screenRequest);

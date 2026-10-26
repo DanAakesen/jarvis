@@ -30,6 +30,22 @@ with sync_playwright() as p:
     else:r.fulfill(status=204);return
    r.fulfill(json=data)
   page.route('http://fixture.invalid/**',respond)
+  page.add_init_script("""window.fixtureAcks={};window.fixturePermission='granted';
+  navigator.permissions.query=async()=>({state:window.fixturePermission});
+  const originalFetch=window.fetch.bind(window);
+  window.fetch=async(input,init)=>{
+    const url=typeof input==='string'?input:input.url;
+    if(url.endsWith('/now/events')) return new Response(new ReadableStream({start(controller){
+      const emit=(event,data)=>controller.enqueue(new TextEncoder().encode('event: '+event+'\\ndata: '+JSON.stringify(data)+'\\n\\n'));
+      window.fixtureCommand=command=>emit('workspace-command',{command,expiresAt:Date.now()+10000});
+      emit('workspace-ready',{sessionId:'12345678-1234-1234-1234-123456789012'});
+    }}),{headers:{'Content-Type':'text/event-stream'}});
+    const response=await originalFetch(input,init);
+    if(url.includes('/now/workspace/commands/')&&url.endsWith('/ack')&&response.ok){
+      window.fixtureAcks[url.split('/').at(-2)]=JSON.parse(init.body);
+    }
+    return response;
+  };""")
   page.add_init_script("""navigator.mediaDevices.getUserMedia=async (constraints)=>{
     const canvas=document.createElement('canvas');canvas.width=360;canvas.height=640;
     const ctx=canvas.getContext('2d');ctx.fillStyle='#366f7e';ctx.fillRect(0,0,360,640);
@@ -66,6 +82,22 @@ with sync_playwright() as p:
   press(page.get_by_role('button',name='Close camera preview',exact=True))
   count=len(frames);page.wait_for_timeout(3000)
   assert len(frames)==count
+  def command(value):
+   page.evaluate('command=>window.fixtureCommand(command)',value)
+   page.wait_for_function('id=>window.fixtureAcks[id]!==undefined',arg=value['commandId'])
+   return page.evaluate('id=>window.fixtureAcks[id]',value['commandId'])
+  page.wait_for_function('typeof window.fixtureCommand==="function"')
+  assert command({'commandId':'jarvis-video-on','operation':'show','viewId':'camera-preview'})['applied']
+  page.locator('.composer-feedback').get_by_text('Receiving camera updates',exact=False).wait_for()
+  assert len(frames)>count
+  assert command({'commandId':'jarvis-video-off','operation':'session','action':'camera','value':'off'})['applied']
+  count=len(frames);page.wait_for_timeout(3000);assert len(frames)==count
+  page.evaluate("window.fixturePermission='prompt'")
+  refused=command({'commandId':'jarvis-video-denied','operation':'show','viewId':'camera-preview'})
+  assert not refused['applied']
+  assert 'allowed' in refused['reason']
+  assert len(frames)==count
+  page.evaluate("window.fixturePermission='granted'")
   exhausted=True
   press(trigger);page.get_by_role('menuitem',name='Enable video',exact=True).click()
   page.get_by_text('The daily vision budget is exhausted.',exact=False).first.wait_for()

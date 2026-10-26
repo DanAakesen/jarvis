@@ -1426,10 +1426,10 @@ describe('ConversationHistory', () => {
     expect(loadConversationHistory).toHaveBeenLastCalledWith(getAccessToken, config, '40');
   });
 
-  it('resets the camera idle timer on unrelated chat turns without uploading an unsolicited frame', async () => {
+  it('does not add an on-demand inspection for an unrelated chat turn', async () => {
     const camera: CameraController = {
       sharing: true, starting: false, inspecting: false, error: '',
-      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), recordActivity: vi.fn(),
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -1438,7 +1438,6 @@ describe('ConversationHistory', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
-    expect(camera.recordActivity).toHaveBeenCalledOnce();
     expect(camera.inspect).not.toHaveBeenCalled();
   });
 
@@ -1515,7 +1514,6 @@ describe('ConversationHistory', () => {
       start: vi.fn(async () => {}),
       stop: vi.fn(),
       inspect: vi.fn(async () => ({ description: 'A red mug in Dan’s hand.' })),
-      recordActivity: vi.fn(),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -1526,7 +1524,6 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
-    expect(camera.recordActivity).toHaveBeenCalledOnce();
     expect(camera.inspect).toHaveBeenCalledWith(session.id, 'caller', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
       getAccessToken,

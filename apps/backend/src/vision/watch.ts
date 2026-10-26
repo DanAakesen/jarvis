@@ -308,7 +308,7 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
   const tools: JarvisTool[] = [
     {
       name: 'watch_for',
-      description: 'Set standing instructions for incoming sampled images. Enable video automatically delivers camera frames; screen watching is separately enabled by Dan. For requests to keep describing, set continuousDescription=true. This tool cannot enable capture. Only claim updates are arriving if feed status is receiving; instructionsSaved alone is pending. Budget and ten-minute user-inactivity limits still apply. Omit source for both.',
+      description: 'Set standing instructions for incoming sampled images. Enable video automatically delivers camera frames; screen watching is separately enabled by Dan. For requests to keep describing, set continuousDescription=true. This tool cannot enable capture. Only claim updates are arriving if feed status is receiving; instructionsSaved alone is pending. Video continues until stopped or closed, subject to spending limits, session teardown and browser/device availability. Omit source for both.',
       sensitive: true,
       inputSchema: { type: 'object', properties: { source: sourceSchema, what: { type: 'string', minLength: 1, maxLength: 300 }, continuousDescription: { type: 'boolean' } },
         required: ['what'], additionalProperties: false },

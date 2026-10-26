@@ -249,9 +249,6 @@ export function VoiceControls({
             visualResultItem.current === null || itemId && visualResultItem.current !== itemId) return;
         notify('Jarvis could not confirm the visual input for this turn.', true);
       },
-      onUserTurn: () => {
-        if (client.current === voice) captures.current.camera?.recordActivity?.();
-      },
       onMicrophoneState: (state) => {
         if (client.current === voice) setMicrophone(state);
       },
@@ -262,7 +259,6 @@ export function VoiceControls({
           visualResultItem.current = null;
           visionController.current?.abort();
         }
-        if (nextStatus === 'listening') captures.current.camera?.recordActivity?.();
         setClientStatus(nextStatus);
         setClientMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {

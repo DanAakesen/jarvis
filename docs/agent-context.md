@@ -1,5 +1,9 @@
 ## Unified camera delivery checks (#1317; 26 October 2026)
 
+The 14:21–14:22 UTC approval supersedes older idle-expiry checks below: active
+video must survive silence beyond ten minutes, while preview Close, workspace
+start/stop, teardown, permission loss, fatal errors and budgets remain enforced.
+
 Run `npm test`, `npm run lint`, `npm run build` and
 `bash .github/scripts/python-ci.sh agents/jarvis`. Focused coverage is in
 web `vision-watch.test.tsx`, `camera-capture.test.tsx`, backend `vision/` and

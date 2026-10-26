@@ -98,6 +98,25 @@ describe('useVisionWatch', () => {
     expect(screen.getByRole('status').textContent).toBe('watching');
   });
 
+  it('keeps delivering through eleven silent minutes while budget remains, then stops for budget exhaustion', async () => {
+    vi.useFakeTimers();
+    let exhausted = false;
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'DELETE'
+      ? new Response(null, { status: 204 }) : exhausted
+      ? new Response(JSON.stringify({ error: 'Daily vision budget exhausted.' }), { status: 429 }) : ok(0.1));
+    vi.stubGlobal('fetch', fetchMock);
+    const onStopped = vi.fn();
+    render(<Harness source="camera" sharing sessionId="42" captureFrame={async () => 'AAAA'} onStopped={onStopped} />);
+    await tick(11 * 60_000);
+    expect(screen.getByRole('status').textContent).toBe('watching');
+    expect(fetchMock.mock.calls.filter(([, init]) => init.method === 'POST').length).toBeGreaterThan(200);
+    expect(onStopped).not.toHaveBeenCalled();
+    exhausted = true;
+    await tick();
+    expect(screen.getByRole('status').textContent).toBe('idle');
+    expect(onStopped).toHaveBeenCalledWith('Daily vision budget exhausted.');
+  });
+
   it('ends camera delivery after repeated capture failures and does not restart until toggled', async () => {
     vi.useFakeTimers();
     const onStopped = vi.fn();

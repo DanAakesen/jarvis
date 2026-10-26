@@ -276,14 +276,18 @@ describe('continuous vision watching', () => {
 
   it('dedupes simultaneous screen and camera comments while delivery is pending', async () => {
     const f = fixture();
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
     let finish!: () => void;
     const delivered = new Promise<void>((resolve) => { finish = resolve; });
     f.addMessage.mockImplementationOnce(async (input) => {
+      entered();
       await delivered;
       return { ...input, id: '99', at: new Date() };
     });
-    const screen = f.watch();
-    await vi.waitFor(() => expect(f.addMessage).toHaveBeenCalledOnce());
+    const screen = f.watch().then((response) => response);
+    await started;
+    expect(f.addMessage).toHaveBeenCalledOnce();
     const camera = await f.watch('camera');
     expect(camera.json().speak).toBeNull();
     finish();

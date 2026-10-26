@@ -5,8 +5,11 @@ Look menu actions are removed. The UI confirms receiving only after backend
 acceptance. Typed and spoken keep-describing requests set a standing narration
 flag; ordinary camera awareness remains quiet. Stop, session transitions,
 permission/capture failures and exhausted budgets preserve existing controls.
-The ten-minute user-inactivity cutoff is unchanged and limits “until I tell you
-to stop”; changing it needs a separate decision.
+Dan approved removing the ten-minute user-inactivity cutoff at 14:21:24 UTC.
+Active video continues during silence until stopped/closed, subject to spending
+limits, session teardown, permission loss, fatal errors and device restrictions.
+Jarvis starts/stops that same video through acknowledged workspace commands
+when requested; missing browser permission is refused explicitly.
 
 ## Local evidence
 
@@ -21,7 +24,8 @@ to stop”; changing it needs a separate decision.
 - `npm run lint` and `npm run build`: all four workspaces passed. Build includes
   TypeScript checks; Vite retains its existing large-chunk advisory.
 - Actual-App synthetic Chromium: 390×844 and 320×700 touch, 1440×1000 desktop.
-  Four frames arrived in each viewport, including recovery after a deliberately
+  At least five frames arrived in each viewport, including Jarvis-command startup
+  and recovery after a deliberately
   stalled request; zero after preview Close. Receiving status expired after 15
   seconds and returned only after a fresh accepted response.
   The separate camera-watch action is absent, receipt status is visible, budget
@@ -77,3 +81,18 @@ the feed-generation/pending-write checks passed 51 tests, final freshness checks
 passed 10 tests, and the final camera-service guard suite passed 26 tests. The
 aggregate counts above include these regressions. Final lint and build passed
 across all four workspaces.
+
+## Approved continuous lifetime and Jarvis control (14:21–14:22 UTC)
+
+The camera idle timer and obsolete activity-reset callbacks are removed. Fake-time
+regressions keep capture on for 30 silent minutes, release it on unmount after
+11 minutes, and keep sampled delivery running beyond ten minutes until spending
+limits stop it. Existing teardown, permission-loss, fatal-error and manual-stop
+checks remain. Spoken and typed workspace tool calls await browser acknowledgement
+for camera start/stop; the model guidance distinguishes capture from frame receipt.
+The actual-App browser script additionally starts video with a workspace command,
+observes accepted frames, stops it with a command, and verifies permission refusal
+without capture. All three viewports passed with no page errors.
+Focused web: 218 tests passed. Focused workspace/capability/vision backend: 180
+tests passed. Full aggregate/lint/build are being repeated for this approval;
+final results are recorded in the PR and handoff.
