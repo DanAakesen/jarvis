@@ -2,6 +2,12 @@
 
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
+Voice-mode follow-up: the typing composer is hidden and its wrapper is
+intentionally transparent. Runtime QA found the visible replacement voice bar
+still used the old 90% fill/24px blur; it now shares the chrome-glass material.
+The header already retained the shared material in voice mode. Actual-room
+SwiftShader and synthetic voice-state evidence are in the #1301 QA folder.
+
 Measured in the actual App: mobile menu wrapper and sheet opacity both rose
 from partial opacity to 1 while fill alpha stayed constant. The phone cascade
 selected 24px blur over the intended 10px; the header retained 90% fill. The

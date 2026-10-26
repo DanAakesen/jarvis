@@ -1,0 +1,34 @@
+{
+  "stageFailed": "false",
+  "canvas": [
+    390,
+    844
+  ],
+  "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+  "surfaces": [
+    {
+      "selector": ".app-topbar",
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    },
+    {
+      "selector": ".conversation-input",
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    },
+    {
+      "selector": ".mobile-bottom-nav",
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    },
+    {
+      "selector": ".mobile-menu-sheet",
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)",
+      "opacity": "1"
+    }
+  ]
+}

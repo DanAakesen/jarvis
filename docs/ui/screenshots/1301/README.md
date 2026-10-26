@@ -88,3 +88,34 @@ or publish them; it followed explicit text requirements and coordinator context.
 Local Node 24.19.0/npm 11.9.0 differs from pinned CI Node 22/npm 10. This is
 synthetic Chromium evidence, not physical iPhone/WebKit or live-service
 acceptance. Coordinator owns hosted exact-head qualification, review and release.
+
+## Actual room and voice-mode follow-up
+
+`settled-real-room-390.png` renders the actual 390×844 WebGL room via Chromium
+ANGLE/SwiftShader (not the fallback or a substituted background). The production
+App components are unchanged by the fixture. After three menu openings and a
+further 2500ms wait, the stage reports `data-failed=false`; its canvas is 390×844.
+Room/orb detail remains visible through the menu blur. Header, composer, dock and
+menu report opacity 1, material alpha 0.36 and 10px blur. The renderer and computed
+values are recorded in `real-room-measurements.json`. Reduced motion is enabled
+for this software-rendered capture; it is not hardware-performance acceptance.
+
+After copying the same temporary App fixture and starting Vite as above:
+
+```sh
+timeout --kill-after=3s 45s python3 docs/ui/screenshots/1301/fixtures/real-room.py
+python3 docs/ui/screenshots/1301/fixtures/voice-material.py
+```
+
+The voice fixture substitutes only the transport/audio client, then uses the
+actual Voice menu/Start voice control to enter the real App's listening UI. It
+uses no microphone or live voice service. At both 390×844 and 1440×1000, the header
+retains the shared 0.36 material/10px blur. The typing `.composer` is hidden;
+`.conversation-input[data-voice-active=true]` intentionally becomes a transparent,
+unblurred wrapper and drops its `luminous-glass` class. It must not receive a
+full-screen glass fill. The visible replacement `.voice-bar.luminous-glass`
+initially revealed a real gap: 0.90 fill and 24px blur. The shared rule now includes
+that bar only, yielding 0.36/10px without changing voice behavior or the wrapper.
+`voice-measurements.json` and the two `voice-material-*.png` captures verify this
+at runtime. All new screenshots were pixel-inspected. Physical iPhone/WebKit,
+real microphone, live voice and hardware rendering remain unverified.
