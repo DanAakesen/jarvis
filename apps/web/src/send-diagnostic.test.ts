@@ -28,10 +28,11 @@ describe('temporary Send diagnostic', () => {
     expect(document.activeElement).toBe(input);
     send.click();
     await Promise.resolve();
+    expect(readSendDiagnostic().some(row => row.phase === 'settled')).toBe(false);
     expect(submit).toHaveBeenCalledTimes(1);
     expect(input.value).toBe('PRIVATE draft token photo health');
     const trace = readSendDiagnostic();
-    expect(trace.some(row => row.event === 'submit' && row.phase === 'settled' && row.prevented)).toBe(true);
+    await vi.waitFor(() => expect(readSendDiagnostic().some(row => row.event === 'submit' && row.phase === 'settled' && row.prevented)).toBe(true));
     expect(storage).not.toHaveBeenCalled();
     expect(network).not.toHaveBeenCalled();
     expect(JSON.stringify(trace)).not.toMatch(/PRIVATE|payload|health|photo|token/);

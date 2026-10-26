@@ -23,6 +23,7 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
   entries = [];
   const started = performance.now();
   let disposed = false;
+  const pending = new Set<number>();
   let observing = document.activeElement === input;
   const inComposer = (target: EventTarget | null) => target instanceof Element &&
     Boolean(target.closest('.conversation-input, .more-menu-list, .more-menu-flyout'));
@@ -61,7 +62,13 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
     const pathInComposer = event.composedPath().some(inComposer);
     record(event, 'capture', pathInComposer);
     if (['pointerdown', 'mousedown', 'touchstart', 'click', 'submit'].includes(event.type)) {
-      queueMicrotask(() => record(event, 'settled', pathInComposer));
+      // Native dispatch can checkpoint microtasks between listeners. A task
+      // runs after propagation/default actions, including React's cancellation.
+      const timer = window.setTimeout(() => {
+        pending.delete(timer);
+        record(event, 'settled', pathInComposer);
+      }, 0);
+      pending.add(timer);
     }
     if (event.type === 'focusin' && !inComposer(event.target) && event.target !== input && event.target !== send) observing = false;
   };
@@ -75,6 +82,8 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
   window.addEventListener('resize', onViewport, options);
   return () => {
     disposed = true;
+    for (const timer of pending) window.clearTimeout(timer);
+    pending.clear();
     for (const type of types) document.removeEventListener(type, onEvent, options);
     window.visualViewport?.removeEventListener('resize', onViewport, options);
     window.visualViewport?.removeEventListener('scroll', onViewport, options);
