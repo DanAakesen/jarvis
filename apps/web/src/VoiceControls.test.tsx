@@ -736,26 +736,6 @@ describe('VoiceControls', () => {
     expect(initialCamera.stop).not.toHaveBeenCalled();
   });
 
-  it('resets camera idle shutdown on speech and unrelated turns using the current capture only', () => {
-    const camera = { sharing: true, starting: false, inspecting: false, error: '',
-      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), recordActivity: vi.fn() };
-    const view = render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
-    const { instance, options, listen } = startVoice();
-    const onUserTurn = (instance.options as { onUserTurn: (text: string) => void }).onUserTurn;
-    listen();
-    expect(camera.recordActivity).toHaveBeenCalledOnce();
-    act(() => onUserTurn('How is the weather?'));
-    expect(camera.recordActivity).toHaveBeenCalledTimes(2);
-    const current = { ...camera, recordActivity: vi.fn() };
-    view.rerender(<VoiceControls client={{} as PublicClientApplication} config={config} camera={current} />);
-    act(() => onUserTurn('Tell me more.'));
-    expect(current.recordActivity).toHaveBeenCalledOnce();
-    expect(camera.recordActivity).toHaveBeenCalledTimes(2);
-    act(() => options.onStatus('stopped', 'Voice is off.'));
-    act(() => onUserTurn('Late transcript.'));
-    expect(current.recordActivity).toHaveBeenCalledOnce();
-  });
-
   it('reports camera failure to Dan and the voice transport rather than claiming it saw a frame', async () => {
     const camera = { sharing: true, starting: false, inspecting: false, error: '', facing: 'user' as const,
       start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(async () => { throw new Error('Fixture capture failed.'); }) };

@@ -8740,3 +8740,25 @@ write with one NULL alias and a valid delivery status synchronizes both from the
 non-NULL identifier. Access controls and source-artifact retention do not change.
 The separate chat-time layout remains below message text on mobile widths up to
 700px and retains its desktop position.
+
+## 26 October 2026 — One camera feature (#1317)
+
+Dan confirmed Enable video and camera watching were always intended as one
+feature, and requested removal of the obsolete separation. Enable video now
+automatically delivers sampled JPEGs, while ongoing narration requires a typed
+or spoken standing request. Tool acknowledgement distinguishes saved instructions
+from received frames. Keep screen watching independent, retain budget/privacy
+controls and the ten-minute inactivity cutoff, and never claim raw video.
+The cutoff limits “until I tell you to stop”; changing it remains unapproved.
+Local synthetic verification does not establish physical-iPhone or live-model acceptance.
+
+## 26 October 2026, 14:21–14:22 UTC — Video continues until stopped (#1317)
+
+Dan explicitly approved removing the ten-minute no-message camera cutoff while
+retaining the spending limit. This supersedes the earlier ten-minute decisions
+and the initial #1317 cutoff-preservation decision above. He added: “Or til I
+close it of course. And make sure Jarvis can also start and stop that video”.
+Close and user-requested workspace camera commands control the same continuous
+sampled delivery. Startup still needs browser permission; session/sign-out,
+permission loss, fatal errors and budget exhaustion still stop it. No guarantee
+of background iOS capture or uninterrupted device access is made.

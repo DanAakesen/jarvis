@@ -1052,7 +1052,7 @@ owner/session/turn-bound and expire after sixty seconds. Legacy `inspect()`
 remains caption-first and validates its description. Existing deadlines,
 cancellation, explicit limit errors and voice single-response correlation remain.
 Camera preview owns no upload loop and uses the existing workspace lifecycle;
-user turns, not rendering/docking, reset the ten-minute idle timer.
+active video continues during silence until explicit stop or an existing session, permission, fatal-error or budget stop condition.
 Coordinator-reported live chat image input is accepted by Dan; live voice image
 delivery and physical-device acceptance are not inferred from synthetic checks.
 
@@ -5878,12 +5878,11 @@ or activation flag is changed here. Deployment does not prove model image
 acceptance or settle the disputed camera cadence. Handle-only history metadata
 also needs confirmation before the stricter local history decoder is changed.
 
-The camera idle lifecycle is already local: `recordActivity` resets a
-ten-minute timer on accepted chat submission and current-client speech/final
-voice turns. Start arms it; switch restarts it; dock/render/watch-frame work
-does not keep it alive. Stop/unmount cancels it and stops tracks. Idle expiry
-restores even a docked preview with visible explanation and recovery; its
-inactive picture is hidden to avoid clipping phone controls.
+The camera has no user-inactivity timer after Dan's 26 October approval (#1317).
+`recordActivity` and its former chat/voice reset callbacks are removed. Stop and
+unmount still cancel requests and stop tracks. Spending limits, permission loss,
+fatal errors and session/sign-out teardown remain authoritative; browser/device
+restrictions may interrupt capture, especially in background on phones.
 
 P9-79's legacy `vision-request.ts` recogniser includes explicit questions such as
 "can you see anything?" and "kan du se noget?". Every-turn camera capture now
@@ -5927,13 +5926,15 @@ Production calling is dormant: P6-22 decided not to provision Teams in Dan's per
 
 P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; camera adds no provider key or Azure resource. Vision uses the dedicated `VISION_MODEL_DEPLOYMENT` (`gpt-6-luna`), not `jarvis.model`, through `/models/chat/completions` with image detail `auto`, `max_completion_tokens: 500`, and `reasoning_effort: none`. Estimated rates are 0.6579 DKK per million input tokens and 3.2893 per million output tokens, converted at 6.5785 DKK/USD. The signed-in browser never receives a provider credential. These are estimates, not billed usage; live deployment pricing and useful-comment acceptance remain to verify.
 
-### Continuous vision watching (P7-38)
+### Continuous vision watching (P7-38; unified camera #1317)
 
-Dan-only `POST /vision/watch` accepts `{ sessionId, source: 'screen' | 'camera', frame }` and returns `{ summary, speak: string | null, budget: { usedUsd, limitUsd } }`. It reuses the existing JPEG/1 MiB validation, abort handling, and `image.fill(0)` cleanup. Dan's separate web work owns independent sharing toggles, meaningful-change detection, and a maximum of one frame every 2.5 seconds per source; the backend never polls a source or pauses for sensitive content.
+Dan-only `POST /vision/watch` accepts `{ sessionId, source: 'screen' | 'camera', frame, feedId? }` and returns `{ summary, speak, budget }`. The camera hook starts automatically when capture and an active session are available, awaits each response and then delays 2.6 seconds; screen watching remains explicitly toggled and skips duplicate frames. Camera confirmation requires an accepted response. In typing mode, a response reporting delivered speech refreshes persisted conversation history; quiet frames do not reload it. Existing ID-based merging, draft/focus and reader scroll-follow behavior are retained. Typed mode creates its conversation session on camera enable; voice owns delivery only for its active session. Each loop has an abort controller and generation UUID. Authenticated `DELETE /vision/watch` with session/source/feedId invalidates only the matching generation, clears instructions and prevents late narration. Cleanup is best effort on disconnect; feed-status evidence expires after 15 seconds without arrivals. Frame requests have a 35-second client timeout. Existing JPEG validation, budgets and in-memory byte cleanup remain.
 
-`VisionWatchService` holds the last summary and up to 20 watch instructions per session/source in memory. The authenticated `watch_for { source?, what }` (300 characters) and `stop_watching_for { source? }` tools resolve the stored Dan message to its session; their audits redact arguments/results. The prompt includes the source summary, instructions, latest Dan text, and recent comments as bounded context. It requires strict `{ summary, noteworthy, speak }` JSON, treats image text as untrusted, and permits comments only for screen errors/problems, instruction matches, or direct question answers. Malformed results fail visibly but still record incurred model usage.
+`watch_for` records instructions and optional `continuousDescription`; its result separates instructionsSaved from cameraFeed/screenFeed receiving or unconfirmed. The shared chat/voice capability prompt maps keep-describing requests to this flag. The vision prompt allows routine and unchanged-scene descriptions only when explicitly requested. Per-source instruction revisions suppress obsolete in-flight commentary after stop. Busy voice narration is dropped, while ordinary alerts retain chat fallback. No raw video, stored frames, new provider or credentials. Camera video no longer stops solely because user messages stop. User-requested start/stop reuses acknowledged workspace show/session camera commands with existing permission checks.
 
-The service suppresses repeated normalized comments for two minutes across both sources; the prompt also suppresses paraphrases of a recent issue. Concurrent deliveries share an in-memory dedupe guard. An active voice relay registers its synchronous announcer callback; a free relay sends `response.create` with verbatim instructions and no tools. If Dan is speaking or the relay is otherwise busy/disconnected, the service posts a Jarvis message to the same session instead. Summaries are never persisted or logged. Successful conversation end invokes the injected session-end callback across module boundaries; that callback, voice teardown and backend shutdown clear in-memory watch state.
+`VisionWatchService` holds the last summary and up to 20 watch instructions per session/source in memory. The authenticated `watch_for { source?, what }` (300 characters) and `stop_watching_for { source? }` tools resolve the stored Dan message to its session; their audits redact arguments/results. The prompt includes the source summary, instructions, latest Dan text, and recent comments as bounded context. It requires strict `{ summary, noteworthy, speak }` JSON, treats image text as untrusted, and permits comments for screen errors/problems, instruction matches, direct question answers or explicitly requested continuous narration. Malformed results fail visibly but still record incurred model usage.
+
+Outside explicit continuous narration, the service suppresses repeated normalized comments for two minutes across both sources; the prompt also suppresses paraphrases of a recent issue. Concurrent deliveries share an in-memory dedupe guard. An active voice relay registers its synchronous announcer callback; a free relay sends `response.create` with verbatim instructions and no tools. Ordinary alerts fall back to a Jarvis chat message if speech is unavailable; continuous narration is dropped while a registered voice relay is busy. Summaries are never persisted or logged. Successful conversation end invokes the injected session-end callback across module boundaries; that callback, voice teardown and backend shutdown clear in-memory watch state.
 
 Watch frames replace the 300-frame cap with `global.vision_daily_budget_usd` (default 1, range 0–100; 0 disables watching). The existing `screen_frames` usage store sums today's `cost_dkk` across all sessions and both sources, including on-demand inspections. Watch reservations are excluded from the existing on-demand three-second throttle and 300-frame count. SQL reservations use the existing UTC-day application lock, per-session/source 2500 ms throttling, and a conservative 0.1 DKK pending-cost hold reconciled to known token cost. This is an allowance for the bounded prompt/model, not a tokenizer-proven upper bound. Failed/unknown-cost calls retain the hold until the UTC day ends; insufficient remaining budget refuses before another model call. The budget response includes outstanding holds, so it can decrease after concurrent calls reconcile. No migration or dependency is added. `vision.watch` logs only source, noteworthy, spoke, latencyMs, and cost (DKK); the logger allowlist excludes frames, summaries, comments and instructions. Offline tests verify the contract; live Azure SQL concurrency, actual billing and Dan's UI integration remain unverified.
 
@@ -7622,3 +7623,12 @@ coverage disclosures keep detailed provenance available on demand, and
 Nutrition chart series use human-readable names and units. These are web-only
 changes: contracts, backend authorization and the original Daily write path
 remain unchanged.
+
+Review follow-up: receiving status expires 15 seconds after the last accepted
+frame and clears on request failure, with delayed/retrying feedback while the
+bounded loop recovers. Camera startup and typed turns share one pending session
+creation. A matching feed stop aborts pending plain-text comment writes through
+the existing SQL cancellation helper and rechecks state after awaits. A database
+write already committed before cancellation remains transcript history; stop
+does not delete historical messages. Old feed-generation DELETEs cannot stop a
+replacement feed. No database schema change.

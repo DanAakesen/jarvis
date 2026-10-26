@@ -79,6 +79,8 @@ describe('Foundry screen vision model', () => {
       expect(request.messages[0].role).toBe('system');
       expect(request.messages[0].content).toContain('untrusted');
       expect(request.messages[0].content).toContain('Stay silent');
+      expect(request.messages[0].content).toContain('When continuousDescription is true');
+      expect(request.messages[0].content).toContain('Otherwise routine changes are not noteworthy');
       expect(request.messages[0].content).not.toContain('ignored-on-demand-question');
       expect(request.messages).toHaveLength(2);
       expect(JSON.parse(request.messages[1].content[0].text)).toMatchObject({

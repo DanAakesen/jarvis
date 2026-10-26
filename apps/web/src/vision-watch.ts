@@ -4,6 +4,7 @@ import { backendFetch } from './backend-request';
 import type { ScreenShareController } from './screen-sharing';
 
 export const WATCH_INTERVAL_MS = 2_600;
+export const WATCH_FRESHNESS_MS = 15_000;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
 export interface WatchBudget {
@@ -12,7 +13,7 @@ export interface WatchBudget {
 }
 
 export interface VisionWatchController {
-  /** True only while frames are actually being sent for this source. */
+  /** Camera is active only after backend frame acceptance; screen retains its explicit toggle. */
   readonly watching: boolean;
   /** Shared daily vision budget as last reported by the backend, null until the first answer. */
   readonly budget: WatchBudget | null;
@@ -32,26 +33,29 @@ export function formatWatchBudget(budget: WatchBudget | null): string {
   return `${usd(budget.usedUsd)} of ${usd(budget.limitUsd)} used today`;
 }
 
-function parseResult(value: unknown): WatchBudget {
+interface WatchResult { budget: WatchBudget; observationDelivered: boolean }
+
+function parseResult(value: unknown): WatchResult {
   if (typeof value === 'object' && value !== null && 'budget' in value) {
     const { budget } = value;
     if (typeof budget === 'object' && budget !== null && 'usedUsd' in budget && 'limitUsd' in budget &&
         typeof budget.usedUsd === 'number' && typeof budget.limitUsd === 'number' &&
         Number.isFinite(budget.usedUsd) && Number.isFinite(budget.limitUsd)) {
-      return { usedUsd: budget.usedUsd, limitUsd: budget.limitUsd };
+      return { budget: { usedUsd: budget.usedUsd, limitUsd: budget.limitUsd },
+        observationDelivered: 'speak' in value && typeof value.speak === 'string' && Boolean(value.speak.trim()) };
     }
   }
   throw new WatchRequestError('Jarvis returned an invalid watch response.', 502);
 }
 
 async function postFrame(
-  backendUrl: string, token: string, sessionId: string, source: 'screen' | 'camera', frame: string, signal: AbortSignal,
-): Promise<WatchBudget> {
+  backendUrl: string, token: string, sessionId: string, source: 'screen' | 'camera', frame: string, feedId: string, signal: AbortSignal,
+): Promise<WatchResult> {
   const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/vision/watch`, {
     method: 'POST',
     headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, source, frame }),
-    signal,
+    body: JSON.stringify({ sessionId, source, frame, feedId }),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(35_000)]),
   });
   if (!response.ok) {
     let message = 'Jarvis could not watch the shared image.';
@@ -85,24 +89,42 @@ export function useVisionWatch(
   source: 'screen' | 'camera',
   sessionId: string | null,
   onStopped?: (message: string) => void,
+  onObservationDelivered?: () => void,
 ): VisionWatchController {
   const [requested, setRequested] = useState(false);
+  const [delivered, setDelivered] = useState(false);
+  const [ended, setEnded] = useState(false);
+  const [owner, setOwner] = useState({ sharing: capture?.sharing ?? false, sessionId });
   const [budget, setBudget] = useState<WatchBudget | null>(null);
   const sharing = capture?.sharing ?? false;
   const captureFrame = capture?.captureFrame;
   const backendUrl = config.backendUrl;
   const tokenRef = useRef(getAccessToken);
   const stoppedRef = useRef(onStopped);
-  useEffect(() => { tokenRef.current = getAccessToken; stoppedRef.current = onStopped; }, [getAccessToken, onStopped]);
+  const observationRef = useRef(onObservationDelivered);
+  useEffect(() => { tokenRef.current = getAccessToken; stoppedRef.current = onStopped;
+    observationRef.current = onObservationDelivered; }, [getAccessToken, onStopped, onObservationDelivered]);
   const ready = sharing && Boolean(sessionId) && Boolean(captureFrame) && Boolean(config.backendUrl);
-  const watching = requested && ready;
+  const running = (source === 'camera' ? !ended : requested) && ready;
+  const watching = running && (source === 'screen' || delivered);
+
+  if (owner.sharing !== sharing || owner.sessionId !== sessionId) {
+    setOwner({ sharing, sessionId });
+    setDelivered(false);
+    setEnded(false);
+    setRequested(false);
+    setBudget(null);
+  }
 
   // A share that ended or a session that changed ends watching; adjust during render rather than in an effect.
   if (requested && !ready) setRequested(false);
 
   useEffect(() => {
-    if (!watching || !sessionId || !captureFrame || !backendUrl) return;
+    if (!running || !sessionId || !captureFrame || !backendUrl) return;
     const activeSession = sessionId;
+    const feedId = crypto.randomUUID();
+    let token: string | undefined;
+    let freshnessTimer: ReturnType<typeof setTimeout> | undefined;
     const controller = new AbortController();
     const { signal } = controller;
     const run = async () => {
@@ -112,26 +134,39 @@ export function useVisionWatch(
         try {
           const frame = await captureFrame();
           if (signal.aborted) return;
-          // Unchanged frames carry nothing new and would only spend budget.
-          if (frame !== previous) {
-            const next = await postFrame(backendUrl, await tokenRef.current(), activeSession, source, frame, signal);
+          // Screens skip duplicates; camera delivery must continue even for a still scene.
+          if (source === 'camera' || frame !== previous) {
+            token = await tokenRef.current();
+            if (signal.aborted) return;
+            const next = await postFrame(backendUrl, token, activeSession, source, frame, feedId, signal);
             if (signal.aborted) return;
             previous = frame;
-            setBudget(next);
+            setBudget(next.budget);
+            if (next.budget.usedUsd >= next.budget.limitUsd) throw new WatchRequestError(
+              'Video stopped: the daily vision budget is exhausted. Enable video after the next UTC day begins.', 429);
+            if (next.observationDelivered) observationRef.current?.();
+            setDelivered(true);
+            clearTimeout(freshnessTimer);
+            freshnessTimer = setTimeout(() => setDelivered(false), WATCH_FRESHNESS_MS);
           }
           failures = 0;
         } catch (reason) {
           if (signal.aborted) return;
+          setDelivered(false);
           const failure = reason instanceof WatchRequestError ? reason : null;
           if (failure && (failure.status === 404 || (failure.status === 429 && /budget/iu.test(failure.message)))) {
             stoppedRef.current?.(failure.message);
             setRequested(false);
+            setEnded(true);
+            setDelivered(false);
             return;
           }
           if (!(failure?.status === 429)) failures += 1;
           if (failures >= MAX_CONSECUTIVE_FAILURES) {
             stoppedRef.current?.(`Watching stopped: ${failure?.message ?? 'Jarvis could not capture the shared image.'}`);
             setRequested(false);
+            setEnded(true);
+            setDelivered(false);
             return;
           }
         }
@@ -139,13 +174,22 @@ export function useVisionWatch(
       }
     };
     void run();
-    return () => controller.abort();
-  }, [backendUrl, captureFrame, sessionId, source, watching]);
+    return () => {
+      controller.abort();
+      clearTimeout(freshnessTimer);
+      if (token) void backendFetch(`${backendUrl.replace(/\/+$/u, '')}/vision/watch`, {
+        method: 'DELETE',
+        headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: activeSession, source, feedId }),
+      }).catch(() => undefined);
+    };
+  }, [backendUrl, captureFrame, sessionId, source, running]);
 
   const start = useCallback(() => {
     if (!ready) return;
+    setEnded(false);
     setRequested(true);
   }, [ready]);
-  const stop = useCallback(() => setRequested(false), []);
+  const stop = useCallback(() => { setRequested(false); setEnded(true); setDelivered(false); }, []);
   return { watching, budget, start, stop };
 }

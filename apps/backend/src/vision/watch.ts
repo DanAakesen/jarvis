@@ -28,6 +28,11 @@ export interface VisionWatchUsageStore {
 interface SourceState {
   summary: string;
   instructions: string[];
+  continuousDescription: boolean;
+  receivedAt: number | null;
+  revision: number;
+  delivery: AbortController;
+  feedId?: string;
 }
 
 interface WatchSession {
@@ -87,11 +92,15 @@ export class VisionWatchService {
   }
 
   forgetSession(sessionId: string): void {
+    const state = this.sessions.get(sessionId);
+    state?.camera.delivery.abort();
+    state?.screen.delivery.abort();
     this.sessions.delete(sessionId);
     this.voices.delete(sessionId);
   }
 
   close(): void {
+    for (const sessionId of this.sessions.keys()) this.forgetSession(sessionId);
     this.sessions.clear();
     this.voices.clear();
   }
@@ -101,8 +110,8 @@ export class VisionWatchService {
     let state = this.sessions.get(sessionId);
     if (!state) {
       if (this.sessions.size >= 128) throw new ScreenVisionError(429, 'Too many active watch sessions.');
-      state = { screen: { summary: '', instructions: [] },
-        camera: { summary: '', instructions: [] }, comments: new Map(), pendingComments: new Set() };
+      state = { screen: { summary: '', instructions: [], continuousDescription: false, receivedAt: null, revision: 0, delivery: new AbortController() },
+        camera: { summary: '', instructions: [], continuousDescription: false, receivedAt: null, revision: 0, delivery: new AbortController() }, comments: new Map(), pendingComments: new Set() };
       this.sessions.set(sessionId, state);
     }
     for (const [key, comment] of state.comments) {
@@ -111,7 +120,7 @@ export class VisionWatchService {
     return state;
   }
 
-  async setInstruction(sessionId: string, source: WatchSource | undefined, what: string | null): Promise<void> {
+  async setInstruction(sessionId: string, source: WatchSource | undefined, what: string | null, continuousDescription?: boolean): Promise<void> {
     const session = await this.conversations.getSession(sessionId);
     if (!session || session.endedAt) {
       this.forgetSession(sessionId);
@@ -124,6 +133,11 @@ export class VisionWatchService {
       throw new ToolRefusal('Stop an existing watch before adding more instructions.');
     }
     for (const selected of sources) {
+      state[selected].delivery.abort();
+      state[selected].delivery = new AbortController();
+      state[selected].revision += 1;
+      if (what === null) state[selected].continuousDescription = false;
+      else if (continuousDescription !== undefined) state[selected].continuousDescription = continuousDescription;
       if (what === null) state[selected].instructions = [];
       else if (!state[selected].instructions.includes(what)) {
         state[selected].instructions.push(what);
@@ -131,9 +145,27 @@ export class VisionWatchService {
     }
   }
 
+  stopFeed(sessionId: string, source: WatchSource, feedId: string): void {
+    const state = this.sessions.get(sessionId)?.[source];
+    if (!state || state.feedId !== feedId) return;
+    state.receivedAt = null;
+    state.summary = '';
+    state.instructions = [];
+    state.continuousDescription = false;
+    state.delivery.abort();
+    state.delivery = new AbortController();
+    state.revision += 1;
+  }
+
+  feedStatus(sessionId: string, source: WatchSource): 'receiving' | 'unconfirmed' {
+    const receivedAt = this.sessions.get(sessionId)?.[source].receivedAt;
+    return receivedAt != null && this.now() - receivedAt < 15_000 ? 'receiving' : 'unconfirmed';
+  }
+
   async watch(input: {
     readonly sessionId: string;
     readonly source: WatchSource;
+    readonly feedId?: string;
     readonly image: Buffer;
     readonly limitUsd: number;
     readonly model?: string;
@@ -150,6 +182,7 @@ export class VisionWatchService {
       throw new ScreenVisionError(503, 'Vision watch settings are unavailable.');
     }
     this.busy.add(key);
+    let clearReceipt: (() => void) | undefined;
     try {
       const session = await this.conversations.getSession(input.sessionId);
       if (!session || session.endedAt) {
@@ -174,10 +207,20 @@ export class VisionWatchService {
       if (reservation.outcome === 'rate-limited') {
         throw new ScreenVisionError(429, 'Please wait 2.5 seconds before watching another frame from this source.');
       }
+      input.signal.throwIfAborted();
+      const sourceState = state[input.source];
+      sourceState.receivedAt = started;
+      if (input.feedId) sourceState.feedId = input.feedId;
+      clearReceipt = () => {
+        if (sourceState.feedId === input.feedId && sourceState.receivedAt === started) sourceState.receivedAt = null;
+      };
+      input.signal.addEventListener('abort', clearReceipt, { once: true });
+      const revision = sourceState.revision;
+      const deliverySignal = AbortSignal.any([input.signal, sourceState.delivery.signal]);
       const result = await this.model.describe({
         image: input.image, model: input.model ?? VISION_MODEL_DEPLOYMENT,
         reasoningEffort: input.reasoningEffort ?? 'none', signal: input.signal,
-        watch: { source: input.source, previousSummary: state[input.source].summary,
+        watch: { source: input.source, continuousDescription: sourceState.continuousDescription, previousSummary: state[input.source].summary,
           instructions: [...state[input.source].instructions], latestQuestion: latestQuestion?.slice(0, 5_000) ?? null,
           recentComments: [...state.comments.values()].map((comment) => comment.text) },
       });
@@ -197,13 +240,13 @@ export class VisionWatchService {
       const observation = parseObservation(result.description);
       const usedDkk = await this.usage.readWatchBudget(new Date(this.now()));
       if (!Number.isFinite(usedDkk) || usedDkk < 0) throw new Error('Vision budget unavailable');
-      state[input.source].summary = observation.summary;
+      if (!deliverySignal.aborted && revision === sourceState.revision) sourceState.summary = observation.summary;
       let speak: string | null = null;
       const candidate = observation.speak;
       // Never announce once the shared daily budget is exhausted, or across UTC rollover.
-      if (candidate && usedDkk < input.limitUsd * DKK_PER_USD &&
+      if (candidate && revision === sourceState.revision && usedDkk < input.limitUsd * DKK_PER_USD &&
           at.toISOString().slice(0, 10) === new Date(this.now()).toISOString().slice(0, 10) &&
-          !input.signal.aborted && !state.comments.has(commentKey(candidate)) &&
+          !input.signal.aborted && (sourceState.continuousDescription || !state.comments.has(commentKey(candidate))) &&
           !state.pendingComments.has(commentKey(candidate))) {
         state.pendingComments.add(commentKey(candidate));
         try {
@@ -212,14 +255,21 @@ export class VisionWatchService {
             this.forgetSession(input.sessionId);
             throw new ScreenVisionError(404, 'Active conversation session not found.');
           }
-          if (!input.signal.aborted) {
+          if (!input.signal.aborted && revision === sourceState.revision) {
             const deliveredByVoice = this.voices.get(input.sessionId)?.(candidate) ?? false;
+            if (!deliveredByVoice && sourceState.continuousDescription && this.voices.has(input.sessionId)) {
+              // Busy voice turns drop this observation; never queue a stale narration backlog.
+              return { summary: observation.summary, speak: null, budget: { usedUsd: usedDkk / DKK_PER_USD, limitUsd: input.limitUsd } };
+            }
             if (!deliveredByVoice) {
               const message = await this.conversations.addMessage({
-                sessionId: input.sessionId, role: 'jarvis', text: candidate,
+                signal: deliverySignal, sessionId: input.sessionId, role: 'jarvis', text: candidate,
                 model: VISION_MODEL_DEPLOYMENT, language: current.language,
               });
               if (!message) throw new Error('Vision comment could not be delivered');
+            }
+            if (deliverySignal.aborted || revision !== sourceState.revision) {
+              return { summary: observation.summary, speak: null, budget: { usedUsd: usedDkk / DKK_PER_USD, limitUsd: input.limitUsd } };
             }
             state.comments.set(commentKey(candidate), { text: candidate, at: this.now() });
             if (state.comments.size > 64) state.comments.delete(state.comments.keys().next().value!);
@@ -233,9 +283,11 @@ export class VisionWatchService {
         latencyMs: this.now() - started, cost: result.costDkk });
       return { summary: observation.summary, speak, budget: { usedUsd: usedDkk / DKK_PER_USD, limitUsd: input.limitUsd } };
     } catch (error) {
+      clearReceipt?.();
       if (error instanceof ScreenVisionError) throw error;
       throw new ScreenVisionError(503, 'I could not watch the shared image.');
     } finally {
+      if (clearReceipt) input.signal.removeEventListener('abort', clearReceipt);
       this.busy.delete(key);
     }
   }
@@ -256,15 +308,17 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
   const tools: JarvisTool[] = [
     {
       name: 'watch_for',
-      description: 'Watch shared screen and/or camera frames for something Dan requests. Sharing must be enabled by Dan. Omit source to watch both.',
+      description: 'Set standing instructions for incoming sampled images. Enable video automatically delivers camera frames; screen watching is separately enabled by Dan. For requests to keep describing, set continuousDescription=true. This tool cannot enable capture. Only claim updates are arriving if feed status is receiving; instructionsSaved alone is pending. Video continues until stopped or closed, subject to spending limits, session teardown and browser/device availability. Omit source for both.',
       sensitive: true,
-      inputSchema: { type: 'object', properties: { source: sourceSchema, what: { type: 'string', minLength: 1, maxLength: 300 } },
+      inputSchema: { type: 'object', properties: { source: sourceSchema, what: { type: 'string', minLength: 1, maxLength: 300 }, continuousDescription: { type: 'boolean' } },
         required: ['what'], additionalProperties: false },
       execute: async (input, request) => {
-        const { source, what } = input as { source?: WatchSource; what: string };
+        const { source, what, continuousDescription } = input as { source?: WatchSource; what: string; continuousDescription?: boolean };
         if (!what.trim()) throw new ToolRefusal('Describe what Jarvis should watch for.');
-        await service.setInstruction(await toolSession(request), source, what.trim());
-        return { watching: source ?? 'both' };
+        const sessionId = await toolSession(request);
+        await service.setInstruction(sessionId, source, what.trim(), continuousDescription);
+        return { instructionsSaved: true, source: source ?? 'both',
+          cameraFeed: service.feedStatus(sessionId, 'camera'), screenFeed: service.feedStatus(sessionId, 'screen') };
       },
     },
     {
@@ -283,12 +337,22 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
     id: 'vision-watch', tools,
     registerRoutes: async (app) => {
       app.addHook('onClose', async () => { service.close(); });
-      app.post<{ Body: { sessionId: string; source: WatchSource; frame: string } }>('/vision/watch', {
+      app.delete<{ Body: { sessionId: string; source: WatchSource; feedId: string } }>('/vision/watch', {
+        schema: { body: { type: 'object', properties: {
+          sessionId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
+          source: sourceSchema, feedId: { type: 'string', format: 'uuid' },
+        }, required: ['sessionId', 'source', 'feedId'], additionalProperties: false } },
+      }, async (request, reply) => {
+        if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
+        service.stopFeed(request.body.sessionId, request.body.source, request.body.feedId);
+        return reply.code(204).send();
+      });
+      app.post<{ Body: { sessionId: string; source: WatchSource; frame: string; feedId?: string } }>('/vision/watch', {
         bodyLimit: SCREEN_FRAME_BODY_LIMIT,
         schema: {
           body: { type: 'object', properties: {
             sessionId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
-            source: sourceSchema, frame: { type: 'string', minLength: 4, maxLength: SCREEN_FRAME_BODY_LIMIT - 1_024 },
+            source: sourceSchema, feedId: { type: 'string', format: 'uuid' }, frame: { type: 'string', minLength: 4, maxLength: SCREEN_FRAME_BODY_LIMIT - 1_024 },
           }, required: ['sessionId', 'source', 'frame'], additionalProperties: false },
           response: {
             200: { type: 'object', properties: {
@@ -302,7 +366,7 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
       }, async (request, reply) => {
         reply.header('Cache-Control', 'no-store');
         if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
-        const { sessionId, source, frame } = request.body;
+        const { sessionId, source, frame, feedId } = request.body;
         request.body.frame = '';
         if (!validSessionId(sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID.' });
         if (!app.settingsStore) return reply.code(503).send({ error: 'Vision watching is unavailable.' });
@@ -316,7 +380,7 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
           image = decodeFrame(frame);
           const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
           return reply.send(await service.watch({
-            sessionId, source, image, limitUsd: settings.global.visionDailyBudgetUsd,
+            sessionId, source, image, ...(feedId ? { feedId } : {}), limitUsd: settings.global.visionDailyBudgetUsd,
             model: settings.roles.vision.model, reasoningEffort: settings.roles.vision.reasoningEffort,
             signal: controller.signal,
             log: (fields) => { request.log.info(fields, 'vision.watch'); },
