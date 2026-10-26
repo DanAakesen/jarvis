@@ -14,7 +14,7 @@ when requested; missing browser permission is refused explicitly.
 ## Local evidence
 
 - Final `npm test`: contracts 174 passed; web 153 files/2,388 passed; backend
-  297 files/6,683 passed with one skipped; vault mirror 13 files/237 passed.
+  297 files/6,685 passed with one skipped; vault mirror 13 files/237 passed.
 - Focused backend before review: 7 files, 161 tests passed (`vision`, capability instructions,
   visual context and tool parity). Covers typed and spoken tool dispatch,
   repeated unchanged observations, acknowledgement before/after frame arrival,
@@ -93,6 +93,11 @@ for camera start/stop; the model guidance distinguishes capture from frame recei
 The actual-App browser script additionally starts video with a workspace command,
 observes accepted frames, stops it with a command, and verifies permission refusal
 without capture. All three viewports passed with no page errors.
-Focused web: 218 tests passed. Focused workspace/capability/vision backend: 180
-tests passed. Full aggregate/lint/build are being repeated for this approval;
-final results are recorded in the PR and handoff.
+Focused web: 218 tests passed. Final workspace/capability backend: 154 tests
+passed; camera service: 26 passed. The pending-delivery test now waits for its
+explicit persistence-entry signal instead of a load-sensitive one-second polling
+limit. Final full aggregate completed successfully at 14:38 UTC with the counts
+above; lint and build passed across all four workspaces. Hosted CodeQL, PR title
+and Plan status passed on implementation commit `83a1d960`; aggregate hosted CI
+was skipped because the PR remains draft. Final-main rebase/revalidation remains
+with the parent integration queue.
