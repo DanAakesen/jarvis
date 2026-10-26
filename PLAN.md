@@ -2,7 +2,7 @@
 
 ## Composer Plus readability (#1319; 26 October 2026)
 
-Implemented the scoped composer Plus readability, bottom-up action order and Voice waveform correction. Local verification is recorded in `docs/ui/screenshots/1319/README.md`. Full web tests (2,394), focused checks (195), contracts/web lint and synthetic Chromium visual QA passed. Draft publication and integration remain pending; integrate after meal recovery #1314, Send #1316 and unified camera #1318. Do not restore removed camera-watch controls.
+Implemented the scoped composer Plus readability, bottom-up action order and Voice waveform correction. Local verification is recorded in `docs/ui/screenshots/1319/README.md`. The first candidate passed 2,394 web tests. The transparency-preserving review correction passed 196 focused checks, contracts/web lint/build and synthetic Chromium visual QA; exact-head aggregate hosted qualification remains pending. Draft PR #1320 is open; a review correction preserves translucency using native top-layer popup blur. Final integration remains pending; integrate after meal recovery #1314, Send #1316 and unified camera #1318. Do not restore removed camera-watch controls.
 
 ## Desktop composer parity (#1309; 26 October 2026)
 

@@ -1278,7 +1278,7 @@ export function ConversationHistory({
         />
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
-        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage}
+        <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
           actions={[...captureActions, ...primaryActions]} align="start" icon="plus" />
         <button className="composer-dictate" type="button" disabled={!dictationAvailable}
           aria-label={dictating ? 'Stop dictation' : 'Dictate'} aria-pressed={dictating}

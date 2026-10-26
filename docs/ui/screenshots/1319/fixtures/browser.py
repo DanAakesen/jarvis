@@ -40,13 +40,19 @@ with sync_playwright() as p:
             assert menu.is_visible()
             plus.click(); assert not menu.is_visible()
         plus.click(); page.wait_for_timeout(350)
+        page.set_viewport_size({'width':width,'height':height-80})
+        page.wait_for_timeout(100)
+        assert abs(menu.bounding_box()['y']+menu.bounding_box()['height']+10-plus.bounding_box()['y']) < 2
+        page.set_viewport_size({'width':width,'height':height})
+        page.wait_for_timeout(150)
         items=menu.get_by_role('menuitem')
         labels=items.all_text_contents()
         assert labels[0]=='Language' and labels[-2:]==['Voice','Attach file or photo'], labels
         positions=[item.bounding_box()['y'] for item in items.all()]
         assert positions==sorted(positions)
         assert menu.evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(24px)'
-        assert menu.evaluate("e=>getComputedStyle(e).backgroundColor.includes('0.94')")
+        assert menu.evaluate("e=>e.matches(':popover-open')")
+        assert menu.evaluate("e=>getComputedStyle(e).backgroundColor===getComputedStyle(document.querySelector('.conversation-input')).backgroundColor")
         assert page.locator('.conversation-input').evaluate("e=>getComputedStyle(e).backdropFilter")=='blur(10px)'
         assert menu.evaluate("e=>[...e.querySelectorAll('button')].every(b=>{const r=b.getBoundingClientRect(); return b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})")
         page.screenshot(path=str(out/f'{width}-{theme}-menu.png'))
@@ -55,7 +61,10 @@ with sync_playwright() as p:
         items.nth(items.count()-2).press('Home'); items.first.press('ArrowRight')
         flyout=page.get_by_role('menu',name='Language',exact=True)
         assert flyout.is_visible()
+        assert flyout.evaluate("e=>e.matches(':popover-open')")
         page.screenshot(path=str(out/f'{width}-{theme}-language.png'))
+        plus.click(); assert not menu.is_visible() and not flyout.is_visible()
+        plus.click(); items.first.press('ArrowRight')
         page.keyboard.press('Escape'); page.keyboard.press('Escape')
         assert plus.evaluate('e=>e===document.activeElement')
         plus.click()
@@ -67,7 +76,7 @@ with sync_playwright() as p:
         page.emulate_media(reduced_motion='reduce')
         plus.click(); assert menu.is_visible(); page.keyboard.press('Escape')
         assert not errors, errors
-        results.append({'width':width,'theme':theme,'order':labels,'blur':'24px','composerBlur':'10px','keyboard':True,'toggleCycles':3,'nativePickerAnchor':True,'reducedMotion':True,'pageErrors':errors})
+        results.append({'width':width,'theme':theme,'order':labels,'blur':'24px','composerBlur':'10px','nativeTopLayer':True,'chromeFillPreserved':True,'viewportAnchor':True,'keyboard':True,'toggleCycles':3,'nativePickerAnchor':True,'reducedMotion':True,'pageErrors':errors})
         page.close()
     browser.close()
 (out/'measurements.json').write_text(json.dumps(results,indent=2)+'\n')

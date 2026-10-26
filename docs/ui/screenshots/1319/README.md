@@ -4,10 +4,19 @@ Actual App with synthetic dense conversation history, mocked sign-in/HTTP and
 browser speech recognition. Chromium uses the existing WebGL fallback. No private
 screenshots, real microphone, camera, voice provider or physical iPhone tested.
 
-The popup uses 24px blur and a 94% theme-colored fill. The higher fill matters:
-nested backdrop roots can leave underlying chat text sharp despite a computed
-blur. This is limited to the composer Plus list and its Language flyout.
-The composer/header/navigation and voice menus retain their existing material.
+The popup uses 24px blur with the **unchanged** chrome translucent fill (40% of
+the existing theme surface). The composer is a backdrop root: increasing a nested
+popup's blur did not blur the underlying chat. Both composer sheets now use manual
+native popovers, placing them in the browser top layer while preserving DOM ancestry,
+file-input anchoring and existing custom focus/close behavior. Only this popup opts
+in; other menus and glass surfaces are unchanged. Position follows the trigger every
+animation frame while open, including viewport changes. Browsers without native
+popover support retain the existing inline menu behavior; the sampling correction
+requires native popover support.
+
+Review rejected the first candidate's 94% fill: it reduced transmission without
+fixing actual blur. That fill is removed. Regenerated captures show the settled
+translucent popup with blurred underlying text, rather than a computed-blur claim.
 
 Top-to-bottom DOM, visual and keyboard order is Language, available capture
 options, Voice, Attach. Voice reuses the existing `ShellIcon` waveform; Dictate
@@ -29,7 +38,7 @@ rm apps/web/qaapp1301.tsx apps/web/qaapp1301.html
 
 Screenshots cover 390×844 touch emulation and 1440×1000 desktop in dark/light,
 with the menu open over dense text and the Language flyout open. Assertions cover
-actual rendered order, 24px popup/10px unchanged composer blur, fixed popup alpha,
+actual rendered order, 24px popup/10px unchanged composer blur, unchanged chrome fill and native top-layer placement,
 hit testing, repeated toggles, Home/End/arrows/Escape and restored Plus focus,
 native chooser bounds/cancellation, reduced motion and browser page errors.
 `measurements.json` records results. Emulation does not establish iPhone/Safari
@@ -62,3 +71,16 @@ Based on main `6ec8af1e` (includes meal recovery #1314). Prepare a draft PR;
 do not merge/deploy. The coordinator must integrate after Send #1316 and camera
 #1318, preserving removed camera-watch controls and all unrelated documentation.
 No edits to VoiceControls or capture-action definitions belong to this change.
+
+## Review correction validation
+
+The top-layer follow-up regenerates all screenshots and repeats viewport/theme,
+resize anchoring, repeated Plus close with an open Language flyout, native file
+chooser, focus, keyboard and reduced-motion checks. Earlier full-suite results
+above describe the first candidate; exact follow-up results are recorded below.
+
+- `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/ConversationMoreMenu.test.tsx src/ConversationAttachments.test.tsx src/stylesheets.test.tsx`: **4 files / 196 tests passed**, including native-popover DOM/focus/toggle/picker retention with a jsdom adapter. Real top-layer rendering is covered by Chromium, not that adapter.
+- `npm run lint --workspace @jarvis/contracts --workspace @jarvis/web`: passed. After the final test-adapter/viewport predicate adjustment, `npm exec --workspace @jarvis/web -- eslint src/ConversationMoreMenu.tsx src/ConversationMoreMenu.test.tsx --max-warnings 0` also passed.
+- `npm run build --workspace @jarvis/contracts --workspace @jarvis/web`: passed, including TypeScript and production build (existing chunk-size advisory).
+- `python3 docs/ui/screenshots/1319/fixtures/browser.py`: passed all four combinations with native top-layer placement, unchanged fill and viewport anchoring assertions. The regenerated mobile and desktop captures were visually inspected; underlying text is blurred rather than merely dimmed.
+- The full web suite passed on the first candidate (2,394 tests); exact-head full aggregate qualification after this correction remains for hosted CI. Existing dependency-feed/PowerShell limits remain unchanged; no feed/lockfile workarounds were made.

@@ -4477,8 +4477,15 @@ select.form-control {
 /* Composer Plus needs stronger separation from dense conversation text (#1319).
    Keep the rest of the shell on its existing glass material. */
 .app-shell .composer-more :is(.more-menu-list, .more-menu-flyout) {
-  --composer-menu-surface: rgb(from var(--surface) r g b / 94%);
-  background: var(--composer-menu-surface);
+  background: var(--chrome-glass-surface);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+}
+
+/* Top-layer placement escapes only this popup's nested composer backdrop root. */
+.app-shell .composer-more :is(.more-menu-list, .more-menu-flyout)[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  overflow: visible;
 }

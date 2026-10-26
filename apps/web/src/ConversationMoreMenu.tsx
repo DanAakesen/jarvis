@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { VoiceLanguage } from './voice-client';
 import { voiceLanguages } from './voice-language';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
@@ -61,6 +61,7 @@ export function ConversationMoreMenu({
   label = 'More options',
   icon = 'more',
   languageNote,
+  topLayer = false,
 }: {
   language?: VoiceLanguage;
   onLanguageChange?: (language: VoiceLanguage) => void;
@@ -72,7 +73,10 @@ export function ConversationMoreMenu({
   icon?: 'more' | 'attach' | 'plus';
   /** Explains how a language choice applies, shown inside the Language flyout. */
   languageNote?: string;
+  /** Escape the composer backdrop root while retaining native picker and focus ancestry. */
+  topLayer?: boolean;
 }) {
+  const renderInTopLayer = topLayer && typeof HTMLElement.prototype.showPopover === 'function';
   const id = useId();
   const menuId = `${id}-menu`;
   const languageMenuId = `${id}-language`;
@@ -87,6 +91,34 @@ export function ConversationMoreMenu({
   const [open, setOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const pendingFocus = useRef<'first' | 'last' | 'checked' | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !renderInTopLayer || !menu.current?.showPopover) return;
+    const sheet = menu.current;
+    const flyout = languageMenu.current;
+    // A nested backdrop-filter cannot sample chat outside the composer's backdrop root.
+    // Manual popovers escape that root without moving the attachment input in the DOM.
+    sheet.showPopover();
+    if (languageOpen) flyout?.showPopover();
+    let frame = 0;
+    const position = () => {
+      const anchor = trigger.current?.getBoundingClientRect();
+      if (!anchor) return;
+      sheet.style.left = `${align === 'end' ? anchor.right - sheet.offsetWidth : anchor.left}px`;
+      sheet.style.bottom = `${window.innerHeight - anchor.top + 10}px`;
+      if (languageOpen && flyout) {
+        const row = languageItem.current?.getBoundingClientRect();
+        if (row) {
+          const phone = window.innerWidth <= 700;
+          flyout.style.left = `${phone ? row.left - 6 : align === 'end' ? row.left - flyout.offsetWidth - 12 : row.right + 12}px`;
+          flyout.style.top = `${phone ? row.top - flyout.offsetHeight - 12 : row.top - 6}px`;
+        }
+      }
+      frame = requestAnimationFrame(position);
+    };
+    position();
+    return () => cancelAnimationFrame(frame);
+  }, [align, languageOpen, open, renderInTopLayer]);
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
@@ -252,7 +284,7 @@ export function ConversationMoreMenu({
         <MenuIcon name={icon} />
       </button>
       {open && (
-        <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label={label}
+        <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu" aria-label={label}
           onKeyDown={(event) => onMenuKeyDown(event, false)}>
           {renderActions(leadingActions)}
           {language !== undefined && onLanguageChange && <div role="none" className="more-menu-language">
@@ -272,7 +304,7 @@ export function ConversationMoreMenu({
               <MenuIcon name="chevron" />
             </button>
             {languageOpen && (
-              <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" role="menu"
+              <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu"
                 aria-label="Language" aria-describedby={languageNote ? languageNoteId : undefined}
                 onKeyDown={(event) => onMenuKeyDown(event, true)}>
                 {voiceLanguages.map((option) => (
