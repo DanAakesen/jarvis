@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { ConversationToast } from './ConversationToast';
 import type { CameraController } from './screen-sharing';
 import { CameraStatus } from './CameraStatus';
@@ -22,7 +22,21 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
   const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
   const [previewSize, setPreviewSize] = useState({ width: 0, height: 0 });
   const [attempt, setAttempt] = useState(0);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ id: number; x: number; y: number; offset: typeof offset; rect: DOMRect } | null>(null);
   const stream = camera.previewStream;
+  useEffect(() => {
+    const reset = () => { drag.current = null; setOffset({ x: 0, y: 0 }); };
+    window.addEventListener('resize', reset);
+    return () => window.removeEventListener('resize', reset);
+  }, []);
+  const endDrag = (event: PointerEvent<HTMLDivElement>) => {
+    const start = drag.current;
+    if (!start || start.id !== event.pointerId) return;
+    drag.current = null;
+    if (event.type !== 'pointerup') setOffset(start.offset);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   useEffect(() => {
     const element = video.current;
     if (!element || !stream) return;
@@ -75,7 +89,24 @@ export function CameraPreview({ camera }: { camera: CameraController }) {
     }
   };
   return <div ref={container} className="camera-preview" data-inactive={!camera.sharing && !camera.starting}>
-    <div ref={picture} className="camera-preview-picture" data-facing={camera.facing} style={pictureSize}>
+    <div ref={picture} className="camera-preview-picture" data-facing={camera.facing} style={{ ...pictureSize, translate: `${offset.x}px ${offset.y}px` }}
+      onPointerDown={(event) => {
+        if (!event.isPrimary || event.button !== 0 || !(event.target instanceof Element) ||
+          event.target.closest('button, .camera-preview-feedback')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, offset,
+          rect: event.currentTarget.getBoundingClientRect() };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const start = drag.current;
+        if (!start || start.id !== event.pointerId) return;
+        const dx = Math.max(-start.rect.left, Math.min(window.innerWidth - start.rect.right, event.clientX - start.x));
+        const dy = Math.max(-start.rect.top, Math.min(window.innerHeight - start.rect.bottom, event.clientY - start.y));
+        setOffset({ x: start.offset.x + dx, y: start.offset.y + dy });
+      }}
+      onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}>
       <video ref={video} autoPlay muted playsInline aria-label="Live camera preview" data-readback="off"
         onLoadedMetadata={(event) => updateVideoSize(event.currentTarget)}
         onResize={(event) => updateVideoSize(event.currentTarget)} />

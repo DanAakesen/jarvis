@@ -4457,3 +4457,13 @@ select.form-control {
 }
 .app-shell[data-phone="true"][data-keyboard-open="true"] { --phone-dock-bottom: var(--space-2); }
 .app-shell[data-phone="true"][data-keyboard-open="true"] .mobile-bottom-nav { visibility: hidden; pointer-events: none; }
+
+/* #1296: clearer conversation/navigation glass; header and keyboard geometry stay independent. */
+.app-shell :is(.conversation-input, .mobile-bottom-nav, .mobile-menu-sheet, .more-menu-list, .more-menu-flyout) {
+  --surface-translucent: color-mix(in srgb, var(--surface) 58%, transparent);
+}
+.app-shell :is(.mobile-bottom-nav, .mobile-menu-sheet, .more-menu-list, .more-menu-flyout) {
+  background: var(--surface-translucent);
+  backdrop-filter: blur(10px);
+}
+.app-shell .conversation-input.luminous-glass { background: var(--surface-translucent); backdrop-filter: blur(10px); }

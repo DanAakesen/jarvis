@@ -1,5 +1,17 @@
 # Decisions
 
+## Preview movement and menu glass (#1296; 26 October 2026)
+
+Use pointer capture on the camera video for both touch and mouse movement,
+excluding overlay controls and scrollable feedback from gesture initiation.
+Keep movement local to the preview, without altering workspace or keyboard
+layout logic. Prevent an open plus trigger's pointer press from blurring its
+menu before click; then close and restore trigger focus. Scope the requested
+transparency to conversation/navigation/menu surfaces, preserving header and
+icon colors. These are synthetic-browser-verified choices, not physical-device
+acceptance. Private reference downloads failed and no private image is published.
+
+
 ## Dictation stop lifecycle (#1293; 26 October 2026)
 
 An explicit stop is distinct from a failed start. Suppress only cancellation
