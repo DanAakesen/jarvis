@@ -1,5 +1,13 @@
 # Agent context
 
+## Desktop composer checks (#1309; 26 October 2026)
+
+Run contracts/web lint, tests and build. Actual-App synthetic Chromium coverage
+and reproduction are in `docs/ui/screenshots/1309/README.md`. It checks desktop
+window geometry, popup hit targets, dictation controls, attachment/error rows and
+phone regression. Preserve the continuous dictation lifecycle from #1305 and the
+attachment submenu from #1308 when integrating; #1303 visibility stays phone-only.
+
 ## Continuous dictation checks (#1305; 26 October 2026)
 
 Run `npm test --workspace @jarvis/web`, web lint and web build. Focused regression

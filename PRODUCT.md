@@ -1,5 +1,13 @@
 # Product
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Desktop uses the approved full-width draft and second row of borderless Plus,
+Dictate and Send controls; Voice is under Plus. Attachment errors stay above the
+composer, and attachment pills stay inside. The composer follows the history
+window when resized, maximized or restored, with its popup above history.
+Desktop navigation remains unchanged; Chat-only composer visibility is mobile-only.
+
 ## Camera preview follow-up (#1304; 26 October 2026)
 
 Show only the unframed video and overlaid switch/close controls, using the existing app glass material. Remove visible Live and camera-direction badges. Preserve movement, camera switching and closing; retain fitted geometry through stream replacement and refresh it on playback resume.

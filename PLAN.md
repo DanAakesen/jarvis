@@ -1,5 +1,21 @@
 # Project plan
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Implemented shared two-row styling, desktop Dictate/Voice placement, aligned
+composer width and wrapper stacking, with attachment errors above the surface.
+Synthetic actual-App QA covers desktop normal/resized/maximized/restored states,
+repeated Plus interaction, Dictate start/stop, attachments/errors and phone layout.
+Follow-up fixed the initial vertical seam when the room fallback status is shown;
+the browser fixture now asserts vertical adjacency before any resize and after it.
+Draft PR #1313 now incorporates main `83563177` (attachment #1308, preview
+#1312 and continuous Dictate #1310), preserving their implementations. Combined
+web tests and rendered composer/preview regressions pass. Coordinator owns the
+merge slot after mobile composer #1307. Final integration incorporates main
+`3688ef4e`, preserving mobile visibility/measurement/focus guards; 2,387 web tests
+and combined desktop/mobile/Voice QA pass. Exact-head hosted checks and accepted
+deployment remain release gates.
+
 ## Mobile Chat-only composer (#1303; 26 October 2026)
 
 Use the current route and Workspaces pane state to show mobile composer variants
@@ -22,7 +38,6 @@ Physical iPhone acceptance remains pending.
 ## Preview follow-up #1304
 
 Implemented shared-material switch/close controls, removed visible camera badges, and retained/refreshed fitted geometry across stream replacement/resume. Synthetic mobile/desktop regression QA passed for dragging, repeated switching, pause/resume aspect changes and viewport restoration. Normal web checks are recorded in the PR; no physical-device acceptance or release claimed.
-
 
 ## Settled glass and dock selection (#1301; 26 October 2026)
 

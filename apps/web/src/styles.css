@@ -1054,8 +1054,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 @media (pointer: coarse) {
   .sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
 }
-/* The composer and its menus stay above workspace windows, so More and attach menus are never hidden. */
-.conversation-input.luminous-glass { z-index: var(--z-dock); }
+/* The fixed wrapper owns the stacking context. Workspace canvases isolate their
+   front/maximized windows, so the dock layer clears the entire window context
+   while staying below sheets and modal dialogs. */
+.conversation-input-stack:has(> .conversation-input.luminous-glass) { position: relative; z-index: var(--z-dock); }
 /* Shell panels keep their heading and resize handle in place while only the body scrolls. */
 @media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
   .area-sidebar, .context-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }

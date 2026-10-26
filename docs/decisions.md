@@ -1,5 +1,12 @@
 # Decisions
 
+## Desktop composer parity (#1309; 26 October 2026)
+
+Apply the approved composer geometry and controls to desktop as requested,
+including Voice under Plus and Dictate beside Send. Keep the existing isolated
+workspace and dock stacking hierarchy: elevate the fixed outer stack, not its
+inner child. Do not extend the mobile Chat-only visibility rule to desktop.
+
 ## Route-scoped phone composer (#1303; 26 October 2026)
 
 Use the `/` route plus closed Workspaces pane state: the full-width Workspaces

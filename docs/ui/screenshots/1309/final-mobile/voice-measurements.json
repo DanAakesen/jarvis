@@ -1,0 +1,201 @@
+[
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "voiceTransport": "synthetic listening state; no microphone or network",
+    "states": [
+      {
+        "selector": ".app-topbar",
+        "class": "app-topbar",
+        "voiceActive": null,
+        "hidden": false,
+        "display": "flex",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+        "blur": "blur(10px)",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 52,
+          "top": 0,
+          "right": 390,
+          "bottom": 52,
+          "left": 0
+        }
+      },
+      {
+        "selector": ".conversation-input",
+        "class": "conversation-input",
+        "voiceActive": "true",
+        "hidden": false,
+        "display": "block",
+        "background": "rgba(0, 0, 0, 0)",
+        "blur": "none",
+        "rect": {
+          "x": 12,
+          "y": 135.375,
+          "width": 366,
+          "height": 0,
+          "top": 135.375,
+          "right": 378,
+          "bottom": 135.375,
+          "left": 12
+        }
+      },
+      {
+        "selector": ".composer",
+        "class": "composer",
+        "voiceActive": null,
+        "hidden": true,
+        "display": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "blur": "none",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      {
+        "selector": ".voice-bar",
+        "class": "voice-bar luminous-glass",
+        "voiceActive": null,
+        "hidden": false,
+        "display": "flex",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+        "blur": "blur(10px)",
+        "rect": {
+          "x": 100.5390625,
+          "y": 698,
+          "width": 188.921875,
+          "height": 62,
+          "top": 698,
+          "right": 289.4609375,
+          "bottom": 760,
+          "left": 100.5390625
+        }
+      },
+      {
+        "selector": ".mobile-bottom-nav",
+        "class": "mobile-bottom-nav",
+        "voiceActive": null,
+        "hidden": false,
+        "display": "grid",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+        "blur": "blur(10px)",
+        "rect": {
+          "x": 0,
+          "y": 776,
+          "width": 390,
+          "height": 68,
+          "top": 776,
+          "right": 390,
+          "bottom": 844,
+          "left": 0
+        }
+      }
+    ],
+    "mobileRouteVisibility": true,
+    "explicitEndVoice": true,
+    "errors": []
+  },
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "voiceTransport": "synthetic listening state; no microphone or network",
+    "states": [
+      {
+        "selector": ".app-topbar",
+        "class": "app-topbar",
+        "voiceActive": null,
+        "hidden": false,
+        "display": "flex",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+        "blur": "blur(10px)",
+        "rect": {
+          "x": 6,
+          "y": 6,
+          "width": 1428,
+          "height": 50,
+          "top": 6,
+          "right": 1434,
+          "bottom": 56,
+          "left": 6
+        }
+      },
+      {
+        "selector": ".conversation-input",
+        "class": "conversation-input",
+        "voiceActive": "true",
+        "hidden": false,
+        "display": "block",
+        "background": "rgba(0, 0, 0, 0)",
+        "blur": "none",
+        "rect": {
+          "x": 350,
+          "y": 0,
+          "width": 740,
+          "height": 0,
+          "top": 0,
+          "right": 1090,
+          "bottom": 0,
+          "left": 350
+        }
+      },
+      {
+        "selector": ".composer",
+        "class": "composer",
+        "voiceActive": null,
+        "hidden": true,
+        "display": "none",
+        "background": "rgba(0, 0, 0, 0)",
+        "blur": "none",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      },
+      {
+        "selector": ".voice-bar",
+        "class": "voice-bar luminous-glass",
+        "voiceActive": null,
+        "hidden": false,
+        "display": "flex",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+        "blur": "blur(10px)",
+        "rect": {
+          "x": 621.5390625,
+          "y": 914,
+          "width": 196.921875,
+          "height": 62,
+          "top": 914,
+          "right": 818.4609375,
+          "bottom": 976,
+          "left": 621.5390625
+        }
+      },
+      {
+        "selector": ".mobile-bottom-nav",
+        "exists": false
+      }
+    ],
+    "mobileRouteVisibility": false,
+    "explicitEndVoice": true,
+    "errors": []
+  }
+]
