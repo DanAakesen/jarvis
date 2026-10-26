@@ -1,3 +1,12 @@
+## Unified camera delivery checks (#1317; 26 October 2026)
+
+Run `npm test`, `npm run lint`, `npm run build` and
+`bash .github/scripts/python-ci.sh agents/jarvis`. Focused coverage is in
+web `vision-watch.test.tsx`, `camera-capture.test.tsx`, backend `vision/` and
+`core/capability-instructions.test.ts`. Actual-App synthetic browser checks
+cover repeated silent frames and camera stop at 320/390px touch and 1440px desktop;
+see `docs/ui/screenshots/1317/README.md`. No physical-iPhone acceptance claimed.
+
 # Agent context
 
 ## Composer Plus checks (#1319; 26 October 2026)

@@ -1,3 +1,11 @@
+## Unified camera delivery (#1317; 26 October 2026)
+
+Implementation on `fix/1317-unified-camera`: automatic sampled-frame delivery,
+truthful receiving status, explicit standing narration, obsolete camera action
+cleanup and bounded lifecycle. Local checks and synthetic browser evidence are
+in `docs/ui/screenshots/1317/README.md`. Draft review and exact-head hosted CI
+remain before parent-coordinated integration; no merge or deployment authorized here.
+
 # Project plan
 
 ## Composer Plus readability (#1319; 26 October 2026)

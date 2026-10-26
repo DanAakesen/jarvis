@@ -1,0 +1,26 @@
+[
+  {
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "framesDuringSilence": 3,
+    "framesAfterStop": 0,
+    "errors": []
+  },
+  {
+    "width": 320,
+    "height": 700,
+    "touch": true,
+    "framesDuringSilence": 3,
+    "framesAfterStop": 0,
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "height": 1000,
+    "touch": false,
+    "framesDuringSilence": 3,
+    "framesAfterStop": 0,
+    "errors": []
+  }
+]

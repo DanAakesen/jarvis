@@ -17,6 +17,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 function fixture(options: {
+  voiceNarration?: boolean;
   observation?: unknown;
   describe?: ScreenVisionModel['describe'];
   reserve?: VisionWatchUsageStore['reserveWatchFrame'];
@@ -71,7 +72,9 @@ function fixture(options: {
           };
           return JSON.parse(await executeRealtimeToolCall({
             call_id: 'voice-watch-call', name: 'watch_for',
-            arguments: JSON.stringify({ source: 'screen', what: 'Tell me when the build finishes' }),
+            arguments: JSON.stringify(options.voiceNarration
+              ? { source: 'camera', what: 'Keep describing what you see', continuousDescription: true }
+              : { source: 'screen', what: 'Tell me when the build finishes' }),
           }, app.jarvisTools, request, new AbortController().signal));
         });
       },
@@ -86,6 +89,63 @@ function fixture(options: {
 }
 
 describe('continuous vision watching', () => {
+  it('uses the same standing narration instruction for spoken requests and drops busy voice observations', async () => {
+    const f = fixture({ voiceNarration: true });
+    const response = await f.app.inject({ method: 'POST', url: '/test/voice/watch-tool', headers });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { cameraFeed: 'unconfirmed' } });
+    const speak = vi.fn(() => false);
+    f.service.registerVoice('42', speak);
+    await f.watch('camera');
+    expect(speak).toHaveBeenCalledOnce();
+    expect(f.addMessage).not.toHaveBeenCalled();
+    speak.mockReturnValue(true);
+    f.advance(2_600);
+    await f.watch('camera');
+    expect(speak).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(f.model.describe).mock.lastCall![0].watch).toMatchObject({ continuousDescription: true });
+  });
+
+  it('clears only the matching delivery generation on camera off and rejects unauthenticated stops', async () => {
+    const f = fixture();
+    const feedId = 'a1b2c3d4-1234-4123-8123-123456789012';
+    await f.app.inject({ method: 'POST', url: '/vision/watch', headers,
+      payload: { sessionId: '42', source: 'camera', frame: image, feedId } });
+    const payload = { sessionId: '42', source: 'camera', feedId };
+    expect((await f.app.inject({ method: 'DELETE', url: '/vision/watch', payload })).statusCode).toBe(401);
+    f.service.stopFeed('42', 'camera', 'older-feed');
+    expect(f.service.feedStatus('42', 'camera')).toBe('receiving');
+    expect((await f.app.inject({ method: 'DELETE', url: '/vision/watch', headers, payload })).statusCode).toBe(204);
+    expect(f.service.feedStatus('42', 'camera')).toBe('unconfirmed');
+  });
+
+  it('reports delivery truthfully and narrates repeated unchanged frames only on explicit standing instruction', async () => {
+    const f = fixture();
+    expect(f.service.feedStatus('42', 'camera')).toBe('unconfirmed');
+    await f.service.setInstruction('42', 'camera', 'Keep describing what you see until I stop', true);
+    await f.watch('camera');
+    expect(f.service.feedStatus('42', 'camera')).toBe('receiving');
+    f.advance(2_600);
+    await f.watch('camera');
+    expect(f.addMessage).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(f.model.describe).mock.lastCall![0].watch).toMatchObject({ continuousDescription: true });
+    await f.service.setInstruction('42', 'camera', null);
+    f.advance(2_600);
+    await f.watch('camera');
+    expect(f.addMessage).toHaveBeenCalledTimes(2);
+    f.advance(15_000);
+    expect(f.service.feedStatus('42', 'camera')).toBe('unconfirmed');
+  });
+
+  it('accepts typed keep-describing instructions without claiming capture started', async () => {
+    const f = fixture();
+    const response = await f.app.inject({ method: 'POST', url: '/tools/watch_for',
+      headers: { ...headers, 'x-jarvis-message-id': '7' },
+      payload: { source: 'camera', what: 'Keep describing what you see', continuousDescription: true } });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { instructionsSaved: true, cameraFeed: 'unconfirmed' } });
+    await f.watch('camera');
+    expect(vi.mocked(f.model.describe).mock.lastCall![0].watch).toMatchObject({ continuousDescription: true });
+  });
+
   it('releases in-memory watch state through the successful conversation-end lifecycle, across sibling plugins', async () => {
     const f = fixture({ observation: { summary: 'Editor', noteworthy: false, speak: null } });
     await f.service.setInstruction('42', 'screen', 'Tell me when the build finishes');
@@ -250,7 +310,7 @@ describe('continuous vision watching', () => {
     const f = fixture({ observation: { summary: 'Build running.', noteworthy: false, speak: null } });
     const tool = await f.app.inject({ method: 'POST', url: '/test/voice/watch-tool', headers, payload: {} });
     expect(tool.statusCode).toBe(200);
-    expect(tool.json()).toMatchObject({ outcome: 'ok', result: { watching: 'screen' } });
+    expect(tool.json()).toMatchObject({ outcome: 'ok', result: { instructionsSaved: true, source: 'screen', cameraFeed: 'unconfirmed' } });
     await f.watch();
     expect(vi.mocked(f.model.describe).mock.lastCall![0].watch?.instructions).toEqual(['Tell me when the build finishes']);
   });
@@ -262,7 +322,7 @@ describe('continuous vision watching', () => {
       payload: { what: 'Tell me when the build finishes' },
     });
 
-    expect(tool.json()).toMatchObject({ outcome: 'ok', result: { watching: 'both' } });
+    expect(tool.json()).toMatchObject({ outcome: 'ok', result: { instructionsSaved: true, source: 'both' } });
     await f.watch('camera');
     expect(vi.mocked(f.model.describe).mock.lastCall![0].watch?.instructions).toEqual(['Tell me when the build finishes']);
     const stop = await f.app.inject({

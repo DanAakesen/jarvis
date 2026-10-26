@@ -259,9 +259,21 @@ export function ConversationHistory({
   const [turnError, setTurnError] = useState('');
   const watchToken = useCallback(() => tokenProvider(), [tokenProvider]);
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
-  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', session?.id ?? null, setTurnError);
   const [steering, setSteering] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
+  const stopCamera = camera?.stop;
+  const cameraStopped = useCallback((message: string) => { stopCamera?.(); setTurnError(message); }, [stopCamera]);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', voiceActive ? null : session?.id ?? null, cameraStopped);
+  useEffect(() => {
+    if (!camera?.sharing || voiceActive || session) return;
+    const controller = new AbortController();
+    void createChatSession(tokenProvider, config, language, controller.signal).then((created) => {
+      if (!controller.signal.aborted) setSession(created);
+    }).catch(() => {
+      if (!controller.signal.aborted) cameraStopped('Video could not connect. Enable video to retry.');
+    });
+    return () => controller.abort();
+  }, [camera?.sharing, cameraStopped, config, language, session, tokenProvider, voiceActive]);
   const [dictating, setDictating] = useState(false);
   const [dictationError, setDictationError] = useState('');
   const dictationRecognition = useRef<DictationRecognition | null>(null);
@@ -943,16 +955,11 @@ export function ConversationHistory({
     }] : []),
     ...(camera ? [{
       id: 'share-camera',
+      ...(camera.sharing ? { description: cameraWatch.watching ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : 'Connecting camera updates…' } : {}),
       label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Enable video',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
       disabled: camera.starting,
-    }] : []),
-    ...(camera?.sharing && (session || cameraWatch.watching) ? [{
-      id: 'camera-watch',
-      label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
-      icon: <ConversationIcon name="camera" />,
-      onSelect: () => { if (cameraWatch.watching) cameraWatch.stop(); else cameraWatch.start(); },
     }] : []),
     ...(camera?.sharing && camera.switchCamera && navigator.maxTouchPoints > 0 ? [{
       id: 'switch-camera',
@@ -1207,6 +1214,8 @@ export function ConversationHistory({
           width: conversationWindow.position.width, maxWidth: 'none', margin: 0,
         } : undefined}>
       {!voiceActive && <div className="composer-feedback">
+        {camera?.sharing && <p className="composer-status" role="status">{cameraWatch.watching
+          ? `Receiving camera updates · ${formatWatchBudget(cameraWatch.budget)}` : 'Connecting camera updates…'}</p>}
         {(!dictationAvailable || dictating || dictationError) && <p id="dictation-status"
           className={dictating && !dictationError ? 'visually-hidden' : 'composer-status'}
           role={dictationError ? 'alert' : dictating ? 'status' : 'note'}>
