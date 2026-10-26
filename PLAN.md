@@ -1,5 +1,16 @@
 # Project plan
 
+## iPhone keyboard follow-up (#1295; 26 October 2026)
+
+Owner acceptance of #1293 failed despite release: the dock remained above the
+keyboard. The old height-gap fixture missed the equal-height resized-layout
+case. A focused-composer fallback now covers both event orders and already-short
+mount/enable, with navigation restored on focus departure or observed expansion.
+Runtime scope is only `phone-chat-viewport.ts`; other shipped UI stays unchanged.
+Focused regressions cover safe composer-control focus handoff as well as keyboard
+resize. Actual-App synthetic captures and measured geometry are in `docs/ui/screenshots/iphone-keyboard-1295/`. Physical iPhone
+acceptance and parent-owned hosted qualification/release remain outstanding.
+
 ## Mobile corrections (#1293; 26 October 2026)
 
 Implemented the requested full-width message row, lower borderless icon controls,
