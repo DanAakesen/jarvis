@@ -60,6 +60,7 @@ function renderConversation(phone = false) {
 }
 
 function pick(...files: File[]) {
+  if (!screen.queryByRole('menu')) fireEvent.click(screen.getByRole('button', { name: 'More options' }));
   fireEvent.change(screen.getByTestId('attachment-input'), { target: { files } });
 }
 
@@ -251,6 +252,38 @@ describe('composer attachments', () => {
     await screen.findByRole('textbox', { name: 'Message Jarvis' });
     pick(new File(['%PDF-'], 'scan.pdf', { type: 'application/pdf' }));
     expect(await screen.findByText(/Jarvis couldn’t read this file/u)).toBeTruthy();
+  });
+
+  it.each([false, true])('keeps the native picker source open through cancel and closes after selection (phone=%s)', async (phone) => {
+    renderConversation(phone);
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(trigger);
+    const action = screen.getByRole('menuitem', { name: 'Attach file or photo' });
+    const input = screen.getByTestId('attachment-input');
+    const click = vi.spyOn(input, 'click');
+    action.focus();
+    fireEvent.click(action);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(action);
+    expect(action.parentElement?.contains(input)).toBe(true);
+    // Native chooser focus loss has no DOM relatedTarget; it must not dismiss the source.
+    fireEvent.blur(action, { relatedTarget: null });
+    fireEvent(input, new Event('cancel', { bubbles: true }));
+    expect(screen.getByTestId('attachment-input')).toBe(input);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(uploadAttachment).not.toHaveBeenCalled();
+    fireEvent.click(action);
+    expect(click).toHaveBeenCalledTimes(2);
+    fireEvent.change(input, { target: { files: [new File(['photo'], 'photo.png', { type: 'image/png' })] } });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+    await screen.findByText('photo.png');
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('offers the attach action in the More menu', async () => {

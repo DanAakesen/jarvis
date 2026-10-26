@@ -40,7 +40,9 @@ and voice layout are unchanged.
 
 Each state opens and closes Plus three times with animation allowed to settle.
 Every enabled menu button passes `elementFromPoint` hit testing, including when
-the conversation is maximized. Clicking Attach opens the actual file chooser.
+the conversation is maximized. Clicking Attach opens the actual file chooser while retaining the menu and
+its full-size native input anchor. Simulated cancellation keeps the source open;
+selection closes it. Bounds are measured together in one animation frame.
 The full-width draft sits above Plus, Dictate and Send. Dictate starts, accepts
 synthetic recognized speech into the unsent draft and stops. Uploaded attachment
 pills sit above the draft inside the glass; unsupported-file feedback sits above
@@ -79,3 +81,24 @@ Affected web checks run independently. Local Node 24.19.0 /
 npm 11.9.0 differs from CI Node 22 / npm 10. Draft CI intentionally skips full
 qualification. The coordinator owns latest-main integration, exact-head CI,
 review, merge and deployment.
+
+## Pre-integration against main 83563177
+
+Merged `83563177288aafccf8cee63f9f941ac3f6fed02c`, including attachment #1308,
+preview #1312 and continuous Dictate #1310. Only five documentation introductions
+conflicted; both sets of entries were retained. The production source merged
+without conflict. Dictation lifecycle, preview components and the attachment
+menu implementation match main; this issue retains its existing composer scope.
+
+The composer fixture now checks `continuous`/`interimResults`, automatic
+recognizer replacement after an unrequested end, explicit Stop, native picker
+anchor retention and cancellation. Full composer/phone QA and the actual-room
+initial-layout variant are rerun on the combined tree. The unchanged #1304
+preview fixture also passes at 390, 320 and 1440px; its output is retained in
+`integration-preview-measurements.json`. It ran from a scratch copy with only
+the output directory changed, preserving the other worker's original evidence.
+
+Combined-tree `npm test --workspace @jarvis/web`: 153 files / 2,384 tests passed.
+Composer and actual-room browser commands above passed; the unchanged preview
+fixture passed all three sizes. The final mobile composer #1307 baseline and
+parent merge slot remain pending.

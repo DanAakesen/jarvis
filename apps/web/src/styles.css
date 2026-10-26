@@ -1330,6 +1330,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .more-menu-language { position: relative; }
 .more-menu-flyout { z-index: 1; top: -6px; left: calc(100% + 12px); min-width: 176px; }
 .more-menu[data-align="end"] .more-menu-flyout { top: auto; right: calc(100% + 12px); bottom: -6px; left: auto; }
+/* Give the native chooser the attachment row's bounds without intercepting its button. */
+.more-menu-file { position: relative; }
+.more-menu-file-input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
 .more-menu-item { display: flex; width: 100%; min-height: 44px; align-items: center; gap: var(--space-3); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); text-align: left; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard); }
 .more-menu-item > svg, .more-menu-check svg { width: 20px; height: 20px; flex: 0 0 auto; }
 .more-menu-label { flex: 1 1 auto; min-width: 0; }

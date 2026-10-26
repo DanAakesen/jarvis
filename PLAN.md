@@ -8,8 +8,24 @@ Synthetic actual-App QA covers desktop normal/resized/maximized/restored states,
 repeated Plus interaction, Dictate start/stop, attachments/errors and phone layout.
 Follow-up fixed the initial vertical seam when the room fallback status is shown;
 the browser fixture now asserts vertical adjacency before any resize and after it.
-Draft publication and integration follow local checks. Coordinator owns the merge
-slot after #1308, #1304, #1305 and #1303; latest-main qualification remains required.
+Draft PR #1313 now incorporates main `83563177` (attachment #1308, preview
+#1312 and continuous Dictate #1310), preserving their implementations. Combined
+web tests and rendered composer/preview regressions pass. Coordinator owns the
+merge slot after mobile composer #1307; final qualification remains required.
+
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Implemented on a separate branch from main `d7667964`: interim transcript
+replacement, automatic restart through pauses, repeatable explicit Stop, and
+visible fatal failures. Evidence and verification are in
+`docs/ui/screenshots/1305/README.md`. Reconciled attachment #1308 and preview
+#1312 from main `57ae85a0`, preserving their changes. Final exact-head checks
+and independent review precede the coordinator-authorized sequential merge.
+Physical iPhone acceptance remains pending.
+
+## Preview follow-up #1304
+
+Implemented shared-material switch/close controls, removed visible camera badges, and retained/refreshed fitted geometry across stream replacement/resume. Synthetic mobile/desktop regression QA passed for dragging, repeated switching, pause/resume aspect changes and viewport restoration. Normal web checks are recorded in the PR; no physical-device acceptance or release claimed.
 
 ## Settled glass and dock selection (#1301; 26 October 2026)
 

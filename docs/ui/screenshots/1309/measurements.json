@@ -68,7 +68,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       },
       {
         "state": "resized",
@@ -131,7 +132,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       },
       {
         "state": "maximized",
@@ -194,7 +196,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       },
       {
         "state": "restored",
@@ -257,7 +260,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       }
     ],
     "dictationStartStop": true,
@@ -333,7 +337,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       },
       {
         "state": "resized",
@@ -396,7 +401,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       },
       {
         "state": "maximized",
@@ -459,7 +465,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       },
       {
         "state": "restored",
@@ -522,7 +529,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       }
     ],
     "dictationStartStop": true,
@@ -598,7 +606,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       }
     ],
     "dictationStartStop": true,

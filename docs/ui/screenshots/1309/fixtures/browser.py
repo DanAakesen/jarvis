@@ -64,8 +64,14 @@ with sync_playwright() as p:
                 plus.click(); assert not menu.is_visible()
             plus.click()
             with page.expect_file_chooser(): page.get_by_role('menuitem',name='Attach file or photo',exact=True).click()
-            assert plus.get_attribute('aria-expanded') == 'false'
-            states.append({'state':state,'bounds':bounds,'menuHitTests':3,'pickerClickable':True})
+            assert plus.get_attribute('aria-expanded') == 'true'
+            attachment_input = page.get_by_test_id('attachment-input')
+            anchor = attachment_input.evaluate("e=>{const input=e.getBoundingClientRect(),action=e.parentElement.querySelector('button').getBoundingClientRect();return ['x','y','width','height'].map(k=>Math.abs(input[k]-action[k]));}")
+            assert all(delta < 1 for delta in anchor), (width, state, anchor)
+            attachment_input.dispatch_event('cancel')
+            assert plus.get_attribute('aria-expanded') == 'true'
+            plus.click()
+            states.append({'state':state,'bounds':bounds,'menuHitTests':3,'pickerClickable':True,'pickerAnchorRetained':True})
         inspect('normal')
         if real_room:
             assert page.locator('.jarvis-stage').get_attribute('data-failed') == 'false'
@@ -82,12 +88,18 @@ with sync_playwright() as p:
         dictate = page.get_by_role('button',name='Dictate',exact=True)
         assert dictate.is_visible() and dictate.is_enabled()
         dictate.click(); page.get_by_role('button',name='Stop dictation',exact=True).wait_for()
+        assert page.evaluate('window.fixtureRecognition.current.continuous && window.fixtureRecognition.current.interimResults')
         page.evaluate("window.fixtureRecognition.current.onresult({resultIndex:0,results:[Object.assign([{transcript:'Synthetic dictated draft'}],{isFinal:true})]})")
         page.wait_for_function("document.querySelector('.composer textarea').value.includes('Synthetic dictated draft')")
+        page.evaluate('window.fixturePreviousRecognition = window.fixtureRecognition.current; window.fixtureRecognition.current.onend()')
+        assert page.evaluate('window.fixtureRecognition.current !== window.fixturePreviousRecognition')
+        assert page.get_by_role('button', name='Stop dictation', exact=True).is_visible()
         page.get_by_role('button',name='Stop dictation',exact=True).click()
         assert page.get_by_role('button',name='Dictate',exact=True).is_visible()
+        plus.click()
         page.locator('[data-testid="attachment-input"]').set_input_files({'name':'synthetic.txt','mimeType':'text/plain','buffer':b'synthetic'})
         page.locator('.attachment-chip[data-status="ready"]').wait_for()
+        plus.click()
         page.locator('[data-testid="attachment-input"]').set_input_files({'name':'unsupported.exe','mimeType':'application/octet-stream','buffer':b'synthetic'})
         feedback = page.locator('.composer-feedback .chat-error'); feedback.wait_for()
         assert feedback.bounding_box()['y'] < page.locator('.conversation-input').bounding_box()['y']

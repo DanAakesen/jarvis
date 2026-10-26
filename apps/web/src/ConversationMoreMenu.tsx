@@ -10,6 +10,8 @@ export type MoreMenuAction = {
   icon: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
+  /** Native file input kept beside its action while the system chooser is open. */
+  fileInput?: ReactNode;
   /** Explains why an action is unavailable; announced with the disabled item and shown as its tooltip. */
   description?: string;
 };
@@ -190,25 +192,33 @@ export function ConversationMoreMenu({
 
   const renderActions = (menuActions: MoreMenuAction[]) => menuActions.map((action) => {
     const descriptionId = action.description ? `${id}-${action.id}-description` : undefined;
+    const button = (
+      <button
+        className="more-menu-item"
+        type="button"
+        role="menuitem"
+        tabIndex={-1}
+        aria-disabled={action.disabled || undefined}
+        aria-describedby={descriptionId}
+        title={action.description}
+        onClick={() => {
+          if (action.disabled) return;
+          if (!action.fileInput) close(true);
+          action.onSelect();
+        }}
+      >
+        {action.icon}
+        <span className="more-menu-label">{action.label}</span>
+      </button>
+    );
     return (
       <Fragment key={action.id}>
-        <button
-          className="more-menu-item"
-          type="button"
-          role="menuitem"
-          tabIndex={-1}
-          aria-disabled={action.disabled || undefined}
-          aria-describedby={descriptionId}
-          title={action.description}
-          onClick={() => {
-            if (action.disabled) return;
-            close(true);
-            action.onSelect();
-          }}
-        >
-          {action.icon}
-          <span className="more-menu-label">{action.label}</span>
-        </button>
+        {action.fileInput ? (
+          <div role="none" className="more-menu-file" onChange={() => close(true)}>
+            {button}
+            {action.fileInput}
+          </div>
+        ) : button}
         {descriptionId && <span id={descriptionId} className="visually-hidden">{action.description}</span>}
       </Fragment>
     );

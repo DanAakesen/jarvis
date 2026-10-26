@@ -68,7 +68,8 @@
           }
         },
         "menuHitTests": 3,
-        "pickerClickable": true
+        "pickerClickable": true,
+        "pickerAnchorRetained": true
       }
     ],
     "dictationStartStop": true,

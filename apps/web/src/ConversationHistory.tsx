@@ -315,14 +315,6 @@ export function ConversationHistory({
     setVoiceActive(active);
     onVoiceActiveChange(active);
   }, [onVoiceActiveChange]);
-  const appendDictation = useCallback((transcript: string) => {
-    const text = transcript.trim();
-    if (!text) return;
-    const current = draftValue.current;
-    const next = `${current}${current && !/\s$/u.test(current) ? ' ' : ''}${text}`.slice(0, 20_000);
-    draftValue.current = next;
-    setDraft(next);
-  }, []);
   const stopDictation = useCallback(() => {
     const recognition = dictationRecognition.current;
     dictationRecognition.current = null;
@@ -343,48 +335,75 @@ export function ConversationHistory({
       setDictationError("Dictation isn't supported in this browser.");
       return;
     }
-    const recognition = new Recognition();
-    dictationRecognition.current = recognition;
     dictationStopRequested.current = false;
-    recognition.lang = language === 'da' ? 'da-DK' : 'en-US';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.onresult = (event) => {
-      if (dictationRecognition.current !== recognition) return;
-      const parts: string[] = [];
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index];
-        if (result?.isFinal && result[0]?.transcript) parts.push(result[0].transcript);
-      }
-      appendDictation(parts.join(' '));
-    };
-    recognition.onerror = (event) => {
-      if (dictationRecognition.current !== recognition) return;
-      // Stop may emit cancellation/no-speech before its final result and end.
-      // Keep this session alive until end so the final draft text is retained.
-      if (dictationStopRequested.current && (event.error === 'aborted' || event.error === 'no-speech')) return;
-      dictationRecognition.current = null;
-      setDictating(false);
-      setDictationError(event.error === 'not-allowed'
-        ? 'Microphone permission was denied. Allow access and try Dictate again.'
-        : event.error === 'no-speech'
-          ? 'No speech was detected. Try Dictate again.'
-          : 'Dictation could not start. Check microphone access and try again.');
-    };
-    recognition.onend = () => {
-      if (dictationRecognition.current !== recognition) return;
-      dictationRecognition.current = null;
-      setDictating(false);
-    };
     setDictationError('');
-    try {
-      recognition.start();
-      setDictating(true);
-    } catch {
-      dictationRecognition.current = null;
-      setDictating(false);
-      setDictationError('Dictation could not start. Check microphone access and try again.');
-    }
+    setDictating(true);
+    const startRecognition = () => {
+      const recognition = new Recognition();
+      dictationRecognition.current = recognition;
+      recognition.lang = language === 'da' ? 'da-DK' : 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      let base = draftValue.current;
+      let rendered = base;
+      let seenResults = 0;
+      let firstResult = 0;
+      recognition.onresult = (event) => {
+        if (dictationRecognition.current !== recognition) return;
+        // A typed edit or Send owns the draft. Never overwrite it with a replay
+        // of results already displayed; new segments can still be dictated.
+        if (draftValue.current !== rendered) {
+          base = draftValue.current;
+          firstResult = seenResults;
+        }
+        // Interim entries can disappear. Their indexes are then available for
+        // new speech, so do not keep suppressing indexes beyond this snapshot.
+        firstResult = Math.min(firstResult, event.results.length);
+        seenResults = event.results.length;
+        const parts: string[] = [];
+        for (let index = firstResult; index < event.results.length; index += 1) {
+          const text = event.results[index]?.[0]?.transcript?.trim();
+          if (text) parts.push(text);
+        }
+        const text = parts.join(' ');
+        // Results are a session snapshot: replace interim hypotheses instead of
+        // appending them again when they become final or are replayed.
+        rendered = `${base}${base && text && !/\s$/u.test(base) ? ' ' : ''}${text}`.slice(0, 20_000);
+        draftValue.current = rendered;
+        setDraft(rendered);
+      };
+      recognition.onerror = (event) => {
+        if (dictationRecognition.current !== recognition) return;
+        // Silence is normal while toggled on. Explicit stop can emit aborted
+        // before its final result; retain ownership until end in both cases.
+        if (event.error === 'no-speech' || (dictationStopRequested.current && event.error === 'aborted')) return;
+        dictationRecognition.current = null;
+        setDictating(false);
+        setDictationError(event.error === 'not-allowed' || event.error === 'service-not-allowed'
+          ? 'Microphone permission was denied. Allow access and try Dictate again.'
+          : 'Dictation could not start. Check microphone access and try again.');
+        recognition.abort();
+      };
+      recognition.onend = () => {
+        if (dictationRecognition.current !== recognition) return;
+        dictationRecognition.current = null;
+        if (dictationStopRequested.current) {
+          setDictating(false);
+        } else {
+          // Browsers can end even continuous recognition during a pause. A new
+          // instance isolates its result indexes and ignores late old callbacks.
+          startRecognition();
+        }
+      };
+      try {
+        recognition.start();
+      } catch {
+        dictationRecognition.current = null;
+        setDictating(false);
+        setDictationError('Dictation could not start. Check microphone access and try again.');
+      }
+    };
+    startRecognition();
   };
   const registerVoiceStart = useCallback((start: (() => void) | null) => {
     voiceStart.current = start ? () => {
@@ -904,6 +923,12 @@ export function ConversationHistory({
     label: 'Attach file or photo',
     icon: <ConversationIcon name="attach" />,
     onSelect: () => fileInput.current?.click(),
+    fileInput: <input ref={fileInput} className="more-menu-file-input" type="file" disabled={attachments.full} multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
+      aria-label="Attach files" data-testid="attachment-input"
+      onChange={(event) => {
+        addFiles(Array.from(event.target.files ?? []));
+        event.target.value = '';
+      }} />,
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
   }, {
@@ -1224,12 +1249,6 @@ export function ConversationHistory({
             <ConversationIcon name="send" />
           </span>
         </button>
-        <input ref={fileInput} className="visually-hidden" type="file" multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
-          aria-label="Attach files" data-testid="attachment-input"
-          onChange={(event) => {
-            addFiles(Array.from(event.target.files ?? []));
-            event.target.value = '';
-          }} />
         {fileDrag && <p className="composer-drop-hint" aria-hidden="true">Drop files to attach them</p>}
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.

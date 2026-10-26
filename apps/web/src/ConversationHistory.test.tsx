@@ -63,6 +63,7 @@ const steeringMessage = { ...userMessage, id: '53', text: 'Continue in English.'
 
 class MockDictationRecognition {
   static instance: MockDictationRecognition;
+  static failStart = false;
   lang = '';
   interimResults = false;
   continuous = false;
@@ -70,7 +71,7 @@ class MockDictationRecognition {
   onresult: ((event: Event & { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0?: { transcript?: string } }> }) => void) | null = null;
   onerror: ((event: Event & { error: string }) => void) | null = null;
   onend: (() => void) | null = null;
-  start = vi.fn();
+  start = vi.fn(() => { if (MockDictationRecognition.failStart) throw new Error("Unavailable"); });
   stop = vi.fn(() => this.onend?.());
   abort = vi.fn();
 
@@ -78,9 +79,13 @@ class MockDictationRecognition {
     MockDictationRecognition.instance = this;
   }
 
-  emitTranscript(transcript: string) {
-    const result = Object.assign([{ transcript }], { isFinal: true });
-    this.onresult?.({ resultIndex: 0, results: [result] } as unknown as Event & {
+  results: { isFinal: boolean; 0: { transcript: string } }[] = [];
+
+  emitTranscript(transcript: string, isFinal = true) {
+    const last = this.results.at(-1);
+    const index = last && !last.isFinal ? this.results.length - 1 : this.results.length;
+    this.results[index] = { isFinal, 0: { transcript } };
+    this.onresult?.({ resultIndex: index, results: this.results } as unknown as Event & {
       resultIndex: number;
       results: ArrayLike<{ isFinal: boolean; 0?: { transcript?: string } }>;
     });
@@ -152,6 +157,7 @@ function FactoryConversationActions() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  MockDictationRecognition.failStart = false;
   loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -182,6 +188,140 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
     expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
+  });
+
+  it('streams revised interim snapshots once and keeps listening across silence and repeated toggles', async () => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.type(textbox, 'Remember');
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const first = MockDictationRecognition.instance;
+    expect(first.continuous).toBe(true);
+    expect(first.interimResults).toBe(true);
+    act(() => first.emitTranscript('the lunch', false));
+    expect(textbox).toHaveProperty('value', 'Remember the lunch');
+    act(() => first.emitTranscript('the launch', false));
+    expect(textbox).toHaveProperty('value', 'Remember the launch');
+    act(() => first.emitTranscript('the launch'));
+    act(() => first.onresult?.({ resultIndex: 0, results: first.results } as never));
+    expect(textbox).toHaveProperty('value', 'Remember the launch');
+    act(() => first.emitTranscript('tomorrow', false));
+    act(() => first.onend?.());
+    const second = MockDictationRecognition.instance;
+    expect(second).not.toBe(first);
+    expect(second.start).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Stop dictation' })).not.toBeNull();
+    act(() => {
+      first.emitTranscript('stale');
+      first.onend?.();
+      second.onerror?.({ error: 'no-speech' } as never);
+      second.onend?.();
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    const third = MockDictationRecognition.instance;
+    act(() => third.emitTranscript('at noon'));
+    expect(textbox).toHaveProperty('value', 'Remember the launch tomorrow at noon');
+    await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    expect(MockDictationRecognition.instance).toBe(third);
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await user.click(screen.getByRole('button', { name: 'Dictate' }));
+      act(() => MockDictationRecognition.instance.emitTranscript('again'));
+      await user.click(screen.getByRole('button', { name: 'Stop dictation' }));
+    }
+    expect(textbox).toHaveProperty('value', 'Remember the launch tomorrow at noon again again again');
+    expect(sessionStorage.getItem('jarvis.chat.draft')).toContain('Remember the launch');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    expect(voiceSessions).toHaveLength(0);
+  });
+
+  it('preserves typed edits while later recognition snapshots stream', async () => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const recognition = MockDictationRecognition.instance;
+    act(() => recognition.emitTranscript('old words', false));
+    fireEvent.change(textbox, { target: { value: 'My correction' } });
+    act(() => recognition.emitTranscript('old words'));
+    expect(textbox).toHaveProperty('value', 'My correction');
+    act(() => recognition.emitTranscript('new words', false));
+    expect(textbox).toHaveProperty('value', 'My correction new words');
+    act(() => recognition.emitTranscript('new wording'));
+    expect(textbox).toHaveProperty('value', 'My correction new wording');
+  });
+
+  it.each([false, true])('keeps new speech after edited interim results disappear (prior snapshot: %s)', async (priorSnapshot) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const recognition = MockDictationRecognition.instance;
+    act(() => {
+      recognition.emitTranscript('hello');
+      recognition.emitTranscript('guess', false);
+    });
+    expect(textbox).toHaveProperty('value', 'hello guess');
+    fireEvent.change(textbox, { target: { value: 'My correction' } });
+    if (priorSnapshot) act(() => recognition.onresult?.({ resultIndex: 1, results: recognition.results } as never));
+    act(() => {
+      recognition.results.pop();
+      recognition.onresult?.({ resultIndex: 1, results: recognition.results } as never);
+    });
+    expect(textbox).toHaveProperty('value', 'My correction');
+    act(() => recognition.emitTranscript('new words', false));
+    expect(textbox).toHaveProperty('value', 'My correction new words');
+    act(() => recognition.emitTranscript('new wording'));
+    act(() => recognition.onresult?.({ resultIndex: 0, results: recognition.results } as never));
+    expect(textbox).toHaveProperty('value', 'My correction new wording');
+    expect(sessionStorage.getItem('jarvis.chat.draft')).toBe('My correction new wording');
+  });
+
+  it.each(['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'aborted'])('stops on active %s failures without restarting', async (error) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const recognition = MockDictationRecognition.instance;
+    act(() => recognition.emitTranscript('Keep this', false));
+    act(() => {
+      recognition.onerror?.({ error } as never);
+      recognition.onend?.();
+    });
+    expect(screen.getByRole('alert')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Dictate' })).not.toBeNull();
+    expect(MockDictationRecognition.instance).toBe(recognition);
+    expect(recognition.abort).toHaveBeenCalledOnce();
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', 'Keep this');
+  });
+
+  it.each([false, true])('reports a start exception (restart: %s)', async (restart) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    renderConversation();
+    if (!restart) MockDictationRecognition.failStart = true;
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    if (restart) {
+      MockDictationRecognition.failStart = true;
+      act(() => MockDictationRecognition.instance.onend?.());
+    }
+    expect(screen.getByRole('alert').textContent).toContain('Dictation could not start');
+    expect(screen.getByRole('button', { name: 'Dictate' })).not.toBeNull();
+  });
+
+  it('ignores callbacks after unmount', async () => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    const user = userEvent.setup();
+    const view = renderConversation();
+    await user.click(screen.getByRole('button', { name: 'Dictate' }));
+    const first = MockDictationRecognition.instance;
+    view.unmount();
+    act(() => first.onend?.());
+    expect(first.abort).toHaveBeenCalledOnce();
+    expect(MockDictationRecognition.instance).toBe(first);
   });
 
   it.each(['aborted', 'no-speech'])('retains final text after requested stop and %s before end', async (error) => {

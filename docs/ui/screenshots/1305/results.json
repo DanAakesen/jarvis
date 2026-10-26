@@ -1,0 +1,22 @@
+[
+  {
+    "width": 390,
+    "touch": true,
+    "theme": "dark",
+    "motion": "no-preference",
+    "result": "passed",
+    "pageErrors": []
+  },
+  {
+    "width": 320,
+    "touch": true,
+    "theme": "light",
+    "motion": "reduce",
+    "result": "passed",
+    "pageErrors": []
+  },
+  {
+    "width": 1440,
+    "result": "unchanged desktop composer inspected; Dictate is phone-only"
+  }
+]
