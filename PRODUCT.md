@@ -4,6 +4,12 @@
 
 Show only the unframed video and overlaid switch/close controls, using the existing app glass material. Remove visible Live and camera-direction badges. Preserve movement, camera switching and closing; retain fitted geometry through stream replacement and refresh it on playback resume.
 
+## Native attachment chooser continuity (#1306; 26 October 2026)
+
+Opening Attach file or photo retains the underlying plus menu while the native
+chooser is open. Cancellation leaves the menu available; selecting files closes
+it and continues the existing upload flow. Preserve plus toggling and ordinary
+menu-action dismissal. No custom photo chooser is introduced.
 
 ## Unified translucent chrome (#1301; 26 October 2026)
 
