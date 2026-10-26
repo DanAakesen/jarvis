@@ -1441,6 +1441,46 @@ describe('ConversationHistory', () => {
     expect(camera.inspect).not.toHaveBeenCalled();
   });
 
+  it('shows repeated persisted camera observations during silence without disturbing the draft', async () => {
+    const accepts: ((response: Response) => void)[] = [];
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => init.method === 'DELETE'
+      ? Promise.resolve(new Response(null, { status: 204 }))
+      : new Promise<Response>(resolve => { accepts.push(resolve); })));
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      captureFrame: vi.fn(async () => 'AAAA'),
+    };
+    renderConversation(0, camera);
+    await waitFor(() => expect(accepts).toHaveLength(1));
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Unsent draft' } });
+    input.focus();
+    const observation = { ...message, id: '99', text: 'The blue cup is now on the table.' };
+    loadConversationHistory.mockResolvedValue({ messages: [message, observation], nextCursor: null });
+    await act(async () => { accepts[0]!(new Response(JSON.stringify({
+      summary: 'A cup', speak: observation.text, budget: { usedUsd: 0.01, limitUsd: 1 },
+    }))); });
+    expect(await screen.findByText(observation.text)).not.toBeNull();
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    await waitFor(() => expect(accepts).toHaveLength(2), { timeout: 4_000 });
+    const next = { ...observation, id: '100', text: 'A hand moves the cup to the left.' };
+    loadConversationHistory.mockResolvedValue({ messages: [message, observation, next], nextCursor: null });
+    await act(async () => { accepts[1]!(new Response(JSON.stringify({
+      summary: 'Moved cup', speak: next.text, budget: { usedUsd: 0.02, limitUsd: 1 },
+    }))); });
+    expect(await screen.findByText(next.text)).not.toBeNull();
+    expect(screen.getAllByText(observation.text)).toHaveLength(1);
+    expect(transcript.scrollTop).toBe(100);
+    expect((input as HTMLTextAreaElement).value).toBe('Unsent draft');
+    expect(document.activeElement).toBe(input);
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
   it('shares pending camera session startup with a typed turn instead of creating two sessions', async () => {
     let finish!: (value: typeof session) => void;
     createChatSession.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));

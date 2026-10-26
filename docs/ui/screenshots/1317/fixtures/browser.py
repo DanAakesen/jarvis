@@ -10,13 +10,14 @@ with sync_playwright() as p:
   errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
   page.route('**/src/useSignIn.ts',lambda r:r.fulfill(content_type='application/javascript',body="const token=async()=> 'synthetic'; const session={state:'signed-in',profile:{name:'Synthetic QA'},message:'',getAccessToken:token,getEntraAccessToken:token,hasOwnerSession:true,client:{getActiveAccount:()=>({homeAccountId:'synthetic'}),getAllAccounts:()=>[]},signIn:async()=>{},switchAccount:async()=>{},signOut:async()=>{},signOutAllDevices:async()=>{}}; export function useSignIn(){return session;}"))
   frames=[]
+  observations=[]
   exhausted=False
   stall=False
   held=[]
   def respond(r):
    u=r.request.url
    msg={'id':'42','sessionId':'41','channel':'voice','language':'en','role':'jarvis','text':'Synthetic conversation for camera and menu verification. Move the preview while keeping the conversation visible.','model':None,'voiceMinutes':None,'at':'2026-10-26T06:00:00.000Z','toolCalls':[]}
-   data={'messages':[msg],'nextCursor':None} if '/conversation/history' in u else {}
+   data={'messages':[msg]+observations,'nextCursor':None} if '/conversation/history' in u else {}
    if '/workspaces' in u:data={'items':[]}
    if '/workspace/pins' in u:data={'pins':[]}
    if '/jobs' in u:data={'jobs':[]}
@@ -27,7 +28,11 @@ with sync_playwright() as p:
    if '/vision/watch' in u:
     if r.request.method=='POST' and stall:held.append(r);return
     if r.request.method=='POST' and exhausted:r.fulfill(status=429,json={'error':'The daily vision budget is exhausted.'});return
-    if r.request.method=='POST':frames.append(r.request.post_data_json);data={'summary':'Synthetic scene','speak':None,'budget':{'usedUsd':0.01,'limitUsd':1}}
+    if r.request.method=='POST':
+     frames.append(r.request.post_data_json)
+     observation={**msg,'id':str(100+len(frames)),'text':f'Synthetic ongoing observation {len(frames)}.'}
+     observations.append(observation)
+     data={'summary':'Synthetic scene','speak':observation['text'],'budget':{'usedUsd':0.01,'limitUsd':1}}
     else:r.fulfill(status=204);return
    r.fulfill(json=data)
   page.route('http://fixture.invalid/**',respond)
@@ -70,6 +75,9 @@ with sync_playwright() as p:
   picture=page.locator('.camera-preview-picture');picture.wait_for();page.wait_for_timeout(600)
   page.wait_for_timeout(5800)
   assert len(frames)>=3, len(frames)
+  for observation in observations[:3]:
+   page.get_by_text(observation['text'],exact=True).wait_for()
+   assert page.get_by_text(observation['text'],exact=True).count()==1
   stall=True
   page.locator('.composer-feedback').get_by_text('Camera updates delayed; retrying…',exact=True).wait_for(timeout=25000)
   assert len(held)==1
@@ -112,7 +120,7 @@ with sync_playwright() as p:
   assert page.locator('.camera-preview video').evaluate('v=>v.srcObject===null')
   assert len(frames)==count
   assert not errors, errors
-  results.append({'width':width,'height':height,'touch':touch,'framesDuringSilence':count,'framesAfterStop':len(frames)-count,'errors':errors})
+  results.append({'width':width,'height':height,'touch':touch,'framesDuringSilence':count,'visibleObservationsDuringSilence':len(observations[:3]),'framesAfterStop':len(frames)-count,'errors':errors})
   page.close()
  b.close()
 (out/'measurements.json').write_text(json.dumps(results,indent=2))

@@ -4,6 +4,7 @@
     "height": 844,
     "touch": true,
     "framesDuringSilence": 5,
+    "visibleObservationsDuringSilence": 3,
     "framesAfterStop": 0,
     "errors": []
   },
@@ -12,6 +13,7 @@
     "height": 700,
     "touch": true,
     "framesDuringSilence": 5,
+    "visibleObservationsDuringSilence": 3,
     "framesAfterStop": 0,
     "errors": []
   },
@@ -20,6 +22,7 @@
     "height": 1000,
     "touch": false,
     "framesDuringSilence": 5,
+    "visibleObservationsDuringSilence": 3,
     "framesAfterStop": 0,
     "errors": []
   }

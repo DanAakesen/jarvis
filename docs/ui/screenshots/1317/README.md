@@ -123,3 +123,15 @@ tests. All-workspace lint/build and Python Ruff/929 tests/byte compilation passe
 The aggregate exited successfully at 15:06 UTC. No local check failed on the
 combined production tree. Hosted exact-head qualification follows readiness;
 reviewed integration authorization does not bypass required checks or policies.
+
+## Review correction: visible typing narration
+
+Automated review found that persisted watch descriptions were not surfaced during
+silence. A successful response with delivered speech now triggers typing history
+refresh, using the existing ID-based merge and reader scroll-follow behavior.
+Quiet responses do not reload history; aborted/stopped responses do not notify.
+Regression coverage includes two visible descriptions without another user turn,
+no duplicates, unchanged unsent draft/focus and preserved older-history position.
+The browser fixture now checks multiple visible synthetic ongoing descriptions,
+rather than inferring visible narration from frame POST counts. Live model
+natural-language intent selection remains unverified.

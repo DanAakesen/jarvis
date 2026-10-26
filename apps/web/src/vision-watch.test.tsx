@@ -5,14 +5,15 @@ import { useVisionWatch, WATCH_INTERVAL_MS, WATCH_FRESHNESS_MS } from './vision-
 const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com/' };
 const getToken = async () => 'fixture-token';
 
-function Harness({ sharing, sessionId, captureFrame, onStopped, source = 'screen' }: {
+function Harness({ sharing, sessionId, captureFrame, onStopped, onObservationDelivered, source = 'screen' }: {
   source?: 'screen' | 'camera';
   sharing: boolean;
   sessionId: string | null;
   captureFrame: () => Promise<string>;
   onStopped?: (message: string) => void;
+  onObservationDelivered?: () => void;
 }) {
-  const watch = useVisionWatch(config, getToken, { sharing, captureFrame }, source, sessionId, onStopped);
+  const watch = useVisionWatch(config, getToken, { sharing, captureFrame }, source, sessionId, onStopped, onObservationDelivered);
   return (
     <section>
       <button type="button" onClick={watch.start}>Start</button>
@@ -41,6 +42,30 @@ afterEach(() => {
 });
 
 describe('useVisionWatch', () => {
+  it('notifies for each delivered observation, but not quiet frames or late stopped responses', async () => {
+    vi.useFakeTimers();
+    const onObservationDelivered = vi.fn();
+    let accept!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => init.method === 'DELETE'
+      ? Promise.resolve(new Response(null, { status: 204 }))
+      : new Promise<Response>(resolve => { accept = resolve; })));
+    render(<Harness source="camera" sharing sessionId="42" captureFrame={async () => 'AAAA'}
+      onObservationDelivered={onObservationDelivered} />);
+    await tick(0);
+    await act(async () => { accept(ok(0.01)); });
+    expect(onObservationDelivered).not.toHaveBeenCalled();
+    const observation = () => new Response(JSON.stringify({ speak: 'The same cup.', budget: { usedUsd: 0.02, limitUsd: 1 } }));
+    for (let i = 0; i < 2; i++) {
+      await tick();
+      await act(async () => { accept(observation()); });
+    }
+    expect(onObservationDelivered).toHaveBeenCalledTimes(2);
+    await tick();
+    await click('Stop');
+    await act(async () => { accept(observation()); });
+    expect(onObservationDelivered).toHaveBeenCalledTimes(2);
+  });
+
   it('automatically delivers repeated camera frames after silence, confirms acceptance, and aborts on session change', async () => {
     vi.useFakeTimers();
     let accept: ((response: Response) => void) | undefined;

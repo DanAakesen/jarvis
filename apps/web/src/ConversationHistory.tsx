@@ -282,7 +282,8 @@ export function ConversationHistory({
   const [voiceActive, setVoiceActive] = useState(false);
   const stopCamera = camera?.stop;
   const cameraStopped = useCallback((message: string) => { stopCamera?.(); setTurnError(message); }, [stopCamera]);
-  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', voiceActive ? null : session?.id ?? null, cameraStopped);
+  const refreshCameraObservations = useCallback(() => setReload(value => value + 1), []);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', voiceActive ? null : session?.id ?? null, cameraStopped, refreshCameraObservations);
   useEffect(() => {
     if (!camera?.sharing || voiceActive || session) return;
     let cancelled = false;

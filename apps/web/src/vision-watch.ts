@@ -33,13 +33,16 @@ export function formatWatchBudget(budget: WatchBudget | null): string {
   return `${usd(budget.usedUsd)} of ${usd(budget.limitUsd)} used today`;
 }
 
-function parseResult(value: unknown): WatchBudget {
+interface WatchResult { budget: WatchBudget; observationDelivered: boolean }
+
+function parseResult(value: unknown): WatchResult {
   if (typeof value === 'object' && value !== null && 'budget' in value) {
     const { budget } = value;
     if (typeof budget === 'object' && budget !== null && 'usedUsd' in budget && 'limitUsd' in budget &&
         typeof budget.usedUsd === 'number' && typeof budget.limitUsd === 'number' &&
         Number.isFinite(budget.usedUsd) && Number.isFinite(budget.limitUsd)) {
-      return { usedUsd: budget.usedUsd, limitUsd: budget.limitUsd };
+      return { budget: { usedUsd: budget.usedUsd, limitUsd: budget.limitUsd },
+        observationDelivered: 'speak' in value && typeof value.speak === 'string' && Boolean(value.speak.trim()) };
     }
   }
   throw new WatchRequestError('Jarvis returned an invalid watch response.', 502);
@@ -47,7 +50,7 @@ function parseResult(value: unknown): WatchBudget {
 
 async function postFrame(
   backendUrl: string, token: string, sessionId: string, source: 'screen' | 'camera', frame: string, feedId: string, signal: AbortSignal,
-): Promise<WatchBudget> {
+): Promise<WatchResult> {
   const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/vision/watch`, {
     method: 'POST',
     headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, 'Content-Type': 'application/json' },
@@ -86,6 +89,7 @@ export function useVisionWatch(
   source: 'screen' | 'camera',
   sessionId: string | null,
   onStopped?: (message: string) => void,
+  onObservationDelivered?: () => void,
 ): VisionWatchController {
   const [requested, setRequested] = useState(false);
   const [delivered, setDelivered] = useState(false);
@@ -97,7 +101,9 @@ export function useVisionWatch(
   const backendUrl = config.backendUrl;
   const tokenRef = useRef(getAccessToken);
   const stoppedRef = useRef(onStopped);
-  useEffect(() => { tokenRef.current = getAccessToken; stoppedRef.current = onStopped; }, [getAccessToken, onStopped]);
+  const observationRef = useRef(onObservationDelivered);
+  useEffect(() => { tokenRef.current = getAccessToken; stoppedRef.current = onStopped;
+    observationRef.current = onObservationDelivered; }, [getAccessToken, onStopped, onObservationDelivered]);
   const ready = sharing && Boolean(sessionId) && Boolean(captureFrame) && Boolean(config.backendUrl);
   const running = (source === 'camera' ? !ended : requested) && ready;
   const watching = running && (source === 'screen' || delivered);
@@ -135,9 +141,10 @@ export function useVisionWatch(
             const next = await postFrame(backendUrl, token, activeSession, source, frame, feedId, signal);
             if (signal.aborted) return;
             previous = frame;
-            setBudget(next);
-            if (next.usedUsd >= next.limitUsd) throw new WatchRequestError(
+            setBudget(next.budget);
+            if (next.budget.usedUsd >= next.budget.limitUsd) throw new WatchRequestError(
               'Video stopped: the daily vision budget is exhausted. Enable video after the next UTC day begins.', 429);
+            if (next.observationDelivered) observationRef.current?.();
             setDelivered(true);
             clearTimeout(freshnessTimer);
             freshnessTimer = setTimeout(() => setDelivered(false), WATCH_FRESHNESS_MS);
