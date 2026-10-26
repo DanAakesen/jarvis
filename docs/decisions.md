@@ -8,6 +8,9 @@ scroll or cancellation. Do not prevent native scrolling or button/link actions.
 The local Chromium comparison and limits are recorded in
 `ui/screenshots/mobile-chat-scroll/README.md`. No release authorization is implied.
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+Follow the clarified bottom-up order: Attach nearest Plus, Voice above it, remaining actions, Language at the top. Keep DOM and visual ordering aligned rather than reversing CSS flow. Reuse the app waveform icon for Voice, with the microphone reserved for Dictate. Strengthen only composer menu blur, retaining the existing translucent fill. Manual native popovers let that blur sample the underlying chat instead of stopping at the composer backdrop root; preserve DOM ancestry, picker anchoring and shared menu behavior.
 
 ## 26 October 2026 — Preserve phone composer focus on Send (#1315)
 

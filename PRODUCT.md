@@ -6,6 +6,9 @@ Scrolling the phone transcript while composing retains textarea focus and the
 unsent draft, allowing continued typing and one-tap Send. An intentional outside
 tap can still dismiss the keyboard. Physical iPhone acceptance remains unverified.
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+The chat composer Plus menu must stay readable over chat text. From the trigger upward, place Attach file or photo, Voice, the other available actions, then Language. Voice uses a waveform distinct from the Dictate microphone. Preserve the native attachment chooser anchor and desktop parity.
 
 ## Mobile Send focus (#1315; 26 October 2026)
 

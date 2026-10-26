@@ -6,6 +6,9 @@ Outside touch dismissal waits for a completed tap. Movement, native scrolling
 or pointer cancellation abandons dismissal without preventing browser defaults.
 Keep composer/menu exemptions and the mobile Send focus guard unchanged.
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+Scope the stronger 24px blur to `.composer-more` popups, including its Language flyout, and retain the existing translucent chrome fill. Use manual native popovers to render these sheets in the top layer, outside the composer backdrop root, while keeping their DOM ancestry and picker input intact. Other glass surfaces retain their tokens. Render Language first in DOM order, then capture actions, Voice and Attach last nearest Plus; keyboard traversal follows the visible order. Reuse the existing ShellIcon waveform for Voice and retain the Dictate microphone. This locally supersedes the shared popup material from #1301.
 
 ## Mobile Send focus (#1315; 26 October 2026)
 

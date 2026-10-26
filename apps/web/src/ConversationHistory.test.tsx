@@ -500,6 +500,27 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])('keeps Plus visual and keyboard order with Attach nearest the trigger (phone=%s)', async (phone) => {
+    const user = userEvent.setup();
+    renderConversation(0, undefined, vi.fn(), undefined, phone);
+    const plus = screen.getByRole('button', { name: 'More options' });
+    await user.click(plus);
+    const items = screen.getAllByRole('menuitem');
+    expect(items.map(item => item.textContent)).toEqual(['Language', 'Voice', 'Attach file or photo']);
+    expect(document.activeElement).toBe(items[0]);
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(items[2]);
+    await user.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(items[1]);
+    expect(items[1]?.querySelector('svg rect')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Dictate' }).querySelector('svg rect')).not.toBeNull();
+    await user.keyboard('{Home}{ArrowRight}');
+    expect(screen.getByRole('menu', { name: 'Language' })).not.toBeNull();
+    await user.keyboard('{Escape}{Escape}');
+    expect(document.activeElement).toBe(plus);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('starts the existing realtime Voice session from the plus menu on phones', async () => {
     const user = userEvent.setup();
     renderConversation(0, undefined, vi.fn(), undefined, true);
@@ -1891,10 +1912,6 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('group', { name: 'Reply language' })).toBeNull();
     const more = screen.getByRole('button', { name: 'More options' });
     more.focus();
-    await user.keyboard('{ArrowDown}');
-    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Attach file or photo' }));
-    await user.keyboard('{ArrowDown}');
-    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Voice' }));
     await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
     await user.keyboard('{ArrowRight}');
