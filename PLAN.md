@@ -1,5 +1,13 @@
 # Project plan
 
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Implemented on a separate branch from main `d7667964`: interim transcript
+replacement, automatic restart through pauses, repeatable explicit Stop, and
+visible fatal failures. Evidence and verification are in
+`docs/ui/screenshots/1305/README.md`. Parent owns independent review, hosted
+exact-head checks and merge. Physical iPhone acceptance remains pending.
+
 ## Settled glass and dock selection (#1301; 26 October 2026)
 
 Draft PR #1302 corrects the measured double menu fade, inconsistent phone blur,

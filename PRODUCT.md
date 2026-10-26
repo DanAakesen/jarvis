@@ -117,7 +117,9 @@ Native-phone acceptance remains separate from controlled browser evidence.
 On phones, keep message times below the chat bubbles. Use the compact composer
 with a plus menu for existing attachments, video, screen sharing and realtime
 Voice. Dictate is a separate action that adds recognized speech to the unsent
-draft; it never starts a Jarvis voice turn or sends the draft. Make unavailable
+draft; it never starts a Jarvis voice turn or sends the draft. Dictate stays
+active through pauses until Stop, displays interim speech as it arrives, and
+can be toggled repeatedly. Genuine recognition failures stop it visibly. Make unavailable
 browser dictation and microphone failures clear. On phones, give the draft a
 full-width row and place borderless icon actions below it, preserving accessible
 names. Show errors above the composer surface. Keyboard-covered navigation must

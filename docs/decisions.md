@@ -1,5 +1,16 @@
 # Decisions
 
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Keep browser dictation toggled on across natural recognition endings and silence,
+streaming interim hypotheses into the draft without duplicating finalized text.
+Use a fresh recognizer per automatic restart to isolate result indexes and stale
+callbacks. Explicit Stop allows trailing results but prevents restart. Permission,
+audio/service and unexpected abort errors remain visible and terminal; no-speech
+alone is a normal pause. Preserve typed draft edits and keep realtime voice,
+composer geometry and colors unchanged. Synthetic verification is separate from
+physical iPhone speech-service acceptance.
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

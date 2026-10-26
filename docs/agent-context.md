@@ -1,5 +1,14 @@
 # Agent context
 
+## Continuous dictation checks (#1305; 26 October 2026)
+
+Run `npm test --workspace @jarvis/web`, web lint and web build. Focused regression
+coverage is in `ConversationHistory.test.tsx`; the actual-App simulated speech
+browser check and reproduction steps are in `docs/ui/screenshots/1305/README.md`.
+Check interim replacements, final replay, pause/end and no-speech restart,
+explicit stop, repeated toggles, draft editing, stale callbacks and fatal errors.
+These checks do not establish physical iPhone or real speech-provider acceptance.
+
 ## Settled shell glass checks (#1301; 26 October 2026)
 
 Use `npm test --workspace @jarvis/web`, web lint and web build, plus the actual-App
