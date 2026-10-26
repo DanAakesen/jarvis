@@ -1,5 +1,15 @@
 # Design
 
+## Chat bubble frost (#1324; 26 October 2026)
+
+Bubbles share the Plus menu's 24px backdrop blur and translucent chrome fill.
+Preserve bubble geometry, rims, tints, text and the desktop transcript's 64px
+fade. Apply that fade directly to painted transcript items with scrollport-aligned
+offsets, rather than masking their ancestor. Extend item masks to retain timestamp
+and focus overflow. Keep the window blur on a background pseudo-element so it
+does not intercept bubble backdrop sampling. Phone typing mode retains no fade.
+
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 Scope the stronger 24px blur to `.composer-more` popups, including its Language flyout, and retain the existing translucent chrome fill. Use manual native popovers to render these sheets in the top layer, outside the composer backdrop root, while keeping their DOM ancestry and picker input intact. Other glass surfaces retain their tokens. Render Language first in DOM order, then capture actions, Voice and Attach last nearest Plus; keyboard traversal follows the visible order. Reuse the existing ShellIcon waveform for Voice and retain the Dictate microphone. This locally supersedes the shared popup material from #1301.

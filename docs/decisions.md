@@ -1,5 +1,15 @@
 # Decisions
 
+## 2026-10-26 — Preserve transcript fade with bubble frost (#1324)
+
+A masked transcript and a backdrop-filtered window each block child backdrop
+sampling. Bubbles remain in scroll flow; move the window blur to its content's
+background pseudo-element and move the existing 64px fade to individual painted
+items. Track viewport-relative mask offsets on scroll, resize and content change.
+No popovers or list markup changes. Synthetic fade comparison and pixel evidence
+are in `docs/ui/screenshots/chat-bubble-frost/`. Physical Safari remains unverified.
+
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 Follow the clarified bottom-up order: Attach nearest Plus, Voice above it, remaining actions, Language at the top. Keep DOM and visual ordering aligned rather than reversing CSS flow. Reuse the app waveform icon for Voice, with the microphone reserved for Dictate. Strengthen only composer menu blur, retaining the existing translucent fill. Manual native popovers let that blur sample the underlying chat instead of stopping at the composer backdrop root; preserve DOM ancestry, picker anchoring and shared menu behavior.

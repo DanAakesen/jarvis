@@ -1,5 +1,15 @@
 # Agent context
 
+## Bubble frost checks (#1324; 26 October 2026)
+
+Run web tests, lint/build and aggregate repository checks. Actual-App synthetic
+browser reproduction and limitations are in `docs/ui/screenshots/chat-bubble-frost/`.
+Check actual scene blur, translucency, item-mask fade versus baseline, lists,
+scrolling, composer and Plus menu across desktop/mobile and both themes.
+Keep backdrop-filter and masks off bubble ancestors; preserve the visible fade
+through the item masks. No real data or private screenshots belong in fixtures.
+
+
 ## Composer Plus checks (#1319; 26 October 2026)
 
 Run contracts/web lint, tests and build plus the selected shared Python checks.

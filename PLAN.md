@@ -1,5 +1,13 @@
 # Project plan
 
+## Chat bubble frost (#1324; local qualification, 26 October 2026)
+
+Implemented bubble frost with the existing desktop fade preserved through
+item-level masks. Local evidence and check outcomes are recorded in
+`docs/ui/screenshots/chat-bubble-frost/`. Parent coordinates integration after
+camera, Health and keyboard-scroll work, then checked merge/deployment.
+
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 Implemented the scoped composer Plus readability, bottom-up action order and Voice waveform correction. Local verification is recorded in `docs/ui/screenshots/1319/README.md`. The first candidate passed 2,394 web tests. The transparency-preserving review correction passed 196 focused checks, contracts/web lint/build and synthetic Chromium visual QA; exact-head aggregate hosted qualification remains pending. Draft PR #1320 is open; a review correction preserves translucency using native top-layer popup blur. Final integration remains pending; integrated main 496182bc (meal recovery #1314 and Send #1316). The revised queue places this fix before camera #1318; no unmerged camera work is imported.

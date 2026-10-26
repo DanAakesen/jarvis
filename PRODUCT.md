@@ -1,5 +1,11 @@
 # Product
 
+## Chat bubble readability (#1324; 26 October 2026)
+
+Frost the background behind both speakers' chat bubbles like the Plus menu,
+retaining sharp text, translucency, existing layout and the desktop top-edge fade.
+
+
 ## Composer Plus readability (#1319; 26 October 2026)
 
 The chat composer Plus menu must stay readable over chat text. From the trigger upward, place Attach file or photo, Voice, the other available actions, then Language. Voice uses a waveform distinct from the Dictate microphone. Preserve the native attachment chooser anchor and desktop parity.

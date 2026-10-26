@@ -458,6 +458,57 @@ export function ConversationHistory({
   }, []);
 
   useLayoutEffect(() => {
+    const element = transcript.current;
+    if (!element || !hosted) return;
+    // A mask on the scrollport prevents bubble backdrops from sampling the room.
+    // Apply the same viewport-aligned fade to painted items instead.
+    const update = () => {
+      const top = element.getBoundingClientRect().top;
+      const items = Array.from(element.querySelectorAll<HTMLElement>('.conversation-message, :scope > :not(.conversation-messages):not(:has(.conversation-message))'));
+      const offsets = items.map(item => top - item.getBoundingClientRect().top + 16);
+      items.forEach((item, index) => {
+        item.style.setProperty('--transcript-fade-start', `${offsets[index]}px`);
+        item.dataset.transcriptFade = '';
+      });
+    };
+    let frame = 0;
+    const trackEntrance = () => {
+      update();
+      const entering = element.getAnimations?.({ subtree: true }).some(animation =>
+        'animationName' in animation && animation.animationName === 'conversation-enter' && animation.playState === 'running');
+      frame = entering ? requestAnimationFrame(trackEntrance) : 0;
+    };
+    const animationChanged = () => {
+      if (!frame) frame = requestAnimationFrame(trackEntrance);
+    };
+    update();
+    element.addEventListener('animationstart', animationChanged);
+    element.addEventListener('animationend', animationChanged);
+    element.addEventListener('animationcancel', animationChanged);
+    element.addEventListener('scroll', update, { passive: true });
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+    resize?.observe(element);
+    const watchChildren = () => {
+      for (const child of element.children) resize?.observe(child);
+      update();
+    };
+    watchChildren();
+    const mutation = new MutationObserver(watchChildren);
+    mutation.observe(element, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', update);
+    return () => {
+      element.removeEventListener('scroll', update);
+      element.removeEventListener('animationstart', animationChanged);
+      element.removeEventListener('animationend', animationChanged);
+      element.removeEventListener('animationcancel', animationChanged);
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', update);
+      resize?.disconnect();
+      mutation.disconnect();
+    };
+  }, [hosted, conversationWindow?.element]);
+
+  useLayoutEffect(() => {
     // Follow new content only while Dan is reading the latest message; scrolling up keeps his place.
     // A newly mounted window (first history or reopened after Close) starts at the latest message.
     const element = transcript.current;

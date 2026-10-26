@@ -1,0 +1,466 @@
+[
+  {
+    "width": 390,
+    "theme": "dark",
+    "ancestors": [
+      {
+        "tag": "conversation-message",
+        "blur": "blur(24px)",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-messages",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-transcript",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-window-host",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-conversation-content",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-window luminous-glass workspace-window-conversation",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-canvas workspace-canvas-layered",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-shell-area",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "shell-main",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "app app-shell",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      }
+    ],
+    "blurPixelDelta": 52.39137345679012,
+    "unblurredVariation": 53.098533115259045,
+    "frostedVariation": 4.449063478935858,
+    "transmissionDelta": 72.02447530864198,
+    "geometryUnchanged": true,
+    "animatedFramesDiffer": true,
+    "lists": 2,
+    "scrollAndComposer": true,
+    "menuTopLayer": true,
+    "maskAlignmentAfterScrollResizeAppendReplaceReducedMotion": true,
+    "fadePixelError": null,
+    "errors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "ancestors": [
+      {
+        "tag": "conversation-message",
+        "blur": "blur(24px)",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-messages",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-transcript",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-window-host",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-conversation-content",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-window luminous-glass workspace-window-conversation",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-canvas workspace-canvas-layered",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-shell-area",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "shell-main",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "app app-shell",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      }
+    ],
+    "blurPixelDelta": 50.609027777777776,
+    "unblurredVariation": 51.32217815890431,
+    "frostedVariation": 5.057835476643612,
+    "transmissionDelta": 70.35422839506172,
+    "geometryUnchanged": true,
+    "animatedFramesDiffer": true,
+    "lists": 2,
+    "scrollAndComposer": true,
+    "menuTopLayer": true,
+    "maskAlignmentAfterScrollResizeAppendReplaceReducedMotion": true,
+    "fadePixelError": null,
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "ancestors": [
+      {
+        "tag": "conversation-message",
+        "blur": "blur(24px)",
+        "mask": "linear-gradient(rgba(0, 0, 0, 0) 182.703px, rgb(0, 0, 0) 246.703px)",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-messages",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-transcript",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-window-host",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-conversation-content",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-window luminous-glass workspace-window-conversation",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-canvas workspace-canvas-layered",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-shell-area",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "shell-main",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "app app-shell",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      }
+    ],
+    "blurPixelDelta": 2.3187106918238993,
+    "unblurredVariation": 3.224266034667602,
+    "frostedVariation": 1.5038492748566454,
+    "transmissionDelta": 10.75567784765898,
+    "geometryUnchanged": true,
+    "animatedFramesDiffer": true,
+    "lists": 2,
+    "scrollAndComposer": true,
+    "menuTopLayer": true,
+    "maskAlignmentAfterScrollResizeAppendReplaceReducedMotion": true,
+    "fadePixelError": 0.305091961852861,
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "ancestors": [
+      {
+        "tag": "conversation-message",
+        "blur": "blur(24px)",
+        "mask": "linear-gradient(rgba(0, 0, 0, 0) 182.703px, rgb(0, 0, 0) 246.703px)",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-messages",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-transcript",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "conversation-window-host",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-conversation-content",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-window luminous-glass workspace-window-conversation",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-canvas workspace-canvas-layered",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "workspace-shell-area",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "shell-main",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "app app-shell",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      },
+      {
+        "tag": "",
+        "blur": "none",
+        "mask": "none",
+        "opacity": "1",
+        "filter": "none"
+      }
+    ],
+    "blurPixelDelta": 1.5424965059399023,
+    "unblurredVariation": 2.278169195165489,
+    "frostedVariation": 1.2335288782384946,
+    "transmissionDelta": 8.038277428371769,
+    "geometryUnchanged": true,
+    "animatedFramesDiffer": true,
+    "lists": 2,
+    "scrollAndComposer": true,
+    "menuTopLayer": true,
+    "maskAlignmentAfterScrollResizeAppendReplaceReducedMotion": true,
+    "fadePixelError": 0.2285919050862852,
+    "errors": []
+  }
+]

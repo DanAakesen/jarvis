@@ -14,8 +14,7 @@
 /* Messages scroll up under the controls and fade out at the top edge of the window. */
 .conversation-window-host > .conversation-transcript {
   padding: var(--space-7) var(--space-5) var(--space-4);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
-  mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
+
 }
 .conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: var(--space-2); padding: 0 var(--space-4) 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 6%, var(--surface)); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-latest svg { width: 18px; height: 18px; flex: 0 0 auto; }
@@ -557,12 +556,12 @@
 @keyframes phrase-shine { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 @media (prefers-reduced-motion: reduce) { .live-phrase[data-typed] { animation: none; color: var(--text-muted); background: none; } }
 :root[data-motion="reduced"] .live-phrase[data-typed] { animation: none; color: var(--text-muted); background: none; }
-/* Bubbles v3 (Dan, 7 October): the conversation already sits on blurred glass, so bubbles carry no fill of their own.
-   A fine rim (warm for Dan, cool for Jarvis) and the faintest tint shape them; the text sits on the window's glass. */
+/* Match the Plus sheet frost behind sharp text; retain the existing rims/tints. */
 .conversation-message[data-speaker="dan"],
 .conversation-message[data-speaker="jarvis"] {
-  background: transparent;
-  backdrop-filter: none;
+  background: var(--chrome-glass-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   box-shadow: none;
 }
 .conversation-message[data-speaker="dan"] {
@@ -773,3 +772,17 @@
 .app-shell .conversation-history .composer:has(.attachment-chips) > :is(textarea, .composer-prompt) { grid-row: 2; }
 .app-shell .conversation-history .composer:has(.attachment-chips) > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 3; }
 .app-shell .conversation-history .composer:has(.attachment-chips) > .composer-live { grid-row: 4; }
+
+/* Align each item's fade with the scrollport without masking its ancestors.
+   Extend the mask beyond the box to preserve timestamps and focus outlines. */
+.conversation-window-host > .conversation-transcript [data-transcript-fade] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent var(--transcript-fade-start), var(--ink-solid) calc(var(--transcript-fade-start) + 64px));
+  mask-image: linear-gradient(to bottom, transparent var(--transcript-fade-start), var(--ink-solid) calc(var(--transcript-fade-start) + 64px));
+  mask-position: -16px -16px;
+  mask-size: calc(100% + 32px) calc(100% + 64px);
+  mask-repeat: no-repeat;
+  mask-clip: no-clip;
+}
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .app-shell[data-phone="true"][data-voice-active="false"] .conversation-window-host > .conversation-transcript [data-transcript-fade] { mask-image: none; -webkit-mask-image: none; }
+}
