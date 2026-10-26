@@ -35,6 +35,40 @@ function setPreviewBounds(width: number, height: number, statusHeight = 36) {
 }
 
 describe('Camera preview', () => {
+  it.each(['touch', 'mouse'])('moves via %s without consuming overlay controls and restores a cancelled drag', (pointerType) => {
+    class TestPointerEvent extends MouseEvent {
+      pointerId = 1;
+      isPrimary = true;
+      pointerType = 'touch';
+      constructor(type: string, init: PointerEventInit) { super(type, init); Object.assign(this, { pointerType: init.pointerType }); }
+    }
+    vi.stubGlobal('PointerEvent', TestPointerEvent);
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    const controller = camera({ switchCamera: vi.fn(async () => {}) });
+    const { container } = render(<CameraPreview camera={controller} />);
+    const picture = container.querySelector<HTMLElement>('.camera-preview-picture')!;
+    picture.setPointerCapture = vi.fn();
+    picture.hasPointerCapture = vi.fn(() => true);
+    picture.releasePointerCapture = vi.fn();
+    vi.spyOn(picture, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100, right: 300, bottom: 400 } as DOMRect);
+    const point = { pointerType, pointerId: 1, isPrimary: true, button: 0 };
+    fireEvent.pointerDown(picture, { ...point, clientX: 150, clientY: 180 });
+    fireEvent.pointerMove(picture, { ...point, clientX: 200, clientY: 220 });
+    fireEvent.pointerUp(picture, point);
+    expect(picture.style.translate).toBe('50px 40px');
+    const switchButton = screen.getByRole('button', { name: 'Switch to back camera' });
+    fireEvent.pointerDown(switchButton, point);
+    fireEvent.click(switchButton);
+    expect(controller.switchCamera).toHaveBeenCalledOnce();
+    expect(picture.setPointerCapture).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(picture, { ...point, clientX: 150, clientY: 180 });
+    fireEvent.pointerMove(picture, { ...point, clientX: -900, clientY: -900 });
+    expect(picture.style.translate).toBe('-50px -60px');
+    fireEvent.pointerCancel(picture, point);
+    expect(picture.style.translate).toBe('50px 40px');
+    fireEvent.click(screen.getByRole('button', { name: 'Close camera preview' }));
+    expect(controller.stop).toHaveBeenCalledOnce();
+  });
   it('shows camera limit freshness without changing the composer or pretending a cached image is live', () => {
     const { container } = render(<CameraPreview camera={camera({ conversation: true, observationNotice: 'Camera capture limit reached. Using an observation from 20 seconds ago.' })} />);
     expect(screen.getByText(/Camera capture limit reached/u).getAttribute('role')).toBe('status');

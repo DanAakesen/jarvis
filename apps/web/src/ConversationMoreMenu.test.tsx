@@ -28,6 +28,23 @@ function Harness({ onSelect = vi.fn(), disabled = false }: { onSelect?: () => vo
 }
 
 describe('ConversationMoreMenu', () => {
+  it('alternates on repeated plus taps, including while the language flyout is open', async () => {
+    const user = userEvent.setup();
+    render(<ConversationMoreMenu icon="plus" language="en" onLanguageChange={vi.fn()} />);
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    for (let i = 0; i < 3; i++) {
+      await user.pointer([{ keys: '[TouchA>]', target: trigger }, { keys: '[/TouchA]' }]);
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      await user.click(screen.getByRole('menuitem', { name: 'Language' }));
+      const down = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+      fireEvent(trigger, down);
+      expect(down.defaultPrevented).toBe(true);
+      await user.pointer([{ keys: '[TouchA>]', target: trigger }, { keys: '[/TouchA]' }]);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(screen.queryByRole('menu')).toBeNull();
+      expect(document.activeElement).toBe(trigger);
+    }
+  });
   it('returns focus after an outside press on nonfocusable content without stealing a clicked control', async () => {
     const user = userEvent.setup();
     render(<Harness />);
