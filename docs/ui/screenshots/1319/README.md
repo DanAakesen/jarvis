@@ -65,12 +65,12 @@ Local Node 24.19.0/npm 11.9.0 differs from CI Node 22/npm 10.
 - Final `npm run build --workspace @jarvis/contracts --workspace @jarvis/web`: passed, including TypeScript and production build (existing chunk-size advisory).
 - Final repeat `python3 docs/ui/screenshots/1319/fixtures/browser.py`: passed after the final array/token changes; captures regenerated.
 
-## Integration hold
+## Integration queue
 
-Based on main `6ec8af1e` (includes meal recovery #1314). Prepare a draft PR;
-do not merge/deploy. The coordinator must integrate after Send #1316 and camera
-#1318, preserving removed camera-watch controls and all unrelated documentation.
-No edits to VoiceControls or capture-action definitions belong to this change.
+Integrated main `496182bc226bd3419a8e015ad7e2955e23abb4a1` (meal recovery #1314 and
+Send #1316). The coordinator revised the queue: this PR now precedes camera #1318.
+No unmerged camera changes were imported. Normal ready-PR qualification and review
+are required; the coordinator owns merge/deployment.
 
 ## Review correction validation
 
@@ -84,3 +84,26 @@ above describe the first candidate; exact follow-up results are recorded below.
 - `npm run build --workspace @jarvis/contracts --workspace @jarvis/web`: passed, including TypeScript and production build (existing chunk-size advisory).
 - `python3 docs/ui/screenshots/1319/fixtures/browser.py`: passed all four combinations with native top-layer placement, unchanged fill and viewport anchoring assertions. The regenerated mobile and desktop captures were visually inspected; underlying text is blurred rather than merely dimmed.
 - The full web suite passed on the first candidate (2,394 tests); exact-head full aggregate qualification after this correction remains for hosted CI. Existing dependency-feed/PowerShell limits remain unchanged; no feed/lockfile workarounds were made.
+
+## Integrated main 496182bc
+
+Merged `496182bc226bd3419a8e015ad7e2955e23abb4a1` with both meal recovery and
+one-tap Send. Production files merged automatically. Four documentation
+introductions conflicted; both sets of entries were retained. The Send primary
+pointer guard matches main. No camera #1318 source is imported; that PR follows
+this one in the revised integration queue.
+
+Integrated local verification:
+
+- `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/ConversationMoreMenu.test.tsx src/ConversationAttachments.test.tsx src/stylesheets.test.tsx`: 4 files / **199 tests passed**.
+- `npm test --workspace @jarvis/web -- --run src/phone-chat-viewport.test.tsx`: **13 tests passed**.
+- `python3 docs/ui/screenshots/1319/fixtures/browser.py`: passed all four mobile/desktop and dark/light combinations; regenerated captures inspected over dense chat text.
+- `python3 docs/ui/screenshots/1319/fixtures/integration-send.py`: passed cancelled touch, repeated Send, explicit blur/reopen, interrupted-stream recovery and desktop click, with zero browser errors and intercepted synthetic requests. This copies the existing #1315 script with only the port/output location adjusted; original #1315 evidence is unchanged. Copy its `qa1315.{html,tsx}` fixtures into `apps/web/` and serve Vite on 5174 to reproduce. Results live in `integration-send/`.
+
+The first browser attempt found the old Vite process unavailable after environment
+restart; restarting the normal local server resolved it. Physical-device limits
+remain unchanged. Exact-head hosted CI and review are required before the
+coordinator merges; no local aggregate failure is waived.
+
+- Final `npm run lint --workspace @jarvis/contracts --workspace @jarvis/web`: passed.
+- Final `npm run build --workspace @jarvis/contracts --workspace @jarvis/web`: passed, including TypeScript and production bundle; only the existing chunk-size advisory remains.

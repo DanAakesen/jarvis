@@ -7,8 +7,8 @@ The actual-App dense-text browser fixture and reproduction are in
 `docs/ui/screenshots/1319/README.md`. Check dark/light mobile/desktop, popup
 readability, top-to-bottom keyboard order, repeated Plus toggle, Language,
 native attachment chooser anchoring/cancellation and the separate Dictate icon.
-Physical iPhone acceptance remains separate. Integrate after #1316 and #1318;
-never restore the separate camera-watch actions removed by #1318.
+Physical iPhone acceptance remains separate. Integrated main #1316; the revised
+queue places this fix before camera #1318. Do not import its unmerged changes.
 
 ## Mobile Send focus checks (#1315; 26 October 2026)
 
