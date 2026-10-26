@@ -174,6 +174,65 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('keeps the phone draft focused through Send and repeated pending sends without duplicating turns', async () => {
+    const user = userEvent.setup();
+    sendChatTurn.mockImplementation(() => new Promise(() => {}));
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const send = screen.getByRole('button', { name: 'Send' });
+    await user.type(textbox, 'Synthetic first message');
+    await user.pointer({ target: send, keys: '[MouseLeft>]' });
+    expect(document.activeElement).toBe(textbox);
+    expect(createChatSession).not.toHaveBeenCalled();
+    await user.pointer({ target: send, keys: '[/MouseLeft]' });
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(textbox);
+    expect(textbox).toHaveProperty('value', '');
+    expect(send).toHaveProperty('disabled', true);
+    await user.click(send);
+    expect(sendChatTurn).toHaveBeenCalledTimes(1);
+    await user.type(textbox, 'Synthetic follow-up');
+    await user.click(send);
+    await waitFor(() => expect(steerChatTurn).toHaveBeenCalledTimes(1));
+    expect(document.activeElement).toBe(textbox);
+    expect(textbox).toHaveProperty('value', '');
+    await user.click(send);
+    expect(steerChatTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not submit a cancelled phone press and preserves recovery after a rejected send', async () => {
+    const user = userEvent.setup();
+    sendChatTurn.mockRejectedValueOnce(new Error('Synthetic offline failure'));
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    const textbox = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const send = screen.getByRole('button', { name: 'Send' });
+    await user.type(textbox, 'Synthetic retry draft');
+    fireEvent.pointerDown(send, { pointerType: 'touch', button: 0 });
+    fireEvent.pointerCancel(send, { pointerType: 'touch' });
+    expect(createChatSession).not.toHaveBeenCalled();
+    expect(textbox).toHaveProperty('value', 'Synthetic retry draft');
+    expect(document.activeElement).toBe(textbox);
+    await user.click(send);
+    await waitFor(() => expect(screen.getByText('Synthetic offline failure')).toBeTruthy());
+    expect(document.activeElement).toBe(textbox);
+    expect(textbox).toHaveProperty('value', 'Synthetic retry draft');
+    sendChatTurn.mockResolvedValueOnce(assistantMessage);
+    await user.click(send);
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(document.activeElement).toBe(textbox);
+    expect(textbox).toHaveProperty('value', '');
+  });
+
+  it('retains keyboard activation when Send is explicitly focused', async () => {
+    const user = userEvent.setup();
+    sendChatTurn.mockImplementation(() => new Promise(() => {}));
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Synthetic keyboard send');
+    screen.getByRole('button', { name: 'Send' }).focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(1));
+  });
+
   it('reattaches on mount with original identity without adding a Stop control', async () => {
     const recovered = { sessionId: '41', messageId: '51', language: 'en' };
     loadActiveChatTurns.mockResolvedValueOnce([recovered]);

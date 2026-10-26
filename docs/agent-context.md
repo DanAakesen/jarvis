@@ -1,5 +1,16 @@
 # Agent context
 
+## Mobile Send focus checks (#1315; 26 October 2026)
+
+Run the ConversationHistory and phone-chat-viewport suites for focused coverage;
+full web tests, web lint and web build also pass locally. The actual-component
+Chromium touch reproduction, event traces, screenshot and instructions are in
+`docs/ui/screenshots/1315/README.md`. It controls keyboard viewport geometry and
+intercepts every external request with synthetic responses. Physical iPhone
+keyboard behavior remains unverified; the combined baseline is 6ec8af1e and
+final hosted qualification/merge remain parent-owned.
+
+
 ## Desktop composer checks (#1309; 26 October 2026)
 
 Run contracts/web lint, tests and build. Actual-App synthetic Chromium coverage

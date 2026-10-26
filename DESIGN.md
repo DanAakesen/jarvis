@@ -1,5 +1,13 @@
 # Design
 
+## Mobile Send focus (#1315; 26 October 2026)
+
+When the phone message field is focused, prevent the Send primary pointer-down
+from transferring focus. Keep native click/form submission, keyboard activation
+and cancellation semantics; do not send on pointer-down or refocus after an
+asynchronous reply. Control geometry and desktop focus behavior stay unchanged.
+
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Reuse the phone composer's two-row layout and existing glass/control tokens on

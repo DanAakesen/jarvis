@@ -1,5 +1,13 @@
 # Product
 
+## Mobile Send focus (#1315; 26 October 2026)
+
+A phone Send tap while the message field is focused sends once without dismissing
+the keyboard, leaving the field ready for the next draft. Cancelled presses do
+not send. Existing upload, empty-draft, pending/steering and failure recovery
+semantics remain in place. Physical iPhone acceptance remains unverified.
+
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Desktop uses the approved full-width draft and second row of borderless Plus,
