@@ -44,6 +44,14 @@ with sync_playwright() as p:
    press(page.get_by_role('button',name='Stop dictation',exact=True))
   assert box.input_value()=='Remember the launch tomorrow again again again'
   press(page.get_by_role('button',name='Dictate',exact=True))
+  page.evaluate("fixtureRecognition.current.onresult({resultIndex:0,results:[{0:{transcript:'hello'},isFinal:true},{0:{transcript:'guess'},isFinal:false}]})")
+  box.fill('My correction')
+  page.evaluate("fixtureRecognition.current.onresult({resultIndex:1,results:[{0:{transcript:'hello'},isFinal:true}]})")
+  assert box.input_value()=='My correction'
+  page.evaluate("fixtureRecognition.current.onresult({resultIndex:1,results:[{0:{transcript:'hello'},isFinal:true},{0:{transcript:'new words'},isFinal:false}]})")
+  assert box.input_value()=='My correction new words'
+  page.evaluate("fixtureRecognition.current.onresult({resultIndex:1,results:[{0:{transcript:'hello'},isFinal:true},{0:{transcript:'new wording'},isFinal:true}]})")
+  assert box.input_value()=='My correction new wording'
   page.evaluate("fixtureRecognition.current.onerror({error:'not-allowed'})")
   assert 'Microphone permission was denied' in page.get_by_role('alert').inner_text()
   assert page.get_by_role('button',name='Dictate',exact=True).count()==1

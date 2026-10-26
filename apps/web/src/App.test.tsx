@@ -2209,7 +2209,8 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('button', { name: 'More options' }));
     await user.click(screen.getByRole('menuitem', { name: 'Enable video' }));
-    expect(await screen.findByText('Front camera on')).not.toBeNull();
+    expect(await screen.findByRole('button', { name: 'Close camera preview' })).not.toBeNull();
+    expect(screen.queryByText('Front camera on')).toBeNull();
     const preview = screen.getByRole('article', { name: 'Camera preview' });
     const video = within(preview).getByLabelText('Live camera preview') as HTMLVideoElement;
     expect(video.srcObject).toBe(stream);
@@ -2269,7 +2270,8 @@ describe('App shell', () => {
       expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({
         video: expect.objectContaining({ facingMode: { ideal: 'user' } }),
       }));
-      expect(screen.getByText('Camera on - direction unavailable')).not.toBeNull();
+      expect(screen.getByLabelText('Live camera preview')).not.toBeNull();
+      expect(screen.queryByText('Camera on - direction unavailable')).toBeNull();
       expect(await workspace.command('close-reopened-camera', 'close', 'camera-preview')).toMatchObject({ applied: true });
       expect(track.stop).toHaveBeenCalledOnce();
     } else {

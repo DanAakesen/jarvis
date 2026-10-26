@@ -5645,3 +5645,11 @@ Chromium capture instructions and explicit limits are in
 `docs/ui/screenshots/mobile-corrections-1293/README.md`.
 Aggregate CI skips drafts; `pipeline_evidence.py` also rejects a dispatched PR
 that remains draft. The parent owns readiness and normal exact-head qualification.
+
+## Preview follow-up validation (#1304; 26 October 2026)
+
+`docs/ui/screenshots/1304/README.md` records actual-App synthetic camera QA,
+continuous frame/aspect-change assertions and commands. Controls use existing
+chrome glass tokens. Stream replacement retains valid preview geometry and
+playback resume refreshes it. No private source image or physical iPhone
+acceptance is included. Composer visibility (#1303) remains separately owned.

@@ -1,5 +1,18 @@
 # Design
 
+## Preview controls and resumed video (#1304; 26 October 2026)
+
+Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.
+
+## Attachment chooser source (#1306; 26 October 2026)
+
+Keep the attachment row mounted when opening the system file/photo chooser.
+Its transparent native file input shares that row's bounds instead of a clipped
+1px position elsewhere in the composer. Selection closes the menu and restores
+plus focus; cancellation retains the source. Other actions keep their existing
+closure behavior. Synthetic actual-App evidence and physical-iPhone limits are
+in `docs/ui/screenshots/1306/README.md`.
+
 ## Settled glass correction (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

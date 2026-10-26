@@ -924,6 +924,12 @@ export function ConversationHistory({
     label: 'Attach file or photo',
     icon: <ConversationIcon name="attach" />,
     onSelect: () => fileInput.current?.click(),
+    fileInput: <input ref={fileInput} className="more-menu-file-input" type="file" disabled={attachments.full} multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
+      aria-label="Attach files" data-testid="attachment-input"
+      onChange={(event) => {
+        addFiles(Array.from(event.target.files ?? []));
+        event.target.value = '';
+      }} />,
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
   }, ...(phone ? [{
@@ -1244,12 +1250,6 @@ export function ConversationHistory({
             <ConversationIcon name="send" />
           </span>
         </button>
-        <input ref={fileInput} className="visually-hidden" type="file" multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
-          aria-label="Attach files" data-testid="attachment-input"
-          onChange={(event) => {
-            addFiles(Array.from(event.target.files ?? []));
-            event.target.value = '';
-          }} />
         {fileDrag && <p className="composer-drop-hint" aria-hidden="true">Drop files to attach them</p>}
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.

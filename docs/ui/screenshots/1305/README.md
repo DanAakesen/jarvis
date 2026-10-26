@@ -68,3 +68,19 @@ Node 24.19.0/npm 11.9.0 differs from pinned CI Node 22/npm 10. The jsdom suite
 reports existing unimplemented canvas/media methods. Simulated browser events
 are not physical iPhone, WebKit, microphone or speech-provider acceptance.
 Independent review, hosted exact-head qualification and merge belong to the parent.
+
+## Combined predecessor qualification
+
+Integrated main `57ae85a0326dcccf64666644a09115fd0cf2e2f3`, including attachment
+#1308 and preview #1312. Both documentation conflicts retained all entries;
+runtime attachment changes merged without conflicts. Re-ran the actual-App
+browser fixture with the shrinking-snapshot regression added at both phone
+widths. An initial harness ordering mistake changed the draft before an older
+assertion; moving the independent shrink scenario after repeat-toggle checks
+corrected the harness without changing product code.
+
+Combined results: browser checks passed at 390×844 dark and 320×700 light/reduced
+motion (including shrinking interim results after edits), with no page errors;
+desktop 1440×1000 retained its existing visibility. Refreshed screenshots were
+inspected. Full web suite: 153 files / 2,383 tests passed in 210.04 seconds.
+Web lint and build passed; build retained the existing chunk-size advisory.
