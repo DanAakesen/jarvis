@@ -1,3 +1,4 @@
+import { activeDailySession, currentDailyMessage } from './context.js';
 import { nutritionSummary } from '../nutrition/review.js';
 import { ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
 import { resolveDailyOwner } from '../owner.js';
@@ -19,6 +20,8 @@ export function dailyFoodLookupTool(lookup: DailyFoodLookup): JarvisTool {
       if (!parsed.success) throw new ToolRefusal('Use 1-25 bounded food components with positive grams or an explicit unknown; no authority or provider selectors.');
       signal = AbortSignal.any([signal, AbortSignal.timeout(20_000)]);
       signal.throwIfAborted();
+      const source = await currentDailyMessage(request, signal);
+      await activeDailySession(request, source, signal, Date.now());
       const result = await lookup(structuredClone(parsed.data.components), request, signal);
       signal.throwIfAborted();
       const response = { ...result, intakeLogged: false,
@@ -26,6 +29,8 @@ export function dailyFoodLookupTool(lookup: DailyFoodLookup): JarvisTool {
       if (Buffer.byteLength(JSON.stringify(response)) > dailyResultByteLimit) {
         throw new ToolRefusal('Food reference result exceeds the shared Health response limit. Request fewer components; no complete result is claimed.');
       }
+      request.server.nowEventHub?.publish({ type: 'food_estimate_result', sessionId: source.sessionId,
+        sourceMessageId: source.id, summary: response.presentation });
       return response;
     },
   };

@@ -8,7 +8,12 @@ import { dailyFoodLookupTool } from './food-lookup.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
-const request = (id = owner) => ({ server: { ownerObjectId: id }, principal: { objectId: id } }) as FastifyRequest;
+const request = (id = owner) => ({
+  server: { ownerObjectId: id, nowEventHub: { publish: vi.fn() },
+    conversationStore: { getSession: vi.fn(async () => ({ id: '41', channel: 'chat', endedAt: null })) } },
+  principal: { objectId: id }, headers: {},
+  jarvisConversationMessage: { id: '42', sessionId: '41', role: 'dan', text: 'Estimate synthetic food.', at: new Date(), model: null },
+}) as unknown as FastifyRequest;
 const input = () => ({ components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] });
 function result(): FridaLookup {
   const values = { energyKcal: 0, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null };
@@ -29,6 +34,8 @@ describe('inactive internal Frida reference lookup', () => {
     expect(response).toEqual({ ...reference, intakeLogged: false,
       presentation: 'Estimated nutrition (Frida; not measured):\n- Protein: unknown (not zero) g\n- Calories: 0 kcal\n- Fat: unknown (not zero) g\n- Carbohydrates: unknown (not zero) g\n- Fiber: unknown (not zero) g' });
     expect(lookup).toHaveBeenCalledWith(input().components, req, expect.any(AbortSignal));
+    expect(req.server.nowEventHub.publish).toHaveBeenCalledWith({ type: 'food_estimate_result', sessionId: '41', sourceMessageId: '42',
+      summary: expect.stringContaining('- Calories: 0 kcal') });
     expect(tool.sensitive).toBe(true); expect(tool.denyOnPhone).toBe(true);
     expect(tool.reflexSafe).not.toBe(true); expect(tool.publicAllowedOnPhone).not.toBe(true);
     expect(tool.description.length).toBeLessThanOrEqual(4000);
@@ -43,12 +50,25 @@ describe('inactive internal Frida reference lookup', () => {
       const outcome = expect(active).rejects.toThrow();
       expect(timeout).toHaveBeenCalledWith(20000);
       payload.components[0]!.grams = 999;
+      await vi.waitFor(() => expect(lookup).toHaveBeenCalledOnce());
       expect(lookup.mock.calls[0]![0][0]!.grams).toBe(100);
       controller.abort();
       expect(lookup.mock.calls[0]![2].aborted).toBe(true);
       pending.resolve(result());
       await outcome;
     } finally { timeout.mockRestore(); pending.resolve(result()); }
+  });
+  it('refuses missing or inactive source bindings before lookup or presentation', async () => {
+    const lookup = vi.fn<DailyFoodLookup>().mockResolvedValue(result());
+    const tool = dailyFoodLookupTool(lookup);
+    const missing = request(); delete missing.jarvisConversationMessage;
+    await expect(tool.execute(input(), missing, new AbortController().signal)).rejects.toThrow('verified current');
+    const ended = request();
+    vi.mocked(ended.server.conversationStore!.getSession).mockResolvedValue(null);
+    await expect(tool.execute(input(), ended, new AbortController().signal)).rejects.toThrow('active verified');
+    expect(lookup).not.toHaveBeenCalled();
+    expect(missing.server.nowEventHub.publish).not.toHaveBeenCalled();
+    expect(ended.server.nowEventHub.publish).not.toHaveBeenCalled();
   });
   it('rejects authority/provider selectors before invoking the injected service', async () => {
     const lookup = vi.fn<DailyFoodLookup>().mockResolvedValue(result()); const tool = dailyFoodLookupTool(lookup);

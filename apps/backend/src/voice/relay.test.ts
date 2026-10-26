@@ -3885,7 +3885,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
         undefined,
         undefined,
         undefined,
-        name.startsWith('daily_'),
+        name.startsWith('health_'),
       );
       const activityEvents: unknown[] = [];
       app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));

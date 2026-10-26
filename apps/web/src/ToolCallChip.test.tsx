@@ -30,3 +30,11 @@ it.each(['health_food_review', 'daily_food_review'])('brands current and retaine
   expect(view.container.textContent).not.toContain('Daily');
   view.unmount();
 });
+
+it.each([['daily_health_history', 'Health history'], ['daily_health_summary', 'Health summary']])(
+  'keeps retained %s branding readable', (tool, label) => {
+    const view = render(<ToolCallChip tool={tool} state="ok" />);
+    expect(screen.getByText(label)).toBeTruthy();
+    view.unmount();
+  },
+);

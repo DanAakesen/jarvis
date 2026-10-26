@@ -214,7 +214,7 @@ describe('production tool catalogue', () => {
     const off = modulesWithEveryFeature({ daily: false });
     expect(off.map(({ id }) => id)).toEqual(on.map(({ id }) => id).filter((id) => id !== 'daily'));
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
-    expect(offNames.filter((name) => name.startsWith('daily_'))).toEqual([]);
+    expect(offNames.filter((name) => name.startsWith('health_') || name.startsWith('daily_'))).toEqual([]);
     expect(createToolRegistry(on).list().map(({ name }) => name).filter((name) => !dailyToolNames.includes(name)))
       .toEqual(offNames);
     expect(on.find(({ id }) => id === 'daily')!.tools.map(({ name }) => name)).toEqual(dailyToolNames);

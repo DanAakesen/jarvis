@@ -8,7 +8,10 @@ The `daily` module, storage, `/daily` APIs, MCP connector and external Daily ser
 remain unchanged. Legacy `/tools/daily_*` HTTP routes share the canonical handlers
 and are omitted from discovery. Old retained tool chips display Health.
 
-Food lookup results include a server-built nutrition list. The generic tool
+Food lookup results include a server-built nutrition list. The exported standalone
+lookup handler (not currently in production composition) validates the current
+owner message and active session before publishing that presentation, just as the
+food-review lookup path does. The generic tool
 confirmation uses that presentation instead of an acknowledgment. A scoped internal
 `food_estimate_result` event carries only server-derived nutrition to the matching
 conversation/source; chat appends it to the saved reply and browser voice appends it

@@ -8,6 +8,7 @@ import type { MealInput } from '../nutrition/model.js';
 import { createToolRegistry, ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { fridaReference, type FridaLookup, type LookupComponent } from '../nutrition/frida.js';
 import type { DailyFoodLookup } from '../query.js';
+import { dailyFoodLookupTool } from './food-lookup.js';
 import { dailyFoodReviewTool } from './food-review.js';
 import { confirmToolCall } from '../../core/tool-calls.js';
 import { foodReviewSchema } from '../nutrition/review.js';
@@ -154,7 +155,8 @@ async function executeThroughVoiceCapability(
 describe('inactive internal food proposal review', () => {
   it.each([{ earlierRefusal: false, lookupOnly: false }, { earlierRefusal: true, lookupOnly: false },
     { earlierRefusal: false, lookupOnly: true, completeList: false },
-    { earlierRefusal: false, lookupOnly: true, completeList: true }])('presents actual nutrition through browser tools ($earlierRefusal, lookup only: $lookupOnly)', async ({ earlierRefusal, lookupOnly, completeList }) => {
+    { earlierRefusal: false, lookupOnly: true, completeList: true },
+    { earlierRefusal: false, lookupOnly: true, completeList: false, standalone: true }])('presents actual nutrition through browser tools ($earlierRefusal, lookup only: $lookupOnly)', async ({ earlierRefusal, lookupOnly, completeList, standalone }) => {
     const f = fixture();
     f.session.channel = 'chat';
     f.session.id = '41';
@@ -194,7 +196,7 @@ describe('inactive internal food proposal review', () => {
       expireConfirmation: vi.fn(async () => false),
       expirePendingConfirmations: vi.fn(async () => {}),
     } });
-    const tool = dailyFoodReviewTool(f.nutrition, Date.now, f.lookup);
+    const tool = standalone ? dailyFoodLookupTool(f.lookup) : dailyFoodReviewTool(f.nutrition, Date.now, f.lookup);
     const ownerHeaders = { authorization: ['Bearer', 'owner.payload.signature'].join(' '), 'user-agent': 'Synthetic Mobile Browser' };
     const agentHeaders = { authorization: ['Bearer', 'agent.payload.signature'].join(' '), 'x-jarvis-message-id': '42' };
     const app = buildApp(config, undefined, {
@@ -206,16 +208,18 @@ describe('inactive internal food proposal review', () => {
       conversationAgent: { stream: async function* () {
         const catalogue = await app.inject({ method: 'GET', url: '/tools', headers: agentHeaders });
         expect(catalogue.json()).toContainEqual(expect.objectContaining({
-          name: 'health_food_review', description: expect.stringContaining('a mobile browser is NOT a telephone call'),
+          name: tool.name, ...(standalone ? {} : { description: expect.stringContaining('a mobile browser is NOT a telephone call') }),
         }));
         expect(service.pendingBrowserConfirmations()).toHaveLength(0);
-        const lookup = await app.inject({ method: 'POST', url: '/tools/health_food_review', headers: agentHeaders,
-          payload: { change: { operation: 'lookup_components', components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } });
+        const lookupPayload = (grams: number) => {
+          const components = [{ name: 'Synthetic food', grams, preparationMethod: null }];
+          return standalone ? { components } : { change: { operation: 'lookup_components', components } };
+        };
+        const lookup = await app.inject({ method: 'POST', url: `/tools/${tool.name}`, headers: agentHeaders, payload: lookupPayload(100) });
         expect(lookup.json()).toMatchObject({ outcome: 'ok', result: { intakeLogged: false } });
         expect(service.pendingBrowserConfirmations()).toHaveLength(0);
         if (lookupOnly) {
-          await app.inject({ method: 'POST', url: '/tools/health_food_review', headers: agentHeaders,
-            payload: { change: { operation: 'lookup_components', components: [{ name: 'Synthetic edited portion', grams: 75, preparationMethod: null }] } } });
+          await app.inject({ method: 'POST', url: `/tools/${tool.name}`, headers: agentHeaders, payload: lookupPayload(75) });
           app.nowEventHub.publish({ type: 'food_estimate_result', sessionId: 'another-session', sourceMessageId: '42', summary: 'Wrong session' });
           app.nowEventHub.publish({ type: 'food_estimate_result', sessionId: '41', sourceMessageId: 'other-source', summary: 'Wrong source' });
           yield completeList ? 'Checked it.\n- Protein: 7.5 g\n- Calories: 150 kcal\n- Fat: 15 g' : 'Checked it.'; return;
