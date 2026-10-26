@@ -1,0 +1,405 @@
+[
+  {
+    "width": 390,
+    "height": 844,
+    "touch": true,
+    "before": {
+      "x": 120.75,
+      "y": 76,
+      "width": 202.5,
+      "height": 360
+    },
+    "after": {
+      "x": 80.75,
+      "y": 146,
+      "width": 202.5,
+      "height": 360
+    },
+    "states": [
+      {
+        "state": "dragged",
+        "picture": {
+          "x": 80.75,
+          "y": 146,
+          "width": 202.5,
+          "height": 360
+        },
+        "video": {
+          "x": 80.75,
+          "y": 146,
+          "width": 202.5,
+          "height": 360
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 187.25,
+          "y": 150,
+          "width": 92,
+          "height": 44
+        }
+      },
+      {
+        "state": "switched-repeatedly",
+        "picture": {
+          "x": 80.75,
+          "y": 146,
+          "width": 202.5,
+          "height": 360
+        },
+        "video": {
+          "x": 80.75,
+          "y": 146,
+          "width": 202.5,
+          "height": 360
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 187.25,
+          "y": 150,
+          "width": 92,
+          "height": 44
+        }
+      },
+      {
+        "state": "resumed-landscape-short-viewport",
+        "picture": {
+          "x": 62,
+          "y": 76,
+          "width": 320,
+          "height": 180
+        },
+        "video": {
+          "x": 62,
+          "y": 76,
+          "width": 320,
+          "height": 180
+        },
+        "intrinsic": [
+          640,
+          360
+        ],
+        "controls": {
+          "x": 286,
+          "y": 80,
+          "width": 92,
+          "height": 44
+        }
+      },
+      {
+        "state": "restored-portrait",
+        "picture": {
+          "x": 120.75,
+          "y": 76,
+          "width": 202.5,
+          "height": 360
+        },
+        "video": {
+          "x": 120.75,
+          "y": 76,
+          "width": 202.5,
+          "height": 360
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 227.25,
+          "y": 80,
+          "width": 92,
+          "height": 44
+        }
+      }
+    ],
+    "composer": {
+      "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+      "blur": "blur(10px)"
+    },
+    "surfaces": [
+      {
+        "class": "app-topbar",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "conversation-input luminous-glass",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "mobile-bottom-nav",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "mobile-menu-sheet",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "width": 320,
+    "height": 700,
+    "touch": true,
+    "before": {
+      "x": 76.703125,
+      "y": 76,
+      "width": 189,
+      "height": 336
+    },
+    "after": {
+      "x": 36.703125,
+      "y": 146,
+      "width": 189,
+      "height": 336
+    },
+    "states": [
+      {
+        "state": "dragged",
+        "picture": {
+          "x": 36.703125,
+          "y": 146,
+          "width": 189,
+          "height": 336
+        },
+        "video": {
+          "x": 36.703125,
+          "y": 146,
+          "width": 189,
+          "height": 336
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 129.703125,
+          "y": 150,
+          "width": 92,
+          "height": 44
+        }
+      },
+      {
+        "state": "switched-repeatedly",
+        "picture": {
+          "x": 36.703125,
+          "y": 146,
+          "width": 189,
+          "height": 336
+        },
+        "video": {
+          "x": 36.703125,
+          "y": 146,
+          "width": 189,
+          "height": 336
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 129.703125,
+          "y": 150,
+          "width": 92,
+          "height": 44
+        }
+      },
+      {
+        "state": "resumed-landscape-short-viewport",
+        "picture": {
+          "x": 30.40625,
+          "y": 76,
+          "width": 281.59375,
+          "height": 158.390625
+        },
+        "video": {
+          "x": 30.40625,
+          "y": 76,
+          "width": 281.59375,
+          "height": 158.390625
+        },
+        "intrinsic": [
+          640,
+          360
+        ],
+        "controls": {
+          "x": 216,
+          "y": 80,
+          "width": 92,
+          "height": 44
+        }
+      },
+      {
+        "state": "restored-portrait",
+        "picture": {
+          "x": 76.703125,
+          "y": 76,
+          "width": 189,
+          "height": 336
+        },
+        "video": {
+          "x": 76.703125,
+          "y": 76,
+          "width": 189,
+          "height": 336
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 169.703125,
+          "y": 80,
+          "width": 92,
+          "height": 44
+        }
+      }
+    ],
+    "composer": {
+      "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+      "blur": "blur(10px)"
+    },
+    "surfaces": [
+      {
+        "class": "app-topbar",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "conversation-input luminous-glass",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "mobile-bottom-nav",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "mobile-menu-sheet",
+        "background": "color(srgb 1 0.980392 0.945098 / 0.4)",
+        "blur": "blur(10px)"
+      }
+    ],
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "height": 900,
+    "touch": false,
+    "before": {
+      "x": 1174.96875,
+      "y": 93.25,
+      "width": 119.265625,
+      "height": 212.03125
+    },
+    "after": {
+      "x": 1024.96875,
+      "y": 183.25,
+      "width": 119.265625,
+      "height": 212.03125
+    },
+    "states": [
+      {
+        "state": "dragged",
+        "picture": {
+          "x": 1024.96875,
+          "y": 183.25,
+          "width": 119.265625,
+          "height": 212.03125
+        },
+        "video": {
+          "x": 1024.96875,
+          "y": 183.25,
+          "width": 119.265625,
+          "height": 212.03125
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 1096.234375,
+          "y": 187.25,
+          "width": 44,
+          "height": 44
+        }
+      },
+      {
+        "state": "resumed-landscape-short-viewport",
+        "picture": {
+          "x": 1103.015625,
+          "y": 89.25,
+          "width": 263.15625,
+          "height": 148.03125
+        },
+        "video": {
+          "x": 1103.015625,
+          "y": 89.25,
+          "width": 263.15625,
+          "height": 148.03125
+        },
+        "intrinsic": [
+          640,
+          360
+        ],
+        "controls": {
+          "x": 1318.171875,
+          "y": 93.25,
+          "width": 44,
+          "height": 44
+        }
+      },
+      {
+        "state": "restored-portrait",
+        "picture": {
+          "x": 1174.96875,
+          "y": 93.25,
+          "width": 119.265625,
+          "height": 212.03125
+        },
+        "video": {
+          "x": 1174.96875,
+          "y": 93.25,
+          "width": 119.265625,
+          "height": 212.03125
+        },
+        "intrinsic": [
+          360,
+          640
+        ],
+        "controls": {
+          "x": 1246.234375,
+          "y": 97.25,
+          "width": 44,
+          "height": 44
+        }
+      }
+    ],
+    "composer": {
+      "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+      "blur": "blur(10px)"
+    },
+    "surfaces": [
+      {
+        "class": "app-topbar",
+        "background": "oklab(0.24412 -0.0046442 -0.020353 / 0.361915)",
+        "blur": "blur(10px)"
+      },
+      {
+        "class": "conversation-input luminous-glass",
+        "background": "color(srgb 0.0627451 0.0901961 0.129412 / 0.36)",
+        "blur": "blur(10px)"
+      }
+    ],
+    "errors": []
+  }
+]

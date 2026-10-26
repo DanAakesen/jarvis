@@ -1,5 +1,10 @@
 # Design
 
+## Preview controls and resumed video (#1304; 26 October 2026)
+
+Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.
+
+
 ## Settled glass correction (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is

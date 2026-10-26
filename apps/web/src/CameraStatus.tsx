@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react';
 import type { CameraController } from './screen-sharing';
 
 const mobileCameraQuery = '(pointer: coarse) and (hover: none)';
-function CameraGlyph({ name }: { name: 'camera' | 'switch' | 'close' }) {
+function CameraGlyph({ name }: { name: 'switch' | 'close' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
     strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   if (name === 'switch') return <svg {...common}><path d="M20 7H4l4-4M4 17h16l-4 4" /></svg>;
-  if (name === 'close') return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
-  return <svg {...common}><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2Z" />
-    <circle cx="12" cy="12" r="3" /></svg>;
+  return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
 }
 
 export function CameraStatus({ camera }: { camera: CameraController }) {
@@ -25,8 +23,6 @@ export function CameraStatus({ camera }: { camera: CameraController }) {
     return camera.error ? <div className="camera-status"><span className="chat-error" role="alert">{camera.error}</span></div> : null;
   }
   return <div className="camera-status">
-    <span className="camera-status-label" role="status"><CameraGlyph name="camera" />{camera.starting ? 'Starting camera…' : camera.facing === 'user' ? 'Front camera on'
-      : camera.facing === 'environment' ? 'Back camera on' : 'Camera on - direction unavailable'}</span>
     <div className="camera-status-actions">
       {mobile && camera.switchCamera && <button type="button" className="camera-status-control" disabled={camera.starting || camera.inspecting}
         aria-label={camera.facing === 'user' ? 'Switch to back camera' : camera.facing === 'environment' ? 'Switch to front camera' : 'Switch camera'}

@@ -14,10 +14,10 @@ describe('camera status', () => {
     matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn(),
   }))));
   afterEach(() => vi.unstubAllGlobals());
-  it('has a short status and only switch/close icon controls, without requesting a frame', () => {
+  it('has no direction badge and only switch/close icon controls, without requesting a frame', () => {
     const controller = camera();
     render(<CameraStatus camera={controller} />);
-    expect(screen.getByText('Front camera on')).not.toBeNull();
+    expect(screen.queryByText('Front camera on')).toBeNull();
     expect(screen.getAllByRole('button')).toHaveLength(2);
     const change = screen.getByRole('button', { name: 'Switch to back camera' });
     const off = screen.getByRole('button', { name: 'Close camera preview' });
@@ -32,7 +32,7 @@ describe('camera status', () => {
 
   it('shows back facing, keeps off usable while inspecting and disables switching', () => {
     render(<CameraStatus camera={camera({ facing: 'environment', inspecting: true })} />);
-    expect(screen.getByText('Back camera on')).not.toBeNull();
+    expect(screen.queryByText('Back camera on')).toBeNull();
     expect(screen.getByRole('button', { name: 'Switch to front camera' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: 'Close camera preview' }).hasAttribute('disabled')).toBe(false);
   });

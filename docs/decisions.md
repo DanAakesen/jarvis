@@ -1,5 +1,10 @@
 # Decisions
 
+## 26 October 2026 — Preview controls (#1304)
+
+The owner requested existing app styling for preview controls and removal of Live/camera-direction badges. Reuse shared chrome glass tokens; preserve named switch/close actions and unframed movement. A reported changed preview after switching/typing motivates preserving valid geometry through stream replacement and updating it when playback resumes. The exact private-device lifecycle remains unverified.
+
+
 ## Stable menu material and shared chrome (#1301; 26 October 2026)
 
 Voice-mode follow-up: the typing composer is hidden and its wrapper is
