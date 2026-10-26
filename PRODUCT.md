@@ -1,5 +1,9 @@
 # Product
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+The chat composer Plus menu must stay readable over chat text. From the trigger upward, place Attach file or photo, Voice, the other available actions, then Language. Voice uses a waveform distinct from the Dictate microphone. Preserve the native attachment chooser anchor and desktop parity.
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Desktop uses the approved full-width draft and second row of borderless Plus,

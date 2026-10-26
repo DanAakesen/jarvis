@@ -1,5 +1,9 @@
 # Project plan
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+Implemented the scoped composer Plus readability, bottom-up action order and Voice waveform correction. Local verification is recorded in `docs/ui/screenshots/1319/README.md`. Full web tests (2,394), focused checks (195), contracts/web lint and synthetic Chromium visual QA passed. Draft publication and integration remain pending; integrate after meal recovery #1314, Send #1316 and unified camera #1318. Do not restore removed camera-watch controls.
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Implemented shared two-row styling, desktop Dictate/Voice placement, aligned

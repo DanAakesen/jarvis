@@ -1,5 +1,9 @@
 # Design
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+Scope the stronger 24px blur and 94% theme-surface fill to `.composer-more` popups, including its Language flyout. Other glass surfaces retain their tokens. Render Language first in DOM order, then capture actions, Voice and Attach last nearest Plus; keyboard traversal follows the visible order. Reuse the existing ShellIcon waveform for Voice and retain the Dictate microphone. This locally supersedes the shared popup material from #1301.
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Reuse the phone composer's two-row layout and existing glass/control tokens on

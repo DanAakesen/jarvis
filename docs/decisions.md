@@ -1,5 +1,9 @@
 # Decisions
 
+## Composer Plus readability (#1319; 26 October 2026)
+
+Follow the clarified bottom-up order: Attach nearest Plus, Voice above it, remaining actions, Language at the top. Keep DOM and visual ordering aligned rather than reversing CSS flow. Reuse the app waveform icon for Voice, with the microphone reserved for Dictate. Strengthen only composer menu glass; retain picker anchoring and shared menu behavior.
+
 ## Desktop composer parity (#1309; 26 October 2026)
 
 Apply the approved composer geometry and controls to desktop as requested,

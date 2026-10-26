@@ -1,5 +1,15 @@
 # Agent context
 
+## Composer Plus checks (#1319; 26 October 2026)
+
+Run contracts/web lint, tests and build plus the selected shared Python checks.
+The actual-App dense-text browser fixture and reproduction are in
+`docs/ui/screenshots/1319/README.md`. Check dark/light mobile/desktop, popup
+readability, top-to-bottom keyboard order, repeated Plus toggle, Language,
+native attachment chooser anchoring/cancellation and the separate Dictate icon.
+Physical iPhone acceptance remains separate. Integrate after #1316 and #1318;
+never restore the separate camera-watch actions removed by #1318.
+
 ## Desktop composer checks (#1309; 26 October 2026)
 
 Run contracts/web lint, tests and build. Actual-App synthetic Chromium coverage

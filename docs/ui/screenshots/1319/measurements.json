@@ -1,0 +1,74 @@
+[
+  {
+    "width": 390,
+    "theme": "dark",
+    "order": [
+      "Language",
+      "Share screen",
+      "Enable video",
+      "Voice",
+      "Attach file or photo"
+    ],
+    "blur": "24px",
+    "composerBlur": "10px",
+    "keyboard": true,
+    "toggleCycles": 3,
+    "nativePickerAnchor": true,
+    "reducedMotion": true,
+    "pageErrors": []
+  },
+  {
+    "width": 390,
+    "theme": "light",
+    "order": [
+      "Language",
+      "Share screen",
+      "Enable video",
+      "Voice",
+      "Attach file or photo"
+    ],
+    "blur": "24px",
+    "composerBlur": "10px",
+    "keyboard": true,
+    "toggleCycles": 3,
+    "nativePickerAnchor": true,
+    "reducedMotion": true,
+    "pageErrors": []
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "order": [
+      "Language",
+      "Share screen",
+      "Enable video",
+      "Voice",
+      "Attach file or photo"
+    ],
+    "blur": "24px",
+    "composerBlur": "10px",
+    "keyboard": true,
+    "toggleCycles": 3,
+    "nativePickerAnchor": true,
+    "reducedMotion": true,
+    "pageErrors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "order": [
+      "Language",
+      "Share screen",
+      "Enable video",
+      "Voice",
+      "Attach file or photo"
+    ],
+    "blur": "24px",
+    "composerBlur": "10px",
+    "keyboard": true,
+    "toggleCycles": 3,
+    "nativePickerAnchor": true,
+    "reducedMotion": true,
+    "pageErrors": []
+  }
+]

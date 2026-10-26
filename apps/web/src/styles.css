@@ -4473,3 +4473,12 @@ select.form-control {
   backdrop-filter: blur(var(--chrome-glass-blur));
   -webkit-backdrop-filter: blur(var(--chrome-glass-blur));
 }
+
+/* Composer Plus needs stronger separation from dense conversation text (#1319).
+   Keep the rest of the shell on its existing glass material. */
+.app-shell .composer-more :is(.more-menu-list, .more-menu-flyout) {
+  --composer-menu-surface: rgb(from var(--surface) r g b / 94%);
+  background: var(--composer-menu-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
