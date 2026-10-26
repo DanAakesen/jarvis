@@ -1,5 +1,22 @@
 # Decisions
 
+## Phone navigation and draft-only dictation (#1287; 25 October 2026)
+
+Use the approved dark phone composition with the compact composer above a
+bottom Chat/Health/Workspaces/Menu navigation. Workspaces opens the renamed
+saved-window pane, distinct from the Software Factory page. Highlight the current
+destination by color only; the page sheet uses horizontally swipeable pages and
+keyboard Previous/Next controls. Keep message times below bubbles and preserve existing
+attachment and visual-capture actions. Voice remains the existing realtime
+assistant session under the plus menu.
+
+Dictate is a separate browser `SpeechRecognition` action that appends finalized
+transcript text to the persisted unsent draft; it never submits or starts
+`BrowserVoiceClient`. This reuses a platform speech API rather than adding a new
+backend transcription route. Browser support and permission errors remain
+visible; audio processing follows the browser's speech-recognition
+implementation, which may use its provider. No new API or storage contract.
+
 ## Resolve project references against the active registry (25 October 2026; #1263)
 
 - Resolve explicit project IDs and full repository names exactly; normalize
@@ -59,7 +76,7 @@ Project clarification (#1264) selects/revalidates a target and does not consume
 action approval. Acknowledgment delivery (#1259) does not require affirmative
 playback receipts; actual delivery failures and explicit cancellation remain
 dispatch stops. These are compatibility constraints, not new product policy.
-Synthetic regressions verify the boundary; live voice/model/device acceptance
+synthetic regressions verify the boundary; live voice/model/device acceptance
 and combined-head qualification are separate.
 
 ## Bound deployment-status responses at 4 MiB (25 October 2026; #1267)

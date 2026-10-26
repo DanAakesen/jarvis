@@ -47,6 +47,26 @@ const missingAccessToken = async (): Promise<string> => {
   throw new Error('Your sign-in needs attention. Try again.');
 };
 
+type DictationResult = { isFinal: boolean; 0?: { transcript?: string } };
+type DictationResultEvent = Event & { resultIndex: number; results: ArrayLike<DictationResult> };
+type DictationErrorEvent = Event & { error: string };
+type DictationRecognition = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onstart: (() => void) | null;
+  onresult: ((event: DictationResultEvent) => void) | null;
+  onerror: ((event: DictationErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+type DictationWindow = Window & {
+  SpeechRecognition?: new () => DictationRecognition;
+  webkitSpeechRecognition?: new () => DictationRecognition;
+};
+
 type QueuedMessage = { id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
 const followThreshold = 32;
 const draftKey = 'jarvis.chat.draft';
@@ -63,7 +83,7 @@ function writeDraft(value: string) {
   } catch { /* The draft then lasts only while the page is open. */ }
 }
 
-function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'latest' | 'attach' }) {
+function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'latest' | 'attach' | 'microphone' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'screen':
@@ -79,6 +99,8 @@ function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'late
       return <svg {...common}><path d="M12 5v14m-6-6 6 6 6-6" /></svg>;
     case 'attach':
       return <svg {...common}><path d="m20 11.5-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg>;
+    case 'microphone':
+      return <svg {...common}><rect x="9" y="2" width="6" height="13" rx="3" /><path d="M5 10v2a7 7 0 0 0 14 0v-2m-7 9v3m-4 0h8" /></svg>;
   }
 }
 
@@ -171,6 +193,7 @@ export function ConversationHistory({
   children,
   screenShare,
   camera,
+  phone = false,
 }: {
   client: PublicClientApplication;
   getAccessToken?: () => Promise<string>;
@@ -179,6 +202,7 @@ export function ConversationHistory({
   children?: ReactNode;
   screenShare?: ScreenShareController;
   camera?: CameraController;
+  phone?: boolean;
 }) {
   const tokenProvider = getAccessToken ?? missingAccessToken;
   const { onVoiceActiveChange } = useVoiceWorkspace();
@@ -231,6 +255,10 @@ export function ConversationHistory({
   const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', session?.id ?? null, setTurnError);
   const [steering, setSteering] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
+  const [dictating, setDictating] = useState(false);
+  const [dictationError, setDictationError] = useState('');
+  const dictationRecognition = useRef<DictationRecognition | null>(null);
+  const voiceStart = useRef<(() => void) | null>(null);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [atLatest, setAtLatest] = useState(true);
@@ -285,7 +313,80 @@ export function ConversationHistory({
     setVoiceActive(active);
     onVoiceActiveChange(active);
   }, [onVoiceActiveChange]);
+  const appendDictation = useCallback((transcript: string) => {
+    const text = transcript.trim();
+    if (!text) return;
+    const current = draftValue.current;
+    const next = `${current}${current && !/\s$/u.test(current) ? ' ' : ''}${text}`.slice(0, 20_000);
+    draftValue.current = next;
+    setDraft(next);
+  }, []);
+  const stopDictation = useCallback(() => {
+    const recognition = dictationRecognition.current;
+    dictationRecognition.current = null;
+    setDictating(false);
+    recognition?.abort();
+  }, []);
+  const toggleDictation = () => {
+    if (dictationRecognition.current) {
+      dictationRecognition.current.stop();
+      return;
+    }
+    const Recognition = (window as DictationWindow).SpeechRecognition ??
+      (window as DictationWindow).webkitSpeechRecognition;
+    if (!Recognition) {
+      setDictationError("Dictation isn't supported in this browser.");
+      return;
+    }
+    const recognition = new Recognition();
+    dictationRecognition.current = recognition;
+    recognition.lang = language === 'da' ? 'da-DK' : 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onresult = (event) => {
+      const parts: string[] = [];
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result?.isFinal && result[0]?.transcript) parts.push(result[0].transcript);
+      }
+      appendDictation(parts.join(' '));
+    };
+    recognition.onerror = (event) => {
+      if (dictationRecognition.current === recognition) dictationRecognition.current = null;
+      setDictating(false);
+      setDictationError(event.error === 'not-allowed'
+        ? 'Microphone permission was denied. Allow access and try Dictate again.'
+        : event.error === 'no-speech'
+          ? 'No speech was detected. Try Dictate again.'
+          : 'Dictation could not start. Check microphone access and try again.');
+    };
+    recognition.onend = () => {
+      if (dictationRecognition.current === recognition) dictationRecognition.current = null;
+      setDictating(false);
+    };
+    setDictationError('');
+    try {
+      recognition.start();
+      setDictating(true);
+    } catch {
+      dictationRecognition.current = null;
+      setDictating(false);
+      setDictationError('Dictation could not start. Check microphone access and try again.');
+    }
+  };
+  const registerVoiceStart = useCallback((start: (() => void) | null) => {
+    voiceStart.current = start ? () => {
+      stopDictation();
+      start();
+    } : null;
+  }, [stopDictation]);
+  const dictationAvailable = Boolean((window as DictationWindow).SpeechRecognition ??
+    (window as DictationWindow).webkitSpeechRecognition);
 
+  useEffect(() => () => {
+    dictationRecognition.current?.abort();
+    dictationRecognition.current = null;
+  }, []);
   useLayoutEffect(() => {
     const textarea = input.current;
     if (!textarea || voiceActive) return;
@@ -792,7 +893,12 @@ export function ConversationHistory({
     onSelect: () => fileInput.current?.click(),
     disabled: attachments.full,
     ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
-  }];
+  }, ...(phone ? [{
+    id: 'start-voice',
+    label: 'Voice',
+    icon: <ConversationIcon name="microphone" />,
+    onSelect: () => voiceStart.current?.(),
+  }] : [])];
   const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
   const fileDragHandlers = voiceActive ? {} : {
     onDragEnter: (event: React.DragEvent) => {
@@ -870,7 +976,7 @@ export function ConversationHistory({
                       const image = publicPublicationImage(message.text, messages.slice(0, index));
                       return image ? <PublicImageConfirmation getAccessToken={tokenProvider} config={config} attachment={image} /> : null;
                     })()}
-                    {/* Only the time, tucked onto the bubble's top-right edge and shown on hover; voice usage is read out to screen readers. */}
+                    {/* The time sits below the bubble and appears on hover; voice usage is read out to screen readers. */}
                     <div className="message-metadata">
                       <time dateTime={message.at} title={formatDateTime(message.at)}>
                         {relativeTime(message.at, now)}
@@ -1027,6 +1133,7 @@ export function ConversationHistory({
         language={language}
         onLanguageChange={setLanguage}
         onActiveChange={updateVoiceActive}
+        onStartAvailable={registerVoiceStart}
         onSessionEnded={() => {
           screenShare?.stop();
           camera?.stop();
@@ -1034,7 +1141,8 @@ export function ConversationHistory({
         }}
       />
       </div>
-      <form id="conversation-composer" className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
+      <form id="conversation-composer" className="composer" hidden={voiceActive}
+        onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
         <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove}
           getAccessToken={tokenProvider} config={config} />
@@ -1075,7 +1183,14 @@ export function ConversationHistory({
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage}
-          leadingActions={attachActions} actions={captureActions} align="end" />
+          leadingActions={attachActions} actions={captureActions} align="start" icon="plus" />
+        <button className="composer-dictate" type="button" disabled={!dictationAvailable}
+          aria-label={dictating ? 'Stop dictation' : 'Dictate'} aria-pressed={dictating}
+          aria-describedby={`dictation-guidance${!dictationAvailable || dictating || dictationError ? ' dictation-status' : ''}`}
+          title={!dictationAvailable ? "Dictation isn't supported in this browser." : dictating ? 'Stop dictation' : 'Dictate with your browser’s speech recognition'}
+          onClick={toggleDictation}>
+          <ConversationIcon name="microphone" /><span>{dictating ? 'Listening…' : 'Dictate'}</span>
+        </button>
         <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
           aria-label="Send" title={uploadingFiles ? 'Waiting for uploads to finish' : 'Send message'}>
           {/* A new key per message restarts the one-off take-off animation, even when sends follow each other quickly. */}
@@ -1093,6 +1208,16 @@ export function ConversationHistory({
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.
         </p>
+        <p id="dictation-guidance" className="visually-hidden">
+          Dictation uses your browser’s speech-recognition service, which may process audio outside Jarvis. It adds text to this draft only.
+        </p>
+        {(!dictationAvailable || dictating || dictationError) && <p id="dictation-status" className="composer-status"
+          data-dictating={dictating || undefined}
+          role={dictationError ? 'alert' : dictating ? 'status' : 'note'}>
+          {dictationError || (dictating
+            ? 'Listening. Tap Stop dictation to finish.'
+            : "Dictation isn't supported in this browser.")}
+        </p>}
         {screenShare?.sharing && <div className="composer-live">
           {screenShare?.sharing && <div className="camera-status">
             <span role="status">Screen shared with Jarvis</span>

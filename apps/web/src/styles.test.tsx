@@ -72,6 +72,32 @@ describe('responsive stylesheet contract', () => {
     expect(sharedStyles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
   });
 
+  it('keeps the phone page sheet compact above the composer and navigation dock', () => {
+    expect(sharedStyles).toContain('bottom: calc(var(--phone-dock-bottom, 84px) + var(--conversation-composer-height, 52px) + var(--space-2));');
+    expect(sharedStyles).toContain('inset: 0 0 calc(var(--phone-dock-bottom, 84px) + var(--conversation-composer-height, 52px) + var(--space-2));');
+    expect(sharedStyles).toContain('.mobile-menu { position: fixed; z-index: var(--z-sheet); inset: 0; pointer-events: none; }');
+    expect(sharedStyles).toContain('animation: mobile-sheet-in 380ms var(--ease-enter) both; pointer-events: auto;');
+    expect(sharedStyles).toContain('max-height: min(196px, calc(var(--overlay-viewport-height, 100dvh) - var(--phone-dock-bottom, 84px) - var(--conversation-composer-height, 52px) - env(safe-area-inset-top) - var(--space-4)));');
+    expect(sharedStyles).toContain('.mobile-menu-page .mobile-menu-link { min-height: 48px; gap: var(--space-1); padding-inline: var(--space-2); }');
+    expect(sharedStyles).toContain('.mobile-menu-sheet .modal-heading { order: 2; display: grid; grid-template-columns: 44px auto; gap: var(--space-1); margin: 0; }');
+    expect(sharedStyles).toContain('.mobile-menu-sheet .mobile-menu-body { order: 1; flex: 1 1 auto; }');
+  });
+
+  it('uses the phone conversation canvas without the desktop window frame', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(history).toContain('.app-shell[data-phone="true"][data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not([hidden], .workspace-window-minimized)');
+    expect(history).toContain('align-self: stretch; flex: 1 1 auto; width: 100%; height: auto; max-height: none; min-height: 0;');
+    expect(history).toContain('.app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation .workspace-window-heading { display: none; }');
+    expect(history).toContain('padding: var(--space-3); -webkit-mask-image: none; mask-image: none;');
+  });
+
+  it('keeps mobile dictation feedback concise and the draft field within the compact composer row', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer textarea { max-height: 44px; overflow-y: auto; }');
+    expect(history).toContain('.app-shell[data-phone="true"] .conversation-history .composer-status[data-dictating]');
+    expect(history).toContain('text-overflow: ellipsis; white-space: nowrap;');
+  });
+
   it('keeps table scrolling focusable and the narrow action grid shrinkable', () => {
     expect(ruleDeclaration(sharedStyles, /\.generated-view-table:focus-visible\s*\{([^}]*)\}/, 'outline'))
       .toBe('3px solid var(--focus)');
@@ -84,6 +110,13 @@ describe('responsive stylesheet contract', () => {
     expect(ruleDeclaration(sharedStyles, /\.release-trail-pipeline a\s*\{([^}]*)\}/, 'overflow-wrap')).toBe('anywhere');
     expect(sharedStyles).toContain('.kanban-strip-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));');
     expect(sharedStyles).toContain('.deployment-add { grid-template-columns: repeat(2, minmax(0, 1fr)); }');
+  });
+
+  it('keeps the Dictate label visible without squeezing the draft on narrow phones', () => {
+    const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
+    const narrowRules = mediaBlocks(historyStyles).find(({ query }) => query.includes('max-width: 380px'))?.body ?? '';
+    expect(narrowRules).toContain('.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate { gap: 0; padding-inline: var(--space-2); }');
+    expect(narrowRules).toContain('.app-shell[data-phone="true"] .conversation-history .composer > .composer-dictate svg { display: none; }');
   });
 });
 
@@ -679,12 +712,20 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.app-shell\[data-phone="true"\] \.topbar-actions\s*\{([^}]*)\}/, 'gap')).toBe('0');
   });
 
-  it('keeps phone message times on the bubble rim rather than below the bubble', () => {
+  it('keeps message times below the bubble without covering its text', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'position')).toBe('absolute');
+    expect(ruleDeclaration(history, /\.conversation-message \.message-metadata\s*\{([^}]*)\}/, 'top')).toBe('calc(100% + var(--space-1))');
+    expect(ruleDeclaration(history, /\.conversation-message\s*\{([^}]*)\}/, 'margin')).toBe('var(--space-4) 0 calc(var(--space-4) + var(--space-2))');
     const touchRules = mediaBlocks(history).filter(({ query }) => /hover:\s*none/u.test(query)).map(({ body }) => body).join('\n');
     expect(touchRules).toContain('.message-metadata { opacity: 1; }');
-    expect(touchRules).not.toMatch(/\.conversation-message \.message-metadata\s*\{[^}]*position:\s*static/su);
+  });
+
+  it('keeps the phone Dictate and Send actions beside the draft field', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(history).toContain('grid-template-columns: 44px minmax(0, 1fr) auto 44px');
+    expect(history).toContain('.composer > .composer-dictate { display: inline-flex; grid-column: 3;');
+    expect(history).toContain('.composer > .composer-send { display: grid; grid-column: 4;');
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
@@ -752,7 +793,7 @@ describe('shared glass tokens', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     const voice = readFileSync('src/VoiceControls.css', 'utf8');
     const toasts = readFileSync('src/ConversationToast.css', 'utf8');
-    expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --phone-dock-bottom: calc(env(safe-area-inset-bottom) + 16px); }');
+    expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --mobile-nav-height: 68px; --phone-dock-bottom: calc(env(safe-area-inset-bottom) + var(--mobile-nav-height) + 16px); }');
     expect(ruleDeclaration(styles, /\.app-shell\.app-signed-out\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) calc(env(safe-area-inset-right) + var(--space-5)) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + var(--space-5))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, '--dock-space')).toBe('calc(68px + var(--phone-dock-bottom))');
     expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="true"\] \.jarvis-page\s*\{([^}]*)\}/, 'padding-bottom')).toBe('var(--phone-dock-bottom)');
@@ -1011,7 +1052,6 @@ describe('shared glass tokens', () => {
     for (const selector of [
       /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/,
-      /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.camera-control-button\[aria-pressed="true"\], \.topbar-icon-button\[aria-expanded="true"\], \.settings-link\[aria-current="page"\]\s*\{([^}]*)\}/,
       /\.workspace-arrangement-options \[aria-pressed="true"\]\s*\{([^}]*)\}/,
       /\.folio-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
@@ -1025,6 +1065,11 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.presence-chip-trigger\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
     expect(ruleDeclaration(source, /\.workspace-tab-item\[data-state="front"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
     expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'font-weight')).toBe('750');
+    expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'background')).toBe('transparent');
+    expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
+    expect(ruleDeclaration(source, /\.mobile-bottom-nav-link\[aria-current="page"\], \.mobile-bottom-nav-link\[aria-pressed="true"\], \.mobile-bottom-nav-link\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'color')).toBe('var(--focus)');
+    expect(source.indexOf('.mobile-bottom-nav-link[aria-current="page"]'))
+      .toBeGreaterThan(source.indexOf('.mobile-bottom-nav-link:hover'));
     expect(source).toContain('--selection-hover: var(--state-selected-hover)');
     expect(source).toContain('--selection-pressed: var(--state-selected-pressed)');
     expect(source).toContain('background: var(--selection-pressed, var(--glass-pressed))');

@@ -583,7 +583,7 @@ describe('App shell', () => {
     { daily: false, proactive: true },
     { daily: true, proactive: true },
     { daily: true, proactive: false },
-  ])('lists the same pages in the phone menu as the rail (daily $daily, proactive $proactive)', async ({ daily, proactive }) => {
+  ])('lists secondary destinations beside persistent phone navigation (daily $daily, proactive $proactive)', async ({ daily, proactive }) => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -591,11 +591,19 @@ describe('App shell', () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     const user = userEvent.setup();
     render(<MemoryRouter><App config={config} dailyEnabled={daily} pushEnabled={false} proactiveEnabled={proactive} /></MemoryRouter>);
-    const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
+    await screen.findByRole('navigation', { name: 'Areas' });
+    const mobileNavigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
+    expect(mobileNavigation.getByRole('link', { name: 'Chat' })).not.toBeNull();
+    expect(Boolean(mobileNavigation.queryByRole('link', { name: 'Health' }))).toBe(daily);
+    expect(mobileNavigation.getByRole('button', { name: 'Workspaces' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Menu' }));
     const pages = within(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('navigation', { name: 'Pages' }));
-    const railPages = rail.getAllByRole('link').map((link) => link.getAttribute('aria-label')!.replace('Conversation', 'Jarvis'));
-    expect(pages.getAllByRole('link').map((link) => link.textContent)).toEqual([...railPages, 'Settings']);
+    expect(pages.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      ...(proactive ? ['Proactive'] : []), 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings',
+    ]);
+    expect(pages.queryByRole('link', { name: 'Chat' })).toBeNull();
+    expect(pages.queryByRole('link', { name: 'Health' })).toBeNull();
+    expect(pages.getByRole('button', { name: 'Context panel' })).not.toBeNull();
     expect(pages.queryByRole('link', { name: 'Proactive' }) !== null).toBe(proactive);
   });
 
@@ -844,8 +852,7 @@ describe('App shell', () => {
       return respond(input, init);
     });
     await renderSignedIn('/', true);
-    if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
-    const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
+    const navigation = phone ? screen.getByRole('navigation', { name: 'Mobile navigation' }) : screen.getByRole('navigation', { name: 'Areas' });
     expectNoDailyInRenderedContent(document.body);
     fireEvent.click(within(navigation).getByRole('link', { name: 'Health' }));
     await screen.findByRole('heading', { name: 'Training' });
@@ -1757,19 +1764,18 @@ describe('App shell', () => {
     await user.click(menu);
     expect(menu.getAttribute('aria-expanded')).toBe('true');
     const sheet = screen.getByRole('dialog', { name: 'Go to' });
-    const home = within(sheet).getByRole('link', { name: 'Jarvis' });
     const usage = within(sheet).getByRole('link', { name: 'Usage' });
     const factory = within(sheet).getByRole('link', { name: 'Software Factory' });
     const notes = within(sheet).getByRole('link', { name: 'Notes' });
     expect(factory.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(sheet).queryByRole('link', { name: 'Tasks' })).toBeNull();
-    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBe('page');
     expect(usage.hasAttribute('aria-current')).toBe(false);
     await user.click(usage);
     expect(menu.getAttribute('aria-expanded')).toBe('false');
     await user.click(menu);
     expect(usage.getAttribute('aria-current')).toBe('page');
-    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Chat' }).hasAttribute('aria-current')).toBe(false);
     expect(sheet.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     await user.keyboard('{Escape}');
     expect(menu.getAttribute('aria-expanded')).toBe('false');
@@ -2077,7 +2083,7 @@ describe('App shell', () => {
     expect(folio.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('closes the Folio when a phone menu selects the same page or a different page', async () => {
+  it('closes the Folio when phone navigation selects Chat or a menu destination', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -2085,13 +2091,16 @@ describe('App shell', () => {
     const user = userEvent.setup();
     await renderSignedIn();
     const menu = screen.getByRole('button', { name: 'Menu' });
+    const mobileNavigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
     const shell = document.querySelector('.app-shell')!;
-    for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
-      await user.click(menu);
-      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Folio' }));
+    for (const page of ['Chat', 'Usage', 'Usage', 'Settings']) {
+      await user.click(mobileNavigation.getByRole('button', { name: 'Workspaces' }));
       expect(shell.getAttribute('data-folio-open')).toBe('true');
-      await user.click(menu);
-      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
+      if (page === 'Chat') await user.click(mobileNavigation.getByRole('link', { name: 'Chat' }));
+      else {
+        await user.click(menu);
+        await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
+      }
       expect(shell.getAttribute('data-folio-open')).toBe('false');
       expect(menu.getAttribute('aria-expanded')).toBe('false');
     }
