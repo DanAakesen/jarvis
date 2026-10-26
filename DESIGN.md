@@ -1,3 +1,9 @@
+## Temporary Send diagnostic (local, 26 October 2026)
+
+A temporary Copy Send diagnostic item in the phone Plus menu writes only the
+bounded trace on explicit press, using existing toast feedback. Attach remains
+nearest Plus. No typing-area geometry or Send behavior changes.
+
 # Design
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)

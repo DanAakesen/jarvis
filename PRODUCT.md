@@ -1,3 +1,9 @@
+## Temporary Send diagnostic (local, 26 October 2026)
+
+Approved passive, bounded, content-free in-memory tracing supports investigation
+of the unresolved keyboard-open Send symptom. An explicitly pressed temporary phone Plus action copies the trace to clipboard;
+no clipboard read, automatic transmission or persistence. This is not a proven fix.
+
 # Product
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)

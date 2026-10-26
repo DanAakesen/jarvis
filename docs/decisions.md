@@ -1,3 +1,10 @@
+## 26 October 2026 — Local passive Send collector
+
+Owner approved content-free in-memory tap/focus/viewport diagnosis, not the
+speculative mouse fallback. Collect a bounded allowlist using passive listeners;
+add no storage or telemetry. Later owner approval permits an explicit phone Plus
+copy action and clipboard writing only, with safe feedback and no clipboard reads.
+
 # Decisions
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)

@@ -1,0 +1,81 @@
+{
+  "active": "message",
+  "height": 480,
+  "keyboard": "true",
+  "trace": [
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "pointerdown",
+      "target": "",
+      "active": "message"
+    },
+    {
+      "type": "pointermove",
+      "target": "",
+      "active": "message"
+    },
+    {
+      "type": "pointercancel",
+      "target": "",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    },
+    {
+      "type": "scroll",
+      "target": "conversation-transcript",
+      "active": "message"
+    }
+  ],
+  "scroll_before": 5606,
+  "scroll_after": 5461,
+  "draft": "Draft before scroll",
+  "calls": [
+    "Draft before scroll continued"
+  ],
+  "first_plus_opened": false,
+  "copied_event_count": 60,
+  "clipboard_content_free": true,
+  "activations": [
+    "qa-button",
+    "qa-link"
+  ],
+  "errors": []
+}
