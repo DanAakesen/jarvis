@@ -23,6 +23,7 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
   entries = [];
   const started = performance.now();
   let disposed = false;
+  const pending = new Set<number>();
   let observing = document.activeElement === input;
   const inComposer = (target: EventTarget | null) => target instanceof Element &&
     Boolean(target.closest('.conversation-input, .more-menu-list, .more-menu-flyout'));
@@ -37,14 +38,15 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
     return inComposer(target) ? 'composer-surface' : 'other';
   };
   const finite = (value: number) => Number.isFinite(value) ? Math.round(value) : 0;
-  const record = (event: Event, phase: SendDiagnosticEntry['phase'], pathInComposer = event.composedPath().some(inComposer)) => {
+  const record = (event: Event, phase: SendDiagnosticEntry['phase'], pathInComposer = event.composedPath().some(inComposer),
+    target = classify(event.target), contained = inComposer(event.target)) => {
     if (disposed) return;
     const rect = send.getBoundingClientRect();
     const viewport = window.visualViewport;
     const pointer = 'pointerType' in event ? event.pointerType : '';
     entries.push({
       ms: finite(performance.now() - started), event: event.type, phase,
-      target: classify(event.target), inComposer: inComposer(event.target),
+      target, inComposer: contained,
       pathInComposer, focused: classify(document.activeElement),
       prevented: event.defaultPrevented, disabled: send.disabled,
       pointer: pointer === 'touch' || pointer === 'mouse' || pointer === 'pen' ? pointer : 'none',
@@ -59,9 +61,17 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
     if (!observing) return;
     // Never observe unrelated interactions before an active composer session.
     const pathInComposer = event.composedPath().some(inComposer);
-    record(event, 'capture', pathInComposer);
+    const target = classify(event.target);
+    const contained = inComposer(event.target);
+    record(event, 'capture', pathInComposer, target, contained);
     if (['pointerdown', 'mousedown', 'touchstart', 'click', 'submit'].includes(event.type)) {
-      queueMicrotask(() => record(event, 'settled', pathInComposer));
+      // Native dispatch can checkpoint microtasks between listeners. A task
+      // runs after propagation/default actions, including React's cancellation.
+      const timer = window.setTimeout(() => {
+        pending.delete(timer);
+        record(event, 'settled', pathInComposer, target, contained);
+      }, 0);
+      pending.add(timer);
     }
     if (event.type === 'focusin' && !inComposer(event.target) && event.target !== input && event.target !== send) observing = false;
   };
@@ -75,6 +85,8 @@ export function observeSendDiagnostic(input: HTMLTextAreaElement, send: HTMLButt
   window.addEventListener('resize', onViewport, options);
   return () => {
     disposed = true;
+    for (const timer of pending) window.clearTimeout(timer);
+    pending.clear();
     for (const type of types) document.removeEventListener(type, onEvent, options);
     window.visualViewport?.removeEventListener('resize', onViewport, options);
     window.visualViewport?.removeEventListener('scroll', onViewport, options);

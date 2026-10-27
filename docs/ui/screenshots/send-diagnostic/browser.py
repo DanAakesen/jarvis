@@ -87,6 +87,9 @@ with sync_playwright() as p:
         assert payload['version'] == 1 and 0 < len(payload['events']) <= 128
         assert 'Draft before scroll' not in copied and 'Synthetic' not in copied
         assert all(set(row) == {'ms','event','phase','target','focused','inComposer','pathInComposer','prevented','disabled','pointer','viewport','button'} for row in payload['events'])
+        assert any(row['event'] == 'pointerdown' and row['target'] == 'send' and row['phase'] == 'settled' and row['prevented'] for row in payload['events']), payload
+        result['native_send_cancellation_recorded'] = True
+        result['native_send_pointerdown'] = [row for row in payload['events'] if row['event'] == 'pointerdown' and row['target'] == 'send']
         result['copied_event_count'] = len(payload['events'])
         result['clipboard_content_free'] = True
 

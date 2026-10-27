@@ -71,7 +71,58 @@
     "Draft before scroll continued"
   ],
   "first_plus_opened": false,
-  "copied_event_count": 60,
+  "native_send_cancellation_recorded": true,
+  "native_send_pointerdown": [
+    {
+      "ms": 2910,
+      "event": "pointerdown",
+      "phase": "capture",
+      "target": "send",
+      "inComposer": true,
+      "pathInComposer": true,
+      "focused": "composer",
+      "prevented": false,
+      "disabled": false,
+      "pointer": "touch",
+      "viewport": [
+        390,
+        480,
+        0,
+        100
+      ],
+      "button": [
+        329,
+        419,
+        44,
+        44
+      ]
+    },
+    {
+      "ms": 3005,
+      "event": "pointerdown",
+      "phase": "settled",
+      "target": "send",
+      "inComposer": true,
+      "pathInComposer": true,
+      "focused": "composer",
+      "prevented": true,
+      "disabled": true,
+      "pointer": "touch",
+      "viewport": [
+        390,
+        480,
+        0,
+        100
+      ],
+      "button": [
+        329,
+        419,
+        44,
+        44
+      ]
+    }
+  ],
+  "copied_event_count": 56,
   "clipboard_content_free": true,
   "activations": [
     "qa-button",

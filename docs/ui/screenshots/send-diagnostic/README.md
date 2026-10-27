@@ -13,8 +13,8 @@ No input/change/keypress listeners, message text, draft length, DOM attributes,
 HTML, URLs, tokens, file/photo content, health data, event payload serialization,
 network transmission or persistent storage. Clipboard writing occurs only through the explicit Copy Send diagnostic action; clipboard reading is absent. Listeners are passive
 and never cancel, stop, focus, submit or schedule browser layout changes. Geometry
-reads observe the current layout. Settled microtasks observe cancellation after
-existing handlers have run; no events are synthesized by the collector.
+reads observe the current layout. Settled snapshots run in a deferred task after native dispatch/default actions
+and observe cancellation after existing handlers have run; no events are synthesized by the collector.
 
 This is a diagnostic, not a fix or physical iOS reproduction. Browser event
 metadata and viewport dimensions do not prove that a software keyboard is open.
@@ -77,3 +77,34 @@ out before clipboard access. Only the completed run is acceptance evidence.
 Final focused suite: 137 tests passed. Web lint and TypeScript/Vite build passed.
 No full-suite or hosted qualification is claimed for this UI follow-up. No external
 issue/PR mutation attempted because direct owner-reader verification is unavailable.
+
+## Review correction: native dispatch ordering
+
+Automated review identified that capture-listener microtasks may checkpoint before
+React handles native input. Settled recording now uses a deferred task rather than
+a microtask; pending tasks are explicitly cancelled on disposal. This is essential
+to avoid falsely reporting prevented=false before the real Send guard runs. The
+browser assertion requires a settled native Send pointer-down with prevented=true;
+production event guards remain intact. No extra data fields are introduced.
+
+## Intact native event comparison on combined main
+
+Base: combined main `67b581dd` (diagnostic #1329 plus bubble #1326). With all
+production event guards intact, native Chromium touch submits once but the merged
+microtask collector records Send pointer-down capture/settled prevented=false.
+The native cancellation assertion fails; `native-order-baseline.json` retains
+the content-free Send records. This verifies a diagnostic sampling defect, not
+the owner's iOS tap failure.
+
+A deferred task observes prevented=true, but native SVG event target identity can
+clear after dispatch. Capture only the existing target category/containment
+booleans, then use them in the deferred sample. Do not retain DOM identity or add
+data fields. The final native run records capture=false then settled=true for
+Send, while one-tap Send, continued typing/scroll, copy privacy and outside
+controls pass. `browser.json` includes those records and the assertion outcome.
+
+The test leaves React handlers/defaults intact: no stopPropagation or replacement
+handlers. VisualViewport keyboard height/blur expansion remain simulated; backend
+responses and layout are fixtures. Clipboard is read by the test harness only.
+No physical iOS keyboard, Send fix, telemetry, policy/gate change or self-merge is
+claimed. Pending tasks are cancelled on cleanup.
