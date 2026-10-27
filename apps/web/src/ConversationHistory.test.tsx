@@ -174,6 +174,81 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it.each(['Send', 'More options', 'Dictate'])('preserves typing focus through the recorded later mouse-down on %s, activating only on click', async (name) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    sendChatTurn.mockImplementation(() => new Promise(() => {}));
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Retain this draft' } });
+    input.focus();
+    const button = screen.getByRole('button', { name });
+    fireEvent.pointerDown(button, { pointerType: 'touch', button: 0 });
+    fireEvent.pointerUp(button, { pointerType: 'touch', button: 0 });
+    const mouseDown = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 });
+    button.querySelector('svg')!.dispatchEvent(mouseDown);
+    expect(mouseDown.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(input);
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
+    fireEvent.mouseUp(button);
+    fireEvent.click(button);
+    if (name === 'Send') {
+      await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(1));
+      fireEvent.click(button);
+      expect(sendChatTurn).toHaveBeenCalledTimes(1);
+      expect(document.activeElement).toBe(input);
+    } else if (name === 'More options') {
+      expect(screen.getByRole('menu', { name: 'More options' })).toBeTruthy();
+      expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
+      const item = screen.getByRole('menuitem', { name: 'Language' });
+      expect(fireEvent.mouseDown(item)).toBe(true);
+      expect(input).toHaveProperty('value', 'Retain this draft');
+    } else {
+      expect(screen.getByRole('button', { name: 'Stop dictation' })).toBeTruthy();
+      expect(document.activeElement).toBe(input);
+    }
+  });
+
+  it.each(['Send', 'More options', 'Dictate'])('does not activate %s on a cancelled or dragged press', (name) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    renderConversation(0, undefined, vi.fn(), undefined, true);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Keep cancelled draft' } });
+    input.focus();
+    const control = screen.getByRole('button', { name });
+    fireEvent.pointerDown(control, { pointerType: 'touch', button: 0 });
+    fireEvent.pointerMove(control, { pointerType: 'touch', clientY: 100 });
+    fireEvent.pointerCancel(control, { pointerType: 'touch' });
+    fireEvent.mouseDown(control, { button: 0 });
+    fireEvent.mouseUp(document.body);
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull();
+    expect(input).toHaveProperty('value', 'Keep cancelled draft');
+  });
+
+  it.each([false, true])('keeps ordinary focus and keyboard activation with phone=%s', async (phone) => {
+    vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
+    sendChatTurn.mockImplementation(() => new Promise(() => {}));
+    const user = userEvent.setup();
+    renderConversation(0, undefined, vi.fn(), undefined, phone);
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Normal activation' } });
+    for (const name of ['Send', 'More options', 'Dictate']) {
+      const control = screen.getByRole('button', { name });
+      if (phone) control.focus(); else input.focus();
+      expect(fireEvent.mouseDown(control, { button: 0 })).toBe(true);
+      input.focus();
+      expect(fireEvent.mouseDown(control, { button: 2 })).toBe(true);
+    }
+    const plus = screen.getByRole('button', { name: 'More options' });
+    plus.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('menu', { name: 'More options' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
+  });
+
   it.each([false, true])('copies temporary phone Send metadata with safe feedback (failure=%s)', async (failure) => {
     const writeText = failure ? vi.fn().mockRejectedValue(new Error('PRIVATE clipboard error')) : vi.fn().mockResolvedValue(undefined);
     const readText = vi.fn();

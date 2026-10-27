@@ -1,3 +1,9 @@
+## Mobile composer tap focus (#1315; 27 October 2026)
+
+While typing on a phone, primary mouse-down on Send, Plus or Dictate preserves
+textarea focus until native click performs the action. Keep the draft, one-send
+semantics, cancellation, menu keyboard focus and transcript scrolling intact.
+
 ## Temporary Send diagnostic (local, 26 October 2026)
 
 Approved passive, bounded, content-free in-memory tracing supports investigation

@@ -1,3 +1,11 @@
+## 27 October 2026 — Preserve composer focus on later mouse-down (#1315)
+
+Owner iPhone metadata reports an uncancelled mouse-down after cancelled Send
+pointer-down, followed by blur/movement and a missed click; Plus/Dictate share the
+sequence. Guard only primary mouse-down on opted-in phone composer toolbar controls
+while textarea is focused. Preserve native click activation, menu focus and scroll.
+Browser sequence replay is distinguished from native Chromium and physical iOS.
+
 ## 26 October 2026 — Local passive Send collector
 
 Owner approved content-free in-memory tap/focus/viewport diagnosis, not the

@@ -1369,6 +1369,16 @@ export function ConversationHistory({
       />
       </div>
       <form id="conversation-composer" className="composer" hidden={voiceActive}
+        onMouseDown={(event) => {
+          if (!phone || event.button !== 0 || document.activeElement !== input.current ||
+            !(event.target instanceof Element)) return;
+          const control = event.target.closest('button');
+          // iOS can deliver a later mouse-down even after Send pointer-down was
+          // cancelled. Keep typing focus until the native click performs its action.
+          if (control?.matches('[data-preserve-typing-focus], .composer-more > .more-menu-trigger')) {
+            event.preventDefault();
+          }
+        }}
         onSubmit={(event) => void sendMessage(event)}>
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
         <ComposerAttachments items={attachments.items} problems={attachments.problems} showErrors={false} onRemove={attachments.remove}
@@ -1411,14 +1421,14 @@ export function ConversationHistory({
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
           actions={[...captureActions, ...primaryActions]} align="start" icon="plus" />
-        <button className="composer-dictate" type="button" disabled={!dictationAvailable}
+        <button className="composer-dictate" data-preserve-typing-focus type="button" disabled={!dictationAvailable}
           aria-label={dictating ? 'Stop dictation' : 'Dictate'} aria-pressed={dictating}
           aria-describedby={`dictation-guidance${!dictationAvailable || dictating || dictationError ? ' dictation-status' : ''}`}
           title={!dictationAvailable ? "Dictation isn't supported in this browser." : dictating ? 'Stop dictation' : 'Dictate with your browser’s speech recognition'}
           onClick={toggleDictation}>
           <ConversationIcon name={dictating ? 'stop' : 'microphone'} />
         </button>
-        <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
+        <button className="composer-send" data-preserve-typing-focus type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
           onPointerDown={(event) => {
             // Keep the keyboard and dock steady until the native click submits.
             // Do not send on pointer-down: a dragged/cancelled press must remain cancellable.

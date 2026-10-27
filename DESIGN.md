@@ -1,3 +1,9 @@
+## Mobile composer controls while typing (#1315; 27 October 2026)
+
+Preserve typing focus on the toolbar press, then let native click open Plus,
+toggle Dictate or submit Send. Menu-item focus remains intentional after opening.
+Use the existing form/control geometry; no visual or bubble/fade changes.
+
 ## Temporary Send diagnostic (local, 26 October 2026)
 
 A temporary Copy Send diagnostic item in the phone Plus menu writes only the

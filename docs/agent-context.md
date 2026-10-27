@@ -1,3 +1,11 @@
+## Mobile composer focus checks (#1315; 27 October 2026)
+
+Run ConversationHistory, ConversationMoreMenu, phone-chat-viewport and
+send-diagnostic suites, full web, lint/build. Owner-sequence replay and native
+Chromium checks/limits are in `docs/ui/screenshots/composer-control-focus/README.md`.
+Form toolbar buttons may opt in with `data-preserve-typing-focus`; no global touch
+suppression. Keep diagnostic privacy and independent screen-share UI scope.
+
 ## Passive Send diagnostic checks (local)
 
 Run send-diagnostic, ConversationHistory and phone-chat-viewport tests plus web
