@@ -1699,8 +1699,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   defaults to medium. Other models keep their request behavior. Terra exposes
   the supported intersection of the existing reasoning enum, without `minimal`
   or a shared-enum expansion. The deployment also appears in Research through
-  the existing capability filter; its role default is unchanged. Pricing remains
-  unverified, so no Terra rate is added to usage or vision pricing tables.
+  the existing capability filter; its role default is unchanged. Microsoft's
+  public Global Standard list rates are documented in `infra/README.md`.
+  Account-specific rates and Azure context-tier billing rules remain unverified;
+  no Terra rate is added to runtime usage or vision pricing tables.
   Normal rollout must first resolve actual Azure quota/rates, choose capacity,
   then inspect and update only the saved owner chat model. Danish `/voice/da`
   uses the realtime voice role when `options.connect` is configured. Only the

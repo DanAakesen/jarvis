@@ -19,8 +19,11 @@ subscription-backed coding/image tools stay unchanged.
 Terra's documented reasoning default is medium. Send explicit none only for
 Terra when the existing setting is none; preserve other model requests. Expose
 its intersection with the existing enum, without minimal or a broad max/ultra
-change. Actual Azure quota/rates, capacity choice, live selection and paid
-acceptance remain unverified; see `infra/README.md` for rollout holds.
+change. Microsoft's public Global Standard price table is verified through its
+indexed model catalog tag page and recorded in `infra/README.md`. Account rates,
+Azure context-tier billing rules, actual quota/capacity, approved spend, live
+selection and paid acceptance remain unresolved. No runtime price or budget
+implementation is added; the deployment hold remains in force.
 
 ## 27 October 2026 — Compact screen-share Stop control (#1333)
 

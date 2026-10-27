@@ -89,10 +89,24 @@ Actual quota/capacity and the saved model could not be observed. Microsoft's
 lists Terra in Sweden Central; it does not prove subscription quota or capacity.
 The [Azure pricing page](https://azure.microsoft.com/en-us/pricing/details/azure-openai/)
 timed out, and the public Retail Prices API request returned proxy HTTP 403.
-[OpenAI's model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra)
-lists standard USD/million tokens of input $1, cached input $0.05 and output $5,
-plus cache-write/long-context adjustments. Those are not verified Azure account
-rates; no Azure price or currency conversion is invented here.
+
+Microsoft's 26 October [Terra announcement](https://techcommunity.microsoft.com/blog/azure-ai-foundry-blog/gpt-6-1-terra-now-generally-available-in-microsoft-foundry-build-agents-that-see/4567769)
+publishes these Global Standard list rates in USD per million tokens:
+
+| Context tier | Input | Cached input | Cache writes | Output |
+| --- | ---: | ---: | ---: | ---: |
+| Short | $1.00 | $0.05 | $1.25 | $5.00 |
+| Long | $2.00 | $0.10 | $2.50 | $7.50 |
+
+The canonical article returned HTTP 403 here; the complete table was verified in
+Microsoft's indexed [model catalog tag page](https://techcommunity.microsoft.com/tag/model%20catalog).
+These are public list prices, not verified account-specific rates. Azure's
+short/long context threshold and whether a threshold changes billing for the
+whole request were not verified; do not import OpenAI's billing rules into this
+Azure rollout. Actual quota/capacity, account rates and the owner's spending
+approval remain unresolved. No monthly Terra spend limit or new budget
+implementation is approved by this preparation. Runtime pricing tables and
+currency conversion remain unchanged; the deployment hold above still applies.
 
 The optional `codexToolModel` parameter defaults to `gpt-5.5` and sets the
 backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14 web research and P7-15 image

@@ -12,8 +12,11 @@ PowerShell. Documentation review confirms Danish Voice Live uses the voice role;
 only its hosted-agent fallback inherits chat. The required capacity is absent
 from both committed parameters and the deploy script, so normal Deploy cannot
 complete; keep #1338 draft and do not merge until an approved value is committed.
-Next: independent review, hosted Node 22 qualification, actual Azure
-quota/pricing and capacity decision, followed by
+Microsoft's public Global Standard short/long list rates are sourced in
+`infra/README.md`; account rates, Azure tier billing rules and spending approval
+remain unresolved. No new budget implementation is authorized.
+Next: independent review, hosted Node 22 qualification, actual Azure quota,
+account pricing and capacity/spend decisions, followed by
 normal release and a saved-owner chat-only Settings update. No merge, deployment,
 paid inference or live model-selection verification is claimed.
 

@@ -22,6 +22,10 @@ mirror substitution used the same integrity-pinned tarballs and restored the
 lockfile byte-for-byte. Draft #1338 is not hosted qualification; independent
 review, Node 22 CI, actual Azure pricing/quota and saved owner selection remain
 pending. No live/cost verification is implied by the synthetic tests.
+Microsoft's public Global Standard list rates are now sourced in `infra/README.md`;
+account rates, Azure context-tier billing rules, quota/capacity and spending
+approval remain unresolved. No new runtime price or budget implementation is
+approved, and the required-capacity deployment hold remains unchanged.
 
 ## Deadline notification checks (#1335; 27 October 2026)
 
