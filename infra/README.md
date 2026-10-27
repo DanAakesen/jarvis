@@ -68,6 +68,12 @@ or replace explicit session models. The existing Danish voice path also inherits
 chat settings on its next session; its separate voice role remains unchanged.
 If the saved effort is `minimal`, the model-only update is refused: resolve a
 supported effort with the owner rather than silently changing it.
+Existing approval interpretation and proactive summarization also read the chat
+setting. Account for those shared consumers in the spending decision. No new
+background model role or Terra price estimate is introduced here. The inactive
+semantic-mail adapter requires known pricing and therefore refuses an unpriced model.
+The proactive unknown-model estimate uses existing known rates; it is not a
+verified Terra spending bound.
 Only run paid canaries after the owner resolves the spending hold.
 
 Discovery on 27 October: this executor has no Azure CLI, Azure identity

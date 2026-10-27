@@ -9,6 +9,17 @@ update only the saved chat model through Settings. Do not interpret the code
 default as the owner's active model. No Azure login, paid inference or live
 settings mutation belongs in this preparation.
 
+Local results on Node 24.19.0/npm 11.9.0: focused backend 219 passed, full backend
+300 files/6,718 passed/one skipped; hosted agent 930 passed plus Ruff/byte
+compilation. Backend ESLint/TypeScript and standalone Bicep v0.44.1 build/lint
+pass. Compiled baseline comparison changes only the new Terra resource/required
+parameter and the following decision deployment's ordering dependency. Repository
+script checks: 141 passed; three cannot launch missing `pwsh`. The public npm
+mirror substitution used the same integrity-pinned tarballs and restored the
+lockfile byte-for-byte. Draft #1338 is not hosted qualification; independent
+review, Node 22 CI, actual Azure pricing/quota and saved owner selection remain
+pending. No live/cost verification is implied by the synthetic tests.
+
 ## Deadline notification checks (#1335; 27 October 2026)
 
 Run backend `proactive/detect.test.ts`, `proactive/deadline-notifications.test.ts`,

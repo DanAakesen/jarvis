@@ -1704,6 +1704,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Normal rollout must first resolve actual Azure quota/rates, choose capacity,
   then inspect and update only the saved owner chat model. Existing Danish voice
   shares the chat setting; new separate role/session overrides are not introduced.
+  Existing approval interpretation and proactive summarization also consume chat
+  settings, while the inactive semantic-mail adapter refuses a model without
+  verified cost rates.
+  Their shared-setting/cost implications must be reviewed before rollout.
   Factory task starts prefer per-task model/reasoning overrides to the
   corresponding role settings, then pass the effective choices to the runner.
   Codex applies both through ACP config options; Copilot receives its model and
