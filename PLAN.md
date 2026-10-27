@@ -1,3 +1,12 @@
+## Mobile composer first-tap control focus (#1315; 27 October 2026)
+
+Owner transferred implementation from Copilot after supplying real iPhone event
+metadata. Shared scoped mouse-down guard implemented; diagnostic remains intact.
+Local validation passes: 155 files / 2,437 tests, focused 153, lint/build and
+browser replay/native-touch/scroll checks. Next: coordinator review, scoped PR
+through approved publication boundary, normal hosted checks and owner review.
+No automatic merge or unrelated Stop share implementation.
+
 ## Diagnostic native-event sampling correction (#1315; local follow-up)
 
 Native Chromium confirmed that capture microtasks can label cancellation before
