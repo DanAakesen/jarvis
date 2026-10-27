@@ -86,9 +86,7 @@ export function detectFindings(facts: SourceFact[], now: Date, language: 'da' | 
     const overdue = due < at;
     const text = snippet(fact.text, 300);
     findings.push({
-      title: language === 'da'
-        ? (overdue ? 'Overskredet opgavefrist' : 'Opgavefrist nærmer sig')
-        : (overdue ? 'Overdue task' : 'Task deadline approaching'),
+      title: snippet(fact.text, 200),
       body: language === 'da'
         ? `Opgaven "${text}" ${overdue ? 'havde' : 'har'} frist ${dueAt}.`
         : `The task "${text}" ${overdue ? 'was' : 'is'} due at ${dueAt}.`,

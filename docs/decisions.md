@@ -1089,6 +1089,16 @@ a separately authorized deployment.
 
 Refs DanAakesen/jarvis#1190.
 
+## Deadline notification details (27 October 2026; #1335)
+
+The owner approved correcting generic deadline notification lines to show task
+names and deadlines. Deterministic findings now use the bounded task name as
+their stored title; bundled alert lines include the existing Copenhagen due-time
+label. The ordinary finding upsert refreshes recurring generic records without
+a migration. Item identity, states, alert ledger and delivery policy are retained.
+Only stored titles and due times enter the encrypted payload; source bodies and
+private telemetry remain excluded. Physical iPhone appearance remains unverified.
+
 ## Push notifications carry bounded details (22 October 2026; P13-21 / #1194)
 
 The owner confirmed that proactive todo reminders and alerts should say what

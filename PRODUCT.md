@@ -1364,8 +1364,9 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
   and reminders about an hour before a todo is due. Hold a quiet-hour reminder
   until 07:00 and show it as due soon or overdue. Bundle at most one push per
   run and enforce daily caps. Pushes carry bounded todo or finding titles and
-  due times for durable, owner-protected items in an encrypted payload; they
-  never approve an action. Details never enter logs, metrics, errors or job
+  due times for durable, owner-protected items in an encrypted payload. They
+  identify deadline tasks by name and include due times in bundled alert lines;
+  they never approve an action. Details never enter logs, metrics, errors or job
   output, and the payload is not stored. A user-triggered test is not proactive
   delivery. Teams is not used.
 - Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label

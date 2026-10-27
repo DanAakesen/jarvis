@@ -2622,6 +2622,11 @@ generations for heartbeat/finish fencing. Startup marks leftover running rows
 interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
 refuses to discard rows of that kind.
 
+Deadline findings store the source task name as their title, capped at 200
+UTF-16 units. Existing generic titles refresh through the normal owner/key
+upsert when the task is observed again, before the alert hook reads details.
+This needs no migration or delivery-history reset.
+
 The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
 reconciles runs once and evaluates the latest Copenhagen slot immediately;
 handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
@@ -2791,7 +2796,9 @@ Reminder details come from rows already in memory; alert details come from
 stored-item reads that do not mark items loaded or seen. Missing or failed
 detail reads still send the count headline. Up to three entries and an overflow
 line fit within the 240-code-point body limit; titles are capped at 60 and each
-line at 80. Sanitization strips controls, collapses whitespace and truncates on
+line at 80. Bundled alert lines include each available Copenhagen due time
+before the title, keeping the time visible when long titles are truncated.
+Sanitization strips controls, collapses whitespace and truncates on
 code-point boundaries with an ellipsis. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
 TTL/high urgency; user tests retain the original five-minute/normal headers.
 System sends are rejected inside quiet hours at the sender boundary. The worker

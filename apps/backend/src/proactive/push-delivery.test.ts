@@ -99,15 +99,17 @@ describe('shared proactive push delivery', () => {
       ],
     }).toString());
     const lines = kind === 'alert'
-      ? ['Synthetic later', 'Synthetic earlier', 'Synthetic middle']
+      ? ['12:00 Synthetic later', '10:00 Synthetic earlier', '11:00 Synthetic middle']
       : ['10:00 Synthetic earlier', '11:00 Synthetic middle', '12:00 Synthetic later'];
     expect(payload).toMatchObject({ title, body: [...lines, `+2 ${language === 'da' ? 'flere' : 'more'}`].join('\n') });
   });
 
-  it.each(['en', 'da'] as const)('sanitizes controls and bounds Unicode lines, total body, and encrypted record in %s', (language) => {
+  it.each([
+    ['mixed', 'en'], ['mixed', 'da'], ['alert', 'en'], ['alert', 'da'],
+  ] as const)('sanitizes controls and bounds Unicode lines, total body, and encrypted record for %s in %s', (kind, language) => {
     const privateTitle = `  Synthetic\u0000\u0001\u007f\u0085\u202e\u200b\n\t  ${'🧪'.repeat(150)} `;
     const payload = buildPushPayload({
-      ...request, kind: 'mixed', language, count: 99,
+      ...request, kind, language, count: 99,
       details: Array.from({ length: 6 }, (_, index) => ({ title: privateTitle, dueAt: `2026-10-20T${10 + index}:00:00Z` })),
     });
     const content = JSON.parse(payload.toString());
@@ -121,6 +123,8 @@ describe('shared proactive push delivery', () => {
     }
     expect(content.body).toContain('🧪…');
     expect(content.body).toContain(`+96 ${language === 'da' ? 'flere' : 'more'}`);
+    expect(content.body.split('\n').slice(0, 3).map((line: string) => line.slice(0, 6)))
+      .toEqual(['12:00 ', '13:00 ', '14:00 ']);
     expect(payload.length + 1 + 16).toBeLessThanOrEqual(4096);
     expect(() => encryptWebPushPayload(subscription('record-bound'), payload)).not.toThrow();
   });
