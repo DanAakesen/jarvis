@@ -11,10 +11,13 @@ This executor uses Node 24.19.0/npm 11.9.0 and Python 3.12.14. The frozen npm
 install encountered mirror HTTP 403; installing the same integrity-pinned public
 npm tarballs with temporary resolved-URL substitution succeeded. The committed
 lockfile was restored byte-for-byte. Workspace lint/build and Python component
-checks pass. Full web (2,441) and contracts (174) tests pass; broad backend
-validation encounters timing failures in unchanged tests. Three repository
-script checks need missing `pwsh`; the other 141 pass. Retain these limitations
-when handing off for hosted qualification; physical iPhone appearance is unverified.
+checks pass. Full web (2,441) and contracts (174) tests pass. Initial backend:
+6,701 passed, 10 failed, one skipped; vault mirror: 232 passed, five failed.
+All 15 failures pass targeted single-worker reruns (15 backend matching cases,
+five vault cases), with original timeout limits. The aggregate run itself failed;
+retain that distinction. Python components pass 374 runner and 929 agent tests.
+Three repository script checks need missing `pwsh`; the other 141 pass. Hosted
+qualification and physical iPhone appearance remain unverified.
 
 ## Compact screen Stop checks (#1333; 27 October 2026)
 

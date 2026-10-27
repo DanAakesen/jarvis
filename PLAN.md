@@ -4,8 +4,9 @@ Scoped correction on `fix/1335-notification-task-details`, from main `d74bdd82`:
 deadline findings retain bounded task names and bundled alert lines show due
 times. Existing records refresh through normal upserts; no migration or delivery
 policy change. Implementation and 124 focused pipeline/privacy tests pass, as do
-workspace lint/build and Python components. Broad backend validation encounters
-timing failures in unchanged tests. Next: coordinator review and hosted
+workspace lint/build and Python components. All 15 initial backend/vault-mirror
+timing failures pass targeted reruns without changing timeouts. Three repository
+script checks need missing PowerShell. Next: coordinator review and hosted
 qualification. No merge, deployment or phone acceptance is claimed.
 
 ## Mobile composer first-tap control focus (#1315; 27 October 2026)
