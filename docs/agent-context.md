@@ -3,8 +3,11 @@
 Run backend model-catalog, settings, model-tools, settings-tools and
 agent-contract tests, backend lint/build, hosted-agent tests/Ruff/byte compilation,
 and Bicep v0.44.1 offline build/lint. Terra has a required `terraChatCapacity`
-parameter with no default or chosen value. Before normal main-only release,
-resolve the quota/pricing/capacity hold in `infra/README.md`, then inspect and
+parameter with no default or chosen value. Neither the committed parameters nor
+`deploy_bicep.sh` supplies it, so normal Deploy cannot complete with the required
+parameter missing. Keep PR #1338 draft and do not merge until the actual
+quota/pricing/capacity hold in `infra/README.md` is resolved and an approved
+capacity is committed. After the normal release, inspect and
 update only the saved chat model through Settings. Do not interpret the code
 default as the owner's active model. No Azure login, paid inference or live
 settings mutation belongs in this preparation.

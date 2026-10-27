@@ -54,6 +54,10 @@ decision is approved. Then add the approved value to the existing
 `main.parameters.json` as `parameters.terraChatCapacity.value`; the normal
 main-only Deploy reads that file. There is deliberately no speculative value in
 the committed parameters, no new identity and no bootstrap or direct-deploy path.
+Neither committed `main.parameters.json` nor `deploy_bicep.sh` currently supplies
+`terraChatCapacity`. The normal Deploy therefore cannot complete: the required
+template parameter is missing. Keep PR #1338 draft and do not merge it until an
+approved capacity is supplied through the committed parameter file.
 The template adds `gpt-6.1-terra` / `2026-10-26`, GlobalStandard, after Sol in the
 existing Foundry account's serialized model deployment chain.
 
@@ -64,8 +68,10 @@ If needed, use the existing Settings update with only
 `{"settings":{"roles":{"chat":{"model":"gpt-6.1-terra"}}}}` to retain the
 existing valid reasoning and all unrelated settings. Verify the returned
 effective model, then start a new chat. Do not rewrite stored settings globally
-or replace explicit session models. The existing Danish voice path also inherits
-chat settings on its next session; its separate voice role remains unchanged.
+or replace explicit session models. Danish `/voice/da` uses the realtime voice
+role when `options.connect` is configured; only the `connectDanish` hosted-agent
+fallback inherits chat settings on its next session. The voice-role default
+remains unchanged.
 If the saved effort is `minimal`, the model-only update is refused: resolve a
 supported effort with the owner rather than silently changing it.
 Existing approval interpretation and proactive summarization also read the chat

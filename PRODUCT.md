@@ -629,7 +629,7 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 | Area | Setting | Default |
 | --- | --- | --- |
-| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat and hosted Danish fallback); voice role `gpt-realtime-2.1` (Danish and English Voice Live) |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
@@ -648,8 +648,10 @@ GPT-6.1 Terra main-chat preparation (#1337) preserves saved model choices. Chang
 the code default does not replace Dan's saved `roles.chat.model` or legacy
 `jarvis.model`; rollout must inspect that effective setting and update only chat
 through Settings after deployment. Active session choices remain intact. Danish
-voice already uses the chat model; separate voice, vision, research, coding and
-image-generation defaults are unchanged. Capacity, actual Azure quota/pricing and
+`/voice/da` uses the realtime voice role when `options.connect` is configured;
+only the `connectDanish` hosted-agent fallback inherits chat settings. Separate
+voice, vision, research, coding and image-generation defaults are unchanged.
+Capacity, actual Azure quota/pricing and
 live acceptance remain pending; this is not a production-selection claim.
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
@@ -1099,7 +1101,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
-| Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Jarvis: model and reasoning (chat and hosted Danish fallback); voice-role model for Danish and English Voice Live | Change (applies to new sessions) |
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Identity and role: shared description (up to 2,000 characters), distinct from tone/style | Change; apply to active voice after provider acknowledgement, otherwise reconnect |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset; preserves the separate identity description |

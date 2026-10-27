@@ -10,8 +10,11 @@ Prefer Terra only when it is in the deployed chat catalogue; retain Luna before
 provisioning or during ARM fallback. Preserve saved `roles.chat.model`, legacy
 `jarvis.model` and explicit sessions rather than silently migrating them. Rollout
 must observe the owner setting and apply the existing chat-only Settings update
-to fulfill the requested owner default. Danish voice already shares chat; other
-role defaults and subscription-backed coding/image tools stay unchanged.
+to fulfill the requested owner default. Danish `/voice/da` uses the realtime
+voice role when `options.connect` is configured; only the `connectDanish`
+hosted-agent fallback inherits chat settings. Approval interpretation and
+proactive summarization already consume chat settings. Other role defaults and
+subscription-backed coding/image tools stay unchanged.
 
 Terra's documented reasoning default is medium. Send explicit none only for
 Terra when the existing setting is none; preserve other model requests. Expose

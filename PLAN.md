@@ -8,7 +8,11 @@ is published. Full backend: 300 files, 6,718 passed and one skipped. Hosted agen
 930 passed plus Ruff/byte compilation. Backend lint/build and Bicep v0.44.1
 offline build/lint pass; baseline template comparison preserves every existing
 resource property/capacity. Repository scripts: 141 passed; three require missing
-PowerShell. Next: independent review, hosted Node 22 qualification, actual Azure
+PowerShell. Documentation review confirms Danish Voice Live uses the voice role;
+only its hosted-agent fallback inherits chat. The required capacity is absent
+from both committed parameters and the deploy script, so normal Deploy cannot
+complete; keep #1338 draft and do not merge until an approved value is committed.
+Next: independent review, hosted Node 22 qualification, actual Azure
 quota/pricing and capacity decision, followed by
 normal release and a saved-owner chat-only Settings update. No merge, deployment,
 paid inference or live model-selection verification is claimed.

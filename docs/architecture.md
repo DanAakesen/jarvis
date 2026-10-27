@@ -1702,8 +1702,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   the existing capability filter; its role default is unchanged. Pricing remains
   unverified, so no Terra rate is added to usage or vision pricing tables.
   Normal rollout must first resolve actual Azure quota/rates, choose capacity,
-  then inspect and update only the saved owner chat model. Existing Danish voice
-  shares the chat setting; new separate role/session overrides are not introduced.
+  then inspect and update only the saved owner chat model. Danish `/voice/da`
+  uses the realtime voice role when `options.connect` is configured. Only the
+  `connectDanish` hosted-agent fallback inherits chat settings. New separate
+  role/session overrides are not introduced.
   Existing approval interpretation and proactive summarization also consume chat
   settings, while the inactive semantic-mail adapter refuses a model without
   verified cost rates.
