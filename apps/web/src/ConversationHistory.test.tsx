@@ -2198,4 +2198,45 @@ describe('ConversationHistory', () => {
     expect(screen.queryByRole('menuitem', { name: /^Look at/ })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Language' })).not.toBeNull();
   });
+
+  describe('compact screen-share Stop control', () => {
+    const shareController = (patch: Partial<ScreenShareController> = {}): ScreenShareController => ({
+      sharing: true, starting: false, inspecting: false, error: '', start: vi.fn(async () => {}),
+      stop: vi.fn(), inspect: vi.fn(), ...patch,
+    });
+
+    it('replaces the status row with one Stop recording button beside Dictate', async () => {
+      const screenShare = shareController();
+      const { container } = renderConversation(0, undefined, vi.fn(), screenShare);
+      await screen.findByRole('textbox', { name: 'Message Jarvis' });
+      const stop = screen.getByRole('button', { name: 'Stop recording' });
+      expect(stop.parentElement).toBe(screen.getByRole('button', { name: 'Dictate' }).parentElement);
+      expect(stop.nextElementSibling).toBe(screen.getByRole('button', { name: 'Dictate' }));
+      expect(stop.hasAttribute('data-preserve-typing-focus')).toBe(true);
+      expect(container.querySelector('.composer-live, .camera-status')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Stop screen' })).toBeNull();
+      expect(screen.getByRole('status').textContent).toBe('Screen shared with Jarvis');
+      fireEvent.click(stop);
+      expect(screenShare.stop).toHaveBeenCalledOnce();
+    });
+
+    it('is absent when no screen is shared and keeps share errors announced', async () => {
+      const { unmount } = renderConversation(0, undefined, vi.fn(), shareController({ sharing: false }));
+      await screen.findByRole('textbox', { name: 'Message Jarvis' });
+      expect(screen.queryByRole('button', { name: 'Stop recording' })).toBeNull();
+      unmount();
+      renderConversation(0, undefined, vi.fn(), shareController({ error: 'Screen sharing failed.' }));
+      expect((await screen.findByRole('alert')).textContent).toBe('Screen sharing failed.');
+      expect(screen.getByRole('button', { name: 'Stop recording' })).not.toBeNull();
+    });
+
+    it('is reachable by keyboard before Dictate', async () => {
+      renderConversation(0, undefined, vi.fn(), shareController());
+      await screen.findByRole('textbox', { name: 'Message Jarvis' });
+      const stop = screen.getByRole('button', { name: 'Stop recording' });
+      expect(stop.getAttribute('type')).toBe('button');
+      expect(stop.tabIndex).toBe(0);
+      expect(stop.compareDocumentPosition(screen.getByRole('button', { name: 'Dictate' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
 });

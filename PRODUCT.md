@@ -1,3 +1,10 @@
+## Compact screen Stop control (#1333; 27 October 2026)
+
+While a screen is shared, the composer shows one compact Stop recording button
+beside Dictate instead of a separate status row. It stops sharing only, keeps the
+draft and typing focus, and screen-share errors stay announced. Capture behavior
+is unchanged.
+
 ## Temporary Send diagnostic (local, 26 October 2026)
 
 Approved passive, bounded, content-free in-memory tracing supports investigation
