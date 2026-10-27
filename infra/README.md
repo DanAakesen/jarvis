@@ -36,7 +36,7 @@ Offline build/lint does not verify deployed rules or email delivery.
 ## Required deployment inputs
 
 `main.bicep` requires `backendIdentityResourceId`, `sqlAdminGroupObjectId`,
-`foundryNameTimestamp`, and `budgetContactEmails`. The Deploy workflow reads
+`foundryNameTimestamp`, `budgetContactEmails`, and `terraChatCapacity`. The Deploy workflow reads
 the comma-separated addresses from the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub
 secret and writes a protected temporary parameters file; do not put addresses
 in the repository. This configures the email-only Azure Monitor action group
@@ -44,6 +44,43 @@ used by both app alert rules and budget thresholds. `backendImage` is optional: 
 which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.
+
+### Terra main-chat rollout hold (#1337)
+
+`terraChatCapacity` is a required positive integer with no default. Do not merge
+or deploy this preparation until actual subscription quota, model access,
+available capacity and Azure pricing have been checked and the capacity/spend
+decision is approved. Then add the approved value to the existing
+`main.parameters.json` as `parameters.terraChatCapacity.value`; the normal
+main-only Deploy reads that file. There is deliberately no speculative value in
+the committed parameters, no new identity and no bootstrap or direct-deploy path.
+The template adds `gpt-6.1-terra` / `2026-10-26`, GlobalStandard, after Sol in the
+existing Foundry account's serialized model deployment chain.
+
+After the normal infrastructure/backend/agent release, verify Terra in the live
+catalogue. Read authenticated `GET /settings` to observe the effective chat model
+and reasoning; a source-code default is not evidence of Dan's active selection.
+If needed, use the existing Settings update with only
+`{"settings":{"roles":{"chat":{"model":"gpt-6.1-terra"}}}}` to retain the
+existing valid reasoning and all unrelated settings. Verify the returned
+effective model, then start a new chat. Do not rewrite stored settings globally
+or replace explicit session models. The existing Danish voice path also inherits
+chat settings on its next session; its separate voice role remains unchanged.
+If the saved effort is `minimal`, the model-only update is refused: resolve a
+supported effort with the owner rather than silently changing it.
+Only run paid canaries after the owner resolves the spending hold.
+
+Discovery on 27 October: this executor has no Azure CLI, Azure identity
+configuration or existing Azure login, and no authorized owner-settings route.
+Actual quota/capacity and the saved model could not be observed. Microsoft's
+[availability matrix](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability)
+lists Terra in Sweden Central; it does not prove subscription quota or capacity.
+The [Azure pricing page](https://azure.microsoft.com/en-us/pricing/details/azure-openai/)
+timed out, and the public Retail Prices API request returned proxy HTTP 403.
+[OpenAI's model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra)
+lists standard USD/million tokens of input $1, cached input $0.05 and output $5,
+plus cache-write/long-context adjustments. Those are not verified Azure account
+rates; no Azure price or currency conversion is invented here.
 
 The optional `codexToolModel` parameter defaults to `gpt-5.5` and sets the
 backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14 web research and P7-15 image

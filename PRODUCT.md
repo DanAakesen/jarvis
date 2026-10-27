@@ -629,7 +629,7 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 | Area | Setting | Default |
 | --- | --- | --- |
-| Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
@@ -643,6 +643,14 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 | Global | Max parallel tasks; sleep switch | Set by Dan |
 | Backend global setting | Maximum automatic check-fix attempts (`global.max_check_attempts`) | 3 (0–10; 0 disables automatic repair) |
 | New projects | Owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | `DanAakesen`, private, `DanAakesen/templates`, Copilot, Deliver a PR, 1, `main` |
+
+GPT-6.1 Terra main-chat preparation (#1337) preserves saved model choices. Changing
+the code default does not replace Dan's saved `roles.chat.model` or legacy
+`jarvis.model`; rollout must inspect that effective setting and update only chat
+through Settings after deployment. Active session choices remain intact. Danish
+voice already uses the chat model; separate voice, vision, research, coding and
+image-generation defaults are unchanged. Capacity, actual Azure quota/pricing and
+live acceptance remain pending; this is not a production-selection claim.
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 

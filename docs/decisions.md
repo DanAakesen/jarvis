@@ -1,3 +1,24 @@
+## 27 October 2026 — Prepare Terra as the main-chat default (#1337)
+
+Dan requested GPT-6.1 Terra for main chat, both selectable and default, and
+explicitly approved the issue and draft PR. Prepare the existing Foundry
+GlobalStandard deployment path for `gpt-6.1-terra` / `2026-10-26`; capacity is a
+required positive parameter without a guessed value. No deployment, paid
+provisioning or inference is authorized by this preparation.
+
+Prefer Terra only when it is in the deployed chat catalogue; retain Luna before
+provisioning or during ARM fallback. Preserve saved `roles.chat.model`, legacy
+`jarvis.model` and explicit sessions rather than silently migrating them. Rollout
+must observe the owner setting and apply the existing chat-only Settings update
+to fulfill the requested owner default. Danish voice already shares chat; other
+role defaults and subscription-backed coding/image tools stay unchanged.
+
+Terra's documented reasoning default is medium. Send explicit none only for
+Terra when the existing setting is none; preserve other model requests. Expose
+its intersection with the existing enum, without minimal or a broad max/ultra
+change. Actual Azure quota/rates, capacity choice, live selection and paid
+acceptance remain unverified; see `infra/README.md` for rollout holds.
+
 ## 27 October 2026 — Compact screen-share Stop control (#1333)
 
 Replace the composer's screen-sharing status row with an icon-only red square

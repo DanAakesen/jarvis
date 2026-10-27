@@ -1,3 +1,13 @@
+## Terra main-chat preparation (#1337; 27 October 2026)
+
+Owner-approved issue/claim and draft PR preparation on
+`codex/1337-terra-main-chat`, from main `0ce12d35`. Prepare the Foundry deployment
+with required `terraChatCapacity` and prefer deployed Terra for main chat; retain
+saved choices and existing role/tool defaults. Offline validation is in progress.
+Next: draft review, actual Azure quota/pricing and capacity decision, followed by
+normal release and a saved-owner chat-only Settings update. No merge, deployment,
+paid inference or live model-selection verification is claimed.
+
 ## Deadline notification details (#1335; 27 October 2026)
 
 Scoped correction on `fix/1335-notification-task-details`, from main `d74bdd82`:
@@ -1725,6 +1735,9 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **Terra main chat (#1337):** scoped preparation only; draft/review, quota and
+  pricing verification, capacity selection and saved owner default remain gated.
 
 - **Web polish (P9-98 / #792, P9-102 / #798, P9-103 / #797; 17 October):** one small PR per Dan's speed-first direction. Settings says Routines instead of Task recipes; the `/recipes` API alias is untouched. Presence reads green/yellow/blue in both themes; light dots carry a ring of their own hue, and the mode label stays beside every dot except in the phone top bar, whose chip shows the dot alone. Phone pages now end above the measured composer height, so Save settings is reachable with a six-line draft (before, a real touch tap hit the composer's More options button). Headless Chrome at 320×700, 390×844 and 1440×900 in both themes against a fake backend; no physical iPhone/Safari. Next: exact-head CI and the coordinator's merge; live acceptance stays with Dan.
 

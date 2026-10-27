@@ -570,6 +570,38 @@ def client(
 
 
 @pytest.mark.asyncio
+async def test_terra_chat_uses_responses_tools_and_preserves_explicit_session_model() -> None:
+    backend = FakeBackend(catalogue=[{
+        **LIST_JOBS, "execution": {"defaultEffect": "read"},
+    }], model_name="gpt-6.1-terra")
+    tool = FakeItem(type="function_call", call_id="terra_jobs", name="list_jobs", arguments="{}")
+    model, transport = client([], rounds=[
+        [completed(tool)], [completed()], [completed()],
+    ], backend=backend)
+    token = current_message_id.set("17")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "List jobs")], "en",
+        )]
+        assert len(transport.responses.requests) == 2
+        for request in transport.responses.requests:
+            assert request["model"] == "gpt-6.1-terra"
+            assert request["reasoning"] == {"effort": "none"}
+            assert "include" not in request
+            assert any(tool["name"] == "list_jobs" for tool in request["tools"])
+        assert sum(request.url.path == "/tools/list_jobs" for request in backend.requests) == 1
+
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Hello")], "en", settings=ModelSettings("gpt-6-astra", "high"),
+        )]
+        assert transport.responses.requests[-1]["model"] == "gpt-6-astra"
+        assert transport.responses.requests[-1]["reasoning"] == {"effort": "high"}
+    finally:
+        current_message_id.reset(token)
+        await model.close()
+
+
+@pytest.mark.asyncio
 async def test_chat_uses_capability_instructions_from_agent_settings() -> None:
     model, transport = client([completed()])
 

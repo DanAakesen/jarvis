@@ -1688,6 +1688,22 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `gpt-6-astra` and `gpt-6.1-sol` (Bicep). `gpt-6-astra` has capacity 150 (rate limit
   150K tokens per minute, Global Standard bills per token) since 23 October, because the
   live acceptance run sends over 50K input tokens a minute to the Chat model (#1232).
+  #1337 prepares `gpt-6.1-terra` version `2026-10-26` in the same Sweden Central
+  account with GlobalStandard and a required `terraChatCapacity` parameter, with
+  no guessed capacity or default value. The existing serial deployment chain
+  inserts Terra after Sol. The chat code default becomes Terra when ARM lists
+  it; until then, and during ARM fallback, the existing Luna default remains.
+  The fallback catalogue does not claim Terra is deployed. Saved chat/legacy
+  settings take precedence, and no migration writes them. The existing Responses
+  adapter sends explicit `reasoning.effort: none` for Terra because omission
+  defaults to medium. Other models keep their request behavior. Terra exposes
+  the supported intersection of the existing reasoning enum, without `minimal`
+  or a shared-enum expansion. The deployment also appears in Research through
+  the existing capability filter; its role default is unchanged. Pricing remains
+  unverified, so no Terra rate is added to usage or vision pricing tables.
+  Normal rollout must first resolve actual Azure quota/rates, choose capacity,
+  then inspect and update only the saved owner chat model. Existing Danish voice
+  shares the chat setting; new separate role/session overrides are not introduced.
   Factory task starts prefer per-task model/reasoning overrides to the
   corresponding role settings, then pass the effective choices to the runner.
   Codex applies both through ACP config options; Copilot receives its model and

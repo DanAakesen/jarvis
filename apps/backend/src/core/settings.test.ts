@@ -10,6 +10,8 @@ import type { AwayModeStore } from './away-mode.js';
 import { capabilityInstructions } from './capability-instructions.js';
 import { checkAgentContract } from './agent-contract.js';
 import { DANISH_REALTIME_VOICE } from '../voice/realtime.js';
+import { fallbackModelCatalogue } from './model-catalog.js';
+import type { ModelCatalogue } from '@jarvis/contracts';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -38,6 +40,7 @@ function fixture(
   credentialStatusStore?: CredentialStatusStore,
   awayModeStore?: AwayModeStore,
   onEmbeddingModelChanged?: () => Promise<void>,
+  modelCatalogue?: ModelCatalogue,
 ) {
   const app = buildApp(config, undefined, {
     auth,
@@ -45,12 +48,94 @@ function fixture(
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(onEmbeddingModelChanged ? { onEmbeddingModelChanged } : {}),
+    ...(modelCatalogue ? { modelCatalogue: { read: async () => modelCatalogue } } : {}),
   });
   apps.push(app);
   return app;
 }
 
 describe('settings API', () => {
+  const terraCatalogue: ModelCatalogue = {
+    source: 'arm',
+    deployments: [...fallbackModelCatalogue().deployments, {
+      name: 'gpt-6.1-terra', model: 'gpt-6.1-terra', version: '2026-10-26',
+      sku: 'GlobalStandard', capacity: 1, capabilities: ['chat', 'responses', 'image'],
+      reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'],
+    }],
+  };
+
+  it('defaults deployed Terra through owner and agent settings without writing stored choices', async () => {
+    const { store, values } = createStore();
+    const owner = fixture(store, undefined, undefined, undefined, undefined, terraCatalogue);
+    const response = await owner.inject({ url: '/settings', headers: authorization });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().options.roles.chat.models).toContain('gpt-6.1-terra');
+    expect(response.json().settings.roles).toEqual(defaultSettings.roles);
+    expect(response.json().settings.jarvis).toEqual({ model: 'gpt-6.1-terra', reasoning: 'none' });
+
+    const agent = fixture(store, async () => ({
+      kind: 'jarvis-agent', objectId: '00000000-0000-0000-0000-000000000001', tenantId: config.auth.tenantId,
+    }), undefined, undefined, undefined, terraCatalogue);
+    const effective = await agent.inject({ url: '/agent/settings', headers: authorization });
+    expect(effective.statusCode).toBe(200);
+    expect(effective.json()).toMatchObject({ model: 'gpt-6.1-terra', reasoningEffort: 'none' });
+    expect(values).toEqual({});
+  });
+
+  it('keeps Luna available before Terra deployment and during ARM fallback', async () => {
+    const { store, values } = createStore();
+    for (const catalogue of [fallbackModelCatalogue(), { ...fallbackModelCatalogue(), source: 'arm' as const }]) {
+      expect(catalogue.deployments.some(({ name }) => name === 'gpt-6.1-terra')).toBe(false);
+      expect((await readSettings(store, catalogue)).roles.chat)
+        .toEqual({ model: 'gpt-5.6-luna', reasoningEffort: 'none' });
+      expect(validateSettingsPatch({ roles: { chat: { reasoningEffort: 'high' } } }, catalogue))
+        .toEqual({ roles: { chat: { reasoningEffort: 'high' } } });
+    }
+    expect(values).toEqual({});
+  });
+
+  it.each(['roles.chat.model', 'jarvis.model'])('preserves the saved chat model in %s when Terra becomes available', async (key) => {
+    const { store, values } = createStore();
+    values[key] = '"gpt-6-luna"';
+    values['roles.chat.reasoning_effort'] = '"high"';
+    const before = { ...values };
+    const effective = await readSettings(store, terraCatalogue);
+    expect(effective.roles.chat).toEqual({ model: 'gpt-6-luna', reasoningEffort: 'high' });
+    expect(effective.roles.codex).toEqual({ model: 'default', reasoningEffort: 'none' });
+    expect(effective.roles.copilot).toEqual({ model: 'default', reasoningEffort: 'none' });
+    expect(values).toEqual(before);
+  });
+
+  it('applies a chat-only Terra selection without changing other roles or settings', async () => {
+    const { store } = createStore();
+    await store.write({ roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } }, appearance: { theme: 'dark' } });
+    const before = await readSettings(store, terraCatalogue);
+    const app = fixture(store, undefined, undefined, undefined, undefined, terraCatalogue);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: { chat: { model: 'gpt-6.1-terra' } } } },
+    });
+    expect(response.statusCode).toBe(200);
+    const after = await readSettings(store, terraCatalogue);
+    expect(after).toEqual({
+      ...before, jarvis: { model: 'gpt-6.1-terra', reasoning: 'high' },
+      roles: { ...before.roles, chat: { model: 'gpt-6.1-terra', reasoningEffort: 'high' } },
+    });
+  });
+
+  it('refuses an unsupported inherited effort without overwriting saved settings', async () => {
+    const { store, values } = createStore();
+    await store.write({ roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'minimal' } } });
+    const before = { ...values };
+    const app = fixture(store, undefined, undefined, undefined, undefined, terraCatalogue);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: { chat: { model: 'gpt-6.1-terra' } } } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(values).toEqual(before);
+  });
+
   it('defaults work presentation on and persists either boolean without changing appearance', async () => {
     const { store, values } = createStore();
     const app = fixture(store);

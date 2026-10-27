@@ -1,3 +1,14 @@
+## Terra main-chat preparation checks (#1337; 27 October 2026)
+
+Run backend model-catalog, settings, model-tools, settings-tools and
+agent-contract tests, backend lint/build, hosted-agent tests/Ruff/byte compilation,
+and Bicep v0.44.1 offline build/lint. Terra has a required `terraChatCapacity`
+parameter with no default or chosen value. Before normal main-only release,
+resolve the quota/pricing/capacity hold in `infra/README.md`, then inspect and
+update only the saved chat model through Settings. Do not interpret the code
+default as the owner's active model. No Azure login, paid inference or live
+settings mutation belongs in this preparation.
+
 ## Deadline notification checks (#1335; 27 October 2026)
 
 Run backend `proactive/detect.test.ts`, `proactive/deadline-notifications.test.ts`,

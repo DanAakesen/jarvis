@@ -49,6 +49,9 @@ param vaultMirrorMaxDeletes int = 3
 @description('A ChatGPT-supported model for Codex hosted-runner tools.')
 param codexToolModel string = 'gpt-5.5'
 
+@description('Approved GlobalStandard capacity for the GPT-6.1 Terra main-chat deployment. Required: verify actual subscription quota and pricing before choosing a value or deploying.')
+@minValue(1)
+param terraChatCapacity int
 
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
@@ -625,13 +628,34 @@ resource gpt61SolDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
   }
 }
 
+// Main-chat option/default requested 27 October. Keep capacity required until
+// actual quota and Azure pricing have been checked and a value approved.
+resource gpt61TerraChatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-6.1-terra'
+  dependsOn: [
+    gpt61SolDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: terraChatCapacity
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-6.1-terra'
+      version: '2026-10-26'
+    }
+  }
+}
+
 // Alternative decision provider (Dan's choice, 10 October): selectable in Settings next to Jev. The deployment
 // name cannot contain "microsoft" (reserved word). Quota for this model is 60 requests per minute.
 resource decision1Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'decision-1'
   dependsOn: [
-    gpt61SolDeployment
+    gpt61TerraChatDeployment
   ]
   sku: {
     name: 'GlobalStandard'
