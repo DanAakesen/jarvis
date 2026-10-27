@@ -39,6 +39,13 @@ The public JavaScript entry matches that build. Physical-phone acceptance
 remains open on #860; existing complete-feature rows below are not upgraded by
 this bounded correction.
 
+## Deadline notification correction (#1335; 27 October 2026)
+
+Deadline pushes use bounded task names and due times for single and bundled
+alerts. This corrects the existing detail path without changing deduplication,
+delivery policy or iOS preview behavior. Built with passing synthetic pipeline
+and privacy tests; production and physical-phone acceptance remain unverified.
+
 ## Jarvis: conversation and voice
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |

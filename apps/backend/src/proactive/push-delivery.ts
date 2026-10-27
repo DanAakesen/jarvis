@@ -98,7 +98,7 @@ export function buildPushPayload(request: SystemPushRequest, now = new Date()): 
     body = detail ? `${shorten(detail.title, 80 - Array.from(suffix).length)}${suffix}` : '';
   } else {
     const lines = visible.map((detail) => shorten(
-      `${request.kind !== 'alert' && detail.due ? `${localTimeLabel(detail.due)} ` : ''}${detail.title}`, 80,
+      `${detail.due ? `${localTimeLabel(detail.due)} ` : ''}${detail.title}`, 80,
     ));
     const remaining = request.count - visible.length;
     const overflow = visible.length > 0 && remaining > 0 ? `+${remaining} ${da ? 'flere' : 'more'}` : '';
