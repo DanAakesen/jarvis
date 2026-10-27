@@ -1427,7 +1427,6 @@ export function ConversationHistory({
             aria-label="Stop recording" title="Stop sharing your screen with Jarvis"
             onClick={() => screenShare.stop()}>
             <ConversationIcon name="stop" />
-            <span aria-hidden="true">Stop</span>
           </button>
         </>}
         <button className="composer-dictate" data-preserve-typing-focus type="button" disabled={!dictationAvailable}

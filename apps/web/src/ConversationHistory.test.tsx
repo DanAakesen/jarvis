@@ -2288,6 +2288,7 @@ describe('ConversationHistory', () => {
       expect(stop.parentElement).toBe(screen.getByRole('button', { name: 'Dictate' }).parentElement);
       expect(stop.nextElementSibling).toBe(screen.getByRole('button', { name: 'Dictate' }));
       expect(stop.hasAttribute('data-preserve-typing-focus')).toBe(true);
+      expect(stop.textContent).toBe('');
       expect(container.querySelector('.composer-live, .camera-status')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Stop screen' })).toBeNull();
       expect(screen.getByRole('status').textContent).toBe('Screen shared with Jarvis');

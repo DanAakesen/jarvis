@@ -287,11 +287,11 @@
 .app-shell .conversation-history .composer > .composer-dictate:hover:not(:disabled) { background: var(--glass-hover); }
 .app-shell .conversation-history .composer > .composer-dictate:active:not(:disabled) { background: var(--glass-pressed); }
 .app-shell .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
-.app-shell .conversation-history .composer > .composer-screen-stop { display: inline-flex; grid-column: 2; justify-self: end; min-height: 44px; align-items: center; gap: var(--space-1); padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
-.app-shell .conversation-history .composer-screen-stop svg { width: 16px; height: 16px; flex: 0 0 auto; }
+.app-shell .conversation-history .composer > .composer-screen-stop { display: inline-grid; grid-column: 2; justify-self: end; place-items: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--record-stop); cursor: pointer; }
+.app-shell .conversation-history .composer-screen-stop svg { width: 20px; height: 20px; flex: 0 0 auto; fill: currentColor; }
 .app-shell .conversation-history .composer-screen-stop:hover { background: var(--error-wash); }
 .app-shell .conversation-history .composer-screen-stop:active { background: var(--glass-pressed); }
-.app-shell .conversation-history .composer-screen-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.app-shell .conversation-history .composer-screen-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
 .app-shell .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
 .app-shell .conversation-history .composer-status { grid-column: 1 / -1; }
 .app-shell .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }

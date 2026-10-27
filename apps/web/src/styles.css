@@ -63,6 +63,7 @@
   --disabled-surface: #e9e2d7;
   --disabled-text: #5c564f;
   --error: #951f25;
+  --record-stop: #e5383b;
   --warning-surface: #f6dfc7;
   --warning-text: #593a16;
   --success-wash: #dcedf1;
@@ -204,6 +205,7 @@
   --disabled-surface: #202a34;
   --disabled-text: #c0c8d0;
   --error: #ff9690;
+  --record-stop: #e5383b;
   --warning-surface: #483929;
   --warning-text: #ffe1bd;
   --success-wash: #12303a;
