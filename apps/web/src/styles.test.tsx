@@ -736,7 +736,7 @@ describe('shared glass tokens', () => {
     expect(history).toContain('.composer > .composer-dictate { display: inline-flex; grid-column: 3;');
     expect(history).toContain('.composer > .composer-send { display: grid; grid-column: 4;');
     expect(history).toContain('.composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }');
-    expect(history).toContain('.composer > :is(.composer-more, .composer-dictate, .composer-send) { grid-row: 2; }');
+    expect(history).toContain('.composer > :is(.composer-more, .composer-screen-stop, .composer-dictate, .composer-send) { grid-row: 2; }');
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {

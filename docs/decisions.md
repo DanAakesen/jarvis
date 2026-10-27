@@ -1,3 +1,19 @@
+## 27 October 2026 — Compact screen-share Stop control (#1333)
+
+Replace the composer's screen-sharing status row with an icon-only red square
+Stop recording button in the empty grid cell beside Dictate. A visually hidden status keeps "Screen shared
+with Jarvis" announced; the button opts in to `data-preserve-typing-focus`. The
+earlier unpushed implementation was not recoverable, so this is new work. Capture
+and background-watch behavior are untouched.
+
+## 27 October 2026 — Preserve composer focus on later mouse-down (#1315)
+
+Owner iPhone metadata reports an uncancelled mouse-down after cancelled Send
+pointer-down, followed by blur/movement and a missed click; Plus/Dictate share the
+sequence. Guard only primary mouse-down on opted-in phone composer toolbar controls
+while textarea is focused. Preserve native click activation, menu focus and scroll.
+Browser sequence replay is distinguished from native Chromium and physical iOS.
+
 ## 26 October 2026 — Local passive Send collector
 
 Owner approved content-free in-memory tap/focus/viewport diagnosis, not the

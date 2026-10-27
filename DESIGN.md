@@ -1,3 +1,9 @@
+## Mobile composer controls while typing (#1315; 27 October 2026)
+
+Preserve typing focus on the toolbar press, then let native click open Plus,
+toggle Dictate or submit Send. Menu-item focus remains intentional after opening.
+Use the existing form/control geometry; no visual or bubble/fade changes.
+
 ## Temporary Send diagnostic (local, 26 October 2026)
 
 A temporary Copy Send diagnostic item in the phone Plus menu writes only the
@@ -1155,8 +1161,8 @@ non-colour cues described in the current shell guidance below.
   sections.
 - **Screen sharing (P7-05):** keep the browser-selected share/stop control and
   live sharing status in the conversation workflow, with a separate, explicit
-  Look at screen action for chat and voice. Keep the status and Stop action
-  visible while sharing; reuse the shared button, focus, and narrow-screen
+  Look at screen action for chat and voice. While sharing, a compact icon-only red
+  square Stop recording button sits beside Dictate (no separate status row; #1333); reuse the shared button, focus, and narrow-screen
   wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
   the confirmed share control into the shared shell's top bar.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible

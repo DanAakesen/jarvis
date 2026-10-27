@@ -1,3 +1,18 @@
+## Compact screen Stop checks (#1333; 27 October 2026)
+
+Run ConversationHistory (compact screen-share Stop control), screen-context and
+VoiceControls suites, then full web, lint and build. The Stop button carries
+`data-preserve-typing-focus`; it relies on the mobile focus guard from #1331 for
+the phone mouse-down behavior. No physical-device check is implied.
+
+## Mobile composer focus checks (#1315; 27 October 2026)
+
+Run ConversationHistory, ConversationMoreMenu, phone-chat-viewport and
+send-diagnostic suites, full web, lint/build. Owner-sequence replay and native
+Chromium checks/limits are in `docs/ui/screenshots/composer-control-focus/README.md`.
+Form toolbar buttons may opt in with `data-preserve-typing-focus`; no global touch
+suppression. Keep diagnostic privacy and independent screen-share UI scope.
+
 ## Passive Send diagnostic checks (local)
 
 Run send-diagnostic, ConversationHistory and phone-chat-viewport tests plus web
