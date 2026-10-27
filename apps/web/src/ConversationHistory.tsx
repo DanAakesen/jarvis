@@ -1421,6 +1421,15 @@ export function ConversationHistory({
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
           actions={[...captureActions, ...primaryActions]} align="start" icon="plus" />
+        {screenShare?.sharing && <>
+          <span className="visually-hidden" role="status">Screen shared with Jarvis</span>
+          <button className="composer-screen-stop" data-preserve-typing-focus type="button"
+            aria-label="Stop recording" title="Stop sharing your screen with Jarvis"
+            onClick={() => screenShare.stop()}>
+            <ConversationIcon name="stop" />
+            <span aria-hidden="true">Stop</span>
+          </button>
+        </>}
         <button className="composer-dictate" data-preserve-typing-focus type="button" disabled={!dictationAvailable}
           aria-label={dictating ? 'Stop dictation' : 'Dictate'} aria-pressed={dictating}
           aria-describedby={`dictation-guidance${!dictationAvailable || dictating || dictationError ? ' dictation-status' : ''}`}
@@ -1447,12 +1456,6 @@ export function ConversationHistory({
         <p id="dictation-guidance" className="visually-hidden">
           Dictation uses your browser’s speech-recognition service, which may process audio outside Jarvis. It adds text to this draft only.
         </p>
-        {screenShare?.sharing && <div className="composer-live">
-          {screenShare?.sharing && <div className="camera-status">
-            <span role="status">Screen shared with Jarvis</span>
-            <button type="button" className="composer-live-stop" onClick={() => screenShare.stop()}>Stop screen</button>
-          </div>}
-        </div>}
         {(screenShare?.inspecting || camera?.inspecting) &&
           <p className="composer-status" role="status">{camera?.inspecting ? 'Looking at camera…' : 'Looking at screen…'}</p>}
       </form>

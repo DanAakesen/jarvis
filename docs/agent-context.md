@@ -1,3 +1,10 @@
+## Compact screen Stop checks (#1333; 27 October 2026)
+
+Run ConversationHistory (compact screen-share Stop control), screen-context and
+VoiceControls suites, then full web, lint and build. The Stop button carries
+`data-preserve-typing-focus`; it relies on the mobile focus guard from #1331 for
+the phone mouse-down behavior. No physical-device check is implied.
+
 ## Mobile composer focus checks (#1315; 27 October 2026)
 
 Run ConversationHistory, ConversationMoreMenu, phone-chat-viewport and

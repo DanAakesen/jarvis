@@ -1,3 +1,11 @@
+## 27 October 2026 — Compact screen-share Stop control (#1333)
+
+Replace the composer's screen-sharing status row with a Stop recording button in
+the empty grid cell beside Dictate. A visually hidden status keeps "Screen shared
+with Jarvis" announced; the button opts in to `data-preserve-typing-focus`. The
+earlier unpushed implementation was not recoverable, so this is new work. Capture
+and background-watch behavior are untouched.
+
 ## 27 October 2026 — Preserve composer focus on later mouse-down (#1315)
 
 Owner iPhone metadata reports an uncancelled mouse-down after cancelled Send
