@@ -1293,3 +1293,41 @@ describe('settings API', () => {
     expect(response.body).not.toContain('never-return-this');
   });
 });
+
+describe('backend log capability awareness', () => {
+  it.each([
+    { enabled: false, composed: true, configured: false },
+    { enabled: true, composed: true, configured: true },
+    { enabled: true, composed: false, configured: false },
+  ])('advertises honest log availability to main chat: %j', async ({ enabled, composed, configured }) => {
+    const runtimeConfig = { ...loadConfig(enabled ? {
+      JARVIS_BACKEND_LOGS_ENABLED: 'true',
+      JARVIS_BACKEND_LOGS_WORKSPACE_ID: '11111111-1111-4111-8111-111111111111',
+      JARVIS_BACKEND_LOGS_APP_NAME: 'ca-jarvis-backend-synthetic',
+    } : {}), logLevel: 'silent' as const };
+    const { createBackendLogsModule } = await import('../operations/backend-logs.js');
+    const { coreModule } = await import('./index.js');
+    const module = createBackendLogsModule({ config: runtimeConfig.backendLogs, getToken: async () => 'synthetic-token' });
+    const app = buildApp(runtimeConfig, undefined, {
+      auth: async () => ({ kind: 'jarvis-agent', objectId: '00000000-0000-0000-0000-000000000001', tenantId: runtimeConfig.auth.tenantId }),
+      settingsStore: createStore().store,
+      modules: [coreModule, ...(composed ? [module] : [])],
+    });
+    apps.push(app);
+    const response = await app.inject({ url: '/agent/settings', headers: authorization });
+    expect(response.statusCode).toBe(200);
+    const instructions = response.json().capabilityInstructions;
+    expect(instructions).toContain(configured ? 'Use read_backend_logs for my retained backend-only logs (may lag minutes)'
+      : 'read_backend_logs is unavailable; never claim log access');
+    const catalogue = await app.inject({ url: '/tools', headers: authorization });
+    const tool = catalogue.json().find((entry: { name: string }) => entry.name === 'read_backend_logs');
+    if (!composed) expect(tool).toBeUndefined();
+    else {
+      expect(tool.execution).toEqual({ defaultEffect: 'read' });
+      expect(tool.description).toContain(configured ? 'Configured; tool results establish current access and data availability'
+        : 'Unavailable: backend log access is disabled or unconfigured');
+      expect(tool.description).toContain('self-diagnosis and natural questions about my errors');
+      expect(tool.description).toContain('Stored Azure logs may lag minutes');
+    }
+  });
+});

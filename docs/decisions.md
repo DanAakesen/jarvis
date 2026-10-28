@@ -1,3 +1,24 @@
+## 28 October 2026 — approved backend-only log grant; executable preflight first (#1341)
+
+The owner explicitly approved persistent access to Jarvis's backend log records
+and basic logging-workspace metadata, excluding other apps and all writes,
+deletion, new credentials and extra permissions. Use the documented built-in
+Log Analytics Data Reader with the restrictive workspace/table/app condition;
+this avoids custom-role creation and new operator privileges. No new sign-in is
+needed for the existing main-only OIDC route. The original custom-role plan below
+is historical, not a request for more owner approval.
+
+The first follow-up release supplies bounded metadata-only ARM reads in that
+normal path before any activation assignment: compare actual principal/runtime
+identity, workspace and schema, exact built-in actions, access mode and assignment
+inventory, and find a real negative workspace candidate if one is visible. Keep
+private IDs/GUIDs in runner-temporary storage and emit only fixed verdicts. Group
+membership and provider enforcement remain explicitly unverified at this stage;
+no assignment or feature enablement is inferred. Main-chat instructions and tool
+descriptions must reflect configured/unavailable log state and retained ingestion
+lag. Existing permission boundaries and the requirement for real backend-identity
+positive/negative proof before activation remain.
+
 ## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
 
 Dan approved starting read-only chat access to Jarvis's own backend logs,

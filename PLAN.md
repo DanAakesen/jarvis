@@ -1,3 +1,23 @@
+## Approved log activation preflight and awareness (#1341; 28 October 2026)
+
+PR #1342 is merged as `0df74dee`. The owner has approved persistent read access to
+only backend log records plus basic workspace metadata. No further owner approval
+is needed for that exact scope. Follow-up `codex/1341-backend-log-activation` adds
+an executable metadata-only preflight in the existing main-only deployment path,
+and explicit configured/unavailable log guidance for main chat. It creates no
+role assignment and leaves the reader off. The preflight is the next required
+live step because this executor has no permitted direct Azure route. Actual
+identity/schema/access findings must precede the approved conditional assignment
+and backend-identity enforcement probes; candidates and synthetic tests are not
+proof. No private identifiers enter public evidence. Next: focused validation,
+scoped draft review/normal qualification, then the existing main OIDC preflight.
+Continue the already-approved activation from that result; do not merge this PR
+from the implementation worker or request another generic permission. Local
+checks pass 14 synthetic preflight cases, 62 reader/instruction cases, the three
+HTTP awareness states, backend lint/build and scoped Ruff/byte compilation. Full
+backend is running. Repository script discovery passes all available checks;
+three existing setup tests require missing PowerShell.
+
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a

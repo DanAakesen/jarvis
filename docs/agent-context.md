@@ -1,3 +1,21 @@
+## Owner-approved log activation preflight and awareness (#1341; 28 October 2026)
+
+Owner approval for persistent backend-only log reads plus basic workspace metadata
+is received; do not ask again for this scope or a new Azure sign-in. Existing
+qualified main-only OIDC is the execution route. This follow-up first installs a
+fixed read-only metadata preflight before infrastructure deployment, with no role
+assignment or reader enablement. Preserve the no-private-identifier publication
+boundary and never upload `backend-log-preflight.private.json`.
+
+Run Python `test_backend_log_preflight.py`, pipeline/deploy tests, Ruff and byte
+compilation; backend settings/capability/registry/production-module/log-reader
+suites plus lint/build. Fixtures are synthetic. No local test establishes live
+Azure grants, group membership, supported conditional access or negative data
+isolation. After review and normal release, inspect only content-free preflight
+verdicts and continue the approved assignment/probe/activation work. Stop if live
+identity/schema differs, broader access is unresolved or foreign workspace proof
+is unavailable; never widen permissions or switch modes as a workaround.
+
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a
