@@ -1,3 +1,33 @@
+## Backend log reader checks (#1341; P11-42; 28 October 2026)
+
+Follow-up review found that rejected Content-Length cleanup could await a
+transport cancellation forever and retain the single-query gate. Cleanup is now
+nonblocking, consistent with the streamed-body path. Two synthetic regressions
+use invalid/oversized lengths and never-resolving cancellation, then prove another
+query enters the provider. All 44 reader tests and backend lint/build pass.
+The original head's qualification is superseded;
+normal exact-head hosted checks are required for this correction. No permission
+or activation change is included.
+
+Use the engineering skill. Run backend `operations/backend-logs.test.ts`, signed
+`auth/auth.test.ts`, registry, production-module, config, logging/source and shared
+capability-budget suites, then backend tests/lint/build and normal hosted checks.
+All records must be synthetic. Configuration stays off; no new log role,
+assignment, access-mode, retention, ingestion or credential change is part of this
+PR. [Backend logs](backend-logs.md) contains the exact conditional-grant proposal
+and action-time owner approval/live isolation gates. Do not infer Azure proof
+from local fixtures or widen workspace access when a query fails.
+
+Local results: seven focused suites/262 tests, final reader/instruction rerun/59,
+backend lint/build and hosted agent 930 tests/Ruff/byte compilation pass. The full
+backend aggregate has 6,760 passed, one failed, one skipped: workspace session
+language `en` acknowledgement timed out and passes its isolated single-worker
+rerun under original limits. No timeout/check was weakened. Repository script
+checks: 141 passed, three cannot launch missing `pwsh`. Node 24.19.0/npm 11.9.0
+were available locally; normal hosted Node 22 qualification is pending while the
+PR remains draft. Frozen dependency installation used public versions with the
+same integrity pins after a configured mirror 403; lockfile bytes are restored.
+
 ## Terra main-chat preparation checks (#1337; 27 October 2026)
 
 Run backend model-catalog, settings, model-tools, settings-tools and

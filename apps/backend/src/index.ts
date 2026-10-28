@@ -129,6 +129,7 @@ import { createWeatherModule } from './core/weather.js';
 import { assessVaultIndex, createSystemStatusReader } from './system-status.js';
 import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
 import { createProductionModules } from './production-modules.js';
+import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createPushStore } from './database/push-store.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
@@ -221,7 +222,7 @@ try {
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone ||
-    config.phone || sleepResourceId
+    config.phone || sleepResourceId || config.backendLogs
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -912,6 +913,14 @@ try {
   });
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
+    backendLogs: createBackendLogsModule({
+      config: config.backendLogs,
+      getToken: credential ? async (signal) => {
+        const token = await credential.getToken('https://api.loganalytics.io/.default', { abortSignal: signal });
+        if (!token) throw new Error('Backend log identity unavailable');
+        return token.token;
+      } : undefined,
+    }),
     conversation: createConversationModule(frameStore),
     factory: factoryModule,
     sleep: createSleepModule(containerAppScaler),

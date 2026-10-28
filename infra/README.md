@@ -1,3 +1,11 @@
+## Proposed backend log access (#1341; currently disabled)
+
+[The reader and activation plan](../docs/backend-logs.md) documents a proposed
+workspace-scoped conditional grant for the existing backend identity. It is not
+added to Bicep, bootstrap or CI. Owner action-time approval and live schema,
+effective-grant and negative other-app checks remain required. Deployment of this
+code leaves the flag off and preserves existing retention and permissions.
+
 # Infrastructure
 
 `bootstrap.ps1` and `bootstrap.output.json` record the completed P0-06 bootstrap.

@@ -114,6 +114,19 @@ export function isRegisteredLogEvent(event: string): boolean {
   return events.has(event);
 }
 
+/** Historical logs are untrusted. Reuse the export allowlist, then omit free text and identifiers. */
+export function safeHistoricalLogFields(input: Record<string, unknown>): Record<string, unknown> {
+  const categories = new Set([
+    'kind', 'method', 'reason', 'phase', 'stage', 'lastStage', 'outcome', 'decision', 'status',
+    'language', 'scope', 'source', 'channel', 'closedBy', 'family', 'verdict', 'cachePath',
+    'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
+    'errorCode', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
+  ]);
+  return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
+    typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
+    (typeof value === 'string' && categories.has(key))));
+}
+
 // Apply an allowlist before either stdout or Application Insights sees a record.
 // Headers, bodies, URLs, query strings, arbitrary messages and errors are discarded.
 const authDenialReasons = new Set([

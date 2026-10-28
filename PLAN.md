@@ -1,3 +1,32 @@
+## Backend log reader (#1341; P11-42; 28 October 2026)
+
+Follow-up review found that rejected Content-Length cleanup could await a
+transport cancellation forever and retain the single-query gate. Cleanup is now
+nonblocking, consistent with the streamed-body path. Two synthetic regressions
+use invalid/oversized lengths and never-resolving cancellation, then prove another
+query enters the provider. All 44 reader tests and backend lint/build pass.
+The original head's qualification is superseded;
+normal exact-head hosted checks are required for this correction. No permission
+or activation change is included.
+
+Codex claimed [#1341](https://github.com/DanAakesen/jarvis/issues/1341) and branched
+`codex/1341-backend-logs` from current main `00493374`. The default-off retained
+backend-log reader, authenticated sensitive read integration and synthetic
+regressions are implemented in [#1342](https://github.com/DanAakesen/jarvis/pull/1342).
+Seven focused suites pass 262 tests; backend lint/build pass. Full backend: 300
+files pass, one fails (6,760 passed, one failed, one skipped); the workspace-language
+acknowledgement case passes an isolated rerun with its original timeout. The final
+shared-instruction/reader rerun passes 59 tests. Hosted agent: 930 passed plus Ruff
+and byte compilation. Repository scripts: 141 pass; three need missing `pwsh`.
+Local runtime is Node 24.19.0/npm 11.9.0; hosted Node 22 remains pending. Same
+integrity-pinned public npm packages installed after the configured mirror 403;
+the lockfile is unchanged. The exact Azure conditional
+grant is proposed only in [docs/backend-logs.md](docs/backend-logs.md); no role or
+assignment/configuration activation is applied by merge/deploy. Next: review and
+hosted qualification, then action-time owner approval and deployed schema,
+effective-grant and other-app exclusion proof before activation. Separate app
+review findings are outside this task.
+
 ## Terra main-chat preparation (#1337; 27 October 2026)
 
 Owner-approved issue/claim and draft PR preparation on
