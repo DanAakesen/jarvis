@@ -1,7 +1,7 @@
 # Eight approved review fixes
 
 [Issue #1343](https://github.com/DanAakesen/jarvis/issues/1343) and
-[draft PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) cover the owner's
+[PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) cover the owner's
 eight approved findings. The mobile Settings change replaces the original
 unsaved-draft proposal. No Settings navigation guard, autosave or draft storage
 is included. Optional audit findings and Azure log permissions are outside scope.
@@ -62,6 +62,12 @@ new-tab drafts. Notification failure recovery is one bounded immediate retry;
 later redelivery can retry because failure does not consume the receipt. This
 change adds no background retry scheduler.
 
-Draft PR CI skips the main/SQL checks by repository design; a skipped run is not
-qualification. The PR remains draft for independent review and normal CI. No merge, deployment,
+The coordinator marked the PR ready after independent source review. The first
+hosted SQL run, [40756774334](https://github.com/DanAakesen/jarvis/actions/runs/40756774334),
+had 281 passes and two test-setup failures. The catalog query now includes the
+issue-delivery index its assertion already required. The Workspaces test now
+unwinds migrations newer than 0067 before its second rollback, after reapplying
+the full manifest. Assertions and migration implementation remain unchanged.
+Qualification must run again on the correction's new head; results are recorded
+in the PR without treating the original failed run as passed. No merge, deployment,
 Azure grant or production acceptance is claimed.

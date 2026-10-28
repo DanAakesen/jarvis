@@ -14,14 +14,18 @@ SQL behavior. Chromium screenshots live under `docs/ui/screenshots/fix-eight-134
 390/320px and a focused short viewport are simulated, not physical iPhone acceptance.
 No Azure access, real workers, mail sends, notifications or health writes are part
 of these checks. Local verification results are recorded in
-[draft PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) and the
+[PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) and the
 [validation report](review-fixes-1343.md).
 
 Local results: full web 2,447, contracts 174, final ConversationHistory 126 and
 backend/web lint/build passed. Backend aggregate: 6,776 passed, two failed, one
 skipped; the stale Settings approval assertion was corrected and both affected
 suites passed a 16-test rerun with original timeouts. Preserve that aggregate
-failure distinction. Main/SQL CI is skipped while the PR is draft.
+failure distinction. The coordinator subsequently marked the PR ready. Hosted
+SQL run 40756774334 had 281 passes and two test-setup failures, corrected by
+including the issue-delivery index in its catalog query and unwinding newer
+migrations again before the second Workspaces rollback. Preserve every index,
+round-trip and latest-only assertion. New-head hosted qualification is required.
 
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 

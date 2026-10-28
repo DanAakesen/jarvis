@@ -2,7 +2,7 @@
 
 Implement the eight approved findings on `codex/fix-eight-review-gaps-1343` under
 [issue #1343](https://github.com/DanAakesen/jarvis/issues/1343), claimed by Codex.
-All eight fixes are implemented in [draft PR #1345](https://github.com/DanAakesen/jarvis/pull/1345)
+All eight fixes are implemented in [PR #1345](https://github.com/DanAakesen/jarvis/pull/1345)
 for independent review and coordinator release; no own
 merge or deployment. Scope covers issue delivery/origin and completion recovery,
 Gmail receipts, chat warning/queue reload persistence, oversized worker-start
@@ -19,7 +19,11 @@ Local checks: full web 2,447 and contracts 174 passed; final conversation rerun
 passed, two failed, one skipped. Corrected the stale approval-text assertion;
 both affected suites then passed 16 tests with original limits. See the report
 for SQL CI, Node 22 and physical-device limits. Next: independent review and
-normal qualification; the draft CI skip is not a pass.
+normal qualification. The coordinator marked the PR ready. Hosted SQL run
+40756774334 had 281 passes and two test-setup failures: the index query omitted
+the expected new index, and the second Workspaces rollback needed to unwind
+0068 again. Both are corrected without weakening assertions; qualification must
+run on the correction's new head.
 
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 

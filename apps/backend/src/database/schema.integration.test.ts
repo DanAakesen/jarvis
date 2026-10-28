@@ -182,7 +182,8 @@ describe('committed domain schema (groups 1-8)', () => {
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
         N'IX_deployments_release_id_at', N'IX_messages_at', N'IX_proactive_alerts_owner_day_status',
         N'IX_proactive_reminders_owner_day_state', N'IX_proactive_reminders_owner_state_fire_at',
-        N'UX_activity_alert_key', N'UX_proactive_alerts_owner_alert_key', N'UX_proactive_reminders_owner_key') ORDER BY name`);
+        N'UX_activity_alert_key', N'UX_proactive_alerts_owner_alert_key', N'UX_proactive_reminders_owner_key',
+        N'UX_tasks_issue_delivery') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
       'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_messages_at',
       'IX_proactive_alerts_owner_day_status', 'IX_proactive_reminders_owner_day_state',
@@ -312,6 +313,7 @@ describe('committed domain schema (groups 1-8)', () => {
           SET result_folio_id = @resultId, result_delivery_status = N'pending'
           WHERE job_id = @jobId;`);
 
+      await revertNewerThan(rollbackPool, committed, migration.name);
       await expect(revertMigration(rollbackPool, committed, down)).resolves.toBe(migration.name);
       const restored = await rollbackPool.request().input('itemId', sql.NVarChar(80), itemId)
         .query<{ title: string }>('SELECT title FROM dbo.folio_items WHERE item_id = @itemId;');
