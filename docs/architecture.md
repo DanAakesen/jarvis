@@ -4346,14 +4346,23 @@ projection use the drawn position. Reduced motion keeps the map still.
 The `create_project` tool accepts only a repository name and description. It reads
 validated New projects defaults, creates the repository through the backend-only
 `jarvis-repo-admin` Key Vault secret, registers the configured project values, and
-creates a chat-origin scaffold task linked to the calling message. The token is
-read with the backend managed identity and used only in the outbound GitHub request;
+creates a scaffolding issue through the existing GitHub App issue client, then
+creates a chat-origin scaffold task linked to that issue and the calling message.
+The issue body retains the full template/product/plan instructions; its number is
+stored in the existing task issue field, allowing the board overlay before a PR
+exists and the normal delivery path to add its closing reference. The tool returns
+the issue number and URL. No worker label is added during creation: the existing
+dispatcher owns that claim, avoiding a second label-triggered task. The repository
+admin token is read with the backend managed identity and used only in its outbound GitHub request;
 it is not included in tool arguments/results, the task prompt, runner environment,
 or task events. `KEY_VAULT_URI` configures this server-side boundary. Repository
 calls reject redirects, bound response bodies and time out after 30 seconds;
-provider details are sanitized. If repository creation succeeds but project or
-task persistence fails, the tool reports the partial result instead of claiming
-success.
+provider details are sanitized. The issue client keeps its existing bounded
+requests and credentials. If repository creation succeeds but registration, issue
+creation or task persistence fails, the tool reports the partial result. A known
+issue URL survives task failure; an uncertain issue write requires checking the
+repository rather than blindly retrying it. Missing issue service refuses before
+creating a repository.
 
 The scaffold task runs in the normal sandbox, uses its HTTPS Git credential helper
 to clone the configured templates repository and Jarvis P3-09 workflow sources,

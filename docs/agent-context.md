@@ -1,3 +1,25 @@
+## Scaffolding issue linkage checks (#1344; P11-43; 28 October 2026)
+
+Run backend new-project, board, issue/task and GitHub delivery suites, then
+aggregate workspace tests/lint/build and repository script checks. Use synthetic
+repository/issue/store responses only. Verify issue creation precedes task
+persistence, the initial task has issueNumber, the pre-PR board overlay appears,
+and failures report known repository/issue progress without retrying uncertain
+issue writes. Preserve template/cpinit and PRODUCT.md/PLAN.md instructions.
+No real project, permission/credential changes, merge or deployment.
+Local Node 22.22.2/npm 11.9.0: focused six suites pass 163 tests; workspace
+lint/build and architecture-flow script syntax pass. Aggregate contracts 174,
+web 2,441 and vault mirror 237 pass; backend 6,768 pass, seven fail and one is
+skipped. Auth fixtures returned 401 versus expected 403 in six cases; one pin
+fixture hit its unchanged five-second timeout. The one-worker rerun passed all 12 pin tests;
+auth remained failing (57 passed, seven failed, with different cases). Retain
+these failures separately from clean-main comparison evidence: untouched main
+0df74dee passed 73 cases and failed three auth cases; pin tests passed. Different
+auth cases fail across runs, and their exact cause remains unverified. Repository scripts: 141 pass; three need missing pwsh.
+The npm mirror returned HTTP 403; public npm supplied the same integrity-pinned
+tarballs and the lockfile was restored byte-for-byte. Hosted qualification and
+live project acceptance are not established by these local checks.
+
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a

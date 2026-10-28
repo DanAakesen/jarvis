@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { readSettings } from '../core/settings.js';
 import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { GitHubIssueRequestError, type GitHubIssueReference } from '../github/issues.js';
 import type { CreateProject } from './projects.js';
 
 export interface RepositoryCreationInput {
@@ -53,8 +54,8 @@ export const createProjectTool: JarvisTool = {
   description: 'Create and scaffold a new managed project from its name and description.',
   inputSchema,
   async execute(input, request, signal) {
-    const { projectRepositoryCreator, projectStore, settingsStore, taskStore } = request.server;
-    if (!projectRepositoryCreator || !projectStore || !settingsStore || !taskStore) {
+    const { projectRepositoryCreator, projectStore, settingsStore, taskStore, githubIssueClient } = request.server;
+    if (!projectRepositoryCreator || !projectStore || !settingsStore || !taskStore || !githubIssueClient) {
       throw new ToolRefusal('New project creation is unavailable.');
     }
     const { name, description } = input as { name: string; description: string };
@@ -75,7 +76,7 @@ export const createProjectTool: JarvisTool = {
     try {
       repositoryUrl = await notifications.runConfirmed(
         'create_repository',
-        `Create the ${defaults.visibility} repository ${repo}: ${cleanDescription}`,
+        `Create the ${defaults.visibility} repository ${repo} and its scaffolding issue: ${cleanDescription}`,
         () => projectRepositoryCreator.create({
           owner: defaults.owner,
           name: cleanName,
@@ -114,35 +115,52 @@ export const createProjectTool: JarvisTool = {
       );
     }
 
+    const title = `Scaffold ${cleanName}`;
+    const scaffold = scaffoldRequest({
+      owner: defaults.owner,
+      name: cleanName,
+      description: cleanDescription,
+      visibility: defaults.visibility,
+      defaultBranch: defaults.defaultBranch,
+    }, defaults.templatesRepository);
+    let issue: GitHubIssueReference;
+    try {
+      issue = await githubIssueClient.createIssue(repo, title, scaffold);
+    } catch (error) {
+      const rejected = error instanceof GitHubIssueRequestError && error.status < 500;
+      throw new ToolRefusal(
+        `The repository ${repo} was created and registered, but ${rejected
+          ? 'I could not create its scaffolding issue.'
+          : "scaffolding issue creation could not be verified. Check the repository's issues before retrying."} No scaffolding task was started.`,
+      );
+    }
+
     let task;
     try {
       task = await taskStore.create({
         projectId: project.id,
-        title: `Scaffold ${cleanName}`,
-        request: scaffoldRequest({
-          owner: defaults.owner,
-          name: cleanName,
-          description: cleanDescription,
-          visibility: defaults.visibility,
-          defaultBranch: defaults.defaultBranch,
-        }, defaults.templatesRepository),
+        issueNumber: issue.number,
+        title,
+        request: scaffold,
         source: 'chat',
         originMessageId,
       });
     } catch {
       throw new ToolRefusal(
-        `The repository ${repo} was created and registered, but I could not start its scaffolding task.`,
+        `The repository ${repo} was created and registered with scaffolding issue ${issue.url}, but I could not start its scaffolding task.`,
       );
     }
     if (!task) {
       throw new ToolRefusal(
-        `The repository ${repo} was created and registered, but I could not start its scaffolding task.`,
+        `The repository ${repo} was created and registered with scaffolding issue ${issue.url}, but I could not start its scaffolding task.`,
       );
     }
     return {
       projectId: project.id,
       repository: repo,
       repositoryUrl,
+      issueNumber: issue.number,
+      issueUrl: issue.url,
       taskId: task.id,
     };
   },

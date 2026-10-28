@@ -1,3 +1,21 @@
+## 28 October 2026 — Give new-project scaffolding an issue (#1344; P11-43)
+
+Dan requested a GitHub issue for scaffolding as well as ordinary Factory work.
+Create it after repository creation/registration and before task persistence,
+using the existing GitHub issue client and task issue-number field. This gives
+the issue-based Kanban a card and lets normal delivery retain its closing link.
+Keep the scaffold prompt, configured defaults and chat-message origin unchanged.
+Creation adds no worker label; the dispatcher owns the claim, so the issue-label
+webhook cannot independently start a second task during creation.
+
+The existing repository confirmation summary includes the scaffolding issue.
+Missing issue service refuses before side effects. Known issue references survive
+task persistence failures; uncertain issue writes are reported without an
+automatic retry. No new credentials, permissions, schema or board rules are needed.
+Validate with synthetic GitHub/store responses; no real project is created for
+this change. Draft preparation is approved; review, hosted qualification and
+integration remain coordinator-owned.
+
 ## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
 
 Dan approved starting read-only chat access to Jarvis's own backend logs,

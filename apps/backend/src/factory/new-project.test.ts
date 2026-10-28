@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { buildApp } from '../app.js';
+import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { SettingsStore } from '../core/settings.js';
@@ -8,6 +8,8 @@ import { createRepoAdminRepositoryCreator } from '../credentials/repo-admin.js';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 import type { OwnerInteractionService } from '../core/owner-interactions.js';
+import { GitHubIssueRequestError, type GitHubIssueClient } from '../github/issues.js';
+import { createFactoryBoard } from './board.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const repositoryToken = 'repo-admin-test-token-not-for-sandbox';
@@ -19,7 +21,7 @@ const authorization = {
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-it('uses configured defaults and keeps the repository secret out of task and recorded data', async () => {
+function fixture(overrides: BuildAppOptions = {}) {
   const requests: { url: string; init: RequestInit }[] = [];
   const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const address = String(url);
@@ -37,6 +39,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   const taskInput = vi.fn(async (input: Parameters<TaskStore['create']>[0]) => ({
     id: '81',
     projectId: input.projectId,
+    issueNumber: input.issueNumber ?? null,
     originMessageId: input.originMessageId ?? null,
     title: input.title,
     request: input.request,
@@ -126,6 +129,8 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     receiveConfirmation: vi.fn(async () => false),
     expirePendingConfirmations: vi.fn(async () => {}),
   } as unknown as OwnerInteractionService;
+  const createIssue = vi.fn(async () => ({ number: 1, url: 'https://github.com/DanAakesen/bright-app/issues/1' }));
+  const githubIssueClient = { createIssue } as unknown as GitHubIssueClient;
   const app = buildApp(config, undefined, {
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
     projectRepositoryCreator: createRepoAdminRepositoryCreator(
@@ -138,16 +143,24 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     settingsStore,
     toolCallStore,
     ownerInteractions,
+    githubIssueClient,
     eventHub: taskEventHub as TaskEventHub,
+    ...overrides,
   });
   apps.push(app);
-
-  const response = await app.inject({
+  const create = () => app.inject({
     method: 'POST',
     url: '/tools/create_project',
     headers: authorization,
     payload: { name: 'bright-app', description: 'A bright new application' },
   });
+  return { app, create, requests, fetcher, taskInput, taskStore, projectInput, createdProject,
+    events, toolCalls, createIssue, runConfirmed };
+}
+
+it('creates the scaffold issue before its task and keeps defaults, instructions and secrets safe', async () => {
+  const { create, requests, taskInput, projectInput, createdProject, events, toolCalls, createIssue, runConfirmed } = fixture();
+  const response = await create();
 
   expect(response.statusCode).toBe(200);
   expect(response.json()).toMatchObject({
@@ -157,6 +170,8 @@ it('uses configured defaults and keeps the repository secret out of task and rec
       projectId: '73',
       repository: 'DanAakesen/bright-app',
       repositoryUrl: 'https://github.com/DanAakesen/bright-app',
+      issueNumber: 1,
+      issueUrl: 'https://github.com/DanAakesen/bright-app/issues/1',
       taskId: '81',
     },
   });
@@ -173,9 +188,17 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     source: 'chat',
     originMessageId: '42',
     title: 'Scaffold bright-app',
+    issueNumber: 1,
   }));
+  expect(createIssue).toHaveBeenCalledExactlyOnceWith('DanAakesen/bright-app', 'Scaffold bright-app', taskInput.mock.calls[0]?.[0].request);
+  expect(projectInput.mock.invocationCallOrder[0]).toBeLessThan(createIssue.mock.invocationCallOrder[0]!);
+  expect(createIssue.mock.invocationCallOrder[0]).toBeLessThan(taskInput.mock.invocationCallOrder[0]!);
   expect(taskInput.mock.calls[0]?.[0].request).toContain('DanAakesen/templates');
   expect(taskInput.mock.calls[0]?.[0].request).toContain('PowerShell 7 (pwsh)');
+  expect(taskInput.mock.calls[0]?.[0].request).toContain('Fill PRODUCT.md and PLAN.md from the description');
+  expect(taskInput.mock.calls[0]?.[0].request).toContain('templates/github-actions/pr-checks.yml');
+  expect(taskInput.mock.calls[0]?.[0].request).toContain('templates/github-actions/release.yml');
+  expect(taskInput.mock.calls[0]?.[0].request).toContain('default branch develop as the PR base');
   expect(taskInput.mock.calls[0]?.[0].request).toContain('JARVIS_NEEDS_ATTENTION:');
   expect(runConfirmed).toHaveBeenCalledWith(
     'create_repository',
@@ -195,6 +218,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     task: taskInput.mock.calls[0]?.[0],
     events,
     toolCalls,
+    issue: createIssue.mock.calls,
   })).not.toContain(repositoryToken);
   expect(JSON.stringify({
     result: response.json(),
@@ -202,5 +226,86 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     task: taskInput.mock.calls[0]?.[0],
     events,
     toolCalls,
+    issue: createIssue.mock.calls,
   })).not.toContain(vaultToken);
+});
+
+it('shows the scaffold issue with its Factory task overlay before a pull request exists', async () => {
+  const test = fixture();
+  expect((await test.create()).statusCode).toBe(200);
+  const task = await test.taskInput.mock.results[0]!.value;
+  const issue = await test.createIssue.mock.results[0]!.value;
+  const board = createFactoryBoard(test.createdProject.id, test.createdProject.repo, {
+    issues: [{
+      ...issue, title: task.title, body: task.request, taskCode: null, labels: [], worker: null,
+      state: 'open', updatedAt: task.createdAt, closedAt: null, blockedBy: [], blockedByCount: 0,
+    }],
+    pullRequests: [],
+  }, [task], []);
+  expect(board.columns.find(({ id }) => id === 'ready')?.cards).toMatchObject([{
+    issue: { number: issue.number, url: issue.url }, task: { id: task.id, state: 'Ready' }, pr: null,
+  }]);
+  expect(board.columns.flatMap(({ cards }) => cards)).toHaveLength(1);
+});
+
+it('refuses before repository creation when the issue service is unavailable', async () => {
+  const test = fixture({ githubIssueClient: undefined });
+  const response = await test.create();
+  expect(response.json()).toMatchObject({ outcome: 'refused' });
+  expect(test.fetcher).not.toHaveBeenCalled();
+  expect(test.projectInput).not.toHaveBeenCalled();
+  expect(test.createIssue).not.toHaveBeenCalled();
+  expect(test.taskInput).not.toHaveBeenCalled();
+});
+
+it('does not create an issue or task when approval or repository creation fails', async () => {
+  const test = fixture();
+  test.runConfirmed.mockRejectedValueOnce(new Error('Not approved'));
+  const response = await test.create();
+  expect(response.json()).toMatchObject({ outcome: 'refused' });
+  expect(test.fetcher).not.toHaveBeenCalled();
+  expect(test.projectInput).not.toHaveBeenCalled();
+  expect(test.createIssue).not.toHaveBeenCalled();
+  expect(test.taskInput).not.toHaveBeenCalled();
+});
+
+it('does not create an issue or task when registration fails after repository creation', async () => {
+  const test = fixture();
+  test.projectInput.mockRejectedValueOnce(new Error('Private database detail'));
+  const response = await test.create();
+  expect(response.json()).toMatchObject({ outcome: 'refused' });
+  expect(response.body).toContain('was created, but I could not register it');
+  expect(response.body).not.toContain('Private database detail');
+  expect(test.createIssue).not.toHaveBeenCalled();
+  expect(test.taskInput).not.toHaveBeenCalled();
+});
+
+it.each([403, 404, 422, 500, 503, null])('reports issue creation failure (%s) without starting a task or retrying the write', async (status) => {
+  const test = fixture();
+  test.createIssue.mockRejectedValueOnce(status === null
+    ? new Error('Private transport detail') : new GitHubIssueRequestError(status));
+  const response = await test.create();
+  expect(response.json()).toMatchObject({ outcome: 'refused' });
+  expect(response.body).toContain('was created and registered');
+  expect(response.body).toContain('No scaffolding task was started');
+  expect(response.body).toContain(status !== null && status < 500
+    ? 'could not create its scaffolding issue'
+    : "could not be verified. Check the repository's issues before retrying");
+  expect(response.body).not.toContain('Private transport detail');
+  expect(test.createIssue).toHaveBeenCalledOnce();
+  expect(test.taskInput).not.toHaveBeenCalled();
+});
+
+it.each(['throws', 'returns null'])('keeps the created issue link when task persistence %s', async (failure) => {
+  const test = fixture();
+  const create = vi.spyOn(test.taskStore, 'create');
+  if (failure === 'throws') create.mockRejectedValueOnce(new Error('Private database detail'));
+  else create.mockResolvedValueOnce(null);
+  const response = await test.create();
+  expect(response.json()).toMatchObject({ outcome: 'refused' });
+  expect(response.body).toContain('https://github.com/DanAakesen/bright-app/issues/1');
+  expect(response.body).toContain('could not start its scaffolding task');
+  expect(response.body).not.toContain('Private database detail');
+  expect(test.createIssue).toHaveBeenCalledOnce();
+  expect(create).toHaveBeenCalledOnce();
 });

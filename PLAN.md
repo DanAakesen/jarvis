@@ -1,3 +1,26 @@
+## Scaffolding issue linkage (#1344; P11-43; 28 October 2026)
+
+Owner-approved scoped issue/claim and draft preparation. After creating and
+registering a repository, create its scaffolding issue through the existing
+GitHub issue client and persist its number on the initial Factory task. Preserve
+template/cpinit, PRODUCT.md/PLAN.md, workflow templates, configured defaults and
+chat-message linkage. Return the issue reference; report partial and uncertain
+writes without automatic issue retries. No new project, permission or credential
+changes are used for testing. Focused backend: 163 passed. Workspace lint/build
+pass on Node 22.22.2. Aggregate tests: contracts 174, web 2,441 and vault mirror
+237 pass; backend 6,768 pass, seven fail and one is skipped. Six failures are in
+unchanged auth fixtures (401 versus expected 403), and one is the unchanged pin
+fixture's five-second timeout. Repository scripts: 141 pass, three cannot launch
+missing pwsh. A one-worker rerun passed all 12 pin tests; auth still failed (57 passed, seven
+failed, with different cases). The same suites on untouched main 0df74dee returned 73 passes and three auth
+failures, with pin tests passing. Auth failures therefore also reproduce on the
+baseline; their exact cause is not established. The aggregate failure remains
+explicit.
+Draft PR preparation is complete; independent review and exact-head hosted
+qualification remain pending. Main Deploy 40753486660 failed live conversation
+acceptance during preparation, so integration remains coordinator-owned and held
+until main is healthy.
+
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a

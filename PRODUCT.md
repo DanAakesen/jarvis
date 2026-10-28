@@ -601,7 +601,7 @@ stateDiagram-v2
 Jarvis creates new repositories from a name and description; the Add project dialog shows the saved defaults that Jarvis applies. Each project keeps its own settings and can change them at any time.
 
 1. Jarvis creates `<owner>/<name>` with the configured visibility and the backend-only `jarvis-repo-admin` token. The token never enters a sandbox.
-2. Jarvis registers the project with the configured defaults and starts the first task in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
+2. Jarvis registers the project with the configured defaults, creates a scaffolding issue in the new repository, and links the first Factory task to that issue so it appears on the issue-based Kanban before a PR exists. The result includes the issue link. If issue creation or task persistence fails, Jarvis reports the partial result and any known issue link; uncertain issue writes are not retried automatically. The task runs in a sandbox: clone the templates repository, run its initializer (`cpinit`) with the modules the agent chooses from the description, fill `PRODUCT.md` and `PLAN.md` from the description, add the repository's PR-check and release workflow templates (P3-09), and open a pull request.
 3. When the description is not enough to choose modules or fill the documents, the task moves to Needs attention with a question for Dan instead of guessing.
 4. A new project starts with the base `node`/`1x2` defaults; this is not a detected stack. Dan can change any project setting afterwards.
 
