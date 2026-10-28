@@ -193,6 +193,20 @@ describe('provider limits and failures', () => {
     }
   });
 
+  it.each(['invalid', 'oversized'])('does not await stuck cancellation for %s declared length and releases the query gate', async (length) => {
+    const cancel = vi.fn(() => new Promise<void>(() => {}));
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(new ReadableStream({ cancel }), {
+      headers: { 'content-length': length === 'invalid' ? 'invalid' : String(backendLogLimits.responseBytes + 1) },
+    }));
+    const f = fixture(fetcher);
+    // Both reads must settle even though cancellation never does. The second must enter the provider.
+    expect(await f.read()).toMatchObject({ status: 'unavailable', reason: 'query_failed', records: [] });
+    expect(await f.read()).toMatchObject({ status: 'unavailable', reason: 'query_failed', records: [] });
+    expect(cancel).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(f.getToken).toHaveBeenCalledTimes(2);
+  });
+
   it.each(['token', 'fetch', 'body'])('enforces the deadline even if %s ignores cancellation', async (stage) => {
     vi.useFakeTimers();
     // Native AbortSignal.timeout does not use Vitest's virtual clock.

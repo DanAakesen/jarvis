@@ -1,5 +1,14 @@
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 
+Follow-up review found that rejected Content-Length cleanup could await a
+transport cancellation forever and retain the single-query gate. Cleanup is now
+nonblocking, consistent with the streamed-body path. Two synthetic regressions
+use invalid/oversized lengths and never-resolving cancellation, then prove another
+query enters the provider. All 44 reader tests and backend lint/build pass.
+The original head's qualification is superseded;
+normal exact-head hosted checks are required for this correction. No permission
+or activation change is included.
+
 Use the engineering skill. Run backend `operations/backend-logs.test.ts`, signed
 `auth/auth.test.ts`, registry, production-module, config, logging/source and shared
 capability-budget suites, then backend tests/lint/build and normal hosted checks.

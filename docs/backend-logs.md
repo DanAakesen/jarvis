@@ -174,3 +174,10 @@ with the original timeout and one worker; the aggregate run remains failed.
 Hosted-agent checks pass 930 tests, Ruff and byte compilation. Repository script
 checks pass 141, with three errors due to unavailable PowerShell. Normal hosted
 Node 22 qualification remains pending while the PR is draft.
+
+Follow-up independent review identified one deadline defect in the prepared
+implementation: rejecting an invalid/oversized Content-Length awaited body
+cancellation. Cancellation now runs without blocking the failed read or keeping
+the query gate occupied. Two synthetic tests make cancellation never resolve,
+then require both the first read and a subsequent provider read to settle. This
+correction requires qualification of its new head; the earlier head is superseded.

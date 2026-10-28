@@ -1,9 +1,18 @@
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
+Follow-up review found that rejected Content-Length cleanup could await a
+transport cancellation forever and retain the single-query gate. Cleanup is now
+nonblocking, consistent with the streamed-body path. Two synthetic regressions
+use invalid/oversized lengths and never-resolving cancellation, then prove another
+query enters the provider. All 44 reader tests and backend lint/build pass.
+The original head's qualification is superseded;
+normal exact-head hosted checks are required for this correction. No permission
+or activation change is included.
+
 Codex claimed [#1341](https://github.com/DanAakesen/jarvis/issues/1341) and branched
 `codex/1341-backend-logs` from current main `00493374`. The default-off retained
 backend-log reader, authenticated sensitive read integration and synthetic
-regressions are implemented in draft [#1342](https://github.com/DanAakesen/jarvis/pull/1342).
+regressions are implemented in [#1342](https://github.com/DanAakesen/jarvis/pull/1342).
 Seven focused suites pass 262 tests; backend lint/build pass. Full backend: 300
 files pass, one fails (6,760 passed, one failed, one skipped); the workspace-language
 acknowledgement case passes an isolated rerun with its original timeout. The final

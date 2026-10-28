@@ -127,7 +127,8 @@ async function readResponse(response: Response, signal: AbortSignal): Promise<un
   if (!response.body) throw new Error('Missing query body');
   const declared = response.headers.get('content-length');
   if (declared !== null && (!/^\d+$/u.test(declared) || Number(declared) > backendLogLimits.responseBytes)) {
-    await response.body.cancel().catch(() => undefined);
+    // Cancellation is cleanup; a transport that ignores it must not hold the deadline or query gate.
+    void response.body.cancel().catch(() => undefined);
     throw new Error('Query body limit');
   }
   const reader = response.body.getReader();
