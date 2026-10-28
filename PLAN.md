@@ -1,3 +1,31 @@
+## Terra main-chat preparation (#1337; 27 October 2026)
+
+Owner-approved issue/claim and draft PR preparation on
+`codex/1337-terra-main-chat`, from main `0ce12d35`. Prepare the Foundry deployment
+with required `terraChatCapacity` and prefer deployed Terra for main chat; retain
+saved choices and existing role/tool defaults. Draft PR [#1338](https://github.com/DanAakesen/jarvis/pull/1338)
+is published. Full backend: 300 files, 6,718 passed and one skipped. Hosted agent:
+930 passed plus Ruff/byte compilation. Backend lint/build and Bicep v0.44.1
+offline build/lint pass; baseline template comparison preserves every existing
+resource property/capacity. Repository scripts: 141 passed; three require missing
+PowerShell. Documentation review confirms Danish Voice Live uses the voice role;
+only its hosted-agent fallback inherits chat. On 28 October, prepare requested
+capacity 150 in the existing parameter file, matching the established chat
+allocation. The previously missing parameter was a draft-design gap, not a need
+for a new Azure login. Existing main-only Deploy/OIDC validates Azure acceptance;
+PR CI checks the template offline. Live quota remains unobserved.
+Microsoft's public Global Standard short/long list rates are sourced in
+`infra/README.md`; account rates and Azure tier billing rules remain unverified.
+Dan approved USD 20/month and accepted existing alerts; no new budget subsystem
+or repeated budget/sign-in question is required.
+Resumed validation: five focused backend suites pass 220 tests, including the
+persisted Terra owner-setting update and owner/agent readbacks; backend
+lint/build and updated Bicep v0.44.1 build/lint pass. All required deployment
+parameters are supplied by committed parameters plus existing script inputs.
+Next: independent review and hosted Node 22 qualification, followed by
+normal release and a saved-owner chat-only Settings update. No merge, deployment,
+paid inference or live model-selection verification is claimed.
+
 ## Deadline notification details (#1335; 27 October 2026)
 
 Scoped correction on `fix/1335-notification-task-details`, from main `d74bdd82`:
@@ -1725,6 +1753,11 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **Terra main chat (#1337):** request capacity 150 through the existing main-only
+  deployment path, then apply the controlled saved-owner default update. #1338
+  contains passing local backend/hosted-agent/Bicep evidence. Normal review and
+  qualification remain; no new budget guard or owner sign-in is required.
 
 - **Web polish (P9-98 / #792, P9-102 / #798, P9-103 / #797; 17 October):** one small PR per Dan's speed-first direction. Settings says Routines instead of Task recipes; the `/recipes` API alias is untouched. Presence reads green/yellow/blue in both themes; light dots carry a ring of their own hue, and the mode label stays beside every dot except in the phone top bar, whose chip shows the dot alone. Phone pages now end above the measured composer height, so Save settings is reachable with a six-line draft (before, a real touch tap hit the composer's More options button). Headless Chrome at 320×700, 390×844 and 1440×900 in both themes against a fake backend; no physical iPhone/Safari. Next: exact-head CI and the coordinator's merge; live acceptance stays with Dan.
 

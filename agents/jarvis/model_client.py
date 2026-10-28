@@ -1134,6 +1134,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if reasoning_effort and reasoning_effort != "none":
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
+                    elif reasoning_effort == "none" and model_name == "gpt-6.1-terra":
+                        # Terra defaults to medium when omitted; preserve the
+                        # owner's existing none setting without changing other models.
+                        request["reasoning"] = {"effort": "none"}
                     with latency_span("model_call") as model_span:
                         if use_anthropic:
                             anthropic_request: dict[str, Any] = {

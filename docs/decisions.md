@@ -1,3 +1,38 @@
+## 27 October 2026 — Prepare Terra as the main-chat default (#1337)
+
+Dan requested GPT-6.1 Terra for main chat, both selectable and default, and
+explicitly approved the issue and draft PR. Prepare the existing Foundry
+GlobalStandard deployment path for `gpt-6.1-terra` / `2026-10-26`. On 28 October,
+resume with requested capacity 150 in the committed parameters, following the
+existing chat allocation and recorded 50K-TPM throttling evidence (#1232/L91).
+This is a throughput request for pay-per-token GlobalStandard, not a reserved
+PTU commitment or an observation of actual available quota. The normal main-only
+Deploy already authenticates through OIDC and can validate Azure acceptance;
+do not require a new owner sign-in just to prepare the request. No merge,
+deployment or paid inference is performed by this preparation.
+
+Prefer Terra only when it is in the deployed chat catalogue; retain Luna before
+provisioning or during ARM fallback. Preserve saved `roles.chat.model`, legacy
+`jarvis.model` and explicit sessions rather than silently migrating them. Rollout
+must observe the owner setting and apply the existing chat-only Settings update
+to fulfill the requested owner default. Danish `/voice/da` uses the realtime
+voice role when `options.connect` is configured; only the `connectDanish`
+hosted-agent fallback inherits chat settings. Approval interpretation and
+proactive summarization already consume chat settings. Other role defaults and
+subscription-backed coding/image tools stay unchanged.
+
+Terra's documented reasoning default is medium. Send explicit none only for
+Terra when the existing setting is none; preserve other model requests. Expose
+its intersection with the existing enum, without minimal or a broad max/ultra
+change. Microsoft's public Global Standard price table is verified through its
+indexed model catalog tag page and recorded in `infra/README.md`. Account rates,
+Azure context-tier billing rules, actual quota/capacity, live selection and paid
+acceptance remain unverified. Dan approved USD 20/month and declined a new
+spending guard, accepting existing alerts. Keep safeguards and alerts intact;
+no runtime price or budget implementation is added. Normal review/qualification
+and the existing authenticated deployment remain required; stop on an Azure
+allocation rejection rather than silently changing capacity, region or access.
+
 ## 27 October 2026 — Compact screen-share Stop control (#1333)
 
 Replace the composer's screen-sharing status row with an icon-only red square

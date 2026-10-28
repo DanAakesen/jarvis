@@ -1,3 +1,39 @@
+## Terra main-chat preparation checks (#1337; 27 October 2026)
+
+Run backend model-catalog, settings, model-tools, settings-tools and
+agent-contract tests, backend lint/build, hosted-agent tests/Ruff/byte compilation,
+and Bicep v0.44.1 offline build/lint. Terra has a required `terraChatCapacity`
+parameter, now supplied as 150 in committed `main.parameters.json`, matching the
+established chat allocation. PR CI remains offline; the normal main-only
+Deploy/OIDC path validates live Azure acceptance. No new sign-in is needed to
+prepare this request, and available quota is not claimed. Stop/report any Azure
+quota/capacity rejection without silently changing allocations or access.
+After the normal release, inspect and
+update only the saved chat model through Settings. Do not interpret the code
+default as the owner's active model. No Azure login, paid inference or live
+settings mutation belongs in this preparation.
+
+Local results on Node 24.19.0/npm 11.9.0: focused backend 219 passed, full backend
+300 files/6,718 passed/one skipped; hosted agent 930 passed plus Ruff/byte
+compilation. Backend ESLint/TypeScript and standalone Bicep v0.44.1 build/lint
+pass. Compiled baseline comparison changes only the new Terra resource/required
+parameter and the following decision deployment's ordering dependency. Repository
+script checks: 141 passed; three cannot launch missing `pwsh`. The public npm
+mirror substitution used the same integrity-pinned tarballs and restored the
+lockfile byte-for-byte. Draft #1338 is not hosted qualification; independent
+review, Node 22 CI, Azure acceptance and saved owner selection remain
+pending. No live/cost verification is implied by the synthetic tests.
+Microsoft's public Global Standard list rates are now sourced in `infra/README.md`;
+account rates, Azure context-tier billing rules and actual quota/capacity remain
+unverified. Dan approved USD 20/month, accepted existing alerts and declined a
+new spending guard. No new runtime price/budget implementation or login handoff
+is required. Keep review/qualification and main-only deployment controls intact.
+28 October continuation: the updated saved-default regression asserts the stored
+model key, owner Settings readback and new agent Settings readback while retaining
+reasoning/other settings. All five focused suites pass 220 tests, plus backend
+lint/build and updated Bicep v0.44.1 build/lint. Existing runtime/agent code stays
+unchanged; full backend/hosted-agent results above are retained prior evidence.
+
 ## Deadline notification checks (#1335; 27 October 2026)
 
 Run backend `proactive/detect.test.ts`, `proactive/deadline-notifications.test.ts`,
