@@ -77,7 +77,13 @@ and reasoning; a source-code default is not evidence of Dan's active selection.
 If needed, use the existing Settings update with only
 `{"settings":{"roles":{"chat":{"model":"gpt-6.1-terra"}}}}` to retain the
 existing valid reasoning and all unrelated settings. Verify the returned
-effective model, then start a new chat. Do not rewrite stored settings globally
+effective model with owner `GET /settings`; a new hosted-agent session must
+resolve Terra through its normal agent-only `GET /agent/settings` read. The
+existing owner `set_jarvis_model` tool uses the same
+validated settings write path and returns the saved model for the next session.
+The regression test covers the persisted model-only update and both readbacks;
+the hosted-agent regression preserves an explicit session model. Do not claim
+activation from the code fallback alone. Do not rewrite stored settings globally
 or replace explicit session models. Danish `/voice/da` uses the realtime voice
 role when `options.connect` is configured; only the `connectDanish` hosted-agent
 fallback inherits chat settings on its next session. The voice-role default

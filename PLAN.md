@@ -18,6 +18,10 @@ Microsoft's public Global Standard short/long list rates are sourced in
 `infra/README.md`; account rates and Azure tier billing rules remain unverified.
 Dan approved USD 20/month and accepted existing alerts; no new budget subsystem
 or repeated budget/sign-in question is required.
+Resumed validation: five focused backend suites pass 220 tests, including the
+persisted Terra owner-setting update and owner/agent readbacks; backend
+lint/build and updated Bicep v0.44.1 build/lint pass. All required deployment
+parameters are supplied by committed parameters plus existing script inputs.
 Next: independent review and hosted Node 22 qualification, followed by
 normal release and a saved-owner chat-only Settings update. No merge, deployment,
 paid inference or live model-selection verification is claimed.

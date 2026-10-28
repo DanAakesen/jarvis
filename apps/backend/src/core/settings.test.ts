@@ -107,7 +107,7 @@ describe('settings API', () => {
   });
 
   it('applies a chat-only Terra selection without changing other roles or settings', async () => {
-    const { store } = createStore();
+    const { store, values } = createStore();
     await store.write({ roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } }, appearance: { theme: 'dark' } });
     const before = await readSettings(store, terraCatalogue);
     const app = fixture(store, undefined, undefined, undefined, undefined, terraCatalogue);
@@ -120,6 +120,20 @@ describe('settings API', () => {
     expect(after).toEqual({
       ...before, jarvis: { model: 'gpt-6.1-terra', reasoning: 'high' },
       roles: { ...before.roles, chat: { model: 'gpt-6.1-terra', reasoningEffort: 'high' } },
+    });
+    expect(values['roles.chat.model']).toBe('"gpt-6.1-terra"');
+    expect(values['roles.chat.reasoning_effort']).toBe('"high"');
+    const ownerReadback = await app.inject({ url: '/settings', headers: authorization });
+    expect(ownerReadback.statusCode).toBe(200);
+    expect(ownerReadback.json().settings).toEqual(after);
+
+    const agent = fixture(store, async () => ({
+      kind: 'jarvis-agent', objectId: '00000000-0000-0000-0000-000000000001', tenantId: config.auth.tenantId,
+    }), undefined, undefined, undefined, terraCatalogue);
+    const agentReadback = await agent.inject({ url: '/agent/settings', headers: authorization });
+    expect(agentReadback.statusCode).toBe(200);
+    expect(agentReadback.json()).toMatchObject({
+      model: 'gpt-6.1-terra', reasoningEffort: 'high', roles: after.roles,
     });
   });
 

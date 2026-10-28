@@ -28,6 +28,11 @@ account rates, Azure context-tier billing rules and actual quota/capacity remain
 unverified. Dan approved USD 20/month, accepted existing alerts and declined a
 new spending guard. No new runtime price/budget implementation or login handoff
 is required. Keep review/qualification and main-only deployment controls intact.
+28 October continuation: the updated saved-default regression asserts the stored
+model key, owner Settings readback and new agent Settings readback while retaining
+reasoning/other settings. All five focused suites pass 220 tests, plus backend
+lint/build and updated Bicep v0.44.1 build/lint. Existing runtime/agent code stays
+unchanged; full backend/hosted-agent results above are retained prior evidence.
 
 ## Deadline notification checks (#1335; 27 October 2026)
 
