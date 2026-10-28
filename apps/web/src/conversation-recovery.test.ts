@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { conversationRecoveryKey, readConversationRecovery, saveConversationRecovery } from './conversation-recovery';
+import { conversationRecoveryKey, readConversationRecovery, saveConversationRecovery, type SavedFailedTurn } from './conversation-recovery';
+
+const queue = [{ id: 2, text: 'Synthetic queued request', language: 'en' as const }];
+const warning: SavedFailedTurn = { id: 1, text: 'Synthetic failed request', language: 'en', messageId: '42',
+  error: 'An action may have completed; check status before retrying.', partialReply: 'Partial', acknowledgment: 'I will check.' };
 
 describe('tab conversation recovery', () => {
   it('isolates backend/account scopes and retains text, language, files and failure uncertainty', () => {
@@ -28,5 +32,46 @@ describe('tab conversation recovery', () => {
     const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => { throw new Error('Synthetic quota limit'); });
     expect(saveConversationRecovery('synthetic-recovery', { queue: [{ id: 1, text: 'Request', language: 'en' }], failedTurns: [] })).toBe(false);
     write.mockRestore();
+  });
+  it.each([100_000, 100_001, 512 * 1024])('round-trips a supported %i-byte partial reply without losing its queue or warning', length => {
+    const failedTurns = [{ ...warning, partialReply: 'x'.repeat(length) }];
+    expect(saveConversationRecovery('synthetic-boundary', { queue, failedTurns })).toBe(true);
+    expect(readConversationRecovery('synthetic-boundary')).toEqual({ queue, failedTurns });
+  });
+  it('round-trips a multibyte reply at the supported 512 KiB UTF-8 limit', () => {
+    const failedTurns = [{ ...warning, partialReply: '🙂'.repeat(128 * 1024) }];
+    expect(new TextEncoder().encode(failedTurns[0]!.partialReply).byteLength).toBe(512 * 1024);
+    expect(saveConversationRecovery('synthetic-multibyte', { queue, failedTurns })).toBe(true);
+    expect(readConversationRecovery('synthetic-multibyte')).toEqual({ queue, failedTurns });
+  });
+  it.each([
+    ['oversized ASCII reply', { partialReply: 'x'.repeat(512 * 1024 + 1) }],
+    ['oversized multibyte reply', { partialReply: '🙂'.repeat(128 * 1024 + 1) }],
+    ['oversized error', { error: 'x'.repeat(10_001) }],
+    ['oversized acknowledgment', { acknowledgment: 'x'.repeat(2_001) }],
+    ['invalid message ID', { messageId: 'invalid' }],
+  ] as const)('preserves valid queue entries and warnings beside an %s', (_label, invalid) => {
+    const bad = { ...warning, ...invalid, id: 3 };
+    const key = 'synthetic-invalid-warning';
+    sessionStorage.setItem(key, JSON.stringify({ queue, failedTurns: [bad, warning], savedAt: Date.now() }));
+    expect(readConversationRecovery(key)).toEqual({ queue, failedTurns: [warning] });
+    expect(saveConversationRecovery(key, { queue, failedTurns: [bad, warning] })).toBe(false);
+    expect(readConversationRecovery(key)).toEqual({ queue, failedTurns: [warning] });
+  });
+  it('restores a valid queue even when the warning collection is malformed', () => {
+    sessionStorage.setItem('synthetic-malformed-warning', JSON.stringify({ queue, failedTurns: null, savedAt: Date.now() }));
+    expect(readConversationRecovery('synthetic-malformed-warning')).toEqual({ queue, failedTurns: [] });
+  });
+  it('retains queued messages and uncertainty warnings when partial contexts exceed the snapshot budget', () => {
+    const failedTurns = Array.from({ length: 4 }, (_, index) => ({ ...warning, id: index + 3, partialReply: 'x'.repeat(512 * 1024) }));
+    expect(saveConversationRecovery('synthetic-snapshot-budget', { queue, failedTurns })).toBe(false);
+    expect(readConversationRecovery('synthetic-snapshot-budget')).toEqual({
+      queue, failedTurns: failedTurns.map(turn => ({ ...turn, partialReply: '' })),
+    });
+  });
+  it('saves the valid queue when warning metadata alone exceeds the snapshot budget', () => {
+    const failedTurns = Array.from({ length: 201 }, (_, index) => ({ ...warning, id: index + 3, error: 'x'.repeat(10_000) }));
+    expect(saveConversationRecovery('synthetic-warning-budget', { queue, failedTurns })).toBe(false);
+    expect(readConversationRecovery('synthetic-warning-budget')).toEqual({ queue, failedTurns: [] });
   });
 });

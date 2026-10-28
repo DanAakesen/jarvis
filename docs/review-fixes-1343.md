@@ -71,3 +71,22 @@ the full manifest. Assertions and migration implementation remain unchanged.
 Qualification must run again on the correction's new head; results are recorded
 in the PR without treating the original failed run as passed. No merge, deployment,
 Azure grant or production acceptance is claimed.
+
+## Recovery bounds follow-up
+
+CI 40757610202 subsequently passed on `5cf8da23`: SQL 283, backend 6,778 with
+one skipped, web 2,448 and contracts 174. A bot review found a separate recovery
+regression: a 100,001-character partial reply was saved successfully but rejected
+on read, discarding the valid queue too. This is reproduced and corrected within
+approved items 4–5.
+
+Writer and reader now share per-entry validation with the backend's 512 KiB
+UTF-8 partial-reply limit. Invalid entries are isolated; valid queued messages
+and other warnings survive. If partial contexts exceed the existing two-million-
+character snapshot bound, saving omits partial context before warning metadata;
+if warning metadata alone remains oversized, it preserves the queue alone.
+Incomplete saves return failure to the existing visible recovery warning.
+Regression tests cover 100,000/100,001 characters, exact and excess 512 KiB ASCII
+and multibyte replies, invalid warning fields and snapshot-budget preservation.
+The follow-up requires CI on its new head. No retry of the failed PR-description
+write is included; qualification results are delivered to the coordinator.

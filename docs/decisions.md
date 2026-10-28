@@ -18,6 +18,12 @@ not approval to repeat a completed or uncertain server action. No optional audit
 feature, Azure log permission, paid worker, real email send or health write is
 included. Draft delivery remains subject to independent review and coordinator release.
 
+Review follow-up: use the same per-entry validator on write and read, matching
+the backend's 512 KiB UTF-8 partial-reply limit. Reject invalid entries separately
+so a bad warning cannot discard unrelated queued drafts. Under the existing
+snapshot bound, prioritize unsent messages and uncertainty warnings over partial
+context; report incomplete saving through the existing recovery feedback.
+
 ## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
 
 Dan approved starting read-only chat access to Jarvis's own backend logs,

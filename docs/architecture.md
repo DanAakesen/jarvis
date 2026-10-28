@@ -19,8 +19,12 @@ and approval boundaries.
 
 Browser tab recovery uses sessionStorage scoped by backend/account for queued
 text/file references and terminal error context. A stored snapshot expires after
-24 hours without update; malformed/oversized recovery is refused and storage
-write failures are visible. Recovery never resubmits a server-accepted turn and
+24 hours without update. Writer and reader share per-entry validation, including
+the backend's 512 KiB UTF-8 partial-reply limit; invalid warning entries do not
+discard valid queued messages. The two-million-character snapshot bound remains.
+When partial contexts exceed it, saving keeps warnings and queued messages first;
+if necessary it falls back to the queue alone. Incomplete saves and storage write
+failures are visible through the existing recovery warning. Recovery never resubmits a server-accepted turn and
 restored queued requests require an explicit Send queued messages action. The
 Settings change only moves the explicit Save control at phone width.
 

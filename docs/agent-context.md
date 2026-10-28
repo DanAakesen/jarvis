@@ -27,6 +27,14 @@ including the issue-delivery index in its catalog query and unwinding newer
 migrations again before the second Workspaces rollback. Preserve every index,
 round-trip and latest-only assertion. New-head hosted qualification is required.
 
+CI 40757610202 passed on `5cf8da23`: SQL 283, backend 6,778/one skipped, web
+2,448 and contracts 174. The next recovery hardening fixes the confirmed bot
+finding at discussion_r4405317215. Run conversation-recovery and
+ConversationHistory tests, web lint/build and new-head hosted CI. Boundaries cover
+100,000/100,001 ASCII characters, exact 512 KiB ASCII and multibyte replies,
+invalid warning isolation and snapshot-budget compaction that retains queued
+messages and uncertainty warnings. No PR-body metadata retry is authorized.
+
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a

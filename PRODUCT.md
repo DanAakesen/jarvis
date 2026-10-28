@@ -14,6 +14,10 @@ value and vision budget in USD per day.
 Chat warnings and unsent queued messages survive reload in this tab, scoped to
 the backend and signed-in account. Restored queued messages wait for the owner's
 explicit Send queued messages action. Missing browser storage is reported.
+Supported partial replies up to 512 KiB in UTF-8 survive recovery. Invalid
+warning entries do not discard valid queued messages; when recovery reaches its
+storage bound, unsent messages and uncertainty warnings take priority over
+partial reply context, and incomplete saving is reported.
 On mobile, Settings keeps its heading and explicit Save in a sticky top; desktop
 keeps its existing footer Save. No Settings navigation guard, autosave or draft
 persistence is added. Live/device and SQL integration acceptance remain separate

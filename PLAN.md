@@ -25,6 +25,14 @@ the expected new index, and the second Workspaces rollback needed to unwind
 0068 again. Both are corrected without weakening assertions; qualification must
 run on the correction's new head.
 
+Qualification of `5cf8da23` passed (CI 40757610202): SQL 283, backend 6,778 plus
+one skipped, web 2,448, contracts 174. A subsequent bot finding reproduced loss
+of the whole recovery snapshot for a 100,001-character partial reply. The scoped
+follow-up aligns read/write validation to 512 KiB UTF-8, retains valid entries
+independently and prioritizes queue/warning data when partial context exceeds
+the snapshot budget. Boundary and ConversationHistory checks pass 141 tests;
+new-head CI is required before merge. Do not retry the failed PR-body update.
+
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a
