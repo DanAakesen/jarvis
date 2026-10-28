@@ -113,6 +113,10 @@ checked 28 October 2026. Grants are additive: broader effective assignments can
 bypass this condition. Resource-context access also depends on workspace access
 mode. A privileged owner must inspect effective grants and supported conditions;
 this implementation does not change access mode or remove existing assignments.
+The overview's allowed-value character list omits underscores, while this legacy
+table name contains them. The documentation alone therefore does not establish
+acceptance of this exact custom-table condition; require provider acceptance and
+the positive/negative proof below, without substituting a broader grant.
 The repository deploy identity cannot create the proposed custom role. A future,
 separately approved owner/bootstrap operation must be narrowly scoped and reviewed;
 do not run the full bootstrap as a substitute or place this grant into CI.
@@ -161,3 +165,12 @@ partial/empty/unavailable results, timeout/cancellation, concurrency, signed own
 and service authorization, read classification and redacted audits. Shared
 catalogue, capability-budget and logging tests remain enforced without raised
 limits. These are unit/local HTTP checks, not deployed Azure authorization proof.
+
+Local run (Node 24.19.0/npm 11.9.0): seven focused suites passed 262 tests;
+final reader/shared-instruction rerun passed 59; backend lint/build pass. The full
+backend aggregate finished with 6,760 passed, one failed and one skipped. Its
+workspace-language `en` acknowledgement failure passes the exact isolated case
+with the original timeout and one worker; the aggregate run remains failed.
+Hosted-agent checks pass 930 tests, Ruff and byte compilation. Repository script
+checks pass 141, with three errors due to unavailable PowerShell. Normal hosted
+Node 22 qualification remains pending while the PR is draft.

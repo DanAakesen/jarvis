@@ -3,8 +3,15 @@
 Codex claimed [#1341](https://github.com/DanAakesen/jarvis/issues/1341) and branched
 `codex/1341-backend-logs` from current main `00493374`. The default-off retained
 backend-log reader, authenticated sensitive read integration and synthetic
-regressions are implemented. Seven focused suites pass 262 tests; backend lint
-and TypeScript build pass. Full backend and draft PR publication are in progress. The exact Azure conditional
+regressions are implemented in draft [#1342](https://github.com/DanAakesen/jarvis/pull/1342).
+Seven focused suites pass 262 tests; backend lint/build pass. Full backend: 300
+files pass, one fails (6,760 passed, one failed, one skipped); the workspace-language
+acknowledgement case passes an isolated rerun with its original timeout. The final
+shared-instruction/reader rerun passes 59 tests. Hosted agent: 930 passed plus Ruff
+and byte compilation. Repository scripts: 141 pass; three need missing `pwsh`.
+Local runtime is Node 24.19.0/npm 11.9.0; hosted Node 22 remains pending. Same
+integrity-pinned public npm packages installed after the configured mirror 403;
+the lockfile is unchanged. The exact Azure conditional
 grant is proposed only in [docs/backend-logs.md](docs/backend-logs.md); no role or
 assignment/configuration activation is applied by merge/deploy. Next: review and
 hosted qualification, then action-time owner approval and deployed schema,
