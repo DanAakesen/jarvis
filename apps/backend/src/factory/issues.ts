@@ -133,6 +133,8 @@ export async function createJarvisIssue(input: {
   executor?: IssueExecutor;
   expectedTaskCode?: string;
   expectedRepository?: string;
+  originMessageId?: string;
+  tasks?: TaskStore | null;
   projects: ProjectStore | null;
   github: GitHubIssueClient | null;
 }): Promise<{ number: number; url: string; taskCode: string }> {
@@ -173,6 +175,10 @@ export async function createJarvisIssue(input: {
     }
     if (executor === 'jarvis') {
       try {
+        if (input.originMessageId) {
+          if (!input.tasks?.rememberIssueOrigin) throw new Error('Issue origin storage unavailable');
+          await input.tasks.rememberIssueOrigin(repository, issue.number, input.originMessageId);
+        }
         if (selectedProject) await revalidateProject(selectedProject.id, repository, input.projects);
         await input.github!.addLabels(repository, issue.number, ['Jarvis']);
       } catch {
@@ -303,6 +309,7 @@ export async function startIssueTask(input: {
   issue: number;
   project?: string;
   repository?: string;
+  deliveryId?: string;
 }): Promise<StartIssueResult> {
   if (!Number.isSafeInteger(input.issue) || input.issue < 1 || input.issue > 2_147_483_647) {
     return { kind: 'issue-not-found' };
@@ -324,6 +331,14 @@ export async function startIssueTask(input: {
   }
   if (!project) return { kind: 'project-not-found' };
   if (!input.tasks.findActiveByIssue) throw new Error('Issue task storage unavailable');
+  if (input.deliveryId) {
+    if (!input.tasks.findByIssueDelivery) throw new Error('Issue delivery storage unavailable');
+    const delivered = await input.tasks.findByIssueDelivery(input.deliveryId);
+    if (delivered) {
+      if (delivered.projectId !== project.id || delivered.issueNumber !== input.issue) throw new Error('Issue delivery context mismatch');
+      return { kind: 'existing', task: delivered, issue: null, repository: project.repo };
+    }
+  }
   const existing = await input.tasks.findActiveByIssue(project.id, input.issue);
   if (existing) return { kind: 'existing', task: existing, issue: null, repository: project.repo };
 
@@ -341,6 +356,7 @@ export async function startIssueTask(input: {
   if (!prompt) return { kind: 'prompt-too-large' };
 
   await revalidateProject(project.id, project.repo, input.projects);
+  const originMessageId = await input.tasks.getIssueOrigin?.(project.repo, input.issue);
   let task: TaskRecord | null;
   try {
     task = await input.tasks.create({
@@ -348,7 +364,9 @@ export async function startIssueTask(input: {
       issueNumber: input.issue,
       title: issue.title.slice(0, 200),
       request: prompt,
-      source: 'board',
+      source: originMessageId ? 'chat' : 'board',
+      ...(originMessageId ? { originMessageId } : {}),
+      ...(input.deliveryId ? { issueDeliveryId: input.deliveryId } : {}),
       agent: 'codex',
     });
   } catch (error) {

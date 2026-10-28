@@ -1,3 +1,19 @@
+## Review-fix persistence (#1343; migration 0068)
+
+`dbo.tasks.issue_delivery_id` is a nullable, binary-collated nvarchar(100) with a
+filtered unique index. Its lookup includes completed tasks: delivery identity is
+not an active-task lock. Creation checks it under transaction locks before
+inserting, so a repeated delivery cannot create another task after completion.
+`dbo.factory_issue_origins` maps lower-case repository plus issue number to the
+verified originating message ID. It is saved before a worker label is published;
+message retention cascades removal of this association. The paired down batch
+removes only this additive association/index/column.
+
+`dbo.task_status_notifications` retains its existing task/state key. The message
+insert and key insert now share a rollback-protected SQL transaction; duplicate
+or uncertain retries do not add another message and failed writes leave no key.
+No new secrets, credentials or health data are stored.
+
 # Data model
 
 Version 1, updated 10 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44, P8-45, P9-30 and P9-66. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata, generated HTML report artifacts, explicitly pinned workspace views and private conversation attachments. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).

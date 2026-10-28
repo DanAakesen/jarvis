@@ -30,9 +30,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function confirmationSummary(patch: SettingsPatch): string | null {
   const changes: string[] = [];
   for (const role of modelRoles) {
-    if (patch.roles?.[role]) changes.push(`${role} model settings`);
+    const change = patch.roles?.[role];
+    if (change?.model !== undefined) changes.push(`${role} model: ${change.model}`);
+    if (change?.reasoningEffort !== undefined) changes.push(`${role} reasoning: ${change.reasoningEffort}`);
   }
-  if (patch.global?.visionDailyBudgetUsd !== undefined) changes.push('the per-day vision budget');
+  if (patch.global?.visionDailyBudgetUsd !== undefined) changes.push(`vision budget: USD ${patch.global.visionDailyBudgetUsd} per day`);
   return changes.length ? `Change ${changes.join(' and ')} in Jarvis settings.` : null;
 }
 

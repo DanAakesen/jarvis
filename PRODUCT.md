@@ -10,6 +10,31 @@ backend-only diagnostics that can lag minutes; tool results establish current
 access and data availability. They are never advertised as an instantaneous
 stream or other-app log access. No new UI or log/retention changes.
 
+## Review fixes (#1343; 28 October 2026)
+
+The eight owner-approved fixes preserve one task per signed issue-label delivery,
+carry the verified conversation origin through issue creation and label pickup,
+and write task-status messages atomically with their delivery receipts. Retried
+writes cannot consume a receipt without the message. Oversized issue startup
+shows a retained Now alert naming the existing issue instead of implying work
+started or creating another issue.
+
+Gmail receipts distinguish waiting for approval, cancellation, completed writes
+and uncertain outcomes. Settings approvals name each proposed model, reasoning
+value and vision budget in USD per day.
+
+Chat warnings and unsent queued messages survive reload in this tab, scoped to
+the backend and signed-in account. Restored queued messages wait for the owner's
+explicit Send queued messages action. Missing browser storage is reported.
+Supported partial replies up to 512 KiB in UTF-8 survive recovery. Invalid
+warning entries do not discard valid queued messages; when recovery reaches its
+storage bound, unsent messages and uncertainty warnings take priority over
+partial reply context, and incomplete saving is reported.
+On mobile, Settings keeps its heading and explicit Save in a sticky top; desktop
+keeps its existing footer Save. No Settings navigation guard, autosave or draft
+persistence is added. Live/device and SQL integration acceptance remain separate
+from local synthetic checks; implementation does not activate other features.
+
 ## Read-only backend log troubleshooting (#1341; P11-42; 28 October 2026)
 
 Owner-approved chat access covers only Jarvis's own retained backend runtime

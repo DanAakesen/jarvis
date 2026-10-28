@@ -104,3 +104,8 @@ one result column mirrors it to the other. Writing NULL to only one result alias
 clears both aliases and the delivery status; when both columns are written with
 one NULL and a valid delivery status, the trigger synchronizes from the non-NULL
 value.
+
+`0068_issue_delivery_origin.sql` adds a unique nullable task issue-delivery ID and
+an internal issue-to-conversation-origin association. Message retention cascades
+association removal. The down batch drops the new association, index and column;
+it does not remove tasks, issues, conversations or notification receipts.

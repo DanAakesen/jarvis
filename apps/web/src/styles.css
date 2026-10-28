@@ -4519,3 +4519,10 @@ select.form-control {
   border-top-left-radius: var(--radius-window);
   border-top-right-radius: var(--radius-window);
 }
+
+/* Mobile Settings keeps the existing explicit Save within reach while scrolling. */
+@media (max-width: 700px) {
+  .settings-page > .settings-header { position: sticky; top: calc(var(--rail-size) + env(safe-area-inset-top)); z-index: var(--z-panel); flex-wrap: wrap; padding: var(--space-3); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); border-radius: var(--radius-panel); }
+  .settings-header .settings-save-mobile { position: static; display: flex; flex: 1 1 auto; width: auto; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none; justify-content: flex-end; }
+  .settings-save-mobile .settings-feedback { flex-basis: 100%; margin: 0; }
+}

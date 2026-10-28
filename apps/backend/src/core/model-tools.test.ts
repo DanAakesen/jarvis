@@ -68,7 +68,7 @@ describe('Jarvis model tool', () => {
     });
     expect(runConfirmed).toHaveBeenCalledWith(
       'other',
-      'Change chat model settings in Jarvis settings.',
+      'Change chat model: gpt-5.6-luna and chat reasoning: high in Jarvis settings.',
       expect.any(Function),
       expect.any(AbortSignal),
     );

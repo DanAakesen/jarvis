@@ -1,3 +1,15 @@
+## Reconcile review fixes with current main (#1343; 28 October 2026)
+
+Integrate main `61d193668d94ac07c0c19df38eb8dd4a503ec37b` (merged #1346)
+into #1345 after recovery head `2f039761` passed CI 40760736915. The only
+overlap is five documentation prefixes; both entries are retained. Non-overlapping
+implementation, tests, workflows and artifacts retain their parent blobs; only
+documentation is combined/annotated. No Azure command, grant, activation or
+deployment is run here. Combined checks pass 388 backend tests, 14 synthetic
+Python preflight tests and backend lint/build. Full qualification must pass on the resulting
+head; earlier-head green is retained history, not its qualification. Coordinator
+review/merge remains separate. Do not retry the failed PR-body metadata write.
+
 ## Approved log activation preflight and awareness (#1341; 28 October 2026)
 
 PR #1342 is merged as `0df74dee`. The owner has approved persistent read access to
@@ -20,6 +32,41 @@ from naming an absent tool in disabled instructions. That guidance now avoids
 the absent tool name; all four pass in the 246-test rerun. Exact-head full hosted
 qualification remains pending. Repository script discovery passes all available
 checks; three existing setup tests require missing PowerShell.
+
+## Owner-approved review fixes (#1343; 28 October 2026)
+
+Implement the eight approved findings on `codex/fix-eight-review-gaps-1343` under
+[issue #1343](https://github.com/DanAakesen/jarvis/issues/1343), claimed by Codex.
+All eight fixes are implemented in [PR #1345](https://github.com/DanAakesen/jarvis/pull/1345)
+for independent review and coordinator release; no own
+merge or deployment. Scope covers issue delivery/origin and completion recovery,
+Gmail receipts, chat warning/queue reload persistence, oversized worker-start
+feedback and explicit Settings approval values. The owner's replacement for
+Settings is sticky mobile heading/Save, preserving desktop behavior; no draft
+guard/autosave/persistence. Optional audit findings and Azure log work are excluded.
+Local regression/aggregate checks and browser evidence are recorded in the PR
+and [validation report](docs/review-fixes-1343.md);
+SQL Server CI and physical iPhone/live acceptance remain distinct release evidence.
+Workflow-owned status cells are not edited by this change.
+
+Local checks: full web 2,447 and contracts 174 passed; final conversation rerun
+126 passed; backend/web lint and builds passed. Backend aggregate had 6,776
+passed, two failed, one skipped. Corrected the stale approval-text assertion;
+both affected suites then passed 16 tests with original limits. See the report
+for SQL CI, Node 22 and physical-device limits. Next: independent review and
+normal qualification. The coordinator marked the PR ready. Hosted SQL run
+40756774334 had 281 passes and two test-setup failures: the index query omitted
+the expected new index, and the second Workspaces rollback needed to unwind
+0068 again. Both are corrected without weakening assertions; qualification must
+run on the correction's new head.
+
+Qualification of `5cf8da23` passed (CI 40757610202): SQL 283, backend 6,778 plus
+one skipped, web 2,448, contracts 174. A subsequent bot finding reproduced loss
+of the whole recovery snapshot for a 100,001-character partial reply. The scoped
+follow-up aligns read/write validation to 512 KiB UTF-8, retains valid entries
+independently and prioritizes queue/warning data when partial context exceeds
+the snapshot budget. Boundary and ConversationHistory checks pass 141 tests;
+new-head CI is required before merge. Do not retry the failed PR-body update.
 
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
