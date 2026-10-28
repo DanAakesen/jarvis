@@ -1,3 +1,15 @@
+## Live preflight blocker — ARM role classification, 28 October 2026
+
+The first main execution after #1346, Deploy #40761349594, stopped at
+`builtin_role_mismatch` before Bicep. Identity/runtime/workspace/schema checks
+precede that role check; permission inventory and enforcement were not reached.
+The verifier incorrectly used the CLI model's `properties.roleType` for a raw ARM
+response. The [2022-04-01 REST contract](https://learn.microsoft.com/en-us/rest/api/authorization/role-definitions/get?view=rest-authorization-2022-04-01)
+uses `properties.type`. The scoped correction keeps exact permission checks,
+with ARM-shaped positive and CLI-only/custom-role negative regressions. Fifteen
+synthetic tests pass; successful live rerun and subsequent grant/probes remain
+pending. No new permission or reader activation has occurred.
+
 ## Current activation status — owner approval received, 28 October 2026
 
 The owner approved persistent backend-only log reads plus basic workspace

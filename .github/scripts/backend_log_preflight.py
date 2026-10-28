@@ -178,7 +178,7 @@ def inspect(expected: dict, azure: Azure) -> dict:
     role = azure.get(expected["workspace_id"] + "/providers/Microsoft.Authorization/roleDefinitions/" + DATA_READER, "2022-04-01")
     require(isinstance(role, dict) and same_id(role.get("name"), DATA_READER), "builtin_role_mismatch")
     props = role.get("properties", {})
-    require(props.get("roleType") == "BuiltInRole" and isinstance(props.get("permissions"), list)
+    require(props.get("type") == "BuiltInRole" and isinstance(props.get("permissions"), list)
             and len(props["permissions"]) == 1, "builtin_role_mismatch")
     permission = props["permissions"][0]
     require(isinstance(permission, dict)

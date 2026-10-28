@@ -47,7 +47,7 @@ class FakeAzure:
         self.table = {"id": EXPECTED["workspace_id"] + "/tables/ContainerAppConsoleLogs_CL", "plan": "Analytics",
                       "schema": {"columns": [{"name": "ContainerAppName_s", "type": "string"}, {"name": "Log_s", "type": "string"}],
                                  "standardColumns": [{"name": "TimeGenerated", "type": "datetime"}]}}
-        self.role = {"name": DATA_READER, "properties": {"roleType": "BuiltInRole", "permissions": [
+        self.role = {"name": DATA_READER, "properties": {"type": "BuiltInRole", "permissions": [
             {"actions": list(ACTIONS), "dataActions": list(DATA_ACTIONS), "notActions": [], "notDataActions": []}]}}
         self.assignments = [{"id": "synthetic-role-assignment", "properties": {"principalId": PRINCIPAL, "scope": GROUP, "principalType": "ServicePrincipal",
             "roleDefinitionId": GROUP + "/providers/Microsoft.Authorization/roleDefinitions/" + DATA_READER}}]
@@ -116,6 +116,16 @@ class MetadataTests(unittest.TestCase):
             mutate(azure.table)
             with self.assertRaisesRegex(PreflightBlocked, "console_(table_unavailable|schema_mismatch)"):
                 inspect(EXPECTED, azure)
+
+    def test_requires_arm_role_type_not_cli_role_type_or_custom_role(self):
+        # az rest returns the ARM wire shape (properties.type), not the CLI model's roleType.
+        for properties in ({"roleType": "BuiltInRole"}, {"type": "CustomRole"},
+                           {"type": None, "roleType": "BuiltInRole"}):
+            with self.subTest(properties=properties):
+                azure = FakeAzure()
+                azure.role["properties"] = {**properties, "permissions": azure.role["properties"]["permissions"]}
+                with self.assertRaisesRegex(PreflightBlocked, "builtin_role_mismatch"):
+                    inspect(EXPECTED, azure)
 
     def test_rejects_broader_builtin_permissions(self):
         for key, value in (("actions", ["*/read"]), ("dataActions", list(DATA_ACTIONS) + ["Microsoft.OperationalInsights/workspaces/jobs/export/action"]),

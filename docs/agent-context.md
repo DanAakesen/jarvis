@@ -1,3 +1,13 @@
+## Backend log preflight ARM wire contract (#1341; 28 October 2026)
+
+Deploy #40761349594 failed closed before Bicep at `builtin_role_mismatch`.
+The `az rest` role-definition response uses `properties.type`, not the CLI
+model's `roleType`. Keep the exact built-in permission allowlist and reject
+custom/CLI-only shapes. Run `PYTHONPATH=.github/scripts python -m unittest
+discover -s .github/scripts/tests -p test_backend_log_preflight.py`, scoped Ruff
+and byte compilation. Fifteen synthetic tests pass for the correction; no live
+rerun, grant or enablement is claimed. Existing Azure scope approval persists.
+
 ## Owner-approved log activation preflight and awareness (#1341; 28 October 2026)
 
 Owner approval for persistent backend-only log reads plus basic workspace metadata

@@ -1,3 +1,17 @@
+## Backend log preflight ARM correction (#1341; 28 October 2026)
+
+PR #1346 merged as `61d19366` after qualified CI #40759821759 and independent
+review. Main Deploy #40761349594 stopped before Bicep at
+`builtin_role_mismatch`; backend, agent, web, readiness and acceptance were
+skipped. No assignment or activation occurred. The verifier used the CLI-model
+`properties.roleType` instead of ARM REST `properties.type`. An ARM-shaped
+fixture reproduces the failure; the field correction and explicit rejection of
+CLI-only/custom-role shapes pass all 15 preflight tests, scoped Ruff and byte
+compilation. Exact permissions and all other gates remain. Next: independent
+review/normal qualification of this correction, then repeat the main preflight;
+only its actual successful readback can precede conditional grant/probe work.
+The earlier provider BadRequest/live-conversation failure remains unresolved.
+
 ## Approved log activation preflight and awareness (#1341; 28 October 2026)
 
 PR #1342 is merged as `0df74dee`. The owner has approved persistent read access to
