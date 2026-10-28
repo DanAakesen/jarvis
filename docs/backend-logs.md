@@ -1,3 +1,34 @@
+## Current activation status — owner approval received, 28 October 2026
+
+The owner approved persistent backend-only log reads plus basic workspace
+metadata. The approved route uses built-in Log Analytics Data Reader with its
+exact query/read, workspace/read and table-data/read permissions and a version-2
+backend table/app condition at workspace scope. No custom role, additional
+operator permission or new credential is needed. The original minimal custom-role
+proposal below is historical and superseded for execution.
+
+The follow-up installs a fixed metadata-only preflight in the existing qualified
+main-only deployment path. It compares live MI/runtime IDs with the intended
+repository target, resolves the workspace customer GUID, validates access mode,
+console schema and exact built-in permissions, and reads assignment inventories
+and possible foreign workspace controls. Obvious workspace/resource/group-access
+concerns are surfaced, with group membership and provider enforcement explicitly
+unverified. The private mode-0600 report stays in RUNNER_TEMP and is never uploaded;
+public logs contain only fixed check names. It uses no data query or write.
+
+This stage applies no grant and leaves the reader off. After that actual readback,
+continue the already-approved conditional assignment, readback and positive/
+negative backend-identity proof before enabling configuration. No new approval or
+Azure sign-in is required for the existing scope. The preflight's successful
+metadata collection is not activation eligibility, and a foreign workspace
+candidate is not a negative-access proof. If no real negative target is visible,
+report that blocker; do not substitute an invented workspace or broaden access.
+
+Main chat now explicitly uses the log tool for configured self-diagnosis and
+states that access is unavailable while disabled or unconfigured. Tool exposure
+uses the same distinction; configuration never guarantees Azure permission or
+that current data is present. Retained logs can lag minutes.
+
 # Backend log reader
 
 Issue [#1341](https://github.com/DanAakesen/jarvis/issues/1341), P11-42.

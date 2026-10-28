@@ -1,3 +1,34 @@
+## Current-main reconciliation for #1345 (28 October 2026)
+
+Main `61d19366` adds #1346 log preflight/guidance; merge it into review-fix
+head `2f039761` while preserving both scopes. Only PLAN, PRODUCT, agent-context,
+architecture and decisions prepend conflicts overlap; retain both sets of text.
+Non-overlapping implementation/test/workflow/artifact blobs are verified unchanged
+from their respective parent; only documentation is combined/annotated.
+Run combined synthetic log/settings/capability and factory/Gmail regressions,
+the 14 Python preflight fixtures, backend lint/build and exact-head hosted CI.
+No live preflight/Azure access or PR-body metadata retry belongs to this task.
+Local combined results: 388 backend and 14 Python preflight tests, backend
+lint/build passed. Exact-head hosted qualification is still required.
+
+## Owner-approved log activation preflight and awareness (#1341; 28 October 2026)
+
+Owner approval for persistent backend-only log reads plus basic workspace metadata
+is received; do not ask again for this scope or a new Azure sign-in. Existing
+qualified main-only OIDC is the execution route. This follow-up first installs a
+fixed read-only metadata preflight before infrastructure deployment, with no role
+assignment or reader enablement. Preserve the no-private-identifier publication
+boundary and never upload `backend-log-preflight.private.json`.
+
+Run Python `test_backend_log_preflight.py`, pipeline/deploy tests, Ruff and byte
+compilation; backend settings/capability/registry/production-module/log-reader
+suites plus lint/build. Fixtures are synthetic. No local test establishes live
+Azure grants, group membership, supported conditional access or negative data
+isolation. After review and normal release, inspect only content-free preflight
+verdicts and continue the approved assignment/probe/activation work. Stop if live
+identity/schema differs, broader access is unresolved or foreign workspace proof
+is unavailable; never widen permissions or switch modes as a workaround.
+
 ## Eight review fixes: validation (#1343; 28 October 2026)
 
 Scope: issue-label replay, issue conversation origin, atomic completion receipts,

@@ -1,3 +1,15 @@
+## Backend log awareness and approved activation (#1341; 28 October 2026)
+
+The owner has approved persistent read-only access to backend records and basic
+workspace metadata, excluding other applications. Activation remains off until
+live target, schema, effective-access and enforcement checks are complete.
+Main chat explicitly names `read_backend_logs` for self-diagnosis when configured;
+while disabled/unconfigured it must say log access is unavailable. The tool
+catalogue carries the same availability distinction. These are retained,
+backend-only diagnostics that can lag minutes; tool results establish current
+access and data availability. They are never advertised as an instantaneous
+stream or other-app log access. No new UI or log/retention changes.
+
 ## Review fixes (#1343; 28 October 2026)
 
 The eight owner-approved fixes preserve one task per signed issue-label delivery,

@@ -1,3 +1,26 @@
+## Backend log activation boundary and awareness (#1341; 28 October 2026)
+
+Owner approval now covers the built-in Log Analytics Data Reader's query, data
+and basic workspace metadata reads, with the exact backend table/record condition
+at workspace scope. The first executable activation stage is
+`.github/scripts/backend_log_preflight.py`, called by the existing qualified,
+main-only infrastructure job before Bicep. It uses only bounded ARM GETs with the
+existing OIDC identity. It compares actual MI and attached runtime identity,
+resolves the workspace customer GUID, validates access mode/table schema/exact
+built-in permissions, and reads assignment inventories plus possible foreign
+workspace controls. It flags obvious legacy/resource/group-access concerns and
+never equates an inventory or candidate with effective membership/enforcement
+proof. Private values stay in a mode-0600 runner-temporary file; public output is
+value-free check names. There is no assignment, configuration enablement, token
+creation, new identity privilege or resource-context workaround in this stage.
+
+Main-agent settings combine the configured backend-log flag with actual tool
+composition. Capability instructions name the tool for retained backend-only
+self-diagnosis when configured, otherwise explicitly refuse availability claims.
+The descriptor also identifies disabled/unconfigured state and distinguishes
+configuration from successful live access. Existing sensitive audit handling,
+read metadata and returned failure/partial/freshness semantics remain intact.
+
 ## Issue delivery and chat recovery (#1343; 28 October 2026)
 
 Migration 0068 adds a unique nullable issue delivery ID to tasks and an internal

@@ -1,3 +1,38 @@
+## Reconcile review fixes with current main (#1343; 28 October 2026)
+
+Integrate main `61d193668d94ac07c0c19df38eb8dd4a503ec37b` (merged #1346)
+into #1345 after recovery head `2f039761` passed CI 40760736915. The only
+overlap is five documentation prefixes; both entries are retained. Non-overlapping
+implementation, tests, workflows and artifacts retain their parent blobs; only
+documentation is combined/annotated. No Azure command, grant, activation or
+deployment is run here. Combined checks pass 388 backend tests, 14 synthetic
+Python preflight tests and backend lint/build. Full qualification must pass on the resulting
+head; earlier-head green is retained history, not its qualification. Coordinator
+review/merge remains separate. Do not retry the failed PR-body metadata write.
+
+## Approved log activation preflight and awareness (#1341; 28 October 2026)
+
+PR #1342 is merged as `0df74dee`. The owner has approved persistent read access to
+only backend log records plus basic workspace metadata. No further owner approval
+is needed for that exact scope. Follow-up `codex/1341-backend-log-activation` adds
+an executable metadata-only preflight in the existing main-only deployment path,
+and explicit configured/unavailable log guidance for main chat. It creates no
+role assignment and leaves the reader off. The preflight is the next required
+live step because this executor has no permitted direct Azure route. Actual
+identity/schema/access findings must precede the approved conditional assignment
+and backend-identity enforcement probes; candidates and synthetic tests are not
+proof. No private identifiers enter public evidence. Next: scoped draft
+review/normal qualification, then the existing main OIDC preflight.
+Continue the already-approved activation from that result; do not merge this PR
+from the implementation worker or request another generic permission. Local
+checks pass 14 synthetic preflight cases and 246 reader/instruction/settings/
+chat-voice parity tests, backend lint/build and scoped Ruff/byte compilation. The
+full backend run passed 6,763 tests with one skip and found four parity failures
+from naming an absent tool in disabled instructions. That guidance now avoids
+the absent tool name; all four pass in the 246-test rerun. Exact-head full hosted
+qualification remains pending. Repository script discovery passes all available
+checks; three existing setup tests require missing PowerShell.
+
 ## Owner-approved review fixes (#1343; 28 October 2026)
 
 Implement the eight approved findings on `codex/fix-eight-review-gaps-1343` under

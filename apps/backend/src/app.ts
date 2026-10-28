@@ -134,6 +134,7 @@ declare module 'fastify' {
   }
   interface FastifyInstance {
     ownerObjectId: string;
+    backendLogsConfigured: boolean;
     ownerSessionConnections: OwnerSessionConnectionRegistry | null;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
@@ -246,6 +247,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     : null);
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
+  app.decorate('backendLogsConfigured', config.backendLogs !== undefined);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),

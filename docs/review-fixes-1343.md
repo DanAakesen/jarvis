@@ -90,3 +90,16 @@ Regression tests cover 100,000/100,001 characters, exact and excess 512 KiB ASCI
 and multibyte replies, invalid warning fields and snapshot-budget preservation.
 The follow-up requires CI on its new head. No retry of the failed PR-description
 write is included; qualification results are delivered to the coordinator.
+
+## Current-main integration
+
+Recovery head `2f039761` passed CI 40760736915: web 2,460, contracts 174, SQL
+283 and backend 6,778 with one skipped, plus aggregate CI, CodeQL and title
+validation. Main then advanced to `61d193668d94ac07c0c19df38eb8dd4a503ec37b`
+with #1346's log preflight/guidance. Integration preserves both scopes. Only five
+documentation prefixes conflict, and both additions are retained. Non-overlapping
+implementation/test/workflow/artifact blobs match their respective parents;
+only documentation is combined/annotated. Combined checks pass 388 backend
+tests, 14 synthetic Python preflight tests and backend lint/build. Fresh
+qualification on the integration head remains required; no live preflight, access change, own
+merge/deploy or retry of the failed PR-body update is included.

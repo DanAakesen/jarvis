@@ -1008,7 +1008,7 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
 }
 
 export async function buildAgentSettingsPayload(
-  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore' | 'jarvisTools'>,
+  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore' | 'jarvisTools' | 'backendLogsConfigured'>,
 ) {
   if (!app.settingsStore) throw new Error('Settings unavailable');
   const catalogue = await app.modelCatalogue.read();
@@ -1028,6 +1028,7 @@ export async function buildAgentSettingsPayload(
       app.jarvisTools.get('proactive_recent_items') !== undefined,
       app.jarvisTools.get('proactive_preferences') !== undefined,
       app.jarvisTools.get('owner_reminders') !== undefined,
+      app.backendLogsConfigured && app.jarvisTools.get('read_backend_logs') !== undefined,
     ),
     timeouts: settings.timeouts,
     personality: settings.personality,
