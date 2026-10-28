@@ -1318,7 +1318,7 @@ describe('backend log capability awareness', () => {
     expect(response.statusCode).toBe(200);
     const instructions = response.json().capabilityInstructions;
     expect(instructions).toContain(configured ? 'Use read_backend_logs for my retained backend-only logs (may lag minutes)'
-      : 'read_backend_logs is unavailable; never claim log access');
+      : 'Backend log access is unavailable; never claim access');
     const catalogue = await app.inject({ url: '/tools', headers: authorization });
     const tool = catalogue.json().find((entry: { name: string }) => entry.name === 'read_backend_logs');
     if (!composed) expect(tool).toBeUndefined();

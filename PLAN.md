@@ -9,14 +9,17 @@ role assignment and leaves the reader off. The preflight is the next required
 live step because this executor has no permitted direct Azure route. Actual
 identity/schema/access findings must precede the approved conditional assignment
 and backend-identity enforcement probes; candidates and synthetic tests are not
-proof. No private identifiers enter public evidence. Next: focused validation,
-scoped draft review/normal qualification, then the existing main OIDC preflight.
+proof. No private identifiers enter public evidence. Next: scoped draft
+review/normal qualification, then the existing main OIDC preflight.
 Continue the already-approved activation from that result; do not merge this PR
 from the implementation worker or request another generic permission. Local
-checks pass 14 synthetic preflight cases, 62 reader/instruction cases, the three
-HTTP awareness states, backend lint/build and scoped Ruff/byte compilation. Full
-backend is running. Repository script discovery passes all available checks;
-three existing setup tests require missing PowerShell.
+checks pass 14 synthetic preflight cases and 246 reader/instruction/settings/
+chat-voice parity tests, backend lint/build and scoped Ruff/byte compilation. The
+full backend run passed 6,763 tests with one skip and found four parity failures
+from naming an absent tool in disabled instructions. That guidance now avoids
+the absent tool name; all four pass in the 246-test rerun. Exact-head full hosted
+qualification remains pending. Repository script discovery passes all available
+checks; three existing setup tests require missing PowerShell.
 
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
