@@ -45,19 +45,29 @@ which the Deploy workflow uses only before ACR holds the first backend image.
 The workflow takes the IDs from `bootstrap.output.json` and deploys as
 `jarvis-infra`.
 
-### Terra main-chat rollout hold (#1337)
+### Terra main-chat rollout (#1337)
 
-`terraChatCapacity` is a required positive integer with no default. Do not merge
-or deploy this preparation until actual subscription quota, model access,
-available capacity and Azure pricing have been checked and the capacity/spend
-decision is approved. Then add the approved value to the existing
-`main.parameters.json` as `parameters.terraChatCapacity.value`; the normal
-main-only Deploy reads that file. There is deliberately no speculative value in
-the committed parameters, no new identity and no bootstrap or direct-deploy path.
-Neither committed `main.parameters.json` nor `deploy_bicep.sh` currently supplies
-`terraChatCapacity`. The normal Deploy therefore cannot complete: the required
-template parameter is missing. Keep PR #1338 draft and do not merge it until an
-approved capacity is supplied through the committed parameter file.
+`terraChatCapacity` is a required positive integer. The committed parameters now
+request 150, matching the repository's established chat allocation. This is a
+requested throughput limit, not a claim of available live quota. Capacity 1 was
+too small for a Jarvis turn; 50K TPM also throttled the recorded 57K–66K/minute
+acceptance workload (#1232/L91). Matching 150 is the practical starting request,
+not a proof of the mathematical minimum for every workload.
+
+Microsoft's [deployment automation guide](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/automate-quota-deployments)
+defines one capacity unit as 1,000 TPM. A Terra-specific live minimum/maximum or
+remaining allocation has not been read here. GlobalStandard is
+[pay-per-token](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types),
+with no reserved PTU purchase introduced by this allocation.
+
+PR CI builds/lints Bicep offline; it cannot prove current Azure availability. The
+existing main-only Deploy authenticates with its existing OIDC identity and
+submits the template, where Azure validates model/SKU limits, quota and capacity.
+A separate owner sign-in or live quota read is not a prerequisite for preparing
+this ordinary deployment request. Normal qualification/review still precedes
+merge; no worker merges or directly deploys. If Azure rejects the allocation,
+report the exact failure and stop: do not silently increase quota, change region
+or SKU, create access, or claim success. No deployment is performed here.
 The template adds `gpt-6.1-terra` / `2026-10-26`, GlobalStandard, after Sol in the
 existing Foundry account's serialized model deployment chain.
 
@@ -80,7 +90,10 @@ background model role or Terra price estimate is introduced here. The inactive
 semantic-mail adapter requires known pricing and therefore refuses an unpriced model.
 The proactive unknown-model estimate uses existing known rates; it is not a
 verified Terra spending bound.
-Only run paid canaries after the owner resolves the spending hold.
+Dan approved a USD 20/month Terra budget and accepted the existing alert-based
+controls. Keep those alerts unchanged; no new spending guard is required or
+implemented, and the alerts are not an enforced hard cap. The ordinary metered
+model deployment does not authorize unlimited spending or reserved capacity.
 
 Discovery on 27 October: this executor has no Azure CLI, Azure identity
 configuration or existing Azure login, and no authorized owner-settings route.
@@ -103,10 +116,11 @@ Microsoft's indexed [model catalog tag page](https://techcommunity.microsoft.com
 These are public list prices, not verified account-specific rates. Azure's
 short/long context threshold and whether a threshold changes billing for the
 whole request were not verified; do not import OpenAI's billing rules into this
-Azure rollout. Actual quota/capacity, account rates and the owner's spending
-approval remain unresolved. No monthly Terra spend limit or new budget
-implementation is approved by this preparation. Runtime pricing tables and
-currency conversion remain unchanged; the deployment hold above still applies.
+Azure rollout. Actual quota/capacity and account-specific rates remain
+unobserved; the normal authenticated Deploy determines whether Azure accepts the
+requested allocation. Runtime pricing tables and currency conversion remain
+unchanged. USD 20/month and existing alerts are the owner's accepted budget
+direction; no new budget subsystem or login handoff is introduced.
 
 The optional `codexToolModel` parameter defaults to `gpt-5.5` and sets the
 backend's `JARVIS_CODEX_TOOL_MODEL` for P7-14 web research and P7-15 image

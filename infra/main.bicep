@@ -49,7 +49,7 @@ param vaultMirrorMaxDeletes int = 3
 @description('A ChatGPT-supported model for Codex hosted-runner tools.')
 param codexToolModel string = 'gpt-5.5'
 
-@description('Approved GlobalStandard capacity for the GPT-6.1 Terra main-chat deployment. Required: verify actual subscription quota and pricing before choosing a value or deploying.')
+@description('Requested GlobalStandard throughput allocation for GPT-6.1 Terra main chat. Azure validates model/SKU limits and subscription quota during normal deployment; this is not a reserved PTU purchase.')
 @minValue(1)
 param terraChatCapacity int
 
@@ -628,8 +628,8 @@ resource gpt61SolDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
   }
 }
 
-// Main-chat option/default requested 27 October. Keep capacity required until
-// actual quota and Azure pricing have been checked and a value approved.
+// Main-chat option/default requested 27 October. Request the established chat
+// throughput allocation; normal main-only Deploy validates Azure acceptance.
 resource gpt61TerraChatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-6.1-terra'

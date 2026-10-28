@@ -9,14 +9,16 @@ is published. Full backend: 300 files, 6,718 passed and one skipped. Hosted agen
 offline build/lint pass; baseline template comparison preserves every existing
 resource property/capacity. Repository scripts: 141 passed; three require missing
 PowerShell. Documentation review confirms Danish Voice Live uses the voice role;
-only its hosted-agent fallback inherits chat. The required capacity is absent
-from both committed parameters and the deploy script, so normal Deploy cannot
-complete; keep #1338 draft and do not merge until an approved value is committed.
+only its hosted-agent fallback inherits chat. On 28 October, prepare requested
+capacity 150 in the existing parameter file, matching the established chat
+allocation. The previously missing parameter was a draft-design gap, not a need
+for a new Azure login. Existing main-only Deploy/OIDC validates Azure acceptance;
+PR CI checks the template offline. Live quota remains unobserved.
 Microsoft's public Global Standard short/long list rates are sourced in
-`infra/README.md`; account rates, Azure tier billing rules and spending approval
-remain unresolved. No new budget implementation is authorized.
-Next: independent review, hosted Node 22 qualification, actual Azure quota,
-account pricing and capacity/spend decisions, followed by
+`infra/README.md`; account rates and Azure tier billing rules remain unverified.
+Dan approved USD 20/month and accepted existing alerts; no new budget subsystem
+or repeated budget/sign-in question is required.
+Next: independent review and hosted Node 22 qualification, followed by
 normal release and a saved-owner chat-only Settings update. No merge, deployment,
 paid inference or live model-selection verification is claimed.
 
@@ -1748,9 +1750,10 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Terra main chat (#1337):** scoped preparation only; draft/review, quota and
-  pricing verification, capacity selection and saved owner default remain gated.
-  Draft #1338 contains passing local backend/hosted-agent/Bicep evidence.
+- **Terra main chat (#1337):** request capacity 150 through the existing main-only
+  deployment path, then apply the controlled saved-owner default update. #1338
+  contains passing local backend/hosted-agent/Bicep evidence. Normal review and
+  qualification remain; no new budget guard or owner sign-in is required.
 
 - **Web polish (P9-98 / #792, P9-102 / #798, P9-103 / #797; 17 October):** one small PR per Dan's speed-first direction. Settings says Routines instead of Task recipes; the `/recipes` API alias is untouched. Presence reads green/yellow/blue in both themes; light dots carry a ring of their own hue, and the mode label stays beside every dot except in the phone top bar, whose chip shows the dot alone. Phone pages now end above the measured composer height, so Save settings is reachable with a six-line draft (before, a real touch tap hit the composer's More options button). Headless Chrome at 320×700, 390×844 and 1440×900 in both themes against a fake backend; no physical iPhone/Safari. Next: exact-head CI and the coordinator's merge; live acceptance stays with Dan.
 

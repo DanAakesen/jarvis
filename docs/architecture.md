@@ -1689,8 +1689,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   150K tokens per minute, Global Standard bills per token) since 23 October, because the
   live acceptance run sends over 50K input tokens a minute to the Chat model (#1232).
   #1337 prepares `gpt-6.1-terra` version `2026-10-26` in the same Sweden Central
-  account with GlobalStandard and a required `terraChatCapacity` parameter, with
-  no guessed capacity or default value. The existing serial deployment chain
+  account with GlobalStandard and `terraChatCapacity: 150` in committed parameters,
+  matching the existing chat throughput allocation. This requests capacity; it
+  does not assert live quota or buy reserved PTUs. The existing serial deployment chain
   inserts Terra after Sol. The chat code default becomes Terra when ARM lists
   it; until then, and during ARM fallback, the existing Luna default remains.
   The fallback catalogue does not claim Terra is deployed. Saved chat/legacy
@@ -1703,8 +1704,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   public Global Standard list rates are documented in `infra/README.md`.
   Account-specific rates and Azure context-tier billing rules remain unverified;
   no Terra rate is added to runtime usage or vision pricing tables.
-  Normal rollout must first resolve actual Azure quota/rates, choose capacity,
-  then inspect and update only the saved owner chat model. Danish `/voice/da`
+  Offline PR CI checks template validity; the existing main-only Deploy/OIDC
+  path validates Azure acceptance without requiring a new owner login. A quota
+  rejection remains a visible failure, with no automatic allocation/region/SKU
+  changes. After a successful release, inspect and update only the saved owner
+  chat model. Danish `/voice/da`
   uses the realtime voice role when `options.connect` is configured. Only the
   `connectDanish` hosted-agent fallback inherits chat settings. New separate
   role/session overrides are not introduced.

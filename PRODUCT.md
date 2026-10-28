@@ -651,8 +651,10 @@ through Settings after deployment. Active session choices remain intact. Danish
 `/voice/da` uses the realtime voice role when `options.connect` is configured;
 only the `connectDanish` hosted-agent fallback inherits chat settings. Separate
 voice, vision, research, coding and image-generation defaults are unchanged.
-Capacity, actual Azure quota/pricing and
-live acceptance remain pending; this is not a production-selection claim.
+The template requests capacity 150 through the normal authenticated deployment
+path; actual allocation and live acceptance remain unverified. Dan accepts the
+existing budget alerts with USD 20/month authorized for Terra; no new spending
+guard or other role change is part of this work.
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
