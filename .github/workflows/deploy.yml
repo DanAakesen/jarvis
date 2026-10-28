@@ -107,6 +107,8 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Read-only backend log activation preflight
+        run: python .github/scripts/backend_log_preflight.py
       - name: Deploy Bicep, keeping the running backend image
         run: bash .github/scripts/deploy_bicep.sh "$RUNNER_TEMP/infra-outputs.json"
 
