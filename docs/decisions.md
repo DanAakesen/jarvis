@@ -1,3 +1,23 @@
+## 28 October 2026 — Eight review fixes and mobile Settings replacement (#1343)
+
+Dan approved the eight reviewed fixes and explicitly approved issue/draft-PR
+publication. For Settings, he replaced the proposed unsaved-draft fix with a
+sticky mobile heading and Save at the top. Preserve desktop behavior and do not
+add Settings guards, autosave or draft persistence.
+
+Use persisted delivery identity, independent of active task state, to prevent
+old label replays from starting work again. Save issue conversation origin before
+publishing the worker label. Commit task-status messages and deduplication keys
+atomically; a failed transaction remains retryable. Surface a too-large worker
+prompt as a retained Now alert tied to the existing issue. Keep uncertain Gmail
+writes uncertain and approval cards explicit about changed values/units.
+
+For chat reload recovery, reuse tab-local storage, isolate backend/account scopes
+and restore queued messages for review before sending. These are unsent drafts,
+not approval to repeat a completed or uncertain server action. No optional audit
+feature, Azure log permission, paid worker, real email send or health write is
+included. Draft delivery remains subject to independent review and coordinator release.
+
 ## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
 
 Dan approved starting read-only chat access to Jarvis's own backend logs,

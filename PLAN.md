@@ -1,3 +1,17 @@
+## Owner-approved review fixes (#1343; 28 October 2026)
+
+Implement the eight approved findings on `codex/fix-eight-review-gaps-1343` under
+[issue #1343](https://github.com/DanAakesen/jarvis/issues/1343), claimed by Codex.
+One draft PR is prepared for independent review and coordinator release; no own
+merge or deployment. Scope covers issue delivery/origin and completion recovery,
+Gmail receipts, chat warning/queue reload persistence, oversized worker-start
+feedback and explicit Settings approval values. The owner's replacement for
+Settings is sticky mobile heading/Save, preserving desktop behavior; no draft
+guard/autosave/persistence. Optional audit findings and Azure log work are excluded.
+Local regression/aggregate checks and browser evidence are recorded in the PR;
+SQL Server CI and physical iPhone/live acceptance remain distinct release evidence.
+Workflow-owned status cells are not edited by this change.
+
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a

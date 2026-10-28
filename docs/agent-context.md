@@ -1,3 +1,20 @@
+## Eight review fixes: validation (#1343; 28 October 2026)
+
+Scope: issue-label replay, issue conversation origin, atomic completion receipts,
+honest Gmail receipts/uncertainty, chat warning/queue reload recovery, sticky
+mobile Settings Save, visible oversized-start failure, explicit Settings approvals.
+The owner expressly replaced Settings draft preservation: do not add guards,
+autosave or draft persistence. Azure logs #1341/#1342 and optional audit ideas
+remain separate.
+
+Use synthetic fixtures only. Run full backend/web tests, contracts and backend/web
+lint/build. Migration 0068 and transaction/concurrency regressions additionally
+require the normal isolated SQL Server CI job; local unit mocks are not proof of
+SQL behavior. Chromium screenshots live under `docs/ui/screenshots/fix-eight-1343/`;
+390/320px and a focused short viewport are simulated, not physical iPhone acceptance.
+No Azure access, real workers, mail sends, notifications or health writes are part
+of these checks. Current local verification results are recorded in the draft PR.
+
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 
 Follow-up review found that rejected Content-Length cleanup could await a

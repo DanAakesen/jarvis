@@ -56,7 +56,7 @@ const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
-  'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions',
+  'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_issue_origins', 'factory_task_submissions',
   'github_app_mint_status', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'owner_reminder_schedules', 'owner_sessions', 'phone_sessions',
   'proactive_alerts', 'proactive_items',
@@ -190,13 +190,14 @@ describe('committed domain schema (groups 1-8)', () => {
       'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
-      'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key', 'UX_proactive_reminders_owner_key',
+      'UX_activity_alert_key', 'UX_proactive_alerts_owner_alert_key', 'UX_proactive_reminders_owner_key', 'UX_tasks_issue_delivery',
     ]);
   });
 
   it('renames Workspaces storage while synchronizing legacy SQL reads and writes', () =>
     withRollbackDatabase(async (rollbackPool, committed) => {
-      const migration = committed.at(-1)!;
+      await revertNewerThan(rollbackPool, committed, '0067_workspaces_identifiers.sql');
+      const migration = committed.find(item => item.name === '0067_workspaces_identifiers.sql')!;
       expect(migration.name).toBe('0067_workspaces_identifiers.sql');
       const down = await readDownMigration(migration.name);
       await expect(revertMigration(rollbackPool, committed, down)).resolves.toBe(migration.name);
@@ -223,7 +224,7 @@ describe('committed domain schema (groups 1-8)', () => {
           VALUES (@jobId, N'research', N'Existing research', N'done', 1, 1, SYSUTCDATETIME(), SYSUTCDATETIME(),
             @resultId, N'pending');`);
 
-      await expect(applyMigrations(rollbackPool, committed)).resolves.toEqual([migration.name]);
+      await expect(applyMigrations(rollbackPool, committed)).resolves.toEqual(committed.filter(item => item.name >= migration.name).map(item => item.name));
       const synonym = await rollbackPool.request().query<{ name: string }>(
         `SELECT name FROM sys.synonyms WHERE schema_id = SCHEMA_ID(N'dbo') AND name = N'folio_items';`);
       expect(synonym.recordset).toEqual([{ name: 'folio_items' }]);
@@ -949,7 +950,7 @@ describe('committed domain schema (groups 1-8)', () => {
       .query('SELECT COUNT(1) AS count FROM dbo.background_job_steps WHERE job_id = @jobId')).recordset[0]?.count).toBe(0);
   });
 
-  it('persists one notification claim per task and state across store recreation', async () => {
+  it('atomically persists notification messages and deduplication across failure, concurrency and store recreation', async () => {
     const project = await createProjectStore(pool).create({
       name: 'Notification fixture',
       repo: `DanAakesen/notification-${randomUUID()}`,
@@ -969,12 +970,39 @@ describe('committed domain schema (groups 1-8)', () => {
     const firstStore = createTaskStatusNotificationStore(pool);
     const restartedStore = createTaskStatusNotificationStore(pool);
 
-    await expect(firstStore.claim(task.id, 'Done')).resolves.toBe(true);
-    await expect(restartedStore.claim(task.id, 'Done')).resolves.toBe(false);
-    await expect(restartedStore.claim(task.id, 'pull_request_opened')).resolves.toBe(true);
+    const session = await createConversationStore(pool).createSession({ channel: 'chat', language: 'en' });
+    const message = { sessionId: session.id, text: 'Synthetic completion', language: 'en' as const };
+    await expect(firstStore.deliver(task.id, 'Done', { ...message, sessionId: '9223372036854775807' })).rejects.toThrow();
+    const results = await Promise.all([firstStore.deliver(task.id, 'Done', message), restartedStore.deliver(task.id, 'Done', message)]);
+    expect(results.sort()).toEqual([false, true]);
+    const written = await pool.request().input('sessionId', sql.BigInt, BigInt(session.id))
+      .query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.messages WHERE jarvis_session_id = @sessionId;');
+    expect(written.recordset[0]?.count).toBe(1);
+    await expect(restartedStore.deliver(task.id, 'Done', message)).resolves.toBe(false);
+    await expect(restartedStore.deliver(task.id, 'pull_request_opened', message)).resolves.toBe(true);
     await expect(createTaskStore(pool, createEventHub<TaskEventMessage>())
       .transition(task.id, 'Cancelled')).resolves.toMatchObject({ kind: 'ok' });
   });
+  it('retains issue origins and one task per webhook delivery even after completion and store recreation', async () => {
+    const project = await createProjectStore(pool).create({ name: 'Issue delivery fixture', repo: `DanAakesen/delivery-${randomUUID()}`,
+      default_branch: 'main', default_agent: 'codex', policy: 'deliver_pr', merge_rules: null, sandbox_size: '1x2', tech: 'node' });
+    const conversation = createConversationStore(pool);
+    const session = await conversation.createSession({ channel: 'chat', language: 'en' });
+    const source = (await conversation.addMessage({ sessionId: session.id, role: 'dan', text: 'Synthetic coding request', model: null }))!;
+    const first = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    const restarted = createTaskStore(pool, createEventHub<TaskEventMessage>());
+    await first.rememberIssueOrigin!(project.repo, 8, source.id);
+    expect(await restarted.getIssueOrigin!(project.repo, 8)).toBe(source.id);
+    const deliveryId = randomUUID();
+    const input = { projectId: project.id, title: 'Synthetic issue task', request: 'Synthetic work', issueNumber: 8,
+      issueDeliveryId: deliveryId, source: 'chat' as const, originMessageId: source.id };
+    const created = await Promise.all([first.create(input), restarted.create(input)]);
+    expect(created[0]?.id).toBe(created[1]?.id);
+    await pool.request().input('taskId', sql.BigInt, BigInt(created[0]!.id)).query("UPDATE dbo.tasks SET state = N'Done' WHERE id = @taskId;");
+    expect(await restarted.findByIssueDelivery!(deliveryId)).toMatchObject({ id: created[0]!.id, state: 'Done', originMessageId: source.id });
+    expect(await restarted.create(input)).toMatchObject({ id: created[0]!.id, state: 'Done' });
+  });
+
   it('persists presence modes across store recreation and publishes each transition once', async () => {
     const changedAt = new Date('2026-10-04T12:00:00.000Z');
     const firstStore = createAwayModeStore(pool);

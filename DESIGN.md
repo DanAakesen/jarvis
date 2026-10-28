@@ -1,3 +1,18 @@
+## Mobile Settings Save (#1343; 28 October 2026)
+
+At the existing 700px phone breakpoint, the Settings header stays beneath the
+shared top bar while scrolling. Its single explicit Save button moves into that
+header, retains its 44px touch target, and shows pending/success/error feedback
+there. Desktop retains the footer control; resizing moves the same action
+between locations without changing the form draft or save behavior. The sticky
+surface uses shared glass, spacing and z-order tokens. Synthetic Chromium
+captures cover 390px, 320px and a focused 500px-high viewport; that last check
+approximates reduced screen space and does not prove physical iOS keyboard behavior.
+
+Restored chat queues show their retained bubbles and a Send queued messages
+control. Reload does not automatically execute these unsent requests. Terminal
+reply warnings remain associated with their submitted message after reload.
+
 ## Mobile composer controls while typing (#1315; 27 October 2026)
 
 Preserve typing focus on the toolbar press, then let native click open Plus,

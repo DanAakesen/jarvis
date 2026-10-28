@@ -91,6 +91,7 @@ function fixture(registeredProjects: readonly Project[] = [project]) {
     archive: vi.fn(async (id: string) => id === project.id),
   } as unknown as ProjectStore;
   const taskStore = {
+    rememberIssueOrigin: vi.fn(async () => {}),
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),

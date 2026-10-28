@@ -1,3 +1,4 @@
+import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
@@ -82,7 +83,6 @@ import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
 import { createGitHubIssueClient } from './github/issues.js';
-import { startIssueTask } from './factory/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryHandler } from './github/delivery.js';
@@ -759,14 +759,16 @@ try {
     } : {}),
     isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
       trackedRepositories.has(repository.toLowerCase()),
-    onMapping: async (mapping) => {
+    onMapping: async (mapping, deliveryId) => {
       if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
-        const result = await startIssueTask({
+        const result = await handleIssueLabel({
+          alerts: alertActivityStore ?? null,
           projects: projectStore,
           tasks: taskStore,
           github: githubIssueClient,
           repository: mapping.repository,
           issue: mapping.number,
+          ...(deliveryId ? { deliveryId } : {}),
         });
         if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
           'not-an-issue', 'prompt-too-large'].includes(result.kind)) {

@@ -1,3 +1,29 @@
+## Issue delivery and chat recovery (#1343; 28 October 2026)
+
+Migration 0068 adds a unique nullable issue delivery ID to tasks and an internal
+repository/issue-to-source-message association. The create_issue tool saves that
+verified source before adding Jarvis's worker label. Label pickup looks up the
+origin and creates a chat-sourced task. Existing completed delivery receipts
+short-circuit old webhook replay; new receipts commit after mapping succeeds.
+Task creation also binds the delivery ID transactionally, covering concurrent
+pickup and a crash between task creation and delivery-receipt persistence.
+
+Task-status delivery now inserts its message and task/state receipt in one SQL
+transaction. The event handler retries once after a failed transaction; the
+receipt also makes an uncertain post-commit retry safe. If both attempts fail,
+the failure stays logged and a later event replay can retry because no receipt
+was consumed. This is not a new outbound notification channel or scheduler.
+Oversized startup persists a deduplicated Now alert through the existing alert
+store. Gmail receipts and Settings approval summaries reuse existing execution
+and approval boundaries.
+
+Browser tab recovery uses sessionStorage scoped by backend/account for queued
+text/file references and terminal error context. A stored snapshot expires after
+24 hours without update; malformed/oversized recovery is refused and storage
+write failures are visible. Recovery never resubmits a server-accepted turn and
+restored queued requests require an explicit Send queued messages action. The
+Settings change only moves the explicit Save control at phone width.
+
 ## Retained backend log reader (#1341; P11-42; 28 October 2026)
 
 `operations/backend-logs.ts` adds one sensitive read tool through production module

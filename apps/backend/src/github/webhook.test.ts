@@ -56,7 +56,7 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 
 function fixture(
   getSecret: () => Promise<string | undefined> = async () => secret,
-  onMapping?: (mapping: NonNullable<WebhookDeliveryInput['mapping']>) => Promise<void>,
+  onMapping?: (mapping: NonNullable<WebhookDeliveryInput['mapping']>, deliveryId?: string) => Promise<void>,
   isTrackedRepository?: (repository: string) => boolean,
   readWorkflowRun?: (repository: string, runId: number) => Promise<{ workflowId: number; cancelled: boolean }>,
 ) {
@@ -67,6 +67,7 @@ function fixture(
     ...(isTrackedRepository ? { isTrackedRepository } : {}),
     ...(readWorkflowRun ? { readWorkflowRun } : {}),
     deliveryStore: {
+      hasDelivery: async (id) => deliveries.has(id),
       async record(input) {
         if (deliveries.has(input.deliveryId)) return false;
         deliveries.set(input.deliveryId, input);
@@ -152,16 +153,29 @@ describe('GitHub webhook receiver', () => {
       name.toLowerCase() === repository.full_name.toLowerCase());
 
     expect((await deliver(app, 'issue-label-1', 'issues')).statusCode).toBe(202);
+    active = null; // The original task has completed; an old delivery must not create another.
     expect((await deliver(app, 'issue-label-1', 'issues')).json()).toEqual({ status: 'duplicate' });
-    expect(onMapping).toHaveBeenCalledTimes(2);
+    expect(onMapping).toHaveBeenCalledTimes(1);
     expect(taskStore.create).toHaveBeenCalledOnce();
-    expect(taskStore.findActiveByIssue).toHaveBeenCalledTimes(2);
+    expect(taskStore.findActiveByIssue).toHaveBeenCalledTimes(1);
     expect(github.readIssue).toHaveBeenCalledOnce();
     expect(deliveries.get('issue-label-1')?.mapping).toMatchObject({
       kind: 'issue_labeled',
       repository: repository.full_name,
       number: 42,
     });
+  });
+
+  it('retries a failed issue mapping because no completed delivery receipt was saved', async () => {
+    const onMapping = vi.fn().mockRejectedValueOnce(new Error('Synthetic transient failure')).mockResolvedValue(undefined);
+    const { app, deliveries } = fixture(undefined, onMapping);
+    expect((await deliver(app, 'retry-issue', 'issues')).statusCode).toBe(503);
+    expect(deliveries.has('retry-issue')).toBe(false);
+    expect((await deliver(app, 'retry-issue', 'issues')).statusCode).toBe(202);
+    expect(deliveries.has('retry-issue')).toBe(true);
+    await deliver(app, 'retry-issue', 'issues');
+    expect(onMapping).toHaveBeenCalledTimes(2);
+    expect(onMapping).toHaveBeenCalledWith(expect.objectContaining({ kind: 'issue_labeled' }), 'retry-issue');
   });
 
   it.each([false, true])('resolves deployment workflow identity before persistence (cancelled=%s)', async (cancelled) => {
@@ -358,6 +372,8 @@ describe('GitHub webhook receiver', () => {
       getSecret,
       onMapping,
       deliveryStore: {
+        hasDelivery: async (id) => deliveries.has(id),
+        recordPullRequest: async () => {},
         async record(input) {
           order.push('persist');
           if (deliveries.has(input.deliveryId)) return false;
