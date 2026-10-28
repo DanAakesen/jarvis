@@ -2,15 +2,24 @@
 
 Implement the eight approved findings on `codex/fix-eight-review-gaps-1343` under
 [issue #1343](https://github.com/DanAakesen/jarvis/issues/1343), claimed by Codex.
-One draft PR is prepared for independent review and coordinator release; no own
+All eight fixes are implemented in [draft PR #1345](https://github.com/DanAakesen/jarvis/pull/1345)
+for independent review and coordinator release; no own
 merge or deployment. Scope covers issue delivery/origin and completion recovery,
 Gmail receipts, chat warning/queue reload persistence, oversized worker-start
 feedback and explicit Settings approval values. The owner's replacement for
 Settings is sticky mobile heading/Save, preserving desktop behavior; no draft
 guard/autosave/persistence. Optional audit findings and Azure log work are excluded.
-Local regression/aggregate checks and browser evidence are recorded in the PR;
+Local regression/aggregate checks and browser evidence are recorded in the PR
+and [validation report](docs/review-fixes-1343.md);
 SQL Server CI and physical iPhone/live acceptance remain distinct release evidence.
 Workflow-owned status cells are not edited by this change.
+
+Local checks: full web 2,447 and contracts 174 passed; final conversation rerun
+126 passed; backend/web lint and builds passed. Backend aggregate had 6,776
+passed, two failed, one skipped. Corrected the stale approval-text assertion;
+both affected suites then passed 16 tests with original limits. See the report
+for SQL CI, Node 22 and physical-device limits. Next: independent review and
+normal qualification; the draft CI skip is not a pass.
 
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 

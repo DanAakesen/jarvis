@@ -39,14 +39,13 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
     if (tool.startsWith('mail_')) {
       const action = result as { status?: unknown; summary?: unknown; detail?: unknown } | null;
       if (action?.status === 'awaiting_confirmation') {
-        return `Awaiting your approval; no Gmail change has been made.${typeof action.summary === 'string' ? ` ${action.summary}` : ''}`;
+        return 'Awaiting your approval; no Gmail change has been made.';
       }
       if (action?.status === 'unverified' || action?.status === 'partial') {
         return typeof action.detail === 'string' && action.detail.length <= 1_000
           ? action.detail : 'The Gmail outcome is unverified. Check Gmail before trying again.';
       }
       if (action?.status === 'cancelled') return 'Cancelled. No Gmail change was made.';
-      if (action?.status === 'completed' && typeof action.detail === 'string' && action.detail.length <= 1_000) return action.detail;
     }
     if (tool === 'calendar_confirm_change') {
       const change = result as { status?: unknown; detail?: unknown; items?: unknown } | null;

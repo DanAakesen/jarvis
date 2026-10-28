@@ -13,7 +13,7 @@ describe('Gmail action receipts', () => {
   it('reports cancellation, completion and uncertain sends according to the recorded result', () => {
     expect(confirmToolCall('mail_confirm_action', 'ok', { status: 'cancelled' })).toBe('Cancelled. No Gmail change was made.');
     expect(confirmToolCall('mail_confirm_action', 'ok', { status: 'completed', detail: 'Gmail accepted the message for sending.' }))
-      .toBe('Gmail accepted the message for sending.');
+      .toBe('Done: mail_confirm_action succeeded.');
     const warning = 'I could not verify whether Google completed the action. Check Google Calendar or Gmail before trying again.';
     expect(confirmToolCall('mail_confirm_action', 'error', { error: warning })).toContain(warning);
     expect(confirmToolCall('mail_send', 'error', { error: 'Tool execution failed' })).not.toContain('succeeded');

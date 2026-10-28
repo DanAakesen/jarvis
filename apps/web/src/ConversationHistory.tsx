@@ -1305,6 +1305,7 @@ export function ConversationHistory({
                   aria-label={`Remove queued message: ${message.text}`}
                   onClick={() => {
                     discardFiles((message.attachments ?? []).map((file) => file.id));
+                    if (queue.length === 1) setQueuePaused(false);
                     setQueue((current) => current.filter((item) => item.id !== message.id));
                   }}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">

@@ -13,7 +13,15 @@ require the normal isolated SQL Server CI job; local unit mocks are not proof of
 SQL behavior. Chromium screenshots live under `docs/ui/screenshots/fix-eight-1343/`;
 390/320px and a focused short viewport are simulated, not physical iPhone acceptance.
 No Azure access, real workers, mail sends, notifications or health writes are part
-of these checks. Current local verification results are recorded in the draft PR.
+of these checks. Local verification results are recorded in
+[draft PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) and the
+[validation report](review-fixes-1343.md).
+
+Local results: full web 2,447, contracts 174, final ConversationHistory 126 and
+backend/web lint/build passed. Backend aggregate: 6,776 passed, two failed, one
+skipped; the stale Settings approval assertion was corrected and both affected
+suites passed a 16-test rerun with original timeouts. Preserve that aggregate
+failure distinction. Main/SQL CI is skipped while the PR is draft.
 
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 

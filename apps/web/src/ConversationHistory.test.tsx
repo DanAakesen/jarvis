@@ -1366,7 +1366,7 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn.mock.calls.map((call) => call[3])).toEqual(['First', 'Second', 'Third']);
   });
 
-  it('restores queued unsent text after remount and waits for explicit Send queued messages', async () => {
+  it.each(['send', 'remove'] as const)('restores queued text paused after remount and supports explicit %s', async (action) => {
     sendChatTurn.mockImplementationOnce(() => new Promise(() => {}));
     const view = renderConversation();
     const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
@@ -1382,6 +1382,16 @@ describe('ConversationHistory', () => {
     await screen.findByRole('button', { name: 'Send queued messages' });
     expect(sendChatTurn).not.toHaveBeenCalled();
     sendChatTurn.mockResolvedValueOnce(assistantMessage);
+    if (action === 'remove') {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove queued message: Synthetic queued follow-up' }));
+      expect(screen.queryByRole('button', { name: 'Send queued messages' })).toBeNull();
+      const freshInput = screen.getByRole('textbox', { name: 'Message Jarvis' });
+      fireEvent.change(freshInput, { target: { value: 'Synthetic fresh message' } });
+      fireEvent.keyDown(freshInput, { key: 'Enter', ctrlKey: true });
+      await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+      expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Synthetic fresh message');
+      return;
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Send queued messages' }));
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
     expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Synthetic queued follow-up');
