@@ -1,6 +1,7 @@
 import type { Level } from 'pino';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
+import { loadBackendLogsConfig, type BackendLogsConfig } from './operations/backend-logs.js';
 import { normalizeFoundryProjectEndpoint, normalizeVoiceLiveEndpoint } from './voice/relay.js';
 export { ConfigurationError } from './configuration-error.js';
 
@@ -9,6 +10,7 @@ export interface BackendConfig {
   staticWebAppOrigin?: string;
   logLevel: Level;
   applicationInsightsConnectionString?: string;
+  backendLogs?: BackendLogsConfig;
   keyVaultUri?: string;
   voiceLiveEndpoint?: string;
   foundryEndpoints?: {
@@ -239,9 +241,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     throw new ConfigurationError('JARVIS_OWNER_SESSION_ENABLED must be true or false');
   }
   const auth = loadAuthConfig(env);
+  const backendLogs = loadBackendLogsConfig(env);
 
   return {
     auth,
+    ...(backendLogs ? { backendLogs } : {}),
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),

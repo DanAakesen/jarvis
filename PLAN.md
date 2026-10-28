@@ -1,3 +1,16 @@
+## Backend log reader (#1341; P11-42; 28 October 2026)
+
+Codex claimed [#1341](https://github.com/DanAakesen/jarvis/issues/1341) and branched
+`codex/1341-backend-logs` from current main `00493374`. The default-off retained
+backend-log reader, authenticated sensitive read integration and synthetic
+regressions are implemented. Seven focused suites pass 262 tests; backend lint
+and TypeScript build pass. Full backend and draft PR publication are in progress. The exact Azure conditional
+grant is proposed only in [docs/backend-logs.md](docs/backend-logs.md); no role or
+assignment/configuration activation is applied by merge/deploy. Next: review and
+hosted qualification, then action-time owner approval and deployed schema,
+effective-grant and other-app exclusion proof before activation. Separate app
+review findings are outside this task.
+
 ## Terra main-chat preparation (#1337; 27 October 2026)
 
 Owner-approved issue/claim and draft PR preparation on

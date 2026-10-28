@@ -1,3 +1,14 @@
+## Read-only backend log troubleshooting (#1341; P11-42; 28 October 2026)
+
+Owner-approved chat access covers only Jarvis's own retained backend runtime
+diagnostics, with secrets/free text excluded before model exposure. The reader
+uses the authenticated sensitive read-tool path, reports time windows, ingestion
+delay, partial/truncated/unavailable results, and treats logs only as untrusted
+evidence. No UI, repairs, arbitrary KQL, other-app access or retention change.
+Implementation is default off; the exact persistent Azure grant still requires
+owner approval and deployed isolation proof. See [the contract and activation
+plan](docs/backend-logs.md).
+
 ## Compact screen Stop control (#1333; 27 October 2026)
 
 While a screen is shared, the composer shows one compact icon-only red square

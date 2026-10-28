@@ -1,3 +1,16 @@
+## Retained backend log reader (#1341; P11-42; 28 October 2026)
+
+`operations/backend-logs.ts` adds one sensitive read tool through production module
+composition and the existing authenticated dispatcher. It queries the existing
+Log Analytics workspace using the backend identity, a fixed console table and
+exact backend-app predicate, rechecks all result sources and applies the logging
+allowlists plus stricter historical-field projection. Time/rows/bytes/concurrency
+and the complete identity/query/body lifetime are bounded. No raw messages or
+provider error bodies reach the model or tool-call audit. Shared instructions
+keep log evidence separate from authority. No deployment/grant/retention changes
+are included; configuration defaults off. [Backend logs](backend-logs.md) records
+the query contract, proposed conditional role and unverified live boundaries.
+
 # Architecture
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)

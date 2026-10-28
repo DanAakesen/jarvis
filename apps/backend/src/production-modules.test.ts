@@ -25,6 +25,7 @@ import { createScreenVisionModule } from './vision/screen.js';
 import { createVisionWatchModule } from './vision/watch.js';
 import { createVoiceRelayModule } from './voice/relay.js';
 import { createProductionModules } from './production-modules.js';
+import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
@@ -52,6 +53,7 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
   const frameStore = new FrameStore();
   return createProductionModules({
     core: coreModule,
+    backendLogs: createBackendLogsModule(),
     conversation: createConversationModule(frameStore),
     factory: factoryModule,
     sleep: createSleepModule(null),
@@ -125,7 +127,7 @@ describe('production tool catalogue', () => {
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
       'browser-agent', 'image-generation', 'html-view', 'weather', 'workspaces', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive',
+      'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive', 'backend-logs',
     ]);
   });
 

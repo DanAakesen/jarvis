@@ -1,3 +1,14 @@
+## Backend log reader checks (#1341; P11-42; 28 October 2026)
+
+Use the engineering skill. Run backend `operations/backend-logs.test.ts`, signed
+`auth/auth.test.ts`, registry, production-module, config, logging/source and shared
+capability-budget suites, then backend tests/lint/build and normal hosted checks.
+All records must be synthetic. Configuration stays off; no new log role,
+assignment, access-mode, retention, ingestion or credential change is part of this
+PR. [Backend logs](backend-logs.md) contains the exact conditional-grant proposal
+and action-time owner approval/live isolation gates. Do not infer Azure proof
+from local fixtures or widen workspace access when a query fails.
+
 ## Terra main-chat preparation checks (#1337; 27 October 2026)
 
 Run backend model-catalog, settings, model-tools, settings-tools and

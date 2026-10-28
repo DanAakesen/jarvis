@@ -1,3 +1,18 @@
+## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
+
+Dan approved starting read-only chat access to Jarvis's own backend logs,
+including retained history, with secrets filtered and other apps excluded. New
+Azure log-read permission still requires action-time owner approval. Use existing
+Log Analytics console history and the authenticated sensitive read-tool registry;
+no UI, arbitrary KQL, repair action or retention change. Reapply logging allowlists
+and omit free text/identifiers from historical output. Keep the implementation
+disabled until the deployed schema and Azure isolation are proven. Microsoft's
+current granular RBAC docs support the proposed restrictive table/row condition;
+that is documentation evidence, not proof of an effective deployed grant. The
+exact unapplied proposal and validation/rollback gates are in
+[backend-logs.md](backend-logs.md). No role/assignment/access-mode/credential change
+is authorized by this code preparation.
+
 ## 27 October 2026 — Prepare Terra as the main-chat default (#1337)
 
 Dan requested GPT-6.1 Terra for main chat, both selectable and default, and
