@@ -86,8 +86,9 @@ class _Turn:
 class _CheckedStream:
     """Retain real SDK stream lifecycle with stricter native terminal validation."""
 
-    def __init__(self, stream: Any, cleanup_seconds: int):
+    def __init__(self, stream: Any, cleanup_seconds: int, *, allow_function_calls: bool = True):
         self.stream, self.cleanup_seconds = stream, cleanup_seconds
+        self.allow_function_calls = allow_function_calls
 
     async def __aenter__(self):
         return self
@@ -100,6 +101,10 @@ class _CheckedStream:
         completed = False
         seen_text = False
         async for event in self.stream:
+            if (not self.allow_function_calls
+                    and event.type in {"response.output_item.added", "response.output_item.done"}
+                    and getattr(getattr(event, "item", None), "type", None) == "function_call"):
+                raise ManagedChatError("managed_final_only_tool_call")
             if event.type == "response.output_text.delta" and event.delta:
                 seen_text = True
             if event.type == "response.completed":
@@ -107,6 +112,8 @@ class _CheckedStream:
                 if final.status != "completed":
                     raise ManagedChatError("managed_response_unfinished")
                 for item in final.output:
+                    if item.type == "function_call" and not self.allow_function_calls:
+                        raise ManagedChatError("managed_final_only_tool_call")
                     if item.type not in {"message", "reasoning", "function_call"}:
                         raise ManagedChatError("managed_response_item_unsupported")
                     if (item.type == "function_call"
@@ -243,4 +250,7 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
             "instructions": request["instructions"], "stream": True,
         }
         stream = await self._client.responses.create(**native_request)
-        return _CheckedStream(stream, turn.settings.backend_http_timeout_seconds)
+        return _CheckedStream(
+            stream, turn.settings.backend_http_timeout_seconds,
+            allow_function_calls=bool(request.get("tools")),
+        )

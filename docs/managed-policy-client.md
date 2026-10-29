@@ -61,8 +61,10 @@ match at request time. No per-request tool override is sent. Unsupported store,
 previous-response, token-limit and reasoning override fields are not forwarded.
 The harness output-budget difference remains explicit; local Current output limits
 are not a managed provider cap. Force-final synthesis cannot disable registered
-functions using unsupported `tool_choice`; if the provider still requests calls,
-the shared no-more-calls guard fails closed without repeating the action.
+functions using unsupported `tool_choice`. When the shared request omits tools,
+the native stream enforces a final-text-only boundary: any function item, including
+a new action with different arguments, fails before dispatch. Text-only synthesis
+can complete. No extra provider suppression parameter is sent.
 
 The verifier must fetch the actual immutable prompt-agent version, validate the
 normal-chat schemas, disabled built-ins, identity definition/model/effort and

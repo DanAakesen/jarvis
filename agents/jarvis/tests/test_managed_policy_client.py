@@ -306,23 +306,47 @@ async def test_mode_refresh_keeps_existing_prompt_policy_in_native_continuation(
 
 
 @pytest.mark.asyncio
-async def test_existing_action_deduplication_stops_native_repeated_calls():
+@pytest.mark.parametrize("arguments", ["{}", '{"different":true}'])
+@pytest.mark.parametrize("announce_call", [False, True])
+async def test_final_only_boundary_rejects_repeated_and_new_native_actions(
+    arguments, announce_call,
+):
     backend = FakeBackend(catalogue=[{
         "name": "fixture_action", "description": "Synthetic action only.",
         "inputSchema": {"type": "object", "properties": {}},
         "execution": {"defaultEffect": "action"},
     }], model_name=SETTINGS.model, reasoning_effort=SETTINGS.reasoning_effort)
+    last_call = function("fixture_action", call_id="new-call", arguments=arguments)
+    last_events = final("", [last_call])
+    if announce_call:
+        last_events.insert(0, {"type": "response.output_item.added", "output_index": 0,
+                               "sequence_number": 0, "item": last_call})
     f = Fixture([final("", [function("fixture_action")]),
-                 final("", [function("fixture_action")]),
-                 final("", [function("fixture_action")])], backend)
+                 final("", [function("fixture_action")]), last_events], backend)
     async with f.client() as model:
-        with pytest.raises(ManagedChatError, match="turn_failed"):
+        with pytest.raises(ManagedChatError, match="final_only_tool_call"):
             await f.run(model)
     calls = [r for r in backend.requests if r.url.path == "/tools/fixture_action"]
     assert len(calls) == 1
     assert len(f.requests) == 3
     assert any("already completed" in str(item) for item in f.requests[-1]["input"])
     assert not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+async def test_final_only_boundary_accepts_text_without_another_action():
+    backend = FakeBackend(catalogue=[{
+        "name": "fixture_action", "description": "Synthetic action only.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "execution": {"defaultEffect": "action"},
+    }], model_name=SETTINGS.model, reasoning_effort=SETTINGS.reasoning_effort)
+    f = Fixture([final("", [function("fixture_action")]),
+                 final("", [function("fixture_action")]), final("Finished once.")], backend)
+    async with f.client() as model:
+        chunks = await f.run(model)
+    assert "Finished once." in chunks
+    assert len([r for r in backend.requests if r.url.path == "/tools/fixture_action"]) == 1
+    assert f.bindings.finishes == [("42", True)]
 
 
 @pytest.mark.asyncio
