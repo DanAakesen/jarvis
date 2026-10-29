@@ -1,3 +1,27 @@
+## Backend-log authorization observations (#1341; 29 October 2026)
+
+Deploy #40828872899 is terminal: metadata/infrastructure/backend/web/agent/readiness
+passed, live acceptance failed. Logs remain disabled. The preflight's resource
+log-grant warning and missing foreign workspace control are unresolved.
+The next reviewed stage adds fixed aggregate observations to the existing smoke
+route using the actual backend credential; no new endpoint/auth allowance/grant.
+Private preflight data is consumed in that same infrastructure job, never uploaded.
+`backend_log_probe_parameters.py` validates freshness/ownership/shape; its private
+Bicep parameter file is deleted on script exit. `backend_log_probe_verdicts.py`
+emits only fixed values from the optional smoke object. Do not treat its
+`authorization_observations` stage or empty/allowed negative queries as proof.
+Missing foreign controls stay `not_configured`; no fake workspace is substituted.
+After an empty resource-group inventory, metadata discovery may list workspaces
+already visible to the same deploy identity in the existing subscription. A failed
+read remains unavailable; do not request new permission to make the inventory work.
+The probe caches once per process; grant changes require a fresh backend process
+and post-change proof before enabling the separate reader flag.
+Run focused authorization/reader/status/auth/config tests, Python backend-log and
+deployment-script tests, backend lint/build, Ruff/byte compilation and offline
+Bicep compilation. All fixtures must be synthetic. Preserve the existing approved
+scope, actual negative controls, grant readback and no-private-ID publication.
+Do not retry the denied PR-body metadata writes.
+
 ## Backend log preflight ARM wire contract (#1341; 28 October 2026)
 
 29 October: reconcile #1348 with main `10d6d170` without altering #1345 runtime,

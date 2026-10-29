@@ -1,3 +1,4 @@
+import type { BackendLogAuthorizationProbe } from './operations/backend-log-authorization.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
@@ -126,6 +127,7 @@ export interface BuildAppOptions {
   readonly systemStatusReader?: SystemStatusReader;
   readonly vaultMirrorStatusReader?: import('./vault-mirror-status.js').VaultMirrorStatusReader;
   readonly systemSmokeProbes?: Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>;
+  readonly backendLogAuthorizationProbe?: BackendLogAuthorizationProbe;
 }
 
 declare module 'fastify' {
@@ -135,6 +137,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     ownerObjectId: string;
     backendLogsConfigured: boolean;
+    backendLogAuthorizationProbe: BackendLogAuthorizationProbe | null;
     ownerSessionConnections: OwnerSessionConnectionRegistry | null;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
@@ -248,6 +251,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('backendLogsConfigured', config.backendLogs !== undefined);
+  app.decorate('backendLogAuthorizationProbe', options.backendLogAuthorizationProbe ?? null);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),

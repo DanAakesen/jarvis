@@ -60,7 +60,7 @@ def deploy_parts(path: str) -> set[str]:
         return {"web"}
     if path.startswith("agents/jarvis/"):
         return {"agent"}
-    if path == ".github/scripts/backend_log_preflight.py":
+    if path in {".github/scripts/backend_log_preflight.py", ".github/scripts/backend_log_probe_parameters.py"}:
         return {"infra"}
     if path == ".github/scripts/deploy_bicep.sh":
         return {"infra", "backend"}

@@ -1,3 +1,4 @@
+import { createBackendLogAuthorizationProbe } from './operations/backend-log-authorization.js';
 import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
@@ -222,7 +223,7 @@ try {
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone ||
-    config.phone || sleepResourceId || config.backendLogs
+    config.phone || sleepResourceId || config.backendLogs || config.backendLogProbe
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -1154,6 +1155,15 @@ try {
     systemStatusReader,
     vaultMirrorStatusReader,
     systemSmokeProbes,
+    ...(config.backendLogProbe && credential ? { backendLogAuthorizationProbe: createBackendLogAuthorizationProbe({
+      config: config.backendLogProbe,
+      ...(config.foundryAccountResourceId ? { foundryResourceId: config.foundryAccountResourceId } : {}),
+      getToken: async (signal) => {
+        const token = await credential.getToken('https://api.loganalytics.io/.default', { abortSignal: signal });
+        if (!token) throw new Error('Backend log probe identity unavailable');
+        return token.token;
+      },
+    }) } : {}),
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(approvalInterpreter ? { approvalInterpreter } : {}),

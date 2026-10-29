@@ -1,3 +1,40 @@
+## Current qualification: metadata passed, grant still off — 29 October 2026
+
+Deploy [40828872899](https://github.com/DanAakesen/jarvis/actions/runs/40828872899)
+passed live identity/runtime/workspace/schema/built-in-role checks. Its fixed
+verdicts include `access_mode_resource_or_workspace`,
+`existing_resource_log_grant_requires_review` and
+`negative_workspace_candidate_missing`. Bicep, backend, web, hosted agent 159 and
+readiness passed. Live acceptance failed again with research down and chat
+`error_badrequesterror`. No log assignment or reader activation occurred.
+
+The next increment prepares actual backend-identity observations through the
+existing authenticated `GET /status/smoke`, with one optional
+`backendLogAuthorization` object. Same-job private metadata configures the fixed
+workspace/app/principal and an actual foreign control if one exists. Metadata discovery first uses the resource group, then only existing
+subscription-metadata access; a denial/unavailable inventory is explicit and no
+permission is added. Missing controls remain missing; the reader flag stays off. The probe matches the token
+principal before querying and returns only fixed verdicts for unfiltered console,
+other-app, other-table, foreign-workspace and Foundry resource queries. All queries
+aggregate counts in a fixed last-24-hour window; no log text or rows are exposed.
+At most five requests share an eight-second deadline, each response is bounded to
+4 KiB, redirects/retries are disabled and cancellation cleanup never blocks.
+
+Azure's [resource-query API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries)
+can silently filter inaccessible data. Therefore `query_allowed` or
+`no_visible_rows` is an observation, not a successful negative proof. Missing,
+partial, malformed, denied and HTTP/transport failures remain distinct fixed
+states. Responses are cached once per backend process and timestamped; repeat
+freshly after any grant change. Baseline observations cannot establish the future
+conditional grant's enforcement. Actual positive controls, readback and all
+required post-grant isolation checks still precede activation.
+
+Private report and Bicep parameter files are never uploaded. A strict pipeline
+formatter emits only allowlisted verdicts and no identifiers/provider text.
+This stage creates no grant/credential, new endpoint/tool/UI, retention change or
+activation. The generic resource-grant warning still requires effective-access
+review, and a real foreign-workspace control is still required.
+
 ## Live preflight blocker — ARM role classification, 28 October 2026
 
 The first main execution after #1346, Deploy #40761349594, stopped at
@@ -92,7 +129,7 @@ remain visible. Raw Azure error bodies never reach the model.
 ## Configuration, currently off
 
 The tool is advertised but returns `unavailable` / `disabled` until explicitly
-configured. No token or query is requested while it is disabled.
+configured. The chat reader requests no token or query while disabled. Separately configured deployment-only authorization probes may run fixed aggregate observations while chat access remains off.
 
 | Setting | Value after approval and verification |
 | --- | --- |

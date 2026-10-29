@@ -515,6 +515,9 @@ jobs:
           fi
           # Validate the complete fixed check set before logging any identifiers.
           python .github/scripts/smoke_reasons.py "$response" --evidence acceptance-evidence.json
+          if ! python .github/scripts/backend_log_probe_verdicts.py "$response"; then
+            echo "::warning::Backend log authorization observations unavailable; no activation performed."
+          fi
           {
             echo "### Backend smoke checks"
             echo
