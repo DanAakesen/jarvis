@@ -91,7 +91,7 @@ export function createRuntimeSessionStore(pool: sql.ConnectionPool): RuntimeSess
               SELECT 1 FROM dbo.messages WITH (HOLDLOCK) WHERE id = @sourceId
                 AND jarvis_session_id = @sessionId AND role = N'dan')
               SELECT 'unavailable' AS kind;
-            ELSE IF EXISTS (SELECT 1 FROM dbo.session_runtime_turns WHERE jarvis_session_id = @sessionId AND source_message_id = @sourceId)
+            ELSE IF EXISTS (SELECT 1 FROM dbo.session_runtime_sources WHERE jarvis_session_id = @sessionId AND source_message_id = @sourceId)
               SELECT 'source_already_claimed' AS kind;
             ELSE IF EXISTS (SELECT 1 FROM dbo.session_runtime_turns WHERE jarvis_session_id = @sessionId AND status = N'active')
               SELECT 'session_busy' AS kind;
@@ -105,6 +105,8 @@ export function createRuntimeSessionStore(pool: sql.ConnectionPool): RuntimeSess
                 WHERE jarvis_session_id = @sessionId AND target_model IS NULL;
               INSERT INTO dbo.session_runtime_turns (jarvis_session_id, source_message_id, claim_id, status)
                 VALUES (@sessionId, @sourceId, @claimId, N'active');
+              INSERT INTO dbo.session_runtime_sources (jarvis_session_id, source_message_id, claim_id)
+                VALUES (@sessionId, @sourceId, @claimId);
               SELECT 'claimed' AS kind, native_conversation_id FROM dbo.session_runtime_tests WHERE jarvis_session_id = @sessionId;
             END;`);
         const row = result.recordset[0];
@@ -118,6 +120,53 @@ export function createRuntimeSessionStore(pool: sql.ConnectionPool): RuntimeSess
         }
         await transaction.commit();
         return { kind: 'claimed', claimId, nativeConversationId: row.native_conversation_id ?? null };
+      } catch (error) {
+        try { await transaction.rollback(); } catch { /* Preserve original failure, including uncertain commit. */ }
+        throw error;
+      }
+    },
+    async attachSource(input) {
+      validateManagedTurnClaim(input);
+      validateRuntimeSessionId(input.additionalSourceMessageId);
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const result = await transaction.request()
+          .input('owner', sql.UniqueIdentifier, input.ownerObjectId)
+          .input('sessionId', sql.BigInt, BigInt(input.sessionId))
+          .input('sourceId', sql.BigInt, BigInt(input.sourceMessageId))
+          .input('claimId', sql.UniqueIdentifier, input.claimId)
+          .input('additionalSourceId', sql.BigInt, BigInt(input.additionalSourceMessageId))
+          .query<{ attached: boolean }>(`DECLARE @active bigint;
+            SELECT @active = t.source_message_id
+              FROM dbo.session_runtime_tests r WITH (UPDLOCK, HOLDLOCK)
+              JOIN dbo.jarvis_sessions s ON s.id = r.jarvis_session_id
+              JOIN dbo.session_runtime_turns t WITH (UPDLOCK, HOLDLOCK) ON t.jarvis_session_id = r.jarvis_session_id
+              WHERE r.jarvis_session_id = @sessionId AND r.owner_object_id = @owner
+                AND r.runtime_test = N'copilot' AND s.ended_at IS NULL
+                AND t.source_message_id = @sourceId AND t.claim_id = @claimId AND t.status = N'active';
+            IF @active IS NULL OR @additionalSourceId <= @sourceId OR NOT EXISTS (
+              SELECT 1 FROM dbo.messages WITH (HOLDLOCK) WHERE id = @additionalSourceId
+                AND jarvis_session_id = @sessionId AND role = N'dan')
+              SELECT CONVERT(bit, 0) AS attached;
+            ELSE IF EXISTS (SELECT 1 FROM dbo.session_runtime_sources
+              WHERE jarvis_session_id = @sessionId AND source_message_id = @additionalSourceId)
+              SELECT CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.session_runtime_sources
+                WHERE jarvis_session_id = @sessionId AND source_message_id = @additionalSourceId AND claim_id = @claimId)
+                THEN 1 ELSE 0 END) AS attached;
+            ELSE BEGIN
+              INSERT INTO dbo.session_runtime_sources (jarvis_session_id, source_message_id, claim_id)
+                VALUES (@sessionId, @additionalSourceId, @claimId);
+              SELECT CONVERT(bit, 1) AS attached;
+            END;`);
+        const row = result.recordset[0];
+        if (!row || typeof row.attached !== 'boolean') throw new Error('Missing managed source attachment result');
+        if (!row.attached) {
+          await transaction.rollback();
+          return false;
+        }
+        await transaction.commit();
+        return true;
       } catch (error) {
         try { await transaction.rollback(); } catch { /* Preserve original failure, including uncertain commit. */ }
         throw error;

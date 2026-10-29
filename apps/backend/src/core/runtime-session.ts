@@ -47,6 +47,8 @@ export interface RuntimeSessionStore {
   getSession(ownerObjectId: string, sessionId: string): Promise<RuntimeTestSession | null>;
   /** Claim once before provider creation; hold across every function round. No expiry or automatic recovery. */
   claimTurn(input: Omit<ManagedTurnClaim, 'claimId'> & { readonly target: ManagedSessionTarget }): Promise<ManagedTurnClaimResult>;
+  /** Consume verified later user steering under the active root claim before tools or model continuation. */
+  attachSource(input: ManagedTurnClaim & { readonly additionalSourceMessageId: string }): Promise<boolean>;
   /** Report failed for known terminal failure only. Uncertain/crashed work must retain its active claim. */
   completeTurn(input: ManagedTurnClaim & { readonly outcome: 'succeeded' | 'failed' }): Promise<boolean>;
   bindNativeConversation(input: ManagedTurnClaim & { readonly nativeConversationId: string }): Promise<boolean>;

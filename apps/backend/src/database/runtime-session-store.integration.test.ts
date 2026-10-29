@@ -104,6 +104,47 @@ describe('durable runtime session isolation', () => {
     await expect(store.completeTurn({ ...input, claimId: winner.claimId, outcome: 'failed' })).resolves.toBe(true);
     await expect(store.claimTurn(input)).resolves.toEqual({ kind: 'source_already_claimed' });
   });
+  it('retains every consumed steering source against replay across terminal turns', async () => {
+    const ownerObjectId = randomUUID();
+    const store = createRuntimeSessionStore(pool);
+    const conversations = createConversationStore(pool);
+    const target = { model: 'fixture', effort: 'high', agentName: 'fixture', version: '1', fingerprint: 'a'.repeat(64) };
+    const session = await store.createSession({ ownerObjectId, language: 'en', runtimeTest: 'copilot' });
+    const sessionId = session.session.id;
+    const source = async (role: 'dan' | 'jarvis' = 'dan', targetSession = sessionId) => (await conversations.addMessage({ sessionId: targetSession, role, text: 'Steering fixture', model: null }))!.id;
+    const earlier = await source();
+    const root = await source();
+    const consumed = await source();
+    const assistant = await source('jarvis');
+    const foreignSession = await conversations.createSession({ channel: 'chat', language: 'en' });
+    const foreignMessage = await source('dan', foreignSession.id);
+    const result = await store.claimTurn({ ownerObjectId, sessionId, sourceMessageId: root, target });
+    if (result.kind !== 'claimed') throw new Error('Missing claim');
+    const capability = { ownerObjectId, sessionId, sourceMessageId: root, claimId: result.claimId };
+    for (const additionalSourceMessageId of [root, earlier, assistant, foreignMessage]) {
+      await expect(store.attachSource({ ...capability, additionalSourceMessageId })).resolves.toBe(false);
+    }
+    await expect(store.attachSource({ ...capability, ownerObjectId: randomUUID(), additionalSourceMessageId: consumed })).resolves.toBe(false);
+    await expect(store.attachSource({ ...capability, claimId: randomUUID(), additionalSourceMessageId: consumed })).resolves.toBe(false);
+    await expect(Promise.all([store.attachSource({ ...capability, additionalSourceMessageId: consumed }),
+      store.attachSource({ ...capability, additionalSourceMessageId: consumed })])).resolves.toEqual([true, true]);
+    await expect(store.claimTurn({ ownerObjectId, sessionId, sourceMessageId: consumed, target })).resolves.toEqual({ kind: 'source_already_claimed' });
+    await expect(store.completeTurn({ ...capability, outcome: 'succeeded' })).resolves.toBe(true);
+    await expect(store.attachSource({ ...capability, additionalSourceMessageId: consumed })).resolves.toBe(false);
+    await expect(createRuntimeSessionStore(pool).claimTurn({ ownerObjectId, sessionId, sourceMessageId: consumed, target })).resolves.toEqual({ kind: 'source_already_claimed' });
+    const nextSource = await source();
+    const next = await store.claimTurn({ ownerObjectId, sessionId, sourceMessageId: nextSource, target });
+    if (next.kind !== 'claimed') throw new Error('Missing next claim');
+    await expect(store.attachSource({ ownerObjectId, sessionId, sourceMessageId: nextSource, claimId: next.claimId, additionalSourceMessageId: consumed })).resolves.toBe(false);
+    // A later source consumed by another (earlier-ID root) claim cannot be reclaimed as steering.
+    const later = await source();
+    await expect(store.attachSource({ ownerObjectId, sessionId, sourceMessageId: nextSource, claimId: next.claimId, additionalSourceMessageId: later })).resolves.toBe(true);
+    await expect(store.completeTurn({ ownerObjectId, sessionId, sourceMessageId: nextSource, claimId: next.claimId, outcome: 'failed' })).resolves.toBe(true);
+    const olderRoot = await store.claimTurn({ ownerObjectId, sessionId, sourceMessageId: earlier, target });
+    if (olderRoot.kind !== 'claimed') throw new Error('Missing older source claim');
+    await expect(store.attachSource({ ownerObjectId, sessionId, sourceMessageId: earlier, claimId: olderRoot.claimId, additionalSourceMessageId: later })).resolves.toBe(false);
+    await expect(store.claimTurn({ ownerObjectId, sessionId, sourceMessageId: later, target })).resolves.toEqual({ kind: 'source_already_claimed' });
+  });
   it('keeps normal history compatible and test messages available only through explicit session scope', async () => {
     const store = createConversationStore(pool);
     const normal = await store.createSession({ channel: 'chat', language: 'en' });

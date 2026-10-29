@@ -29,3 +29,11 @@ CREATE TABLE dbo.session_runtime_turns (
   CONSTRAINT CK_session_runtime_turns_status CHECK (status IN (N'active', N'succeeded', N'failed'))
 );
 CREATE UNIQUE INDEX UX_session_runtime_turns_active ON dbo.session_runtime_turns (jarvis_session_id) WHERE status = N'active';
+
+-- Every consumed source remains nonreplayable after its owning turn finishes.
+CREATE TABLE dbo.session_runtime_sources (
+  jarvis_session_id bigint NOT NULL CONSTRAINT FK_session_runtime_sources_session REFERENCES dbo.session_runtime_tests (jarvis_session_id),
+  source_message_id bigint NOT NULL CONSTRAINT FK_session_runtime_sources_message REFERENCES dbo.messages (id),
+  claim_id uniqueidentifier NOT NULL CONSTRAINT FK_session_runtime_sources_claim REFERENCES dbo.session_runtime_turns (claim_id),
+  CONSTRAINT PK_session_runtime_sources PRIMARY KEY (jarvis_session_id, source_message_id)
+);

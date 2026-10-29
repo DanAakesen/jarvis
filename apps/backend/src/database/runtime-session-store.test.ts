@@ -100,7 +100,7 @@ describe('durable managed turn claims', () => {
       const statement = data.query.mock.calls[0]![0];
       for (const fragment of ['UPDLOCK, HOLDLOCK', 'role = N\'dan\'', 'jarvis_session_id = @sessionId',
         'r.owner_object_id = @owner', 's.ended_at IS NULL', 'target_fingerprint <> @fingerprint',
-        'source_already_claimed', 'session_busy', 'INSERT INTO dbo.session_runtime_turns']) expect(statement).toContain(fragment);
+        'source_already_claimed', 'session_busy', 'INSERT INTO dbo.session_runtime_turns', 'INSERT INTO dbo.session_runtime_sources', 'ELSE IF EXISTS (SELECT 1 FROM dbo.session_runtime_sources']) expect(statement).toContain(fragment);
       expect(data.request.input).toHaveBeenCalledWith('fingerprint', sql.VarChar(64), target.fingerprint);
     } finally { data.constructor.mockRestore(); }
   });
@@ -147,4 +147,49 @@ it('ships durable source uniqueness and one active claim per session with guarde
   expect(migration.sql).toContain('CONSTRAINT UQ_session_runtime_turns_claim UNIQUE (claim_id)');
   const down = await readDownMigration(migration.name);
   expect(down.sql.indexOf('THROW')).toBeLessThan(down.sql.indexOf('DROP TABLE dbo.session_runtime_turns'));
+});
+
+
+describe('consumed steering source attachment', () => {
+  function fixtureAttachment(attached: boolean) {
+    const query = vi.fn().mockResolvedValue({ recordset: [{ attached }] });
+    const request = { input: vi.fn(), query };
+    request.input.mockReturnValue(request);
+    const transaction = { begin: vi.fn(), commit: vi.fn(), rollback: vi.fn(), request: vi.fn(() => request) };
+    const constructor = vi.spyOn(sql, 'Transaction').mockImplementation(function () { return transaction; } as unknown as typeof sql.Transaction);
+    return { store: createRuntimeSessionStore({} as sql.ConnectionPool), transaction, constructor, query, request };
+  }
+  it('persists only verified later user messages under the exact active root capability', async () => {
+    const data = fixtureAttachment(true);
+    try {
+      await expect(data.store.attachSource({ ...claim, additionalSourceMessageId: '44' })).resolves.toBe(true);
+      expect(data.transaction.commit).toHaveBeenCalledOnce();
+      expect(data.transaction.rollback).not.toHaveBeenCalled();
+      expect(data.request.input).toHaveBeenCalledWith('additionalSourceId', sql.BigInt, 44n);
+      const statement = data.query.mock.calls[0]![0];
+      for (const fragment of ['UPDLOCK, HOLDLOCK', 't.source_message_id = @sourceId', 't.claim_id = @claimId',
+        "t.status = N'active'", 'r.owner_object_id = @owner', "r.runtime_test = N'copilot'", 's.ended_at IS NULL',
+        '@additionalSourceId <= @sourceId', "role = N'dan'", 'jarvis_session_id = @sessionId',
+        'source_message_id = @additionalSourceId AND claim_id = @claimId', 'INSERT INTO dbo.session_runtime_sources']) expect(statement).toContain(fragment);
+    } finally { data.constructor.mockRestore(); }
+  });
+  it('rolls back denied attachment and never retries an uncertain outcome', async () => {
+    const data = fixtureAttachment(false);
+    try {
+      await expect(data.store.attachSource({ ...claim, additionalSourceMessageId: '44' })).resolves.toBe(false);
+      expect(data.transaction.commit).not.toHaveBeenCalled();
+      expect(data.transaction.rollback).toHaveBeenCalledOnce();
+      data.query.mockRejectedValueOnce(new Error('uncertain'));
+      await expect(data.store.attachSource({ ...claim, additionalSourceMessageId: '44' })).rejects.toThrow('uncertain');
+      expect(data.query).toHaveBeenCalledTimes(2);
+    } finally { data.constructor.mockRestore(); }
+  });
+  it('rejects malformed capability or source before transaction', async () => {
+    const data = fixtureAttachment(true);
+    try {
+      await expect(data.store.attachSource({ ...claim, additionalSourceMessageId: 'invalid' })).rejects.toThrow();
+      await expect(data.store.attachSource({ ...claim, claimId: 'invalid', additionalSourceMessageId: '44' })).rejects.toThrow();
+      expect(data.transaction.begin).not.toHaveBeenCalled();
+    } finally { data.constructor.mockRestore(); }
+  });
 });
