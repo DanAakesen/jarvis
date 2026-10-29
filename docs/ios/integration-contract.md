@@ -17,7 +17,7 @@ Draft for the native iPhone app, derived from reading the current backend and we
 1. `POST /conversation/sessions` with `{channel: "chat", language: "da" or "en"}` returns 201 and `{id, ...}`.
 2. `POST /conversation/sessions/:id/turns` with `{text (1 to 20000 characters), attachmentIds (up to 5), screenContext}` answers as a server-sent event stream.
 3. Stream events: `user`, `delta {text}`, `acknowledgment`, `food_invitation`, `interrupted`, `done`, `error`.
-4. Reattach after a drop: `GET /conversation/turns/active`, then `GET /conversation/turns/:messageId/events`. Cancel with `POST .../cancel`. The web client retries reattaching for up to 15 minutes, 2 seconds apart.
+4. Reattach after a drop: `GET /conversation/turns/active` returns `{turns: [{sessionId, messageId, language}]}`. Keep the `sessionId` and `messageId` of each entry. Reattach with `GET /conversation/sessions/:sessionId/turns/:messageId/events` (a server-sent event stream) and cancel with `POST /conversation/sessions/:sessionId/turns/:messageId/cancel`, which answers `{cancelled: true}`. Both answer 404 when the turn is unknown or the session id does not match it. The web client retries reattaching for up to 15 minutes, 2 seconds apart.
 5. History: `GET /conversation/history?limit=50&before=CURSOR&sessionId=ID` returns `{messages, nextCursor}`.
 6. Attachments: `POST /conversation/attachments` as multipart, one file up to 20 MB, returns `{id, name, contentType, size, status}`.
 7. Tool calls are not streamed as their own events. Read them from `toolCalls` in the final history, or from the confirmation text.
@@ -43,9 +43,9 @@ Draft for the native iPhone app, derived from reading the current backend and we
 
 ## 5. App control (workspace commands)
 
-- Stream: authenticated SSE at `GET /now/events` with the events `workspace-ready`, `workspace-command`, `workspace-cancel`.
-- Register: `POST /now/workspace/state` with `{sessionId, snapshot}`. The most recent snapshot marks the active client.
-- Acknowledge each command within 10 seconds: `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied, outcome, reason}`. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
+- Stream: authenticated SSE at `GET /now/events` with the events `workspace-ready`, `workspace-command`, `workspace-cancel`. The `workspace-ready` event carries a server-issued `sessionId` (a UUID) for this connection. Send it back in every register and acknowledge call, which answer 409 once that connection is gone.
+- Register: `POST /now/workspace/state` with the snapshot fields flat beside the id: `{sessionId, windows, contextPanelOpen}` plus optional `device`, `frame` and `view`. There is no `snapshot` wrapper, and a body that nests the fields under one is rejected with 400. `windows` holds at most 32 entries, each with a required `viewId` and `title`. `device` is `{kind, label}` where `kind` is `desktop`, `phone` or `tablet` and `label` is optional. It answers 204, 400 for an invalid snapshot and 409 when the connection is stale. The most recent snapshot marks the active client.
+- Acknowledge each command within 10 seconds (the `workspace-command` event carries `expiresAt`): `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
 - A command `target` is `active`, `desktop`, `phone` or `all`.
 - UNVERIFIED: replay after an SSE reconnect, which commands are desktop only, version negotiation, and how the phone and the desktop choose the active client.
 
