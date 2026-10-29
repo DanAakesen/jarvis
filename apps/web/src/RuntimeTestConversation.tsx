@@ -3,7 +3,7 @@ import type { PublicConfig } from '../config/public-config';
 import { Loader } from './Loader';
 import { MarkdownContent } from './MarkdownContent';
 import { Modal } from './Modal';
-import { cancelChatTurn, loadConversationHistory, sendChatTurn, type ChatMessage, type RuntimeTestSession } from './conversation-history';
+import { ChatTurnError, cancelChatTurn, loadConversationHistory, sendChatTurn, type ChatMessage, type RuntimeTestSession } from './conversation-history';
 import './RuntimeTestSelector.css';
 
 /** A session-scoped test view; normal chat remains mounted with its own draft and session. */
@@ -20,6 +20,8 @@ export function RuntimeTestConversation({ session, config, getAccessToken, onClo
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [requiresHistoryReview, setRequiresHistoryReview] = useState(false);
+  const [blockedError, setBlockedError] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [stopping, setStopping] = useState(false);
   const [accepted, setAccepted] = useState(false);
@@ -32,18 +34,21 @@ export function RuntimeTestConversation({ session, config, getAccessToken, onClo
     setNextCursor(page.nextCursor);
     setPartial('');
     setError('');
+    setRequiresHistoryReview(false);
   }).catch(() => {
     setError('Could not load this test conversation. Refresh history before sending again.');
+    setRequiresHistoryReview(true);
   }).finally(() => setLoading(false)), [config, getAccessToken, session.id]);
   useEffect(() => { void load(); return () => { active.current?.controller.abort(); }; }, [load]);
   useEffect(() => { transcript.current?.scrollTo?.({ top: transcript.current.scrollHeight }); }, [messages, partial]);
   const refresh = (before?: string) => { setLoading(true); setError(''); void load(before); };
   const send = async () => {
     const text = draft.trim();
-    if (!text || busy || active.current || loading || error) return;
+    if (!text || busy || active.current || loading || requiresHistoryReview || blockedError) return;
     const turn = { controller: new AbortController(), messageId: undefined as string | undefined };
     active.current = turn;
     setBusy(true);
+    setError('');
     setAccepted(false);
     setDraft('');
     setPartial('');
@@ -56,9 +61,13 @@ export function RuntimeTestConversation({ session, config, getAccessToken, onClo
       message => append(message));
       append(reply);
       setPartial('');
-    } catch {
+    } catch (failure) {
       if (!turn.messageId) setDraft(text);
-      setError('The reply was interrupted. It may have completed or performed an action. Refresh history and check action status before sending again.');
+      const known = failure instanceof ChatTurnError;
+      const message = known ? failure.message : 'The reply was interrupted. It may have completed or performed an action. Refresh history and check action status before sending again.';
+      setError(message);
+      setRequiresHistoryReview(!known || failure.delivery !== 'not_accepted' || Boolean(turn.messageId));
+      if (known && failure.blocksSession) setBlockedError(message);
     } finally { active.current = null; setBusy(false); setStopping(false); }
   };
   const stop = async () => {
@@ -75,12 +84,12 @@ export function RuntimeTestConversation({ session, config, getAccessToken, onClo
   return <Modal title={`${label} test conversation`} titleId={`${id}-title`} onClose={onClose} busy={busy}
     className="runtime-test-conversation" footer={<form onSubmit={event => { event.preventDefault(); void send(); }}>
       <label htmlFor={`${id}-message`}>Message {label}</label>
-      <textarea className="form-control" id={`${id}-message`} value={draft} rows={3} disabled={busy || loading || Boolean(error)}
+      <textarea className="form-control" id={`${id}-message`} value={draft} rows={3} disabled={busy || loading || requiresHistoryReview || Boolean(blockedError)}
         onChange={event => setDraft(event.target.value)} />
       <div className="button-group">
         <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>Return to normal conversation</button>
         {busy ? <button type="button" className="secondary-button" disabled={!accepted || stopping} onClick={() => { void stop(); }}>Stop reply</button>
-          : <button type="submit" className="primary-button" disabled={!draft.trim() || loading || Boolean(error)}>Send</button>}
+          : <button type="submit" className="primary-button" disabled={!draft.trim() || loading || requiresHistoryReview || Boolean(blockedError)}>Send</button>}
       </div>
     </form>}>
     <p>This separate test uses {label}. Its messages stay out of normal conversation history.</p>
@@ -95,7 +104,7 @@ export function RuntimeTestConversation({ session, config, getAccessToken, onClo
       {partial && <article className="runtime-test-message"><strong>Jarvis</strong><MarkdownContent source={partial} streaming /></article>}
       {busy && <Loader variant="text" label="Waiting for test reply" text="Replying" />}
     </div>
-    {error && <div role="alert"><p>{error}</p><button className="secondary-button" type="button" disabled={busy || loading}
+    {(blockedError || error) && <div role="alert"><p>{blockedError || error}</p><button className="secondary-button" type="button" disabled={busy || loading}
       onClick={() => { refresh(); }}>Refresh history</button></div>}
   </Modal>;
 }

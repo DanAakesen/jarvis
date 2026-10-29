@@ -94,6 +94,20 @@ class _BackendBinding:
         self._attempted = True
         response = await self._post("claim", {"target": self._target})
         if response.status_code in {404, 409}:
+            # Preserve only the server's fixed rejection vocabulary. A busy
+            # session and a consumed source need different recovery guidance.
+            if len(response.content) <= 4096:
+                try:
+                    payload = response.json()
+                    code = payload.get("code") if isinstance(payload, dict) else None
+                    allowed = ({"managed_unavailable"} if response.status_code == 404 else {
+                        "managed_session_busy", "managed_source_already_claimed",
+                        "managed_target_mismatch",
+                    })
+                    if isinstance(code, str) and code in allowed:
+                        raise ManagedChatError(code)
+                except (ValueError, TypeError):
+                    pass
             return False
         if response.status_code != 200 or len(response.content) > 4096:
             raise ManagedChatError("managed_binding_unavailable")

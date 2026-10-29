@@ -1,3 +1,15 @@
+## Managed conversation failure repair (#1350; 29 October 2026)
+
+Use the production lazy wrapper with stateful synthetic claims in
+`agents/jarvis/tests/test_managed_runtime_lifecycle.py`. A known setup failure may
+finish its source as failed only before any inference attempt and with no backend
+tool call; cancellation, unknown inference and possible actions retain the claim.
+Do not reset an existing uncertain claim or replay a consumed source. Preserve
+exact finite managed codes through hosted error SSE, backend SSE and the test UI.
+Run hosted pytest/Ruff, backend conversation/status checks and lint/build, and
+web stream/test-conversation checks and lint/build. Fixtures cannot establish the
+first live failure cause; no live logs or owner request replay is available here.
+
 ## Managed canary diagnostics (#1350; 29 October 2026)
 
 Manual Deploy 40884299864 passed provisioning/configuration/readiness but failed

@@ -91,6 +91,7 @@ class _FirstSeedCursor(NativeInputCursor):
 
 class _SeededPolicyClient(ManagedPolicyClient):
     async def _create_response(self, request):
+        await self._ensure_native_conversation()
         turn = self._native_turn.get()
         if turn.cursor.sent_count is None and turn.binding.new_native:
             # Initial native context includes the same verified SQL rolling/history

@@ -91,6 +91,116 @@ export async function accessToken(getAccessToken: () => Promise<string>): Promis
   return getAccessToken();
 }
 
+// Finite backend diagnostics; unrecognized provider codes are never displayed.
+const managedFailureCodes = [
+  'managed_session_busy', 'managed_source_already_claimed', 'managed_target_mismatch',
+  'managed_unavailable', 'managed_agent_builtin_tools_enabled', 'managed_agent_definition_mismatch',
+  'managed_agent_definition_missing', 'managed_agent_extra_skills', 'managed_agent_function_tools_mismatch',
+  'managed_agent_toolset_missing', 'managed_agent_unsupported_setting', 'managed_agent_version_mismatch',
+  'managed_backend_endpoint_invalid', 'managed_binding_invalid', 'managed_binding_unavailable',
+  'managed_claim_missing', 'managed_client_retries_enabled', 'managed_conversation_missing',
+  'managed_definition_instructions_missing', 'managed_definition_tools_invalid', 'managed_endpoint_invalid',
+  'managed_endpoint_selector_mismatch', 'managed_existing_credential_unavailable', 'managed_final_only_tool_call',
+  'managed_immutable_target_missing', 'managed_input_boundary_invalid', 'managed_input_cursor_rewound',
+  'managed_input_empty', 'managed_input_item_unsupported', 'managed_input_unsupported',
+  'managed_limits_invalid', 'managed_model_forbidden', 'managed_model_unauthorized',
+  'managed_policy_catalogue_changed', 'managed_policy_image_unverified', 'managed_policy_smoke_unavailable',
+  'managed_policy_setup_failed', 'managed_policy_turn_failed', 'managed_probe_conversation_missing',
+  'managed_probe_empty_or_unfinished', 'managed_probe_failed', 'managed_probe_incomplete',
+  'managed_probe_requested_tool', 'managed_probe_settings_mismatch', 'managed_probe_timeout',
+  'managed_project_endpoint_mismatch', 'managed_provider_failure', 'managed_readback_forbidden',
+  'managed_readback_invalid', 'managed_readback_unauthorized', 'managed_readback_unavailable',
+  'managed_response_empty', 'managed_response_failed', 'managed_response_item_unsupported',
+  'managed_response_unfinished', 'managed_reviewed_definition_mismatch', 'managed_reviewed_fingerprint_mismatch',
+  'managed_seed_input_invalid', 'managed_source_context_missing', 'managed_steering_source_unclaimed',
+  'managed_summary_history_policy_pending', 'managed_target_invalid', 'managed_target_missing',
+  'managed_target_settings_mismatch', 'managed_tool_arguments_invalid', 'managed_tool_call_invalid',
+  'managed_tool_call_unfinished', 'managed_tool_repeated', 'managed_tool_round_limit',
+  'managed_tool_schema_unsupported', 'managed_turn_already_claimed', 'managed_voice_requires_backend_relay',
+] as const;
+const managedFailures: ReadonlySet<string> = new Set(managedFailureCodes);
+
+const chatTurnFailureMessages = {
+  managed_session_busy: 'This test conversation has an unfinished managed reply and cannot continue safely. Return to normal conversation. Refreshing history will not clear the unfinished reply.',
+  managed_source_already_claimed: 'This test conversation has a previously claimed reply and cannot continue safely. Return to normal conversation. Refreshing history will not make it replayable.',
+  managed_turn_already_claimed: 'This test conversation has a previously claimed reply and cannot continue safely. Return to normal conversation. Refreshing history will not make it replayable.',
+  managed_target_mismatch: 'The settings for this test conversation no longer match its managed runtime. Return to normal conversation.',
+  managed_unavailable: 'The managed test conversation is unavailable. Return to normal conversation.',
+  managed_target_settings_mismatch: 'The managed runtime does not support the selected chat settings.',
+  managed_reviewed_definition_mismatch: 'The managed runtime definition no longer matches its reviewed configuration.',
+  managed_reviewed_fingerprint_mismatch: 'The managed runtime definition no longer matches its reviewed configuration.',
+  managed_existing_credential_unavailable: 'The managed runtime could not authenticate with its existing credential.',
+  managed_readback_unauthorized: 'Jarvis could not authenticate when checking the managed runtime.',
+  managed_readback_forbidden: 'Jarvis does not have permission to check the managed runtime.',
+  managed_readback_unavailable: 'Jarvis could not check the managed runtime.',
+  managed_model_unauthorized: 'The managed runtime could not authenticate with the selected model.',
+  managed_model_forbidden: 'The managed runtime does not have permission to use the selected model.',
+  managed_binding_unavailable: 'Jarvis could not verify the managed conversation state. Check history and action status before sending again.',
+  managed_tool_call_unfinished: 'A managed tool call did not finish. Check history and action status before sending again.',
+  managed_policy_turn_failed: 'The managed reply has an uncertain outcome and this test conversation cannot continue safely. Check history and action status. Return to normal conversation. Refreshing history will not clear the unfinished reply.',
+  managed_policy_setup_failed: 'The managed runtime could not prepare the reply. Check history before sending a new message. The previous message will not be sent again.',
+  managed_response_failed: 'The managed runtime could not finish the reply. Check history and action status before sending again.',
+  managed_provider_failure: 'The managed runtime request failed. Check history and action status before sending again.',
+  agent_auth_unavailable: 'Jarvis could not authenticate with the chat runtime.',
+  agent_http_400: 'The chat runtime rejected the request.',
+  agent_http_401: 'The chat runtime rejected Jarvis’s authentication.',
+  agent_http_403: 'Jarvis does not have permission to use the chat runtime.',
+  agent_http_404: 'The configured chat runtime could not be found.',
+  agent_http_408: 'The chat runtime request timed out.',
+  agent_http_409: 'The chat runtime reported a request conflict.',
+  agent_http_424: 'A chat runtime dependency failed.',
+  agent_http_500: 'The chat runtime encountered a server error.',
+  agent_http_502: 'The chat runtime returned a gateway error.',
+  agent_http_503: 'The chat runtime is unavailable.',
+  agent_http_504: 'The chat runtime request timed out.',
+  agent_http_other: 'The chat runtime rejected the request.',
+  error_authenticationerror: 'The chat runtime could not authenticate with the selected model.',
+  error_permissiondeniederror: 'The chat runtime does not have permission to use the selected model.',
+  agent_http_429: 'The chat runtime is rate limited. Try again later.',
+  rate_limit_exceeded: 'The chat runtime is rate limited. Try again later.',
+  agent_request_failed: 'Jarvis could not reach the chat runtime.',
+  agent_response_invalid: 'The chat runtime returned an invalid response.',
+  agent_stream_failed: 'The connection to the chat runtime failed.',
+  agent_stream_ended: 'The chat runtime ended the reply before it finished.',
+} as const;
+type ChatTurnFailureCode = keyof typeof chatTurnFailureMessages | typeof managedFailureCodes[number];
+function chatFailureMessage(code: ChatTurnFailureCode): string {
+  return Object.hasOwn(chatTurnFailureMessages, code) ? chatTurnFailureMessages[code as keyof typeof chatTurnFailureMessages]
+    : 'The managed runtime could not finish the reply.';
+}
+const blockedSessionCodes: ReadonlySet<string> = new Set(['managed_session_busy', 'managed_source_already_claimed',
+  'managed_turn_already_claimed', 'managed_target_mismatch', 'managed_unavailable', 'managed_policy_turn_failed']);
+
+/** Only client-controlled messages and finite server codes reach the test-conversation error view. */
+export class ChatTurnError extends Error {
+  readonly blocksSession: boolean;
+  constructor(message: string, readonly code: ChatTurnFailureCode | undefined = undefined,
+    readonly delivery: 'not_accepted' | 'accepted' | 'unknown' = 'unknown') {
+    super(code ? `${message} (${code})` : message);
+    this.name = 'ChatTurnError';
+    this.blocksSession = code !== undefined && blockedSessionCodes.has(code);
+  }
+}
+function chatFailureCode(value: unknown): ChatTurnFailureCode | undefined {
+  return typeof value === 'string' && (Object.hasOwn(chatTurnFailureMessages, value) || managedFailures.has(value)) ? value as ChatTurnFailureCode : undefined;
+}
+const preacceptChatMessages: ReadonlySet<string> = new Set([
+  'Chat is unavailable until the Jarvis agent is configured', 'Conversation storage unavailable',
+  'The selected test runtime is unavailable. No other runtime was used.', 'Test conversation storage is unavailable.',
+  'Active chat session not found', 'Session is not a chat session', 'Message text cannot be empty',
+  'A chat turn is already active', 'Too many recent replies. Try again shortly.',
+  'Conversation attachments are unavailable.', 'One or more attachments are unavailable.',
+  'This visual turn has already been received', 'Runtime tests require a new chat conversation.',
+]);
+const stableChatMessages: ReadonlySet<string> = new Set([...preacceptChatMessages,
+  'Reply stopped. Check conversation and action status before trying again.',
+  'Reply stopped. An action may already have completed; check its status before trying again.',
+  'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+]);
+function stableChatMessage(value: unknown, fallback: string): string {
+  return typeof value === 'string' && stableChatMessages.has(value) ? value : fallback;
+}
+
 async function chatResponse(
   getAccessToken: () => Promise<string>,
   config: PublicConfig,
@@ -100,10 +210,13 @@ async function chatResponse(
   onDeliveryUncertain?: () => void,
   signal?: AbortSignal,
 ): Promise<Response> {
-  if (!config.backendUrl) throw new Error('Chat unavailable. Try again.');
-  const token = signal
-    ? await waitForChatSetup(getAccessToken, signal)
-    : await accessToken(getAccessToken);
+  if (!config.backendUrl) throw new ChatTurnError('Chat unavailable. Try again.', undefined, 'not_accepted');
+  let token: string;
+  try { token = signal ? await waitForChatSetup(getAccessToken, signal) : await accessToken(getAccessToken); }
+  catch {
+    signal?.throwIfAborted();
+    throw new ChatTurnError('Jarvis could not verify your Microsoft sign-in. Sign in again.', undefined, 'not_accepted');
+  }
   signal?.throwIfAborted();
   let response: Response;
   try {
@@ -123,15 +236,22 @@ async function chatResponse(
     onDeliveryUncertain?.();
     throw new Error('Connection interrupted. The message or a task action may already have completed; check conversation and task status before trying again.');
   }
-  if (response.status === 401) throw new Error('Jarvis could not verify your Microsoft sign-in. Sign in again.');
-  if (response.status === 403) throw new Error("This Microsoft account isn't allowed to use Jarvis.");
+  if (response.status === 401) throw new ChatTurnError('Jarvis could not verify your Microsoft sign-in. Sign in again.', undefined, 'not_accepted');
+  if (response.status === 403) throw new ChatTurnError("This Microsoft account isn't allowed to use Jarvis.", undefined, 'not_accepted');
   if (!response.ok) {
     let message = `Jarvis could not send the message (HTTP ${response.status}).`;
+    let code: ChatTurnFailureCode | undefined;
+    let delivery: ChatTurnError['delivery'] = 'unknown';
     try {
       const error: unknown = await response.json();
-      if (isRecord(error) && typeof error.error === 'string') message = error.error;
+      if (isRecord(error)) {
+        code = chatFailureCode(error.code);
+        message = code ? chatFailureMessage(code) : stableChatMessage(error.error, message);
+        if (typeof error.error === 'string' && preacceptChatMessages.has(error.error) &&
+            (response.status < 500 || response.status === 503)) delivery = 'not_accepted';
+      }
     } catch { /* Keep the stable response error. */ }
-    throw new Error(message);
+    throw new ChatTurnError(message, code, delivery);
   }
   return response;
 }
@@ -283,10 +403,11 @@ export async function sendChatTurn(
       throw new Error('Jarvis returned an invalid chat stream.');
     }
     if (event.event === 'error') {
-      const message = isRecord(payload) && typeof payload.error === 'string'
-        ? payload.error
-        : 'Jarvis could not finish the reply. Check task status before trying again.';
-      throw new Error(message);
+      const code = isRecord(payload) ? chatFailureCode(payload.code) : undefined;
+      const fallback = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
+      const warning = stableChatMessage(isRecord(payload) ? payload.error : undefined, fallback);
+      const message = code ? `${chatFailureMessage(code)}${blockedSessionCodes.has(code) || code === 'managed_policy_setup_failed' ? '' : ` ${warning}`}` : warning;
+      throw new ChatTurnError(message, code, acceptedId ? 'accepted' : 'unknown');
     }
     if (event.event === 'user') {
       if (!isChatMessage(payload, 'dan', session.id)) throw new Error('Jarvis returned an invalid chat stream.');

@@ -1,3 +1,20 @@
+## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
+
+The owner requested repair after real Copilot test replies failed. A successful
+minimal canary does not qualify user context, claims, shared policy or tool rounds.
+The pinned OpenAI SDK 3.24.0 and its
+[function-call model](https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_function_tool_call.py)
+define function-call status as optional. Accept omission/null only after the
+parent response is explicitly completed; explicit unfinished/unknown statuses and
+the final-only no-tool boundary still fail before dispatch. This corrects a
+reproduced contract mismatch, not a proven attribution of the owner's failure.
+
+Known failures before inference and before any backend tool call may finish a
+claim as failed, while the source remains permanently consumed. Unknown inference,
+cancellation and possible tool effects retain the claim. Show fixed failure codes
+and actual blocked-state guidance; do not silently clear claims, resend messages,
+change model/settings or switch the production default.
+
 ## 29 October 2026 — use the documented optional identity status (#1350)
 
 The [Foundry governance contract](https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin)

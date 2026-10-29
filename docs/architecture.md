@@ -1,3 +1,14 @@
+## Managed turn failure boundaries (#1350; 29 October 2026)
+
+The managed policy transport creates/binds its native conversation immediately
+before the first response request, after shared context preparation. It records
+whether inference was attempted across all rounds. An ordinary setup failure with
+no inference attempt and no backend tool call can terminate its claim as failed;
+the source remains consumed. Unknown inference or tool outcomes retain the active
+claim. Only fixed internal error codes cross hosted/backend SSE, and the test UI
+keeps a busy or uncertain managed conversation blocked rather than treating a
+history refresh as claim recovery. No persistence schema or retry policy changes.
+
 ## Runtime test candidate (#1350; 29 October 2026)
 
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
