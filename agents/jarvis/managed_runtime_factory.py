@@ -10,13 +10,14 @@ from contextlib import aclosing, asynccontextmanager
 from urllib.parse import quote
 
 import httpx
-from openai import AsyncOpenAI
+from openai import APITimeoutError, AsyncOpenAI
 
 from jarvis_tools import (
     MAX_RESPONSE_BYTES,
     current_chat_input_start,
     current_chat_session_id,
     current_message_id,
+    model_tools,
 )
 from managed_bindings import BackendNativeBindings
 from managed_copilot import (
@@ -36,7 +37,7 @@ from managed_policy_client import (
     ManagedPolicyTurnContext,
     NativeInputCursor,
 )
-from model_client import AzureOpenAIResponsesClient, responses_base_url
+from model_client import AzureOpenAIResponsesClient, chat_model_tools, responses_base_url
 from model_contract import ModelStreamChunk
 from state import ModelSettings
 
@@ -130,10 +131,17 @@ class LazyManagedRuntime:
         return context
 
     @staticmethod
-    async def _json(client, url, headers, *, params=None):
+    async def _json(client, url, headers, *, params=None, timeout_seconds):
         try:
             async with client.stream("GET", url, headers=headers, params=params,
-                                     follow_redirects=False) as response:
+                                     follow_redirects=False, timeout=timeout_seconds) as response:
+                if response.status_code in {401, 403}:
+                    error = ManagedChatError(
+                        "managed_readback_forbidden" if response.status_code == 403
+                        else "managed_readback_unauthorized",
+                    )
+                    error.status_code = response.status_code
+                    raise error
                 if response.status_code != 200:
                     raise ManagedChatError("managed_readback_unavailable")
                 body = bytearray()
@@ -150,13 +158,8 @@ class LazyManagedRuntime:
         except Exception:
             raise ManagedChatError("managed_readback_unavailable") from None
 
-    async def complete_chat(
-        self, messages, language, *, settings=None, reflex_note=None, smoke=False,
-    ) -> AsyncIterator[ModelStreamChunk]:
-        if smoke:
-            raise ManagedChatError("managed_policy_smoke_unavailable")
-        context = self._context()
-        settings = settings or await self.session_settings()
+    @asynccontextmanager
+    async def _prepared(self, settings):
         backend = self._current._tools
         credential = self._current._credential
         if credential is None:
@@ -168,7 +171,7 @@ class LazyManagedRuntime:
         ), timeout) as backend_http:
             dto = await self._json(backend_http, "/agent/runtime-tests/target", {
                 "Authorization": "Bearer " + await backend._token(),
-            })
+            }, timeout_seconds=timeout)
             try:
                 endpoint, fields = dto["projectEndpoint"], dto["target"]
                 definition = normalized_managed_definition(dto["definition"])
@@ -194,7 +197,8 @@ class LazyManagedRuntime:
             bindings = _SeedBindings(BackendNativeBindings(client=backend_http,
                                                            token_provider=backend._token))
             async with _owned(httpx.AsyncClient(
-                timeout=timeout, follow_redirects=False, transport=self._transport,
+                timeout=self._current._client.timeout, follow_redirects=False,
+                transport=self._transport,
             ), timeout) as provider_http:
                 async def verify(verified_target, requested, tools):
                     try:
@@ -204,7 +208,7 @@ class LazyManagedRuntime:
                         readback = await self._json(
                             provider_http, path + "/versions/"
                             + quote(target.agent_version, safe=""),
-                            headers, params={"api-version": "v1"},
+                            headers, params={"api-version": "v1"}, timeout_seconds=timeout,
                         )
                         actual_definition = normalized_managed_definition(readback["definition"])
                         validate_managed_agent_version(
@@ -220,7 +224,8 @@ class LazyManagedRuntime:
                         ) != target.fingerprint:
                             raise ManagedChatError("managed_reviewed_fingerprint_mismatch")
                         agent = await self._json(provider_http, path, headers,
-                                                 params={"api-version": "v1"})
+                                                 params={"api-version": "v1"},
+                                                 timeout_seconds=timeout)
                         rules = agent.get("agent_endpoint", {}).get("version_selector", {}).get(
                             "version_selection_rules")
                         if (agent.get("name") != target.agent_name
@@ -237,15 +242,94 @@ class LazyManagedRuntime:
                         raise ManagedChatError("managed_readback_invalid") from None
 
                 async with _owned(AsyncOpenAI(
-                    api_key=token, http_client=provider_http,
+                    api_key=token, http_client=provider_http, timeout=self._current._client.timeout,
                     **agent_client_options(endpoint, target.agent_name),
                 ), timeout) as sdk:
-                    model = _SeededPolicyClient(
-                        client=sdk, backend=backend, target=target, bindings=bindings,
-                        context_provider=lambda: context, definition_verifier=verify,
+                    yield sdk, target, bindings, verify
+
+    async def complete_chat(
+        self, messages, language, *, settings=None, reflex_note=None, smoke=False,
+    ) -> AsyncIterator[ModelStreamChunk]:
+        if smoke:
+            raise ManagedChatError("managed_policy_smoke_unavailable")
+        context = self._context()
+        settings = settings or await self.session_settings()
+        async with self._prepared(settings) as (sdk, target, bindings, verify):
+            model = _SeededPolicyClient(
+                client=sdk, backend=self._current._tools, target=target, bindings=bindings,
+                context_provider=lambda: context, definition_verifier=verify,
+            )
+            async with aclosing(model.complete_chat(
+                messages, language, settings=settings, reflex_note=reflex_note,
+            )) as stream:
+                async for chunk in stream:
+                    yield chunk
+
+    async def probe_target(self):
+        """Fixed synthetic text canary, never a user turn or a function executor.
+
+        Caller owns the existing 210-second invocation deadline. Only the freshly
+        created canary conversation may be deleted; cleanup is bounded/best effort.
+        """
+        try:
+            settings = await self.session_settings()
+            if (settings.model, settings.reasoning_effort) != ("gpt-6.1-terra", "high"):
+                raise ManagedChatError("managed_probe_settings_mismatch")
+            async with self._prepared(settings) as (sdk, target, _bindings, verify):
+                await verify(target, settings, chat_model_tools(model_tools(
+                    await self._current._tools.tools(),
+                )))
+                native_id = None
+                try:
+                    native = await sdk.conversations.create()
+                    if not isinstance(native.id, str) or not native.id:
+                        raise ManagedChatError("managed_probe_conversation_missing")
+                    native_id = native.id
+                    stream = await sdk.responses.create(
+                        conversation=native_id,
+                        input="Reply with the single word OK. Do not call tools.", stream=True,
                     )
-                    async with aclosing(model.complete_chat(
-                        messages, language, settings=settings, reflex_note=reflex_note,
-                    )) as stream:
-                        async for chunk in stream:
-                            yield chunk
+                    seen_text, completed = False, False
+                    try:
+                        async for event in stream:
+                            if event.type == "response.output_text.delta":
+                                seen_text = seen_text or bool(event.delta.strip())
+                            elif event.type == "response.completed":
+                                if event.response.status != "completed":
+                                    raise ManagedChatError("managed_probe_incomplete")
+                                if any(item.type not in {"message", "reasoning"}
+                                       for item in event.response.output):
+                                    raise ManagedChatError("managed_probe_requested_tool")
+                                completed = True
+                            elif event.type in {"error", "response.failed", "response.incomplete"}:
+                                raise ManagedChatError("managed_probe_incomplete")
+                    finally:
+                        async with asyncio.timeout(settings.backend_http_timeout_seconds):
+                            await stream.close()
+                    if not completed or not seen_text:
+                        raise ManagedChatError("managed_probe_empty_or_unfinished")
+                    return {"status": "ok", "model": target.model,
+                            "reasoningEffort": target.reasoning_effort}
+                finally:
+                    if native_id is not None:
+                        try:
+                            async with asyncio.timeout(settings.backend_http_timeout_seconds):
+                                await sdk.conversations.delete(native_id)
+                        except Exception:
+                            pass  # Best effort; never delete another or guessed conversation.
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            status = getattr(error, "status_code", None)
+            if isinstance(error, ManagedChatError):
+                result = {"status": "unavailable", "reason": error.code}
+                if status in {401, 403}:
+                    result["httpStatus"] = status
+                return result
+            if status in {401, 403}:
+                return {"status": "unavailable", "reason": (
+                    "managed_model_forbidden" if status == 403 else "managed_model_unauthorized"
+                ), "httpStatus": status}
+            if isinstance(error, (TimeoutError, httpx.TimeoutException, APITimeoutError)):
+                return {"status": "unavailable", "reason": "managed_probe_timeout"}
+            return {"status": "unavailable", "reason": "managed_probe_failed"}

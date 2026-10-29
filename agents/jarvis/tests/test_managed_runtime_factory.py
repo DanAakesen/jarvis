@@ -100,7 +100,8 @@ class Fixture:
                 await backend.tools())),
         )
         current = AzureOpenAIResponsesClient(
-            client=NS(base_url=responses_base_url(ENDPOINT)), credential=self.credential,
+            client=NS(base_url=responses_base_url(ENDPOINT), timeout=httpx.Timeout(600)),
+            credential=self.credential,
             model_name=SETTINGS.model, server_address="fixture.services.ai.azure.com",
             system_prompt="", max_output_tokens=4096, tools=backend, reasoning_effort="high",
         )
@@ -184,3 +185,79 @@ async def test_main_injects_lazy_chat_only_and_preserves_current_instance(monkey
         assert captured["current"] is current
         assert isinstance(captured["options"]["copilot_chat_client"], LazyManagedRuntime)
         assert not f.requests and not f.credential.scopes
+
+
+class CanaryFixture(Fixture):
+    def __init__(self, fault=None):
+        super().__init__()
+        self.responses = 1  # Normal synthetic completed text, no function request.
+        self.fault = fault
+
+    async def handle(self, request):
+        if request.method == "DELETE":
+            self.requests.append(request)
+            assert request.url.path.endswith("/conversations/native-one")
+            return httpx.Response(200, json={"id": "native-one", "deleted": True,
+                                             "object": "conversation.deleted"})
+        if request.url.path.endswith("/responses"):
+            if self.fault == "tool":
+                self.responses = 0
+            elif self.fault in {"forbidden", "timeout", "empty", "failed"}:
+                self.requests.append(request)
+                if self.fault == "forbidden":
+                    return httpx.Response(403, json={"error": {"message": "PRIVATE_RAW_ERROR"}})
+                if self.fault == "timeout":
+                    raise httpx.ReadTimeout("PRIVATE_RAW_ERROR")
+                kind = "response.failed" if self.fault == "failed" else "response.completed"
+                return httpx.Response(200, text="data: " + json.dumps({
+                    "type": kind, "sequence_number": 1, "response": {
+                        "id": "r", "status": "completed", "output": []},
+                }) + "\n\n", headers={"content-type": "text/event-stream"})
+        if request.url.path.endswith("/versions/1") and self.fault == "metadata403":
+            self.requests.append(request)
+            return httpx.Response(403, json={"error": "PRIVATE_RAW_ERROR"})
+        return await super().handle(request)
+
+
+@pytest.mark.asyncio
+async def test_canary_uses_bridge_credential_without_user_context_claim_or_tool_dispatch():
+    f = CanaryFixture()
+    async with f.runtime() as (runtime, current):
+        result = await runtime.probe_target()
+        assert result == {"status": "ok", "model": "gpt-6.1-terra", "reasoningEffort": "high"}
+        assert not current._tools._http.is_closed
+    response_request = next(r for r in f.requests if r.url.path.endswith("/responses"))
+    assert json.loads(response_request.content) == {
+        "conversation": "native-one", "input": "Reply with the single word OK. Do not call tools.",
+        "stream": True,
+    }
+    assert response_request.headers["Authorization"] == "Bearer synthetic-provider-token"
+    assert response_request.extensions["timeout"]["read"] == 600
+    assert all(r.extensions["timeout"]["read"] == SETTINGS.backend_http_timeout_seconds
+               for r in f.requests if r.method == "GET")
+    assert not any("/claim" in r.url.path for r in f.requests)
+    assert not any(r.url.path.startswith("/tools/") or r.url.path == "/factory/context"
+                   for r in f.backend.requests)
+    assert [r.url.path for r in f.requests if r.method == "DELETE"] == [
+        "/api/projects/synthetic/agents/fixture-managed/endpoint/protocols/openai/"
+        "conversations/native-one"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault,reason", [
+    ("tool", "managed_probe_requested_tool"), ("empty", "managed_probe_empty_or_unfinished"),
+    ("failed", "managed_probe_incomplete"), ("timeout", "managed_probe_timeout"),
+    ("forbidden", "managed_model_forbidden"), ("metadata403", "managed_readback_forbidden"),
+])
+async def test_canary_failures_are_fixed_cleanup_only_known_synthetic_id(fault, reason):
+    f = CanaryFixture(fault)
+    async with f.runtime() as (runtime, _):
+        result = await runtime.probe_target()
+    assert result["status"] == "unavailable" and result["reason"] == reason
+    assert "PRIVATE_RAW_ERROR" not in json.dumps(result)
+    assert not any(r.url.path.startswith("/tools/") for r in f.backend.requests)
+    assert not any("/claim" in r.url.path for r in f.requests)
+    deleted = [r for r in f.requests if r.method == "DELETE"]
+    assert len(deleted) == (0 if fault == "metadata403" else 1)
+    if fault in {"forbidden", "metadata403"}:
+        assert result["httpStatus"] == 403
