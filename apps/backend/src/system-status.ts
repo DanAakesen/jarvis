@@ -93,6 +93,28 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
+export const researchSmokeFailureReasons: ReadonlySet<string> = new Set([
+  'research_settings_unavailable',
+  'research_runner_auth',
+  'research_runner_timeout',
+  'research_runner_aborted',
+  'research_runner_transport',
+  'research_runner_protocol',
+  'research_runner_http_400',
+  'research_runner_http_401',
+  'research_runner_http_403',
+  'research_runner_http_404',
+  'research_runner_http_429',
+  'research_runner_http_500',
+  'research_runner_http_502',
+  'research_runner_http_503',
+  'research_runner_http_504',
+  'research_usage_limit',
+  'research_runner_failed',
+  'research_result_missing',
+  'research_result_invalid',
+  'research_unavailable',
+]);
 export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'backend_unavailable',
   'catalogue_unavailable',
@@ -139,6 +161,14 @@ export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'model_bad_request_tools',
   'model_bad_request_reasoning',
   'model_bad_request_include',
+  'model_reasoning_parameter_unsupported',
+  'model_reasoning_effort_unsupported',
+  'model_reasoning_value_unsupported',
+  'model_reasoning_effort_value_unsupported',
+  'model_reasoning_value_invalid',
+  'model_reasoning_effort_value_invalid',
+  'model_reasoning_request_invalid',
+  'model_reasoning_effort_request_invalid',
   'error_internalservererror',
   'tool_loop_stalled',
 ]);
@@ -169,6 +199,7 @@ const sharedChatFailureReasons = [
   'agent_error', 'timeout', ...chatAgentFailureReasons, ...chatAgentInvocationReasons,
 ] as const;
 const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
+  research: researchSmokeFailureReasons,
   agent_contract: new Set([
     'Tool count exceeds the agent limit.',
     'A tool name is invalid.',

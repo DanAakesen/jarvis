@@ -1,0 +1,8 @@
+{
+  "purpose": "Explicit synthetic test profile requested by the owner; never a live default or a database readback.",
+  "roles": {
+    "chat": {"model": "gpt-6.1-terra", "reasoningEffort": "high"},
+    "research": {"model": "gpt-6.1-terra", "reasoningEffort": "xhigh"},
+    "vision": {"model": "gpt-6-luna", "reasoningEffort": "high"}
+  }
+}

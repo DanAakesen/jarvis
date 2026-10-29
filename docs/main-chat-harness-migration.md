@@ -10,6 +10,36 @@ to the initial work. Track the approved stages in
 
 ## Baseline investigation
 
+PR #1351 merged as `938bb48f` after full CI
+[40839366476](https://github.com/DanAakesen/jarvis/actions/runs/40839366476).
+Deploy [40840605441](https://github.com/DanAakesen/jarvis/actions/runs/40840605441)
+then passed backend deployment, hosted agent activation and readiness, but failed
+live acceptance at 08:23 UTC on 29 October. All five required chat scenarios
+reported `model_bad_request_reasoning`. Research remained down separately.
+
+The smoke builder forces effort `none`; only its Terra branch explicitly sends
+that value. This connects the live rejection to that source path, but does not
+prove why Azure rejected it or reveal the saved chat effort. Microsoft's
+[Terra announcement reproduced on its model catalog page](https://techcommunity.microsoft.com/tag/model%20catalog)
+explicitly lists `none`, and the [OpenAI model contract](https://developers.openai.com/api/docs/models/gpt-6.1-terra)
+also supports that effort. Azure's [reasoning guide](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/reasoning)
+lists Terra reasoning and Responses support. None of these sources explains this
+project's rejection. Do not remove a documented parameter, substitute another
+effort or rewrite the owner's settings from this evidence.
+
+The follow-up retains fixed distinctions for known provider error codes and the
+exact `reasoning` versus `reasoning.effort` subfield. Unknown metadata still uses
+the earlier classification. The missing fact is whether the live service reports
+an unsupported parameter, unsupported value or another invalid request. No raw
+provider code, subfield, message or body is copied into logs or reports.
+
+Research uses the separate subscription-backed runner. Its probe previously
+discarded every failure. Fixed reasons now distinguish settings reads, runner
+HTTP/auth/transport/protocol failures, timeout/abort, known usage limit, failed
+execution and missing/invalid results. The fixed prompt, selected role settings,
+45-second limit, polling, cleanup and acceptance rules are retained. This is
+independent diagnostic evidence, not a claim that research shares the chat fault.
+
 Deploy [40654306679](https://github.com/DanAakesen/jarvis/actions/runs/40654306679)
 on `004933741d2319e86f002ca0849921bf735773bf` passed research and all chat smoke
 checks at 08:22 UTC on 28 October. Deploy
@@ -108,6 +138,14 @@ boundaries need review before creating the agent. No model, grant or capability
 selection is implied by this document.
 
 ## Local validation of the diagnostic candidate
+
+The follow-up passes 1,019 hosted tests, hosted Ruff/byte compilation, 349 focused
+backend tests, the full backend suite (6,902 passed, one skipped), backend
+lint/build and 13 sanitizer tests. The research fixtures
+exercise terminal cleanup, timeout cancellation, unchanged dry-run inputs and
+reason filtering through retained/HTTP reports. Normal exact-head
+qualification remains required for this follow-up; previous-head CI does not
+qualify it. Current main `82fff9f5` and its separate log diagnostics are preserved.
 
 The unchanged hosted baseline passes 930 tests. The candidate passes 944 hosted
 tests, hosted Ruff and byte compilation, 280 backend system-status/chat-agent/

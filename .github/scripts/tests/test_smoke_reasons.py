@@ -7,7 +7,8 @@ import tempfile
 import unittest
 
 from smoke_reasons import (
-    CHAT_AGENT_FAILURE_REASONS, CHAT_AGENT_INVOCATION_REASONS, CHECK_IDS, MAX_REPORT_BYTES, SAFE_REASONS,
+    CHAT_AGENT_FAILURE_REASONS, CHAT_AGENT_INVOCATION_REASONS, CHECK_IDS, MAX_REPORT_BYTES,
+    RESEARCH_FAILURE_REASONS, SAFE_REASONS,
     failure_reasons, report_ok, safe_report,
 )
 
@@ -29,7 +30,8 @@ class SmokeReasonsTests(unittest.TestCase):
         retained = safe_report(report)
         self.assertFalse(report_ok(retained))
         self.assertEqual(failure_reasons(retained), [
-            f"smoke_reason {check}: rate_limit_exceeded" for check in sorted(SAFE_REASONS)
+            f"smoke_reason {check}: rate_limit_exceeded"
+            for check in sorted(SAFE_REASONS) if check.startswith("chat_")
         ])
 
     def test_hosted_origin_allowlist_matches_the_backend_exactly(self):
@@ -38,6 +40,21 @@ class SmokeReasonsTests(unittest.TestCase):
     def test_backend_side_failure_allowlist_matches_the_backend_exactly(self):
         self.assertEqual(backend_reason_set("chatAgentInvocationReasons"), CHAT_AGENT_INVOCATION_REASONS)
         self.assertFalse(CHAT_AGENT_INVOCATION_REASONS & CHAT_AGENT_FAILURE_REASONS)
+
+    def test_research_reasons_match_backend_and_survive_without_private_details(self):
+        self.assertEqual(backend_reason_set("researchSmokeFailureReasons"), RESEARCH_FAILURE_REASONS)
+        for code in sorted(RESEARCH_FAILURE_REASONS | {"private_fixture"}):
+            with self.subTest(code=code):
+                report = {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
+                next(row for row in report["entries"] if row["id"] == "research").update({
+                    "status": "down", "reason": code, "details": "PRIVATE_RUNNER_EVENT",
+                })
+                retained = safe_report(report)
+                expected = code if code in RESEARCH_FAILURE_REASONS else "not_reported_or_redacted"
+                self.assertEqual(failure_reasons(retained), [f"smoke_reason research: {expected}"])
+                self.assertFalse(report_ok(retained))
+                self.assertNotIn("PRIVATE_RUNNER_EVENT", json.dumps(retained))
+                self.assertNotIn("private_fixture", json.dumps(retained))
 
     def test_fixed_hosted_and_backend_reasons_survive_artifact_sanitization_and_still_fail_acceptance(self):
         for code in sorted(CHAT_AGENT_FAILURE_REASONS | CHAT_AGENT_INVOCATION_REASONS):
@@ -53,7 +70,8 @@ class SmokeReasonsTests(unittest.TestCase):
                 self.assertFalse(report_ok(retained))
                 self.assertNotIn("never-retain", json.dumps(retained))
                 self.assertEqual(code in SAFE_REASONS["chat_canary"], code == "rate_limit_exceeded")
-                for check in SAFE_REASONS.keys() - {"chat_canary"}:
+                for check in (key for key in SAFE_REASONS if key.startswith("chat_")
+                              and key != "chat_canary"):
                     self.assertIn(code, SAFE_REASONS[check])
 
     def test_unknown_code_shaped_origins_are_redacted_in_logs_and_artifacts(self):

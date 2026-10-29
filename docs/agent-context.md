@@ -4,9 +4,11 @@ Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,
 exclude unrelated projects, preserve redaction/bounds and keep the reader disabled
 until expanded access is specifically approved and proven. Do not remove the role
 or apply the earlier backend-only grant as though it authorized whole-system reads.
-See [inventory/design/grant proposal](jarvis-logs.md). Issue #1341 remains canonical;
-its scope-update write was automatically denied. Do not retry or publish the same
-scope/design through another route without materially new specific approval.
+See [inventory/design/grant proposal](jarvis-logs.md). Issue #1341 remains canonical.
+After the initial denial, the owner specifically approved its scope update and
+inventory/design PR publication, test disclosures, readiness and integration after
+checks. The one authorized issue-update retry succeeded. Parent owns readiness
+and merge. Keep new grants and reader activation outside that publication step.
 
 Local metadata preparation reads only existing-authorized ARM resource/table lists.
 Exact canonical ID plus ownership tag is required; table plan/_ResourceId metadata
@@ -15,6 +17,35 @@ public labels, and all negative/unavailable states honest. Runtime source adapte
 capability replacement, grant execution and live qualification are still pending.
 Run Python backend-log and pipeline tests, scoped Ruff/byte compilation and diff
 checks. No actual log data, credentials or private identifiers enter GitHub.
+
+## Smoke/normal settings parity (#1350; 29 October 2026)
+
+The owner explicitly requires the same role settings in tests. Use the selected
+model, reasoning and configured output budget; keep unsupported settings visible
+rather than substituting another value. Run hosted tests/Ruff/compileall and
+research-smoke/foundry-model tests plus backend lint. Local results: 1,025 hosted
+and 56 backend tests passed. These do not prove the server's stored settings,
+provider acceptance or ordinary-chat failure. Saved settings stay unchanged;
+the owner approved publication with #1353, followed by normal checks/review. See
+[local report](smoke-settings-1350.md).
+
+## Reasoning and research smoke checks (#1350; 29 October 2026)
+
+The real Deploy 40840605441 reports model_bad_request_reasoning in all required
+chat scenarios; it does not prove none unsupported. Microsoft's Terra announcement
+and OpenAI's model contract explicitly support none. Keep settings and model
+requests intact until actual rejection detail identifies a correction. Run hosted
+pytest/Ruff/compileall, backend research-smoke/web-research/system-status/chat-agent/
+chat-canary/status tests plus lint/build, and Python test_smoke_reasons.py. Fixtures
+must cover unknown/malformed provider metadata, independent runner HTTP/auth/
+timeout/quota/result cases, cleanup, retained/HTTP reports and raw-detail redaction.
+No real worker or subscription/API operation belongs in those tests. Preserve
+current main's #1352 log-probe changes and separate authorization boundaries.
+
+Local follow-up: 1,019 hosted tests, hosted Ruff/compileall, 349 focused backend
+tests, full backend 6,902 passed/one skipped, backend lint/build and 13 sanitizer
+tests pass. Node 24/npm 11 local evidence does not replace pinned Node 22/npm 10
+qualification. No live correction or new provider operation is claimed.
 
 ## Foundry resource-log diagnosis (#1341; 29 October 2026)
 

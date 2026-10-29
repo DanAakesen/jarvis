@@ -16,6 +16,27 @@ explicitly leaves workspace-wide ownership, routing, historical ownership and
 provider enforcement unverified. Metadata lists remain bounded and private; no
 runtime log adapter, capability duplication, new grant or ingestion change occurs.
 
+## Smoke request parity (#1350; 29 October 2026)
+
+The hosted-client candidate resolves smoke reasoning and output budget
+through the same values as normal chat. Model/effort observations use the existing
+span with a finite effort label; unrecognized labels are flagged without being
+copied or replaced. No session setting, provider endpoint, source authorization,
+tool catalogue or voice path changes. Review, qualification and live acceptance are
+pending; [local evidence](smoke-settings-1350.md) distinguishes test drift
+from any actual ordinary-chat failure.
+
+## Separate model and research rejection evidence (#1350; 29 October 2026)
+
+Hosted chat adds fixed distinctions for known reasoning rejection codes and
+reasoning-object versus effort subfields. The research smoke boundary separately
+classifies its existing settings/Foundry runner/result failures. Both finite
+allowlists survive the existing status and release sanitizers, without provider
+bodies, nested property names, operation text or runner events. Research keeps its
+fixed dry run, selected settings, timing and cleanup. No inference, role, stored
+setting, worker credential or production runtime path changes. See
+[actual release evidence and remaining uncertainty](main-chat-harness-migration.md).
+
 ## Foundry resource-query permission observations (#1341; 29 October 2026)
 
 The existing fixed Foundry resource query now counts `AzureDiagnostics` in the
