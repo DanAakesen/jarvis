@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FoundryClientError, type InvocationSnapshot } from '../foundry/client.js';
 import { researchSmokeFailureReasons, createSystemSmokeReader, createSystemStatusReader, systemSmokeHttpResponse } from '../system-status.js';
@@ -5,6 +6,9 @@ import { createResearchSmokeProbe, researchSmokeFailureReason } from './research
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const accepted = { invocationId: 'fixture-invocation', sessionId: 'fixture-session', status: 'queued' as const, agent: 'codex' as const };
+const roleProfile = JSON.parse(readFileSync(new URL(
+  '../../../../agents/jarvis/tests/fixtures/runtime_role_settings.json', import.meta.url,
+), 'utf8')) as { roles: { research: { model: string; reasoningEffort: string } } };
 
 function fixture(overrides: Partial<InvocationSnapshot> = {}) {
   return {
@@ -25,7 +29,7 @@ afterEach(() => { vi.useRealTimers(); });
 describe('research smoke evidence', () => {
   it.each([
     ['fixture-model', 'high'],
-    ['gpt-6.1-terra', 'xhigh'],
+    [roleProfile.roles.research.model, roleProfile.roles.research.reasoningEffort],
   ])('keeps the fixed dry run and selected %s/%s settings with terminal cleanup', async (model, reasoningEffort) => {
     const client = fixture();
     const report = await createResearchSmokeProbe({

@@ -8,6 +8,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
@@ -49,6 +50,10 @@ from model_client import (
 )
 from model_contract import AcknowledgmentBoundary, SummaryCompletion, ToolLoopStalled
 from state import ModelMessage, ModelSettings
+
+ROLE_PROFILE = json.loads(
+    (Path(__file__).parent / "fixtures" / "runtime_role_settings.json").read_text(encoding="utf-8")
+)["roles"]
 
 
 class FakeStream:
@@ -989,16 +994,20 @@ async def test_smoke_chat_executes_only_read_only_tools_without_context_or_histo
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("effort", ["none", "low", "medium", "high", "xhigh"])
+@pytest.mark.parametrize(("model_name", "effort"), [
+    pytest.param(ROLE_PROFILE["chat"]["model"], ROLE_PROFILE["chat"]["reasoningEffort"],
+                 id="requested-chat-profile"),
+    *[("gpt-6.1-terra", effort) for effort in ("none", "low", "medium", "xhigh")],
+])
 async def test_smoke_and_normal_chat_use_identical_selected_reasoning_and_token_budget(
-    effort, monkeypatch,
+    model_name, effort, monkeypatch,
 ) -> None:
     exporter = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     monkeypatch.setattr(model_client, "_tracer", provider.get_tracer("fixture"))
     backend = FakeBackend(
-        catalogue=[LIST_JOBS], model_name="gpt-6.1-terra", reasoning_effort=effort,
+        catalogue=[LIST_JOBS], model_name=model_name, reasoning_effort=effort,
     )
     model, transport = client([], rounds=[[completed()], [completed()]], backend=backend)
     model._max_output_tokens = 4096
@@ -1011,12 +1020,12 @@ async def test_smoke_and_normal_chat_use_identical_selected_reasoning_and_token_
         normal, smoke_request = transport.responses.requests
         for field in ("model", "reasoning", "max_output_tokens", "include"):
             assert normal.get(field) == smoke_request.get(field)
-        assert smoke_request["model"] == "gpt-6.1-terra"
+        assert smoke_request["model"] == model_name
         assert smoke_request["reasoning"] == {"effort": effort}
         assert smoke_request["max_output_tokens"] == 4096
         observed = [span.attributes for span in exporter.get_finished_spans()]
         assert len(observed) == 2
-        assert all(item["gen_ai.request.model"] == "gpt-6.1-terra" for item in observed)
+        assert all(item["gen_ai.request.model"] == model_name for item in observed)
         assert all(item["gen_ai.request.reasoning_effort"] == effort for item in observed)
         assert not any(request.method == "PATCH" for request in backend.requests)
     finally:

@@ -1,11 +1,11 @@
-## Local smoke request parity (#1350; 29 October 2026)
+## Smoke request parity (#1350; 29 October 2026)
 
-The local hosted-client candidate resolves smoke reasoning and output budget
+The hosted-client candidate resolves smoke reasoning and output budget
 through the same values as normal chat. Model/effort observations use the existing
 span with a finite effort label; unrecognized labels are flagged without being
 copied or replaced. No session setting, provider endpoint, source authorization,
-tool catalogue or voice path changes. Publication and live qualification are
-pending; [local evidence](smoke-settings-local-1350.md) distinguishes test drift
+tool catalogue or voice path changes. Review, qualification and live acceptance are
+pending; [local evidence](smoke-settings-1350.md) distinguishes test drift
 from any actual ordinary-chat failure.
 
 ## Separate model and research rejection evidence (#1350; 29 October 2026)

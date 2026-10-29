@@ -1,12 +1,14 @@
-## Local test-settings correction (#1350; 29 October 2026)
+## Test-settings correction (#1350; 29 October 2026)
 
-The owner requires tests to use the same role settings. The local correction
+The owner requires tests to use the same role settings. The correction
 removes smoke's forced-none effort and separate token cap while retaining the
 existing saved-setting resolution and read-only guards. It records bounded
 effective-effort telemetry without adding fallback values. Local validation:
 1,025 hosted tests/Ruff/compilation and 56 research/vision tests plus backend lint
-pass. This change is not pushed, published or deployed, and is not part of #1353.
-See [local scope and remaining evidence](docs/smoke-settings-local-1350.md).
+pass. The owner approved including this correction with the finite diagnostics
+in #1353; exact-head qualification, independent review and live acceptance remain
+pending.
+See [local scope and remaining evidence](docs/smoke-settings-1350.md).
 
 ## Live reasoning rejection and separate research evidence (#1350; 29 October 2026)
 

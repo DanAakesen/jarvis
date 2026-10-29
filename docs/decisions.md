@@ -2,11 +2,12 @@
 
 The owner clarified that the visible chat setting is not none and explicitly
 requires tests to use the same settings. A closed UI selection is not a verified
-database readback. The local candidate removes the smoke-only effort/token-budget
+database readback. The candidate removes the smoke-only effort/token-budget
 overrides, preserves saved values and records effective request settings. It does
 not assert ordinary chat is broken from a forced-none test failure. Synthetic
-regressions pass; publication and live acceptance are pending. No screenshot or
-private configuration record is included. See [local report](smoke-settings-local-1350.md).
+regressions pass; the owner approved publication with #1353. Review, qualification
+and live acceptance are pending. No screenshot or
+private configuration record is included. See [local report](smoke-settings-1350.md).
 
 ## 29 October 2026 — preserve Terra settings while distinguishing its rejection (#1350)
 

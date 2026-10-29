@@ -1,13 +1,13 @@
-## Local smoke/normal settings parity (#1350; 29 October 2026)
+## Smoke/normal settings parity (#1350; 29 October 2026)
 
 The owner explicitly requires the same role settings in tests. Use the selected
 model, reasoning and configured output budget; keep unsupported settings visible
 rather than substituting another value. Run hosted tests/Ruff/compileall and
 research-smoke/foundry-model tests plus backend lint. Local results: 1,025 hosted
 and 56 backend tests passed. These do not prove the server's stored settings,
-provider acceptance or ordinary-chat failure. No saved-setting mutation or public
-publication is authorized by this local candidate. See
-[local report](smoke-settings-local-1350.md).
+provider acceptance or ordinary-chat failure. Saved settings stay unchanged;
+the owner approved publication with #1353, followed by normal checks/review. See
+[local report](smoke-settings-1350.md).
 
 ## Reasoning and research smoke checks (#1350; 29 October 2026)
 

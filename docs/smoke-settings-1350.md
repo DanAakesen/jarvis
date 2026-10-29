@@ -1,7 +1,7 @@
-# Local smoke settings correction (#1350)
+# Smoke settings correction (#1350)
 
-Local review only. This correction is separate from diagnostic PR #1353 and has
-not been pushed or published. It does not change saved settings or the runtime
+This correction is prepared with the finite diagnostics in PR #1353 after the
+owner approved including it. It does not change saved settings or the runtime
 default. The private reference screenshot is not copied into the repository.
 
 ## Confirmed drift
@@ -13,7 +13,7 @@ also changes the model's available reasoning/answer budget. The observed require
 smoke rejection therefore does not establish failure of ordinary chat at a
 different configured effort. A closed UI selection is not a database readback.
 
-## Local correction
+## Request settings correction
 
 Use the same reasoning selection and configured output-token budget for smoke
 and normal chat. Keep the same request fields; do not remove reasoning, substitute
@@ -41,9 +41,12 @@ substituting them.
 ## Validation
 
 Local model-client regression: 189 passed plus scoped Ruff. Full hosted suite:
-1,025 passed, plus full hosted Ruff and byte compilation. Research/vision: 56
-passed plus backend lint. The new cases compare
+1,025 passed, plus full hosted Ruff and byte compilation. The final combined
+backend selection passes 352 tests plus lint/build. The new cases compare
 normal and smoke requests for none/low/medium/high/xhigh, record effective model
 and effort, use the same configured 4096-token test budget and prove invalid
 metadata produces no inference request. These are synthetic results, not live
-acceptance. The correction remains local and separate from #1353.
+acceptance. The fixture profile names Chat Terra/High, Research Terra/xhigh and
+Vision Luna/High explicitly; live probes continue reading effective backend role
+settings and never load that test profile. The final combined head still needs
+normal qualification and independent review before the parent releases it.
