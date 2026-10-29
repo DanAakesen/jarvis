@@ -16,7 +16,7 @@ from managed_copilot import (
 from model_contract import AcknowledgmentBoundary
 from state import ModelMessage, ModelSettings
 
-SETTINGS = ModelSettings("ChatTerraHigh", "high")
+SETTINGS = ModelSettings("gpt-6.1-terra", "high")
 TARGET = ManagedTarget("fixture-chat", SETTINGS.model, SETTINGS.reasoning_effort)
 
 
@@ -58,8 +58,12 @@ class Fixture:
         self.adapter = ManagedCopilotClient(
             client=self.client, backend=self, target=TARGET, bindings=self,
             context_provider=lambda: ManagedTurnContext("session", "42", "prepared identity"),
-            settings_provider=self.settings,
+            settings_provider=self.settings, definition_verifier=self.verify,
         )
+
+    async def verify(self, target, settings, tools):
+        assert target == TARGET and settings == SETTINGS
+        assert tools[0]["strict"] is False
 
     async def settings(self):
         return SETTINGS
@@ -126,8 +130,7 @@ async def test_repeated_rounds_native_conversation_and_source_binding():
     assert all(r["conversation"] == "native-1" for r in f.requests)
     assert f.requests[1]["input"][0]["type"] == "function_call_output"
     for request in f.requests:
-        assert set(request) == {"conversation", "input", "instructions", "tools", "stream"}
-        assert request["tools"][0]["strict"] is False
+        assert set(request) == {"conversation", "input", "instructions", "stream"}
     assert all(s.closed for s in f.rounds)
     assert f.finishes == [("42", True)]
     with pytest.raises(ManagedChatError, match="already_claimed"):
@@ -262,3 +265,32 @@ async def test_real_openai_sdk_agent_scope_and_streamed_protocol():
         assert request.url.params["api-version"] == "v1"
         assert request.headers["Foundry-Features"] == AGENT_PREVIEW_HEADER
     assert json.loads(requests[1].content)["conversation"] == "native-sdk"
+
+
+@pytest.mark.asyncio
+async def test_definition_catalogue_verification_blocks_before_provider_actions():
+    f = Fixture([])
+
+    async def mismatch(target, settings, tools):
+        raise ManagedChatError("managed_agent_function_tools_mismatch")
+
+    f.adapter._verify_definition = mismatch
+    with pytest.raises(ManagedChatError, match="function_tools_mismatch"):
+        await f.run()
+    assert not f.requests and not f.creates and not f.claims and not f.calls
+
+
+@pytest.mark.asyncio
+async def test_async_settings_and_current_context_callbacks():
+    from contextvars import ContextVar
+
+    current = ContextVar("synthetic_managed_turn")
+    f = Fixture([[delta("Done"), completed()]])
+    f.adapter._context = current.get
+    assert await f.adapter.session_settings() == SETTINGS
+    token = current.set(ManagedTurnContext("session", "42", "prepared identity"))
+    try:
+        assert await f.run() == ["Done"]
+    finally:
+        current.reset(token)
+    assert f.requests[0]["instructions"] == "prepared identity"

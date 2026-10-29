@@ -10,7 +10,7 @@ import asyncio
 import hashlib
 import json
 import re
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, aclosing
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -116,7 +116,10 @@ class ManagedCopilotClient:
         self, *, client: Any, backend: BackendToolClient, target: ManagedTarget,
         bindings: NativeConversationBindings,
         context_provider: Callable[[], ManagedTurnContext],
-        settings_provider: Callable[[], Any],
+        settings_provider: Callable[[], Awaitable[ModelSettings]],
+        definition_verifier: Callable[
+            [ManagedTarget, ModelSettings, Sequence[dict[str, Any]]], Awaitable[None]
+        ],
         turn_timeout_seconds: float = 360, cleanup_timeout_seconds: float = 5,
         max_tool_rounds: int = 12,
     ) -> None:
@@ -127,6 +130,7 @@ class ManagedCopilotClient:
         self._client, self._backend, self._target = client, backend, target
         self._bindings, self._context = bindings, context_provider
         self._settings = settings_provider
+        self._verify_definition = definition_verifier
         self._timeout, self._cleanup_timeout = turn_timeout_seconds, cleanup_timeout_seconds
         self._max_rounds = max_tool_rounds
         self.model_name = target.model
@@ -161,6 +165,11 @@ class ManagedCopilotClient:
         if messages[-1].images or reflex_note:
             raise ManagedChatError("managed_input_unsupported")
         async with asyncio.timeout(self._timeout):
+            tools = model_tools(await self._backend.tools())
+            for tool in tools:
+                if tool.get("strict") is True or "___" in tool.get("name", ""):
+                    raise ManagedChatError("managed_tool_schema_unsupported")
+            await self._verify_definition(self._target, settings, tools)
             async with self._bindings.lease(context, self._target) as binding:
                 if not await binding.claim_turn(context.source_message_id):
                     raise ManagedChatError("managed_turn_already_claimed")
@@ -173,7 +182,7 @@ class ManagedCopilotClient:
                             raise ManagedChatError("managed_conversation_missing")
                         await binding.bind(conversation_id)
                     async with aclosing(self._run(
-                        messages[-1], context, binding.conversation_id,
+                        messages[-1], context, binding.conversation_id, tools,
                     )) as chunks:
                         async for chunk in chunks:
                             yield chunk
@@ -191,11 +200,8 @@ class ManagedCopilotClient:
 
     async def _run(
         self, message: ModelMessage, context: ManagedTurnContext, conversation_id: str,
+        tools: Sequence[dict[str, Any]],
     ) -> AsyncIterator[ModelStreamChunk]:
-        tools = model_tools(await self._backend.tools())
-        for tool in tools:
-            if (tool.get("strict") is True or "___" in tool.get("name", "")):
-                raise ManagedChatError("managed_tool_schema_unsupported")
         allowed = {tool["name"] for tool in tools}
         inputs: list[dict[str, Any]] = [{"role": "user", "content": message.content}]
         seen_ids: set[str] = set()
@@ -203,7 +209,7 @@ class ManagedCopilotClient:
         for _ in range(self._max_rounds + 1):
             stream = await self._client.responses.create(
                 conversation=conversation_id, input=inputs, instructions=context.instructions,
-                tools=tools, stream=True,
+                stream=True,
             )
             final = None
             text = ""
