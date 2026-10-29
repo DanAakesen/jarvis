@@ -36,7 +36,7 @@ The owner confirmed these on 29 October 2026 while reviewing the concept board. 
 
 - **Native look.** Native iOS glass materials and standard iOS controls, not a copy of the web chrome.
 - **No bottom tab bar.** Chat and voice switch from the composer, which frees the full screen for both.
-- **Areas open from a right-edge swipe sidebar, with no visible button or handle.** It suits one-handed right-thumb use and scales to many areas: chat and voice, notes, health, banking later and more. A bottom tab bar was rejected because it costs the full-screen chat and voice view, and a left sidebar because it is hard to reach one-handed. Settings sit at the top; pinned shortcuts and a "Jump or ask" control sit within thumb reach at the bottom. The owner chose swipe-only for the prototype and will judge it by using it. The sidebar is a custom SwiftUI component; iOS has no stock right-edge drawer.
+- **Areas open from a right-edge swipe sidebar, with no visible button or handle.** It suits one-handed right-thumb use and scales to many areas: chat, notes, health, banking later and more. A bottom tab bar was rejected because it costs the full-screen chat and voice view, and a left sidebar because it is hard to reach one-handed. The sidebar stays narrow and its rows are right-aligned, so icons and text sit close to the right edge, within thumb reach, instead of being dragged away from it. Settings sit at the top. Areas are listed from the thumb end upward: Chat first (the one area for chat and voice, named simply Chat), then Notes, Health, Software Factory (shown with a code icon), banking (later) and the remaining areas. The owner removed the "Jump or ask" control. Pinned shortcuts at the bottom are still in the prototype and are not decided. The owner chose swipe-only for the prototype and will judge it by using it. The sidebar is a custom SwiftUI component; iOS has no stock right-edge drawer.
 - **Composer.** An iOS take on the web composer: glass, two rows, add, microphone and send. The owner likes the direction; the design is not final.
 - **Orb.** The existing Jarvis orb design carries over. How to render it natively is open.
 - **Presence.** The phone has no presence picker and always uses On the move.
@@ -48,14 +48,14 @@ This is a proposal, not an approved set of requirements or permission to run cap
 
 1. Prepare a local copy with test data and a local-only preview/sign-in approach, without removing production login. *Not started; the concept board uses synthetic data and does not need it.*
 2. Capture a mobile-size inventory of the existing pages, menus and dialogs, and record the features each provides. *Not started; still needed before version 1 scope is agreed.*
-3. Propose native iOS screen flows and layouts using native navigation and controls. *In progress in the concept board: chat, voice, notes and navigation.*
+3. Propose native iOS screen flows and layouts using native navigation and controls. *In progress in the concept board: chat, voice, notes, navigation, generated workspaces and app control.*
 4. Compare the current screens with layout alternatives and agree which brand elements to retain. *In progress; the orb and the composer look are retained so far.*
 5. Create an interactive prototype and refine it with Dan. *In progress: the concept board.*
 6. Obtain Dan's approval of the version 1 scope and design before native implementation. *Not started.*
 
 Browser screenshots at mobile dimensions are evidence of the web app, not validation on a native device. A web prototype can demonstrate flows and visual ideas, but cannot establish actual native behaviour.
 
-**Concept board.** A self-contained HTML page that shows the app inside an iPhone frame, with the Dynamic Island, light and dark themes, a keyboard state and an approximation of Liquid Glass (Clear and Tinted). It uses synthetic data only, runs in the Copilot app's Browser canvas or any Chromium browser, and needs no Mac and no paid tool. It lives in the design session's scratch folder, not in this repository. Screenshots given to outside tools must use synthetic data only.
+**Concept board.** A self-contained HTML page that shows the app inside an iPhone frame, with the Dynamic Island, light and dark themes, a keyboard state and an approximation of Liquid Glass (Clear and Tinted). It also simulates the two essential capabilities: a generated workspace appears as a sheet, one at a time, with hand-built sample content rather than the typed generated views, and a Say menu stands in for speech so that a spoken or typed command can open and close workspaces and navigate the app. It uses synthetic data only, runs in the Copilot app's Browser canvas or any Chromium browser, and needs no Mac and no paid tool. It lives in the design session's scratch folder, not in this repository. Screenshots given to outside tools must use synthetic data only.
 
 ## Build and preview approach discussed
 
@@ -76,7 +76,7 @@ Open choices include:
 - version 1 screens and features, and which existing areas the sidebar lists;
 - the final composer design, pinned shortcuts and native rendering of the orb;
 - how workspaces appear on a phone (sheet, full screen, several at once);
-- access to the swipe-only sidebar with VoiceOver and other assistive technology;
+- access to the swipe-only sidebar with VoiceOver and other assistive technology (the prototype keeps a hidden control for keyboard and screen-reader users as a stopgap);
 - hands-free start routes (Action Button, Siri, AirPods, CarPlay) and background audio, whose iOS limits are unverified;
 - how presence interacts with workspaces: today On the move never asks the owner to look at a screen, while generated workspaces are shown on request;
 - how the active client is chosen when a phone and a desktop are both connected;
