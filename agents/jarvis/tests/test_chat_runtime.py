@@ -104,13 +104,26 @@ def test_runtime_selection_comes_only_from_verified_history(stored_runtime) -> N
         response = client.post("/invocations", json={
             "messageId": "42", "text": "Hello", "language": "en",
             "delegatedAuthorization": AUTHORIZATION,
-            "runtimeTest": "copilot",  # Untrusted payload cannot select the runtime.
         })
     assert response.status_code == 200
     assert "event: done" in response.text
     assert current.chat_calls == (0 if stored_runtime == "copilot" else 1)
     assert copilot.chat_calls == (1 if stored_runtime == "copilot" else 0)
     assert current.closed  # The retained voice client keeps its existing lifecycle.
+
+
+def test_untrusted_payload_cannot_request_a_runtime() -> None:
+    async def context(*_args):
+        raise AssertionError("Invalid payload must not reach source verification")
+
+    app, current = app_with(context)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "runtimeTest": "copilot",
+        })
+    assert response.status_code == 400
+    assert current.chat_calls == 0
 
 
 def test_unconfigured_copilot_selection_never_falls_back() -> None:
