@@ -1,3 +1,23 @@
+## Managed canary failure visibility (#1350; 29 October 2026)
+
+PR #1357 merged after qualification. Manual Deploy 40884299864 passed provisioning
+at 14:03:43 UTC, configured the pinned target and passed backend readiness, then
+failed the canary assertion at 14:05:08. All eight Current chat checks passed;
+research failed separately. The canary's private response was deleted and not
+uploaded, so its specific reason is unavailable through retained workflow logs.
+
+The local workflow-handoff correction reports only existing fixed reason/stage
+labels, bounded HTTP status and allowlisted model/effort constants on failure.
+The fallback stage is the known `managed_text_canary` operation; no new Python
+runtime instrumentation is included. It preserves the gate, private bodies, existing resource,
+credentials, roles and defaults. Metadata-based runtime availability currently
+does not consult canary success; it may offer Copilot despite a failed canary.
+Actual authenticated availability and a working managed response remain unverified.
+No availability policy change is included in this diagnostic correction.
+All 35 handoff/provisioning/deploy-plan tests, scoped Ruff, compilation and shell
+syntax checks pass locally; independent review found no blocker. Exact-head CI
+and a new reviewed handoff remain pending.
+
 ## Managed identity readback correction (#1350; 29 October 2026)
 
 PR #1355 merged after full exact-head qualification. Automatic Deploy 40867958702

@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 HANDOFF = ROOT / ".github/scripts/provision_managed_chat_handoff.sh"
+MISSING_SETTINGS = " expected_model=gpt-6.1-terra actual_model=not_reported expected_effort=high actual_effort=not_reported"
 FAKE = '''#!/usr/bin/env python3
 import json, os, sys
 from pathlib import Path
@@ -44,6 +45,9 @@ elif args[:2] == ['rest','--method']:
         if os.environ.get('CANARY_HTTP_FAILURE'):
             print('private provider content',file=sys.stderr)
             sys.exit(1)
+        if 'CANARY_BODY' in os.environ:
+            print(os.environ['CANARY_BODY'])
+            sys.exit(0)
         print(json.dumps({'status':'ok','model':'other' if os.environ.get('BAD_CANARY') else 'gpt-6.1-terra','reasoningEffort':'high'}))
 elif args[:2] == ['containerapp','update']:
     assert '--set-env-vars' in args
@@ -135,6 +139,62 @@ class ManagedHandoffTests(unittest.TestCase):
             self.assertIn(code, result.stdout)
             self.assertNotIn("private provider", result.stdout + result.stderr)
             self.assertNotIn("canary_ok", result.stdout)
+
+    def diagnostic(self, body):
+        result, calls = self.run_handoff(CANARY_BODY=body)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("::error::managed_chat_canary_failed", result.stdout)
+        self.assertNotIn("managed_chat_comparison_canary_ok", result.stdout)
+        self.assertEqual(sum(args[:2] == ["rest", "--method"] for _, args in calls), 2)
+        lines = [line for line in result.stdout.splitlines() if line.startswith("managed_chat_canary_diagnostic ")]
+        self.assertEqual(len(lines), 1)
+        return lines[0], result
+
+    def test_safe_internal_reason_stage_and_http_are_the_only_failure_details(self):
+        for status in [400, 403, 403.0, 599]:
+            line, result = self.diagnostic(json.dumps({"status": "unavailable", "reason": "managed_readback_forbidden",
+                "stage": "definition_readback", "httpStatus": status,
+                "providerBody": "private-secret-body", "id": "private-resource-id"}))
+            self.assertEqual(line, f"managed_chat_canary_diagnostic reason=managed_readback_forbidden stage=definition_readback http_status={int(status)}" + MISSING_SETTINGS)
+            self.assertNotIn("private-", result.stdout + result.stderr)
+        for stage in ["settings", "target_setup", "conversation_create", "response_start", "response_stream"]:
+            line, _ = self.diagnostic(json.dumps({"reason": "managed_probe_failed", "stage": stage}))
+            self.assertEqual(line, f"managed_chat_canary_diagnostic reason=managed_probe_failed stage={stage}" + MISSING_SETTINGS)
+
+    def test_unknown_or_malformed_labels_never_reach_logs(self):
+        for reason, stage in [("managed_unreviewed_reason", "unknown_stage"),
+                              ("private-secret\n::error::injected", "private-stage\n::add-mask::value"),
+                              ({"private-key": "private-value"}, ["response_stream"]),
+                              (None, None), (True, 1)]:
+            line, result = self.diagnostic(json.dumps({"reason": reason, "stage": stage}))
+            self.assertEqual(line, "managed_chat_canary_diagnostic reason=not_reported stage=managed_text_canary" + MISSING_SETTINGS)
+            self.assertNotIn("private-", result.stdout + result.stderr)
+        line, _ = self.diagnostic(json.dumps({"reason": "managed_probe_timeout"}))
+        self.assertEqual(line, "managed_chat_canary_diagnostic reason=managed_probe_timeout stage=managed_text_canary" + MISSING_SETTINGS)
+
+    def test_expected_and_actual_settings_are_only_bounded_constants(self):
+        for model, effort in [("gpt-6.1-terra", "high"), ("gpt-6-luna", "xhigh")]:
+            line, _ = self.diagnostic(json.dumps({"reason": "managed_probe_failed", "model": model,
+                                                 "reasoningEffort": effort}))
+            self.assertEqual(line, "managed_chat_canary_diagnostic reason=managed_probe_failed stage=managed_text_canary"
+                             + f" expected_model=gpt-6.1-terra actual_model={model} expected_effort=high actual_effort={effort}")
+        for model, effort in [("private-model\n::error::injected", "private-effort"),
+                              ({"private": "secret"}, ["high"]), (None, None), (True, False)]:
+            line, result = self.diagnostic(json.dumps({"reason": "managed_probe_failed", "model": model,
+                                                      "reasoningEffort": effort}))
+            self.assertEqual(line, "managed_chat_canary_diagnostic reason=managed_probe_failed stage=managed_text_canary" + MISSING_SETTINGS)
+            self.assertNotIn("private", result.stdout + result.stderr)
+
+    def test_http_must_be_integral_numeric_in_error_range(self):
+        for status in [True, False, 403.5, "403", None, {}, [], 399, 600, -403]:
+            line, _ = self.diagnostic(json.dumps({"reason": "managed_probe_failed", "stage": "response_start", "httpStatus": status}))
+            self.assertEqual(line, "managed_chat_canary_diagnostic reason=managed_probe_failed stage=response_start" + MISSING_SETTINGS)
+
+    def test_malformed_or_nonobject_body_has_one_fixed_fallback_line(self):
+        for body in ["{private-invalid-json", "[]", "null", '"private-secret"', "42", '{"reason":"managed_probe_failed"} {}']:
+            line, result = self.diagnostic(body)
+            self.assertEqual(line, "managed_chat_canary_diagnostic reason=not_reported stage=managed_text_canary" + MISSING_SETTINGS)
+            self.assertNotIn("private-", result.stdout + result.stderr)
 
 
 if __name__ == "__main__":
