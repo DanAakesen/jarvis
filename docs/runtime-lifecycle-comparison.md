@@ -32,6 +32,17 @@ On 29 October 2026, all four tests passed on Node 24.19.0/npm 11.9.0. Backend
 lint and TypeScript build also passed. The repository pins Node 22/npm 10;
 these local checks do not replace validation on that pinned toolchain.
 
+CI 40864485219 subsequently exposed teardown timeouts on Node 22.23.3 after
+both disconnect scenarios completed their assertions. The same failure was
+reproduced locally on that exact Node version: each aborted fetch left one open
+replacement socket with zero bytes read. The fixture now closes its HTTP
+connections in `preClose`, after all recovery assertions, matching the existing
+conversation test cleanup. All four tests pass on Node 22.23.3 with that cleanup;
+neither the hook timeout nor the lifecycle assertions changed. The combined
+lifecycle, conversation activity and shutdown checks pass all 15 tests on that
+Node version, and scoped lint passes. Full exact-head CI requalification remains
+required.
+
 Commands from the repository root:
 
 ```sh

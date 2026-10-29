@@ -21,9 +21,13 @@ it does not read personal context or invoke a tool. The canary has the same
 210-second invocation ceiling as the existing chat bridge and never executes
 functions. SQL qualification remains blocked locally by a Forbidden image pull;
 do not substitute a different image. Database CI subsequently applied the committed
-migrations and passed all four new runtime integration cases; three stale shared
-schema-inventory assertions were corrected for requalification. Do not claim the
-full Database job passed until that rerun finishes.
+migrations and passed all four new runtime integration cases. After the three
+stale schema-inventory assertions were corrected, CI 40864485219 passed Database
+and Web. Backend failed only two lifecycle fixture teardown hooks: Node 22.23.3
+left an unrequested fetch replacement socket after abort. The fixture now closes
+its connections during teardown, with all lifecycle assertions unchanged; all
+four cases pass locally on that exact Node version. Full CI requalification is
+still pending.
 
 ## Whole-Jarvis log preparation (#1341; 29 October 2026)
 

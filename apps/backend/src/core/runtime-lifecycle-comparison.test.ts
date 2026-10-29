@@ -142,6 +142,11 @@ describe.each(['current', 'copilot'] as const)('%s identical application lifecyc
       expect(tool.json().outcome).toBe('ok');
       emit('delta', { text: 'Read complete.' }); emit('done', {}); finish();
     });
+    // Aborting fetch on Node 22 leaves a pooled replacement socket with no request.
+    // Dispose it only during teardown, after every retained-result assertion.
+    f.app.addHook('preClose', async () => {
+      f.app.server.closeAllConnections();
+    });
     let originalResponse: ServerResponse | undefined;
     f.app.addHook('onRequest', async (request, reply) => {
       if (request.method === 'POST' && request.url.endsWith('/turns')) {

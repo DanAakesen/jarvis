@@ -20,8 +20,12 @@ calls a fixed text canary with the actual bridge identity. No new credential or
 blanket role grant is added. Local SQL execution was blocked by Forbidden pulling
 the pinned SQL Server image. Actual Database CI passed all four new runtime
 contracts and found three stale expected-table assertions in the shared schema
-inventory. The candidate adds the three table names without weakening equality;
-exact-head requalification is pending. No live
+inventory. The candidate adds the three table names without weakening equality.
+CI 40864485219 then passed Database and Web, but Backend found two lifecycle
+fixture shutdown timeouts after their assertions. Exact Node 22.23.3 reproduction
+identified an unrequested replacement fetch socket; teardown-only connection
+cleanup passes all four lifecycle cases locally. Exact-head requalification
+is pending. No live
 provisioning or canary has been run.
 
 The settings correction is merged in #1353. Deploy 40852006540 passed every chat
