@@ -1,0 +1,1732 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-glass="lens">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Jarvis for iPhone · concept board</title>
+<style>
+/* Brand colour tokens are copied from apps/web/src/styles.css so the concept starts on-brand. */
+:root {
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+  color-scheme: light;
+  --ink-solid: #000;
+  --highlight-solid: #fff;
+  --page: #f6f0e6;
+  --text: #17202a;
+  --text-muted: #5c564f;
+  --rule: #d8cfc2;
+  --focus: #14768d;
+  --accent: #14768d;
+  --accent-text: var(--highlight-solid);
+  --record-stop: #e5383b;
+  --success: #14697e;
+  --orb-listening: #2aa4c2;
+  --orb-thinking: #e8a23a;
+  --orb-edge: 82%;
+  --orb-in-a: rgb(10 46 62 / 88%);
+  --orb-in-b: rgb(10 46 62 / 72%);
+  --ambient:
+    radial-gradient(60% 36% at 12% 10%, rgb(20 118 141 / 24%), transparent 70%),
+    radial-gradient(54% 34% at 94% 20%, rgb(232 162 58 / 30%), transparent 70%),
+    radial-gradient(70% 38% at 24% 98%, rgb(45 179 93 / 18%), transparent 70%),
+    radial-gradient(54% 30% at 92% 80%, rgb(47 128 237 / 16%), transparent 70%);
+  --orb-shadow: rgb(13 26 32 / 16%);
+  --bubble-in: rgb(120 120 128 / 15%);
+  --fill-group: rgb(255 255 255 / 70%);
+  --sep: rgb(60 50 30 / 16%);
+  /* Liquid glass material */
+  --g-fill: rgb(255 255 255 / 30%);
+  --g-fill-bar: rgb(255 255 255 / 44%);
+  --g-sat: 1.7;
+  --g-shadow: 0 10px 30px rgb(60 45 20 / 16%), 0 1px 3px rgb(60 45 20 / 12%);
+  --g-solid: #efe8dc;
+  --rim-hi: rgb(255 255 255 / 100%);
+  --rim-mid: rgb(255 255 255 / 60%);
+  --rim-lo: rgb(70 55 30 / 14%);
+  --sheen: rgb(255 255 255 / 50%);
+  /* System keyboard (illustration) */
+  --kb-bg: #d2d5db;
+  --key: #fff;
+  --key-fn: #aeb3bd;
+  --key-on: #fff;
+  --key-on-text: #000;
+  --kb-text: #000;
+  --key-shadow: rgb(0 0 0 / 30%);
+  --kb-sep: rgb(0 0 0 / 18%);
+  --board-bg: #e4ddd0;
+  --board-bar: #f1ebe0;
+  --board-text: #17202a;
+  --board-muted: #4f4a44;
+  --board-rule: #c9bfae;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #07090f;
+  --text: #f3fff9;
+  --text-muted: #c0ccd2;
+  --rule: rgb(226 246 255 / 16%);
+  --focus: #8be9ff;
+  --accent: #52dcfa;
+  --accent-text: #04161d;
+  --success: #a8eefc;
+  --orb-listening: #52dcfa;
+  --orb-thinking: #ffb45c;
+  --orb-edge: 60%;
+  --orb-in-a: rgb(8 40 56 / 62%);
+  --orb-in-b: rgb(6 30 44 / 46%);
+  --ambient:
+    radial-gradient(60% 36% at 12% 10%, rgb(82 220 250 / 30%), transparent 70%),
+    radial-gradient(54% 34% at 94% 20%, rgb(255 180 92 / 26%), transparent 70%),
+    radial-gradient(70% 38% at 24% 98%, rgb(61 220 132 / 16%), transparent 70%),
+    radial-gradient(54% 30% at 92% 80%, rgb(59 139 255 / 20%), transparent 70%);
+  --orb-shadow: rgb(0 0 0 / 46%);
+  --bubble-in: rgb(120 120 128 / 24%);
+  --fill-group: rgb(255 255 255 / 8%);
+  --sep: rgb(226 246 255 / 14%);
+  --g-fill: rgb(255 255 255 / 7%);
+  --g-fill-bar: rgb(16 22 30 / 36%);
+  --g-shadow: 0 12px 34px rgb(0 0 0 / 42%), 0 1px 3px rgb(0 0 0 / 30%);
+  --g-solid: #161c24;
+  --rim-hi: rgb(255 255 255 / 85%);
+  --rim-mid: rgb(255 255 255 / 34%);
+  --rim-lo: rgb(255 255 255 / 5%);
+  --sheen: rgb(255 255 255 / 13%);
+  --kb-bg: #26272a;
+  --key: #6a6a6d;
+  --key-fn: #444447;
+  --kb-text: #fff;
+  --key-shadow: rgb(0 0 0 / 55%);
+  --kb-sep: rgb(255 255 255 / 20%);
+  --board-bg: #03060a;
+  --board-bar: #0b1118;
+  --board-text: #f3fff9;
+  --board-muted: #b7c4ca;
+  --board-rule: rgb(226 246 255 / 14%);
+}
+/* Liquid Glass "Tinted" (iOS 26.1 setting): the same material with a denser, more legible fill. */
+:root[data-tint="tinted"] { --g-fill: rgb(255 255 255 / 62%); --g-fill-bar: rgb(255 255 255 / 74%); }
+:root[data-theme="dark"][data-tint="tinted"] { --g-fill: rgb(40 48 60 / 54%); --g-fill-bar: rgb(16 22 30 / 68%); }
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--board-bg);
+  color: var(--board-text);
+  font: 15px/1.45 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Board controls (outside the phone) */
+.board-bar {
+  position: relative; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 10px;
+  background: var(--board-bar); border-bottom: 1px solid var(--board-rule);
+}
+.board-title { display: flex; align-items: center; align-self: flex-start; gap: 8px; min-height: 31px; }
+.board-name { margin: 0; font-size: 13px; line-height: 1.2; font-weight: 650; letter-spacing: -.1px; white-space: nowrap; }
+@media (max-width: 839px) { .board-name { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); } }
+.info-btn { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--board-rule); border-radius: 50%; background: transparent; color: var(--board-muted); cursor: pointer; }
+.info-btn .ic { width: 16px; height: 16px; }
+.info-btn[aria-expanded="true"] { background: var(--board-text); color: var(--board-bg); }
+@media (hover: hover) { .info-btn:hover { color: var(--board-text); } .info-btn[aria-expanded="true"]:hover { color: var(--board-bg); } }
+@media (pointer: coarse) { .info-btn { width: 44px; height: 44px; } }
+.about {
+  position: absolute; z-index: 60; top: calc(100% + 6px); left: 10px; width: min(380px, calc(100% - 20px)); padding: 12px 14px;
+  border: 1px solid var(--board-rule); border-radius: 12px; background: var(--board-bar); box-shadow: 0 18px 44px rgb(0 0 0 / 46%);
+  color: var(--board-muted); font-size: 13px; line-height: 1.45;
+}
+.about p { margin: 0; }
+.about p + p { margin-top: 6px; }
+.board-ctls { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.ctl { display: flex; align-items: center; gap: 8px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--board-rule); border-radius: 10px; background: color-mix(in srgb, var(--board-text) 5%, transparent); }
+.seg label { position: relative; display: block; }
+.seg input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.seg input:disabled { cursor: not-allowed; }
+.seg span { display: grid; place-items: center; min-height: 26px; padding: 0 9px; border-radius: 8px; color: var(--board-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.seg input:disabled + span { opacity: .45; }
+.seg input:checked + span { background: var(--board-text); color: var(--board-bg); }
+.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (pointer: coarse) { .seg span { min-height: 44px; } }
+@media (hover: hover) { .seg input:not(:checked):not(:disabled):hover + span { background: color-mix(in srgb, var(--board-text) 9%, transparent); } }
+.sel { position: relative; display: inline-flex; align-items: center; padding: 2px; border: 1px solid var(--board-rule); border-radius: 10px; background: color-mix(in srgb, var(--board-text) 5%, transparent); }
+.sel select { appearance: none; -webkit-appearance: none; min-height: 26px; padding: 0 24px 0 9px; border: 0; border-radius: 8px; background: transparent; color: var(--board-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.sel select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.sel .ic { position: absolute; right: 9px; width: 14px; height: 14px; transform: rotate(90deg); color: var(--board-muted); pointer-events: none; }
+@media (pointer: coarse) { .sel select { min-height: 44px; } }
+@media (hover: hover) { .sel select:hover { background: color-mix(in srgb, var(--board-text) 9%, transparent); } }
+
+/* Phone frame */
+.stage { flex: 1; min-height: 0; display: flex; overflow: auto; padding: 8px; }
+.stage[data-zoom="fit"] { overflow: hidden; }
+/* Export modes: bare=1 hides the board bar; bare=screen shows only the 393x852 screen, full bleed. */
+[data-bare] .board-bar { display: none; }
+[data-bare] .stage { padding: 0; }
+[data-bare] .device-wrap { margin: 0; }
+[data-bare] .device { box-shadow: inset 0 0 0 1.5px #5b616b; }
+[data-bare="screen"] .device { padding: 0; width: var(--w); height: var(--h); border-radius: 0; background: none; box-shadow: none; }
+[data-bare="screen"] .side { display: none; }
+[data-bare="screen"] .phone { border-radius: 0; }
+.device-wrap { margin: auto; flex: none; position: relative; }
+.device {
+  position: absolute; left: 0; top: 0; transform-origin: 0 0;
+  width: calc(var(--w) + 24px); height: calc(var(--h) + 24px); padding: 12px;
+  border-radius: 68px;
+  background: linear-gradient(150deg, #3b4048, #171a1f 45%, #0b0d11);
+  box-shadow: inset 0 0 0 1.5px #5b616b, 0 28px 70px rgb(0 0 0 / 34%);
+}
+.device[data-size="pro"] { --w: 393px; --h: 852px; --safe-top: 59px; --island-top: 11px; }
+.device[data-size="max"] { --w: 440px; --h: 956px; --safe-top: 62px; --island-top: 14px; }
+.side { position: absolute; width: 4px; border-radius: 2px; background: #2a2e35; }
+.side.s1 { left: -3px; top: 118px; height: 30px; }
+.side.s2 { left: -3px; top: 176px; height: 58px; }
+.side.s3 { left: -3px; top: 246px; height: 58px; }
+.side.s4 { right: -3px; top: 214px; height: 92px; }
+.phone {
+  --nav-h: 44px; --dock-bottom: 22px; --kb-h: 291px;
+  --lift: 0px; --edge-t: 0; --edge-b: 0; --log-pad: 130px;
+  position: relative; isolation: isolate; overflow: hidden;
+  width: var(--w); height: var(--h); border-radius: 56px;
+  background: var(--page); color: var(--text);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.3;
+}
+.phone[data-kb="on"] { --lift: calc(-1 * (var(--kb-h) + 8px - var(--dock-bottom))); }
+.phone::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ambient); pointer-events: none; }
+.island {
+  position: absolute; z-index: 50; top: var(--island-top); left: 0; right: 0; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  width: 126px; height: 37px; padding: 0 10px; border: 0; border-radius: 19px;
+  background: var(--ink-solid); pointer-events: none; cursor: default;
+  transition: width .42s cubic-bezier(.3, 1.25, .5, 1);
+}
+.island.is-live { width: 164px; pointer-events: auto; cursor: pointer; }
+.island:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.island[data-state="listening"] { --tone: var(--orb-listening); --spd: 1.5s; --lo: .4; }
+.island[data-state="thinking"] { --tone: var(--orb-thinking); --spd: 2.2s; --lo: .7; }
+.island[data-state="speaking"] { --tone: var(--orb-thinking); --spd: .7s; --lo: .35; }
+.isl-dot, .isl-bars { opacity: 0; transition: opacity .18s ease; }
+.island.is-live .isl-dot, .island.is-live .isl-bars { opacity: 1; transition-delay: .14s; }
+.isl-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tone, transparent); box-shadow: 0 0 9px color-mix(in srgb, var(--tone, transparent) 70%, transparent); }
+.isl-bars { display: flex; align-items: center; gap: 2.5px; height: 18px; }
+.isl-bars i { display: block; width: 3px; height: var(--h, 12px); border-radius: 2px; background: var(--tone, transparent); }
+.island.is-live .isl-bars i { animation: isl-bar var(--spd, 1.2s) ease-in-out infinite; animation-delay: calc(var(--n) * -.23s); }
+.island.is-live[data-state="thinking"] .isl-dot { animation: isl-pulse 1.4s ease-in-out infinite; }
+@keyframes isl-bar { 0%, 100% { transform: scaleY(var(--lo, .4)); } 50% { transform: scaleY(1); } }
+@keyframes isl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+.home { position: absolute; z-index: 51; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--text); opacity: .55; pointer-events: none; }
+.statusbar {
+  position: absolute; z-index: 45; top: 0; left: 0; right: 0; height: var(--safe-top);
+  display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 50px;
+  font-size: 17px; font-weight: 600; pointer-events: none;
+}
+.statusbar .sys { display: flex; align-items: center; gap: 6px; }
+
+.ic { width: 24px; height: 24px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Liquid glass: frosted base, upgraded to refraction by script on Chromium */
+.glass {
+  position: relative;
+  background: var(--g-fill);
+  box-shadow: var(--g-shadow);
+  -webkit-backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat));
+  backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat));
+}
+:root[data-glass="lens"] .glass[data-lens] {
+  backdrop-filter: var(--lens) blur(var(--g-blur, 3px)) saturate(var(--g-sat));
+}
+.glass::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(120% 160% at 8% -20%, var(--sheen), transparent 55%);
+}
+.glass::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from 215deg, var(--rim-hi), var(--rim-lo) 26%, transparent 48%, var(--rim-mid) 72%, var(--rim-hi));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass.glass, :root[data-glass="lens"] .glass[data-lens] { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--g-solid); }
+}
+
+.g-btn {
+  display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px;
+  color: var(--text); cursor: pointer;
+  --lens-bezel: 14; --lens-depth: 13; --g-blur: 3.5px; --frost-blur: 12px;
+  transition: transform .3s cubic-bezier(.34, 1.56, .64, 1);
+}
+.g-btn:active:not(:disabled) { transform: scale(.93); }
+.g-btn:disabled { opacity: .45; cursor: not-allowed; }
+.g-btn[aria-pressed="true"] { color: var(--accent); }
+.tint { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+
+/* Navigation */
+.navbar {
+  position: absolute; z-index: 5; top: var(--safe-top); left: 0; right: 0; height: var(--nav-h);
+  display: flex; align-items: center; justify-content: center; padding: 0 16px; pointer-events: none;
+}
+.nav-title { margin: 0; text-align: center; font-size: 17px; font-weight: 600; transition: opacity .2s ease; }
+.navbar.is-large .nav-title { opacity: 0; }
+.navbar.is-large.collapsed .nav-title { opacity: 1; }
+
+.edge { position: absolute; left: 0; right: 0; z-index: 3; pointer-events: none; }
+.edge-t {
+  top: 0; height: calc(var(--safe-top) + var(--nav-h) + 38px); opacity: var(--edge-t);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--page) 94%, transparent) 76%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  -webkit-mask-image: linear-gradient(#000 74%, transparent); mask-image: linear-gradient(#000 74%, transparent);
+}
+.edge-b {
+  bottom: 0; height: 150px; opacity: var(--edge-b); transform: translateY(var(--lift));
+  background: linear-gradient(to top, color-mix(in srgb, var(--page) 80%, transparent) 28%, transparent);
+  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+  -webkit-mask-image: linear-gradient(to top, #000 45%, transparent); mask-image: linear-gradient(to top, #000 45%, transparent);
+  transition: transform .38s cubic-bezier(.32, .72, 0, 1);
+}
+
+/* Screens */
+.views { position: absolute; inset: 0; z-index: 1; }
+.view { position: absolute; inset: 0; }
+.scroller {
+  position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  padding: calc(var(--safe-top) + var(--nav-h)) 0 calc(40px + var(--sheet-pad, 0px));
+}
+.scroller::-webkit-scrollbar { display: none; }
+
+/* Chat */
+.messages { display: flex; flex-direction: column; gap: 10px; padding: calc(var(--safe-top) + var(--nav-h) + 8px) 16px var(--log-pad); }
+.stamp { align-self: center; margin: 4px 0 0; color: var(--text-muted); font-size: 12px; font-weight: 500; }
+.msg { max-width: 76%; padding: 8px 14px; border-radius: 20px; font-size: 17px; line-height: 1.3; overflow-wrap: anywhere; }
+.msg.user { align-self: flex-end; border-bottom-right-radius: 6px; background: var(--accent); color: var(--accent-text); }
+.msg.bot { align-self: flex-start; border-bottom-left-radius: 6px; background: var(--bubble-in); }
+.confirm { align-self: flex-start; display: flex; align-items: center; gap: 6px; margin: -4px 0 0 6px; color: var(--text-muted); font-size: 13px; }
+.confirm .ic { width: 16px; height: 16px; color: var(--success); }
+.typing { display: flex; gap: 4px; padding: 14px; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); opacity: .5; animation: dot 1s ease-in-out infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; }
+.typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+/* Composer: the web composer's two-row glass, as an iOS capsule. Teal rim with a warm amber glint. */
+.composer {
+  position: absolute; z-index: 6; left: 12px; right: 12px; bottom: var(--dock-bottom);
+  display: flex; flex-direction: column; padding: 12px 8px 4px 20px; border-radius: 28px;
+  background: var(--g-fill-bar);
+  --lens-bezel: 20; --lens-depth: 12; --g-blur: 4px; --frost-blur: 18px;
+  transform: translateY(var(--lift)); transition: transform .38s cubic-bezier(.32, .72, 0, 1);
+}
+.composer > :not(.sr) { position: relative; z-index: 1; }
+.composer::after {
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 85%, transparent), color-mix(in srgb, var(--accent) 40%, transparent) 52%, color-mix(in srgb, var(--orb-thinking) 90%, transparent));
+}
+.composer:has(.draft:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.draft { display: block; width: 100%; min-height: 28px; max-height: 120px; margin: 0; padding: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 17px; line-height: 28px; }
+.draft::placeholder { color: var(--text-muted); opacity: 1; }
+.crow { display: flex; align-items: center; margin-top: 2px; }
+.cspace { flex: 1; }
+.cbtn {
+  display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: transform .28s cubic-bezier(.34, 1.56, .64, 1), background-color .2s ease, color .2s ease, opacity .2s ease;
+}
+.cbtn .ic { width: 26px; height: 26px; stroke-width: 1.6; }
+.cbtn.add { margin-left: -10px; color: var(--accent); }
+.cbtn.mic { color: var(--orb-thinking); }
+.cbtn.send:not(:disabled) { color: var(--accent); background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.cbtn:disabled { opacity: .55; cursor: default; }
+.cbtn:active:not(:disabled) { transform: scale(.9); }
+@media (hover: hover) {
+  .cbtn:not(:disabled):hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
+  .cbtn.send:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+}
+
+/* Voice */
+.voice-body { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: calc(var(--safe-top) + var(--nav-h) + 8px) 20px 34px; }
+.orb-wrap { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; transition: transform .55s cubic-bezier(.32, .72, 0, 1); }
+.phone[data-sheet="open"] .orb-wrap, .phone[data-sheet="drag"] .orb-wrap { transform: translateY(-70px) scale(.78); }
+/* An imitation of the web orb: a glass sphere with a golden filament tangle at its core, ringed by thin arcs. */
+.orb { --cy: 98 226 252; --au: 255 188 92; position: relative; flex: none; width: 250px; height: 250px; }
+.orb-glow { position: absolute; inset: -52px; border-radius: 50%; filter: blur(12px); opacity: 0; transition: opacity .7s ease; }
+.orb-glow.cy { background: radial-gradient(circle, rgb(var(--cy) / 44%) 0, rgb(var(--cy) / 14%) 48%, transparent 70%); opacity: .55; }
+.orb-glow.au { background: radial-gradient(circle, rgb(var(--au) / 42%) 0, rgb(var(--au) / 14%) 48%, transparent 70%); }
+.orb[data-state="listening"] .orb-glow.cy { opacity: .95; }
+.orb[data-state="thinking"] .orb-glow.cy, .orb[data-state="speaking"] .orb-glow.cy { opacity: .3; }
+.orb[data-state="thinking"] .orb-glow.au, .orb[data-state="speaking"] .orb-glow.au { opacity: .95; }
+.orb-sphere {
+  position: absolute; inset: 0; overflow: hidden; border-radius: 50%;
+  background: radial-gradient(circle at 50% 46%, var(--orb-in-b), var(--orb-in-a) 82%);
+  box-shadow: inset 0 0 0 1.5px rgb(var(--cy) / 80%), inset 0 0 36px rgb(var(--cy) / 32%), 0 0 36px rgb(var(--cy) / 22%);
+}
+.orb-sphere::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(ellipse 44% 28% at 31% 19%, rgb(255 255 255 / 42%), transparent 72%), linear-gradient(to bottom, transparent 64%, rgb(var(--cy) / 16%));
+}
+.orb-fil, .orb-fx { position: absolute; inset: 0; width: 100%; height: 100%; }
+.orb-fil { fill: none; stroke: rgb(var(--cy) / 34%); stroke-width: .9; animation: orb-turn 60s linear infinite; }
+.orb-rings { position: absolute; inset: -25px; width: 300px; height: 300px; fill: none; stroke-linecap: round; pointer-events: none; }
+.rg { transform-origin: 150px 150px; animation: orb-turn var(--d, 40s) linear infinite; }
+.rg.g2 { animation-direction: reverse; }
+.rg .c { stroke: rgb(var(--cy) / 72%); stroke-width: 1.5; }
+.rg .a { stroke: rgb(var(--au) / 95%); stroke-width: 2.6; }
+.orb[data-state="thinking"] .rg { animation-duration: calc(var(--d, 40s) / 7); }
+.orb[data-state="speaking"] .rg { animation-duration: calc(var(--d, 40s) / 3); }
+.orb[data-state="listening"] .orb-sphere { animation: orb-breathe 2.8s ease-in-out infinite; }
+.orb[data-state="speaking"] .orb-sphere { animation: orb-speak .9s ease-in-out infinite; }
+@keyframes orb-turn { to { transform: rotate(360deg); } }
+@keyframes orb-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes orb-speak { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.05); } 70% { transform: scale(.99); } }
+
+.voice-state { margin: 0; font-size: 34px; line-height: 1.1; font-weight: 700; letter-spacing: -.3px; text-align: center; }
+.transcript { width: 100%; min-height: 116px; margin: 14px 0 14px; padding: 14px 20px 16px; border-radius: 28px; --lens-bezel: 20; --lens-depth: 14; --g-blur: 5px; --frost-blur: 18px; }
+.transcript, .voice-ctls { transition: opacity .25s ease; }
+.phone[data-sheet="open"] .transcript, .phone[data-sheet="open"] .voice-ctls, .phone[data-sheet="drag"] .transcript, .phone[data-sheet="drag"] .voice-ctls { opacity: 0; visibility: hidden; transition: opacity .2s ease, visibility 0s .2s; }
+.transcript p { position: relative; z-index: 1; margin: 0; }
+.transcript .who { min-height: 20px; color: var(--text-muted); font-size: 15px; font-weight: 600; }
+.transcript .line { margin-top: 2px; font-size: 22px; line-height: 1.3; }
+.voice-ctls { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; gap: 8px; }
+.vc { display: grid; justify-items: center; gap: 6px; color: var(--text-muted); font-size: 15px; }
+.vslot { display: grid; place-items: center; height: 72px; }
+.vbtn { width: 56px; height: 56px; --lens-bezel: 17; --lens-depth: 15; }
+.vbtn.main { width: 72px; height: 72px; --lens-bezel: 22; --lens-depth: 18; }
+.vbtn.main .ic { width: 28px; height: 28px; }
+.vbtn.main.is-live { background: color-mix(in srgb, var(--record-stop) 82%, transparent); color: var(--highlight-solid); }
+.vbtn[aria-pressed="true"] { background: color-mix(in srgb, var(--text) 82%, transparent); color: var(--page); }
+
+/* Notes */
+.large-title { margin: 0; padding: 4px 20px 6px; font-size: 34px; line-height: 41px; font-weight: 700; }
+.search { display: flex; align-items: center; gap: 8px; height: 44px; margin: 6px 16px 4px; padding: 0 0 0 14px; border-radius: 999px; color: var(--text-muted); --lens-bezel: 14; --lens-depth: 11; --g-blur: 3px; --frost-blur: 16px; }
+.search:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.search .ic { position: relative; z-index: 1; width: 20px; height: 20px; }
+.search input { position: relative; z-index: 1; flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; -webkit-appearance: none; appearance: none; background: transparent; color: var(--text); font: inherit; font-size: 17px; }
+.search input::-webkit-search-cancel-button { display: none; }
+.search input::placeholder { color: var(--text-muted); opacity: 1; }
+.clear { position: relative; z-index: 1; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
+.clear .ic { width: 18px; height: 18px; }
+.sec { margin: 22px 20px 8px; font-size: 20px; line-height: 25px; font-weight: 700; }
+.group { margin: 0 16px; padding: 0; list-style: none; overflow: hidden; border-radius: 26px; background: var(--fill-group); }
+.group > li { position: relative; }
+.group > li:not([hidden]) ~ li:not([hidden])::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--sep); }
+.note { display: grid; gap: 1px; padding: 11px 16px 12px; }
+.note-title { font-weight: 600; }
+.note-meta { display: flex; gap: 8px; min-width: 0; color: var(--text-muted); font-size: 15px; }
+.note-meta time { flex: none; }
+.note-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { margin: 14px 28px 0; color: var(--text-muted); font-size: 13px; }
+.empty { text-align: center; font-size: 15px; }
+.group + .group { margin-top: 22px; }
+
+/* Area page (placeholder for areas that exist on the web and are not designed for iPhone yet) */
+.area-note { margin: 12px 28px 0; max-width: 30ch; color: var(--text-muted); font-size: 17px; line-height: 1.4; }
+
+/* Sidebar: swipe in from the right edge. --sb-p (0 to 1) follows the finger, so it can be dragged, flicked or released midway. */
+.edge-grab { position: absolute; z-index: 20; top: var(--safe-top); right: 0; bottom: 0; width: 22px; touch-action: none; }
+@media (hover: hover) and (pointer: fine) { .edge-grab { cursor: ew-resize; } }
+.scrim {
+  position: absolute; z-index: 30; inset: 0; background: rgb(0 0 0 / 26%); opacity: var(--sb-p, 0); visibility: hidden; touch-action: none;
+  transition: opacity .42s cubic-bezier(.32, .72, 0, 1), visibility 0s .42s;
+}
+.sidebar {
+  position: absolute; z-index: 32; top: 8px; right: 8px; bottom: 8px; width: min(256px, calc(var(--w) - 120px));
+  display: flex; flex-direction: column; padding: calc(var(--safe-top) - 8px) 10px 12px; border-radius: 48px;
+  background: var(--g-fill-bar); --frost-blur: 28px; touch-action: pan-y; visibility: hidden;
+  transform: translateX(calc((1 - var(--sb-p, 0)) * (100% + 24px)));
+  transition: transform .42s cubic-bezier(.32, .72, 0, 1), visibility 0s .42s;
+}
+.phone[data-sb="open"] .scrim, .phone[data-sb="drag"] .scrim, .phone[data-sb="open"] .sidebar, .phone[data-sb="drag"] .sidebar { visibility: visible; transition-delay: 0s; }
+.phone[data-sb="drag"] .scrim, .phone[data-sb="drag"] .sidebar { transition: none; }
+.sidebar > :not(.sr) { position: relative; z-index: 1; }
+.sb-top { flex: none; }
+.sb-rule { flex: none; height: .5px; margin: 8px 12px; border: 0; background: var(--sep); }
+.sb-list { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.sb-list::-webkit-scrollbar { display: none; }
+/* Bottom-weighted: the list sits in the thumb zone, clear of the home indicator, with Settings alone at the top. */
+.sb-rows { display: flex; flex-direction: column; gap: 2px; margin: auto 0 14px; }
+.sb-row {
+  display: flex; flex-direction: row-reverse; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 0 16px; border: 0; border-radius: 26px;
+  background: transparent; color: var(--text); font-size: 17px; font-weight: 600; text-align: right; cursor: pointer;
+  transition: background-color .2s ease, transform .28s cubic-bezier(.34, 1.56, .64, 1);
+}
+.sb-row .ic { width: 24px; height: 24px; }
+.sb-row small { margin-left: auto; color: var(--text-muted); font-size: 13px; font-weight: 500; }
+.sb-row[aria-current="page"] { background: color-mix(in srgb, var(--accent) 17%, transparent); }
+.sb-row[aria-current="page"] .ic { color: var(--accent); }
+.sb-row:disabled { opacity: .55; cursor: default; }
+.sb-row:active:not(:disabled) { transform: scale(.98); }
+.sb-row:focus-visible { outline-offset: -3px; }
+@media (hover: hover) {
+  .sb-row:not(:disabled):not([aria-current="page"]):hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+}
+/* Stopgap so keyboard and VoiceOver users can reach the swipe-only sidebar. Visible only while focused. */
+.areas-btn {
+  position: absolute; z-index: 46; top: calc(var(--safe-top) + 4px); right: 16px; min-height: 44px; padding: 0 18px; border: 0; border-radius: 22px;
+  background: var(--g-solid); box-shadow: var(--g-shadow); color: var(--text); font-size: 15px; font-weight: 600; opacity: 0; pointer-events: none;
+}
+.areas-btn:focus-visible { opacity: 1; }
+
+/* Generated workspace: one sheet at a time, opened only when asked for */
+.sheet {
+  position: absolute; z-index: 28; left: 8px; right: 8px; bottom: 8px; height: calc(var(--h) * .48);
+  display: flex; flex-direction: column; padding: 8px 8px 16px 22px; border-radius: 44px;
+  background: var(--g-fill-bar); --frost-blur: 26px; visibility: hidden;
+  transform: translateY(calc(100% + 16px + var(--sheet-drag, 0px)));
+  transition: transform .45s cubic-bezier(.32, .72, 0, 1), visibility 0s .45s;
+}
+.phone[data-sheet="open"] .sheet, .phone[data-sheet="drag"] .sheet { visibility: visible; transform: translateY(var(--sheet-drag, 0px)); transition: transform .45s cubic-bezier(.32, .72, 0, 1), visibility 0s; }
+.phone[data-sheet="drag"] .sheet { transition: none; }
+.sheet > :not(.sr, .grab) { position: relative; z-index: 1; }
+.grab { position: absolute; top: 7px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 3px; background: var(--text); opacity: .28; pointer-events: none; }
+.sheet-head { flex: none; display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding-top: 6px; touch-action: none; cursor: grab; }
+.sheet-title { margin: 0; font-size: 22px; line-height: 28px; font-weight: 700; }
+.sheet-body { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; padding-right: 14px; transition: opacity .18s ease; }
+.sheet-body.swap { opacity: 0; }
+.sheet-body p { margin: 0; }
+.sheet-foot { flex: none; margin: 0; padding-right: 14px; color: var(--text-muted); font-size: 13px; }
+.ws-big { font-size: 96px; line-height: 1; font-weight: 700; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+.ws-line { margin-top: 6px !important; font-size: 22px; line-height: 1.25; font-weight: 600; }
+.ws-next, .ws-meta { margin-top: 2px !important; color: var(--text-muted); font-size: 17px; }
+.ws-seg { display: flex; align-items: center; gap: 6px; margin-top: 16px; }
+.ws-seg i { flex: 1; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--text) 16%, transparent); }
+.ws-seg i.done { background: var(--accent); }
+.ws-seg i.now { height: 14px; background: var(--orb-thinking); }
+.ws-ex { color: var(--text-muted); font-size: 17px; font-weight: 600; }
+.ws-lift { margin-top: 2px !important; font-size: 64px; line-height: 1.05; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.ws-rest { margin-top: 6px !important; font-size: 20px; line-height: 1.25; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ws-dots { display: flex; gap: 10px; margin-top: 14px; }
+.ws-dots span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--text-muted); font-size: 15px; font-weight: 700; }
+.ws-dots span.done { background: var(--accent); color: var(--accent-text); }
+.ws-dots span.now { background: transparent; color: var(--text); box-shadow: inset 0 0 0 2.5px var(--orb-thinking); }
+.ws-btn {
+  align-self: flex-start; min-height: 52px; margin-top: 14px; padding: 0 26px; border: 0; border-radius: 26px; background: var(--accent); color: var(--accent-text);
+  font-size: 17px; font-weight: 650; cursor: pointer; transition: transform .28s cubic-bezier(.34, 1.56, .64, 1);
+}
+.ws-btn:active { transform: scale(.96); }
+.ws-btn.quiet { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
+
+/* Extra board controls (outside the phone) */
+.ctl-btn { min-height: 30px; padding: 0 12px; border: 1px solid var(--board-rule); border-radius: 10px; background: color-mix(in srgb, var(--board-text) 5%, transparent); color: var(--board-text); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.ctl-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (pointer: coarse) { .ctl-btn { min-height: 44px; } }
+@media (hover: hover) { .ctl-btn:hover { background: color-mix(in srgb, var(--board-text) 9%, transparent); } }
+.ctl-hint { color: var(--board-muted); font-size: 12px; }
+@media (max-width: 1099px) { .ctl-hint { display: none; } }
+
+/* System keyboard (illustration of the OS keyboard, not a Jarvis control) */
+.kb {
+  position: absolute; z-index: 31; left: 0; right: 0; bottom: 0; height: var(--kb-h);
+  display: flex; flex-direction: column; background: var(--kb-bg); color: var(--kb-text);
+  font-size: 22px; line-height: 1; user-select: none; -webkit-user-select: none;
+  transform: translateY(100%); transition: transform .38s cubic-bezier(.32, .72, 0, 1);
+}
+.phone[data-kb="on"] .kb { transform: none; }
+.kb-bar { display: grid; grid-template-columns: repeat(3, 1fr); height: 44px; }
+.kb-bar button { position: relative; padding: 0; border: 0; background: transparent; color: var(--kb-text); font-size: 17px; }
+.kb-bar button + button::before { content: ""; position: absolute; left: 0; top: 11px; bottom: 11px; width: .5px; background: var(--kb-sep); }
+.kb-keys { display: flex; flex-direction: column; gap: 12px; padding: 6px 3px 0; }
+.kb-row { display: grid; column-gap: 6px; height: 42px; }
+.kb-row.r0 { grid-template-columns: repeat(10, 1fr); }
+.kb-row.l-abc.r1 { grid-template-columns: repeat(9, 1fr); padding: 0 calc((100% + 6px) / 20); }
+.kb-row.l-abc.r2 { grid-template-columns: 1.4fr repeat(7, 1fr) 1.4fr; }
+.kb-row:not(.l-abc).r1 { grid-template-columns: repeat(10, 1fr); }
+.kb-row:not(.l-abc).r2 { grid-template-columns: 1.3fr repeat(5, 1.2fr) 1.3fr; }
+.kb-row.rb { grid-template-columns: 1.3fr 5fr 2fr; }
+.kb-row.r2 .key.fn:first-child { margin-right: 8px; }
+.kb-row.r2 .key.fn:last-child { margin-left: 8px; }
+.key {
+  position: relative; display: grid; place-items: center; height: 42px; padding: 0; border: 0; border-radius: 5px;
+  background: var(--key); color: var(--kb-text); font: inherit; font-size: 22px; box-shadow: 0 1px 0 var(--key-shadow);
+  text-transform: lowercase; cursor: pointer;
+}
+.key.fn { background: var(--key-fn); font-size: 16px; }
+.key.fn .ic { width: 22px; height: 22px; stroke-width: 1.8; }
+.key[aria-pressed="true"] { background: var(--key-on); color: var(--key-on-text); }
+.key[aria-pressed="true"] .ic { fill: currentColor; }
+.key.sp { font-size: 16px; }
+.kb[data-shift="on"] .key.ch { text-transform: uppercase; }
+.key:active { filter: brightness(.9); }
+.key.ch:active::after {
+  content: attr(data-k); position: absolute; z-index: 2; bottom: calc(100% - 2px); left: 50%; width: 150%; height: 56px; margin-left: -75%;
+  display: grid; place-items: center; border-radius: 9px; background: var(--key); box-shadow: 0 3px 10px rgb(0 0 0 / 35%); font-size: 34px;
+}
+.kb-foot { display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 22px 10px; margin-top: auto; }
+.kb-foot .ic, .kb-foot button .ic { width: 24px; height: 24px; stroke-width: 1.6; }
+.kb-foot button { padding: 0; border: 0; background: transparent; color: var(--kb-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-voice" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+    <symbol id="i-notes" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path d="M3 3l18 18"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="m15 9-6 6" stroke="var(--page)" stroke-width="2.2"/><path d="m9 9 6 6" stroke="var(--page)" stroke-width="2.2"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+    <symbol id="i-health" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+    <symbol id="i-usage" viewBox="0 0 24 24"><line x1="12" x2="12" y1="20" y2="10"/><line x1="18" x2="18" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></symbol>
+    <symbol id="i-status" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+    <symbol id="i-shift" viewBox="0 0 24 24"><path d="M12 4 4.5 12.5H8.6V19h6.8v-6.5h4.1z"/></symbol>
+    <symbol id="i-del" viewBox="0 0 24 24"><path d="M21 5H9.2L3 12l6.2 7H21a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m13 9.5 5 5"/><path d="m18 9.5-5 5"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+    <symbol id="i-proactive" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-later" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="M6.5 10h.01"/><path d="M10 10h.01"/><path d="M14 10h.01"/><path d="M17.5 10h.01"/><path d="M8 14h8"/></symbol>
+    <symbol id="i-plane" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  </defs>
+</svg>
+<svg id="lens-defs" width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true" focusable="false"></svg>
+
+<header class="board-bar">
+  <div class="board-title">
+    <h1 class="board-name">Jarvis for iPhone</h1>
+    <button class="info-btn" id="about-btn" type="button" aria-expanded="false" aria-controls="about" aria-label="About this board" title="About this board"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></button>
+  </div>
+  <div class="about" id="about" role="region" aria-label="About this board" hidden>
+    <p>Concept board. Placeholder content only, no real data. Dimmed controls are not designed yet. Swipe in from the phone's right edge to open the sidebar. The Say menu simulates a spoken command. The keyboard illustrates the system keyboard. Scroll the lists to see content pass under the glass.</p>
+    <p id="glass-note" hidden>Lens refraction needs a Chromium browser, so this view shows frosted glass.</p>
+  </div>
+  <div class="board-ctls">
+    <div class="ctl" role="group" aria-label="Theme" title="Theme">
+      <div class="seg">
+        <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+        <label><input type="radio" name="theme" value="dark"><span>Dark</span></label>
+      </div>
+    </div>
+    <div class="ctl" role="group" aria-label="Glass rendering" title="Glass rendering: lens refraction or frosted blur">
+      <div class="seg">
+        <label><input type="radio" name="glass" value="lens"><span>Lens</span></label>
+        <label><input type="radio" name="glass" value="frost"><span>Frosted</span></label>
+      </div>
+    </div>
+    <div class="ctl" role="group" aria-label="Glass style" title="Glass style: clear or tinted, as in the iOS 26.1 setting">
+      <div class="seg">
+        <label><input type="radio" name="tint" value="clear"><span>Clear</span></label>
+        <label><input type="radio" name="tint" value="tinted"><span>Tinted</span></label>
+      </div>
+    </div>
+    <div class="ctl" role="group" aria-label="Device" title="Device size">
+      <div class="seg">
+        <label><input type="radio" name="size" value="pro"><span>Pro</span></label>
+        <label><input type="radio" name="size" value="max"><span>Pro Max</span></label>
+      </div>
+    </div>
+    <div class="ctl" role="group" aria-label="Zoom" title="Zoom">
+      <div class="seg">
+        <label><input type="radio" name="zoom" value="fit"><span>Fit</span></label>
+        <label><input type="radio" name="zoom" value="full"><span>100%</span></label>
+      </div>
+    </div>
+    <div class="ctl">
+      <button class="ctl-btn" id="open-sb-btn" type="button" aria-controls="sidebar" aria-expanded="false" title="Testing aid. On the phone itself, swipe in from the right edge.">Open sidebar</button>
+      <span class="ctl-hint">Swipe in from the phone's right edge</span>
+    </div>
+    <div class="ctl" title="Testing aid: simulate speaking a command to Jarvis">
+      <label class="sel">
+        <span class="sr">Say a command</span>
+        <select id="say-sel">
+          <option value="">Say…</option>
+          <option>Open Notes</option>
+          <option>Open Chat</option>
+          <option>Open Voice</option>
+          <option>Open areas</option>
+          <option>Open Settings</option>
+          <option>Show my run</option>
+          <option>Show my lifts</option>
+          <option>Set done</option>
+          <option>Close workspace</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-kbd" title="Show the system keyboard (Chat only)" hidden>
+      <div class="seg">
+        <label><input type="checkbox" id="kbd-cb"><span>Keyboard</span></label>
+      </div>
+    </div>
+    <div class="ctl" id="ctl-voice" title="Voice state (Voice only)" hidden>
+      <label class="sel">
+        <span class="sr">Voice state</span>
+        <select id="voice-sel">
+          <option value="idle">Ready</option>
+          <option value="listening">Listening</option>
+          <option value="thinking">Thinking</option>
+          <option value="speaking">Speaking</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+  </div>
+</header>
+
+<main class="stage" id="stage">
+  <div class="device-wrap" id="device-wrap">
+    <div class="device" id="device" data-size="pro" role="group" aria-label="iPhone preview">
+      <span class="side s1" aria-hidden="true"></span><span class="side s2" aria-hidden="true"></span>
+      <span class="side s3" aria-hidden="true"></span><span class="side s4" aria-hidden="true"></span>
+      <div class="phone" id="phone" data-kb="off">
+        <button class="island" id="island" type="button" tabindex="-1" aria-hidden="true"><span class="isl-dot"></span><span class="isl-bars" aria-hidden="true"><i style="--h:9px;--n:0"></i><i style="--h:17px;--n:1"></i><i style="--h:11px;--n:2"></i><i style="--h:14px;--n:3"></i></span></button>
+        <div class="statusbar" aria-hidden="true">
+          <span>9:41</span>
+          <span class="sys">
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+            <svg width="17" height="12" viewBox="0 0 17 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1.2 4.2a10 10 0 0 1 14.6 0"/><path d="M3.8 7a6.3 6.3 0 0 1 9.4 0"/><circle cx="8.5" cy="10" r="1.2" fill="currentColor" stroke="none"/></svg>
+            <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="22" height="12" rx="3.8" fill="none" stroke="currentColor" opacity=".45"/><rect x="2" y="2" width="19" height="9" rx="2.5" fill="currentColor"/><path d="M24 4.5v4c.8-.3 1.5-1.1 1.5-2s-.7-1.7-1.5-2z" fill="currentColor" opacity=".5"/></svg>
+          </span>
+        </div>
+
+        <div class="views">
+          <section class="view" id="view-chat" aria-labelledby="nav-title">
+            <div class="scroller messages" id="log" role="log" aria-label="Conversation" tabindex="0">
+              <p class="stamp">Monday</p>
+              <div class="msg user">Summarise my unread notes.</div>
+              <div class="msg bot">You have three: packing list, gift ideas and one about soup. Want the short version?</div>
+              <div class="msg user">Short version, please.</div>
+              <div class="msg bot">Pack light, buy tea, and the soup needs more cumin.</div>
+              <p class="stamp">Yesterday</p>
+              <div class="msg user">What’s on my calendar this week?</div>
+              <div class="msg bot">Three things: a dentist call on Tuesday, lunch on Thursday, and a free Friday.</div>
+              <div class="msg user">Move lunch to Friday.</div>
+              <div class="msg bot">Done. Lunch is now on Friday at 12:30.</div>
+              <p class="stamp">Today 9:41</p>
+              <div class="msg user">Remind me to call the dentist tomorrow at 9.</div>
+              <div class="msg bot">Done. I’ll nudge you tomorrow morning.</div>
+              <p class="confirm"><svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg>Reminder set for tomorrow, 9:00</p>
+              <div class="msg user">What’s next on my list?</div>
+              <div class="msg bot">Two things are waiting: send the invoice and book the car service.</div>
+            </div>
+          </section>
+
+          <section class="view" id="view-voice" aria-labelledby="nav-title" hidden>
+            <div class="voice-body">
+              <div class="orb-wrap">
+                <div class="orb" id="orb" data-state="idle" aria-hidden="true">
+                  <span class="orb-glow cy"></span><span class="orb-glow au"></span>
+                  <svg class="orb-rings" viewBox="0 0 300 300" focusable="false">
+                    <g class="rg g1" style="--d:38s"><circle class="c" cx="150" cy="150" r="146" pathLength="100" stroke-dasharray="38 62"/><circle class="a" cx="150" cy="150" r="146" pathLength="100" stroke-dasharray="4 96" stroke-dashoffset="-44"/></g>
+                    <g class="rg g2" style="--d:54s"><circle class="c" cx="150" cy="150" r="134" pathLength="100" stroke-dasharray="22 10 14 54"/><circle class="a" cx="150" cy="150" r="134" pathLength="100" stroke-dasharray="3 97" stroke-dashoffset="-60"/></g>
+                    <g class="rg g3" style="--d:70s"><circle class="c" cx="150" cy="150" r="122" pathLength="100" stroke-dasharray="30 70"/><circle class="a" cx="150" cy="150" r="122" pathLength="100" stroke-dasharray="2.5 97.5" stroke-dashoffset="-75"/></g>
+                  </svg>
+                  <div class="orb-sphere">
+                    <svg class="orb-fil" viewBox="0 0 250 250" focusable="false"><ellipse cx="125" cy="125" rx="104" ry="38"/><ellipse cx="125" cy="125" rx="104" ry="38" transform="rotate(60 125 125)"/><ellipse cx="125" cy="125" rx="104" ry="38" transform="rotate(120 125 125)"/></svg>
+                    <canvas class="orb-fx" id="orb-fx"></canvas>
+                  </div>
+                </div>
+                <p class="voice-state" id="voice-state" role="status">Ready</p>
+              </div>
+              <div class="transcript glass">
+                <p class="who" id="voice-who"></p>
+                <p class="line" id="voice-line"></p>
+              </div>
+              <div class="voice-ctls">
+                <div class="vc">
+                  <div class="vslot"><button class="g-btn vbtn glass" id="mute" type="button" aria-pressed="false" aria-label="Mute microphone"><svg class="ic" aria-hidden="true"><use id="mute-use" href="#i-mic"/></svg></button></div>
+                  <span>Mute</span>
+                </div>
+                <div class="vc">
+                  <div class="vslot"><button class="g-btn vbtn main glass tint" id="voice-main" type="button" aria-label="Start voice session"><svg class="ic" aria-hidden="true"><use id="voice-main-icon" href="#i-voice"/></svg></button></div>
+                  <span id="voice-main-label">Start</span>
+                </div>
+                <div class="vc">
+                  <div class="vslot"><button class="g-btn vbtn glass" id="vtype" type="button" aria-label="Type a message"><svg class="ic" aria-hidden="true"><use href="#i-keyboard"/></svg></button></div>
+                  <span>Type</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="view-notes" aria-labelledby="t-notes" hidden>
+            <div class="scroller" id="notes-scroll" data-large="true">
+              <h2 class="large-title" id="t-notes">Notes</h2>
+              <div class="search glass" role="search">
+                <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                <input id="note-search" type="search" aria-label="Search notes" placeholder="Search" autocomplete="off">
+                <button class="clear" id="note-clear" type="button" aria-label="Clear search" hidden><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+              </div>
+              <div id="notes-groups">
+                <section class="nsec">
+                  <h3 class="sec">Today</h3>
+                  <ul class="group">
+                    <li class="note"><span class="note-title">Packing list</span><span class="note-meta"><time>9:12</time><span>Passport, charger, sunscreen, the good headphones.</span></span></li>
+                    <li class="note"><span class="note-title">Meeting follow-ups</span><span class="note-meta"><time>8:40</time><span>Send the notes, book the next review, ask about the budget.</span></span></li>
+                  </ul>
+                </section>
+                <section class="nsec">
+                  <h3 class="sec">Previous 7 Days</h3>
+                  <ul class="group">
+                    <li class="note"><span class="note-title">Book ideas</span><span class="note-meta"><time>Monday</time><span>A slow detective story set on a canal boat.</span></span></li>
+                    <li class="note"><span class="note-title">Gift ideas</span><span class="note-meta"><time>Sunday</time><span>Something for the garden, a good notebook, tea.</span></span></li>
+                    <li class="note"><span class="note-title">Garden jobs</span><span class="note-meta"><time>Friday</time><span>Prune the roses, move the pots, order compost.</span></span></li>
+                    <li class="note"><span class="note-title">Podcast queue</span><span class="note-meta"><time>Thursday</time><span>Three episodes on sleep, one on bridges.</span></span></li>
+                  </ul>
+                </section>
+                <section class="nsec">
+                  <h3 class="sec">Earlier</h3>
+                  <ul class="group">
+                    <li class="note"><span class="note-title">Lentil soup</span><span class="note-meta"><time>3 Oct</time><span>Onion, carrot, cumin, one tin of tomatoes, patience.</span></span></li>
+                    <li class="note"><span class="note-title">Birthday plans</span><span class="note-meta"><time>28 Sep</time><span>Table for six, something with candles, no speeches.</span></span></li>
+                    <li class="note"><span class="note-title">Trip budget</span><span class="note-meta"><time>14 Sep</time><span>Train, hotel, food, one splurge.</span></span></li>
+                  </ul>
+                </section>
+              </div>
+              <p class="empty" id="notes-empty" hidden>No notes match your search.</p>
+            </div>
+          </section>
+
+          <section class="view" id="view-area" aria-labelledby="t-area" hidden>
+            <div class="scroller" id="area-scroll" data-large="true">
+              <h2 class="large-title" id="t-area"></h2>
+              <p class="area-note" id="area-note"></p>
+            </div>
+          </section>
+        </div>
+
+        <div class="edge edge-t" aria-hidden="true"></div>
+        <div class="edge edge-b" aria-hidden="true"></div>
+
+        <header class="navbar" id="navbar">
+          <p class="nav-title" id="nav-title">Chat</p>
+        </header>
+
+        <form class="composer glass" id="composer">
+          <label class="sr" for="draft">Message Jarvis</label>
+          <textarea class="draft" id="draft" rows="1" placeholder="Ask Jarvis" autocomplete="off"></textarea>
+          <div class="crow">
+            <button class="cbtn add" type="button" aria-label="Add attachment (not designed yet)" disabled><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+            <span class="cspace"></span>
+            <button class="cbtn mic" id="dictate" type="button" aria-label="Talk to Jarvis"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button>
+            <button class="cbtn send" id="send" type="submit" aria-label="Send" disabled><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg></button>
+          </div>
+        </form>
+
+        <section class="sheet glass" id="sheet" data-flat role="region" aria-labelledby="sheet-title" aria-hidden="true" inert>
+          <span class="grab" aria-hidden="true"></span>
+          <div class="sheet-head" id="sheet-head">
+            <h2 class="sheet-title" id="sheet-title">Workspace</h2>
+            <button class="cbtn sheet-x" id="sheet-x" type="button" aria-label="Close workspace"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
+          </div>
+          <div class="sheet-body" id="sheet-body"></div>
+          <p class="sheet-foot">Sample data. The real workspace would show your data.</p>
+        </section>
+
+        <div class="edge-grab" id="edge-grab" aria-hidden="true"></div>
+        <div class="scrim" id="scrim" aria-hidden="true"></div>
+        <aside class="sidebar glass" id="sidebar" data-flat role="dialog" aria-modal="true" aria-label="Areas" aria-hidden="true" inert>
+          <div class="sb-top">
+            <button class="sb-row" type="button" data-area="settings"><svg class="ic" aria-hidden="true"><use href="#i-settings"/></svg><span>Settings</span></button>
+          </div>
+          <hr class="sb-rule">
+          <nav class="sb-list" aria-label="Areas">
+            <div class="sb-rows" id="sb-rows">
+              <button class="sb-row" type="button" data-area="proactive"><svg class="ic" aria-hidden="true"><use href="#i-proactive"/></svg><span>Proactive</span></button>
+              <button class="sb-row" type="button" data-area="status"><svg class="ic" aria-hidden="true"><use href="#i-status"/></svg><span>Status</span></button>
+              <button class="sb-row" type="button" data-area="usage"><svg class="ic" aria-hidden="true"><use href="#i-usage"/></svg><span>Usage</span></button>
+              <button class="sb-row" type="button" data-area="banking" disabled><svg class="ic" aria-hidden="true"><use href="#i-later"/></svg><span>Banking</span><small>Later</small></button>
+              <button class="sb-row" type="button" data-area="factory"><svg class="ic" aria-hidden="true"><use href="#i-code"/></svg><span>Software Factory</span></button>
+              <button class="sb-row" type="button" data-area="health"><svg class="ic" aria-hidden="true"><use href="#i-health"/></svg><span>Health</span></button>
+              <button class="sb-row" type="button" data-area="notes"><svg class="ic" aria-hidden="true"><use href="#i-notes"/></svg><span>Notes</span></button>
+              <button class="sb-row" type="button" data-area="chat"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><span>Chat</span></button>
+            </div>
+          </nav>
+        </aside>
+        <button class="areas-btn" id="open-areas" type="button" aria-controls="sidebar" aria-expanded="false">Open areas</button>
+        <p class="sr" id="live" role="status"></p>
+
+        <div class="kb" id="kb" aria-hidden="true" inert>
+          <div class="kb-bar" id="kb-bar">
+            <button type="button" tabindex="-1" data-w="I">I</button>
+            <button type="button" tabindex="-1" data-w="The">The</button>
+            <button type="button" tabindex="-1" data-w="I’m">I’m</button>
+          </div>
+          <div class="kb-keys" id="kb-keys"></div>
+          <div class="kb-foot">
+            <svg class="ic" aria-hidden="true"><use href="#i-smile"/></svg>
+            <button type="button" tabindex="-1" id="kb-mic"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button>
+          </div>
+        </div>
+
+        <div class="home" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const SIZES = { pro: { w: 393, h: 852 }, max: { w: 440, h: 956 } };
+  const TITLES = { chat: 'Chat', voice: 'Voice', notes: 'Notes', area: '' };
+  const LARGE = { notes: true, area: true };
+  /* Areas that exist on the web app. Only chat, voice and notes are drawn here; the rest open a placeholder page. */
+  const AREAS = {
+    chat: { label: 'Chat', screen: 'chat' },
+    factory: { label: 'Software Factory', ph: true, re: /\b(software factory|factory)\b/ },
+    notes: { label: 'Notes', screen: 'notes' },
+    health: { label: 'Health', ph: true, re: /\bhealth\b/ },
+    usage: { label: 'Usage', ph: true, re: /\busage\b/ },
+    status: { label: 'Status', ph: true, re: /\bstatus\b/ },
+    proactive: { label: 'Proactive', ph: true, re: /\bproactive\b/ },
+    settings: { label: 'Settings', ph: true, re: /\bsettings?\b/ },
+    banking: { label: 'Banking', later: true, re: /\bbanking\b/ }
+  };
+  const USER_LINE = 'Remind me to call the dentist tomorrow at 9.';
+  const VOICE = {
+    idle: { label: 'Ready', who: '', line: 'Your conversation will appear here.' },
+    listening: { label: 'Listening', who: 'You', line: USER_LINE },
+    thinking: { label: 'Thinking', who: 'You', line: USER_LINE },
+    speaking: { label: 'Speaking', who: 'Jarvis', line: 'Done. I’ll nudge you tomorrow morning.' }
+  };
+  const LENS_OK = /Chrome\/\d+/.test(navigator.userAgent);
+  const params = new URLSearchParams(location.search);
+  const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
+  const startScreen = params.get('screen');
+  const startArea = AREAS[startScreen] && AREAS[startScreen].ph ? startScreen : '';
+  const state = {
+    theme: pick(params.get('theme'), ['light', 'dark'], matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
+    glass: LENS_OK ? pick(params.get('glass'), ['lens', 'frost'], 'lens') : 'frost',
+    tint: pick(params.get('tint'), ['clear', 'tinted'], 'clear'),
+    size: pick(params.get('size'), Object.keys(SIZES), 'pro'),
+    zoom: pick(params.get('zoom'), ['fit', 'full'], 'fit'),
+    screen: startArea ? 'area' : pick(startScreen, ['chat', 'voice', 'notes'], 'chat'),
+    area: startArea,
+    voice: pick(params.get('voice'), Object.keys(VOICE), 'idle'),
+    kbd: params.get('kbd') === '1',
+    bare: pick(params.get('bare'), ['1', 'screen'], '')
+  };
+
+  const stage = $('#stage'), wrap = $('#device-wrap'), device = $('#device'), phone = $('#phone');
+  const navbar = $('#navbar'), navTitle = $('#nav-title');
+  const sheet = $('#sheet'), sidebar = $('#sidebar');
+  let sheetKind = '', sbOpen = false;
+  const syncRadios = (name, value) => $$('input[name="' + name + '"]').forEach(i => { i.checked = i.value === value; });
+
+  function fit() {
+    const d = SIZES[state.size];
+    const pad = state.bare === 'screen' ? 0 : 24;
+    const fw = d.w + pad, fh = d.h + pad;
+    stage.dataset.zoom = state.zoom;
+    const box = stage.getBoundingClientRect();
+    const cs = getComputedStyle(stage);
+    const slack = state.bare ? 0 : 1;
+    const availW = box.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - slack;
+    const availH = box.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - slack;
+    const s = state.zoom === 'fit' ? Math.min(1, availW / fw, availH / fh) : 1;
+    const k = Math.max(0.25, s);
+    wrap.style.width = fw * k + 'px';
+    wrap.style.height = fh * k + 'px';
+    device.style.transform = 'scale(' + k + ')';
+  }
+  function applyTheme() { document.documentElement.dataset.theme = state.theme; syncRadios('theme', state.theme); }
+  function applyTint() { document.documentElement.dataset.tint = state.tint; syncRadios('tint', state.tint); }
+  function applySize() { device.dataset.size = state.size; syncRadios('size', state.size); syncRadios('zoom', state.zoom); fit(); }
+  ['theme', 'tint', 'size', 'zoom'].forEach(name => {
+    $$('input[name="' + name + '"]').forEach(i => i.addEventListener('change', () => {
+      state[name] = i.value;
+      if (name === 'theme') applyTheme(); else if (name === 'tint') applyTint(); else applySize();
+    }));
+  });
+  new ResizeObserver(fit).observe(stage);
+
+  /* About popover: the board notes live behind the info button so the bar stays one slim row. */
+  const aboutBtn = $('#about-btn'), about = $('#about');
+  function setAbout(open) {
+    about.hidden = !open;
+    aboutBtn.setAttribute('aria-expanded', String(open));
+  }
+  aboutBtn.addEventListener('click', () => setAbout(about.hidden));
+  document.addEventListener('pointerdown', e => { if (!about.hidden && !e.target.closest('#about, #about-btn')) setAbout(false); });
+
+  /* Glass: a displacement map per element bends the backdrop near the rim, like a thick convex lens. */
+  const NS = 'http://www.w3.org/2000/svg';
+  const lensDefs = $('#lens-defs');
+  const lenses = new WeakMap();
+  const mapCache = new Map();
+  let lensCount = 0;
+  function lensMap(w, h, r, bezel, pow) {
+    const key = [w, h, r, bezel, pow].join('x');
+    if (mapCache.has(key)) return mapCache.get(key);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d'); const im = ctx.createImageData(w, h); const d = im.data;
+    const hw = w / 2, hh = h / 2;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const px = i + 0.5 - hw, py = j + 0.5 - hh;
+      const qx = Math.abs(px) - (hw - r), qy = Math.abs(py) - (hh - r);
+      const ox = Math.max(qx, 0), oy = Math.max(qy, 0);
+      const out = Math.hypot(ox, oy);
+      const depth = -(out + Math.min(Math.max(qx, qy), 0) - r);
+      let nx, ny;
+      if (out > 0) { nx = ox / out * Math.sign(px); ny = oy / out * Math.sign(py); }
+      else if (qx > qy) { nx = Math.sign(px); ny = 0; } else { nx = 0; ny = Math.sign(py); }
+      const k = depth >= bezel || depth < 0 ? 0 : Math.pow(1 - depth / bezel, pow);
+      const o = (j * w + i) * 4;
+      d[o] = Math.round(127.5 * (1 - nx * k)); d[o + 1] = Math.round(127.5 * (1 - ny * k)); d[o + 2] = 128; d[o + 3] = 255;
+    }
+    ctx.putImageData(im, 0, 0);
+    const url = c.toDataURL();
+    mapCache.set(key, url);
+    return url;
+  }
+  function paintLens(el) {
+    const w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
+    if (w < 8 || h < 8) return;
+    const cs = getComputedStyle(el);
+    const r = Math.min(parseFloat(cs.borderTopLeftRadius) || 0, w / 2, h / 2);
+    const bezel = parseFloat(cs.getPropertyValue('--lens-bezel')) || 16;
+    const depth = parseFloat(cs.getPropertyValue('--lens-depth')) || 14;
+    let L = lenses.get(el);
+    if (!L) {
+      const id = 'lg' + (++lensCount);
+      const f = document.createElementNS(NS, 'filter');
+      f.id = id;
+      f.setAttribute('filterUnits', 'userSpaceOnUse'); f.setAttribute('primitiveUnits', 'userSpaceOnUse');
+      f.setAttribute('color-interpolation-filters', 'sRGB');
+      const img = document.createElementNS(NS, 'feImage');
+      img.setAttribute('preserveAspectRatio', 'none'); img.setAttribute('result', 'm');
+      const disp = document.createElementNS(NS, 'feDisplacementMap');
+      disp.setAttribute('in', 'SourceGraphic'); disp.setAttribute('in2', 'm');
+      disp.setAttribute('xChannelSelector', 'R'); disp.setAttribute('yChannelSelector', 'G');
+      f.append(img, disp); lensDefs.append(f);
+      L = { id, f, img, disp }; lenses.set(el, L);
+    }
+    for (const a of [L.f, L.img]) { a.setAttribute('x', 0); a.setAttribute('y', 0); a.setAttribute('width', w); a.setAttribute('height', h); }
+    L.img.setAttribute('href', lensMap(w, h, r, bezel, 2));
+    L.disp.setAttribute('scale', String(2 * depth));
+    el.style.setProperty('--lens', 'url(#' + L.id + ')');
+    el.dataset.lens = 'on';
+  }
+  const pendingLens = new Set();
+  let lensRaf = 0;
+  const lensObserver = new ResizeObserver(entries => {
+    entries.forEach(e => pendingLens.add(e.target));
+    if (!lensRaf) lensRaf = requestAnimationFrame(() => { lensRaf = 0; pendingLens.forEach(paintLens); pendingLens.clear(); });
+  });
+  function applyGlass() {
+    document.documentElement.dataset.glass = state.glass;
+    syncRadios('glass', state.glass);
+    $('#glass-note').hidden = LENS_OK;
+    if (!LENS_OK) {
+      const lensRadio = $('input[name="glass"][value="lens"]');
+      lensRadio.disabled = true;
+      lensRadio.nextElementSibling.textContent = 'Lens (Chromium only)';
+    }
+  }
+  $$('input[name="glass"]').forEach(i => i.addEventListener('change', () => { state.glass = i.value; applyGlass(); }));
+  if (LENS_OK) $$('.glass:not([data-flat])').forEach(el => lensObserver.observe(el));
+
+  /* Scrolling screens */
+  const log = $('#log');
+  const scrollers = { chat: log, notes: $('#notes-scroll'), area: $('#area-scroll') };
+  function syncEdges() {
+    const sc = scrollers[state.screen];
+    const y = sc ? sc.scrollTop : 0;
+    const max = sc ? sc.scrollHeight - sc.clientHeight : 0;
+    phone.style.setProperty('--edge-t', clamp(y / 14, 0, 1).toFixed(2));
+    phone.style.setProperty('--edge-b', clamp((max - y) / 14, 0, 1).toFixed(2));
+    navbar.classList.toggle('collapsed', !!sc && !!LARGE[state.screen] && y > 38);
+  }
+  Object.values(scrollers).forEach(sc => sc.addEventListener('scroll', syncEdges, { passive: true }));
+  const stick = () => { log.scrollTop = log.scrollHeight; syncEdges(); };
+
+  const composer = $('#composer'), draft = $('#draft'), send = $('#send'), dictate = $('#dictate'), kbdCb = $('#kbd-cb');
+  function padLog() {
+    const lifted = state.kbd;
+    const bottom = sheetKind ? sheet.offsetHeight + 8 : (lifted ? 299 : 22) + composer.offsetHeight;
+    phone.style.setProperty('--log-pad', (bottom + 14) + 'px');
+  }
+  new ResizeObserver(() => {
+    const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+    padLog();
+    if (atBottom && state.screen === 'chat') stick();
+  }).observe(composer);
+
+  const currentArea = () => (state.screen === 'area' ? state.area : state.screen === 'voice' ? 'chat' : state.screen);
+  function showScreen(name, areaId) {
+    state.screen = name;
+    if (name === 'area') {
+      state.area = areaId || state.area || 'health';
+      const a = AREAS[state.area];
+      $('#t-area').textContent = a.label;
+      $('#area-note').textContent = state.area === 'settings'
+        ? 'Settings has not been designed for iPhone yet, so this page is a placeholder.'
+        : a.label + ' exists in the web app. It has not been designed for iPhone yet, so this page is a placeholder.';
+    } else state.area = '';
+    $$('.view').forEach(v => { v.hidden = v.id !== 'view-' + name; });
+    const large = !!LARGE[name];
+    navbar.classList.toggle('is-large', large);
+    navTitle.textContent = name === 'area' ? AREAS[state.area].label : TITLES[name];
+    if (large) navTitle.setAttribute('aria-hidden', 'true'); else navTitle.removeAttribute('aria-hidden');
+    composer.hidden = name !== 'chat';
+    $('#ctl-voice').hidden = name !== 'voice';
+    $('#ctl-kbd').hidden = name !== 'chat';
+    if (name !== 'chat') setKeyboard(false);
+    if (name === 'chat') { padLog(); stick(); }
+    else if (scrollers[name]) scrollers[name].scrollTop = 0;
+    syncEdges();
+    syncIsland();
+    syncSidebar();
+    syncOrb();
+  }
+
+  /* Escape closes the info popover, then the sidebar, then the keyboard, then the workspace sheet */
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (!about.hidden) { setAbout(false); aboutBtn.focus(); return; }
+    if (sbOpen) { setSidebar(false); return; }
+    if (state.kbd) { setKeyboard(false); return; }
+    if (sheetKind) closeSheet();
+  });
+
+  /* Chat */
+  function addMessage(kind, text) {
+    const el = document.createElement('div');
+    el.className = 'msg ' + kind;
+    el.textContent = text;
+    log.append(el);
+    stick();
+    return el;
+  }
+  function syncDraft() {
+    draft.style.height = 'auto';
+    draft.style.height = Math.min(draft.scrollHeight, 120) + 'px';
+    send.disabled = draft.value.trim() === '';
+  }
+  draft.addEventListener('input', syncDraft);
+  draft.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); composer.requestSubmit(); }
+  });
+  composer.addEventListener('submit', e => {
+    e.preventDefault();
+    const text = draft.value.trim();
+    if (!text) return;
+    addMessage('user', text);
+    draft.value = '';
+    syncDraft();
+    setShift(true);
+    replyTyped(text);
+  });
+  /* The composer mic is the way into a voice session: it opens the Voice screen and starts listening. */
+  dictate.addEventListener('click', () => {
+    showScreen('voice');
+    if (state.voice === 'idle') setVoice('listening');
+  });
+
+  /* System keyboard illustration */
+  const kb = $('#kb'), keysEl = $('#kb-keys');
+  const ROWS = {
+    abc: ['qwertyuiop'.split(''), 'asdfghjkl'.split(''), ['shift', ...'zxcvbnm'.split(''), 'del']],
+    num: ['1234567890'.split(''), ['-', '/', ':', ';', '(', ')', '$', '&', '@', '"'], ['sym', '.', ',', '?', '!', '\'', 'del']],
+    sym: [['[', ']', '{', '}', '#', '%', '^', '*', '+', '='], ['_', '\\', '|', '~', '<', '>', '€', '£', '¥', '•'], ['num', '.', ',', '?', '!', '\'', 'del']]
+  };
+  const GLYPH = (id) => '<svg class="ic" aria-hidden="true"><use href="#i-' + id + '"/></svg>';
+  let layer = 'abc', shift = true;
+  function typeText(t) {
+    const s = draft.selectionStart, e = draft.selectionEnd;
+    draft.setRangeText(t, s, e, 'end');
+    draft.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function backspace() {
+    const s = draft.selectionStart, e = draft.selectionEnd;
+    if (s !== e) draft.setRangeText('', s, e, 'end'); else if (s > 0) draft.setRangeText('', s - 1, s, 'end');
+    draft.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  const wantsCaps = () => {
+    const v = draft.value.slice(0, draft.selectionStart);
+    return v === '' || /[.!?]\s$/.test(v) || /\n$/.test(v);
+  };
+  function setShift(on) {
+    shift = on;
+    kb.dataset.shift = on ? 'on' : 'off';
+    const k = $('.key.shift', kb);
+    if (k) k.setAttribute('aria-pressed', String(on));
+  }
+  function key(label, cls, onPress, html) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.tabIndex = -1; b.className = 'key ' + cls;
+    if (html) b.innerHTML = html; else { b.textContent = label; b.dataset.k = label; }
+    b.addEventListener('click', onPress);
+    return b;
+  }
+  function renderKeys() {
+    keysEl.textContent = '';
+    ROWS[layer].forEach((row, ri) => {
+      const r = document.createElement('div');
+      r.className = 'kb-row r' + ri + ' l-' + layer;
+      row.forEach(k => {
+        if (k === 'shift') { const b = key('', 'fn shift', () => setShift(!shift), GLYPH('shift')); b.setAttribute('aria-pressed', String(shift)); b.setAttribute('aria-label', 'Shift'); r.append(b); }
+        else if (k === 'del') r.append(key('', 'fn', backspace, GLYPH('del')));
+        else if (k === 'sym') r.append(key('#+=', 'fn', () => { layer = 'sym'; renderKeys(); }));
+        else if (k === 'num') r.append(key('123', 'fn', () => { layer = 'num'; renderKeys(); }));
+        else r.append(key(k, 'ch', () => { typeText(shift ? k.toUpperCase() : k); setShift(wantsCaps()); }));
+      });
+      keysEl.append(r);
+    });
+    const b = document.createElement('div');
+    b.className = 'kb-row rb';
+    b.append(
+      key(layer === 'abc' ? '123' : 'ABC', 'fn', () => { layer = layer === 'abc' ? 'num' : 'abc'; renderKeys(); }),
+      key('space', 'sp', () => { typeText(' '); setShift(wantsCaps()); }),
+      key('return', 'fn', () => { typeText('\n'); setShift(true); })
+    );
+    keysEl.append(b);
+    setShift(shift);
+  }
+  $$('#kb-bar button').forEach(b => b.addEventListener('click', () => { typeText(b.dataset.w + ' '); setShift(false); }));
+  /* The dictation key swaps the field's placeholder, as the system dictation prompt would. */
+  const kbMic = $('#kb-mic');
+  let dictating = false;
+  function setDictating(on) {
+    dictating = on;
+    kbMic.setAttribute('aria-pressed', String(on));
+    draft.placeholder = on ? 'Listening…' : draft.dataset.ph;
+  }
+  kbMic.addEventListener('click', () => setDictating(!dictating));
+  ['pointerdown', 'mousedown'].forEach(t => kb.addEventListener(t, e => e.preventDefault()));
+  function setKeyboard(on) {
+    if (state.kbd === on && phone.dataset.kb === (on ? 'on' : 'off')) return;
+    state.kbd = on;
+    phone.dataset.kb = on ? 'on' : 'off';
+    if (on) kb.removeAttribute('inert'); else { kb.setAttribute('inert', ''); if (dictating) setDictating(false); }
+    kbdCb.checked = on;
+    padLog();
+    if (state.screen === 'chat') requestAnimationFrame(stick);
+  }
+  kbdCb.addEventListener('change', () => {
+    if (sbOpen || sheetKind) { kbdCb.checked = false; return; }
+    if (kbdCb.checked) { setKeyboard(true); draft.focus({ preventScroll: true }); } else { setKeyboard(false); draft.blur(); }
+  });
+  phone.addEventListener('pointerdown', e => {
+    if (state.kbd && !e.target.closest('.composer, .kb, .sidebar')) { draft.blur(); setKeyboard(false); }
+  });
+  draft.addEventListener('focus', () => setKeyboard(true));
+  draft.dataset.ph = draft.placeholder;
+  draft.addEventListener('blur', () => { if (!kb.contains(document.activeElement)) setKeyboard(false); });
+
+  /* Voice */
+  const orb = $('#orb'), vState = $('#voice-state'), vWho = $('#voice-who'), vLine = $('#voice-line');
+  const vMain = $('#voice-main'), vMainLabel = $('#voice-main-label'), vMainIcon = $('#voice-main-icon');
+  const mute = $('#mute'), muteUse = $('#mute-use'), voiceSel = $('#voice-sel');
+  /* Dynamic Island: a live voice session shows as a widened pill outside the Voice tab; tapping it returns there. */
+  const island = $('#island');
+  function syncIsland() {
+    const live = state.voice !== 'idle' && state.screen !== 'voice';
+    island.classList.toggle('is-live', live);
+    island.dataset.state = state.voice;
+    island.tabIndex = live ? 0 : -1;
+    if (live) {
+      island.removeAttribute('aria-hidden');
+      island.setAttribute('aria-label', 'Voice session: ' + VOICE[state.voice].label + '. Return to voice.');
+    } else {
+      island.setAttribute('aria-hidden', 'true');
+      island.removeAttribute('aria-label');
+    }
+  }
+  island.addEventListener('click', () => {
+    if (sbOpen) setSidebar(false, { restore: false });
+    showScreen('voice');
+  });
+  function setVoice(s, opts) {
+    const o = opts || {};
+    state.voice = s;
+    const v = VOICE[s], live = s !== 'idle';
+    orb.dataset.state = s;
+    vState.textContent = v.label;
+    vWho.textContent = o.who !== undefined ? o.who : v.who;
+    vLine.textContent = o.line !== undefined ? o.line : v.line;
+    vMain.classList.toggle('is-live', live);
+    vMain.classList.toggle('tint', !live);
+    vMain.setAttribute('aria-label', live ? 'End voice session' : 'Start voice session');
+    vMainLabel.textContent = live ? 'End' : 'Start';
+    vMainIcon.setAttribute('href', live ? '#i-stop' : '#i-voice');
+    voiceSel.value = s;
+    syncIsland();
+    syncOrb();
+  }
+  voiceSel.addEventListener('change', () => { cancelSay(); setVoice(voiceSel.value); });
+  vMain.addEventListener('click', () => { cancelSay(); setVoice(state.voice === 'idle' ? 'listening' : 'idle'); });
+  $('#vtype').addEventListener('click', () => { showScreen('chat'); draft.focus({ preventScroll: true }); });
+  mute.addEventListener('click', () => {
+    const on = mute.getAttribute('aria-pressed') !== 'true';
+    mute.setAttribute('aria-pressed', String(on));
+    mute.setAttribute('aria-label', on ? 'Unmute microphone' : 'Mute microphone');
+    muteUse.setAttribute('href', on ? '#i-mic-off' : '#i-mic');
+  });
+
+  /* Notes */
+  const search = $('#note-search'), clear = $('#note-clear'), empty = $('#notes-empty'), groups = $('#notes-groups');
+  function filterNotes() {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    $$('.nsec', groups).forEach(sec => {
+      let any = 0;
+      $$('.note', sec).forEach(li => {
+        const hit = li.textContent.toLowerCase().includes(q);
+        li.hidden = !hit;
+        if (hit) any += 1;
+      });
+      sec.hidden = any === 0;
+      shown += any;
+    });
+    groups.hidden = shown === 0;
+    empty.hidden = shown !== 0;
+    clear.hidden = q === '';
+    syncEdges();
+  }
+  search.addEventListener('input', filterNotes);
+  clear.addEventListener('click', () => { search.value = ''; filterNotes(); search.focus(); });
+
+  /* Orb: a glass sphere with a golden filament tangle, drawn on a canvas as an imitation of the web orb.
+     The production orb is a Three.js scene; this only approximates it. */
+  const orbFx = $('#orb-fx'), orbCtx = orbFx.getContext('2d');
+  const ORB_SIZE = 250, ORB_R = 52, ORB_PTS = 96;
+  const ORB_SPEED = { idle: .18, listening: .42, thinking: 1.5, speaking: .85 };
+  const FILAMENTS = Array.from({ length: 8 }, (_, i) => ({
+    fx: 2 + (i % 3), fy: 3 + ((i * 2) % 3), fz: 1 + ((i * 5) % 4), px: i * .9, py: i * 1.7, pz: i * 2.3
+  }));
+  const orbXs = new Float32Array(ORB_PTS + 1), orbYs = new Float32Array(ORB_PTS + 1), orbDs = new Float32Array(ORB_PTS + 1);
+  let orbT = 0, orbV = ORB_SPEED.idle, orbRaf = 0, orbLast = 0;
+  function drawOrb(now) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2), side = Math.round(ORB_SIZE * dpr);
+    if (orbFx.width !== side) { orbFx.width = side; orbFx.height = side; }
+    const c = orbCtx, mid = ORB_SIZE / 2;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, ORB_SIZE, ORB_SIZE);
+    const R = ORB_R * (state.voice === 'speaking' && !reduceMotion.matches ? 1 + .05 * Math.sin(now / 180) : 1);
+    const glow = c.createRadialGradient(mid, mid, 0, mid, mid, R * 1.5);
+    glow.addColorStop(0, 'rgba(255,200,110,.30)');
+    glow.addColorStop(1, 'rgba(255,200,110,0)');
+    c.fillStyle = glow;
+    c.fillRect(0, 0, ORB_SIZE, ORB_SIZE);
+    c.globalCompositeOperation = 'lighter';
+    c.lineWidth = 1.2;
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+    const ay = orbT * .9, ax = orbT * .55 + .6;
+    const cosY = Math.cos(ay), sinY = Math.sin(ay), cosX = Math.cos(ax), sinX = Math.sin(ax);
+    for (const f of FILAMENTS) {
+      for (let k = 0; k <= ORB_PTS; k++) {
+        const t = k / ORB_PTS * Math.PI * 2;
+        const x = Math.sin(f.fx * t + f.px + orbT * .3), y = Math.sin(f.fy * t + f.py), z = Math.sin(f.fz * t + f.pz);
+        const x1 = x * cosY + z * sinY, z1 = z * cosY - x * sinY;
+        const y2 = y * cosX - z1 * sinX, z2 = y * sinX + z1 * cosX;
+        const s = 1 / (1 - z2 * .22);
+        orbXs[k] = mid + x1 * R * s;
+        orbYs[k] = mid + y2 * R * s;
+        orbDs[k] = z2;
+      }
+      for (let k = 0; k < ORB_PTS; k += 4) {
+        let d = 0;
+        c.beginPath();
+        c.moveTo(orbXs[k], orbYs[k]);
+        for (let j = k + 1; j <= k + 4; j++) { c.lineTo(orbXs[j], orbYs[j]); d += orbDs[j]; }
+        c.strokeStyle = 'rgba(255,196,96,' + (.18 + .62 * (d / 8 + .5)).toFixed(2) + ')';
+        c.stroke();
+      }
+    }
+    c.globalCompositeOperation = 'source-over';
+  }
+  function orbFrame(now) {
+    const dt = clamp((now - orbLast) / 1000, 0, .05);
+    orbLast = now;
+    orbV += (ORB_SPEED[state.voice] - orbV) * Math.min(1, dt * 4);
+    orbT += dt * orbV;
+    drawOrb(now);
+    orbRaf = requestAnimationFrame(orbFrame);
+  }
+  /* The loop only runs while the Voice screen is visible and motion is allowed; otherwise one still frame is drawn. */
+  function syncOrb() {
+    const run = state.screen === 'voice' && !document.hidden && !reduceMotion.matches;
+    if (run) {
+      if (!orbRaf) { orbLast = performance.now(); orbRaf = requestAnimationFrame(orbFrame); }
+      return;
+    }
+    if (orbRaf) { cancelAnimationFrame(orbRaf); orbRaf = 0; }
+    if (state.screen === 'voice') drawOrb(performance.now());
+  }
+  document.addEventListener('visibilitychange', syncOrb);
+  reduceMotion.addEventListener('change', syncOrb);
+
+  /* Sidebar: swipe in from the right edge. The rows are the web app's areas, listed up from the thumb. */
+  const scrim = $('#scrim'), edgeGrab = $('#edge-grab');
+  const openAreas = $('#open-areas'), openSbBtn = $('#open-sb-btn'), liveEl = $('#live');
+  const scaleK = () => phone.getBoundingClientRect().width / phone.offsetWidth || 1;
+  let sbOpener = null, liveTimer = 0;
+  function announce(msg) {
+    clearTimeout(liveTimer);
+    liveEl.textContent = '';
+    liveTimer = setTimeout(() => { liveEl.textContent = msg; }, 30);
+  }
+  function syncInert() {
+    [$('.views'), navbar, edgeGrab, openAreas].forEach(el => { el.inert = sbOpen; });
+    composer.inert = sbOpen || !!sheetKind;
+    sheet.inert = sbOpen || !sheetKind;
+  }
+  function syncSidebar() {
+    const cur = currentArea();
+    $$('.sb-row[data-area]', sidebar).forEach(r => {
+      if (r.dataset.area === cur) r.setAttribute('aria-current', 'page'); else r.removeAttribute('aria-current');
+    });
+  }
+  function setSidebar(open, o = {}) {
+    const was = sbOpen;
+    sbOpen = open;
+    phone.dataset.sb = open ? 'open' : 'closed';
+    phone.style.setProperty('--sb-p', open ? '1' : '0');
+    sidebar.inert = !open;
+    sidebar.setAttribute('aria-hidden', String(!open));
+    [openSbBtn, openAreas].forEach(b => b.setAttribute('aria-expanded', String(open)));
+    openSbBtn.textContent = open ? 'Close sidebar' : 'Open sidebar';
+    if (open === was) return;
+    if (open) {
+      const ae = document.activeElement;
+      sbOpener = o.opener !== undefined ? o.opener : (ae && ae !== document.body && ae !== draft ? ae : null);
+      if (state.kbd) { draft.blur(); setKeyboard(false); }
+      syncInert();
+      syncSidebar();
+      const first = $('.sb-row[aria-current="page"]', sidebar) || $('.sb-row:not(:disabled)', sidebar);
+      if (first) first.focus({ preventScroll: true });
+      announce('Areas');
+    } else {
+      syncInert();
+      if (o.restore !== false && sbOpener && sbOpener.isConnected) sbOpener.focus({ preventScroll: true });
+      sbOpener = null;
+    }
+  }
+  function openArea(id) {
+    const a = AREAS[id];
+    if (!a || a.later) return;
+    setSidebar(false, { restore: false });
+    if (a.screen) showScreen(a.screen === 'chat' && state.screen === 'voice' ? 'voice' : a.screen);
+    else showScreen('area', id);
+    announce('Opened ' + a.label);
+  }
+  sidebar.addEventListener('click', e => {
+    const row = e.target.closest('.sb-row[data-area]');
+    if (row && !row.disabled) openArea(row.dataset.area);
+  });
+  scrim.addEventListener('click', () => { if (sbOpen) setSidebar(false); });
+  openSbBtn.addEventListener('click', () => setSidebar(!sbOpen, { opener: openSbBtn }));
+  openAreas.addEventListener('click', () => setSidebar(true, { opener: openAreas }));
+
+  /* Edge swipe. Opening: drag in from the right edge. Closing: drag the open sidebar toward the edge.
+     A drag on the open sidebar stays pending until it is clearly horizontal, so taps on rows still work. */
+  let drag = null, noClick = false;
+  const sbDistance = () => sidebar.offsetWidth + 24; // matches the closed offset in the .sidebar transform, so the panel tracks the finger 1:1
+  const xFromRight = e => (phone.getBoundingClientRect().right - e.clientX) / scaleK();
+  function beginDrag() {
+    drag.active = true;
+    phone.dataset.sb = 'drag';
+    try { drag.el.setPointerCapture(drag.id); } catch (err) { /* synthetic pointers have no capture */ }
+  }
+  function startDrag(e, el, p0, active) {
+    const x = xFromRight(e);
+    drag = { id: e.pointerId, el, p0, p: p0, active: false, x0: x, y0: e.clientY, lastX: x, t: e.timeStamp, v: 0 };
+    if (active) beginDrag();
+  }
+  edgeGrab.addEventListener('pointerdown', e => {
+    if (sbOpen || drag || e.button > 0) return;
+    e.preventDefault();
+    startDrag(e, edgeGrab, 0, true);
+  });
+  [sidebar, scrim].forEach(el => el.addEventListener('pointerdown', e => {
+    if (!sbOpen || drag || e.button > 0) return;
+    startDrag(e, el, 1, false);
+  }));
+  window.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const x = xFromRight(e);
+    if (!drag.active) {
+      const dx = x - drag.x0, dy = (e.clientY - drag.y0) / scaleK();
+      if (Math.abs(dy) >= 8 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
+      if (dx > -8 || Math.abs(dx) < Math.abs(dy)) return;
+      drag.x0 = x; drag.lastX = x; drag.t = e.timeStamp;
+      beginDrag();
+      return;
+    }
+    const dt = Math.max(1, e.timeStamp - drag.t);
+    drag.v = drag.v * .6 + ((x - drag.lastX) / dt) * .4;
+    drag.lastX = x;
+    drag.t = e.timeStamp;
+    drag.p = clamp(drag.p0 + (x - drag.x0) / sbDistance(), 0, 1);
+    phone.style.setProperty('--sb-p', drag.p.toFixed(3));
+  });
+  function endDrag(e, cancelled) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    if (!d.active) return;
+    noClick = true;
+    setTimeout(() => { noClick = false; }, 0);
+    // A short pull is enough: the thumb should not have to travel far from the edge.
+    const open = cancelled ? d.p0 === 1 : d.v > .35 ? true : d.v < -.35 ? false : d.p > (d.p0 === 0 ? .3 : .7);
+    setSidebar(open);
+  }
+  window.addEventListener('pointerup', e => endDrag(e, false));
+  window.addEventListener('pointercancel', e => endDrag(e, true));
+  document.addEventListener('click', e => { if (noClick) { e.stopPropagation(); e.preventDefault(); } }, true);
+
+  /* Generated workspaces: Jarvis builds a small view and shows it in a sheet over the current screen.
+     These two are fixed samples with placeholder numbers, not generated from real data. */
+  const sheetTitle = $('#sheet-title'), sheetBody = $('#sheet-body'), sheetHead = $('#sheet-head');
+  const pad2 = n => String(n).padStart(2, '0');
+  const mmss = s => Math.floor(s / 60) + ':' + pad2(s % 60);
+  const WS = { run: { title: 'Interval run' }, lifts: { title: 'Today’s lifts' } };
+  const RUN = [['Warm up', 8, 90], ['Fast', 14, 45], ['Easy', 8, 60], ['Fast', 14, 45], ['Easy', 8, 60], ['Fast', 14, 45], ['Easy', 8, 60], ['Cool down', 6, 90]];
+  const LIFT = { name: 'Bench press', kg: 80, reps: 8, sets: 5 };
+  const ws = { run: null, lifts: null };
+  let wsTimer = 0, swapTimer = 0;
+  const restLine = l => 'Set ' + (l.done + 1) + ' of ' + LIFT.sets + ' · ' + (l.rest > 0 ? 'Rest ' + mmss(l.rest) : 'Go');
+  function renderWs() {
+    const refocus = sheetBody.contains(document.activeElement);
+    if (sheetKind === 'run') {
+      const r = ws.run, cur = RUN[r.i], nxt = RUN[(r.i + 1) % RUN.length];
+      sheetBody.innerHTML =
+        '<p class="ws-big" role="timer"><span class="sr">Time left: </span><span id="ws-time">' + mmss(r.left) + '</span></p>' +
+        '<p class="ws-line">' + cur[0] + ' · ' + cur[1] + ' km/h</p>' +
+        '<p class="ws-next">Next: ' + nxt[0] + ' · ' + nxt[1] + ' km/h</p>' +
+        '<div class="ws-seg" role="img" aria-label="Interval ' + (r.i + 1) + ' of ' + RUN.length + '">' +
+        RUN.map((_, k) => '<i class="' + (k < r.i ? 'done' : k === r.i ? 'now' : '') + '"></i>').join('') + '</div>' +
+        '<p class="ws-meta">Interval ' + (r.i + 1) + ' of ' + RUN.length + '</p>';
+    } else if (sheetKind === 'lifts') {
+      const l = ws.lifts, finished = l.done >= LIFT.sets;
+      sheetBody.innerHTML =
+        '<p class="ws-ex">' + LIFT.name + '</p>' +
+        '<p class="ws-lift">' + (finished ? 'Done' : LIFT.kg + ' kg × ' + LIFT.reps) + '</p>' +
+        '<p class="ws-rest" id="ws-rest">' + (finished ? 'All ' + LIFT.sets + ' sets logged' : restLine(l)) + '</p>' +
+        '<div class="ws-dots" role="img" aria-label="' + Math.min(l.done, LIFT.sets) + ' of ' + LIFT.sets + ' sets done">' +
+        Array.from({ length: LIFT.sets }, (_, k) => '<span class="' + (k < l.done ? 'done' : k === l.done ? 'now' : '') + '">' + (k + 1) + '</span>').join('') + '</div>' +
+        (finished
+          ? '<button class="ws-btn quiet" type="button" data-act="again">Start over</button>'
+          : '<button class="ws-btn" type="button" data-act="done">Set done</button>');
+    }
+    if (refocus) { const b = $('.ws-btn', sheetBody); if (b) b.focus({ preventScroll: true }); }
+  }
+  function tickWs() {
+    if (sheetKind === 'run') {
+      const r = ws.run;
+      r.left -= 1;
+      if (r.left <= 0) {
+        r.i = (r.i + 1) % RUN.length;
+        r.left = RUN[r.i][2];
+        renderWs();
+        announce(RUN[r.i][0] + ', ' + RUN[r.i][1] + ' kilometres per hour');
+      } else {
+        const t = $('#ws-time');
+        if (t) t.textContent = mmss(r.left);
+      }
+    } else if (sheetKind === 'lifts') {
+      const l = ws.lifts;
+      if (l.done >= LIFT.sets || l.rest <= 0) return;
+      l.rest -= 1;
+      const el = $('#ws-rest');
+      if (el) el.textContent = restLine(l);
+    }
+  }
+  function liftsDone() {
+    if (sheetKind !== 'lifts') return;
+    const l = ws.lifts;
+    if (l.done >= LIFT.sets) return;
+    l.done += 1;
+    l.rest = 90;
+    renderWs();
+    announce(l.done >= LIFT.sets ? 'All sets logged' : 'Set ' + l.done + ' logged. Rest 1:30');
+  }
+  function paintSheet(kind) {
+    sheetTitle.textContent = WS[kind].title;
+    if (kind === 'run') ws.run = { i: 2, left: 42 }; else ws.lifts = { done: 3, rest: 72 };
+    renderWs();
+    sheetBody.classList.remove('swap');
+    clearInterval(wsTimer);
+    wsTimer = setInterval(tickWs, 1000);
+  }
+  function openSheet(kind) {
+    if (!WS[kind]) return;
+    setSidebar(false, { restore: false });
+    if (state.kbd) { draft.blur(); setKeyboard(false); }
+    if (sheetKind === kind) return;
+    const switching = !!sheetKind;
+    sheetKind = kind;
+    clearInterval(wsTimer);
+    clearTimeout(swapTimer);
+    phone.dataset.sheet = 'open';
+    sheet.setAttribute('aria-hidden', 'false');
+    syncInert();
+    phone.style.setProperty('--sheet-pad', (sheet.offsetHeight + 16) + 'px');
+    padLog();
+    if (state.screen === 'chat') stick();
+    if (switching && !reduceMotion.matches) {
+      sheetBody.classList.add('swap');
+      swapTimer = setTimeout(() => { if (sheetKind === kind) paintSheet(kind); }, 160);
+    } else paintSheet(kind);
+    announce('Opened ' + WS[kind].title);
+  }
+  function closeSheet() {
+    if (!sheetKind) return;
+    const hadFocus = sheet.contains(document.activeElement);
+    sheetKind = '';
+    clearInterval(wsTimer);
+    clearTimeout(swapTimer);
+    phone.dataset.sheet = 'closed';
+    phone.style.removeProperty('--sheet-drag');
+    phone.style.removeProperty('--sheet-pad');
+    sheet.setAttribute('aria-hidden', 'true');
+    syncInert();
+    padLog();
+    announce('Workspace closed');
+    if (hadFocus) (state.screen === 'voice' ? vMain : log).focus({ preventScroll: true });
+  }
+  $('#sheet-x').addEventListener('click', closeSheet);
+  sheetBody.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    if (b.dataset.act === 'done') liftsDone();
+    else if (b.dataset.act === 'again') { ws.lifts = { done: 0, rest: 0 }; renderWs(); announce('Starting over'); }
+  });
+
+  /* Swipe the sheet header down to dismiss it. */
+  let sheetDrag = null;
+  sheetHead.addEventListener('pointerdown', e => {
+    if (!sheetKind || sheetDrag || e.button > 0 || e.target.closest('.sheet-x')) return;
+    sheetDrag = { id: e.pointerId, y0: e.clientY, lastY: e.clientY, t: e.timeStamp, v: 0, dy: 0 };
+    phone.dataset.sheet = 'drag';
+    try { sheetHead.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointers have no capture */ }
+  });
+  sheetHead.addEventListener('pointermove', e => {
+    if (!sheetDrag || e.pointerId !== sheetDrag.id) return;
+    const k = scaleK(), dt = Math.max(1, e.timeStamp - sheetDrag.t);
+    sheetDrag.v = sheetDrag.v * .6 + (((e.clientY - sheetDrag.lastY) / k) / dt) * .4;
+    sheetDrag.lastY = e.clientY;
+    sheetDrag.t = e.timeStamp;
+    sheetDrag.dy = Math.max(0, (e.clientY - sheetDrag.y0) / k);
+    phone.style.setProperty('--sheet-drag', sheetDrag.dy.toFixed(1) + 'px');
+  });
+  function endSheetDrag(e, cancelled) {
+    if (!sheetDrag || e.pointerId !== sheetDrag.id) return;
+    const d = sheetDrag;
+    sheetDrag = null;
+    phone.style.removeProperty('--sheet-drag');
+    if (!cancelled && (d.dy > 80 || d.v > .6)) closeSheet();
+    else if (sheetKind) phone.dataset.sheet = 'open';
+  }
+  sheetHead.addEventListener('pointerup', e => endSheetDrag(e, false));
+  sheetHead.addEventListener('pointercancel', e => endSheetDrag(e, true));
+
+  /* Commands: a typed message or a spoken phrase goes through one small interpreter.
+     Jarvis controls the app by opening areas and workspaces; it answers nothing else on this board. */
+  const FALLBACK = 'This is a concept board, so I cannot answer yet.';
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  function interpret(raw) {
+    const q = norm(raw);
+    if (!q) return null;
+    if (/\b(close|dismiss|hide)\b/.test(q)) {
+      return sheetKind ? { reply: 'Closed.', run: closeSheet } : { reply: 'Nothing is open right now.' };
+    }
+    if (/\b(set done|log set|next set)\b/.test(q)) {
+      return sheetKind === 'lifts' ? { reply: 'Set logged.', run: liftsDone } : { reply: 'Open your lifts first.' };
+    }
+    if (/\b(run|running|interval|intervals|treadmill)\b/.test(q)) {
+      return { reply: 'Here is your interval run.', confirm: 'Opened Interval run', run: () => openSheet('run') };
+    }
+    if (/\b(lift|lifts|lifting|bench|gym|workout)\b/.test(q)) {
+      return { reply: 'Here are today’s lifts.', confirm: 'Opened Today’s lifts', run: () => openSheet('lifts') };
+    }
+    if (/\bnotes?\b/.test(q)) return { reply: 'Opening Notes.', run: () => openArea('notes') };
+    if (/\b(areas|sidebar|menu|navigation)\b/.test(q)) return { reply: 'Here are your areas.', run: () => setSidebar(true) };
+    if (/\b(chat|keyboard|type)\b/.test(q)) return { reply: 'Opening Chat.', run: () => showScreen('chat') };
+    if (/\bvoice\b/.test(q)) return { reply: 'Opening Voice.', run: () => showScreen('voice') };
+    for (const id of Object.keys(AREAS)) {
+      const a = AREAS[id];
+      if (!a.re || !a.re.test(q)) continue;
+      return a.later
+        ? { reply: a.label + ' is not designed yet.' }
+        : { reply: 'Opening ' + a.label + '.', run: () => openArea(id) };
+    }
+    return null;
+  }
+  function addConfirm(text) {
+    const d = document.createElement('div');
+    d.className = 'confirm';
+    d.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-check-circle"/></svg><span></span>';
+    $('span', d).textContent = text;
+    log.append(d);
+    stick();
+  }
+  /* Typed route: dots, then the reply and a confirmation line, then the action. */
+  function replyTyped(text) {
+    const hit = interpret(text);
+    const dots = document.createElement('div');
+    dots.className = 'msg bot typing';
+    dots.innerHTML = '<span class="sr">Jarvis is typing</span><i></i><i></i><i></i>';
+    log.append(dots);
+    stick();
+    setTimeout(() => {
+      dots.remove();
+      addMessage('bot', hit ? hit.reply : FALLBACK);
+      if (hit && hit.confirm) addConfirm(hit.confirm);
+      if (hit && hit.run) setTimeout(hit.run, reduceMotion.matches ? 0 : 500);
+    }, reduceMotion.matches ? 0 : 700);
+  }
+  /* Spoken route: the Say menu plays listening, thinking and speaking, then runs the action. */
+  let sayTimers = [];
+  function cancelSay() { sayTimers.forEach(clearTimeout); sayTimers = []; }
+  function sayCommand(phrase) {
+    cancelSay();
+    if (sbOpen) setSidebar(false, { restore: false });
+    const hit = interpret(phrase), was = state.voice !== 'idle';
+    setVoice('listening', { who: 'You', line: phrase });
+    sayTimers.push(setTimeout(() => setVoice('thinking', { who: 'You', line: phrase }), 900));
+    sayTimers.push(setTimeout(() => {
+      setVoice('speaking', { who: 'Jarvis', line: hit ? hit.reply : FALLBACK });
+      if (hit && hit.run) hit.run();
+    }, 2000));
+    sayTimers.push(setTimeout(() => {
+      if (was) setVoice('listening', { who: '', line: 'Listening…' }); else setVoice('idle');
+    }, 3700));
+  }
+  const saySel = $('#say-sel');
+  saySel.addEventListener('change', () => {
+    const phrase = saySel.value;
+    saySel.value = '';
+    if (phrase) sayCommand(phrase);
+  });
+
+  applyTheme();
+  applyTint();
+  applyGlass();
+  if (state.bare) document.documentElement.dataset.bare = state.bare;
+  applySize();
+  renderKeys();
+  setVoice(state.voice);
+  syncDraft();
+  showScreen(state.screen, state.area);
+  setKeyboard(state.kbd && state.screen === 'chat');
+  if (params.get('sidebar') === 'open') setSidebar(true, { opener: null });
+  const startSheet = params.get('sheet');
+  if (startSheet === 'run' || startSheet === 'lifts') openSheet(startSheet);
+  requestAnimationFrame(() => {
+    const sc = scrollers[state.screen], want = params.get('scroll');
+    if (sc && want) { sc.scrollTop = want === 'top' ? 0 : want === 'bottom' ? sc.scrollHeight : Number(want) || 0; syncEdges(); }
+  });
+})();
+</script>
+</body>
+</html>
