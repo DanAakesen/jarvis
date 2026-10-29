@@ -9061,3 +9061,22 @@ Scope, layouts, retained branding, prototype tools and build/authentication setu
 remain unconfirmed. No implementation or setup is authorized. The discussion,
 proposals and dated references are recorded in [iOS app](../iOS%20app.md).
 Migration and logging work continues independently.
+
+## 29 October 2026 — iOS usage context and design decisions
+
+The owner stated that the iPhone app will mostly be used while lifting weights,
+running on a treadmill and driving, with minimal hands-on time and the screen
+only glanced at, so the experience should be largely hands-free. Generative UI
+workspaces and Jarvis control of the app itself (opening, closing and arranging
+workspaces and navigating) are essential on iOS, as on the web. The owner also
+confirmed these design decisions: native iOS glass and controls rather than the
+web chrome; no bottom tab bar, with chat and voice switching from the composer;
+areas open from a right-edge swipe-only sidebar, chosen for the prototype and to
+be judged by use; an iOS take on the web composer, not final; the existing orb
+design carries over; the phone has no presence picker and always uses On the
+move; no paid design tools. GitHub Replica is ruled out because it does not run
+on the owner's Windows PC. The HTML concept board is local scratch and cannot
+establish native behaviour. Scope, sidebar contents, workspace presentation,
+assistive access to the sidebar, presence behaviour with workspaces and
+build/authentication setup remain unconfirmed. No implementation or setup is
+authorized. See [iOS app](../iOS%20app.md).
