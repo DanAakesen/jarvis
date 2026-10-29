@@ -108,7 +108,8 @@ import { createBackgroundJobStore } from './database/background-job-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
-import { createWebResearchModule, runCodexToolResult } from './core/web-research.js';
+import { createWebResearchModule } from './core/web-research.js';
+import { createResearchSmokeProbe } from './core/research-smoke.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createConfirmationStore } from './database/confirmation-store.js';
@@ -1021,38 +1022,16 @@ try {
         details: { configured: true },
       };
     },
-    research: async () => {
-      if (!webResearchModule || !config.foundryRunnerAgentName) {
-        return { status: 'down' as const, details: { configured: false } };
-      }
-      try {
+    research: createResearchSmokeProbe({
+      configured: Boolean(webResearchModule && config.foundryRunnerAgentName),
+      clientFor: () => clientFor(config.foundryRunnerAgentName!),
+      selectModel: async () => {
         const selected = settingsStore
           ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.research
           : undefined;
-        await runCodexToolResult(
-          clientFor(config.foundryRunnerAgentName),
-          'web_research',
-          'Dry run only: answer with one short sentence and no sources; do not browse or save anything.',
-          selected?.model ?? config.codexToolModel,
-          // A Codex dry run routinely takes 15-25 s; 20 s made the gate flaky (L127).
-          AbortSignal.timeout(45_000),
-          45_000,
-          1_000,
-          (value) => {
-            if (typeof value !== 'object' || value === null || Array.isArray(value) ||
-                typeof (value as Record<string, unknown>).answer !== 'string' ||
-                !Array.isArray((value as Record<string, unknown>).sources)) {
-              throw new Error('Research smoke response is invalid');
-            }
-            return true;
-          },
-          { reasoningEffort: selected?.reasoningEffort ?? 'none' },
-        );
-        return { status: 'ok' as const, details: { configured: true } };
-      } catch {
-        return { status: 'down' as const, details: { configured: true } };
-      }
-    },
+        return selected ?? { model: config.codexToolModel, reasoningEffort: 'none' };
+      },
+    }),
     agent_contract: async () => {
       const app = runtime.app;
       if (!app) return { status: 'down' as const, reason: 'Agent contract could not be checked.' };

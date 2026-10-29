@@ -1054,12 +1054,25 @@ def test_stalled_tool_loop_uses_a_content_free_failure_code() -> None:
     ("tools" + "x" * 256, "error_badrequesterror"),
     ({"private": "fixture"}, "error_badrequesterror"),
 ])
-def test_model_rejection_retains_only_a_fixed_field_code(parameter, code, caplog) -> None:
+@pytest.mark.parametrize("provider_code", [
+    "PRIVATE_PROVIDER_CODE", "unsupported_parameter", "unsupported_value", "invalid_value",
+    "invalid_request_error", {"private": "fixture"},
+])
+def test_model_rejection_retains_only_a_fixed_field_code(
+    parameter, code, provider_code, caplog,
+) -> None:
     error = BadRequestError(
         "PRIVATE_PROVIDER_MESSAGE",
         response=httpx.Response(400, request=httpx.Request("POST", "https://fixture.invalid")),
-        body={"param": parameter, "code": "PRIVATE_PROVIDER_CODE", "input": "PRIVATE_INPUT"},
+        body={"param": parameter, "code": provider_code, "input": "PRIVATE_INPUT"},
     )
+    if parameter == "reasoning.effort":
+        code = {
+            "unsupported_parameter": "model_reasoning_effort_unsupported",
+            "unsupported_value": "model_reasoning_effort_value_unsupported",
+            "invalid_value": "model_reasoning_effort_value_invalid",
+            "invalid_request_error": "model_reasoning_effort_request_invalid",
+        }.get(error.code, code)
 
     class RejectedModel(FakeModel):
         async def complete_chat(self, *_args, **_kwargs) -> AsyncIterator[str]:
@@ -1084,6 +1097,22 @@ def test_model_rejection_retains_only_a_fixed_field_code(parameter, code, caplog
     for private in ("PRIVATE_PROVIDER_MESSAGE", "PRIVATE_PROVIDER_CODE", "PRIVATE_INPUT",
                     "private_fixture", "fixture.invalid"):
         assert private not in retained
+
+
+@pytest.mark.parametrize(("provider_code", "expected"), [
+    ("unsupported_parameter", "model_reasoning_parameter_unsupported"),
+    ("unsupported_value", "model_reasoning_value_unsupported"),
+    ("invalid_value", "model_reasoning_value_invalid"),
+    ("invalid_request_error", "model_reasoning_request_invalid"),
+    ("unsupported_parameter PRIVATE_FIXTURE", "model_bad_request_reasoning"),
+])
+def test_reasoning_object_and_effort_rejections_remain_distinct(provider_code, expected) -> None:
+    error = BadRequestError(
+        "PRIVATE_PROVIDER_MESSAGE",
+        response=httpx.Response(400, request=httpx.Request("POST", "https://fixture.invalid")),
+        body={"param": "reasoning", "code": provider_code},
+    )
+    assert chat_runtime.chat_failure_code(error) == expected
 
 
 async def _context() -> list[ModelMessage]:

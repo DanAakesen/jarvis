@@ -1,3 +1,14 @@
+## Separate model and research rejection evidence (#1350; 29 October 2026)
+
+Hosted chat adds fixed distinctions for known reasoning rejection codes and
+reasoning-object versus effort subfields. The research smoke boundary separately
+classifies its existing settings/Foundry runner/result failures. Both finite
+allowlists survive the existing status and release sanitizers, without provider
+bodies, nested property names, operation text or runner events. Research keeps its
+fixed dry run, selected settings, timing and cleanup. No inference, role, stored
+setting, worker credential or production runtime path changes. See
+[actual release evidence and remaining uncertainty](main-chat-harness-migration.md).
+
 ## Foundry resource-query permission observations (#1341; 29 October 2026)
 
 The existing fixed Foundry resource query now counts `AzureDiagnostics` in the

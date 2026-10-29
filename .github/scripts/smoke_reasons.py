@@ -6,6 +6,28 @@ from pathlib import Path
 import sys
 
 MAX_REPORT_BYTES = 64 * 1024
+RESEARCH_FAILURE_REASONS = frozenset({
+    "research_settings_unavailable",
+    "research_runner_auth",
+    "research_runner_timeout",
+    "research_runner_aborted",
+    "research_runner_transport",
+    "research_runner_protocol",
+    "research_runner_http_400",
+    "research_runner_http_401",
+    "research_runner_http_403",
+    "research_runner_http_404",
+    "research_runner_http_429",
+    "research_runner_http_500",
+    "research_runner_http_502",
+    "research_runner_http_503",
+    "research_runner_http_504",
+    "research_usage_limit",
+    "research_runner_failed",
+    "research_result_missing",
+    "research_result_invalid",
+    "research_unavailable",
+})
 CHAT_AGENT_FAILURE_REASONS = frozenset({
     "backend_unavailable",
     "catalogue_unavailable",
@@ -52,6 +74,14 @@ CHAT_AGENT_FAILURE_REASONS = frozenset({
     "model_bad_request_tools",
     "model_bad_request_reasoning",
     "model_bad_request_include",
+    "model_reasoning_parameter_unsupported",
+    "model_reasoning_effort_unsupported",
+    "model_reasoning_value_unsupported",
+    "model_reasoning_effort_value_unsupported",
+    "model_reasoning_value_invalid",
+    "model_reasoning_effort_value_invalid",
+    "model_reasoning_request_invalid",
+    "model_reasoning_effort_request_invalid",
     "error_internalservererror",
     "tool_loop_stalled",
 })
@@ -81,6 +111,7 @@ SHARED = (
     frozenset({"agent_error", "timeout"}) | CHAT_AGENT_FAILURE_REASONS | CHAT_AGENT_INVOCATION_REASONS
 )
 SAFE_REASONS = {
+    "research": RESEARCH_FAILURE_REASONS,
     "chat_canary": {"agent_error", "timeout", "acceptance_check_failed", "rate_limit_exceeded"},
     "chat_identity": SHARED | {"catalogue_unavailable", "identity_reply"},
     "chat_capabilities": SHARED | {

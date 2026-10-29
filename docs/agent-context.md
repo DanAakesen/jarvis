@@ -1,3 +1,21 @@
+## Reasoning and research smoke checks (#1350; 29 October 2026)
+
+The real Deploy 40840605441 reports model_bad_request_reasoning in all required
+chat scenarios; it does not prove none unsupported. Microsoft's Terra announcement
+and OpenAI's model contract explicitly support none. Keep settings and model
+requests intact until actual rejection detail identifies a correction. Run hosted
+pytest/Ruff/compileall, backend research-smoke/web-research/system-status/chat-agent/
+chat-canary/status tests plus lint/build, and Python test_smoke_reasons.py. Fixtures
+must cover unknown/malformed provider metadata, independent runner HTTP/auth/
+timeout/quota/result cases, cleanup, retained/HTTP reports and raw-detail redaction.
+No real worker or subscription/API operation belongs in those tests. Preserve
+current main's #1352 log-probe changes and separate authorization boundaries.
+
+Local follow-up: 1,019 hosted tests, hosted Ruff/compileall, 349 focused backend
+tests, full backend 6,902 passed/one skipped, backend lint/build and 13 sanitizer
+tests pass. Node 24/npm 11 local evidence does not replace pinned Node 22/npm 10
+qualification. No live correction or new provider operation is claimed.
+
 ## Foundry resource-log diagnosis (#1341; 29 October 2026)
 
 Deploy #40836577365 is terminal: rollout/readiness passed and live acceptance
