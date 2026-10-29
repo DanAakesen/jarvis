@@ -1,5 +1,10 @@
 ## Backend log preflight ARM wire contract (#1341; 28 October 2026)
 
+29 October: reconcile #1348 with main `10d6d170` without altering #1345 runtime,
+migration, UI or artifact blobs. Retain both documentation prefixes and requalify
+the resulting head through normal synchronize CI. Readiness/merge are owner
+approved; the parent integrates. No Azure grant or activation is applied here.
+
 Deploy #40761349594 failed closed before Bicep at `builtin_role_mismatch`.
 The `az rest` role-definition response uses `properties.type`, not the CLI
 model's `roleType`. Keep the exact built-in permission allowlist and reject
@@ -7,6 +12,19 @@ custom/CLI-only shapes. Run `PYTHONPATH=.github/scripts python -m unittest
 discover -s .github/scripts/tests -p test_backend_log_preflight.py`, scoped Ruff
 and byte compilation. Fifteen synthetic tests pass for the correction; no live
 rerun, grant or enablement is claimed. Existing Azure scope approval persists.
+
+## Current-main reconciliation for #1345 (28 October 2026)
+
+Main `61d19366` adds #1346 log preflight/guidance; merge it into review-fix
+head `2f039761` while preserving both scopes. Only PLAN, PRODUCT, agent-context,
+architecture and decisions prepend conflicts overlap; retain both sets of text.
+Non-overlapping implementation/test/workflow/artifact blobs are verified unchanged
+from their respective parent; only documentation is combined/annotated.
+Run combined synthetic log/settings/capability and factory/Gmail regressions,
+the 14 Python preflight fixtures, backend lint/build and exact-head hosted CI.
+No live preflight/Azure access or PR-body metadata retry belongs to this task.
+Local combined results: 388 backend and 14 Python preflight tests, backend
+lint/build passed. Exact-head hosted qualification is still required.
 
 ## Owner-approved log activation preflight and awareness (#1341; 28 October 2026)
 
@@ -25,6 +43,43 @@ isolation. After review and normal release, inspect only content-free preflight
 verdicts and continue the approved assignment/probe/activation work. Stop if live
 identity/schema differs, broader access is unresolved or foreign workspace proof
 is unavailable; never widen permissions or switch modes as a workaround.
+
+## Eight review fixes: validation (#1343; 28 October 2026)
+
+Scope: issue-label replay, issue conversation origin, atomic completion receipts,
+honest Gmail receipts/uncertainty, chat warning/queue reload recovery, sticky
+mobile Settings Save, visible oversized-start failure, explicit Settings approvals.
+The owner expressly replaced Settings draft preservation: do not add guards,
+autosave or draft persistence. Azure logs #1341/#1342 and optional audit ideas
+remain separate.
+
+Use synthetic fixtures only. Run full backend/web tests, contracts and backend/web
+lint/build. Migration 0068 and transaction/concurrency regressions additionally
+require the normal isolated SQL Server CI job; local unit mocks are not proof of
+SQL behavior. Chromium screenshots live under `docs/ui/screenshots/fix-eight-1343/`;
+390/320px and a focused short viewport are simulated, not physical iPhone acceptance.
+No Azure access, real workers, mail sends, notifications or health writes are part
+of these checks. Local verification results are recorded in
+[PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) and the
+[validation report](review-fixes-1343.md).
+
+Local results: full web 2,447, contracts 174, final ConversationHistory 126 and
+backend/web lint/build passed. Backend aggregate: 6,776 passed, two failed, one
+skipped; the stale Settings approval assertion was corrected and both affected
+suites passed a 16-test rerun with original timeouts. Preserve that aggregate
+failure distinction. The coordinator subsequently marked the PR ready. Hosted
+SQL run 40756774334 had 281 passes and two test-setup failures, corrected by
+including the issue-delivery index in its catalog query and unwinding newer
+migrations again before the second Workspaces rollback. Preserve every index,
+round-trip and latest-only assertion. New-head hosted qualification is required.
+
+CI 40757610202 passed on `5cf8da23`: SQL 283, backend 6,778/one skipped, web
+2,448 and contracts 174. The next recovery hardening fixes the confirmed bot
+finding at discussion_r4405317215. Run conversation-recovery and
+ConversationHistory tests, web lint/build and new-head hosted CI. Boundaries cover
+100,000/100,001 ASCII characters, exact 512 KiB ASCII and multibyte replies,
+invalid warning isolation and snapshot-budget compaction that retains queued
+messages and uncertainty warnings. No PR-body metadata retry is authorized.
 
 ## Backend log reader checks (#1341; P11-42; 28 October 2026)
 

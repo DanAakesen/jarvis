@@ -1366,6 +1366,55 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn.mock.calls.map((call) => call[3])).toEqual(['First', 'Second', 'Third']);
   });
 
+  it.each(['send', 'remove'] as const)('restores queued text paused after remount and supports explicit %s', async (action) => {
+    sendChatTurn.mockImplementationOnce(() => new Promise(() => {}));
+    const view = renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Synthetic pending turn' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: 'Synthetic queued follow-up' } });
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    await screen.findByRole('button', { name: 'Remove queued message: Synthetic queued follow-up' });
+    view.unmount();
+    sendChatTurn.mockClear();
+    renderConversation();
+    await screen.findByRole('button', { name: 'Send queued messages' });
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    sendChatTurn.mockResolvedValueOnce(assistantMessage);
+    if (action === 'remove') {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove queued message: Synthetic queued follow-up' }));
+      expect(screen.queryByRole('button', { name: 'Send queued messages' })).toBeNull();
+      const freshInput = screen.getByRole('textbox', { name: 'Message Jarvis' });
+      fireEvent.change(freshInput, { target: { value: 'Synthetic fresh message' } });
+      fireEvent.keyDown(freshInput, { key: 'Enter', ctrlKey: true });
+      await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+      expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Synthetic fresh message');
+      return;
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send queued messages' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Synthetic queued follow-up');
+  });
+
+  it('retains a terminal warning and partial reply with its submitted message after remount', async () => {
+    const savedUser = { ...userMessage, channel: 'chat' as const, language: 'da' as const, toolCalls: [] };
+    loadConversationHistory.mockResolvedValue({ messages: [savedUser], nextCursor: null });
+    sendChatTurn.mockImplementationOnce(async (_client, _config, _session, _text, onUser, onDelta) => {
+      onUser(userMessage); onDelta('Synthetic partial reply');
+      throw new Error('An action may have completed; check status before retrying.');
+    });
+    const view = renderConversation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('An action may have completed; check status before retrying.');
+    view.unmount();
+    renderConversation();
+    expect(await screen.findByText('An action may have completed; check status before retrying.')).not.toBeNull();
+    expect(screen.getByText('Synthetic partial reply')).not.toBeNull();
+    expect(sendChatTurn).toHaveBeenCalledOnce();
+  });
+
   it('keeps a failed turn visible and drains a queued message after error', async () => {
     let fail!: (error: Error) => void;
     let finish!: (message: typeof assistantMessage) => void;

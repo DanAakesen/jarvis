@@ -437,6 +437,24 @@ export function createTaskStore(
   eventArchive?: TaskEventArchive,
 ): TaskStore {
   return {
+    async rememberIssueOrigin(repository, issueNumber, messageId) {
+      await pool.request().input('repository', sql.NVarChar(140), repository.toLowerCase())
+        .input('issue', sql.Int, issueNumber).input('messageId', sql.BigInt, BigInt(messageId))
+        .query(`INSERT dbo.factory_issue_origins (repository, issue_number, origin_message_id)
+          SELECT @repository, @issue, @messageId WHERE NOT EXISTS (
+            SELECT 1 FROM dbo.factory_issue_origins WITH (UPDLOCK, HOLDLOCK) WHERE repository = @repository AND issue_number = @issue);`);
+    },
+    async getIssueOrigin(repository, issueNumber) {
+      const { recordset } = await pool.request().input('repository', sql.NVarChar(140), repository.toLowerCase())
+        .input('issue', sql.Int, issueNumber).query<{ id: string }>(`SELECT CAST(origin_message_id AS varchar(19)) AS id
+          FROM dbo.factory_issue_origins WHERE repository = @repository AND issue_number = @issue;`);
+      return recordset[0]?.id ?? null;
+    },
+    async findByIssueDelivery(deliveryId) {
+      const { recordset } = await pool.request().input('deliveryId', sql.NVarChar(100), deliveryId)
+        .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WHERE issue_delivery_id = @deliveryId;`);
+      return recordset[0] ? toTask(recordset[0]) : null;
+    },
     async claimCreation(submissionId, fingerprint) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
@@ -475,7 +493,8 @@ export function createTaskStore(
     async create(input: CreateTaskInput) {
       const source = input.source ?? 'board';
       const originMessageId = input.originMessageId;
-      if ((source !== 'board' && source !== 'chat') ||
+      if ((input.issueDeliveryId !== undefined && !/^[A-Za-z0-9_-]{1,100}$/u.test(input.issueDeliveryId)) ||
+        (source !== 'board' && source !== 'chat') ||
         (source === 'chat' && originMessageId === undefined) ||
         (source === 'board' && originMessageId !== undefined) ||
         (input.issueNumber !== undefined &&
@@ -497,7 +516,16 @@ export function createTaskStore(
           await transaction.rollback();
           return null;
         }
+        if (input.issueDeliveryId) {
+          const existing = await new sql.Request(transaction).input('deliveryId', sql.NVarChar(100), input.issueDeliveryId)
+            .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks WITH (UPDLOCK, HOLDLOCK) WHERE issue_delivery_id = @deliveryId;`);
+          if (existing.recordset[0]) {
+            await transaction.commit();
+            return toTask(existing.recordset[0]);
+          }
+        }
         const inserted = await new sql.Request(transaction)
+          .input('issueDeliveryId', sql.NVarChar(100), input.issueDeliveryId ?? null)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
           .input('originMessageId', sql.BigInt, originMessageId === undefined ? null : BigInt(originMessageId))
           .input('title', sql.NVarChar(200), input.title)
@@ -509,9 +537,9 @@ export function createTaskStore(
           .input('priority', sql.Int, input.priority ?? 0)
           .input('issueNumber', sql.Int, input.issueNumber ?? null)
           .query<TaskRow>(`INSERT INTO dbo.tasks
-            (project_id, issue_number, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority)
+            (project_id, issue_number, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority, issue_delivery_id)
             OUTPUT ${insertedTaskColumns}
-            VALUES (@projectId, @issueNumber, @originMessageId, @title, @request, @source, @agent, @modelOverride, @reasoningOverride, @priority);`);
+            VALUES (@projectId, @issueNumber, @originMessageId, @title, @request, @source, @agent, @modelOverride, @reasoningOverride, @priority, @issueDeliveryId);`);
         const task = inserted.recordset[0];
         if (!task) throw new Error('Task insert returned no row');
         const event: RecordTaskEventInput = {

@@ -396,3 +396,36 @@ describe('Factory issue tasks', () => {
     expect(github.removeLabel).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('reviewed issue delivery recovery', () => {
+  it('saves the trusted conversation origin before adding the worker label and uses it for pickup', async () => {
+    const test = fixture();
+    const order: string[] = [];
+    test.tasks.rememberIssueOrigin = vi.fn(async () => { order.push('origin'); });
+    test.tasks.getIssueOrigin = vi.fn(async () => '11');
+    vi.mocked(test.github.addLabels).mockImplementation(async () => { order.push('label'); });
+    await createJarvisIssue({ projects: test.projects, github: test.github, tasks: test.tasks,
+      originMessageId: '11', title: 'Synthetic change', body: 'Synthetic acceptance.' });
+    expect(order).toEqual(['origin', 'label']);
+    expect(test.tasks.rememberIssueOrigin).toHaveBeenCalledWith(project.repo, 9, '11');
+    await startIssueTask({ projects: test.projects, github: test.github, tasks: test.tasks, issue: 8 });
+    expect(test.tasks.create).toHaveBeenCalledWith(expect.objectContaining({ source: 'chat', originMessageId: '11' }));
+  });
+  it('returns the delivery original even after it is Done instead of creating another task', async () => {
+    const test = fixture();
+    test.tasks.findByIssueDelivery = vi.fn(async () => ({ ...task, state: 'Done' as const }));
+    const result = await startIssueTask({ projects: test.projects, github: test.github, tasks: test.tasks,
+      issue: 8, deliveryId: 'synthetic-delivery' });
+    expect(result).toMatchObject({ kind: 'existing', task: { state: 'Done' } });
+    expect(test.tasks.create).not.toHaveBeenCalled();
+    expect(test.github.readIssue).not.toHaveBeenCalled();
+  });
+  it('does not start a worker when the issue was created but origin persistence failed', async () => {
+    const test = fixture();
+    test.tasks.rememberIssueOrigin = vi.fn(async () => { throw new Error('Synthetic write failure'); });
+    await expect(createJarvisIssue({ projects: test.projects, github: test.github, tasks: test.tasks,
+      originMessageId: '11', title: 'Synthetic change', body: 'Synthetic acceptance.' })).rejects.toBeInstanceOf(IssueCreationPartialError);
+    expect(test.github.createIssue).toHaveBeenCalledOnce();
+    expect(test.github.addLabels).not.toHaveBeenCalled();
+  });
+});
