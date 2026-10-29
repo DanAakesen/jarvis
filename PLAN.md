@@ -1,3 +1,26 @@
+## Whole-Jarvis logging scope replaces backend-only (#1341; 29 October 2026)
+
+The owner confirmed read-only logs for the backend, hosted agents, coding runners,
+deployments and supporting services, excluding unrelated projects. Retain the
+Foundry Reader assignment; its removal proposal is stopped and was never applied.
+The earlier narrow grant approval does not authorize new whole-system access.
+The current reader stays disabled. See [source inventory and grant proposal](docs/jarvis-logs.md).
+
+Independent local work adds a metadata-only catalogue to the existing preflight:
+exact canonical resources plus ownership tags, and known-table plan/resource-field
+metadata. Neither a shared workspace nor tags alone establishes ownership. Private
+values remain in the existing mode-0600 report; public output is fixed labels.
+No data query, new grant, security mode, credential, ingestion or retention change.
+Runtime multi-source reading, its single capability replacement, exact expanded
+grant approval, source routing and whole-system enforcement remain pending.
+
+Updating issue #1341 was denied by automatic approval review for lacking explicit
+approval of that exact external scope/design mutation. No retry or substitute
+publication was attempted. This branch remains local pending publication approval.
+Local validation passes 35 backend-log Python tests and 45 pipeline tests,
+scoped Ruff, byte compilation and diff checks. No new Azure inventory execution
+or whole-system runtime implementation is claimed.
+
 ## Reconcile log diagnostics with current main (#1341; 29 October 2026)
 
 Merge main `938bb48f` (#1351 chat rejection diagnostics) into log-diagnostic head

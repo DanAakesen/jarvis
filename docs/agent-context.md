@@ -1,3 +1,21 @@
+## Whole-Jarvis log preparation (#1341; 29 October 2026)
+
+Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,
+exclude unrelated projects, preserve redaction/bounds and keep the reader disabled
+until expanded access is specifically approved and proven. Do not remove the role
+or apply the earlier backend-only grant as though it authorized whole-system reads.
+See [inventory/design/grant proposal](jarvis-logs.md). Issue #1341 remains canonical;
+its scope-update write was automatically denied. Do not retry or publish the same
+scope/design through another route without materially new specific approval.
+
+Local metadata preparation reads only existing-authorized ARM resource/table lists.
+Exact canonical ID plus ownership tag is required; table plan/_ResourceId metadata
+is not proof of routed data or enforcement. Keep the catalogue private, fixed
+public labels, and all negative/unavailable states honest. Runtime source adapters,
+capability replacement, grant execution and live qualification are still pending.
+Run Python backend-log and pipeline tests, scoped Ruff/byte compilation and diff
+checks. No actual log data, credentials or private identifiers enter GitHub.
+
 ## Foundry resource-log diagnosis (#1341; 29 October 2026)
 
 Deploy #40836577365 is terminal: rollout/readiness passed and live acceptance

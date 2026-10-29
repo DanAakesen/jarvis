@@ -54,6 +54,8 @@ class FakeAzure:
         self.assignments = [{"id": "synthetic-role-assignment", "properties": {"principalId": PRINCIPAL, "scope": GROUP, "principalType": "ServicePrincipal",
             "roleDefinitionId": GROUP + "/providers/Microsoft.Authorization/roleDefinitions/" + DATA_READER}}]
         self.peers = []
+        self.resources = []
+        self.source_tables = []
 
     def get(self, resource, version, query=None):
         self.calls.append((resource, version, query))
@@ -73,6 +75,10 @@ class FakeAzure:
 
     def pages(self, resource, version, parameters=None):
         self.calls.append((resource, version, parameters))
+        if resource.endswith("/resources"):
+            return self.resources
+        if resource.endswith("/tables"):
+            return self.source_tables
         return self.peers if resource.endswith("/workspaces") else self.assignments
 
 
@@ -88,7 +94,7 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(result["stage"], "metadata_only")
         for key in ("grant_applied", "reader_enabled", "provider_enforcement_verified", "effective_group_memberships_verified"):
             self.assertFalse(result[key])
-        self.assertEqual(len(azure.calls), 13)
+        self.assertEqual(len(azure.calls), 15)
         self.assertTrue(result["assigned_to_inventory_complete"])
         assigned = [call for call in azure.calls if isinstance(call[2], dict) and "assignedTo" in call[2].get("$filter", "")]
         self.assertEqual(len(assigned), 3)
