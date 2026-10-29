@@ -19,6 +19,17 @@ probe/reader/status/auth/config tests, backend lint/build and Python log/script
 checks. All fixtures stay synthetic. Parent owns review/merge and live results;
 the separate migration task owns chat BadRequest investigation.
 
+## Main chat baseline checks (#1350; 29 October 2026)
+
+Use the engineering skill. Run hosted-agent pytest/Ruff/compileall, backend
+system-status and chat-agent/canary checks, and Python test_smoke_reasons.py.
+Fixtures must contain synthetic SDK errors and prove raw messages, codes, nested
+property names and URLs never reach the failure stream/log or retained smoke
+artifact. No live request, login, grant, worker or model switch is part of local
+validation. The new failure codes diagnose a rejected field, not its root cause.
+Preserve #1341/#1349 log observations and their separate authorization gates.
+See [migration notes and manual test questions](main-chat-harness-migration.md).
+
 ## Backend-log authorization observations (#1341; 29 October 2026)
 
 Deploy #40828872899 is terminal: metadata/infrastructure/backend/web/agent/readiness

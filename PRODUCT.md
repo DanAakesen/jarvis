@@ -1,3 +1,15 @@
+## Approved main chat harness replacement (#1350; 29 October 2026)
+
+Replace the custom main chat loop through a controlled, switchable Foundry
+Copilot-harness migration after fixing the live baseline. Preserve native audio,
+Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate
+subscription-backed Factory workers. Automated comparisons use identical test
+scenarios. Dan can test Current or Copilot through Test agent runtime in the chat
+menu, opening a separate labelled conversation with no mid-conversation switch;
+normal chats stay unchanged. This UI is approved but not yet built. Cutover,
+rollback and retirement follow proven parity and required authorization. See
+[migration scope and open decisions](docs/main-chat-harness-migration.md).
+
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
 Retained backend-log chat access remains disabled until Azure isolation is proven.

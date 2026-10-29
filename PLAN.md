@@ -1,3 +1,19 @@
+## Reconcile log diagnostics with current main (#1341; 29 October 2026)
+
+Merge main `938bb48f` (#1351 chat rejection diagnostics) into log-diagnostic head
+`f8a94f6d`. Four documentation-prefix conflicts retain both scopes; PRODUCT
+merges automatically. All seven diagnostic-only and seven main-only file blobs
+remain identical to their respective parents. Combined validation passes 703
+backend tests across 13 suites, all 944 hosted-agent tests and 112 Python
+log/smoke/pipeline/deploy tests, backend lint/build, hosted-agent and log-script
+Ruff, and Python byte compilation. Broader root Ruff reports four inherited
+findings in main's unchanged smoke_reasons.py (I001 and three TRY004); preserve
+that blob. Local Node 24/npm 11 is distinct from pinned exact-head hosted CI.
+The owner separately approved this diagnostic PR's publication and test results,
+readiness and integration after checks. The parent owns readiness/merge; one
+previously denied creation retry is now authorized. No grant, workspace-mode
+change, foreign-control waiver or reader activation occurred.
+
 ## Foundry log permission diagnosis (#1341; 29 October 2026)
 
 Main #1349 deployed as `c05cfada`; Deploy #40836577365 passed infrastructure,
@@ -23,6 +39,19 @@ exact-head hosted qualification remains pending. After review and normal main
 deployment, inspect the fixed verdicts and resolve any effective
 resource-log grant before the approved conditional grant and fresh-process proof.
 The separate migration task owns baseline chat BadRequest diagnosis.
+
+## Main chat harness migration (#1350; 29 October 2026)
+
+One [migration issue](https://github.com/DanAakesen/jarvis/issues/1350) is claimed
+by Codex. Stage 1 adds fixed rejected-field diagnostics to the existing chat
+failure and release evidence path; the live BadRequest root cause remains
+unresolved. The unchanged hosted baseline passes 930 local tests; the diagnostic
+candidate passes 944. Next: independent review/qualification, then actual release
+evidence before selecting a fix. Later runtime/UI/comparison/cutover stages remain
+pending. Dan approved Test agent runtime in the chat menu, Current/Copilot selection
+and a separate labelled conversation with no mid-conversation switch. The
+[migration notes](docs/main-chat-harness-migration.md) include manual test questions
+and outstanding model, grant and parity decisions. No production default changes.
 
 ## Fixed backend-identity authorization observations (#1341; 29 October 2026)
 
