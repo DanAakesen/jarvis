@@ -269,6 +269,7 @@ def inspect(expected: dict, azure: Azure) -> dict:
     try:
         source_catalogue = catalogue(expected, foundry_id, resources, source_tables)
         checks.append("whole_jarvis_scope_planning_only")
+        checks.extend(source_catalogue["findings"])
     except (ValueError, TypeError, AttributeError):
         source_catalogue = None
         checks.append("whole_jarvis_source_metadata_invalid")

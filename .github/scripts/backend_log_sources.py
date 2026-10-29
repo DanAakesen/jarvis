@@ -59,7 +59,14 @@ def catalogue(expected: dict, foundry_id: str, resources: list | None, tables: l
             raise ValueError("invalid_table_inventory")
         table_inventory[name] = {"plan": properties.get("plan"), "resource_id_column": any(
             column.get("name") == "_ResourceId" and column.get("type") == "string" for column in columns)}
-    return {"stage": "whole_jarvis_scope_planning", "sources": status, "owned_resources": owned,
+    findings = ["whole_jarvis_source_" + key + "_" + value for key, value in status.items()]
+    for name in sorted(supported):
+        table = table_inventory.get(name)
+        state = "not_found" if table is None else ("analytics" if table["plan"] == "Analytics" else "unsupported_plan")
+        findings.append("whole_jarvis_table_" + name.lower() + "_" + state)
+        if table is not None:
+            findings.append("whole_jarvis_table_" + name.lower() + ("_resource_id_present" if table["resource_id_column"] else "_resource_id_missing"))
+    return {"stage": "whole_jarvis_scope_planning", "sources": status, "owned_resources": owned, "findings": findings,
             "tables": table_inventory, "resource_inventory_read": resources is not None, "table_inventory_read": tables is not None,
             "workspace_entirely_owned": False, "provider_enforcement_verified": False,
             "workspace_links_verified": False, "historical_ownership_verified": False,

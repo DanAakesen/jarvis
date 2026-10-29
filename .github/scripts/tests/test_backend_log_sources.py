@@ -16,6 +16,9 @@ class SourceOwnershipTests(unittest.TestCase):
         self.assertEqual(report["owned_resources"], {"backend": EXPECTED["app_id"]})
         self.assertEqual(report["sources"]["foundry"], "ownership_unverified")
         self.assertEqual(report["sources"]["storage"], "not_found")
+        self.assertIn("whole_jarvis_source_backend_owned", report["findings"])
+        self.assertIn("whole_jarvis_source_foundry_ownership_unverified", report["findings"])
+        self.assertNotIn(EXPECTED["app_id"], json.dumps(report["findings"]))
         self.assertFalse(report["workspace_entirely_owned"])
         self.assertFalse(report["new_grants_approved"])
         self.assertFalse(report["reader_enabled"])
@@ -35,6 +38,8 @@ class SourceOwnershipTests(unittest.TestCase):
                  "rows": ["synthetic-private-record"]}}
         report = catalogue(EXPECTED, FOUNDRY, [], [table])
         self.assertEqual(report["tables"], {"AppTraces": {"plan": "Analytics", "resource_id_column": True}})
+        self.assertIn("whole_jarvis_table_apptraces_analytics", report["findings"])
+        self.assertIn("whole_jarvis_table_apptraces_resource_id_present", report["findings"])
         self.assertNotIn("synthetic-private-record", json.dumps(report))
         table["properties"]["schema"] = {}
         self.assertFalse(catalogue(EXPECTED, FOUNDRY, [], [table])["tables"]["AppTraces"]["resource_id_column"])
@@ -50,6 +55,7 @@ class SourceOwnershipTests(unittest.TestCase):
         azure.resources = [{"id": EXPECTED["app_id"], "tags": {"project": "jarvis"}}]
         report = inspect(EXPECTED, azure)
         self.assertIn("whole_jarvis_scope_planning_only", report["checks"])
+        self.assertIn("whole_jarvis_source_backend_owned", report["checks"])
         self.assertEqual(report["whole_jarvis_sources"]["owned_resources"], {"backend": EXPECTED["app_id"]})
         self.assertNotIn(EXPECTED["app_id"], json.dumps(report["checks"]))
         self.assertFalse(report["grant_applied"])
