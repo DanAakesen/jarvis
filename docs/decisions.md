@@ -9024,3 +9024,13 @@ Close and user-requested workspace camera commands control the same continuous
 sampled delivery. Startup still needs browser permission; session/sign-out,
 permission loss, fatal errors and budget exhaustion still stop it. No guarantee
 of background iOS capture or uninterrupted device access is made.
+
+## 29 October 2026 — iOS direction; design before implementation
+
+Owner-confirmed direction is limited to GitHub-based macOS builds, reuse of the
+existing Jarvis backend, and native SwiftUI/iOS features and controls. The next
+step is an agreed version 1 design/prototype; Dan may work locally on his PC.
+Scope, layouts, retained branding, prototype tools and build/authentication setup
+remain unconfirmed. No implementation or setup is authorized. The discussion,
+proposals and dated references are recorded in [iOS app](../iOS%20app.md).
+Migration and logging work continues independently.
