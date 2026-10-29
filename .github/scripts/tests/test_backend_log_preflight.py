@@ -84,7 +84,7 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(result["stage"], "metadata_only")
         for key in ("grant_applied", "reader_enabled", "provider_enforcement_verified", "effective_group_memberships_verified"):
             self.assertFalse(result[key])
-        self.assertEqual(len(azure.calls), 8)
+        self.assertEqual(len(azure.calls), 9)
         self.assertNotIn("sharedKey", json.dumps(azure.calls))
         self.assertNotIn("Log_s", json.dumps(azure.calls))  # Schema is read; log content is never queried.
 
@@ -157,6 +157,29 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("negative_workspace_candidate_found", result["checks"])
         self.assertEqual(len(result["negative_workspace_candidates"]), 1)
         self.assertFalse(result["provider_enforcement_verified"])
+
+    def test_missing_group_control_reads_existing_subscription_metadata_without_new_access(self):
+        azure = FakeAzure()
+        original = azure.pages
+        def pages(resource, version, parameters=None):
+            if resource == "/subscriptions/" + SUBSCRIPTION + "/providers/Microsoft.OperationalInsights/workspaces":
+                return [{"id": "/subscriptions/" + SUBSCRIPTION + "/resourceGroups/synthetic-other/providers/Microsoft.OperationalInsights/workspaces/synthetic-peer",
+                         "properties": {"customerId": CLIENT}}]
+            return original(resource, version, parameters)
+        azure.pages = pages
+        report = inspect(EXPECTED, azure)
+        self.assertIn("negative_workspace_subscription_inventory_read", report["checks"])
+        self.assertIn("negative_workspace_candidate_found", report["checks"])
+        self.assertEqual(len(report["negative_workspace_candidates"]), 1)
+        self.assertFalse(report["provider_enforcement_verified"])
+        def unavailable(resource, version, parameters=None):
+            if resource == "/subscriptions/" + SUBSCRIPTION + "/providers/Microsoft.OperationalInsights/workspaces":
+                raise PreflightBlocked("azure_read_unavailable")
+            return original(resource, version, parameters)
+        azure.pages = unavailable
+        report = inspect(EXPECTED, azure)
+        self.assertIn("negative_workspace_subscription_inventory_unavailable", report["checks"])
+        self.assertIn("negative_workspace_candidate_missing", report["checks"])
 
     def test_expected_targets_come_only_from_validated_repository_configuration(self):
         for change in ({"subscriptionId": "synthetic-secret"}, {"resourceGroup": "some-other-group"},

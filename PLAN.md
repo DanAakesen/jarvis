@@ -1,3 +1,40 @@
+## Fixed backend-identity authorization observations (#1341; 29 October 2026)
+
+Main #1348 merged as `8d0288b0`. Deploy #40828872899 passed metadata preflight,
+Bicep, backend/web rollout, hosted agent version 159 and deterministic readiness.
+Live acceptance still failed with research down and chat `error_badrequesterror`;
+application fixes are applied, not accepted. No log grant or reader activation
+occurred. Preflight reported `existing_resource_log_grant_requires_review` and
+`negative_workspace_candidate_missing` after matching live identity, runtime,
+workspace, console schema and exact built-in permissions.
+
+The next scoped increment prepares fixed, read-only backend-identity observations
+through the existing authenticated deployment smoke route. Same-job private
+preflight data becomes a private Bicep parameter file; only validated target IDs
+enter backend configuration. The probe matches the credential's principal to the
+verified backend principal, runs only bounded aggregate queries, and returns fixed
+verdicts. It checks unfiltered console rows, other-app rows, another table, an
+actual foreign workspace when configured, and the existing Foundry resource
+query path. Missing controls, allowed-but-empty queries, provider errors and
+partial/malformed responses remain inconclusive. No grant, new credential,
+permission change, new route, model tool, UI, retention or reader enablement.
+
+Local validation passes 408 focused backend tests across nine suites and 24 backend-log Python tests,
+backend lint/build, scoped Ruff/byte compilation and Bicep 0.44.1 offline build.
+Compiled-template comparison preserves every resource property/role/retention/
+capacity/output after removing only four probe parameters and environment entries.
+Repository scripts pass 165 cases; three require missing PowerShell. Settings,
+capability, production-catalogue and parity tests are included in the 408 passing
+backend cases. Hosted qualification and live probe execution remain pending.
+
+Local synthetic checks and offline compilation qualify only this code; actual
+backend-identity observations require normal independent review and main release.
+They are cached once per backend process and carry a timestamp; new grants require
+fresh observations after the grant and full positive/negative proof. Neither a
+successful metadata preflight nor these observations alone authorizes activation.
+The real foreign-workspace control and existing-resource permission review remain
+blockers. No private IDs or log records may enter public pipeline evidence.
+
 ## Backend log preflight ARM correction (#1341; 28 October 2026)
 
 29 October reconciliation integrates current main `10d6d170` (#1345). Only

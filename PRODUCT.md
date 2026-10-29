@@ -1,3 +1,12 @@
+## Backend log authorization qualification (#1341; 29 October 2026)
+
+Retained backend-log chat access remains disabled until Azure isolation is proven.
+The existing deployment smoke route may return bounded, fixed authorization
+observations from the verified backend identity. It exposes no log records,
+private Azure IDs, credentials, arbitrary query input, new model tool or UI.
+Empty negative queries and missing real controls never establish exclusion.
+This verification stage neither assigns roles nor enables the reader.
+
 ## Backend log awareness and approved activation (#1341; 28 October 2026)
 
 The owner has approved persistent read-only access to backend records and basic

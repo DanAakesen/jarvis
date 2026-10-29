@@ -1,3 +1,18 @@
+## 29 October 2026 — observe actual backend authorization before a log grant (#1341)
+
+The corrected main preflight passed but surfaced an existing resource-log grant
+requiring review and no foreign-workspace control. The ordinary deployment
+succeeded for backend/web/agent/readiness, while live model acceptance remained
+unhealthy. Preserve these distinct facts; no grant or activation is inferred.
+Prepare fixed aggregate reads as the verified backend identity through the
+existing deployment smoke route. Keep private target values inside the same job's
+preflight/parameter files and runtime configuration, and emit only fixed verdicts.
+Use bounded work, exact principal matching, no caller queries, no log text,
+nonblocking cancellation, explicit missing/partial/error states and one-process
+caching with timestamps. Empty negatives are not exclusion proof; a grant change
+needs fresh post-change observations and positive controls. No role mutation,
+new credential, route/auth allowance, UI or reader enablement is included.
+
 ## 28 October 2026 — correct the backend-log preflight ARM role shape (#1341)
 
 The first main preflight (#40761349594) failed closed before Bicep because the

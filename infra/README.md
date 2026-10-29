@@ -1,3 +1,20 @@
+## Backend log authorization observations (#1341)
+
+The control-discovery fallback reads only workspace metadata already visible to
+that same deploy identity in the existing subscription. A denied/unavailable
+inventory stays explicit and creates no access or substitute control.
+
+The owner-approved reader remains off. Main preflight metadata is consumed only
+inside its existing infrastructure job by `backend_log_probe_parameters.py`.
+It validates the private report and prepares four nonsecret runtime target
+parameters in a mode-0600 temporary file; none is printed or uploaded, and the
+file is deleted on deployment-script exit. Empty defaults configure no probe.
+The backend's existing deployment smoke route can then return fixed aggregate
+observations as the verified backend identity. No assignment, credential,
+identity permission, access mode, retention or reader flag is changed. Missing
+foreign workspace controls stay missing. Actual resource-access review and fresh
+post-grant positive/negative proof remain mandatory before activation.
+
 ## Proposed backend log access (#1341; currently disabled)
 
 [The reader and activation plan](../docs/backend-logs.md) documents a proposed

@@ -1,3 +1,27 @@
+## Backend log authorization observation path (#1341; 29 October 2026)
+
+The existing main-only preflight report remains mode 0600 in RUNNER_TEMP. A
+same-job consumer validates its target/shape, ownership, permissions and freshness
+and writes a private Bicep parameter file. Only the verified workspace, principal,
+app and an actual reported foreign workspace control configure read-only probes.
+Control discovery can fall back to workspace metadata already readable in the
+same subscription; no new access is requested and missing controls stay missing.
+No private report, parameter file or raw smoke response is uploaded. The parameter
+file is removed on deployment-script exit. Deployment fingerprints include the
+consumer; changed inputs requalify infrastructure and downstream components.
+
+The backend reuses its managed-identity credential and existing authenticated
+`GET /status/smoke`. A probe matches the token principal, executes at most five
+fixed aggregate queries concurrently under one eight-second total deadline and
+4 KiB per-response bound, and caches fixed observations once per process. It reads
+no message/stack/Log_s fields, follows no redirect, accepts no caller selector and
+retries nothing. The HTTP response has one optional fixed-schema observation
+object; the pipeline emits only allowlisted verdicts. Existing smoke entries,
+model checks, authentication boundaries and reader availability remain unchanged.
+A zero count, a partial response or a missing control is never isolation proof.
+A new permission change needs fresh post-change observations, not this cache.
+No role assignment, credential or activation is added by this increment.
+
 ## Backend log activation boundary and awareness (#1341; 28 October 2026)
 
 Owner approval now covers the built-in Log Analytics Data Reader's query, data

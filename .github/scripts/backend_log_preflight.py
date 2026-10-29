@@ -204,11 +204,24 @@ def inspect(expected: dict, azure: Azure) -> dict:
 
     findings = inventory_findings(expected, [*inherited, *group_roles], resource_permissions, read_role)
     checks.extend(findings or ["no_obvious_log_grant_in_read_inventory"])
-    peers = azure.pages(expected["group"] + "/providers/Microsoft.OperationalInsights/workspaces", "2023-09-01")
-    require(all(isinstance(row, dict) for row in peers), "invalid_workspace_inventory")
-    peers = [row for row in peers if not same_id(row.get("id"), expected["workspace_id"])
-             and isinstance(row.get("id"), str) and row["id"].lower().startswith(expected["group"].lower() + "/")
-             and guid(row.get("properties", {}).get("customerId"))]
+    def controls(rows):
+        require(all(isinstance(row, dict) for row in rows), "invalid_workspace_inventory")
+        pattern = (r"/subscriptions/" + re.escape(expected["subscription"])
+                   + r"/resourceGroups/[a-z0-9._()-]+/providers/Microsoft\.OperationalInsights/workspaces/[a-z0-9-]+")
+        return [row for row in rows if not same_id(row.get("id"), expected["workspace_id"])
+                and isinstance(row.get("id"), str) and re.fullmatch(pattern, row["id"], re.IGNORECASE)
+                and isinstance(row.get("properties"), dict) and guid(row["properties"].get("customerId"))
+                and not same_id(row["properties"]["customerId"], workspace["customerId"])]
+
+    peers = controls(azure.pages(expected["group"] + "/providers/Microsoft.OperationalInsights/workspaces", "2023-09-01"))
+    if not peers:
+        # Read only metadata already visible to this deploy identity. Never request a new grant.
+        try:
+            peers = controls(azure.pages("/subscriptions/" + expected["subscription"]
+                                        + "/providers/Microsoft.OperationalInsights/workspaces", "2023-09-01"))
+            checks.append("negative_workspace_subscription_inventory_read")
+        except PreflightBlocked:
+            checks.append("negative_workspace_subscription_inventory_unavailable")
     # Presence is only a candidate, never a claimed negative authorization proof.
     checks.append("negative_workspace_candidate_found" if peers else "negative_workspace_candidate_missing")
     return {"schema": 1, "stage": "metadata_only", "checks": checks, "targets": expected,

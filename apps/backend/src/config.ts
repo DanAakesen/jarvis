@@ -2,6 +2,7 @@ import type { Level } from 'pino';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
 import { loadBackendLogsConfig, type BackendLogsConfig } from './operations/backend-logs.js';
+import { loadBackendLogProbeConfig, type BackendLogProbeConfig } from './operations/backend-log-authorization.js';
 import { normalizeFoundryProjectEndpoint, normalizeVoiceLiveEndpoint } from './voice/relay.js';
 export { ConfigurationError } from './configuration-error.js';
 
@@ -11,6 +12,7 @@ export interface BackendConfig {
   logLevel: Level;
   applicationInsightsConnectionString?: string;
   backendLogs?: BackendLogsConfig;
+  backendLogProbe?: BackendLogProbeConfig;
   keyVaultUri?: string;
   voiceLiveEndpoint?: string;
   foundryEndpoints?: {
@@ -242,10 +244,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   }
   const auth = loadAuthConfig(env);
   const backendLogs = loadBackendLogsConfig(env);
+  const backendLogProbe = loadBackendLogProbeConfig(env);
 
   return {
     auth,
     ...(backendLogs ? { backendLogs } : {}),
+    ...(backendLogProbe ? { backendLogProbe } : {}),
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),

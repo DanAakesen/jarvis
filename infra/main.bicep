@@ -53,6 +53,12 @@ param codexToolModel string = 'gpt-5.5'
 @minValue(1)
 param terraChatCapacity int
 
+@description('Private main-preflight inputs for fixed backend-identity authorization observations. Empty keeps probes off; these never enable log reads or assign roles.')
+param backendLogProbeWorkspaceId string = ''
+param backendLogProbePrincipalId string = ''
+param backendLogProbeAppName string = ''
+param backendLogProbeForeignWorkspaceId string = ''
+
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
 
@@ -896,6 +902,22 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'FOUNDRY_RUNTIME_ENDPOINT'
               value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_WORKSPACE_ID'
+              value: backendLogProbeWorkspaceId
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_PRINCIPAL_ID'
+              value: backendLogProbePrincipalId
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_APP_NAME'
+              value: backendLogProbeAppName
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_FOREIGN_WORKSPACE_ID'
+              value: backendLogProbeForeignWorkspaceId
             }
             {
               name: 'FOUNDRY_ACCOUNT_RESOURCE_ID'
