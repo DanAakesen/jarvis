@@ -1,3 +1,22 @@
+## Foundry resource-query permission observations (#1341; 29 October 2026)
+
+The existing fixed Foundry resource query now counts `AzureDiagnostics` in the
+same 24-hour window and requests `include-permissions=true`. Bounded response
+metadata is validated and classified in memory; only a fixed `foundry_permissions`
+verdict leaves the backend. No resource/data-source identifiers, deny-table names,
+provider errors or aggregate counts are returned. HTTP query status stays
+independent of permission metadata. Empty results, missing/invalid metadata and
+400 responses cannot establish denied access. Request count, deadline, response
+cap, authentication, cache lifecycle and disabled reader remain unchanged.
+
+The existing ARM preflight validates the runtime Foundry target and collects
+paginated `assignedTo` results for the verified principal at workspace, Foundry
+and already-readable subscription scopes. This includes transitive group grants
+without Graph. Raw assignments/conditions stay in the existing private report;
+only fixed read/unavailable and grant-review labels are public. Incomplete scopes
+never establish a complete effective inventory. This stage changes no grant or
+workspace security mode and does not weaken the foreign-control qualification.
+
 ## Main chat baseline diagnostics (#1350; 29 October 2026)
 
 Hosted chat maps known rejected top-level request fields from an OpenAI SDK

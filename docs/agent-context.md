@@ -1,3 +1,24 @@
+## Foundry resource-log diagnosis (#1341; 29 October 2026)
+
+Deploy #40836577365 is terminal: rollout/readiness passed and live acceptance
+failed. Backend identity matched; console/other-app/other-table returned 403,
+Foundry returned 400, and the real foreign control is absent. The reader is off.
+This scoped follow-up uses fixed `AzureDiagnostics` aggregates and
+`Prefer: include-permissions=true` only for the existing Foundry resource query.
+It classifies bounded permission metadata privately and emits only fixed states,
+separate from query status. None is an activation or isolation eligibility flag.
+
+The metadata-only preflight verifies the Foundry ID from existing backend
+configuration and reads `assignedTo` inventories at workspace, Foundry and
+subscription scope using API 2022-04-01. ARM includes transitive group assignments;
+no directory credential or permission is needed. Consume every page within the
+existing budget or mark the scope unavailable/incomplete. Preserve all conditions
+only in the existing private report. Do not change roles, workspace mode, reader
+availability or the documented real-foreign-control requirement. Run focused
+probe/reader/status/auth/config tests, backend lint/build and Python log/script
+checks. All fixtures stay synthetic. Parent owns review/merge and live results;
+the separate migration task owns chat BadRequest investigation.
+
 ## Main chat baseline checks (#1350; 29 October 2026)
 
 Use the engineering skill. Run hosted-agent pytest/Ruff/compileall, backend

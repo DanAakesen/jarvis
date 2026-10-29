@@ -1,3 +1,45 @@
+## Reconcile log diagnostics with current main (#1341; 29 October 2026)
+
+Merge main `938bb48f` (#1351 chat rejection diagnostics) into log-diagnostic head
+`f8a94f6d`. Four documentation-prefix conflicts retain both scopes; PRODUCT
+merges automatically. All seven diagnostic-only and seven main-only file blobs
+remain identical to their respective parents. Combined validation passes 703
+backend tests across 13 suites, all 944 hosted-agent tests and 112 Python
+log/smoke/pipeline/deploy tests, backend lint/build, hosted-agent and log-script
+Ruff, and Python byte compilation. Broader root Ruff reports four inherited
+findings in main's unchanged smoke_reasons.py (I001 and three TRY004); preserve
+that blob. Local Node 24/npm 11 is distinct from pinned exact-head hosted CI.
+The owner separately approved this diagnostic PR's publication and test results,
+readiness and integration after checks. The parent owns readiness/merge; one
+previously denied creation retry is now authorized. No grant, workspace-mode
+change, foreign-control waiver or reader activation occurred.
+
+## Foundry log permission diagnosis (#1341; 29 October 2026)
+
+Main #1349 deployed as `c05cfada`; Deploy #40836577365 passed infrastructure,
+backend/web/agent rollout and readiness, then failed live chat/research acceptance.
+The actual backend identity matched. Unfiltered console, other-app and other-table
+queries returned 403; Foundry returned 400 and no foreign workspace was configured.
+These are pre-grant observations, not own-backend access or isolation proof.
+
+This follow-up corrects the fixed Foundry aggregate to `AzureDiagnostics` and asks
+for permission metadata. The backend classifies only fixed permission states in
+memory and discards identifiers/provider text. HTTP and permission verdicts stay
+separate, including metadata accompanying errors; a 400 or empty result never
+clears the existing resource-grant warning. The metadata preflight verifies the
+runtime Foundry target and reads paginated ARM `assignedTo` inventories at the
+workspace, Foundry and existing subscription scopes. Unavailable or truncated
+inventories remain incomplete; no Graph grant or additional access is requested.
+
+No role, workspace mode, foreign-control requirement or activation changes.
+Local validation passes 434 backend tests across ten suites, 29 Python log
+tests, 26 deploy-script tests and 45 pipeline tests, backend lint/build and scoped
+Ruff/byte compilation. Local Node 24/npm 11 differs from pinned CI Node 22/npm 10;
+exact-head hosted qualification remains pending. After review and normal main
+deployment, inspect the fixed verdicts and resolve any effective
+resource-log grant before the approved conditional grant and fresh-process proof.
+The separate migration task owns baseline chat BadRequest diagnosis.
+
 ## Main chat harness migration (#1350; 29 October 2026)
 
 One [migration issue](https://github.com/DanAakesen/jarvis/issues/1350) is claimed

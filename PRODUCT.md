@@ -18,6 +18,9 @@ observations from the verified backend identity. It exposes no log records,
 private Azure IDs, credentials, arbitrary query input, new model tool or UI.
 Empty negative queries and missing real controls never establish exclusion.
 This verification stage neither assigns roles nor enables the reader.
+Foundry resource verification uses the supported fixed log table and privately
+classifies permission metadata into fixed verdicts. It never exposes metadata
+identifiers or treats absent data, HTTP 400 or metadata as isolation proof.
 
 ## Backend log awareness and approved activation (#1341; 28 October 2026)
 

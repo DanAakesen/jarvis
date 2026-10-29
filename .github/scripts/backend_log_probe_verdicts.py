@@ -4,10 +4,12 @@ import re
 import sys
 from pathlib import Path
 
-CHECKS = {"unfiltered_table", "other_app", "other_table", "foreign_workspace", "foundry_resource"}
+CHECKS = {"unfiltered_table", "other_app", "other_table", "foreign_workspace", "foundry_resource", "foundry_permissions"}
 VERDICTS = {"denied", "no_visible_rows", "backend_only", "other_app_visible", "query_allowed",
             "not_configured", "unavailable", "bad_request", "unauthenticated", "not_found",
-            "throttled", "timeout", "invalid_response", "rows_visible"}
+            "throttled", "timeout", "invalid_response", "rows_visible", "metadata_missing", "metadata_invalid",
+            "resource_not_listed", "no_data_sources", "data_sources_not_listed", "resource_table_denied",
+            "data_source_table_denied", "table_not_explicitly_denied"}
 
 
 def lines(report: object) -> list[str]:
