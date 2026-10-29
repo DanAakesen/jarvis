@@ -1,0 +1,17 @@
+.runtime-test-selector { max-width: 480px; }
+.runtime-test-selector fieldset { border: 0; padding: 0; margin: var(--space-4) 0 0; min-width: 0; }
+.runtime-test-selector legend { font-weight: 600; margin-bottom: var(--space-2); }
+.runtime-test-option { display: flex; align-items: center; gap: var(--space-3); min-height: var(--control-size); padding: var(--space-2); border-radius: var(--radius-control); cursor: pointer; }
+.runtime-test-option:has(input:checked) { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.runtime-test-option:hover { background: var(--glass-hover); }
+.runtime-test-option:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.runtime-test-option[data-disabled] { cursor: default; }
+.runtime-test-option input { flex: 0 0 auto; }
+.runtime-test-reason { display: block; color: var(--text-muted); font-size: var(--type-caption); font-weight: 400; }
+.runtime-test-selector .button-group { justify-content: flex-end; }
+.runtime-test-conversation { width: min(100%, 760px); }
+.runtime-test-transcript { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
+.runtime-test-message { min-width: 0; overflow-wrap: anywhere; }
+.runtime-test-message > strong { display: block; margin-bottom: var(--space-1); }
+.runtime-test-conversation textarea { display: block; width: 100%; margin: var(--space-2) 0; resize: vertical; max-height: 160px; }
+.runtime-test-conversation .button-group { justify-content: flex-end; }

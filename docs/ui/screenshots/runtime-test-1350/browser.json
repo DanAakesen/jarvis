@@ -1,0 +1,102 @@
+{
+  "synthetic": true,
+  "browser": "154.0.8037.57",
+  "results": [
+    {
+      "width": 1440,
+      "theme": "light",
+      "creates": 2,
+      "turns": 1,
+      "overflow": false,
+      "errors": [],
+      "expectedConsole": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ],
+      "checked": [
+        "menu",
+        "unavailable",
+        "radio",
+        "escape",
+        "focus return",
+        "create failure",
+        "explicit retry",
+        "labelled separate conversation",
+        "scoped history",
+        "streamed test reply",
+        "return"
+      ]
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "creates": 2,
+      "turns": 1,
+      "overflow": false,
+      "errors": [],
+      "expectedConsole": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ],
+      "checked": [
+        "menu",
+        "unavailable",
+        "radio",
+        "escape",
+        "focus return",
+        "create failure",
+        "explicit retry",
+        "labelled separate conversation",
+        "scoped history",
+        "streamed test reply",
+        "return"
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "creates": 2,
+      "turns": 1,
+      "overflow": false,
+      "errors": [],
+      "expectedConsole": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ],
+      "checked": [
+        "menu",
+        "unavailable",
+        "radio",
+        "escape",
+        "focus return",
+        "create failure",
+        "explicit retry",
+        "labelled separate conversation",
+        "scoped history",
+        "streamed test reply",
+        "return"
+      ]
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "creates": 2,
+      "turns": 1,
+      "overflow": false,
+      "errors": [],
+      "expectedConsole": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ],
+      "checked": [
+        "menu",
+        "unavailable",
+        "radio",
+        "escape",
+        "focus return",
+        "create failure",
+        "explicit retry",
+        "labelled separate conversation",
+        "scoped history",
+        "streamed test reply",
+        "return"
+      ]
+    }
+  ]
+}

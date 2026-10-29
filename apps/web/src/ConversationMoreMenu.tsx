@@ -62,6 +62,7 @@ export function ConversationMoreMenu({
   icon = 'more',
   languageNote,
   topLayer = false,
+  onTestRuntime,
 }: {
   language?: VoiceLanguage;
   onLanguageChange?: (language: VoiceLanguage) => void;
@@ -75,6 +76,8 @@ export function ConversationMoreMenu({
   languageNote?: string;
   /** Escape the composer backdrop root while retaining native picker and focus ancestry. */
   topLayer?: boolean;
+  /** Opt in only when the caller supplies a working runtime test flow. */
+  onTestRuntime?: () => void;
 }) {
   const renderInTopLayer = topLayer && typeof HTMLElement.prototype.showPopover === 'function';
   const id = useId();
@@ -328,6 +331,7 @@ export function ConversationMoreMenu({
               </div>
             )}
           </div>}
+          {onTestRuntime && renderActions([{ id: 'test-runtime', label: 'Test agent runtime', icon: <MenuIcon name="plus" />, onSelect: onTestRuntime }])}
           {renderActions(actions)}
         </div>
       )}
