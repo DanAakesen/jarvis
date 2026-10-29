@@ -1,3 +1,12 @@
+## Approved runtime test entry (#1350; 29 October 2026)
+
+The existing chat menu will contain Test agent runtime. Dan chooses Current or
+Copilot and opens a separate, clearly labelled conversation. Normal chats stay
+unchanged; do not switch runtimes mid-conversation. This direction is approved,
+not implemented by the baseline diagnostic PR. It adds no new page, global
+default control or dual-send behavior. Further material interaction choices stay
+open; see [migration notes](docs/main-chat-harness-migration.md).
+
 ## Mobile Settings Save (#1343; 28 October 2026)
 
 At the existing 700px phone breakpoint, the Settings header stays beneath the

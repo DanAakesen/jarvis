@@ -1,3 +1,12 @@
+## Main chat managed harness (#1350; 29 October 2026)
+
+**In progress:** baseline investigation and fixed failure diagnostics.
+**Planned:** switchable managed main-chat path, identical automated comparisons
+and the approved separate runtime-test conversation through the existing chat
+menu. Manual comparison questions and evidence limits are in the
+[migration notes](main-chat-harness-migration.md). No live parity, UI delivery or
+production cutover is claimed.
+
 # Features
 
 The complete list of what Jarvis does or will do, for UI design and planning. Each row names where Dan uses the feature and how far it has got. Requirements live in [PRODUCT.md](../PRODUCT.md) and tasks in [PLAN.md](../PLAN.md); this file is the index.

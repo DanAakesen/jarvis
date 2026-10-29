@@ -1,3 +1,18 @@
+## 29 October 2026 — controlled main chat harness migration (#1350)
+
+Dan approved one migration issue with staged draft PRs: fix the baseline, build a
+temporarily switchable managed path, compare identical test scenarios, then cut
+over with evidence and authorization before retiring replaced runtime code.
+Preserve native voice, identity, tools/approvals, durable memory/artifacts and
+separate subscription-backed Factory workers. Dan subsequently approved Test
+agent runtime in the chat menu, Current/Copilot choice and a separate labelled
+conversation without switching midway. Provide manual test questions, with no
+new question-button feature implied. These are confirmed scope/design decisions;
+model/region, persistent access grants and parity thresholds remain open. The
+first candidate only retains fixed rejected-field diagnostics; it does not prove
+the live error fixed or authorize cutover. See
+[migration evidence and open decisions](main-chat-harness-migration.md).
+
 ## 29 October 2026 — observe actual backend authorization before a log grant (#1341)
 
 The corrected main preflight passed but surfaced an existing resource-log grant

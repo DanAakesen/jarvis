@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from openai import BadRequestError
 from starlette.testclient import TestClient
 
 import chat_runtime
@@ -1035,6 +1036,54 @@ def test_stalled_tool_loop_uses_a_content_free_failure_code() -> None:
     assert chat_runtime.chat_failure_code(ToolLoopStalled("private tool arguments")) == (
         "tool_loop_stalled"
     )
+
+
+@pytest.mark.parametrize(("parameter", "code"), [
+    ("model", "model_bad_request_model"),
+    ("instructions", "model_bad_request_instructions"),
+    ("input[0].content[0].text", "model_bad_request_input"),
+    ("max_output_tokens", "model_bad_request_output_limit"),
+    ("store", "model_bad_request_storage"),
+    ("stream", "model_bad_request_streaming"),
+    ("tools[0].parameters.private_fixture_property", "model_bad_request_tools"),
+    ("reasoning.effort", "model_bad_request_reasoning"),
+    ("include[0]", "model_bad_request_include"),
+    (None, "error_badrequesterror"),
+    ("private_fixture_parameter", "error_badrequesterror"),
+    ("model_private_fixture", "error_badrequesterror"),
+    ("tools" + "x" * 256, "error_badrequesterror"),
+    ({"private": "fixture"}, "error_badrequesterror"),
+])
+def test_model_rejection_retains_only_a_fixed_field_code(parameter, code, caplog) -> None:
+    error = BadRequestError(
+        "PRIVATE_PROVIDER_MESSAGE",
+        response=httpx.Response(400, request=httpx.Request("POST", "https://fixture.invalid")),
+        body={"param": parameter, "code": "PRIVATE_PROVIDER_CODE", "input": "PRIVATE_INPUT"},
+    )
+
+    class RejectedModel(FakeModel):
+        async def complete_chat(self, *_args, **_kwargs) -> AsyncIterator[str]:
+            raise error
+            yield ""
+
+    app = create_app(
+        RejectedModel(), configure_observability=None,
+        chat_context_loader=lambda *_args: _context(),
+    )
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+
+    assert response.status_code == 200
+    assert f'"code": "{code}"' in response.text
+    assert f"chat.failed code={code}" in caplog.text
+    assert "event: done" not in response.text
+    retained = response.text + caplog.text
+    for private in ("PRIVATE_PROVIDER_MESSAGE", "PRIVATE_PROVIDER_CODE", "PRIVATE_INPUT",
+                    "private_fixture", "fixture.invalid"):
+        assert private not in retained
 
 
 async def _context() -> list[ModelMessage]:

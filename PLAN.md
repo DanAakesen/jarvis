@@ -1,3 +1,16 @@
+## Main chat harness migration (#1350; 29 October 2026)
+
+One [migration issue](https://github.com/DanAakesen/jarvis/issues/1350) is claimed
+by Codex. Stage 1 adds fixed rejected-field diagnostics to the existing chat
+failure and release evidence path; the live BadRequest root cause remains
+unresolved. The unchanged hosted baseline passes 930 local tests; the diagnostic
+candidate passes 944. Next: independent review/qualification, then actual release
+evidence before selecting a fix. Later runtime/UI/comparison/cutover stages remain
+pending. Dan approved Test agent runtime in the chat menu, Current/Copilot selection
+and a separate labelled conversation with no mid-conversation switch. The
+[migration notes](docs/main-chat-harness-migration.md) include manual test questions
+and outstanding model, grant and parity decisions. No production default changes.
+
 ## Fixed backend-identity authorization observations (#1341; 29 October 2026)
 
 Main #1348 merged as `8d0288b0`. Deploy #40828872899 passed metadata preflight,
