@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
+from openai import BadRequestError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
@@ -74,11 +75,31 @@ MAX_REQUEST_BYTES = 64 * 1024
 
 logger = logging.getLogger("chat_runtime")
 
+MODEL_REJECTION_FIELDS = {
+    "model": "model_bad_request_model",
+    "instructions": "model_bad_request_instructions",
+    "input": "model_bad_request_input",
+    "max_output_tokens": "model_bad_request_output_limit",
+    "store": "model_bad_request_storage",
+    "stream": "model_bad_request_streaming",
+    "tools": "model_bad_request_tools",
+    "reasoning": "model_bad_request_reasoning",
+    "include": "model_bad_request_include",
+}
+
 
 def chat_failure_code(exc: BaseException) -> str:
     """A short, content-free cause for a failed turn: a known code or only the exception class."""
     if isinstance(exc, ToolLoopStalled):
         return exc.code
+    if isinstance(exc, BadRequestError):
+        # SDK metadata is untrusted. Emit only our fixed field classification;
+        # never copy messages, provider codes, schema property names or values.
+        parameter = exc.param
+        if isinstance(parameter, str) and len(parameter) <= 256:
+            field = parameter.partition(".")[0].partition("[")[0]
+            if field in MODEL_REJECTION_FIELDS:
+                return MODEL_REJECTION_FIELDS[field]
     code = getattr(exc, "code", None) if isinstance(exc, BackendUnavailable) else None
     if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
         return code

@@ -1,3 +1,13 @@
+## Main chat baseline diagnostics (#1350; 29 October 2026)
+
+Hosted chat maps known rejected top-level request fields from an OpenAI SDK
+BadRequestError to fixed failure codes. Backend smoke and release sanitization
+retain the same finite set without retaining provider text or nested schema names.
+Unknown fields retain the existing generic error. The live failure remains
+unresolved; invocation, request settings, native voice, persistence, tools and
+Factory boundaries are unchanged. The managed-harness path is planned, not wired
+or provisioned. See [migration notes](main-chat-harness-migration.md).
+
 ## Backend log authorization observation path (#1341; 29 October 2026)
 
 The existing main-only preflight report remains mode 0600 in RUNNER_TEMP. A
