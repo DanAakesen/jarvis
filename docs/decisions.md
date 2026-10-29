@@ -1,3 +1,13 @@
+## 29 October 2026 — first runtime comparison boundaries (#1350)
+
+The owner approved retaining the Python bridge temporarily to preserve voice
+fallback, starting with existing Jarvis tools with extra harness shell/web/subagent
+tools disabled, and keeping test conversations out of normal chat history. These
+extend the approved chat-menu selector and fresh labelled conversation; they do
+not authorize new identities, role grants, production default changes or removal
+of the old runtime. Actual target/model/region support and persistent access
+changes require specific evidence and applicable owner authorization.
+
 ## 29 October 2026 — tests use the owner's selected role settings (#1350)
 
 The owner clarified that the visible chat setting is not none and explicitly

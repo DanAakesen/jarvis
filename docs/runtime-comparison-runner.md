@@ -2,9 +2,8 @@
 
 `agents/jarvis/tests/runtime_comparison_runner.py` runs explicit Current and
 Copilot factories against the approved `chat_runtime_comparison.json` scenarios.
-It imports `runtime_comparison_support.py` from preparation commits `df113651`
-and `ef9ef3a`; integrate those fixture/support files before ordinary use. This
-change does not copy or modify them.
+Its fixture/support files are included in the same candidate. The preparation
+commits established isolated synthetic inputs before provider adapters existed.
 
 Each runtime/scenario receives a new `ComparisonFixture` and `FixtureBackend`.
 Both get the same synthetic source texts, step IDs, owner decisions, requested
@@ -24,17 +23,16 @@ never calls `from_environment` and supplies no real provider default. Passing a
 factory is executable Python authority: use reviewed local factories, not an
 untrusted module. No command here requests provider credentials.
 
-Run the actual-loop SDK mock demonstration from the adapter worktree:
+Run the actual-loop SDK mock demonstration from the repository root:
 
 ```sh
-PYTHONPATH=/workspace/jarvis-adapter-1350/agents/jarvis:/workspace/jarvis-adapter-1350/agents/jarvis/tests:/workspace/jarvis-runtime-prep-1350/agents/jarvis/tests \
-/tmp/jarvis-1350-venv/bin/python agents/jarvis/tests/runtime_comparison_runner.py \
+PYTHONPATH=agents/jarvis:agents/jarvis/tests \
+python agents/jarvis/tests/runtime_comparison_runner.py \
   --factory-module test_runtime_comparison_runner \
   --output /tmp/jarvis-runtime-comparison-offline-1350.json
 ```
 
-After the preparation support files are integrated into the same worktree,
-`PYTHONPATH=agents/jarvis:agents/jarvis/tests` is sufficient. The CLI requires an
+The CLI requires an
 explicit local module exporting `current_factory` and `copilot_factory`, plus an
 output destination. It can select individual scenarios using repeated `--case`.
 No live factories are included. The demonstration exports factories from the
@@ -79,7 +77,7 @@ latency/cost and the owner's UI test remain outstanding.
 Validation in this worktree:
 
 ```sh
-PYTHONPATH=/workspace/jarvis-adapter-1350/agents/jarvis:/workspace/jarvis-runtime-prep-1350/agents/jarvis/tests \
-/tmp/jarvis-1350-venv/bin/python -m pytest agents/jarvis/tests/test_runtime_comparison_runner.py -q
-/tmp/jarvis-1350-venv/bin/ruff check agents/jarvis/tests/runtime_comparison_runner.py agents/jarvis/tests/test_runtime_comparison_runner.py
+PYTHONPATH=agents/jarvis:agents/jarvis/tests \
+python -m pytest agents/jarvis/tests/test_runtime_comparison_runner.py -q
+ruff check agents/jarvis/tests/runtime_comparison_runner.py agents/jarvis/tests/test_runtime_comparison_runner.py
 ```

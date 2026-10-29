@@ -1,3 +1,20 @@
+## Runtime comparison candidate (#1350; 29 October 2026)
+
+The local candidate contains the managed protocol adapter and definition
+validator, immutable SQL test-session metadata, scoped history/default exclusion,
+source-verified bridge selection, and the approved chat-menu selector with a
+separate labelled test view. The managed option remains disabled until real
+definition/model/effort readback, durable execution coordination and shared
+application-policy integration pass. No target, identity grant or production
+default was created or changed. The [adapter checkpoint](docs/managed-chat-adapter.md)
+lists the missing policy and provisioning evidence.
+
+The settings correction is merged in #1353. Deploy 40852006540 passed every chat
+smoke scenario at 09:55 UTC; research remains down independently with
+`research_runner_failed`. This is passing chat smoke evidence, not ordinary-chat,
+research or two-runtime acceptance. Local test evidence and open boundaries are
+recorded in [migration notes](docs/main-chat-harness-migration.md).
+
 ## Test-settings correction (#1350; 29 October 2026)
 
 The owner requires tests to use the same role settings. The correction

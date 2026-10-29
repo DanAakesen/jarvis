@@ -519,11 +519,19 @@ export async function loadRuntimeTestAvailability(getAccessToken: () => Promise<
   const body: unknown = await response.json();
   if (!isRecord(body)) throw new Error('Invalid runtime availability.');
   const availability: RuntimeTestAvailability = {};
+  const reasons: Record<string, string> = {
+    storage_unavailable: 'Conversation storage is unavailable.',
+    current_unavailable: 'Current chat is not configured.',
+    copilot_not_verified: 'The selected settings and Copilot runtime have not been verified.',
+    verification_unavailable: 'Could not verify the Copilot runtime. Try again later.',
+  };
   for (const runtime of ['current', 'copilot'] as const) {
     const option = body[runtime];
     if (!isRecord(option) || typeof option.available !== 'boolean' ||
         (option.reason !== undefined && typeof option.reason !== 'string')) throw new Error('Invalid runtime availability.');
-    availability[runtime] = { available: option.available, ...(typeof option.reason === 'string' ? { reason: option.reason } : {}) };
+    availability[runtime] = { available: option.available, ...(!option.available
+      ? { reason: typeof option.reason === 'string' ? reasons[option.reason] ?? 'This runtime is unavailable.' : 'Availability has not been confirmed.' }
+      : {}) };
   }
   return availability;
 }

@@ -10,6 +10,15 @@ to the initial work. Track the approved stages in
 
 ## Baseline investigation
 
+PR #1353 merged as `9f831509` after exact-head qualification. Its normal
+[Deploy 40852006540](https://github.com/DanAakesen/jarvis/actions/runs/40852006540)
+passed backend, hosted agent and deterministic readiness. At 09:55 UTC all chat
+smoke entries passed, including canary, identity, capabilities, GitHub read, jobs,
+navigation, timestamp and plain approval. Research independently reported
+`research_runner_failed`, so overall live acceptance still failed. This confirms
+the corrected selected-settings chat smoke path; it does not prove ordinary chat,
+research, or two-runtime parity.
+
 PR #1351 merged as `938bb48f` after full CI
 [40839366476](https://github.com/DanAakesen/jarvis/actions/runs/40839366476).
 Deploy [40840605441](https://github.com/DanAakesen/jarvis/actions/runs/40840605441)
@@ -73,10 +82,25 @@ without evidence and the applicable authorization.
 
 Dan approved **Test agent runtime** in the existing chat menu. Choose **Current**
 or **Copilot**, then open a separate, clearly labelled conversation. Normal chats
-stay unchanged, and a conversation cannot switch runtimes midway. This UI is
-planned, not implemented by the baseline diagnostic change. Dual-send, global
+stay unchanged, and a conversation cannot switch runtimes midway. The baseline
+diagnostic change does not implement this UI. Dual-send, global
 default changes, a new page and replacement voice runtimes are not part of this
-approval.
+approval. The owner later approved retaining the Python bridge temporarily for
+voice fallback, existing Jarvis tools only with extra harness tools disabled,
+and keeping test conversations out of normal history.
+
+The local candidate implements the selector and a new labelled modal test view,
+with scoped SQL session history and normal draft/session preservation. Current
+uses the retained bridge. Copilot is unavailable until live definition/settings,
+durable execution coordination and shared policy behavior pass. Protocol tests
+and synthetic screenshots are not that acceptance. See
+[the adapter's exact remaining gates](managed-chat-adapter.md).
+
+One boundary needs confirmation before activating tests: ordinary history is
+excluded by the candidate, but existing conversation search, recent-message
+context and rolling summary storage have separate read paths. Their intended
+relationship to test transcripts is unresolved; the candidate does not silently
+change durable personal-memory contracts.
 
 ## Manual comparison checklist
 

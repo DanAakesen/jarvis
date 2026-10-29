@@ -12,8 +12,10 @@ describe('runtime test client boundaries', () => {
     await expect(createChatSession(token, config, 'en', undefined, 'current')).rejects.toThrow('invalid chat session');
   });
   it('rejects unconfirmed availability and accepts explicit unavailability reasons', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true }, copilot: { available: false, reason: 'Settings are unsupported.' } }))));
-    expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'Settings are unsupported.' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true }, copilot: { available: false, reason: 'copilot_not_verified' } }))));
+    expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'The selected settings and Copilot runtime have not been verified.' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true }, copilot: { available: false, reason: 'Private provider response.' } }))));
+    expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'This runtime is unavailable.' });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true } }))));
     await expect(loadRuntimeTestAvailability(token, config)).rejects.toThrow('Invalid runtime availability');
   });

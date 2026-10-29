@@ -2,8 +2,13 @@
 
 The existing chat menu will contain Test agent runtime. Dan chooses Current or
 Copilot and opens a separate, clearly labelled conversation. Normal chats stay
-unchanged; do not switch runtimes mid-conversation. This direction is approved,
-not implemented by the baseline diagnostic PR. It adds no new page, global
+unchanged; do not switch runtimes mid-conversation. The local candidate opens an
+accessible selector and then a labelled modal conversation, keeping the normal
+chat mounted with its session and draft. Unknown or unverified availability
+disables the option with a reason. The test view uses scoped history, streaming,
+Stop reply and explicit uncertain-outcome recovery. Desktop/phone Chromium fixture
+inspection covers both themes, focus return, failure/retry and streamed replies;
+it does not establish live provider acceptance. It adds no new page, global
 default control or dual-send behavior. Further material interaction choices stay
 open; see [migration notes](docs/main-chat-harness-migration.md).
 

@@ -6,7 +6,11 @@ Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separa
 subscription-backed Factory workers. Automated comparisons use identical test
 scenarios. Dan can test Current or Copilot through Test agent runtime in the chat
 menu, opening a separate labelled conversation with no mid-conversation switch;
-normal chats stay unchanged. This UI is approved but not yet built. Cutover,
+normal chats stay unchanged. The local candidate implements this selector and
+session-scoped test view; Copilot stays unavailable until its live definition,
+settings, bindings and application policies are verified. The owner also approved
+retaining the Python bridge temporarily for voice fallback, using existing Jarvis
+tools only initially, and excluding test conversations from normal history. Cutover,
 rollback and retirement follow proven parity and required authorization. See
 [migration scope and open decisions](docs/main-chat-harness-migration.md).
 

@@ -1,3 +1,16 @@
+## Runtime comparison preparation (#1350; 29 October 2026)
+
+Use the existing pinned dependencies; the protocol adapter adds no production
+package. Hosted checks cover managed protocol/definition, source routing and
+retained voice. Backend checks cover runtime session/store/migration and routes;
+web checks cover selector/client/scoped conversation/menu/Modal and unchanged
+normal chat. The repeatable synthetic browser check is
+`scripts/check-runtime-test-browser.mjs`; its output is under
+`docs/ui/screenshots/runtime-test-1350/`. These are offline checks, not live parity.
+SQL integration requires the existing isolated database harness; no live migration
+was applied in this preparation. Do not enable the managed option from local
+configuration alone. See [remaining gates](managed-chat-adapter.md).
+
 ## Smoke/normal settings parity (#1350; 29 October 2026)
 
 The owner explicitly requires the same role settings in tests. Use the selected

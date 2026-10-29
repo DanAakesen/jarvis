@@ -21,6 +21,7 @@ from jarvis_tools import (
     BackendToolClient,
     BackendUnavailable,
     current_chat_phase_setter,
+    current_chat_runtime_test,
     current_chat_session_id,
     current_chat_turn_id,
     current_message_id,
@@ -86,6 +87,45 @@ def app_with(loader):
     model = FakeModel()
     app = create_app(model, configure_observability=None, chat_context_loader=loader)
     return app, model
+
+
+@pytest.mark.parametrize("stored_runtime", [None, "current", "copilot"])
+def test_runtime_selection_comes_only_from_verified_history(stored_runtime) -> None:
+    async def context(*_args):
+        current_chat_runtime_test.set(stored_runtime)
+        return []
+
+    current, copilot = FakeModel(), FakeModel()
+    app = create_app(
+        current, copilot_chat_client=copilot,
+        configure_observability=None, chat_context_loader=context,
+    )
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+            "runtimeTest": "copilot",  # Untrusted payload cannot select the runtime.
+        })
+    assert response.status_code == 200
+    assert "event: done" in response.text
+    assert current.chat_calls == (0 if stored_runtime == "copilot" else 1)
+    assert copilot.chat_calls == (1 if stored_runtime == "copilot" else 0)
+    assert current.closed  # The retained voice client keeps its existing lifecycle.
+
+
+def test_unconfigured_copilot_selection_never_falls_back() -> None:
+    async def context(*_args):
+        current_chat_runtime_test.set("copilot")
+        return []
+
+    app, current = app_with(context)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 503
+    assert current.chat_calls == 0
 
 
 def test_chat_streams_text_and_sets_tool_source_message() -> None:
@@ -1177,7 +1217,7 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
     assert result[1].source_message_id is None
     assert sorted(request_timeouts) == sorted([
         ("https://backend.example/me", 17),
-        ("https://backend.example/conversation/history?limit=100", 17),
+        ("https://backend.example/conversation/history?sourceMessageId=42&limit=100", 17),
         ("https://backend.example/conversation/summary", 5),
     ])
 
