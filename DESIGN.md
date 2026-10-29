@@ -12,6 +12,10 @@ it does not establish live provider acceptance. It adds no new page, global
 default control or dual-send behavior. Further material interaction choices stay
 open; see [migration notes](docs/main-chat-harness-migration.md).
 
+The test entry follows Language and precedes the existing capture/Voice/Attach
+actions. Voice and Attach remain adjacent at the end nearest Plus; keyboard order
+continues to follow the visible menu.
+
 ## Mobile Settings Save (#1343; 28 October 2026)
 
 At the existing 700px phone breakpoint, the Settings header stays beneath the
