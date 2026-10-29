@@ -8,12 +8,16 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
 import httpx
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 import chat_telemetry
 import model_client
@@ -46,6 +50,10 @@ from model_client import (
 )
 from model_contract import AcknowledgmentBoundary, SummaryCompletion, ToolLoopStalled
 from state import ModelMessage, ModelSettings
+
+ROLE_PROFILE = json.loads(
+    (Path(__file__).parent / "fixtures" / "runtime_role_settings.json").read_text(encoding="utf-8")
+)["roles"]
 
 
 class FakeStream:
@@ -983,6 +991,63 @@ async def test_smoke_chat_executes_only_read_only_tools_without_context_or_histo
     assert "x-jarvis-message-id" not in tool_request.headers
     assert not any(request.url.path == "/factory/context" for request in backend.requests)
     assert json.loads(backend.requests[-1].content)["role"] == "smoke"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("model_name", "effort"), [
+    pytest.param(ROLE_PROFILE["chat"]["model"], ROLE_PROFILE["chat"]["reasoningEffort"],
+                 id="requested-chat-profile"),
+    *[("gpt-6.1-terra", effort) for effort in ("none", "low", "medium", "xhigh")],
+])
+async def test_smoke_and_normal_chat_use_identical_selected_reasoning_and_token_budget(
+    model_name, effort, monkeypatch,
+) -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(model_client, "_tracer", provider.get_tracer("fixture"))
+    backend = FakeBackend(
+        catalogue=[LIST_JOBS], model_name=model_name, reasoning_effort=effort,
+    )
+    model, transport = client([], rounds=[[completed()], [completed()]], backend=backend)
+    model._max_output_tokens = 4096
+    try:
+        for smoke in (False, True):
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "what jobs are running?")], "en", smoke=smoke,
+            )]
+        assert len(transport.responses.requests) == 2
+        normal, smoke_request = transport.responses.requests
+        for field in ("model", "reasoning", "max_output_tokens", "include"):
+            assert normal.get(field) == smoke_request.get(field)
+        assert smoke_request["model"] == model_name
+        assert smoke_request["reasoning"] == {"effort": effort}
+        assert smoke_request["max_output_tokens"] == 4096
+        observed = [span.attributes for span in exporter.get_finished_spans()]
+        assert len(observed) == 2
+        assert all(item["gen_ai.request.model"] == model_name for item in observed)
+        assert all(item["gen_ai.request.reasoning_effort"] == effort for item in observed)
+        assert not any(request.method == "PATCH" for request in backend.requests)
+    finally:
+        await model.close()
+        provider.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_unsupported_backend_effort_fails_instead_of_substituting_none() -> None:
+    backend = FakeBackend(
+        catalogue=[LIST_JOBS], model_name="gpt-6.1-terra", reasoning_effort="unsupported-fixture",
+    )
+    model, transport = client([completed()], backend=backend)
+    try:
+        with pytest.raises(BackendUnavailable) as failure:
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "what jobs are running?")], "en", smoke=True,
+            )]
+        assert failure.value.code == "settings_invalid"
+        assert transport.responses.requests == []
+    finally:
+        await model.close()
 
 
 @pytest.mark.asyncio

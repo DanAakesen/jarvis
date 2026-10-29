@@ -86,6 +86,16 @@ MODEL_REJECTION_FIELDS = {
     "reasoning": "model_bad_request_reasoning",
     "include": "model_bad_request_include",
 }
+REASONING_REJECTIONS = {
+    ("reasoning", "unsupported_parameter"): "model_reasoning_parameter_unsupported",
+    ("reasoning.effort", "unsupported_parameter"): "model_reasoning_effort_unsupported",
+    ("reasoning", "unsupported_value"): "model_reasoning_value_unsupported",
+    ("reasoning.effort", "unsupported_value"): "model_reasoning_effort_value_unsupported",
+    ("reasoning", "invalid_value"): "model_reasoning_value_invalid",
+    ("reasoning.effort", "invalid_value"): "model_reasoning_effort_value_invalid",
+    ("reasoning", "invalid_request_error"): "model_reasoning_request_invalid",
+    ("reasoning.effort", "invalid_request_error"): "model_reasoning_effort_request_invalid",
+}
 
 
 def chat_failure_code(exc: BaseException) -> str:
@@ -97,6 +107,11 @@ def chat_failure_code(exc: BaseException) -> str:
         # never copy messages, provider codes, schema property names or values.
         parameter = exc.param
         if isinstance(parameter, str) and len(parameter) <= 256:
+            provider_code = exc.code
+            if isinstance(provider_code, str):
+                rejection = REASONING_REJECTIONS.get((parameter, provider_code))
+                if rejection is not None:
+                    return rejection
             field = parameter.partition(".")[0].partition("[")[0]
             if field in MODEL_REJECTION_FIELDS:
                 return MODEL_REJECTION_FIELDS[field]

@@ -1,3 +1,29 @@
+## Test-settings correction (#1350; 29 October 2026)
+
+The owner requires tests to use the same role settings. The correction
+removes smoke's forced-none effort and separate token cap while retaining the
+existing saved-setting resolution and read-only guards. It records bounded
+effective-effort telemetry without adding fallback values. Local validation:
+1,025 hosted tests/Ruff/compilation and 56 research/vision tests plus backend lint
+pass. The owner approved including this correction with the finite diagnostics
+in #1353; exact-head qualification, independent review and live acceptance remain
+pending.
+See [local scope and remaining evidence](docs/smoke-settings-1350.md).
+
+## Live reasoning rejection and separate research evidence (#1350; 29 October 2026)
+
+PR #1351 merged after CI 40839366476. Deploy 40840605441 passed application/agent
+deployment and readiness, then failed live acceptance: the required chat scenarios
+report `model_bad_request_reasoning`; research is independently down. Primary
+Terra documentation supports none, so no parameter/setting change is justified
+yet. Prepare fixed reasoning code/subfield distinctions and separate research
+boundary reasons. Local checks pass 1,019 hosted tests, 349 focused backend tests,
+backend lint/build and 13 sanitizer tests. The full backend suite passes 6,902
+tests with one skip. The baseline is still unresolved.
+Preserve main `82fff9f5` and the original log task's scope. Next: reviewed normal
+release evidence before choosing a correction; managed path/UI work remains
+unreleased. See [migration evidence](docs/main-chat-harness-migration.md).
+
 ## Reconcile log diagnostics with current main (#1341; 29 October 2026)
 
 Merge main `938bb48f` (#1351 chat rejection diagnostics) into log-diagnostic head

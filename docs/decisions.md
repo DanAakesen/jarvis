@@ -1,3 +1,28 @@
+## 29 October 2026 — tests use the owner's selected role settings (#1350)
+
+The owner clarified that the visible chat setting is not none and explicitly
+requires tests to use the same settings. A closed UI selection is not a verified
+database readback. The candidate removes the smoke-only effort/token-budget
+overrides, preserves saved values and records effective request settings. It does
+not assert ordinary chat is broken from a forced-none test failure. Synthetic
+regressions pass; the owner approved publication with #1353. Review, qualification
+and live acceptance are pending. No screenshot or
+private configuration record is included. See [local report](smoke-settings-1350.md).
+
+## 29 October 2026 — preserve Terra settings while distinguishing its rejection (#1350)
+
+Deploy 40840605441 passed backend/agent/readiness and failed live conversation
+acceptance with model_bad_request_reasoning. Smoke forces none, but Microsoft's
+Terra announcement and OpenAI's model contract explicitly support that effort;
+the Azure reasoning guide lists Terra reasoning/Responses support. The documented
+contract and live result conflict without identifying the service's rejection
+code/subfield. Preserve saved settings and request construction, retain fixed
+reasoning distinctions, and separately classify the existing research runner
+boundary. Do not assume a shared root cause or use a parameter removal/effort
+fallback as a fix. All new diagnostic outputs are application-owned constants;
+provider text and worker events remain private. Live correction is unresolved.
+See [migration evidence and primary sources](main-chat-harness-migration.md).
+
 ## 29 October 2026 — distinguish Foundry table errors from log permission evidence (#1341)
 
 The first actual Foundry probe returned 400 while querying `AppTraces`.
