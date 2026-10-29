@@ -1,3 +1,18 @@
+## Backend log preflight ARM wire contract (#1341; 28 October 2026)
+
+29 October: reconcile #1348 with main `10d6d170` without altering #1345 runtime,
+migration, UI or artifact blobs. Retain both documentation prefixes and requalify
+the resulting head through normal synchronize CI. Readiness/merge are owner
+approved; the parent integrates. No Azure grant or activation is applied here.
+
+Deploy #40761349594 failed closed before Bicep at `builtin_role_mismatch`.
+The `az rest` role-definition response uses `properties.type`, not the CLI
+model's `roleType`. Keep the exact built-in permission allowlist and reject
+custom/CLI-only shapes. Run `PYTHONPATH=.github/scripts python -m unittest
+discover -s .github/scripts/tests -p test_backend_log_preflight.py`, scoped Ruff
+and byte compilation. Fifteen synthetic tests pass for the correction; no live
+rerun, grant or enablement is claimed. Existing Azure scope approval persists.
+
 ## Current-main reconciliation for #1345 (28 October 2026)
 
 Main `61d19366` adds #1346 log preflight/guidance; merge it into review-fix
