@@ -20,7 +20,10 @@ The fixed manifest operation exports only static instructions/current schemas;
 it does not read personal context or invoke a tool. The canary has the same
 210-second invocation ceiling as the existing chat bridge and never executes
 functions. SQL qualification remains blocked locally by a Forbidden image pull;
-do not substitute a different image or claim the migration ran.
+do not substitute a different image. Database CI subsequently applied the committed
+migrations and passed all four new runtime integration cases; three stale shared
+schema-inventory assertions were corrected for requalification. Do not claim the
+full Database job passed until that rerun finishes.
 
 ## Whole-Jarvis log preparation (#1341; 29 October 2026)
 

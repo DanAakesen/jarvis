@@ -18,7 +18,10 @@ script and default-off manual Deploy handoff. That handoff creates the compariso
 agent using existing OIDC, configures only its three backend target values and
 calls a fixed text canary with the actual bridge identity. No new credential or
 blanket role grant is added. Local SQL execution was blocked by Forbidden pulling
-the pinned SQL Server image; exact-head Database CI is still required. No live
+the pinned SQL Server image. Actual Database CI passed all four new runtime
+contracts and found three stale expected-table assertions in the shared schema
+inventory. The candidate adds the three table names without weakening equality;
+exact-head requalification is pending. No live
 provisioning or canary has been run.
 
 The settings correction is merged in #1353. Deploy 40852006540 passed every chat
