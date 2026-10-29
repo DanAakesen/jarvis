@@ -23,17 +23,20 @@ function fixture(overrides: Partial<InvocationSnapshot> = {}) {
 afterEach(() => { vi.useRealTimers(); });
 
 describe('research smoke evidence', () => {
-  it('keeps the existing fixed dry run, selected model/effort and terminal cleanup', async () => {
+  it.each([
+    ['fixture-model', 'high'],
+    ['gpt-6.1-terra', 'xhigh'],
+  ])('keeps the fixed dry run and selected %s/%s settings with terminal cleanup', async (model, reasoningEffort) => {
     const client = fixture();
     const report = await createResearchSmokeProbe({
       configured: true, clientFor: () => client,
-      selectModel: async () => ({ model: 'fixture-model', reasoningEffort: 'high' }),
+      selectModel: async () => ({ model, reasoningEffort }),
     })();
     expect(report).toEqual({ status: 'ok', details: { configured: true } });
     expect(client.startCodexTool).toHaveBeenCalledExactlyOnceWith(
       'web_research',
       'Dry run only: answer with one short sentence and no sources; do not browse or save anything.',
-      'fixture-model', { reasoning: 'high', signal: expect.any(AbortSignal) },
+      model, { reasoning: reasoningEffort, signal: expect.any(AbortSignal) },
     );
     expect(client.status).toHaveBeenCalledTimes(1);
     expect(client.deleteSession).toHaveBeenCalledExactlyOnceWith(accepted.sessionId, { signal: expect.any(AbortSignal) });

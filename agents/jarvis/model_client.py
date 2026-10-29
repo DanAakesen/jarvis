@@ -902,12 +902,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 if use_anthropic and self._anthropic_client is None:
                     raise RuntimeError("Foundry Claude client is unavailable")
                 reasoning_effort = (
-                    "none" if role == "smoke" else
                     settings.reasoning_effort if settings is not None else self._reasoning_effort
                 )
-                max_output_tokens = (
-                    min(self._max_output_tokens, 256)
-                    if role == "smoke" else self._max_output_tokens
+                # Smoke must exercise the selected model settings. A separate
+                # effort or token cap can reject/starve an otherwise valid chat.
+                max_output_tokens = self._max_output_tokens
+                span.set_attribute(
+                    "gen_ai.request.reasoning_effort",
+                    reasoning_effort if reasoning_effort in {
+                        "none", "minimal", "low", "medium", "high", "xhigh",
+                    } else "unspecified" if reasoning_effort is None else "unsupported",
                 )
                 span.set_attribute("gen_ai.request.model", model_name)
                 with latency_span("prompt_build") as prompt_span:
