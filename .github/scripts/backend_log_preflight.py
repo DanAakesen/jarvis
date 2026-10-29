@@ -49,7 +49,7 @@ def permits(permission: dict, action: str, data: bool = False) -> bool:
         fnmatch.fnmatchcase(action, value.lower()) for value in denied)
 
 
-def inventory_findings(expected: dict, assignments: list, resource_permissions: bool, role_reader) -> list[str]:
+def inventory_findings(expected: dict, assignments: list, resource_permissions: bool, role_reader, *, assigned_to: bool = False) -> list[str]:
     findings = set()
     for assignment in assignments:
         properties = assignment["properties"]
@@ -67,11 +67,14 @@ def inventory_findings(expected: dict, assignments: list, resource_permissions: 
         legacy = any(permits(p, "microsoft.operationalinsights/workspaces/query/containerappconsolelogs_cl/read")
                      or permits(p, "microsoft.operationalinsights/workspaces/analytics/query/action") for p in permissions)
         data = any(permits(p, "microsoft.operationalinsights/workspaces/tables/data/read", True) for p in permissions)
-        resource = any(permits(p, "microsoft.insights/logs/apptraces/read") for p in permissions)
+        resource = any(permits(p, "microsoft.insights/logs/" + table + "/read")
+                       for p in permissions for table in ("apptraces", "azurediagnostics"))
+        group_prefix = "existing_group_" if assigned_to else "potential_group_"
+        group_suffix = "requires_review" if assigned_to else "membership_unverified"
         if workspace_scope and (legacy or data):
-            findings.add("potential_group_log_grant_membership_unverified" if group else "existing_workspace_log_grant_requires_review")
+            findings.add(group_prefix + "log_grant_" + group_suffix if group else "existing_workspace_log_grant_requires_review")
         elif resource_permissions and resource and not same_id(scope, expected["app_id"]):
-            findings.add("potential_group_resource_log_grant_membership_unverified" if group else "existing_resource_log_grant_requires_review")
+            findings.add(group_prefix + "resource_log_grant_" + group_suffix if group else "existing_resource_log_grant_requires_review")
     return sorted(findings)
 
 
@@ -151,12 +154,19 @@ def inspect(expected: dict, azure: Azure) -> dict:
             and same_id(identity.get("clientId"), expected["client_id"])
             and same_id(identity.get("tenantId"), expected["tenant"]), "live_identity_mismatch")
     checks.append("live_identity_matches")
-    app = azure.get(expected["app_id"], "2024-03-01", "{id:id,identities:identity.userAssignedIdentities,clientId:properties.template.containers[0].env[?name=='SQL_MANAGED_IDENTITY_CLIENT_ID'].value|[0]}")
+    app = azure.get(expected["app_id"], "2024-03-01", "{id:id,identities:identity.userAssignedIdentities,clientId:properties.template.containers[0].env[?name=='SQL_MANAGED_IDENTITY_CLIENT_ID'].value|[0],foundryResourceId:properties.template.containers[0].env[?name=='FOUNDRY_ACCOUNT_RESOURCE_ID'].value|[0]}")
     require(isinstance(app, dict) and same_id(app.get("id"), expected["app_id"])
             and isinstance(app.get("identities"), dict)
             and any(same_id(key, expected["identity_id"]) for key in app["identities"])
             and same_id(app.get("clientId"), expected["client_id"]), "runtime_identity_mismatch")
     checks.append("runtime_identity_matches")
+    foundry_id = app.get("foundryResourceId")
+    require(isinstance(foundry_id, str) and re.fullmatch(re.escape(expected["group"])
+            + r"/providers/Microsoft\.CognitiveServices/accounts/jarvis-[0-9]{14}-"
+            + re.escape(expected["app_name"].removeprefix("ca-jarvis-backend-")), foundry_id, re.IGNORECASE), "runtime_foundry_mismatch")
+    foundry = azure.get(foundry_id, "2025-06-01", "{id:id}")
+    require(isinstance(foundry, dict) and same_id(foundry.get("id"), foundry_id), "live_foundry_mismatch")
+    checks.append("live_foundry_matches")
     workspace = azure.get(expected["workspace_id"], "2023-09-01", "{id:id,customerId:properties.customerId,retention:properties.retentionInDays,features:properties.features}")
     require(isinstance(workspace, dict) and same_id(workspace.get("id"), expected["workspace_id"])
             and guid(workspace.get("customerId")), "live_workspace_mismatch")
@@ -203,6 +213,24 @@ def inspect(expected: dict, azure: Azure) -> dict:
         return roles[identifier]
 
     findings = inventory_findings(expected, [*inherited, *group_roles], resource_permissions, read_role)
+    effective = {}
+    for label, scope in (("workspace", expected["workspace_id"]), ("foundry", foundry_id),
+                         ("subscription", "/subscriptions/" + expected["subscription"])):
+        try:
+            # ARM assignedTo includes transitive group grants for this service principal.
+            rows = azure.pages(scope + "/providers/Microsoft.Authorization/roleAssignments", "2022-04-01",
+                               {"$filter": "assignedTo('" + expected["principal_id"] + "')"})
+            require(all(isinstance(row, dict) and isinstance(row.get("properties"), dict)
+                        and guid(row["properties"].get("principalId"))
+                        and (same_id(row["properties"]["principalId"], expected["principal_id"])
+                             or row["properties"].get("principalType") == "Group") for row in rows), "invalid_role_inventory")
+            findings.extend(inventory_findings(expected, rows, resource_permissions, read_role, assigned_to=True))
+            effective[label] = rows
+            checks.append("assigned_to_" + label + "_inventory_read")
+        except PreflightBlocked:
+            # This metadata-only stage cannot turn an incomplete inventory into proof.
+            checks.append("assigned_to_" + label + "_inventory_unavailable")
+    findings = sorted(set(findings))
     checks.extend(findings or ["no_obvious_log_grant_in_read_inventory"])
     def controls(rows):
         require(all(isinstance(row, dict) for row in rows), "invalid_workspace_inventory")
@@ -225,8 +253,9 @@ def inspect(expected: dict, azure: Azure) -> dict:
     # Presence is only a candidate, never a claimed negative authorization proof.
     checks.append("negative_workspace_candidate_found" if peers else "negative_workspace_candidate_missing")
     return {"schema": 1, "stage": "metadata_only", "checks": checks, "targets": expected,
-            "workspace": workspace, "table": table, "role": role, "inherited_assignments": inherited,
+            "workspace": workspace, "foundry": foundry, "table": table, "role": role, "inherited_assignments": inherited,
             "resource_group_assignments": group_roles, "negative_workspace_candidates": peers,
+            "assigned_to_assignments": effective, "assigned_to_inventory_complete": len(effective) == 3,
             "role_definitions": roles, "access_findings": findings,
             "effective_group_memberships_verified": False, "provider_enforcement_verified": False,
             "reader_enabled": False, "grant_applied": False}

@@ -100,6 +100,16 @@ class FixedVerdictTests(unittest.TestCase):
         self.assertIn("other_app: no_visible_rows", text)
         self.assertIn("not_configured", " ".join(lines({})))
 
+    def test_permission_metadata_is_only_a_fixed_classification_separate_from_http(self):
+        report = self.sample()
+        report["backendLogAuthorization"]["checks"].update(foundry_resource="bad_request", foundry_permissions="table_not_explicitly_denied")
+        text = "\n".join(lines(report))
+        self.assertIn("foundry_resource: bad_request", text)
+        self.assertIn("foundry_permissions: table_not_explicitly_denied", text)
+        report["backendLogAuthorization"]["checks"]["foundry_permissions"] = {"resources": [{"resourceId": "synthetic-private-id"}]}
+        with self.assertRaises((TypeError, ValueError)):
+            lines(report)
+
     def test_rejects_untrusted_provider_text_keys_dates_and_status_values(self):
         base = self.sample()
         variants = []

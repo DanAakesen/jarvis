@@ -1,3 +1,29 @@
+## Foundry log permission diagnosis (#1341; 29 October 2026)
+
+Main #1349 deployed as `c05cfada`; Deploy #40836577365 passed infrastructure,
+backend/web/agent rollout and readiness, then failed live chat/research acceptance.
+The actual backend identity matched. Unfiltered console, other-app and other-table
+queries returned 403; Foundry returned 400 and no foreign workspace was configured.
+These are pre-grant observations, not own-backend access or isolation proof.
+
+This follow-up corrects the fixed Foundry aggregate to `AzureDiagnostics` and asks
+for permission metadata. The backend classifies only fixed permission states in
+memory and discards identifiers/provider text. HTTP and permission verdicts stay
+separate, including metadata accompanying errors; a 400 or empty result never
+clears the existing resource-grant warning. The metadata preflight verifies the
+runtime Foundry target and reads paginated ARM `assignedTo` inventories at the
+workspace, Foundry and existing subscription scopes. Unavailable or truncated
+inventories remain incomplete; no Graph grant or additional access is requested.
+
+No role, workspace mode, foreign-control requirement or activation changes.
+Local validation passes 434 backend tests across ten suites, 29 Python log
+tests, 26 deploy-script tests and 45 pipeline tests, backend lint/build and scoped
+Ruff/byte compilation. Local Node 24/npm 11 differs from pinned CI Node 22/npm 10;
+exact-head hosted qualification remains pending. After review and normal main
+deployment, inspect the fixed verdicts and resolve any effective
+resource-log grant before the approved conditional grant and fresh-process proof.
+The separate migration task owns baseline chat BadRequest diagnosis.
+
 ## Fixed backend-identity authorization observations (#1341; 29 October 2026)
 
 Main #1348 merged as `8d0288b0`. Deploy #40828872899 passed metadata preflight,

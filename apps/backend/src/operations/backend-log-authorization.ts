@@ -23,9 +23,11 @@ export function loadBackendLogProbeConfig(env: NodeJS.ProcessEnv): BackendLogPro
   return Object.freeze({ workspaceId, principalId, appName: name, ...(foreignWorkspaceId ? { foreignWorkspaceId } : {}) });
 }
 
-const verdicts = ['denied', 'no_visible_rows', 'backend_only', 'other_app_visible', 'query_allowed', 'not_configured', 'unavailable', 'bad_request', 'unauthenticated', 'not_found', 'throttled', 'timeout', 'invalid_response', 'rows_visible'] as const;
+const verdicts = ['denied', 'no_visible_rows', 'backend_only', 'other_app_visible', 'query_allowed', 'not_configured', 'unavailable', 'bad_request', 'unauthenticated', 'not_found', 'throttled', 'timeout', 'invalid_response', 'rows_visible',
+  'metadata_missing', 'metadata_invalid', 'resource_not_listed', 'no_data_sources', 'data_sources_not_listed',
+  'resource_table_denied', 'data_source_table_denied', 'table_not_explicitly_denied'] as const;
 type Verdict = typeof verdicts[number];
-const checks = ['unfiltered_table', 'other_app', 'other_table', 'foreign_workspace', 'foundry_resource'] as const;
+const checks = ['unfiltered_table', 'other_app', 'other_table', 'foreign_workspace', 'foundry_resource', 'foundry_permissions'] as const;
 type Check = typeof checks[number];
 export interface BackendLogAuthorizationSnapshot {
   readonly stage: 'authorization_observations';
@@ -101,6 +103,48 @@ function counts(value: unknown, expected: readonly string[]): number[] | undefin
   return row as number[];
 }
 
+const workspaceResource = /^\/subscriptions\/[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}\/resourceGroups\/[a-z0-9._()-]+\/providers\/Microsoft\.OperationalInsights\/workspaces\/[a-z0-9._()-]+$/iu;
+
+/** Classify permission metadata in memory; never return its identifiers or provider text. */
+function foundryPermissions(value: unknown, resourceId: string): Verdict {
+  if (!object(value) || value.permissions === undefined) return 'metadata_missing';
+  const permissions = value.permissions;
+  if (!object(permissions) || Object.keys(permissions).some((key) => !['resources', 'dataSources'].includes(key)) ||
+      !Array.isArray(permissions.resources) || !Array.isArray(permissions.dataSources) ||
+      permissions.resources.length > 16 || permissions.dataSources.length > 16) return 'metadata_invalid';
+  const deniedTables = (item: Record<string, unknown>) => item.denyTables === undefined || (Array.isArray(item.denyTables) &&
+    item.denyTables.length <= 32 && item.denyTables.every((name: unknown) => typeof name === 'string' && /^[a-z][a-z0-9_.]{0,127}$/iu.test(name)));
+  const validId = (id: unknown, pattern: RegExp): id is string => typeof id === 'string' && id.length <= 1_024 && pattern.test(id);
+  const seen = new Set<string>();
+  for (const item of permissions.resources) {
+    if (!object(item) || Object.keys(item).some((key) => !['resourceId', 'dataSources', 'denyTables'].includes(key)) ||
+        !validId(item.resourceId, resource) || seen.has(item.resourceId.toLowerCase()) || !deniedTables(item) ||
+        !Array.isArray(item.dataSources) || item.dataSources.length > 16 ||
+        !item.dataSources.every((id: unknown) => validId(id, workspaceResource)) ||
+        new Set(item.dataSources.map((id: string) => id.toLowerCase())).size !== item.dataSources.length) return 'metadata_invalid';
+    seen.add(item.resourceId.toLowerCase());
+  }
+  seen.clear();
+  for (const item of permissions.dataSources) {
+    if (!object(item) || Object.keys(item).some((key) => !['resourceId', 'denyTables'].includes(key)) ||
+        !validId(item.resourceId, workspaceResource) || seen.has(item.resourceId.toLowerCase()) || !deniedTables(item)) return 'metadata_invalid';
+    seen.add(item.resourceId.toLowerCase());
+  }
+  const target = permissions.resources.find((item: Record<string, unknown>) => (item.resourceId as string).toLowerCase() === resourceId.toLowerCase()) as Record<string, unknown> | undefined;
+  if (!target) return 'resource_not_listed';
+  const denies = (item: Record<string, unknown>) => (item.denyTables as string[] | undefined)?.some((name) => name.toLowerCase() === 'azurediagnostics') ?? false;
+  if (denies(target)) return 'resource_table_denied';
+  const sources = target.dataSources as string[];
+  if (!sources.length) return 'no_data_sources';
+  let missing = false;
+  for (const id of sources) {
+    const source = permissions.dataSources.find((item: Record<string, unknown>) => (item.resourceId as string).toLowerCase() === id.toLowerCase()) as Record<string, unknown> | undefined;
+    if (!source) { missing = true; continue; }
+    if (!denies(source)) return 'table_not_explicitly_denied';
+  }
+  return missing ? 'data_sources_not_listed' : 'data_source_table_denied';
+}
+
 /** Deployment-only observations. Empty negative queries never establish isolation. */
 export function createBackendLogAuthorizationProbe(options: {
   config: BackendLogProbeConfig;
@@ -127,7 +171,8 @@ export function createBackendLogAuthorizationProbe(options: {
       const result: BackendLogAuthorizationSnapshot = { stage: 'authorization_observations', checkedAt: now.toISOString(), identity: 'unavailable',
         checks: { unfiltered_table: 'unavailable', other_app: 'unavailable', other_table: 'unavailable',
           foreign_workspace: config.foreignWorkspaceId ? 'unavailable' : 'not_configured',
-          foundry_resource: foundryResourceId ? 'unavailable' : 'not_configured' } };
+          foundry_resource: foundryResourceId ? 'unavailable' : 'not_configured',
+          foundry_permissions: foundryResourceId ? 'unavailable' : 'not_configured' } };
       const signal = AbortSignal.timeout(deadlineMs);
       try {
         const token = await bounded(options.getToken(signal), signal);
@@ -145,31 +190,35 @@ export function createBackendLogAuthorizationProbe(options: {
           { key: 'other_app', url: endpoint(config.workspaceId), query: `ContainerAppConsoleLogs_CL ${window} | where ContainerAppName_s != '${config.appName}' | summarize Records=count()`, columns: ['Records'] },
           { key: 'other_table', url: endpoint(config.workspaceId), query: `AppTraces ${window} | summarize Records=count()`, columns: ['Records'] },
           ...(config.foreignWorkspaceId ? [{ key: 'foreign_workspace' as const, url: endpoint(config.foreignWorkspaceId), query: `Usage ${window} | summarize Records=count()`, columns: ['Records'] }] : []),
-          ...(foundryResourceId ? [{ key: 'foundry_resource' as const, url: `https://api.loganalytics.azure.com/v1${foundryResourceId}/query`, query: `AppTraces ${window} | summarize Records=count()`, columns: ['Records'] }] : []),
+          ...(foundryResourceId ? [{ key: 'foundry_resource' as const, url: `https://api.loganalytics.azure.com/v1${foundryResourceId}/query`, query: `AzureDiagnostics ${window} | summarize Records=count()`, columns: ['Records'] }] : []),
         ];
         await Promise.all(plans.map(async (plan) => {
           try {
             const response = await bounded(fetcher(plan.url, { method: 'POST', signal, redirect: 'error',
-              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', Prefer: 'wait=5' },
+              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json',
+                Prefer: plan.key === 'foundry_resource' ? 'wait=5, include-permissions=true' : 'wait=5' },
               body: JSON.stringify({ query: plan.query }) }), signal);
-            if (response.status === 403) {
-              void response.body?.cancel().catch(() => undefined);
-              matched.checks[plan.key] = 'denied';
-              return;
-            }
             if (!response.ok) {
-              void response.body?.cancel().catch(() => undefined);
-              matched.checks[plan.key] = ({ 400: 'bad_request', 401: 'unauthenticated', 404: 'not_found',
+              matched.checks[plan.key] = ({ 400: 'bad_request', 401: 'unauthenticated', 403: 'denied', 404: 'not_found',
                 408: 'timeout', 429: 'throttled', 504: 'timeout' } as Record<number, Verdict>)[response.status] ?? 'unavailable';
+              if (plan.key === 'foundry_resource') {
+                try { matched.checks.foundry_permissions = foundryPermissions(await body(response, signal), foundryResourceId!); }
+                catch { matched.checks.foundry_permissions = signal.aborted ? 'timeout' : 'unavailable'; }
+              } else { void response.body?.cancel().catch(() => undefined); }
               return;
             }
-            const row = counts(await body(response, signal), plan.columns);
+            const value = await body(response, signal);
+            if (plan.key === 'foundry_resource') matched.checks.foundry_permissions = foundryPermissions(value, foundryResourceId!);
+            const row = counts(value, plan.columns);
             if (!row) { matched.checks[plan.key] = 'invalid_response'; return; }
             matched.checks[plan.key] = plan.key === 'unfiltered_table'
               ? row[1]! > 0 ? 'other_app_visible' : row[0]! > 0 ? 'backend_only' : 'no_visible_rows'
               : plan.key === 'foreign_workspace' || plan.key === 'foundry_resource' ? 'query_allowed'
                 : row[0]! > 0 ? plan.key === 'other_app' ? 'other_app_visible' : 'rows_visible' : 'no_visible_rows';
-          } catch { matched.checks[plan.key] = signal.aborted ? 'timeout' : 'unavailable'; }
+          } catch {
+            matched.checks[plan.key] = signal.aborted ? 'timeout' : 'unavailable';
+            if (plan.key === 'foundry_resource') matched.checks.foundry_permissions = matched.checks[plan.key];
+          }
         }));
         return matched;
       } catch { return result; }

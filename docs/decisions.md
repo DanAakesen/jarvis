@@ -1,3 +1,22 @@
+## 29 October 2026 — distinguish Foundry table errors from log permission evidence (#1341)
+
+The first actual Foundry probe returned 400 while querying `AppTraces`.
+[Cognitive Services supported logs](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/supported-logs/microsoft-cognitiveservices-accounts-logs)
+use `AzureDiagnostics`. Use that fixed aggregate and request the
+[resource API's permission metadata](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries).
+Classify resource/data-source/deny-table metadata only in bounded backend memory;
+return fixed states separately from the HTTP verdict. A 400, empty response or
+absence of an explicit table denial does not prove isolation or clear existing
+grant concerns. No roles, access mode or activation changes are authorized here.
+
+Use the documented ARM [assignedTo filter](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest)
+for the verified backend service principal at workspace, verified Foundry and
+existing subscription scopes. It includes transitive group grants without new
+directory access. Paginate within the fixed existing budget, otherwise report an
+incomplete scope. Preserve raw conditions only in the private report. The real
+foreign-workspace requirement stays unchanged pending any explicit owner-approved
+qualification change. The separate migration task owns chat failure diagnosis.
+
 ## 29 October 2026 — observe actual backend authorization before a log grant (#1341)
 
 The corrected main preflight passed but surfaced an existing resource-log grant

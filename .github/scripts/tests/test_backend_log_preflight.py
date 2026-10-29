@@ -8,6 +8,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from backend_log_preflight import (
     ACTIONS,
@@ -35,13 +36,14 @@ BOOTSTRAP = {"subscriptionId": SUBSCRIPTION, "tenantId": TENANT, "resourceGroup"
              "backendIdentity": {"resourceId": IDENTITY, "principalId": PRINCIPAL, "clientId": CLIENT}}
 WEB = {"backendUrl": "https://ca-jarvis-backend-aaaaaaaaaaaaa.synthetic.swedencentral.azurecontainerapps.io"}
 EXPECTED = targets(BOOTSTRAP, WEB)
+FOUNDRY = GROUP + "/providers/Microsoft.CognitiveServices/accounts/jarvis-20261001000000-aaaaaaaaaaaaa"
 
 
 class FakeAzure:
     def __init__(self):
         self.calls = []
         self.identity = {"id": IDENTITY, "principalId": PRINCIPAL, "clientId": CLIENT, "tenantId": TENANT}
-        self.app = {"id": EXPECTED["app_id"], "identities": {IDENTITY: {}}, "clientId": CLIENT}
+        self.app = {"id": EXPECTED["app_id"], "identities": {IDENTITY: {}}, "clientId": CLIENT, "foundryResourceId": FOUNDRY}
         self.workspace = {"id": EXPECTED["workspace_id"], "customerId": CUSTOMER, "retention": 30,
                           "features": {"enableLogAccessUsingOnlyResourcePermissions": True}}
         self.table = {"id": EXPECTED["workspace_id"] + "/tables/ContainerAppConsoleLogs_CL", "plan": "Analytics",
@@ -59,6 +61,8 @@ class FakeAzure:
             return self.identity
         if resource == EXPECTED["app_id"]:
             return self.app
+        if resource == FOUNDRY:
+            return {"id": FOUNDRY}
         if resource == EXPECTED["workspace_id"]:
             return self.workspace
         if resource.endswith("/tables/ContainerAppConsoleLogs_CL"):
@@ -84,7 +88,11 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(result["stage"], "metadata_only")
         for key in ("grant_applied", "reader_enabled", "provider_enforcement_verified", "effective_group_memberships_verified"):
             self.assertFalse(result[key])
-        self.assertEqual(len(azure.calls), 9)
+        self.assertEqual(len(azure.calls), 13)
+        self.assertTrue(result["assigned_to_inventory_complete"])
+        assigned = [call for call in azure.calls if isinstance(call[2], dict) and "assignedTo" in call[2].get("$filter", "")]
+        self.assertEqual(len(assigned), 3)
+        self.assertTrue(all(call[2] == {"$filter": "assignedTo('" + PRINCIPAL + "')"} and call[1] == "2022-04-01" for call in assigned))
         self.assertNotIn("sharedKey", json.dumps(azure.calls))
         self.assertNotIn("Log_s", json.dumps(azure.calls))  # Schema is read; log content is never queried.
 
@@ -99,6 +107,58 @@ class MetadataTests(unittest.TestCase):
         azure.app["identities"] = {}
         with self.assertRaisesRegex(PreflightBlocked, "runtime_identity_mismatch"):
             inspect(EXPECTED, azure)
+
+    def test_foundry_target_requires_verified_backend_configuration_and_live_resource(self):
+        for target in (None, "https://evil.invalid", FOUNDRY.replace("rg-jarvis", "foreign-group"), FOUNDRY + "/projects/synthetic"):
+            azure = FakeAzure()
+            azure.app["foundryResourceId"] = target
+            with self.assertRaisesRegex(PreflightBlocked, "runtime_foundry_mismatch"):
+                inspect(EXPECTED, azure)
+        azure = FakeAzure()
+        original = azure.get
+        azure.get = lambda resource, version, query=None: {"id": IDENTITY} if resource == FOUNDRY else original(resource, version, query)
+        with self.assertRaisesRegex(PreflightBlocked, "live_foundry_mismatch"):
+            inspect(EXPECTED, azure)
+
+    def test_assigned_to_reads_transitive_group_roles_and_keeps_conditions_private(self):
+        azure = FakeAzure()
+        role_id = "66666666-6666-4666-8666-666666666666"
+        assignment = {"properties": {"principalId": CLIENT, "principalType": "Group", "scope": FOUNDRY,
+                      "condition": "synthetic-private-condition", "conditionVersion": "2.0",
+                      "roleDefinitionId": GROUP + "/providers/Microsoft.Authorization/roleDefinitions/" + role_id}}
+        original_pages, original_get = azure.pages, azure.get
+        def pages(resource, version, parameters=None):
+            if parameters and "assignedTo" in parameters.get("$filter", ""):
+                return [assignment] if resource.startswith(FOUNDRY) else []
+            return original_pages(resource, version, parameters)
+        def get(resource, version, query=None):
+            if resource.endswith("/roleDefinitions/" + role_id):
+                return {"properties": {"permissions": [{"actions": ["Microsoft.Insights/logs/AzureDiagnostics/read"]}]}}
+            return original_get(resource, version, query)
+        azure.pages, azure.get = pages, get
+        result = inspect(EXPECTED, azure)
+        self.assertIn("existing_group_resource_log_grant_requires_review", result["checks"])
+        self.assertNotIn("potential_group_resource_log_grant_membership_unverified", result["checks"])
+        self.assertEqual(result["assigned_to_assignments"]["foundry"], [assignment])
+        self.assertTrue(result["assigned_to_inventory_complete"])
+        self.assertFalse(result["provider_enforcement_verified"])
+        self.assertNotIn("synthetic-private-condition", json.dumps(result["checks"]))
+
+    def test_unavailable_or_invalid_effective_inventory_is_not_complete(self):
+        for invalid in (False, True):
+            azure = FakeAzure()
+            original = azure.pages
+            def pages(resource, version, parameters=None, invalid=invalid, original=original):
+                if parameters and "assignedTo" in parameters.get("$filter", "") and "/resourceGroups/" not in resource:
+                    if invalid:
+                        return [{"properties": {"principalId": CLIENT, "principalType": "ServicePrincipal"}}]
+                    raise PreflightBlocked("azure_read_unavailable")
+                return original(resource, version, parameters)
+            azure.pages = pages
+            result = inspect(EXPECTED, azure)
+            self.assertIn("assigned_to_subscription_inventory_unavailable", result["checks"])
+            self.assertFalse(result["assigned_to_inventory_complete"])
+            self.assertNotIn("subscription", result["assigned_to_assignments"])
 
     def test_rejects_wrong_workspace_missing_customer_id_unknown_mode_or_changed_retention(self):
         for key, value, reason in (("id", IDENTITY, "live_workspace_mismatch"), ("customerId", "not-a-guid", "live_workspace_mismatch"),
@@ -260,6 +320,23 @@ class TransportTests(unittest.TestCase):
         body = json.dumps({"value": [{}] * 1001}).encode()
         with self.assertRaisesRegex(PreflightBlocked, "inventory_limit"):
             Azure(SUBSCRIPTION, run=lambda *a, **k: subprocess.CompletedProcess(a, 0, body, b'')).pages(GROUP, "2022-04-01")
+
+    def test_assigned_to_inventory_consumes_all_pages_and_never_hides_truncation(self):
+        scope = EXPECTED["workspace_id"] + "/providers/Microsoft.Authorization/roleAssignments"
+        seen = []
+        def run(args, **kwargs):
+            url = args[args.index("--url") + 1]
+            seen.append(url)
+            page = {"value": [{"id": "synthetic-page-" + str(len(seen))}]}
+            if len(seen) == 1:
+                page["nextLink"] = "https://management.azure.com" + scope + "?api-version=2022-04-01&$skiptoken=synthetic"
+            return subprocess.CompletedProcess(args, 0, json.dumps(page).encode(), b'')
+        result = Azure(SUBSCRIPTION, run=run).pages(scope, "2022-04-01", {"$filter": "assignedTo('" + PRINCIPAL + "')"})
+        self.assertEqual(len(result), 2)
+        self.assertEqual(parse_qs(urlsplit(seen[0]).query)["$filter"], ["assignedTo('" + PRINCIPAL + "')"])
+        body = {"value": [], "nextLink": "https://management.azure.com" + scope + "?api-version=2022-04-01&$skiptoken=synthetic"}
+        with self.assertRaisesRegex(PreflightBlocked, "inventory_limit"):
+            Azure(SUBSCRIPTION, run=lambda *a, **k: subprocess.CompletedProcess(a, 0, json.dumps(body).encode(), b'')).pages(scope, "2022-04-01")
 
     def test_main_fails_closed_outside_normal_main_without_printing_private_input(self):
         output = io.StringIO()

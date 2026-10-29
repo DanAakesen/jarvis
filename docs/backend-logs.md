@@ -1,3 +1,41 @@
+## Foundry resource-log correction — 29 October 2026
+
+Deploy [40836577365](https://github.com/DanAakesen/jarvis/actions/runs/40836577365)
+matched the backend identity and returned 403 for unfiltered console, other-app
+and other-table queries. Foundry returned 400; the real foreign-workspace control
+remained missing. Rollout/readiness passed, live chat/research acceptance failed.
+No log grant or reader enablement occurred.
+
+The prepared correction uses a fixed `AzureDiagnostics | ... | summarize Records=count()`
+resource query, matching the [supported Cognitive Services log table](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/supported-logs/microsoft-cognitiveservices-accounts-logs).
+Only that request adds `Prefer: include-permissions=true`. The
+[resource-query API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries)
+may filter inaccessible sources and return empty results or 4xx for absent data.
+The backend validates bounded `permissions.resources` and `permissions.dataSources`
+metadata, matching the expected resource and referenced data sources. It emits a
+separate fixed `foundry_permissions` state: missing/invalid metadata, resource not
+listed, no sources, sources not listed, an explicit resource/source table denial,
+or `table_not_explicitly_denied`. The last state means only that a listed path has
+no explicit denial for the queried table in this response. It is not an effective
+access or isolation proof. HTTP status remains separate, even for error responses.
+No metadata strings, identifiers, log rows, counts or provider text are exposed.
+The existing five-request/eight-second/4-KiB bounds and per-process cache remain.
+
+The ARM preflight additionally verifies the existing Foundry resource and reads
+fully paginated `assignedTo` inventories for the backend principal at workspace,
+Foundry and existing subscription scopes using API 2022-04-01. Microsoft documents
+[transitive group assignments](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest)
+for this filter. No Graph access or new permission is requested. A failed read,
+page/call/time limit or malformed inventory marks that scope incomplete. Private
+assignments and conditions remain in the existing mode-0600 report; pipeline
+output contains only fixed scope/grant-review labels.
+
+The existing resource Reader warning remains a blocker: in resource-or-workspace
+mode, [resource-level read access bypasses workspace conditions](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/granular-rbac-log-analytics).
+Do not change roles or workspace mode without separate specific approval. Do not
+silently waive the real foreign-workspace control; any qualification change must
+be reviewed and approved first. No new grant or activation is included here.
+
 ## Current qualification: metadata passed, grant still off — 29 October 2026
 
 Deploy [40828872899](https://github.com/DanAakesen/jarvis/actions/runs/40828872899)
