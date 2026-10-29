@@ -28,6 +28,7 @@ class FakeAzure:
         self.version = {"name": script.AGENT_NAME, "version": "1", "status": "active", "metadata": script.MARKER,
                         "definition": script.definition(MANIFEST)}
         self.identity = {"principal_id": "11111111-2222-4333-8444-555555555555", "status": "active"}
+        self.agent_state = "enabled"
         self.extra_versions = False
         self.fail_create = False
 
@@ -56,7 +57,7 @@ class FakeAzure:
             return {}
         if "/versions/" in path:
             return copy.deepcopy(self.version)
-        return {"name": script.AGENT_NAME, "state": "enabled", "instance_identity": self.identity,
+        return {"name": script.AGENT_NAME, "state": self.agent_state, "instance_identity": self.identity,
                 "agent_endpoint": {"version_selector": self.selector}}
 
 
@@ -93,6 +94,59 @@ class ProvisionTests(unittest.TestCase):
                 with self.assertRaises(script.Blocked):
                     script.provision(azure, script.definition(MANIFEST))
                 self.assertFalse(any(item[0] != "GET" for item in azure.calls))
+
+    def test_optional_identity_status_reuses_existing_exact_version(self):
+        for status in ["omitted", None, "active"]:
+            with self.subTest(status=status):
+                azure = FakeAzure(existing=True)
+                if status == "omitted":
+                    del azure.identity["status"]
+                else:
+                    azure.identity["status"] = status
+                activation = script.provision(azure, script.definition(MANIFEST))
+                self.assertEqual(activation["version"], "1")
+                self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["PATCH"])
+                azure.calls.clear()
+                self.assertEqual(script.provision(azure, script.definition(MANIFEST)), activation)
+                self.assertFalse(any(call[0] != "GET" for call in azure.calls))
+
+    def test_disabled_unknown_or_invalid_identity_stops_before_pinning(self):
+        for state, status, principal, reason in [
+            ("disabled", "active", "11111111-2222-4333-8444-555555555555", "agent_state_not_enabled"),
+            (None, "active", "11111111-2222-4333-8444-555555555555", "agent_state_not_enabled"),
+            ("enabled", "disabled", "11111111-2222-4333-8444-555555555555", "agent_identity_not_active"),
+            ("enabled", "unknown", "11111111-2222-4333-8444-555555555555", "agent_identity_not_active"),
+            ("enabled", None, "private-invalid-principal", "agent_principal_unverified"),
+            ("enabled", None, None, "agent_principal_unverified"),
+        ]:
+            with self.subTest(state=state, status=status, principal=principal):
+                azure = FakeAzure(existing=True)
+                azure.agent_state = state
+                azure.identity = {"status": status, "principal_id": principal}
+                with self.assertRaisesRegex(script.Blocked, "^" + reason + "$"):
+                    script.provision(azure, script.definition(MANIFEST))
+                self.assertFalse(any(call[0] != "GET" for call in azure.calls))
+
+    def test_identity_status_population_keeps_same_principal_but_substitution_is_rejected(self):
+        for replace in [False, True]:
+            with self.subTest(replace=replace):
+                azure = FakeAzure(existing=True)
+                del azure.identity["status"]
+                data = azure.data
+                def update(path, method="GET", body=None, *, data=data, azure=azure, replace=replace):
+                    result = data(path, method, body)
+                    if method == "PATCH":
+                        azure.identity = {**azure.identity, "status": "active"}
+                        if replace:
+                            azure.identity["principal_id"] = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+                    return result
+                azure.data = update
+                if replace:
+                    with self.assertRaisesRegex(script.Blocked, "^agent_endpoint_unverified$"):
+                        script.provision(azure, script.definition(MANIFEST))
+                else:
+                    self.assertEqual(script.provision(azure, script.definition(MANIFEST))["version"], "1")
+                self.assertFalse(any(call[0] == "POST" for call in azure.calls))
 
     def test_uncertain_create_is_not_retried_and_does_not_pin(self):
         azure = FakeAzure()

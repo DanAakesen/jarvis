@@ -172,6 +172,21 @@ def validate_version(value: dict, expected: dict, version: str) -> dict:
     return actual
 
 
+def agent_principal(agent: dict) -> str:
+    require(agent.get("name") == AGENT_NAME, "existing_agent_ambiguous")
+    require(agent.get("state") == "enabled", "agent_state_not_enabled")
+    identity = agent.get("instance_identity")
+    require(isinstance(identity, dict), "agent_identity_unverified")
+    # Foundry omits this optional Entra status when unset; state is effective enablement.
+    status = identity.get("status")
+    require(status is None or status == "active", "agent_identity_not_active")
+    principal = identity.get("principal_id")
+    require(isinstance(principal, str)
+            and re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", principal) is not None,
+            "agent_principal_unverified")
+    return principal
+
+
 def provision(azure: Azure, expected: dict) -> dict:
     preflight(azure)
     records = azure.inventory("/agents")
@@ -196,17 +211,13 @@ def provision(azure: Azure, expected: dict) -> dict:
         time.sleep(2)
     actual = validate_version(readback, expected, version)
     agent = azure.data("/agents/" + AGENT_NAME)
-    identity = agent.get("instance_identity") or {}
-    require(agent.get("state") == "enabled" and identity.get("status") == "active"
-            and isinstance(identity.get("principal_id"), str)
-            and re.fullmatch(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", identity["principal_id"]) is not None,
-            "agent_identity_unverified")
+    principal = agent_principal(agent)
     selector = {"version_selection_rules": [{"type": "FixedRatio", "agent_version": version, "traffic_percentage": 100}]}
     if (agent.get("agent_endpoint") or {}).get("version_selector") != selector:
         azure.data("/agents/" + AGENT_NAME, "PATCH", {"agent_endpoint": {"version_selector": selector}})
     agent = azure.data("/agents/" + AGENT_NAME)
     require((agent.get("agent_endpoint") or {}).get("version_selector") == selector
-            and agent.get("instance_identity") == identity, "agent_endpoint_unverified")
+            and agent_principal(agent) == principal, "agent_endpoint_unverified")
     actual = validate_version(azure.data("/agents/" + AGENT_NAME + "/versions/" + version), expected, version)
     from managed_definition_fingerprint import managed_definition_fingerprint
     return {"projectEndpoint": azure.endpoint, "agentName": AGENT_NAME, "version": version,

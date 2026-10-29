@@ -1,3 +1,14 @@
+## 29 October 2026 — use the documented optional identity status (#1350)
+
+The [Foundry governance contract](https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin)
+defines effective agent `state` separately from optional Entra identity `status`.
+Provisioning may accept unset status only alongside enabled effective state and
+a valid principal UUID, retaining that principal across endpoint readback.
+Explicit disabled/unknown states remain blocked. This corrects a schema mismatch;
+it does not prove the exact field behind live `agent_identity_unverified`, enable
+an identity, grant access or authorize a replacement resource. Reconcile and reuse
+the existing exact single-version candidate before another handoff.
+
 ## 29 October 2026 — first runtime comparison boundaries (#1350)
 
 The owner subsequently declined extra exclusion from search, recent context and
