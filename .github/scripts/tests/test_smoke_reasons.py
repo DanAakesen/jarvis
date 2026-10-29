@@ -77,6 +77,7 @@ class SmokeReasonsTests(unittest.TestCase):
     def test_unknown_code_shaped_origins_are_redacted_in_logs_and_artifacts(self):
         for code in ("private_provider_detail", "settings_http_418", "error_privateexception",
                      "agent_http_418", "agent_error_code_other",
+                     "managed_future_unreviewed", "managed_session_busy\n::warning::private",
                      "settings_timeout\n::error::private"):
             with self.subTest(code=code):
                 report = {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}

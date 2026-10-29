@@ -12,6 +12,10 @@ turns, safe follow-up, consumed-source rejection and uncertain-action blocking.
 Next: exact-head qualification/review and live original-path validation. No grant,
 default cutover or claim reset is included.
 
+CI found the release smoke formatter's hosted-origin list missing the newly
+preserved managed codes. Its static finite list now matches the backend; exact
+parity, unknown-code redaction and failure-only acceptance assertions stay intact.
+
 ## Managed canary failure visibility (#1350; 29 October 2026)
 
 PR #1357 merged after qualification. Manual Deploy 40884299864 passed provisioning
