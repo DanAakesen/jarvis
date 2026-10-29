@@ -239,6 +239,22 @@ def mode_context(settings: ModelSettings) -> str:
     )
 
 
+def chat_model_tools(definitions: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Apply the existing normal-chat schema boundary to prepared tool definitions."""
+    tools = list(definitions)
+    for tool in tools:
+        if tool["name"] == "get_system_health":
+            parameters = tool["parameters"]
+            tool["parameters"] = {
+                **parameters,
+                "properties": {
+                    name: value for name, value in parameters["properties"].items()
+                    if name != "operation"
+                },
+            }
+    return tools
+
+
 def personalize_instructions(
     instructions: str, settings: ModelSettings | None, language: str = "da"
 ) -> str:
@@ -546,6 +562,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             ),
             reasoning_effort=os.getenv("JARVIS_REASONING_EFFORT", "").strip() or None,
         )
+
+    async def _create_response(self, request: dict[str, Any]) -> Any:
+        """Provider transport seam; application policies remain in _complete."""
+        return await self._client.responses.create(**request)
 
     def diagnostics(self) -> str:
         """Short, secret-free status of the backend tools for troubleshooting."""
@@ -1020,18 +1040,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             for name in SMOKE_TOOL_ORDER if name in definitions
                         ]
                     else:
-                        tools = list(definitions.values())
-                        for tool in tools:
-                            if tool["name"] == "get_system_health":
-                                parameters = tool["parameters"]
-                                tool["parameters"] = {
-                                    **parameters,
-                                    "properties": {
-                                        name: value
-                                        for name, value in parameters["properties"].items()
-                                        if name != "operation"
-                                    },
-                                }
+                        tools = chat_model_tools(list(definitions.values()))
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
                 steering_fetcher = current_steering_fetcher.get()
@@ -1224,7 +1233,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     latency_span("model_request"),
                                     latency_span("model_request_max"),
                                 ):
-                                    stream = await self._client.responses.create(**request)
+                                    stream = await self._create_response(request)
                             except Exception as exc:
                                 if (
                                     image_request
