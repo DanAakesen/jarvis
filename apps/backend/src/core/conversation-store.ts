@@ -1,3 +1,4 @@
+import type { RuntimeTest } from './runtime-session.js';
 import type { VisualContext } from './visual-context.js';
 
 export type ConversationChannel = 'chat' | 'voice' | 'phone';
@@ -10,6 +11,7 @@ export interface ConversationSession {
   readonly language: ConversationLanguage;
   readonly startedAt: Date;
   readonly endedAt: Date | null;
+  readonly runtimeTest?: RuntimeTest;
 }
 
 export interface ConversationMessage {
@@ -70,6 +72,8 @@ export interface ConversationStore {
   createSession(input: {
     readonly channel: ConversationChannel;
     readonly language: ConversationLanguage;
+    readonly runtimeTest?: RuntimeTest;
+    readonly ownerObjectId?: string;
   }): Promise<ConversationSession>;
   getSession(sessionId: string): Promise<ConversationSession | null>;
   endSession(sessionId: string): Promise<boolean>;
@@ -102,6 +106,8 @@ export interface ConversationStore {
   readRecentUserMessages(limit?: number): Promise<string[]>;
   getHistory(input: {
     readonly limit: number;
+    /** Route must authorize an explicit session target before calling. */
+    readonly sessionId?: string;
     readonly before?: string;
   }): Promise<ConversationHistoryPage>;
   searchMessages?(
