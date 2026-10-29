@@ -5,6 +5,27 @@ This is local preparation for one separate agent named
 creates credentials, assigns roles, creates connections, or deletes resources.
 No provisioning or live verification ran while preparing it.
 
+Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
+reached `agent_identity_unverified` on 29 October 2026. That check follows readback
+of one active, exact comparison-agent version and precedes endpoint pinning,
+backend target configuration and the canary. The comparison resource therefore
+exists; do not create a replacement or another version. The combined failure
+does not distinguish agent state, optional identity status and principal ID, so
+no missing grant or exact failing field is proven.
+
+Microsoft's [governance contract](https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin)
+defines `state` as effective runtime enablement and identity `status` as optional,
+omitted when unset. The provisioner now accepts omitted/null status only with an
+enabled agent and valid principal UUID. It still refuses explicit disabled or
+unknown status, disabled/unknown effective state and invalid principal IDs, with
+distinct fixed failure codes. Readback after pinning must retain that principal;
+optional status becoming populated does not change identity. These checks neither
+enable an agent nor change Entra state or roles. The existing exact-name/version/
+definition checks run before any reuse or endpoint write. This correction has
+not yet been exercised live. All 30 provisioning/handoff/deploy-plan tests,
+scoped Ruff, compilation and shell syntax checks pass locally; exact-head CI and
+live handoff remain required.
+
 The target is the existing Jarvis project in Sweden Central:
 
 - Project ID: `/subscriptions/0ac7d719-89bc-4100-be87-a79d33e953a7/resourceGroups/rg-jarvis/providers/Microsoft.CognitiveServices/accounts/jarvis-20261003200000-rmw7kae3bza6a/projects/jarvis-20261003200000`
@@ -78,7 +99,8 @@ The apply path performs:
    the version metadata marker `jarvis_migration=managed-chat-1350`.
 3. Read the agent and all its versions, including drafts. Require exactly one
    version, the marker, exact normalized definition, active status and active
-   instance identity. Pending `creating` status has bounded read-only polling.
+   instance identity principal and effective enabled state, accepting documented
+   unset identity status. Pending version `creating` status has bounded read-only polling.
    Existing-name ambiguity stops without writing a new version.
 4. Pin only this agent's endpoint by `PATCH /agents/jarvis-main-copilot-preview`
    with `agent_endpoint.version_selector.version_selection_rules` containing one

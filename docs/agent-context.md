@@ -1,3 +1,14 @@
+## Managed identity readback failure (#1350; 29 October 2026)
+
+Manual Deploy 40877005757 failed at `agent_identity_unverified` after an active
+comparison version was verified; backend activation and canary did not run.
+Microsoft documents identity status as optional. Preserve enabled effective
+state, UUID principal, exact existing version/definition and post-pin principal
+checks while accepting unset status. Keep explicit disabled/unknown states
+blocked. No actual missing permission or exact failed field is proven. Do not
+create another resource/version or add grants. Run provisioning/handoff tests,
+scoped Ruff/compilation and exact-head CI before reviewed release and handoff.
+
 ## Runtime comparison preparation (#1350; 29 October 2026)
 
 Use the existing pinned dependencies; the protocol adapter adds no production

@@ -1,3 +1,21 @@
+## Managed identity readback correction (#1350; 29 October 2026)
+
+PR #1355 merged after full exact-head qualification. Automatic Deploy 40867958702
+applied all components and passed readiness and all eight chat smoke checks;
+research failed separately. Approved manual Deploy 40877005757 reused those
+components and reached `agent_identity_unverified` after validating one active
+comparison version, before endpoint pinning/backend activation/canary. Do not
+create a duplicate or infer a missing grant from that combined check.
+Its separate acceptance also reported `acceptance_check_failed` for chat canary,
+`github_issue_unavailable` for GitHub read and `research_runner_failed`.
+
+The local correction accepts documented unset identity status with enabled
+effective state and a valid unchanged principal. Explicit disabled/unknown
+states still fail; fixed codes distinguish the rejected component. All 30
+provisioning/handoff/deploy-plan tests, scoped Ruff, compilation and shell syntax
+checks pass locally. Reviewed qualification precedes another existing-resource handoff. No live
+correction, Copilot response or UI acceptance is claimed.
+
 ## Runtime comparison candidate (#1350; 29 October 2026)
 
 The local candidate contains the managed protocol adapter and definition
