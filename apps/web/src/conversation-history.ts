@@ -1,3 +1,4 @@
+import type { RuntimeTestAvailability, TestRuntime } from './RuntimeTestSelector';
 import type { PublicConfig } from '../config/public-config';
 import { backendFetch, awaitWithSignal as waitForChatSetup } from './backend-request';
 import type { ChatAttachment } from './chat-attachments';
@@ -35,7 +36,10 @@ export interface ConversationHistoryPage {
 export interface ChatSession {
   id: string;
   language: 'da' | 'en';
+  runtimeTest?: TestRuntime;
 }
+
+export type RuntimeTestSession = ChatSession & { runtimeTest: TestRuntime };
 
 export interface ChatMessage {
   id: string;
@@ -137,20 +141,23 @@ export async function createChatSession(
   config: PublicConfig,
   language: 'da' | 'en',
   signal?: AbortSignal,
+  runtimeTest?: TestRuntime,
 ): Promise<ChatSession> {
   const response = await chatResponse(getAccessToken, config, '/conversation/sessions', {
     channel: 'chat',
     language,
+    ...(runtimeTest ? { runtimeTest } : {}),
   }, 'application/json', undefined, signal);
   let value: unknown;
   try { value = await response.json(); } catch {
     throw new Error('Jarvis returned an invalid chat session.');
   }
   if (!isRecord(value) || typeof value.id !== 'string' || !/^[1-9]\d{0,18}$/.test(value.id) ||
-      value.channel !== 'chat' || value.language !== language) {
+      value.channel !== 'chat' || value.language !== language ||
+      (value.runtimeTest !== runtimeTest)) {
     throw new Error('Jarvis returned an invalid chat session.');
   }
-  return { id: value.id, language };
+  return { id: value.id, language, ...(runtimeTest ? { runtimeTest } : {}) };
 }
 
 function parseEvent(frame: string): { event: string; data: string } | null {
@@ -414,6 +421,7 @@ export async function loadConversationHistory(
   getAccessToken: () => Promise<string>,
   config: PublicConfig,
   before?: string,
+  sessionId?: string,
 ): Promise<ConversationHistoryPage> {
   const token = await accessToken(getAccessToken);
   if (!config.backendUrl) throw new Error('Conversation history unavailable. Try again.');
@@ -421,6 +429,7 @@ export async function loadConversationHistory(
   const url = new URL(`${config.backendUrl.replace(/\/+$/, '')}/conversation/history`);
   url.searchParams.set('limit', '50');
   if (before !== undefined) url.searchParams.set('before', before);
+  if (sessionId !== undefined) url.searchParams.set('sessionId', sessionId);
 
   let response: Response;
   try {
@@ -441,7 +450,7 @@ export async function loadConversationHistory(
   } catch {
     throw new Error('Jarvis returned an invalid conversation history response.');
   }
-  if (!isHistoryPage(body)) throw new Error('Jarvis returned an invalid conversation history response.');
+  if (!isHistoryPage(body) || (sessionId !== undefined && body.messages.some(message => message.sessionId !== sessionId))) throw new Error('Jarvis returned an invalid conversation history response.');
   return {
     nextCursor: body.nextCursor,
     messages: body.messages.map(message => {
@@ -498,4 +507,31 @@ export async function loadImageArtifactUrl(
     throw new Error('Jarvis returned an untrusted image artifact URL.');
   }
   return url.toString();
+}
+
+/** Configured test availability, not a claim of live model qualification. */
+export async function loadRuntimeTestAvailability(getAccessToken: () => Promise<string>, config: PublicConfig, signal?: AbortSignal): Promise<RuntimeTestAvailability> {
+  if (!config.backendUrl) throw new Error('Runtime tests are unavailable.');
+  const response = await backendFetch(`${config.backendUrl.replace(/\/+$/, '')}/conversation/runtime-tests`, {
+    headers: { Authorization: `Bearer ${await accessToken(getAccessToken)}` }, ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) throw new Error('Could not check runtime availability.');
+  const body: unknown = await response.json();
+  if (!isRecord(body)) throw new Error('Invalid runtime availability.');
+  const availability: RuntimeTestAvailability = {};
+  const reasons: Record<string, string> = {
+    storage_unavailable: 'Conversation storage is unavailable.',
+    current_unavailable: 'Current chat is not configured.',
+    copilot_not_verified: 'The selected settings and Copilot runtime have not been verified.',
+    verification_unavailable: 'Could not verify the Copilot runtime. Try again later.',
+  };
+  for (const runtime of ['current', 'copilot'] as const) {
+    const option = body[runtime];
+    if (!isRecord(option) || typeof option.available !== 'boolean' ||
+        (option.reason !== undefined && typeof option.reason !== 'string')) throw new Error('Invalid runtime availability.');
+    availability[runtime] = { available: option.available, ...(!option.available
+      ? { reason: typeof option.reason === 'string' ? reasons[option.reason] ?? 'This runtime is unavailable.' : 'Availability has not been confirmed.' }
+      : {}) };
+  }
+  return availability;
 }

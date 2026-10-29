@@ -1,3 +1,5 @@
+import { parseRuntimeTest, validateRuntimeSessionId } from '../core/runtime-session.js';
+import { createRuntimeSessionStore } from './runtime-session-store.js';
 import sql from 'mssql';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -45,6 +47,7 @@ interface SessionRow {
   language: ConversationLanguage;
   started_at: Date;
   ended_at: Date | null;
+  runtime_test?: unknown;
 }
 
 interface SessionIdRow extends SessionRow {
@@ -78,12 +81,14 @@ interface ToolCallRow {
 }
 
 function sessionFromRow(row: SessionRow): ConversationSession {
+  const runtimeTest = row.runtime_test === null ? undefined : parseRuntimeTest(row.runtime_test);
   return {
     id: row.id,
     channel: row.channel,
     language: row.language,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    ...(runtimeTest === undefined ? {} : { runtimeTest }),
   };
 }
 
@@ -195,6 +200,13 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     },
 
     async createSession(input) {
+      const runtimeTest = parseRuntimeTest(input.runtimeTest);
+      if (runtimeTest !== undefined) {
+        if (input.channel !== 'chat' || !input.ownerObjectId) throw new TypeError('Runtime test requires an authenticated chat owner');
+        const created = await createRuntimeSessionStore(pool).createSession({ ownerObjectId: input.ownerObjectId,
+          language: input.language, runtimeTest });
+        return { ...created.session, runtimeTest: created.runtimeTest };
+      }
       const result = await pool.request()
         .input('channel', sql.NVarChar(16), input.channel)
         .input('language', sql.NVarChar(8), input.language)
@@ -210,9 +222,10 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     async getSession(sessionId) {
       const result = await databaseReadRequest(pool)
         .input('sessionId', sql.BigInt, BigInt(sessionId))
-        .query<SessionIdRow>(`SELECT CONVERT(varchar(20), id) AS id, channel, language,
-          started_at, ended_at
-          FROM dbo.jarvis_sessions WHERE id = @sessionId;`);
+        .query<SessionIdRow>(`SELECT CONVERT(varchar(20), s.id) AS id, s.channel, s.language,
+          s.started_at, s.ended_at, r.runtime_test
+          FROM dbo.jarvis_sessions s LEFT JOIN dbo.session_runtime_tests r ON r.jarvis_session_id = s.id
+          WHERE s.id = @sessionId;`);
       const row = result.recordset[0];
       return row ? sessionFromRow(row) : null;
     },
@@ -346,10 +359,13 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.recordset.map((row) => row.text);
     },
 
-    async getHistory({ limit, before }) {
+    async getHistory({ limit, before, sessionId, excludeRuntimeTests = false }) {
+      if (sessionId !== undefined) validateRuntimeSessionId(sessionId);
       const result = await databaseReadRequest(pool)
         .input('take', sql.Int, limit + 1)
         .input('beforeId', sql.BigInt, before === undefined ? null : BigInt(before))
+        .input('sessionId', sql.BigInt, sessionId === undefined ? null : BigInt(sessionId))
+        .input('excludeRuntimeTests', sql.Bit, excludeRuntimeTests)
         .query<HistoryRow>(`DECLARE @history TABLE (
             id bigint NOT NULL PRIMARY KEY,
             session_id bigint NOT NULL,
@@ -374,7 +390,10 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             FROM dbo.usage AS u
             WHERE u.jarvis_session_id = s.id AND u.source = N'voice' AND u.metric = N'minutes'
           ) AS voice_usage
-          WHERE @beforeId IS NULL OR m.id < @beforeId
+          WHERE (@beforeId IS NULL OR m.id < @beforeId)
+            AND ((@sessionId IS NOT NULL AND s.id = @sessionId) OR
+              (@sessionId IS NULL AND (@excludeRuntimeTests = 0 OR NOT EXISTS (
+                SELECT 1 FROM dbo.session_runtime_tests r WHERE r.jarvis_session_id = s.id))))
           ORDER BY m.id DESC;
 
           SELECT CONVERT(varchar(20), id) AS id,

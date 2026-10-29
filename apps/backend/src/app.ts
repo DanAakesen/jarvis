@@ -69,6 +69,9 @@ import {
 import { registerWebSocketPlugin } from './websocket.js';
 
 export interface BuildAppOptions {
+  readonly managedRuntime?: import('./core/managed-runtime-routes.js').ManagedRuntimeServices;
+  /** Supplied only after managed definition, settings and application-policy verification. */
+  readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
@@ -171,6 +174,8 @@ declare module 'fastify' {
     onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
+    conversationRuntimeTests: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader | null;
+    managedRuntime: import('./core/managed-runtime-routes.js').ManagedRuntimeServices | null;
     reflexClassifier: ReflexClassifier | null;
     approvalInterpreter: ApprovalInterpreter;
     browserAgent: BrowserAgent | null;
@@ -352,6 +357,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('conversationRuntimeTests', options.conversationRuntimeTests ?? null);
+  app.decorate('managedRuntime', options.managedRuntime ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);
   app.decorate('conversationSummaryStore', options.conversationSummaryStore ?? null);
   if (options.conversationAttachments) {

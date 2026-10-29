@@ -13,7 +13,8 @@ import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
-const { loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+const { loadRuntimeTestAvailability, loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+  loadRuntimeTestAvailability: vi.fn(),
   loadActiveChatTurns: vi.fn(),
   loadConversationHistory: vi.fn(),
   loadImageArtifactUrl: vi.fn(),
@@ -25,7 +26,7 @@ const { loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, crea
 vi.mock('./conversation-history', async (importOriginal) => ({
   ...await importOriginal<typeof import('./conversation-history')>(),
   loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn,
-  loadActiveChatTurns,
+  loadActiveChatTurns, loadRuntimeTestAvailability,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -161,6 +162,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   MockDictationRecognition.failStart = false;
   loadActiveChatTurns.mockResolvedValue([]);
+  loadRuntimeTestAvailability.mockResolvedValue({ current: { available: true }, copilot: { available: false, reason: 'Not verified.' } });
   loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -174,6 +176,26 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('opens a labelled separate runtime test only after Start and preserves the normal draft on return', async () => {
+    const user = userEvent.setup();
+    createChatSession.mockResolvedValue({ id: '70', language: 'en', runtimeTest: 'current' });
+    renderConversation();
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Keep my normal draft');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Test agent runtime' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Current' })).toHaveProperty('disabled', false));
+    expect(createChatSession).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('radio', { name: 'Current' }));
+    await user.click(screen.getByRole('button', { name: 'Open test conversation' }));
+    await screen.findByRole('heading', { name: 'Current test conversation' });
+    expect(createChatSession).toHaveBeenCalledExactlyOnceWith(getAccessToken, config, 'en', undefined, 'current');
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledWith(getAccessToken, config, undefined, '70'));
+    await user.click(screen.getByRole('button', { name: 'Return to normal conversation' }));
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', 'Keep my normal draft');
+    expect(sessionStorage.getItem('jarvis.chat.draft')).toBe('Keep my normal draft');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
   it.each(['Send', 'More options', 'Dictate'])('preserves typing focus through the recorded later mouse-down on %s, activating only on click', async (name) => {
     vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
     sendChatTurn.mockImplementation(() => new Promise(() => {}));
@@ -605,7 +627,7 @@ describe('ConversationHistory', () => {
     const plus = screen.getByRole('button', { name: 'More options' });
     await user.click(plus);
     const items = screen.getAllByRole('menuitem');
-    expect(items.map(item => item.textContent)).toEqual(['Language', ...(phone ? ['Copy Send diagnostic'] : []), 'Voice', 'Attach file or photo']);
+    expect(items.map(item => item.textContent)).toEqual(['Language', 'Test agent runtime', ...(phone ? ['Copy Send diagnostic'] : []), 'Voice', 'Attach file or photo']);
     expect(document.activeElement).toBe(items[0]);
     await user.keyboard('{End}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Attach file or photo' }));

@@ -1,3 +1,34 @@
+## Runtime comparison preparation (#1350; 29 October 2026)
+
+Use the existing pinned dependencies; the protocol adapter adds no production
+package. Hosted checks cover managed protocol/definition, source routing and
+retained voice. Backend checks cover runtime session/store/migration and routes;
+web checks cover selector/client/scoped conversation/menu/Modal and unchanged
+normal chat. The repeatable synthetic browser check is
+`scripts/check-runtime-test-browser.mjs`; its output is under
+`docs/ui/screenshots/runtime-test-1350/`. These are offline checks, not live parity.
+SQL integration requires the existing isolated database harness; no live migration
+was applied in this preparation. Do not enable the managed option from local
+configuration alone. See [remaining gates](managed-chat-adapter.md).
+
+The comparison handoff is an explicit main-only manual Deploy dispatch with
+`provision_managed_chat=true`, after exact-head qualification. Normal pushes do
+not create the comparison agent. See [provisioning steps](managed-chat-provisioning.md).
+No new Azure login or credentials are needed. A real permission rejection must be
+reported by operation/current identity/scope before proposing a missing grant.
+The fixed manifest operation exports only static instructions/current schemas;
+it does not read personal context or invoke a tool. The canary has the same
+210-second invocation ceiling as the existing chat bridge and never executes
+functions. SQL qualification remains blocked locally by a Forbidden image pull;
+do not substitute a different image. Database CI subsequently applied the committed
+migrations and passed all four new runtime integration cases. After the three
+stale schema-inventory assertions were corrected, CI 40864485219 passed Database
+and Web. Backend failed only two lifecycle fixture teardown hooks: Node 22.23.3
+left an unrequested fetch replacement socket after abort. The fixture now closes
+its connections during teardown, with all lifecycle assertions unchanged; all
+four cases pass locally on that exact Node version. Full CI requalification is
+still pending.
+
 ## Whole-Jarvis log preparation (#1341; 29 October 2026)
 
 Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,

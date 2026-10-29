@@ -1,3 +1,39 @@
+## Runtime comparison candidate (#1350; 29 October 2026)
+
+The local candidate contains the managed protocol adapter and definition
+validator, immutable SQL test-session metadata, scoped history/default exclusion,
+source-verified bridge selection, and the approved chat-menu selector with a
+separate labelled test view. The managed option remains disabled until real
+definition/model/effort readback and deployment pass. Durable source/turn
+claims, agent-only binding routes/client and shared application-policy transport
+are now implemented locally. Identical backend disconnect/reattach and steering
+fixtures execute for both choices. The owner declined extra transcript filtering
+from normal search/context/summaries; preserve those existing contracts. No target, identity grant or production
+default was created or changed. The [adapter checkpoint](docs/managed-chat-adapter.md)
+lists the missing policy and provisioning evidence.
+
+The last-mile source is assembled: lazy Python factory, pinned backend target
+reader/configuration, authoritative fixed manifest read, scoped provisioning
+script and default-off manual Deploy handoff. That handoff creates the comparison
+agent using existing OIDC, configures only its three backend target values and
+calls a fixed text canary with the actual bridge identity. No new credential or
+blanket role grant is added. Local SQL execution was blocked by Forbidden pulling
+the pinned SQL Server image. Actual Database CI passed all four new runtime
+contracts and found three stale expected-table assertions in the shared schema
+inventory. The candidate adds the three table names without weakening equality.
+CI 40864485219 then passed Database and Web, but Backend found two lifecycle
+fixture shutdown timeouts after their assertions. Exact Node 22.23.3 reproduction
+identified an unrequested replacement fetch socket; teardown-only connection
+cleanup passes all four lifecycle cases locally. Exact-head requalification
+is pending. No live
+provisioning or canary has been run.
+
+The settings correction is merged in #1353. Deploy 40852006540 passed every chat
+smoke scenario at 09:55 UTC; research remains down independently with
+`research_runner_failed`. This is passing chat smoke evidence, not ordinary-chat,
+research or two-runtime acceptance. Local test evidence and open boundaries are
+recorded in [migration notes](docs/main-chat-harness-migration.md).
+
 ## Whole-Jarvis logging scope replaces backend-only (#1341; 29 October 2026)
 
 The owner confirmed read-only logs for the backend, hosted agents, coding runners,

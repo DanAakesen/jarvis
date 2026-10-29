@@ -1,3 +1,19 @@
+## 29 October 2026 — first runtime comparison boundaries (#1350)
+
+The owner subsequently declined extra exclusion from search, recent context and
+rolling summaries. Jarvis is a personal side project not yet in use; do not add
+multi-user architecture or additional isolation features. This does not authorize
+deletion or a context reset. Runtime/source binding still prevents duplicate work
+and preserves the existing authentication boundary.
+
+The owner approved retaining the Python bridge temporarily to preserve voice
+fallback, starting with existing Jarvis tools with extra harness shell/web/subagent
+tools disabled, and keeping test conversations out of normal chat history. These
+extend the approved chat-menu selector and fresh labelled conversation; they do
+not authorize new identities, role grants, production default changes or removal
+of the old runtime. Actual target/model/region support and persistent access
+changes require specific evidence and applicable owner authorization.
+
 ## 29 October 2026 — whole-Jarvis diagnostic scope supersedes backend-only (#1341)
 
 The owner confirmed all logs belonging to Jarvis: backend, hosted agents, coding

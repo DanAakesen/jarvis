@@ -1,3 +1,41 @@
+## Runtime test candidate (#1350; 29 October 2026)
+
+Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
+server-only native conversation reference to existing SQL sessions. The normal UI
+feed explicitly excludes test sessions; internal context/source reads retain
+global history. Explicit test-session history is scoped. A source
+message history lookup resolves the stored session and returns its runtime
+selection for the Python verifier. A caller runtime flag never selects the
+agent. The retained bridge uses the original client for normal, Current-test and
+voice traffic; only a verified stored Copilot selection may use an injected
+managed chat client. Unconfigured managed selections fail without fallback.
+
+The independent managed protocol adapter uses an agent-scoped HTTP Responses
+client and native conversation continuations, with existing backend function
+execution. Its definition validator requires the selected model/effort, immutable
+version, exact functions and disabled extra built-ins. It is not wired into
+production. Durable turn/source claims and an internal agent-authenticated binding
+client now cover provider creation and continuations; uncertain work stays active
+without automatic replay. `ManagedPolicyClient` reuses the existing application
+policies through a narrow provider transport seam. The lazy factory and pinned
+backend target reader are wired behind three optional target configuration values;
+no managed target has been activated by this preparation. SQL personal memory, blob artifacts, the
+Voice Live relay and subscription-backed Factory are unchanged.
+
+The UI keeps normal chat mounted and opens a new labelled test conversation from
+the chat menu. Default active-turn discovery excludes test sessions. Availability
+fails closed for unverified Copilot; it is not a substitute for live model access
+or authorization. See [adapter boundaries](managed-chat-adapter.md).
+
+The existing AAD-protected hosted Invocations endpoint also accepts two exact
+administrative operations. The manifest operation reads static Jarvis instructions
+and authoritative function schemas without user context, inference or function
+execution. The fixed text canary uses the actual bridge credential and an owned
+synthetic native conversation; it reads no history and executes no tools. Normal
+chat still requires delegated authorization and verified stored source messages.
+The default-off manual Deploy job uses these operations with existing OIDC and
+never assigns roles or changes the normal runtime default.
+
 ## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
 
 The approved feature scope now includes Jarvis backend, agents, runners, deployment

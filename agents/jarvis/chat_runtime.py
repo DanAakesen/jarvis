@@ -43,7 +43,9 @@ from jarvis_tools import (
     BackendUnavailable,
     backend_settings_from_environment,
     current_chat_acknowledgment_enabled,
+    current_chat_input_start,
     current_chat_phase_setter,
+    current_chat_runtime_test,
     current_chat_session_id,
     current_chat_turn_id,
     current_conversation,
@@ -221,6 +223,7 @@ async def load_verified_history(
     backend_url, scope = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
     current_memory_plan.set(None)
+    current_chat_runtime_test.set(None)
     with latency_span("chat_history_verification"):
         async with httpx.AsyncClient(
             timeout=BACKEND_HTTP_TIMEOUT_SECONDS, follow_redirects=False
@@ -232,7 +235,8 @@ async def load_verified_history(
             profile, response, summary_state = await asyncio.gather(
                 client.get(f"{backend_url}/me", headers=headers, timeout=configured_timeout),
                 client.get(
-                    f"{backend_url}/conversation/history?limit={MAX_HISTORY_MESSAGES}",
+                    f"{backend_url}/conversation/history?sourceMessageId={message_id}"
+                    f"&limit={MAX_HISTORY_MESSAGES}",
                     headers=headers,
                     timeout=configured_timeout,
                 ),
@@ -265,6 +269,10 @@ async def load_verified_history(
     ):
         return None
     session_id = current.get("sessionId")
+    runtime_test = page.get("runtimeTest")
+    if runtime_test not in {None, "current", "copilot"}:
+        raise RuntimeError("Conversation runtime selection is invalid")
+    current_chat_runtime_test.set(runtime_test)
     current_chat_session_id.set(
         session_id if isinstance(session_id, str) and MESSAGE_ID.fullmatch(session_id) else None
     )
@@ -481,6 +489,8 @@ def register_chat_invocation(
     app: VoiceAgentServerHost,
     model_client: StreamingModelClient,
     context_loader: ChatContextLoader = load_verified_history,
+    *,
+    copilot_model_client: StreamingModelClient | None = None,
 ) -> None:
     @app.invoke_handler
     async def chat(request: Request):
@@ -496,6 +506,40 @@ def register_chat_invocation(
             return JSONResponse({"error": "Invalid request"}, status_code=400)
         finally:
             body[:] = b"\0" * len(body)
+
+        # Fixed administrative reads/probe through the already authenticated Foundry
+        # invocation endpoint. They never accept user text, delegated context or tools.
+        operation = payload.get("operation") if isinstance(payload, dict) else None
+        if isinstance(operation, str) and operation in {
+            "managed_definition_manifest", "managed_text_canary",
+        } and payload == {
+            "operation": operation,
+        }:
+            manifest = operation == "managed_definition_manifest"
+            owner = model_client if manifest else copilot_model_client
+            method = "managed_definition_manifest" if manifest else "probe_target"
+            action = getattr(owner, method, None)
+            if not callable(action):
+                return JSONResponse(
+                    {"status": "down", "reason": "managed_not_configured"}, status_code=503,
+                )
+            try:
+                if manifest:
+                    result = await action()
+                else:
+                    # Same 210-second invocation ceiling as the backend chat bridge.
+                    async with asyncio.timeout(210):
+                        result = await action()
+                encoded = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                if len(encoded) > 2 * MAX_OUTPUT_BYTES:
+                    raise RuntimeError("Managed metadata exceeds the existing response bound")
+                return JSONResponse(result, headers={"Cache-Control": "no-store"})
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                return JSONResponse(
+                    {"status": "down", "reason": chat_failure_code(exc)}, status_code=503,
+                )
 
         smoke = isinstance(payload, dict) and payload.get("smoke") is True
         smoke_history = payload.get("smokeHistory") if isinstance(payload, dict) else None
@@ -651,12 +695,15 @@ def register_chat_invocation(
         phase_timings_token = current_chat_phase_timings.set(phase_timings)
         try:
             current_chat_session_id.set(None)
+            current_chat_runtime_test.set(None)
             current_memory_plan.set(None)
             history = (
                 () if smoke else await context_loader(match.group(1), message_id, text, language)
             )
             chat_session_id = current_chat_session_id.get()
+            runtime_test = current_chat_runtime_test.get()
             current_chat_session_id.set(None)
+            current_chat_runtime_test.set(None)
             memory_plan = current_memory_plan.get()
             current_memory_plan.set(None)
         except asyncio.CancelledError:
@@ -670,6 +717,14 @@ def register_chat_invocation(
                 {"error": "Unauthorized or unverified conversation message"},
                 status_code=401,
             )
+        selected_model = model_client
+        if runtime_test == "copilot":
+            if copilot_model_client is None:
+                return JSONResponse(
+                    {"error": "The Copilot runtime has not passed configuration verification"},
+                    status_code=503,
+                )
+            selected_model = copilot_model_client
         backend_http_timeout = current_backend_http_timeout_seconds.get()
         current_backend_http_timeout_seconds.set(int(BACKEND_HTTP_TIMEOUT_SECONDS))
 
@@ -683,6 +738,8 @@ def register_chat_invocation(
             turn_token = current_turn.set(None if smoke else message_id)
             chat_turn_token = current_chat_turn_id.set(turn_id)
             chat_session_token = current_chat_session_id.set(chat_session_id)
+            runtime_test_token = current_chat_runtime_test.set(runtime_test)
+            input_start_token = current_chat_input_start.set(None)
             acknowledgment_token = current_chat_acknowledgment_enabled.set(not steering)
             smoke_calls: list[dict[str, Any]] = []
             smoke_token = current_smoke_invocation.set(smoke)
@@ -827,6 +884,7 @@ def register_chat_invocation(
                     messages = tuple(
                         ModelMessage(item["role"], item["text"]) for item in smoke_history
                     )
+                current_chat_input_start.set(len(messages))
                 current_visual = visual or (
                     {
                         "source": "screen",
@@ -885,7 +943,7 @@ def register_chat_invocation(
                         source_message_id=None if smoke else message_id,
                     )
                 )
-                chat = model_client.complete_chat(
+                chat = selected_model.complete_chat(
                     messages,
                     language,
                     **({"smoke": True} if smoke else {}),
@@ -973,6 +1031,8 @@ def register_chat_invocation(
                 current_turn.reset(turn_token)
                 current_chat_turn_id.reset(chat_turn_token)
                 current_chat_session_id.reset(chat_session_token)
+                current_chat_runtime_test.reset(runtime_test_token)
+                current_chat_input_start.reset(input_start_token)
                 current_chat_acknowledgment_enabled.reset(acknowledgment_token)
                 current_visual_result.reset(visual_token)
                 current_image_reservation.reset(image_reservation_token)
