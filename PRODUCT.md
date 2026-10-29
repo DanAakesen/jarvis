@@ -1,3 +1,17 @@
+## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
+
+Read-only diagnostic access covers Jarvis's backend, hosted AI agents, coding
+runners, deployments and supporting services, excluding unrelated projects. This
+replaces the earlier backend-only scope. Retain the existing Foundry Reader role.
+New persistent grants require exact approval; the existing narrow approval is not
+expanded implicitly. One authenticated sensitive log capability must describe
+actual enabled sources, with bounded reads, redaction, untrusted-evidence handling,
+retained-history/ingestion-delay disclosure and honest source coverage. A read grant
+cannot create missing history. No duplicate legacy feature, repair action,
+arbitrary query/exec, credential, collection or retention change is implied.
+The current implementation remains disabled; [whole-scope design](docs/jarvis-logs.md)
+is preparation, not a claim of deployed coverage.
+
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
 Replace the custom main chat loop through a controlled, switchable Foundry

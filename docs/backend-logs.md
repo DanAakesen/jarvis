@@ -1,3 +1,12 @@
+## Superseded scope — 29 October 2026
+
+The owner confirmed whole-Jarvis diagnostic log access, replacing backend-only
+scope. Retain the Foundry Reader assignment; its removal proposal was stopped and
+never applied. New expanded grants require exact approval. The existing tool is
+still disabled. [Whole-Jarvis inventory and design](jarvis-logs.md) is current;
+the backend-only restrictions and grant/qualification discussion below record
+implementation history and do not define the new feature scope.
+
 ## Foundry resource-log correction — 29 October 2026
 
 Deploy [40836577365](https://github.com/DanAakesen/jarvis/actions/runs/40836577365)
