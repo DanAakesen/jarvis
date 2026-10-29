@@ -1415,7 +1415,7 @@ describe('conversation routes', () => {
       messages: [{ id: '42', toolCalls: [{ id: '90', outcome: 'refused' }] }],
       nextCursor: null,
     });
-    expect(store.getHistory).toHaveBeenCalledWith({ limit: 25, before: '50' });
+    expect(store.getHistory).toHaveBeenCalledWith({ limit: 25, before: '50', excludeRuntimeTests: true });
     expect(invalidCursor.statusCode).toBe(400);
     expect(invalidSession.statusCode).toBe(400);
     expect(store.getHistory).toHaveBeenCalledOnce();

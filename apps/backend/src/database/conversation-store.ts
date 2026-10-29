@@ -359,12 +359,13 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.recordset.map((row) => row.text);
     },
 
-    async getHistory({ limit, before, sessionId }) {
+    async getHistory({ limit, before, sessionId, excludeRuntimeTests = false }) {
       if (sessionId !== undefined) validateRuntimeSessionId(sessionId);
       const result = await databaseReadRequest(pool)
         .input('take', sql.Int, limit + 1)
         .input('beforeId', sql.BigInt, before === undefined ? null : BigInt(before))
         .input('sessionId', sql.BigInt, sessionId === undefined ? null : BigInt(sessionId))
+        .input('excludeRuntimeTests', sql.Bit, excludeRuntimeTests)
         .query<HistoryRow>(`DECLARE @history TABLE (
             id bigint NOT NULL PRIMARY KEY,
             session_id bigint NOT NULL,
@@ -391,8 +392,8 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           ) AS voice_usage
           WHERE (@beforeId IS NULL OR m.id < @beforeId)
             AND ((@sessionId IS NOT NULL AND s.id = @sessionId) OR
-              (@sessionId IS NULL AND NOT EXISTS (
-                SELECT 1 FROM dbo.session_runtime_tests r WHERE r.jarvis_session_id = s.id)))
+              (@sessionId IS NULL AND (@excludeRuntimeTests = 0 OR NOT EXISTS (
+                SELECT 1 FROM dbo.session_runtime_tests r WHERE r.jarvis_session_id = s.id))))
           ORDER BY m.id DESC;
 
           SELECT CONVERT(varchar(20), id) AS id,

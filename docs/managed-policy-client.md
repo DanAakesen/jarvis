@@ -104,12 +104,13 @@ are preserved by the explicit input boundary. Reflex receipt context goes throug
 the existing shared `complete_chat` path unchanged. Direct voice completion is
 rejected; native EN/DA Voice Live relay and hosted Danish fallback are unchanged.
 
-Summary/history/recent-context/search policy for test conversations is still an
-owner decision. This adapter refuses `summarize_conversation` and smoke mode;
-it cannot silently make a non-native summary request. Native history import or
-reconstruction is not introduced. Root runtime/binding integration, image handling,
-summary/history policy, target access, managed registered-tool support and live
-acceptance remain activation gates. The older `ManagedCopilotClient` is an offline
+The owner declined extra filtering from normal search, recent context or rolling
+summaries. Existing application memory behavior remains; no reset is performed.
+This adapter refuses direct `summarize_conversation` and smoke mode; the retained
+application's existing summarizer remains separate. Native history import or
+reconstruction is not introduced. Production assembly, image handling, target
+access, registered-tool support and live acceptance still need verification.
+The older `ManagedCopilotClient` is an offline
 protocol checkpoint, not the activation path: its simpler loop does not share
 these policies and its boolean-failure cleanup does not represent the active-claim
 uncertainty contract.

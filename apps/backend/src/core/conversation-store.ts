@@ -109,6 +109,8 @@ export interface ConversationStore {
     /** Route must authorize an explicit session target before calling. */
     readonly sessionId?: string;
     readonly before?: string;
+    /** UI feed only; internal context/source reads retain global history. */
+    readonly excludeRuntimeTests?: boolean;
   }): Promise<ConversationHistoryPage>;
   searchMessages?(
     input: ConversationSearchInput,

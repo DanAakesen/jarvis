@@ -1,8 +1,9 @@
 ## Runtime test candidate (#1350; 29 October 2026)
 
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
-server-only native conversation reference to existing SQL sessions. Normal
-history excludes these sessions; explicit session history is scoped. A source
+server-only native conversation reference to existing SQL sessions. The normal UI
+feed explicitly excludes test sessions; internal context/source reads retain
+global history. Explicit test-session history is scoped. A source
 message history lookup resolves the stored session and returns its runtime
 selection for the Python verifier. A caller runtime flag never selects the
 agent. The retained bridge uses the original client for normal, Current-test and
@@ -13,8 +14,11 @@ The independent managed protocol adapter uses an agent-scoped HTTP Responses
 client and native conversation continuations, with existing backend function
 execution. Its definition validator requires the selected model/effort, immutable
 version, exact functions and disabled extra built-ins. It is not wired into
-production: durable turn claims/coordination, shared application policies and live
-target verification remain gates. SQL personal memory, blob artifacts, the
+production. Durable turn/source claims and an internal agent-authenticated binding
+client now cover provider creation and continuations; uncertain work stays active
+without automatic replay. `ManagedPolicyClient` reuses the existing application
+policies through a narrow provider transport seam. Production assembly and live
+target verification remain pending. SQL personal memory, blob artifacts, the
 Voice Live relay and subscription-backed Factory are unchanged.
 
 The UI keeps normal chat mounted and opens a new labelled test conversation from

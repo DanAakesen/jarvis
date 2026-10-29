@@ -43,6 +43,7 @@ from jarvis_tools import (
     BackendUnavailable,
     backend_settings_from_environment,
     current_chat_acknowledgment_enabled,
+    current_chat_input_start,
     current_chat_phase_setter,
     current_chat_runtime_test,
     current_chat_session_id,
@@ -704,6 +705,7 @@ def register_chat_invocation(
             chat_turn_token = current_chat_turn_id.set(turn_id)
             chat_session_token = current_chat_session_id.set(chat_session_id)
             runtime_test_token = current_chat_runtime_test.set(runtime_test)
+            input_start_token = current_chat_input_start.set(None)
             acknowledgment_token = current_chat_acknowledgment_enabled.set(not steering)
             smoke_calls: list[dict[str, Any]] = []
             smoke_token = current_smoke_invocation.set(smoke)
@@ -848,6 +850,7 @@ def register_chat_invocation(
                     messages = tuple(
                         ModelMessage(item["role"], item["text"]) for item in smoke_history
                     )
+                current_chat_input_start.set(len(messages))
                 current_visual = visual or (
                     {
                         "source": "screen",
@@ -995,6 +998,7 @@ def register_chat_invocation(
                 current_chat_turn_id.reset(chat_turn_token)
                 current_chat_session_id.reset(chat_session_token)
                 current_chat_runtime_test.reset(runtime_test_token)
+                current_chat_input_start.reset(input_start_token)
                 current_chat_acknowledgment_enabled.reset(acknowledgment_token)
                 current_visual_result.reset(visual_token)
                 current_image_reservation.reset(image_reservation_token)

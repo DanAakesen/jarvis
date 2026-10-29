@@ -14,6 +14,11 @@ tools only initially, and excluding test conversations from normal history. Cuto
 rollback and retirement follow proven parity and required authorization. See
 [migration scope and open decisions](docs/main-chat-harness-migration.md).
 
+Jarvis is the owner's personal side project, not a multi-user product. The owner
+does not require extra pre-live exclusion of test transcripts from search, recent
+context or rolling summaries. Preserve existing authenticated owner checks and
+the approved separate UI history. No context wipe is included.
+
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
 Retained backend-log chat access remains disabled until Azure isolation is proven.

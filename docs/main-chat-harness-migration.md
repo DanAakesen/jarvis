@@ -96,11 +96,11 @@ durable execution coordination and shared policy behavior pass. Protocol tests
 and synthetic screenshots are not that acceptance. See
 [the adapter's exact remaining gates](managed-chat-adapter.md).
 
-One boundary needs confirmation before activating tests: ordinary history is
-excluded by the candidate, but existing conversation search, recent-message
-context and rolling summary storage have separate read paths. Their intended
-relationship to test transcripts is unresolved; the candidate does not silently
-change durable personal-memory contracts.
+The owner confirmed this is his personal side project and is not yet in use.
+Do not add extra exclusion from search, recent context or rolling summaries, or
+multi-user product architecture. The normal UI feed remains separate as approved;
+internal source/context reads retain their existing global behavior. No context
+wipe or deletion is authorized.
 
 ## Manual comparison checklist
 

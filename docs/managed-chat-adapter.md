@@ -155,36 +155,35 @@ the backend session CAS binding alone does not serialize turn execution or stop
 multiple native conversation creates. Dedicated protocol tests do not establish
 calendar, steering, approval, source, usage or voice parity.
 
-## Permission/provisioning checkpoint
+## Provisioning checkpoint
 
-The official [harness setup guide](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
-search index states that the creating/invoking caller requires Foundry User on the
-project and that the agent identity separately requires Foundry User at project
-scope. The [agent configuration guide](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent)
-also distinguishes caller invocation permission from downstream agent identity
-access. Role name was previously Azure AI User; repository infrastructure uses
-role ID `53ca6127-db72-4b80-b1b0-d745d6d5456d`. Existing backend identity project
-assignment in infrastructure is a declaration, not a verified effective grant.
+The existing deployment metadata identifies project `jarvis-20261003200000` in
+account `jarvis-20261003200000-rmw7kae3bza6a`, resource group `rg-jarvis`.
+Bootstrap metadata records Sweden Central; Bicep gives the Foundry account and
+project that resource-group location. Deploy 40852006540 confirms these target
+names and hosted version 163. Source declares the existing Terra deployment
+`gpt-6.1-terra`, model version `2026-10-26`, GlobalStandard. Passing chat smoke
+establishes current inference, not compatibility of a newly created Copilot agent.
 
-Before asking for any role change, obtain the actual project ARM resource ID and
-location, actual Terra deployment/version/status and model support in that region,
-existing role assignments, and exact caller and returned agent identity principal
-IDs. None is established by this local adapter task. Do not infer that the
-project's managed identity and the prompt agent's `instance_identity.principal_id`
-are the same. No subscription/resource-group-wide assignment is proposed.
+The proposed first action is one new prompt agent, recommended name
+`jarvis-main-copilot-preview`, in this existing project with Terra/high, existing
+Jarvis function schemas and the disabled built-in toolset. The name and persistent
+creation still require owner authorization. Pin only this new endpoint to its
+returned version, read back the persisted definition and test one real text turn.
+Do not change the existing `jarvis` endpoint or choose another model/region.
 
-A reviewable, conditional provisioning request for the parent to complete is:
+The existing GitHub Actions deployment identity already creates agent versions
+using OIDC and its existing Foundry project access. No new credentials are needed.
+The candidate still needs the provisioning command/production assembly; the
+current normal deployment job creates only the existing hosted agent.
 
-| Action | Exact target/principal required | Scope and role |
-| --- | --- | --- |
-| Create one new managed main-chat prompt-agent version with the reviewed definition; read it back and inspect endpoint selector | Verified existing project endpoint/ARM ID, approved unique agent name, version returned by create; authorized existing provisioning caller | Existing project; documented Foundry User permission. No broad Contributor/Owner grant implied. |
-| Assign missing agent runtime permission only if current assignments show it absent | Actual returned prompt-agent `instance_identity.principal_id`, independently verified | Exact Foundry project ARM resource ID; Foundry User (`53ca6127-db72-4b80-b1b0-d745d6d5456d`). |
-| Assign missing caller permission only if the retained bridge's actual caller lacks it | Verified retained-bridge caller service principal object ID | Same exact project; Foundry User. Check existing backend assignment first. |
-
-This is not yet an executable approval request: target region/model access,
-project resource ID, agent name and principal IDs remain unresolved. Creating an
-agent, assigning roles, inference, or credentials requires the parent's separately
-scoped authorization. Existing Jarvis backend tool execution continues under the
-existing backend client identity and approval path; the model does not receive
-that credential. No Toolbox, generated Foundry Files or downstream-resource role
-changes are requested for this initial function-only bridge.
+The current official [setup guide](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
+requires Foundry User at project scope for the creating/invoking caller. It
+requires the new agent instance identity's separate Foundry User assignment only
+for Toolbox or generated Foundry Files. Those capabilities are outside this
+initial function-only bridge, so no new instance-identity role grant is proposed.
+Function execution keeps the existing Python/backend identity and approvals.
+Read the caller's effective access before requesting any missing permission; if
+needed, request only Foundry User (`53ca6127-db72-4b80-b1b0-d745d6d5456d`) for the
+exact retained caller at this project. Never infer that project and agent instance
+identities are interchangeable, and do not add account/subscription-wide roles.

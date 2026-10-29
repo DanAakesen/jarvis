@@ -422,15 +422,18 @@ describe('runtime test session integration contract', () => {
     expect(session?.runtimeTest).toBe('copilot');
     expect(session).not.toHaveProperty('nativeConversationId');
   });
-  it('excludes test rows by default and constrains explicit history by session', async () => {
+  it('excludes tests only when the UI feed requests it and scopes explicit session history', async () => {
     const { store, input, query } = fixture();
     await store.getHistory({ limit: 10 });
+    expect(input).toHaveBeenCalledWith('excludeRuntimeTests', sql.Bit, false);
     expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, null);
-    expect(query.mock.calls[0]?.[0]).toContain('@sessionId IS NULL AND NOT EXISTS');
+    expect(query.mock.calls[0]?.[0]).toContain('@excludeRuntimeTests = 0 OR NOT EXISTS');
     expect(query.mock.calls[0]?.[0]).toContain('r.jarvis_session_id = s.id');
+    await store.getHistory({ limit: 10, excludeRuntimeTests: true });
+    expect(input).toHaveBeenCalledWith('excludeRuntimeTests', sql.Bit, true);
     await store.getHistory({ limit: 10, sessionId: '42' });
     expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, 42n);
-    expect(query.mock.calls[1]?.[0]).toContain('@sessionId IS NOT NULL AND s.id = @sessionId');
+    expect(query.mock.calls[2]?.[0]).toContain('@sessionId IS NOT NULL AND s.id = @sessionId');
     await expect(store.getHistory({ limit: 10, sessionId: 'invalid' })).rejects.toThrow();
   });
 });

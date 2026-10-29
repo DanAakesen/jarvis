@@ -46,6 +46,7 @@ import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
 import { approvalDeciderFor } from './approval-interpreter.js';
 import { readRuntimeTests } from './runtime-test-availability.js';
+import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -391,10 +392,11 @@ return {
   id: 'conversation',
   tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
   registerRoutes: async (app) => {
+    registerManagedRuntimeRoutes(app);
     const runtimeTests = () => readRuntimeTests({
       storageAvailable: app.conversationStore !== null,
       currentAvailable: app.conversationAgent !== null,
-      readVerified: app.conversationRuntimeTests,
+      readVerified: app.managedRuntime ? app.conversationRuntimeTests : null,
     });
     const activeTurns = new Map<string, ActiveChatTurn>();
     const recoverableTurns = new Map<string, RecoverableChat>();
@@ -1256,6 +1258,7 @@ return {
         limit,
         ...(before === undefined ? {} : { before }),
         ...(sessionId || session?.runtimeTest ? { sessionId: resolvedSessionId! } : {}),
+        ...(!sourceMessageId && !sessionId ? { excludeRuntimeTests: true } : {}),
       });
       return { ...page, ...(sourceMessageId && session?.runtimeTest ? { runtimeTest: session.runtimeTest } : {}) };
     });

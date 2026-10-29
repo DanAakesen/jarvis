@@ -153,7 +153,7 @@ describe('durable runtime session isolation', () => {
     expect(test.runtimeTest).toBe('current');
     const ordinaryMessage = await store.addMessage({ sessionId: normal.id, role: 'dan', text: 'Normal fixture', model: null });
     const testMessage = await store.addMessage({ sessionId: test.id, role: 'dan', text: 'Test fixture', model: null });
-    const history = await store.getHistory({ limit: 50 });
+    const history = await store.getHistory({ limit: 50, excludeRuntimeTests: true });
     expect(history.messages.map((item) => item.id)).toContain(ordinaryMessage!.id);
     expect(history.messages.map((item) => item.id)).not.toContain(testMessage!.id);
     const scoped = await store.getHistory({ limit: 50, sessionId: test.id });

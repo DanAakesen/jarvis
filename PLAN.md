@@ -4,8 +4,11 @@ The local candidate contains the managed protocol adapter and definition
 validator, immutable SQL test-session metadata, scoped history/default exclusion,
 source-verified bridge selection, and the approved chat-menu selector with a
 separate labelled test view. The managed option remains disabled until real
-definition/model/effort readback, durable execution coordination and shared
-application-policy integration pass. No target, identity grant or production
+definition/model/effort readback and production assembly pass. Durable source/turn
+claims, agent-only binding routes/client and shared application-policy transport
+are now implemented locally. Identical backend disconnect/reattach and steering
+fixtures execute for both choices. The owner declined extra transcript filtering
+from normal search/context/summaries; preserve those existing contracts. No target, identity grant or production
 default was created or changed. The [adapter checkpoint](docs/managed-chat-adapter.md)
 lists the missing policy and provisioning evidence.
 

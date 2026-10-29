@@ -90,6 +90,11 @@ function fixture(runtime: RuntimeTest, provider: (request: {
   const app = buildApp(config, createLogger(config, undefined, new Writable({ write(_chunk, _encoding, done) { done(); } })), {
     conversationStore: store, conversationAgent,
     conversationRuntimeTests: async () => ({ current: { available: true }, copilot: { available: true } }),
+    managedRuntime: {
+      sessions: { createSession: vi.fn(), getSession: vi.fn(), claimTurn: vi.fn(),
+        bindNativeConversation: vi.fn(), completeTurn: vi.fn(), attachSource: vi.fn() },
+      readVerifiedTarget: async () => null, // Provider definition access is outside this injected HTTP fixture.
+    },
     auth: async token => token === 'agent.fixture.token'
       ? { kind: 'jarvis-agent' as const, objectId: 'fixture-agent', tenantId: config.auth.tenantId }
       : { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Fixture owner' },
