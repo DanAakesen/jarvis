@@ -9093,3 +9093,29 @@ the thumb end and still shows a row of pinned shortcuts, which is not decided.
 The final list of areas, the pinned shortcuts and assistive access to the
 swipe-only sidebar remain unconfirmed. No implementation or setup is authorized.
 See [iOS app](../iOS%20app.md).
+
+## 29 October 2026 — iOS version 1 answers
+
+The owner answered the version 1 checklist and accepted the recommendation on
+every row except two. The Face ID lock is now on by default, set up at the first
+sign-in, and approvals from the Lock Screen are allowed. Otherwise: hands-free
+means a session the owner starts, with no always-listening wake word, and it
+keeps running with the screen locked, ends itself after 10 minutes of silence
+and pauses for calls and Siri. Version 1 is iPhone only (an iPhone 16 Pro Max on
+iOS 27.2, with an Apple Watch), minimum iOS 26, TestFlight only, with English
+text and English and Danish voice. Sign-in stays Microsoft with 10 days idle.
+Only Apple crash reports are collected, and version 1 has no Health or location
+data and no offline mode. In the sidebar the pinned-shortcuts row is removed and
+the list sits low, nearest the thumb; a one-time hint teaches the edge swipe and
+VoiceOver gets an Open sidebar action. Workspaces open as a full-height sheet,
+one at a time. Version 1 is chat, voice, workspaces, app control and settings,
+with Notes and Health next and unbuilt areas shown as Coming later. TestFlight
+uploads run automatically after each merge to main, signing goes through an App
+Store Connect API key, the design docs are committed to the repository, and
+small backend endpoints for push and Live Activity tokens may follow. The bundle
+ID is com.danaakesen.jarvis, being registered. The owner answered No to starting
+the foundation phase, so no implementation or setup is authorized. The
+safeguards proposed for the Face ID lock and Lock Screen approvals, and whether
+the owner's account has the role the API key needs, are not confirmed. CarPlay,
+the Apple Watch and Music are future intent only.
+See [iOS app](../iOS%20app.md).
