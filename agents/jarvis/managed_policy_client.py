@@ -81,6 +81,7 @@ class _Turn:
     settings: ModelSettings
     registered_tools: list[dict[str, Any]]
     sources: list[str] = field(default_factory=list)
+    inference_attempted: bool = False
 
 
 class _CheckedStream:
@@ -116,8 +117,9 @@ class _CheckedStream:
                         raise ManagedChatError("managed_final_only_tool_call")
                     if item.type not in {"message", "reasoning", "function_call"}:
                         raise ManagedChatError("managed_response_item_unsupported")
+                    # The item status is optional; parent completion was checked above.
                     if (item.type == "function_call"
-                            and getattr(item, "status", None) != "completed"):
+                            and getattr(item, "status", None) not in (None, "completed")):
                         raise ManagedChatError("managed_tool_call_unfinished")
                 if not seen_text and not any(item.type == "function_call" for item in final.output):
                     raise ManagedChatError("managed_response_empty")
@@ -204,11 +206,6 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
             native_token = self._native_turn.set(turn)
             source_token = current_message_id.set(context.source_message_id)
             try:
-                if not binding.conversation_id:
-                    native = await self._client.conversations.create()
-                    if not native.id:
-                        raise ManagedChatError("managed_conversation_missing")
-                    await binding.bind(native.id)
                 async with aclosing(super().complete_chat(
                     messages, language, settings=settings, reflex_note=reflex_note,
                 )) as stream:
@@ -218,10 +215,15 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
             except (asyncio.CancelledError, GeneratorExit):
                 raise
             except ManagedChatError as error:
-                if error.code == "managed_response_failed" and self._tools.calls == calls_before:
+                if (self._tools.calls == calls_before
+                        and (not turn.inference_attempted
+                             or error.code == "managed_response_failed")):
                     success = False
                 raise
             except Exception:
+                if not turn.inference_attempted and self._tools.calls == calls_before:
+                    success = False
+                    raise ManagedChatError("managed_policy_setup_failed") from None
                 raise ManagedChatError("managed_policy_turn_failed") from None
             finally:
                 current_message_id.reset(source_token)
@@ -229,6 +231,15 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
                 if success is not None:
                     async with asyncio.timeout(settings.backend_http_timeout_seconds):
                         await binding.finish_turn(context.source_message_id, success)
+
+    async def _ensure_native_conversation(self) -> None:
+        """Create only after shared context preparation; let the seed hook see bind."""
+        turn = self._native_turn.get()
+        if not turn.binding.conversation_id:
+            native = await self._client.conversations.create()
+            if not native.id:
+                raise ManagedChatError("managed_conversation_missing")
+            await turn.binding.bind(native.id)
 
     async def _create_response(self, request: dict[str, Any]) -> Any:
         turn = self._native_turn.get()
@@ -244,11 +255,14 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
             if attach is None or not await attach(source):
                 raise ManagedChatError("managed_steering_source_unclaimed")
             turn.sources.append(source)
+        await self._ensure_native_conversation()
         native_request = {
             "conversation": turn.binding.conversation_id,
             "input": turn.cursor.take(request["input"]),
             "instructions": request["instructions"], "stream": True,
         }
+        # Once called, transport outcome may be unknown even if no stream arrives.
+        turn.inference_attempted = True
         stream = await self._client.responses.create(**native_request)
         return _CheckedStream(
             stream, turn.settings.backend_http_timeout_seconds,

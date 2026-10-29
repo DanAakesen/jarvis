@@ -308,8 +308,9 @@ async def test_mode_refresh_keeps_existing_prompt_policy_in_native_continuation(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("arguments", ["{}", '{"different":true}'])
 @pytest.mark.parametrize("announce_call", [False, True])
+@pytest.mark.parametrize("call_status", ["completed", "omitted", None])
 async def test_final_only_boundary_rejects_repeated_and_new_native_actions(
-    arguments, announce_call,
+    arguments, announce_call, call_status,
 ):
     backend = FakeBackend(catalogue=[{
         "name": "fixture_action", "description": "Synthetic action only.",
@@ -317,6 +318,10 @@ async def test_final_only_boundary_rejects_repeated_and_new_native_actions(
         "execution": {"defaultEffect": "action"},
     }], model_name=SETTINGS.model, reasoning_effort=SETTINGS.reasoning_effort)
     last_call = function("fixture_action", call_id="new-call", arguments=arguments)
+    if call_status == "omitted":
+        del last_call["status"]
+    else:
+        last_call["status"] = call_status
     last_events = final("", [last_call])
     if announce_call:
         last_events.insert(0, {"type": "response.output_item.added", "output_index": 0,
@@ -398,3 +403,144 @@ async def test_cancelled_inference_keeps_claim_active_without_retry():
             await f.run(model)
     assert len(f.requests) == 1
     assert f.bindings.claims == ["42"] and not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["omitted", None, "completed"])
+async def test_completed_parent_accepts_optional_sdk_function_status(status):
+    # Public/pinned OpenAI ResponseFunctionToolCall.status is Optional[...] = None.
+    item = function()
+    if status == "omitted":
+        del item["status"]
+    else:
+        item["status"] = status
+    f = Fixture([final("", [item]), final()])
+    async with f.client() as model:
+        assert "Done." in await f.run(model)
+    assert len([r for r in f.backend.requests if r.url.path == "/tools/list_jobs"]) == 1
+    assert f.bindings.finishes == [("42", True)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", ["in_progress", "incomplete", "unknown", "", False, 1, [], {}])
+async def test_explicit_unfinished_or_malformed_function_status_cannot_dispatch(status):
+    item = function()
+    item["status"] = status
+    f = Fixture([final("", [item])])
+    async with f.client() as model:
+        with pytest.raises(ManagedChatError, match="tool_call_unfinished"):
+            await f.run(model)
+    assert not any(r.url.path.startswith("/tools/") for r in f.backend.requests)
+    assert not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [None, "in_progress", "incomplete", "failed", "unknown"])
+async def test_optional_function_status_never_overrides_unfinished_parent(status):
+    item = function()
+    del item["status"]
+    events = final("", [item])
+    events[-1]["response"]["status"] = status
+    f = Fixture([events])
+    async with f.client() as model:
+        with pytest.raises(ManagedChatError, match="response_unfinished"):
+            await f.run(model)
+    assert not any(r.url.path.startswith("/tools/") for r in f.backend.requests)
+    assert not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error,code", [
+    (ManagedChatError("managed_input_boundary_invalid"), "managed_input_boundary_invalid"),
+    (ValueError("PRIVATE_PRE_INFERENCE_ERROR"), "managed_policy_setup_failed"),
+])
+async def test_ordinary_failure_before_inference_and_backend_dispatch_completes_failed(error, code):
+    f = Fixture([])
+    async with f.client() as model:
+        async def fail_before_request(request):
+            raise error
+        model._create_response = fail_before_request
+        with pytest.raises(ManagedChatError, match="^" + code + "$"):
+            await f.run(model)
+    assert not f.requests
+    assert f.bindings.finishes == [("42", False)]
+    assert not any(r.url.path.startswith("/tools/") for r in f.backend.requests)
+
+
+@pytest.mark.asyncio
+async def test_pre_inference_failure_after_calendar_preflight_keeps_claim_active():
+    backend = FakeBackend(catalogue=[{
+        "name": "calendar_get_pending_change", "description": "Synthetic pending read.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }], model_name=SETTINGS.model, reasoning_effort=SETTINGS.reasoning_effort)
+    f = Fixture([], backend)
+    async with f.client() as model:
+        async def fail_before_request(request):
+            raise ManagedChatError("managed_input_boundary_invalid")
+        model._create_response = fail_before_request
+        with pytest.raises(ManagedChatError):
+            await f.run(model, [ModelMessage("user", "Create a calendar event tomorrow",
+                                            source_message_id="42")])
+    assert not f.requests
+    assert any(r.url.path == "/tools/calendar_get_pending_change" for r in backend.requests)
+    assert not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+async def test_pre_inference_cancellation_keeps_claim_active():
+    f = Fixture([])
+    async with f.client() as model:
+        async def cancel_before_request(request):
+            raise asyncio.CancelledError()
+        model._create_response = cancel_before_request
+        with pytest.raises(asyncio.CancelledError):
+            await f.run(model)
+    assert not f.requests and not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+async def test_inference_attempt_marker_stays_set_across_later_round_validation_failure():
+    f = Fixture([final()])
+    sent = False
+
+    async def fetch():
+        nonlocal sent
+        if f.requests and not sent:
+            sent = True
+            return [("43", "Continue with the verified follow-up", "en")]
+        return []
+
+    token = current_steering_fetcher.set(fetch)
+    try:
+        async with f.client() as model:
+            create_response = model._create_response
+
+            async def fail_only_later(request):
+                if f.requests:
+                    raise ManagedChatError("managed_input_boundary_invalid")
+                return await create_response(request)
+
+            model._create_response = fail_only_later
+            with pytest.raises(ManagedChatError, match="input_boundary_invalid"):
+                await f.run(model)
+    finally:
+        current_steering_fetcher.reset(token)
+    assert len(f.requests) == 1
+    assert not any(r.url.path.startswith("/tools/") for r in f.backend.requests)
+    assert not f.bindings.finishes
+
+
+@pytest.mark.asyncio
+async def test_context_failure_before_inference_does_not_create_or_bind_empty_native():
+    backend = FakeBackend(
+        catalogue=[LIST_JOBS], context_status=503,
+        model_name=SETTINGS.model, reasoning_effort=SETTINGS.reasoning_effort,
+    )
+    f = Fixture([], backend)
+    f.bindings.conversation_id = None
+    async with f.client() as model:
+        with pytest.raises(ManagedChatError, match="setup_failed"):
+            await f.run(model)
+    assert not f.requests
+    assert f.bindings.conversation_id is None
+    assert f.bindings.finishes == [("42", False)]

@@ -12,6 +12,14 @@ arbitrary query/exec, credential, collection or retention change is implied.
 The current implementation remains disabled; [whole-scope design](docs/jarvis-logs.md)
 is preparation, not a claim of deployed coverage.
 
+## Runtime test failure recovery (#1350; 29 October 2026)
+
+The owner requested repair of failed Copilot test replies. Show meaningful,
+sanitized failure information instead of describing every failure as interruption.
+A history refresh must not imply that an uncertain managed turn is cleared or
+replayable. Preserve the existing return-to-normal action and explicit sending;
+no automatic resend, claim reset, new runtime controls or default change.
+
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
 Replace the custom main chat loop through a controlled, switchable Foundry

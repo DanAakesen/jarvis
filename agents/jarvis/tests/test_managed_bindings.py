@@ -78,6 +78,42 @@ async def test_unknown_claim_outcome_is_not_retried_or_released():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("status,code", [
+    (404, "managed_unavailable"), (409, "managed_session_busy"),
+    (409, "managed_source_already_claimed"), (409, "managed_target_mismatch"),
+])
+async def test_claim_preserves_only_known_status_matched_rejections(status, code):
+    async with httpx.AsyncClient(
+        base_url="https://backend.test", transport=httpx.MockTransport(
+            lambda _: httpx.Response(status, json={"code": code, "error": "PRIVATE"}),
+        ),
+    ) as client:
+        async with BackendNativeBindings(client=client, token_provider=token).lease(
+            CONTEXT, TARGET,
+        ) as binding:
+            with pytest.raises(ManagedChatError, match=f"^{code}$"):
+                await binding.claim_turn("42")
+            assert not await binding.claim_turn("42")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [
+    {"code": "PRIVATE_RAW_ERROR"}, {"code": ["managed_session_busy"]},
+    {"code": "managed_unavailable"}, None,
+])
+async def test_unknown_or_mismatched_claim_rejection_stays_generic(payload):
+    async with httpx.AsyncClient(
+        base_url="https://backend.test", transport=httpx.MockTransport(
+            lambda _: httpx.Response(409, json=payload),
+        ),
+    ) as client:
+        async with BackendNativeBindings(client=client, token_provider=token).lease(
+            CONTEXT, TARGET,
+        ) as binding:
+            assert not await binding.claim_turn("42")
+
+
+@pytest.mark.asyncio
 async def test_redirect_does_not_forward_the_agent_token():
     requests = []
 

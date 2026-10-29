@@ -1,3 +1,4 @@
+import { chatAgentFailureReasons, chatAgentInvocationReasons } from '../system-status.js';
 import { presentNutritionList } from './food-presentation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { RecoverableChat } from './recoverable-chat.js';
@@ -14,6 +15,8 @@ import type {
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
+  ChatAgentError,
+  ChatAgentInvocationError,
   CHAT_AGENT_DIAGNOSTIC_PHASES,
   CHAT_AGENT_PHASES,
   createFoundryAgentSessionId,
@@ -971,8 +974,12 @@ return {
               'conversation.reply_failed',
             );
             publishActivity('failed');
+            const code = error instanceof ChatAgentError && error.code !== undefined && chatAgentFailureReasons.has(error.code)
+              ? error.code : error instanceof ChatAgentInvocationError && chatAgentInvocationReasons.has(error.reason)
+                ? error.reason : undefined;
             yield streamEvent('error', {
               error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+              ...(code === undefined ? {} : { code }),
             });
           }
         } finally {

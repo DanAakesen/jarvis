@@ -10,6 +10,19 @@ to the initial work. Track the approved stages in
 
 ## Baseline investigation
 
+Deploy [40928130267](https://github.com/DanAakesen/jarvis/actions/runs/40928130267)
+passed the managed text canary at 18:12 UTC on 29 October and all Current chat
+checks. Separate research acceptance still failed. The owner subsequently reported
+failed real Copilot test replies; no first-failure cause is established from that
+warning. The bounded canary bypasses user context, durable claims and tool work.
+
+The follow-up repairs a reproduced optional function-status mismatch and keeps
+fixed managed codes visible through the application. A stateful production-wrapper
+fixture proves safe follow-up after known setup/terminal failure, retained consumed
+sources, and blocked/no-replay behavior after uncertain inference or a synthetic
+action. Native allocation now follows shared context preparation. These are local
+regressions, not live proof. Existing uncertain claims are not reset by this change.
+
 PR #1353 merged as `9f831509` after exact-head qualification. Its normal
 [Deploy 40852006540](https://github.com/DanAakesen/jarvis/actions/runs/40852006540)
 passed backend, hosted agent and deterministic readiness. At 09:55 UTC all chat

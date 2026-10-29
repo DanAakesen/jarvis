@@ -1,3 +1,21 @@
+## Managed test conversation failures (#1350; 29 October 2026)
+
+The managed text canary passed in Deploy 40928130267, but the owner reported
+failed real test-conversation replies. The first live cause remains unverified.
+This repair accepts omitted optional function-call status only within a completed
+response, preserves fixed managed error codes through the UI, and distinguishes
+known failures before inference from uncertain work. Native conversation creation
+waits until shared context is prepared. Known failed sources stay consumed;
+uncertain inference/action claims stay active and are never reset or replayed.
+Production-wrapper tests now use a stateful claim fixture for initial text/tool
+turns, safe follow-up, consumed-source rejection and uncertain-action blocking.
+Next: exact-head qualification/review and live original-path validation. No grant,
+default cutover or claim reset is included.
+
+CI found the release smoke formatter's hosted-origin list missing the newly
+preserved managed codes. Its static finite list now matches the backend; exact
+parity, unknown-code redaction and failure-only acceptance assertions stay intact.
+
 ## Managed canary failure visibility (#1350; 29 October 2026)
 
 PR #1357 merged after qualification. Manual Deploy 40884299864 passed provisioning

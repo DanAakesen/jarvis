@@ -16,6 +16,12 @@ The test entry follows Language and precedes the existing capture/Voice/Attach
 actions. Voice and Attach remain adjacent at the end nearest Plus; keyboard order
 continues to follow the visible menu.
 
+Failure recovery preserves known sign-in, HTTP and fixed managed diagnostic
+messages. A busy/uncertain managed conversation explains its blocked state and
+retains Return to normal conversation; refreshing history cannot unlock the
+claim. Other uncertain delivery still requires history/action-status review and
+never resends automatically. No layout, menu placement or new action is added.
+
 ## Mobile Settings Save (#1343; 28 October 2026)
 
 At the existing 700px phone breakpoint, the Settings header stays beneath the

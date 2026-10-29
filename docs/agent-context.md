@@ -1,3 +1,23 @@
+## Managed conversation failure repair (#1350; 29 October 2026)
+
+Use the production lazy wrapper with stateful synthetic claims in
+`agents/jarvis/tests/test_managed_runtime_lifecycle.py`. A known setup failure may
+finish its source as failed only before any inference attempt and with no backend
+tool call; cancellation, unknown inference and possible actions retain the claim.
+Do not reset an existing uncertain claim or replay a consumed source. Preserve
+exact finite managed codes through hosted error SSE, backend SSE and the test UI.
+Run hosted pytest/Ruff, backend conversation/status checks and lint/build, and
+web stream/test-conversation checks and lint/build. Fixtures cannot establish the
+first live failure cause; no live logs or owner request replay is available here.
+
+Also run the complete `.github/scripts/tests` unittest suite: the release smoke
+formatter must retain exactly the backend's fixed hosted-origin codes. Preserve
+the exact-parity assertion and redaction of unknown managed-looking codes.
+The correction passes all 203 script tests and 185 scoped hosted/wrapper tests.
+Local script tests require PowerShell; temporary PowerShell 7.5.4 with writable
+XDG cache/config/data directories satisfies that existing dependency. The two
+smoke files retain the same five pre-existing Ruff findings as the prior head.
+
 ## Managed canary diagnostics (#1350; 29 October 2026)
 
 Manual Deploy 40884299864 passed provisioning/configuration/readiness but failed

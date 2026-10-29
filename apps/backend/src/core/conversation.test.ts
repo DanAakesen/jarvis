@@ -8,7 +8,7 @@ import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { shutdown } from '../shutdown.js';
-import { ChatAgentError, createFoundryAgentSessionId } from './chat-agent.js';
+import { ChatAgentError, ChatAgentInvocationError, createFoundryAgentSessionId } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
@@ -1336,11 +1336,50 @@ describe('conversation routes', () => {
 
     expect(response.body).toContain('event: error');
     expect(response.body).toContain('I could not finish the reply.');
-    expect(response.body).not.toContain('capability_instructions_too_large');
+    expect(response.body).toContain('"code":"capability_instructions_too_large"');
     const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((item) => item.msg === 'conversation.reply_failed');
     expect(entry).toMatchObject({ failure: 'Chat agent failed (capability_instructions_too_large)' });
     expect(store.addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    new ChatAgentError('managed_session_busy'),
+    new ChatAgentError('managed_source_already_claimed'),
+    new ChatAgentError('managed_target_mismatch'),
+    new ChatAgentError('managed_unavailable'),
+    new ChatAgentError('managed_tool_call_unfinished'),
+    new ChatAgentError('managed_policy_turn_failed'),
+    new ChatAgentError('managed_policy_setup_failed'),
+    new ChatAgentError('managed_response_failed'),
+    new ChatAgentInvocationError('private transport detail', 'agent_stream_ended'),
+    new ChatAgentInvocationError('private transport detail', 'agent_http_403'),
+  ])('retains finite typed failure code with uncertainty warning for %s', async (error) => {
+    const store = storeFixture();
+    const app = createApp(store, { conversationAgent: { stream: vi.fn(async function* () { throw error; yield 'unreachable'; }) } });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Hello' } });
+    const code = error instanceof ChatAgentError ? error.code : error.reason;
+    expect(response.body).toContain(JSON.stringify({ code }).slice(1, -1));
+    expect(response.body).toContain('A task action may still have completed; check its status before trying again.');
+    expect(response.body).not.toContain('private transport detail');
+    expect(store.addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    new ChatAgentError('private_provider_detail'),
+    new ChatAgentError('managed_future_unreviewed'),
+    new ChatAgentInvocationError('private transport detail', 'private_provider_detail' as 'agent_stream_ended'),
+    Object.assign(new Error('private provider detail'), { code: 'managed_session_busy', name: 'ChatAgentError' }),
+  ])('drops unknown or forged failure codes from SSE for %s', async (error) => {
+    const app = createApp(storeFixture(), { conversationAgent: { stream: vi.fn(async function* () { throw error; yield 'unreachable'; }) } });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Hello' } });
+    expect(response.body).toContain('event: error');
+    expect(response.body).not.toContain('"code":');
+    expect(response.body).not.toContain('private');
+    expect(response.body).not.toContain('managed_future_unreviewed');
+    expect(response.body).toContain('A task action may still have completed');
   });
 
   it('rejects invalid session fields and unauthenticated callers', async () => {

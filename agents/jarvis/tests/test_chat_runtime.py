@@ -1579,3 +1579,50 @@ def test_history_uses_the_default_timeout_when_agent_settings_are_refused(monkey
     assert asyncio.run(chat_runtime.load_verified_history(TOKEN, "42", "Hi", "en")) == []
     # The summary fetch is capped at 5 s so a slow backend cannot hold the first token.
     assert sorted(timeouts) == [5, 10, 10]
+
+
+@pytest.mark.parametrize("code", [
+    "managed_session_busy", "managed_source_already_claimed", "managed_target_mismatch",
+    "managed_unavailable", "managed_binding_invalid", "managed_turn_already_claimed",
+    "managed_tool_call_unfinished", "managed_policy_setup_failed", "managed_policy_turn_failed",
+    "managed_response_failed",
+    "managed_target_settings_mismatch", "managed_reviewed_fingerprint_mismatch",
+])
+def test_managed_failure_preserves_only_exact_internal_codes(code: str) -> None:
+    from managed_copilot import ManagedChatError
+
+    assert chat_runtime.chat_failure_code(ManagedChatError(code)) == code
+
+
+def test_managed_failure_rejects_unknown_or_forged_code_and_message() -> None:
+    from managed_copilot import ManagedChatError
+
+    for code in [
+        "private_provider_detail", "managed_future_unreviewed", "managed_session_busy\nprivate",
+    ]:
+        assert chat_runtime.chat_failure_code(ManagedChatError(code)) == "error_managedchaterror"
+    forged = RuntimeError("managed_session_busy")
+    forged.code = "managed_session_busy"
+    assert chat_runtime.chat_failure_code(forged) == "error_runtimeerror"
+
+
+def test_managed_stream_error_retains_code_without_provider_content() -> None:
+    from managed_copilot import ManagedChatError
+
+    class ManagedFailedModel(FakeModel):
+        async def complete_chat(self, messages, language, *, settings=None):
+            raise ManagedChatError("managed_binding_invalid") from RuntimeError(
+                "private provider body",
+            )
+            yield ""
+
+    app = create_app(ManagedFailedModel(), configure_observability=None,
+                     chat_context_loader=lambda *_args: _context())
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert "event: error" in response.text
+    assert '"code": "managed_binding_invalid"' in response.text
+    assert "private provider body" not in response.text
