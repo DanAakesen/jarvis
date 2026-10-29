@@ -9080,3 +9080,16 @@ establish native behaviour. Scope, sidebar contents, workspace presentation,
 assistive access to the sidebar, presence behaviour with workspaces and
 build/authentication setup remain unconfirmed. No implementation or setup is
 authorized. See [iOS app](../iOS%20app.md).
+
+## 29 October 2026 — iOS sidebar order, naming and removed control
+
+The owner removed the "Jump or ask" control from the iOS sidebar, asked for the
+area to be named simply Chat instead of Chat and voice and to be the first
+option from below, followed by Notes, Health, Software Factory, banking (later)
+and the rest, and asked for a code symbol as the Software Factory icon. The
+owner also asked that the sidebar not be dragged far from thumb reach, so rows
+and icons sit close to the right edge. The prototype lists the areas upward from
+the thumb end and still shows a row of pinned shortcuts, which is not decided.
+The final list of areas, the pinned shortcuts and assistive access to the
+swipe-only sidebar remain unconfirmed. No implementation or setup is authorized.
+See [iOS app](../iOS%20app.md).
