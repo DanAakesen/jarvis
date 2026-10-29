@@ -43,11 +43,13 @@ tools, names containing `___`, and enabled strict mode. No private manifest,
 instructions, activation file, CLI stderr or provider body belongs in logs or
 uploaded artifacts.
 
-The last-mile manifest retrieval is pending parent integration. The deployment
-principal's Foundry access does not grant backend `GET /tools`. An already
-authorized owner application read or a reviewed read-only existing-agent manifest
-path can supply the file; no new identity, token relay or permission is implied.
-Do not fabricate a manifest to get through provisioning.
+The explicit manual job obtains this file through the existing hosted agent's
+fixed `managed_definition_manifest` Invocations operation. The current deployment
+OIDC identity already has Foundry User authorization to invoke that endpoint. The
+hosted bridge uses its existing backend authorization to read the full current
+catalogue and returns static normal English chat instructions plus function
+schemas. This operation executes no tool or model and includes no user context,
+personal settings or credentials. There is no new backend role or token relay.
 
 ## Commands and state transitions
 
@@ -124,28 +126,60 @@ The private output contains exactly `projectEndpoint`, `agentName`, `version` an
 available. A new agent endpoint exists immediately after creation; only the
 separate comparison option may be wired to it.
 
-## Proposed manual deployment integration
+## Explicit manual deployment integration
 
-`deploy.yml` is unchanged. A reviewed follow-up can add a boolean
-`workflow_dispatch` input `provision_managed_chat`, default `false`. Guard a
-main-only provisioning step with both `github.event_name == 'workflow_dispatch'`
-and `inputs.provision_managed_chat == true`. Run it only after exact qualification,
-existing OIDC login and the authorized private manifest read, under
-`jarvis-production-deploy` concurrency. Ordinary pushes keep the branch inactive.
-No new grant step is part of this action. Keep the manifest and activation file
-in `RUNNER_TEMP`, remove them on exit, and never upload them.
+`deploy.yml` now exposes boolean `workflow_dispatch` input
+`provision_managed_chat`, default `false`. Its separate
+`managed-chat-comparison` job requires main, explicit true input, successful exact
+qualification through `plan`, successful deterministic `smoke` readiness and
+successful or compatible skipped infra/backend/agent jobs. It retains
+`jarvis-production-deploy` concurrency and the current OIDC login permissions.
+Normal pushes and dispatches with the default false input never run this job.
 
-Parent integration still needs the manifest producer, private activation handoff
-and one bounded text canary using the actual bridge credential and configured
-model/effort. No paid API fallback or model substitution is allowed. Permission,
-region/model access, runtime parity and uncertain-turn recovery remain distinct
-activation checks.
+The handoff script `.github/scripts/provision_managed_chat_handoff.sh` reads
+existing infrastructure outputs, fetches the manifest through the fixed existing
+hosted operation, provisions the comparison, validates its private activation
+file and updates only these existing-backend environment variables:
+
+- `FOUNDRY_COPILOT_AGENT_NAME`
+- `FOUNDRY_COPILOT_AGENT_VERSION`
+- `FOUNDRY_COPILOT_DEFINITION_SHA256`
+
+It preserves other environment values and the normal agent/model defaults. It
+then follows the existing bounded `latestRevisionName == latestReadyRevisionName`
+readiness pattern and calls the fixed `managed_text_canary` hosted operation.
+The canary uses the actual bridge credential for one synthetic managed text turn,
+executes no backend tool and cleans up only its own canary conversation. The job
+requires `status: ok`, model `gpt-6.1-terra` and effort `high`; it prints no returned
+text or raw provider error. Each invocation has the existing 210-second bound.
+The job's 20-minute timeout accommodates the existing readiness loop. There is no
+new grant, credential, connection or automatic mutation retry.
+
+All manifest, operation, CLI error and activation files stay in a private
+`RUNNER_TEMP` directory with `umask 077` and are removed on exit. None is uploaded.
+A failure after backend configuration leaves that configuration visible for
+review; it does not reset the target, invoke a fallback or claim success.
+
+This is a comparison configuration handoff, not full release acceptance. The
+normal live conversation/research acceptance job and release receipt remain
+independent; this canary cannot turn their failures into accepted releases.
+
+A future Bicep infrastructure deployment can remove these three ad hoc backend
+values. Preserve or reapply the exact reviewed activation tuple after such a
+deployment before another comparison, or persist it through reviewed optional
+Bicep parameters. Provisioning another version or changing the fingerprint is not
+a substitute for preserving the existing tuple. Runtime parity and uncertain-turn
+recovery still need their own qualification. No live workflow dispatch occurred
+while preparing this change.
 
 ## Offline checks
 
 ```bash
 PYTHONPATH=.github/scripts python -m unittest discover \
   -s .github/scripts/tests -p 'test_provision_managed_chat.py'
+PYTHONPATH=.github/scripts python -m unittest discover \
+  -s .github/scripts/tests -p 'test_managed_chat_handoff.py'
+bash -n .github/scripts/provision_managed_chat_handoff.sh
 python -m compileall -q .github/scripts/provision_managed_chat.py
 ```
 
