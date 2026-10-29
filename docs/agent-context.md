@@ -1,3 +1,15 @@
+## Managed canary diagnostics (#1350; 29 October 2026)
+
+Manual Deploy 40884299864 passed provisioning/configuration/readiness but failed
+the canary assertion. Its exact reason was discarded; retained artifacts contain
+normal acceptance, release plan and receipt only. Preserve private responses;
+emit only existing allowlisted reason/stage, bounded HTTP status and model/effort
+constants. The known fallback stage is `managed_text_canary`; runtime code is
+unchanged. Run handoff/provisioning/deploy-plan tests, Ruff, compilation and shell syntax.
+No new grants, fallback, reset, resource or retry belongs in this correction.
+The availability guard checks metadata, not canary success; do not claim that
+selectability proves working inference. No live availability request was made.
+
 ## Managed identity readback failure (#1350; 29 October 2026)
 
 Manual Deploy 40877005757 failed at `agent_identity_unverified` after an active

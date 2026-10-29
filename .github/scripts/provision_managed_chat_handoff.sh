@@ -71,6 +71,39 @@ if ! timeout 210s az rest --method POST --url "$invocations" --resource https://
 fi
 if ! jq -e 'type == "object" and .status == "ok" and .model == "gpt-6.1-terra" and .reasoningEffort == "high"' \
   "$private_dir/canary.json" >/dev/null 2>"$private_dir/cli.err"; then
+  # Emit only exact internal labels and a bounded integral HTTP status, never provider fields.
+  if ! diagnostic=$(jq -sr '
+    ["managed_readback_forbidden", "managed_readback_unauthorized", "managed_readback_unavailable",
+     "managed_readback_invalid", "managed_existing_credential_unavailable", "managed_target_invalid",
+     "managed_target_missing", "managed_target_settings_mismatch", "managed_immutable_target_missing",
+     "managed_endpoint_invalid", "managed_project_endpoint_mismatch",
+     "managed_reviewed_fingerprint_mismatch", "managed_reviewed_definition_mismatch",
+     "managed_endpoint_selector_mismatch", "managed_definition_tools_invalid",
+     "managed_definition_instructions_missing", "managed_agent_version_mismatch",
+     "managed_agent_definition_missing", "managed_agent_definition_mismatch", "managed_agent_extra_skills",
+     "managed_agent_unsupported_setting", "managed_agent_toolset_missing",
+     "managed_agent_builtin_tools_enabled", "managed_agent_function_tools_mismatch",
+     "managed_probe_settings_mismatch", "managed_probe_conversation_missing", "managed_probe_incomplete",
+     "managed_probe_requested_tool", "managed_probe_empty_or_unfinished", "managed_probe_timeout",
+     "managed_probe_failed", "managed_model_forbidden", "managed_model_unauthorized"] as $reasons |
+    ["settings", "target_setup", "definition_readback", "conversation_create", "response_start", "response_stream"] as $stages |
+    ["gpt-6.1-terra", "gpt-6-luna"] as $models |
+    ["none", "low", "medium", "high", "xhigh"] as $efforts |
+    (if length == 1 and (.[0] | type) == "object" then .[0] else {} end) |
+    .reason as $reason | .stage as $stage | .httpStatus as $http | .model as $model | .reasoningEffort as $effort |
+    (if ($reason | type) == "string" and ($reasons | index($reason)) != null then $reason else "not_reported" end) as $safeReason |
+    (if ($stage | type) == "string" and ($stages | index($stage)) != null then $stage else "managed_text_canary" end) as $safeStage |
+    (if ($model | type) == "string" and ($models | index($model)) != null then $model else "not_reported" end) as $safeModel |
+    (if ($effort | type) == "string" and ($efforts | index($effort)) != null then $effort else "not_reported" end) as $safeEffort |
+    "managed_chat_canary_diagnostic reason=" + $safeReason + " stage=" + $safeStage +
+    (if ($http | type) == "number" then
+       if $http >= 400 and $http <= 599 and ($http | floor) == $http then " http_status=\($http | floor)" else "" end
+     else "" end) +
+    " expected_model=gpt-6.1-terra actual_model=" + $safeModel + " expected_effort=high actual_effort=" + $safeEffort
+  ' "$private_dir/canary.json" 2>"$private_dir/cli.err"); then
+    diagnostic="managed_chat_canary_diagnostic reason=not_reported stage=managed_text_canary expected_model=gpt-6.1-terra actual_model=not_reported expected_effort=high actual_effort=not_reported"
+  fi
+  printf '%s\n' "$diagnostic"
   fail managed_chat_canary_failed
 fi
 echo managed_chat_comparison_canary_ok

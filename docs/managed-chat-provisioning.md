@@ -5,6 +5,23 @@ This is local preparation for one separate agent named
 creates credentials, assigns roles, creates connections, or deletes resources.
 No provisioning or live verification ran while preparing it.
 
+After the identity correction in #1357, manual Deploy
+[40884299864](https://github.com/DanAakesen/jarvis/actions/runs/40884299864) printed
+`managed_chat_provisioned` at 14:03:43 UTC, updated the backend target and passed
+revision readiness. It then printed `managed_chat_canary_failed` at 14:05:08.
+The private canary response was deleted and never uploaded. No exact model,
+permission or protocol cause is established. The local diagnostic correction
+preserves existing safe reason codes and logs only allowlisted stage, bounded
+HTTP status and model/effort constants. Missing internal stage is reported as the
+known `managed_text_canary` handoff operation; Python runtime code is unchanged.
+Raw responses, instructions, schemas,
+CLI errors and identifiers remain private. No retry or new resource is included.
+
+Runtime availability currently depends on target metadata/settings verification,
+not this canary result. A selectable Copilot option therefore does not prove
+inference succeeded. Actual authenticated availability has not been observed;
+changing that guard remains separate from this diagnostic correction.
+
 Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
 reached `agent_identity_unverified` on 29 October 2026. That check follows readback
 of one active, exact comparison-agent version and precedes endpoint pinning,
@@ -21,10 +38,10 @@ unknown status, disabled/unknown effective state and invalid principal IDs, with
 distinct fixed failure codes. Readback after pinning must retain that principal;
 optional status becoming populated does not change identity. These checks neither
 enable an agent nor change Entra state or roles. The existing exact-name/version/
-definition checks run before any reuse or endpoint write. This correction has
-not yet been exercised live. All 30 provisioning/handoff/deploy-plan tests,
-scoped Ruff, compilation and shell syntax checks pass locally; exact-head CI and
-live handoff remain required.
+definition checks run before any reuse or endpoint write. This correction passed
+live provisioning in run 40884299864; managed inference remains unverified. All
+30 provisioning/handoff/deploy-plan tests, scoped Ruff, compilation and shell
+syntax checks passed locally before its qualification and merge.
 
 The target is the existing Jarvis project in Sweden Central:
 
