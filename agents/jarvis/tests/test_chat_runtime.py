@@ -89,6 +89,50 @@ def app_with(loader):
     return app, model
 
 
+def test_provisioning_manifest_is_a_fixed_metadata_read_without_user_context() -> None:
+    class ManifestModel(FakeModel):
+        async def managed_definition_manifest(self):
+            return {"instructions": "Static fixture identity", "tools": []}
+
+    async def no_history(*_args):
+        raise AssertionError("Administrative metadata cannot read user history")
+
+    model = ManifestModel()
+    app = create_app(model, configure_observability=None, chat_context_loader=no_history)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={"operation": "managed_definition_manifest"})
+        extra = client.post("/invocations", json={
+            "operation": "managed_definition_manifest", "text": "arbitrary input",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+        malformed = client.post("/invocations", json={
+            "operation": {}, "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 200
+    assert response.json() == {"instructions": "Static fixture identity", "tools": []}
+    assert response.headers["cache-control"] == "no-store"
+    assert extra.status_code == malformed.status_code == 400
+    assert model.chat_calls == 0
+
+
+def test_fixed_managed_canary_does_not_accept_text_or_expose_probe_errors() -> None:
+    class Probe:
+        async def probe_target(self):
+            raise ValueError("Private provider payload")
+
+    app = create_app(FakeModel(), copilot_chat_client=Probe(), configure_observability=None)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={"operation": "managed_text_canary"})
+        extra = client.post("/invocations", json={
+            "operation": "managed_text_canary", "text": "Do something else",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 503
+    assert response.json() == {"status": "down", "reason": "error_valueerror"}
+    assert "Private" not in response.text
+    assert extra.status_code == 400
+
+
 @pytest.mark.parametrize("stored_runtime", [None, "current", "copilot"])
 def test_runtime_selection_comes_only_from_verified_history(stored_runtime) -> None:
     async def context(*_args):

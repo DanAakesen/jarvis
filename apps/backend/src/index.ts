@@ -16,6 +16,8 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
+import { createRuntimeSessionStore } from './database/runtime-session-store.js';
+import { createManagedTargetReader } from './core/managed-target-reader.js';
 import { createConversationSummaryStore } from './database/conversation-summary-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createPhoneStatusModule } from './phone/status.js';
@@ -467,6 +469,24 @@ try {
         return token.token;
       },
     )
+    : undefined;
+  const readManagedTarget = config.foundryCopilot && config.foundryProjectEndpoint && credential && settingsStore
+    ? createManagedTargetReader({
+      projectEndpoint: config.foundryProjectEndpoint,
+      ...config.foundryCopilot,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Managed target identity unavailable');
+        return token.token;
+      },
+      readSelectedSettings: async () => {
+        const selected = (await readSettings(settingsStore, await modelCatalogue.read())).roles.chat;
+        return { model: selected.model, effort: selected.reasoningEffort };
+      },
+    }) : undefined;
+  const managedRuntime = readManagedTarget && database
+    ? { sessions: createRuntimeSessionStore(database.pool), readTargetMetadata: readManagedTarget,
+      readVerifiedTarget: async () => (await readManagedTarget())?.target ?? null }
     : undefined;
   const vaultClient = githubAppTokenIssuer
     ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
@@ -1122,6 +1142,13 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(managedRuntime && readManagedTarget ? {
+      managedRuntime,
+      conversationRuntimeTests: async () => ({
+        current: { available: Boolean(conversationAgent) },
+        copilot: { available: Boolean(await readManagedTarget()) },
+      }),
+    } : {}),
     ...(healthUpload && healthProcessor && healthCapabilities ? { healthUpload, healthProcessor, healthCapabilities } : {}),
     ...(ownerSessions ? { ownerSessions } : {}),
     ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),

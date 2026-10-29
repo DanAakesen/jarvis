@@ -4,13 +4,22 @@ The local candidate contains the managed protocol adapter and definition
 validator, immutable SQL test-session metadata, scoped history/default exclusion,
 source-verified bridge selection, and the approved chat-menu selector with a
 separate labelled test view. The managed option remains disabled until real
-definition/model/effort readback and production assembly pass. Durable source/turn
+definition/model/effort readback and deployment pass. Durable source/turn
 claims, agent-only binding routes/client and shared application-policy transport
 are now implemented locally. Identical backend disconnect/reattach and steering
 fixtures execute for both choices. The owner declined extra transcript filtering
 from normal search/context/summaries; preserve those existing contracts. No target, identity grant or production
 default was created or changed. The [adapter checkpoint](docs/managed-chat-adapter.md)
 lists the missing policy and provisioning evidence.
+
+The last-mile source is assembled: lazy Python factory, pinned backend target
+reader/configuration, authoritative fixed manifest read, scoped provisioning
+script and default-off manual Deploy handoff. That handoff creates the comparison
+agent using existing OIDC, configures only its three backend target values and
+calls a fixed text canary with the actual bridge identity. No new credential or
+blanket role grant is added. Local SQL execution was blocked by Forbidden pulling
+the pinned SQL Server image; exact-head Database CI is still required. No live
+provisioning or canary has been run.
 
 The settings correction is merged in #1353. Deploy 40852006540 passed every chat
 smoke scenario at 09:55 UTC; research remains down independently with

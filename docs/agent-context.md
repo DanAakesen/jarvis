@@ -11,6 +11,17 @@ SQL integration requires the existing isolated database harness; no live migrati
 was applied in this preparation. Do not enable the managed option from local
 configuration alone. See [remaining gates](managed-chat-adapter.md).
 
+The comparison handoff is an explicit main-only manual Deploy dispatch with
+`provision_managed_chat=true`, after exact-head qualification. Normal pushes do
+not create the comparison agent. See [provisioning steps](managed-chat-provisioning.md).
+No new Azure login or credentials are needed. A real permission rejection must be
+reported by operation/current identity/scope before proposing a missing grant.
+The fixed manifest operation exports only static instructions/current schemas;
+it does not read personal context or invoke a tool. The canary has the same
+210-second invocation ceiling as the existing chat bridge and never executes
+functions. SQL qualification remains blocked locally by a Forbidden image pull;
+do not substitute a different image or claim the migration ran.
+
 ## Whole-Jarvis log preparation (#1341; 29 October 2026)
 
 Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,

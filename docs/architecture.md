@@ -17,14 +17,24 @@ version, exact functions and disabled extra built-ins. It is not wired into
 production. Durable turn/source claims and an internal agent-authenticated binding
 client now cover provider creation and continuations; uncertain work stays active
 without automatic replay. `ManagedPolicyClient` reuses the existing application
-policies through a narrow provider transport seam. Production assembly and live
-target verification remain pending. SQL personal memory, blob artifacts, the
+policies through a narrow provider transport seam. The lazy factory and pinned
+backend target reader are wired behind three optional target configuration values;
+no managed target has been activated by this preparation. SQL personal memory, blob artifacts, the
 Voice Live relay and subscription-backed Factory are unchanged.
 
 The UI keeps normal chat mounted and opens a new labelled test conversation from
 the chat menu. Default active-turn discovery excludes test sessions. Availability
 fails closed for unverified Copilot; it is not a substitute for live model access
 or authorization. See [adapter boundaries](managed-chat-adapter.md).
+
+The existing AAD-protected hosted Invocations endpoint also accepts two exact
+administrative operations. The manifest operation reads static Jarvis instructions
+and authoritative function schemas without user context, inference or function
+execution. The fixed text canary uses the actual bridge credential and an owned
+synthetic native conversation; it reads no history and executes no tools. Normal
+chat still requires delegated authorization and verified stored source messages.
+The default-off manual Deploy job uses these operations with existing OIDC and
+never assigns roles or changes the normal runtime default.
 
 ## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
 

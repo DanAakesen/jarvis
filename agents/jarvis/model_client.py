@@ -571,6 +571,17 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         """Short, secret-free status of the backend tools for troubleshooting."""
         return self._tools.diagnostics()
 
+    async def managed_definition_manifest(self) -> dict[str, Any]:
+        """Static instructions and authoritative schemas for the existing deploy caller.
+
+        No model request, personal context/settings read, or function execution.
+        Foundry's existing invocation authorization protects this administrative read.
+        """
+        return {"instructions": compose_identity_instructions(
+                    DEFAULT_MODEL_SETTINGS.identity_description, "en",
+                ) + "\n\n" + CHAT_INSTRUCTIONS["en"],
+                "tools": chat_model_tools(model_tools(await self._tools.tools()))}
+
     async def session_settings(self) -> ModelSettings:
         """Load the effective settings that this hosted session will retain."""
         return await self._tools.model_settings()

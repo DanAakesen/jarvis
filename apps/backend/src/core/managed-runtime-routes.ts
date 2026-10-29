@@ -3,6 +3,9 @@ import { validateManagedTarget, type ManagedSessionTarget, type ManagedTurnClaim
 
 export interface ManagedRuntimeServices {
   readonly sessions: RuntimeSessionStore;
+  readonly readTargetMetadata?: () => Promise<{
+    projectEndpoint: string; target: ManagedSessionTarget; definition: Record<string, unknown>;
+  } | null>;
   /** Real definition, endpoint selector, settings and policy verification; no configured-only success. */
   readonly readVerifiedTarget: () => Promise<ManagedSessionTarget | null>;
 }
@@ -31,6 +34,18 @@ const sameTarget = (a: ManagedSessionTarget, b: ManagedSessionTarget) =>
 export function registerManagedRuntimeRoutes(app: FastifyInstance): void {
   const claims = (sessionId: string, sourceMessageId: string, claimId: string): ManagedTurnClaim => ({
     ownerObjectId: app.ownerObjectId, sessionId, sourceMessageId, claimId,
+  });
+  app.get('/agent/runtime-tests/target', { config: { jarvisAgent: true } }, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (!request.agentPrincipal) return reply.code(403).send({ error: 'Agent identity required.' });
+    try {
+      const metadata = await app.managedRuntime?.readTargetMetadata?.();
+      if (!metadata) return reply.code(503).send({ code: 'managed_not_verified', error: 'Managed runtime is unavailable.' });
+      validateManagedTarget(metadata.target);
+      return metadata;
+    } catch {
+      return reply.code(503).send({ code: 'managed_target_unavailable', error: 'Managed target metadata is unavailable.' });
+    }
   });
   app.post<{ Params: { sessionId: string }; Body: { target: ManagedSessionTarget } }>(
     '/agent/runtime-tests/:sessionId/claim', { config: { jarvisAgent: true }, schema: { params,

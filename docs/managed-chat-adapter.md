@@ -174,8 +174,12 @@ Do not change the existing `jarvis` endpoint or choose another model/region.
 
 The existing GitHub Actions deployment identity already creates agent versions
 using OIDC and its existing Foundry project access. No new credentials are needed.
-The candidate still needs the provisioning command/production assembly; the
-current normal deployment job creates only the existing hosted agent.
+The candidate now includes a default-off manual provisioning job and lazy
+production assembly. The normal deployment job still creates only the existing
+hosted agent; only explicit `provision_managed_chat=true` on a qualified main
+dispatch creates/configures the new comparison target. The handoff gets the
+complete current schema manifest through the existing hosted identity, then
+checks one real text response with that identity. No dispatch has run here.
 
 The current official [setup guide](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
 requires Foundry User at project scope for the creating/invoking caller. It

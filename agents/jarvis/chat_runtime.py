@@ -507,6 +507,40 @@ def register_chat_invocation(
         finally:
             body[:] = b"\0" * len(body)
 
+        # Fixed administrative reads/probe through the already authenticated Foundry
+        # invocation endpoint. They never accept user text, delegated context or tools.
+        operation = payload.get("operation") if isinstance(payload, dict) else None
+        if isinstance(operation, str) and operation in {
+            "managed_definition_manifest", "managed_text_canary",
+        } and payload == {
+            "operation": operation,
+        }:
+            manifest = operation == "managed_definition_manifest"
+            owner = model_client if manifest else copilot_model_client
+            method = "managed_definition_manifest" if manifest else "probe_target"
+            action = getattr(owner, method, None)
+            if not callable(action):
+                return JSONResponse(
+                    {"status": "down", "reason": "managed_not_configured"}, status_code=503,
+                )
+            try:
+                if manifest:
+                    result = await action()
+                else:
+                    # Same 210-second invocation ceiling as the backend chat bridge.
+                    async with asyncio.timeout(210):
+                        result = await action()
+                encoded = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                if len(encoded) > 2 * MAX_OUTPUT_BYTES:
+                    raise RuntimeError("Managed metadata exceeds the existing response bound")
+                return JSONResponse(result, headers={"Cache-Control": "no-store"})
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                return JSONResponse(
+                    {"status": "down", "reason": chat_failure_code(exc)}, status_code=503,
+                )
+
         smoke = isinstance(payload, dict) and payload.get("smoke") is True
         smoke_history = payload.get("smokeHistory") if isinstance(payload, dict) else None
         smoke_approval = payload.get("smokeApproval", False) if isinstance(payload, dict) else False
