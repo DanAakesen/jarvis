@@ -18,6 +18,32 @@ smoke scenario at 09:55 UTC; research remains down independently with
 research or two-runtime acceptance. Local test evidence and open boundaries are
 recorded in [migration notes](docs/main-chat-harness-migration.md).
 
+## Whole-Jarvis logging scope replaces backend-only (#1341; 29 October 2026)
+
+The owner confirmed read-only logs for the backend, hosted agents, coding runners,
+deployments and supporting services, excluding unrelated projects. Retain the
+Foundry Reader assignment; its removal proposal is stopped and was never applied.
+The earlier narrow grant approval does not authorize new whole-system access.
+The current reader stays disabled. See [source inventory and grant proposal](docs/jarvis-logs.md).
+
+Independent local work adds a metadata-only catalogue to the existing preflight:
+exact canonical resources plus ownership tags, and known-table plan/resource-field
+metadata. Neither a shared workspace nor tags alone establishes ownership. Private
+values remain in the existing mode-0600 report; public output is fixed labels.
+No data query, new grant, security mode, credential, ingestion or retention change.
+Runtime multi-source reading, its single capability replacement, exact expanded
+grant approval, source routing and whole-system enforcement remain pending.
+
+The owner subsequently approved the exact issue scope update, inventory/design
+PR publication with test results, readiness and integration after checks. The one
+authorized issue-update retry succeeded. Reconcile current main `9f831509` without
+altering its chat/research fix; four documentation-prefix conflicts retain both
+scopes. Parent owns readiness/merge. New persistent grants remain unapproved.
+Combined local validation passes 35 backend-log Python tests, 45 pipeline tests
+and 13 main smoke-reason tests, scoped Ruff, byte compilation and diff checks.
+All eight inventory-only and fourteen main-only file blobs match their parents.
+No new Azure inventory execution or whole-system runtime implementation is claimed.
+
 ## Test-settings correction (#1350; 29 October 2026)
 
 The owner requires tests to use the same role settings. The correction

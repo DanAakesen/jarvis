@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
+from backend_log_sources import catalogue
+
 GUID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", re.IGNORECASE)
 DATA_READER = "3b03c2da-16b3-4a49-8834-0f8130efdd3b"
 ACTIONS = {"microsoft.operationalinsights/workspaces/query/read", "microsoft.operationalinsights/workspaces/read"}
@@ -111,7 +113,7 @@ class Azure:
     def _read(self, url: str, query: str | None):
         self.calls += 1
         remaining = self.deadline - self.clock()
-        require(self.calls <= 24 and remaining > 0, "preflight_limit")
+        require(self.calls <= 32 and remaining > 0, "preflight_limit")
         args = ["az", "rest", "--method", "get", "--url", url, "--subscription", self.subscription,
                 "--output", "json", "--only-show-errors"]
         if query:
@@ -252,10 +254,30 @@ def inspect(expected: dict, azure: Azure) -> dict:
             checks.append("negative_workspace_subscription_inventory_unavailable")
     # Presence is only a candidate, never a claimed negative authorization proof.
     checks.append("negative_workspace_candidate_found" if peers else "negative_workspace_candidate_missing")
+    resources = None
+    source_tables = None
+    try:
+        resources = azure.pages(expected["group"] + "/resources", "2021-04-01")
+        checks.append("whole_jarvis_resource_inventory_read")
+    except PreflightBlocked:
+        checks.append("whole_jarvis_resource_inventory_unavailable")
+    try:
+        source_tables = azure.pages(expected["workspace_id"] + "/tables", "2022-10-01")
+        checks.append("whole_jarvis_table_inventory_read")
+    except PreflightBlocked:
+        checks.append("whole_jarvis_table_inventory_unavailable")
+    try:
+        source_catalogue = catalogue(expected, foundry_id, resources, source_tables)
+        checks.append("whole_jarvis_scope_planning_only")
+        checks.extend(source_catalogue["findings"])
+    except (ValueError, TypeError, AttributeError):
+        source_catalogue = None
+        checks.append("whole_jarvis_source_metadata_invalid")
     return {"schema": 1, "stage": "metadata_only", "checks": checks, "targets": expected,
             "workspace": workspace, "foundry": foundry, "table": table, "role": role, "inherited_assignments": inherited,
             "resource_group_assignments": group_roles, "negative_workspace_candidates": peers,
             "assigned_to_assignments": effective, "assigned_to_inventory_complete": len(effective) == 3,
+            "whole_jarvis_sources": source_catalogue,
             "role_definitions": roles, "access_findings": findings,
             "effective_group_memberships_verified": False, "provider_enforcement_verified": False,
             "reader_enabled": False, "grant_applied": False}

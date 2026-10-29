@@ -26,6 +26,24 @@ the chat menu. Default active-turn discovery excludes test sessions. Availabilit
 fails closed for unverified Copilot; it is not a substitute for live model access
 or authorization. See [adapter boundaries](managed-chat-adapter.md).
 
+## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
+
+The approved feature scope now includes Jarvis backend, agents, runners, deployment
+and supporting-service diagnostics, excluding unrelated projects. Preserve existing
+Foundry Reader; no new role or activation follows from the scope confirmation.
+Sources span shared Log Analytics/Application Insights, Foundry resource queries,
+existing SQL/Blob task/check evidence and repository-scoped GitHub Actions logs.
+Coverage, retention and current reader evidence are mapped in [the design](jarvis-logs.md).
+
+The existing private metadata preflight gains an ownership-planning catalogue from
+resource-group resources and workspace table metadata. Exact fixed infrastructure
+IDs and matching ownership tags are necessary; arbitrary tagged resources are
+excluded. Known tables expose only plan and presence of a resource-ID column.
+No source record, schema string or ID is added to public verdicts. The catalogue
+explicitly leaves workspace-wide ownership, routing, historical ownership and
+provider enforcement unverified. Metadata lists remain bounded and private; no
+runtime log adapter, capability duplication, new grant or ingestion change occurs.
+
 ## Smoke request parity (#1350; 29 October 2026)
 
 The hosted-client candidate resolves smoke reasoning and output budget

@@ -11,6 +11,26 @@ SQL integration requires the existing isolated database harness; no live migrati
 was applied in this preparation. Do not enable the managed option from local
 configuration alone. See [remaining gates](managed-chat-adapter.md).
 
+## Whole-Jarvis log preparation (#1341; 29 October 2026)
+
+Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,
+exclude unrelated projects, preserve redaction/bounds and keep the reader disabled
+until expanded access is specifically approved and proven. Do not remove the role
+or apply the earlier backend-only grant as though it authorized whole-system reads.
+See [inventory/design/grant proposal](jarvis-logs.md). Issue #1341 remains canonical.
+After the initial denial, the owner specifically approved its scope update and
+inventory/design PR publication, test disclosures, readiness and integration after
+checks. The one authorized issue-update retry succeeded. Parent owns readiness
+and merge. Keep new grants and reader activation outside that publication step.
+
+Local metadata preparation reads only existing-authorized ARM resource/table lists.
+Exact canonical ID plus ownership tag is required; table plan/_ResourceId metadata
+is not proof of routed data or enforcement. Keep the catalogue private, fixed
+public labels, and all negative/unavailable states honest. Runtime source adapters,
+capability replacement, grant execution and live qualification are still pending.
+Run Python backend-log and pipeline tests, scoped Ruff/byte compilation and diff
+checks. No actual log data, credentials or private identifiers enter GitHub.
+
 ## Smoke/normal settings parity (#1350; 29 October 2026)
 
 The owner explicitly requires the same role settings in tests. Use the selected

@@ -14,6 +14,25 @@ not authorize new identities, role grants, production default changes or removal
 of the old runtime. Actual target/model/region support and persistent access
 changes require specific evidence and applicable owner authorization.
 
+## 29 October 2026 — whole-Jarvis diagnostic scope supersedes backend-only (#1341)
+
+The owner confirmed all logs belonging to Jarvis: backend, hosted agents, coding
+runners, deployments and supporting services, excluding unrelated projects. Stop
+the Foundry Reader removal proposal; it was never approved or applied. Preserve
+that assignment. Earlier backend-only grant approval does not authorize broader
+persistent permissions. Keep the existing issue and disabled reader state.
+
+Map actual source stores/readers and ownership first. A shared workspace is not
+assumed entirely owned. Independent metadata preparation admits only exact known
+infrastructure IDs with ownership tags and records known table plan/resource-field
+metadata privately. Unknown sources and missing collection remain gaps. Propose
+one condition-restricted workspace Data Reader assignment only after the exact
+resource/table manifest and provider support are verified; reuse existing GitHub,
+SQL and Blob access. Exact grants and final qualification remain unapproved.
+Source adapters replace/expand one existing capability, with redaction, bounded
+reads and honest availability. No security, retention, collection or credential
+change is authorized merely by the scope confirmation. See [design](jarvis-logs.md).
+
 ## 29 October 2026 — tests use the owner's selected role settings (#1350)
 
 The owner clarified that the visible chat setting is not none and explicitly
