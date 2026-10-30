@@ -1376,6 +1376,21 @@ shapes were checked against `apps/backend/src/core/now.ts`,
 and `apps/web/src/now-feed.ts`. No backend or iOS-specific route, notification,
 push, Apple framework or third-party dependency was added.
 
+### iOS generated views (P15-07)
+
+`JarvisCore` decodes the version-1 `GeneratedView` JSON contract into typed
+payload models for every renderer, with typed actions and source metadata.
+Validation reports field paths and mirrors the web runtime guards, including
+chart/action limits and the 512 KiB stored HTML artifact bound. Unknown
+renderers and unsupported versions retain their raw JSON; HTML remains
+data-only and no screen or backend path is added. A Linux parity test reads
+`packages/contracts/src/index.js` directly rather than adding exports to the
+contracts package. Decoding can receive the optional trusted Blob host and tool
+registry through `GeneratedViewDecodingContext` in `JSONDecoder.userInfo`. The
+web TypeScript/schema declaration omits source status `running`, while
+`isGeneratedView` accepts it; the Swift source model follows the runtime guard
+pending a contract decision.
+
 ### iOS fixture replay (P15-08)
 
 `FixtureTransport` implements the core HTTP and streaming transport seam without

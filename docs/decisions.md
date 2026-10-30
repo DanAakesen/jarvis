@@ -1,3 +1,13 @@
+## 30 October 2026 — keep generated-view models in JarvisCore (P15-07 / #1392)
+
+Decode the existing version-1 web contract into typed renderer data and actions
+inside the Linux-testable pure-Swift core. Keep rendering and HTML execution out
+of scope; retain the raw JSON for unknown renderers and unsupported versions.
+The parity test reads `packages/contracts/src/index.js` directly, so no web
+contract export or backend route is needed. The runtime `isGeneratedView` guard
+accepts source status `running` although the TypeScript declaration and JSON
+schema omit it; follow runtime behavior and leave the web contract unchanged.
+
 ## 30 October 2026 — synthetic fixture replay in JarvisCore (P15-08 / #1393)
 
 Implement fixture replay through the existing HTTP and streaming transport seam
