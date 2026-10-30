@@ -35,7 +35,7 @@ public final class JarvisChatClient: Sendable {
 
     public func createSession(language: ChatLanguage) async throws -> ChatSession {
         let body = try encode(SessionRequest(channel: "chat", language: language))
-        let response = try await client.performChatRequest(
+        let response = try await client.performAuthenticatedRequest(
             method: .post,
             path: ["conversation", "sessions"],
             body: body,
@@ -74,7 +74,7 @@ public final class JarvisChatClient: Sendable {
     }
 
     public func listActiveTurns() async throws -> [ActiveChatTurn] {
-        let response = try await client.performChatRequest(
+        let response = try await client.performAuthenticatedRequest(
             method: .get,
             path: ["conversation", "turns", "active"],
             idempotent: true
@@ -115,7 +115,7 @@ public final class JarvisChatClient: Sendable {
             throw JarvisChatClientError.invalidResponse
         }
         do {
-            let response = try await client.performChatRequest(
+            let response = try await client.performAuthenticatedRequest(
                 method: .post,
                 path: ["conversation", "sessions", sessionId, "turns", messageId, "cancel"],
                 body: Data("{}".utf8),
@@ -146,7 +146,7 @@ public final class JarvisChatClient: Sendable {
         var queryItems = [URLQueryItem(name: "limit", value: String(limit))]
         if let before { queryItems.append(URLQueryItem(name: "before", value: before)) }
         if let sessionId { queryItems.append(URLQueryItem(name: "sessionId", value: sessionId)) }
-        let response = try await client.performChatRequest(
+        let response = try await client.performAuthenticatedRequest(
             method: .get,
             path: ["conversation", "history"],
             queryItems: queryItems,
@@ -184,7 +184,7 @@ public final class JarvisChatClient: Sendable {
         body.append(upload.data)
         body.append(Data("\r\n--\(boundary)--\r\n".utf8))
 
-        let response = try await client.performChatRequest(
+        let response = try await client.performAuthenticatedRequest(
             method: .post,
             path: ["conversation", "attachments"],
             headers: ["Accept": "application/json"],

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/tools",
+      "response": {
+        "statusCode": 200,
+        "body": [
+          {"name": "get_system_health", "description": "Synthetic no-op health check", "inputSchema": {"type": "object", "properties": {"operation": {"type": "string"}}, "required": ["operation"], "additionalProperties": false}}
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/tools/get_system_health",
+      "requestBody": {"operation": "confirmation_test"},
+      "response": {
+        "statusCode": 200,
+        "body": {"tool": "get_system_health", "outcome": "ok", "result": {"executed": true}, "confirmation": "Synthetic no-op completed."}
+      }
+    }
+  ]
+}

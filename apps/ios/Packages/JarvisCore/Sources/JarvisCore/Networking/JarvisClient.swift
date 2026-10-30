@@ -255,7 +255,7 @@ public final class JarvisClient: Sendable {
         }
     }
 
-    func performChatRequest(
+    func performAuthenticatedRequest(
         method: HTTPMethod,
         path: [String],
         queryItems: [URLQueryItem] = [],
