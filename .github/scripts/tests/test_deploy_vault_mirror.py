@@ -42,6 +42,16 @@ if [[ "$1 $2 $3" == "deployment group show" ]]; then
   else
     echo '{}'
   fi
+elif [[ "$1 $2" == "containerapp list" ]]; then
+  if [[ "${FAKE_COPILOT_CONFIG:-}" == valid ]]; then
+    echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"},{"name":"FOUNDRY_COPILOT_AGENT_VERSION","value":"1"},{"name":"FOUNDRY_COPILOT_DEFINITION_SHA256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]'
+  elif [[ "${FAKE_COPILOT_CONFIG:-}" == partial ]]; then
+    echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"}]}]'
+  elif [[ "${FAKE_COPILOT_CONFIG:-}" == invalid ]]; then
+    echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"},{"name":"FOUNDRY_COPILOT_AGENT_VERSION","value":"1"},{"name":"FOUNDRY_COPILOT_DEFINITION_SHA256","value":"invalid"}]}]'
+  else
+    echo '[]'
+  fi
 elif [[ "$1 $2 $3" == "containerapp job list" ]]; then
   if [[ "${FAKE_MIRROR_PRESENT:-false}" == true ]]; then echo 'job-jarvis-vault-mirror'; fi
 elif [[ "$1 $2" == "identity list" ]]; then
@@ -115,6 +125,22 @@ fi
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("acr build", log)
         self.assertIn("vaultMirrorEnabled=false", log)
+        self.assertNotIn("foundryCopilotAgentName=", log)
+
+    def test_existing_copilot_target_is_preserved_in_bicep_parameters(self):
+        result, log = self.deploy(FAKE_COPILOT_CONFIG="valid")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("foundryCopilotAgentName=jarvis-main-copilot-preview", log)
+        self.assertIn("foundryCopilotAgentVersion=1", log)
+        self.assertIn("foundryCopilotDefinitionSha256=" + "a" * 64, log)
+
+    def test_incomplete_or_invalid_copilot_target_fails_before_deployment(self):
+        for config in ("partial", "invalid"):
+            with self.subTest(config=config):
+                result, log = self.deploy(FAKE_COPILOT_CONFIG=config)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Existing Copilot target configuration is invalid.", result.stdout)
+                self.assertNotIn("deployment group create", log)
 
     def test_disabling_removes_job_identity_and_grants_but_retains_data_containers(self):
         result, log = self.deploy(

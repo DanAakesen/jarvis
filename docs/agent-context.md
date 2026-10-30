@@ -12,6 +12,20 @@ Copilot test-chat turn. Preserve request shape, consumed-source and unknown-outc
 claim behavior until a new sanitized provider cause supplies evidence. Never
 include provider messages or raw responses in diagnostics.
 
+## Managed Copilot target persistence (#1350; 30 October 2026)
+
+Ordinary Bicep deployment carries forward only the existing backend's complete,
+validated Copilot agent name/version/fingerprint tuple. Missing values remain
+absent; partial or invalid tuples fail before deployment. Focused offline checks:
+`.github/scripts/tests/test_deploy_vault_mirror.py`,
+`bash -n .github/scripts/deploy_bicep.sh`, and
+`bicep build infra/main.bicep --stdout`.
+The 30 October main deployment ran no infra/backend/agent update, and its normal
+chat canary failed with the generic `acceptance_check_failed`; it did not capture
+a managed Copilot `providerCause`. No successful original-path Copilot turn is
+established. Do not change `_create_response` based on a synthetic rejection or
+infer that the generic current-chat canary diagnosed the Copilot request.
+
 ## Managed conversation failure repair (#1350; 29 October 2026)
 
 Use the production lazy wrapper with stateful synthetic claims in
@@ -1498,12 +1512,17 @@ identity and no-timestamp reasons appear as `not_reported_or_redacted` in
 artifacts (open web clients accept HTTP reasons only for down checks); read them
 in the `system.smoke_check` events instead.
 
-Only `rate_limit_exceeded` retries a check, once. A numeric SSE `retry_after`
+`rate_limit_exceeded` retries a check once. A numeric SSE `retry_after`
 (seconds) or HTTP `Retry-After` hint sets the wait, clamped to 30–60 seconds;
 without a valid hint it waits a full 60 seconds after the rejection. Retries
 re-enter the same pacing queue. A second throttle fails with the named reason,
 including `chat_canary`; other second-attempt failures retain their actual reason.
-Other errors, assertion failures and timeouts never retry. A rescued first
+`chat_github_read` also retries `github_issue_unavailable` once, through the same
+queue without the rate-limit backoff. Both retry causes share a two-attempt cap.
+A successful `github_read` / `issue_get` receipt for issue 700 with a nonblank
+title passes without requiring the reply to repeat the title. A failed retry
+retains its actual safe reason in acceptance/release evidence; other errors,
+assertion failures and timeouts never retry. A rescued first
 throttle is not retained in the report; inspect dependency telemetry too. #816's
 coordination client is never opened for smoke turns; the agent test
 `test_smoke_invocations_open_no_coordination_connection` pins that.

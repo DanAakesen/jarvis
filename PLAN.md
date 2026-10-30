@@ -969,6 +969,17 @@ as small PRs:
 No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
 #885; merged source is not acceptance.
 
+## Stable GitHub chat acceptance (#1415, 30 October 2026)
+
+Implemented receipt-based issue-700 validation and one paced retry for
+`github_issue_unavailable`, sharing the existing two-attempt cap with throttling.
+Full backend tests (7,236 passed, one skipped), smoke-reason tests (13), backend
+lint and build pass. Genuine read failures retain their safe reason and fail the
+aggregate. Review and secret scan found no issues; CodeQL found no Python alerts
+but skipped JavaScript because its database was too large. Next: normal CI and
+repeated live acceptance on unchanged production; local fixtures do not prove
+live stability.
+
 ## Chat acceptance fix-forward (#820, 17 October 2026)
 
 Three consecutive main deploys failed different chat checks with the bare

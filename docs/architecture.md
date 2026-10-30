@@ -37,7 +37,11 @@ client now cover provider creation and continuations; uncertain work stays activ
 without automatic replay. `ManagedPolicyClient` reuses the existing application
 policies through a narrow provider transport seam. The lazy factory and pinned
 backend target reader are wired behind three optional target configuration values;
-no managed target has been activated by this preparation. SQL personal memory, blob artifacts, the
+the explicit provisioning handoff supplies those values, and ordinary Bicep
+deployments preserve a complete validated tuple from the existing backend
+configuration. Missing configuration remains absent; partial or invalid target
+metadata blocks the infrastructure apply. This persistence does not change the
+production runtime default. SQL personal memory, blob artifacts, the
 Voice Live relay and subscription-backed Factory are unchanged.
 
 The UI keeps normal chat mounted and opens a new labelled test conversation from
@@ -3764,12 +3768,16 @@ any other unexpected exception remains `agent_error`. These
 `chatAgentInvocationReasons` are mirrored by the Python formatter with a parity
 test, and cancellation is never relabelled by the invocation client.
 `rate_limit_exceeded` is explicitly allowed in hosted, canary, smoke-log and
-artifact reasons. Only that failure retries its check once: wait 60 seconds
+artifact reasons. That failure retries its check once: wait 60 seconds
 after rejection by default, or use a numeric SSE `retry_after` (seconds) /
 HTTP `Retry-After` hint clamped to 30–60 seconds, then re-enter the same queue.
 The second result is final; a second throttle names `rate_limit_exceeded` on
-both the check and aggregate canary. Other errors, assertion failures and
-timeouts never retry. Smoke prompts are read-only or no-op, so repeating them
+both the check and aggregate canary. The read-only `chat_github_read` check also
+retries `github_issue_unavailable` once through the same pacing queue, sharing
+the two-attempt cap. It requires a successful `github_read` / `issue_get` receipt
+for issue 700 with a nonblank title, not a title repeated in reply text. A failed
+retry retains its safe reason in release evidence. Other errors, assertion
+failures and timeouts never retry. Smoke prompts are read-only or no-op, so repeating them
 has no side effects; a rescued throttle is not recorded in the report.
 Capacity remains unchanged. Two consecutive production releases with first-attempt
 acceptance and zero throttled spans remain required live verification.
