@@ -86,6 +86,50 @@ final class JarvisChatClientTests: XCTestCase {
         }
     }
 
+    func testDroppedTurnStreamReattachesAndSuppressesReplayedEvents() async throws {
+        let user = event("user", [
+            "id": "42", "sessionId": "12", "role": "dan", "text": "Hi",
+            "model": NSNull(), "at": "2026-10-30T00:00:00.000Z",
+        ])
+        let delta = event("delta", ["text": "Hello"])
+        let done = event("done", [
+            "id": "43", "sessionId": "12", "role": "jarvis", "text": "Hello",
+            "model": NSNull(), "at": "2026-10-30T00:00:01.000Z",
+        ])
+        let transport = FakeChatTransport([
+            .stream(streamResponse(events: user + delta)),
+            .stream(streamResponse(events: user + delta + done)),
+        ])
+        let clock = FakeChatClock()
+        let chat = makeChatClient(
+            transport: transport,
+            reattachPolicy: ReattachPolicy(maximumDuration: .seconds(10)),
+            clock: clock
+        )
+
+        let events = try await chat.sendTurn(sessionId: "12", text: "Hi")
+        let received = try await collect(events)
+        let requests = await transport.recordedRequests()
+        let sleeps = await clock.sleeps()
+
+        XCTAssertEqual(received, [
+            .user(ChatMessage(
+                id: "42", sessionId: "12", role: .dan, text: "Hi", model: nil,
+                at: "2026-10-30T00:00:00.000Z"
+            )),
+            .delta(text: "Hello"),
+            .done(ChatMessage(
+                id: "43", sessionId: "12", role: .jarvis, text: "Hello", model: nil,
+                at: "2026-10-30T00:00:01.000Z"
+            )),
+        ])
+        XCTAssertEqual(requests.map(\.url.path), [
+            "/api/conversation/sessions/12/turns",
+            "/api/conversation/sessions/12/turns/42/events",
+        ])
+        XCTAssertEqual(sleeps, [.seconds(2)])
+    }
+
     func testRejectsInvalidTurnInputWithoutSending() async throws {
         let transport = FakeChatTransport([])
         let chat = makeChatClient(transport: transport)
@@ -254,6 +298,30 @@ final class JarvisChatClientTests: XCTestCase {
         XCTAssertTrue(request.headers["Content-Type"]?.hasPrefix("multipart/form-data; boundary=") == true)
         XCTAssertTrue(String(decoding: request.body!, as: UTF8.self).contains("filename=\"sample\\\".txt\""))
         XCTAssertTrue(String(decoding: request.body!, as: UTF8.self).contains("\r\n\r\nhello\r\n"))
+    }
+
+    func testRejectsUnsupportedAndOversizedUploadsBeforeSending() async throws {
+        let transport = FakeChatTransport([])
+        let chat = makeChatClient(transport: transport)
+        let uploads = [
+            ChatAttachmentUpload(fileName: "sample.bin", contentType: "application/octet-stream", data: Data([1])),
+            ChatAttachmentUpload(
+                fileName: "picture.png",
+                contentType: "image/png",
+                data: Data(repeating: 0, count: 10 * 1024 * 1024 + 1)
+            ),
+        ]
+
+        for upload in uploads {
+            do {
+                _ = try await chat.uploadAttachment(upload)
+                XCTFail("Expected upload validation")
+            } catch {
+                XCTAssertEqual(error as? JarvisChatClientError, .invalidUpload)
+            }
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
     }
 
     func testCancellationOfConsumerCancelsUnderlyingTransportStream() async throws {

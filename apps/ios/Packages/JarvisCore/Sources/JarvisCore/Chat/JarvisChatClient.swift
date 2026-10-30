@@ -1,6 +1,24 @@
 import Foundation
 
 public final class JarvisChatClient: Sendable {
+    private static let imageContentTypes = [
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp",
+        "gif": "image/gif",
+    ]
+    private static let documentContentTypes = [
+        "pdf": "application/pdf",
+        "txt": "text/plain",
+        "md": "text/markdown",
+        "csv": "text/csv",
+        "json": "application/json",
+        "log": "text/plain",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]
+
     private let client: JarvisClient
     private let reattachPolicy: ReattachPolicy
     private let clock: any ChatClock
@@ -46,12 +64,13 @@ public final class JarvisChatClient: Sendable {
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
             screenContext: screenContext
         ))
+        let recoveryStart = await clock.now()
         let response = try await client.performChatStream(
             method: .post,
             path: ["conversation", "sessions", sessionId, "turns"],
             body: body
         )
-        return eventStream(from: response, sessionId: sessionId)
+        return eventStream(from: response, sessionId: sessionId, recoveryStart: recoveryStart)
     }
 
     public func listActiveTurns() async throws -> [ActiveChatTurn] {
@@ -78,28 +97,17 @@ public final class JarvisChatClient: Sendable {
             throw JarvisChatClientError.invalidResponse
         }
         let start = await clock.now()
-        var firstAttempt = true
-        while true {
-            if !firstAttempt, await clock.now() - start >= reattachPolicy.maximumDuration {
-                break
-            }
-            try Task.checkCancellation()
-            firstAttempt = false
-            do {
-                let response = try await client.performChatStream(
-                    method: .get,
-                    path: ["conversation", "sessions", sessionId, "turns", messageId, "events"]
-                )
-                return eventStream(from: response, sessionId: sessionId)
-            } catch let error as JarvisClientError {
-                if case .httpStatus(404) = error { throw JarvisChatClientError.turnNotFound }
-                guard Self.isRetryable(error) else { throw error }
-                try await waitForNextAttempt(since: start)
-            } catch is CancellationError {
-                throw CancellationError()
-            }
-        }
-        throw JarvisChatClientError.reattachTimedOut
+        let response = try await openReattachResponse(
+            sessionId: sessionId,
+            messageId: messageId,
+            since: start
+        )
+        return eventStream(
+            from: response,
+            sessionId: sessionId,
+            recoveryStart: start,
+            messageId: messageId
+        )
     }
 
     public func cancelTurn(sessionId: String, messageId: String) async throws -> Bool {
@@ -153,12 +161,18 @@ public final class JarvisChatClient: Sendable {
     }
 
     public func uploadAttachment(_ upload: ChatAttachmentUpload) async throws -> ChatAttachmentDescriptor {
-        guard !upload.data.isEmpty, upload.data.count <= 20 * 1024 * 1024,
-              !upload.fileName.isEmpty, !upload.fileName.contains("\r"), !upload.fileName.contains("\n"),
-              upload.contentType.range(
-                  of: #"^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+$"#,
-                  options: .regularExpression
-              ) != nil else {
+        let filename = upload.fileName.replacingOccurrences(of: "\\", with: "/")
+        let basename = filename.split(separator: "/", omittingEmptySubsequences: false).last.map(String.init) ?? ""
+        let fileExtension = basename.split(separator: ".", omittingEmptySubsequences: false).last?.lowercased() ?? ""
+        let expectedType = Self.imageContentTypes[fileExtension] ?? Self.documentContentTypes[fileExtension]
+        let typeMatches = upload.contentType == expectedType ||
+            fileExtension == "md" && upload.contentType == "text/plain" ||
+            fileExtension == "csv" && upload.contentType == "application/csv"
+        let maximumBytes = Self.imageContentTypes[fileExtension] == nil ? 20 * 1024 * 1024 : 10 * 1024 * 1024
+        guard !upload.data.isEmpty, upload.data.count <= maximumBytes,
+              !basename.isEmpty, basename.unicodeScalars.count <= 255,
+              !upload.fileName.contains("\r"), !upload.fileName.contains("\n"),
+              typeMatches else {
             throw JarvisChatClientError.invalidUpload
         }
 
@@ -190,47 +204,119 @@ public final class JarvisChatClient: Sendable {
 
     private func eventStream(
         from response: HTTPStreamResponse,
-        sessionId: String
+        sessionId: String,
+        recoveryStart: Duration,
+        messageId initialMessageId: String? = nil
     ) -> AsyncThrowingStream<ChatEvent, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
-                var parser = SSEParser()
-                var receivedBytes = 0
+                var response = response
+                var acceptedMessageId = initialMessageId
+                var previouslyReceived: [ServerSentEvent] = []
+                var replayIndex = 0
+                var isReplayConnection = false
                 var receivedDone = false
 
-                func emit(_ events: [ServerSentEvent]) throws {
-                    for event in events {
-                        let chatEvent = try Self.decode(event: event, sessionId: sessionId)
-                        if case .error(let failure) = chatEvent {
-                            throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
+                func emit(_ event: ServerSentEvent) throws -> Bool {
+                    if isReplayConnection {
+                        if replayIndex < previouslyReceived.count {
+                            guard event == previouslyReceived[replayIndex] else {
+                                throw JarvisChatClientError.invalidResponse
+                            }
+                            replayIndex += 1
+                            return false
                         }
-                        continuation.yield(chatEvent)
-                        if case .done = chatEvent {
-                            receivedDone = true
-                            continuation.finish()
-                            return
-                        }
+                        isReplayConnection = false
                     }
+
+                    let chatEvent = try Self.decode(event: event, sessionId: sessionId)
+                    if case .error(let failure) = chatEvent {
+                        throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
+                    }
+                    if case .user(let message) = chatEvent { acceptedMessageId = message.id }
+                    previouslyReceived.append(event)
+                    continuation.yield(chatEvent)
+                    if case .done = chatEvent { return true }
+                    return false
                 }
 
                 do {
-                    for try await chunk in response.body {
-                        try Task.checkCancellation()
-                        receivedBytes += chunk.count
-                        guard receivedBytes <= 1024 * 1024 else {
-                            throw JarvisChatClientError.responseTooLarge
+                    while !receivedDone {
+                        var parser = SSEParser()
+                        var receivedBytes = 0
+                        do {
+                            for try await chunk in response.body {
+                                try Task.checkCancellation()
+                                receivedBytes += chunk.count
+                                guard receivedBytes <= 1024 * 1024 else {
+                                    throw JarvisChatClientError.responseTooLarge
+                                }
+                                for event in parser.append(chunk) {
+                                    if try emit(event) {
+                                        receivedDone = true
+                                        break
+                                    }
+                                }
+                                if receivedDone { break }
+                            }
+                            if !receivedDone {
+                                for event in parser.finish() {
+                                    if try emit(event) {
+                                        receivedDone = true
+                                        break
+                                    }
+                                }
+                            }
+                            if !receivedDone { throw JarvisChatClientError.streamEnded }
+                        } catch {
+                            let mappedError = Self.mappedStreamError(error)
+                            guard let acceptedMessageId, Self.shouldReattach(after: mappedError) else {
+                                throw mappedError
+                            }
+                            try Task.checkCancellation()
+                            try await waitForNextAttempt(since: recoveryStart)
+                            response = try await openReattachResponse(
+                                sessionId: sessionId,
+                                messageId: acceptedMessageId,
+                                since: recoveryStart
+                            )
+                            replayIndex = 0
+                            isReplayConnection = true
                         }
-                        try emit(parser.append(chunk))
-                        if receivedDone { return }
                     }
-                    try emit(parser.finish())
-                    guard receivedDone else { throw JarvisChatClientError.streamEnded }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: Self.mappedStreamError(error))
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func openReattachResponse(
+        sessionId: String,
+        messageId: String,
+        since start: Duration
+    ) async throws -> HTTPStreamResponse {
+        var firstAttempt = true
+        while true {
+            if !firstAttempt, await clock.now() - start >= reattachPolicy.maximumDuration {
+                throw JarvisChatClientError.reattachTimedOut
+            }
+            try Task.checkCancellation()
+            firstAttempt = false
+            do {
+                return try await client.performChatStream(
+                    method: .get,
+                    path: ["conversation", "sessions", sessionId, "turns", messageId, "events"]
+                )
+            } catch let error as JarvisClientError {
+                if case .httpStatus(404) = error { throw JarvisChatClientError.turnNotFound }
+                guard Self.isRetryable(error) else { throw error }
+                try await waitForNextAttempt(since: start)
+            } catch is CancellationError {
+                throw CancellationError()
+            }
         }
     }
 
@@ -331,6 +417,12 @@ public final class JarvisChatClient: Sendable {
         default:
             return false
         }
+    }
+
+    private static func shouldReattach(after error: any Error) -> Bool {
+        if error as? JarvisChatClientError == .streamEnded { return true }
+        guard let error = error as? JarvisClientError else { return false }
+        return isRetryable(error)
     }
 
     private static func mappedStreamError(_ error: any Error) -> any Error {
