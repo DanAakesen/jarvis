@@ -41,6 +41,7 @@ The owner confirmed these on 29 October 2026 while reviewing the concept board. 
 - **Orb.** The existing Jarvis orb design carries over. How to render it natively is open.
 - **Presence.** The phone has no presence picker and always uses On the move.
 - **Tools.** No paid design tools or subscriptions.
+- **One backend.** The iPhone app reuses the methods the web app already uses, with no iOS-specific backend paths (confirmed 30 October 2026). Anything a design needs that the backend does not already provide is flagged to Dan, who decides whether that backend build starts then.
 
 ## Version 1 answers (29 October 2026)
 

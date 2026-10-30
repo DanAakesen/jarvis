@@ -2,6 +2,8 @@
 
 Status: the foundation phase is authorised. The owner answered the checklist on 29 October 2026 and gave the go for the foundation phase on 30 October 2026. Phase 1a is the first work and no implementation has landed yet. Later phases still need their own go. Every screen needs the owner's approval before it is built, merged or shipped (see Screen approval gate). This file is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
 
+Backend rule (confirmed 30 October 2026): Jarvis is one unified backend with several frontends. The iPhone app reuses the routes, streams, tools, and artifacts the web app already uses, with no iOS-specific backend paths. An iPhone screen that needs something the web app does not already use is raised as an explicit decision before the backend changes. Anything an iPhone design needs that the backend does not already provide is flagged to Dan, who decides whether that backend build starts then.
+
 Related documents: `iOS app.md` (confirmed decisions), `docs/ios/integration-contract.md` (backend endpoints the app talks to) and `docs/ios/design/` (the concept board and the surfaces gallery).
 
 Basis labels: **Checked** means the official GitHub or Apple page was read. **Not re-read** means a research finding or memory not yet confirmed on the page. **My call** is a design choice. The Checked pages were read on 29 October 2026. Runner images and their open issues change often, so recheck them before the first build.
