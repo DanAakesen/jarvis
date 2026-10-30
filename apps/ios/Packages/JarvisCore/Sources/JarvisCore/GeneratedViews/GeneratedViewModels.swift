@@ -7,6 +7,33 @@ public enum GeneratedViewLimits {
     public static let htmlArtifactBytes = 512 * 1024
 }
 
+public enum GeneratedViewRenderer: String, CaseIterable, Codable, Equatable, Sendable {
+    case table
+    case list
+    case detail
+    case text
+    case timeline
+    case chart
+    case taskCard = "task-card"
+    case status
+    case image
+    case htmlApp = "html-app"
+    case knowledgeGraph = "knowledge-graph"
+    case code
+}
+
+public enum GeneratedViewActionType: String, CaseIterable, Codable, Equatable, Sendable {
+    case openRoute = "open-route"
+    case openLink = "open-link"
+    case callTool = "call-tool"
+    case window
+}
+
+public enum GeneratedViewDecodingContext {
+    public static let trustedBlobHostKey = CodingUserInfoKey(rawValue: "JarvisCore.GeneratedView.trustedBlobHost")!
+    public static let registeredToolsKey = CodingUserInfoKey(rawValue: "JarvisCore.GeneratedView.registeredTools")!
+}
+
 public enum GeneratedViewValidationError: Error, Equatable, Sendable, LocalizedError {
     case invalid(path: String, reason: String)
 
@@ -96,7 +123,12 @@ public enum GeneratedViewAction: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let json = try JSONValue(from: decoder)
         let path = GeneratedViewValidator.path(from: decoder.codingPath)
-        try GeneratedViewValidator.validateAction(json, path: path, listItem: false)
+        try GeneratedViewValidator.validateAction(
+            json,
+            path: path,
+            listItem: false,
+            registeredTools: decoder.userInfo[GeneratedViewDecodingContext.registeredToolsKey] as? [String]
+        )
         guard case .object(let object) = json,
               case .string(let type)? = object["type"] else {
             throw GeneratedViewValidationError.invalid(path: path, reason: "must be an action object")
@@ -313,6 +345,8 @@ public struct GeneratedViewEnvelope<Data: Codable & Equatable & Sendable>: Equat
 }
 
 public enum GeneratedView: Codable, Equatable, Sendable {
+    public static let supportedVersion = 1
+
     case table(GeneratedViewEnvelope<GeneratedTableData>)
     case list(GeneratedViewEnvelope<GeneratedListData>)
     case detail(GeneratedViewEnvelope<GeneratedDetailData>)
@@ -339,47 +373,51 @@ public enum GeneratedView: Codable, Equatable, Sendable {
         guard let version = root["version"] else {
             throw GeneratedViewValidationError.invalid(path: "view.version", reason: "is required")
         }
-        guard case .number(let number) = version, number == 1 else {
+        guard case .number(let number) = version, number == Double(Self.supportedVersion) else {
             self = .unsupportedVersion(version: version, raw: raw)
             return
         }
         guard let rendererValue = root["renderer"] else {
             throw GeneratedViewValidationError.invalid(path: "view.renderer", reason: "is required")
         }
-        let renderer = try GeneratedViewValidator.string(rendererValue, path: "view.renderer", min: 1, max: 200)
-        guard GeneratedViewValidator.renderers.contains(renderer) else {
-            self = .unknown(renderer: renderer, raw: raw)
+        guard case .string(let rendererName) = rendererValue else {
+            throw GeneratedViewValidationError.invalid(path: "view.renderer", reason: "must be a string")
+        }
+        guard let renderer = GeneratedViewRenderer(rawValue: rendererName) else {
+            self = .unknown(renderer: rendererName, raw: raw)
             return
         }
 
-        try GeneratedViewValidator.validate(raw)
+        try GeneratedViewValidator.validate(
+            raw,
+            trustedBlobHost: decoder.userInfo[GeneratedViewDecodingContext.trustedBlobHostKey] as? String,
+            registeredTools: decoder.userInfo[GeneratedViewDecodingContext.registeredToolsKey] as? [String]
+        )
         switch renderer {
-        case "table":
+        case .table:
             self = .table(try Self.decodeEnvelope(GeneratedTableData.self, from: raw))
-        case "list":
+        case .list:
             self = .list(try Self.decodeEnvelope(GeneratedListData.self, from: raw))
-        case "detail":
+        case .detail:
             self = .detail(try Self.decodeEnvelope(GeneratedDetailData.self, from: raw))
-        case "text":
+        case .text:
             self = .text(try Self.decodeEnvelope(GeneratedTextData.self, from: raw))
-        case "timeline":
+        case .timeline:
             self = .timeline(try Self.decodeEnvelope(GeneratedTimelineData.self, from: raw))
-        case "chart":
+        case .chart:
             self = .chart(try Self.decodeEnvelope(GeneratedChartData.self, from: raw))
-        case "task-card":
+        case .taskCard:
             self = .taskCard(try Self.decodeEnvelope(GeneratedTaskCardData.self, from: raw))
-        case "status":
+        case .status:
             self = .status(try Self.decodeEnvelope(GeneratedStatusData.self, from: raw))
-        case "image":
+        case .image:
             self = .image(try Self.decodeEnvelope(GeneratedImageData.self, from: raw))
-        case "html-app":
+        case .htmlApp:
             self = .htmlApp(try Self.decodeEnvelope(GeneratedHTMLAppData.self, from: raw))
-        case "knowledge-graph":
+        case .knowledgeGraph:
             self = .knowledgeGraph(try Self.decodeEnvelope(GeneratedKnowledgeGraphData.self, from: raw))
-        case "code":
+        case .code:
             self = .code(try Self.decodeEnvelope(GeneratedCodeData.self, from: raw))
-        default:
-            self = .unknown(renderer: renderer, raw: raw)
         }
     }
 
@@ -436,6 +474,7 @@ public enum GeneratedView: Codable, Equatable, Sendable {
         try GeneratedViewEnvelopeEncoder(
             title: envelope.title,
             renderer: renderer,
+            version: GeneratedView.supportedVersion,
             source: envelope.source,
             data: envelope.data,
             actions: envelope.actions
@@ -467,6 +506,7 @@ private struct GeneratedViewEnvelopeDecoder<Data: Codable & Equatable & Sendable
 private struct GeneratedViewEnvelopeEncoder<Data: Encodable>: Encodable {
     let title: String
     let renderer: String
+    let version: Int
     let source: GeneratedViewSource
     let data: Data
     let actions: [GeneratedViewAction]?
@@ -482,7 +522,7 @@ private struct GeneratedViewEnvelopeEncoder<Data: Encodable>: Encodable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(1, forKey: .version)
+        try container.encode(version, forKey: .version)
         try container.encode(title, forKey: .title)
         try container.encode(renderer, forKey: .renderer)
         try container.encode(source, forKey: .source)
@@ -535,12 +575,9 @@ private struct ValidatedHtmlArtifact: Decodable {
 }
 
 private enum GeneratedViewValidator {
-    static let renderers = [
-        "table", "list", "detail", "text", "timeline", "chart", "task-card", "status", "image",
-        "html-app", "knowledge-graph", "code",
-    ]
+    static let renderers = GeneratedViewRenderer.allCases.map(\.rawValue)
 
-    static let actionTypes = ["open-route", "open-link", "call-tool", "window"]
+    static let actionTypes = GeneratedViewActionType.allCases.map(\.rawValue)
     private static let viewKeys: Set<String> = ["version", "title", "renderer", "source", "data", "actions"]
     private static let sourceIDs: Set<String> = [
         "now", "factory.tasks", "factory.projects", "usage", "image_generation", "html_generation", "research", "knowledge_graph",
@@ -558,7 +595,11 @@ private enum GeneratedViewValidator {
         options: [.caseInsensitive]
     )
 
-    static func validate(_ raw: JSONValue) throws {
+    static func validate(
+        _ raw: JSONValue,
+        trustedBlobHost: String?,
+        registeredTools: [String]?
+    ) throws {
         let root = try object(raw, path: "view")
         try checkKeys(root, path: "view", allowed: viewKeys, required: ["version", "title", "renderer", "source", "data"])
         guard case .number(let version)? = root["version"], version == 1 else {
@@ -568,22 +609,38 @@ private enum GeneratedViewValidator {
         guard renderers.contains(renderer) else { throw invalid("view.renderer", "must be a supported renderer") }
         _ = try string(root["title"], path: "view.title", min: 1, max: 200)
         try validateSource(root["source"], path: "view.source")
-        try validateData(renderer: renderer, value: root["data"], path: "view.data")
+        try validateData(
+            renderer: renderer,
+            value: root["data"],
+            path: "view.data",
+            trustedBlobHost: trustedBlobHost,
+            registeredTools: registeredTools
+        )
         if let actions = root["actions"] {
             guard case .array(let values) = actions else { throw invalid("view.actions", "must be an array") }
             guard values.count <= GeneratedViewLimits.actionsPerView else {
                 throw invalid("view.actions", "must have at most 10 actions")
             }
             for (index, action) in values.enumerated() {
-                try validateAction(action, path: "view.actions[\(index)]", listItem: false)
+                try validateAction(
+                    action,
+                    path: "view.actions[\(index)]",
+                    listItem: false,
+                    registeredTools: registeredTools
+                )
             }
         }
-        guard let encoded = try? JSONEncoder().encode(raw), encoded.count <= 256 * 1024 else {
+        guard serializedJSONByteCount(raw) <= 256 * 1024 else {
             throw invalid("view", "must not exceed 256 KiB of JSON")
         }
     }
 
-    static func validateAction(_ value: JSONValue, path: String, listItem: Bool) throws {
+    static func validateAction(
+        _ value: JSONValue,
+        path: String,
+        listItem: Bool,
+        registeredTools: [String]? = nil
+    ) throws {
         let action = try object(value, path: path)
         guard let type = action["type"]?.stringValue else {
             throw invalid("\(path).type", "is required")
@@ -617,6 +674,9 @@ private enum GeneratedViewValidator {
             guard tool.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil else {
                 throw invalid("\(path).tool", "must contain only letters, digits, _ or -")
             }
+            if let registeredTools, !registeredTools.contains(tool) {
+                throw invalid("\(path).tool", "is not a registered tool")
+            }
         case "window":
             try validateWindowAction(action, path: path)
         default:
@@ -637,7 +697,10 @@ private enum GeneratedViewValidator {
         guard try string(artifact["kind"], path: "artifact.kind", min: 1, max: 10) == "html" else {
             throw invalid("artifact.kind", "must be html")
         }
-        _ = try string(artifact["title"], path: "artifact.title", min: 1, max: 200)
+        let title = try string(artifact["title"], path: "artifact.title", min: 1, max: 200)
+        guard title == title.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            throw invalid("artifact.title", "must not have surrounding whitespace")
+        }
         let html = try string(
             artifact["html"],
             path: "artifact.html",
@@ -651,22 +714,39 @@ private enum GeneratedViewValidator {
               html.range(of: #"<script\b[^>]*\bsrc\s*="#, options: [.regularExpression, .caseInsensitive]) == nil else {
             throw invalid("artifact.html", "must not contain a base element or external script")
         }
+        let createdAt = try string(artifact["createdAt"], path: "artifact.createdAt", min: 1, max: 30)
+        guard validHTMLArtifactTimestamp(createdAt) else {
+            throw invalid("artifact.createdAt", "must be a canonical UTC date-time with millisecond precision")
+        }
+        guard case .bool? = artifact["pinned"] else { throw invalid("artifact.pinned", "must be a boolean") }
         guard case .array(let sources)? = artifact["sources"], sources.count <= 50 else {
             throw invalid("artifact.sources", "must be an array of at most 50 sources")
         }
+        var sourceURLs = Set<String>()
         for (index, sourceValue) in sources.enumerated() {
             let path = "artifact.sources[\(index)]"
             let source = try object(sourceValue, path: path)
             try checkKeys(source, path: path, allowed: ["title", "url"], required: ["title", "url"])
-            _ = try string(source["title"], path: "\(path).title", min: 1, max: 200)
+            let sourceTitle = try string(source["title"], path: "\(path).title", min: 1, max: 200)
+            guard sourceTitle == sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                throw invalid("\(path).title", "must not have surrounding whitespace")
+            }
             let url = try string(source["url"], path: "\(path).url", min: 1, max: 2_048)
-            guard let components = URLComponents(string: url), components.scheme?.lowercased() == "https",
-                  components.host?.isEmpty == false else {
+            guard url == url.trimmingCharacters(in: .whitespacesAndNewlines) else {
+                throw invalid("\(path).url", "must not have surrounding whitespace")
+            }
+            guard var components = URLComponents(string: url), components.scheme?.lowercased() == "https",
+                  components.host?.isEmpty == false, components.user == nil, components.password == nil,
+                  components.port == nil || components.port == 443 else {
                 throw invalid("\(path).url", "must be an HTTPS URL")
             }
+            components.host = components.host?.lowercased()
+            if components.port == 443 { components.port = nil }
+            guard let normalizedURL = components.url?.absoluteString,
+                  sourceURLs.insert(normalizedURL).inserted else {
+                throw invalid("\(path).url", "must be unique")
+            }
         }
-        _ = try dateTime(artifact["createdAt"], path: "artifact.createdAt")
-        guard case .bool? = artifact["pinned"] else { throw invalid("artifact.pinned", "must be a boolean") }
     }
 
     static func path(from codingPath: [CodingKey]) -> String {
@@ -739,7 +819,13 @@ private enum GeneratedViewValidator {
         }
     }
 
-    private static func validateData(renderer: String, value: JSONValue?, path: String) throws {
+    private static func validateData(
+        renderer: String,
+        value: JSONValue?,
+        path: String,
+        trustedBlobHost: String?,
+        registeredTools: [String]?
+    ) throws {
         guard let value else { throw invalid(path, "is required") }
         let data = try object(value, path: path)
         switch renderer {
@@ -784,7 +870,12 @@ private enum GeneratedViewValidator {
                     }
                 }
                 if let action = item["action"] {
-                    try validateAction(action, path: "\(itemPath).action", listItem: true)
+                    try validateAction(
+                        action,
+                        path: "\(itemPath).action",
+                        listItem: true,
+                        registeredTools: registeredTools
+                    )
                 }
             }
         case "detail":
@@ -809,7 +900,12 @@ private enum GeneratedViewValidator {
                     throw invalid(eventPath, "requires at or label")
                 }
                 if let at = event["at"] { try validateTimelineDate(at, path: "\(eventPath).at") }
-                if let label = event["label"] { _ = try string(label, path: "\(eventPath).label", min: 1, max: 40) }
+                if let label = event["label"] {
+                    let value = try string(label, path: "\(eventPath).label", min: 1, max: Int.max)
+                    guard value.unicodeScalars.count <= 40 else {
+                        throw invalid("\(eventPath).label", "must contain 1-40 characters")
+                    }
+                }
                 _ = try string(event["title"], path: "\(eventPath).title", min: 1, max: 200)
                 if let description = event["description"] {
                     _ = try string(description, path: "\(eventPath).description", min: 0, max: 2_000)
@@ -875,7 +971,12 @@ private enum GeneratedViewValidator {
                 let image = try object(imageValue, path: imagePath)
                 try checkKeys(image, path: imagePath, allowed: ["url", "alt"], required: ["url", "alt"])
                 let url = try string(image["url"], path: "\(imagePath).url", min: 1, max: 2_000)
-                guard safeHTTPS(url, hosts: ["github.com", "raw.githubusercontent.com", "avatars.githubusercontent.com"], allowAzureSubdomains: false) else {
+                guard safeHTTPS(
+                    url,
+                    hosts: ["github.com", "raw.githubusercontent.com", "avatars.githubusercontent.com"],
+                    allowAzureSubdomains: false,
+                    trustedBlobHost: trustedBlobHost
+                ) else {
                     throw invalid("\(imagePath).url", "must be a safe HTTPS image URL")
                 }
                 _ = try string(image["alt"], path: "\(imagePath).alt", min: 1, max: 500)
@@ -1054,7 +1155,12 @@ private enum GeneratedViewValidator {
         _ = try dateTime(.string(value), path: path)
     }
 
-    private static func safeHTTPS(_ value: String, hosts: Set<String>, allowAzureSubdomains: Bool) -> Bool {
+    private static func safeHTTPS(
+        _ value: String,
+        hosts: Set<String>,
+        allowAzureSubdomains: Bool,
+        trustedBlobHost: String? = nil
+    ) -> Bool {
         guard let components = URLComponents(string: value),
               components.scheme?.lowercased() == "https",
               let host = components.host?.lowercased(),
@@ -1062,8 +1168,89 @@ private enum GeneratedViewValidator {
               components.user == nil,
               components.password == nil,
               components.port == nil || components.port == 443 else { return false }
+        let trustedBlobHostIsValid = trustedBlobHost?.range(
+            of: #"^[a-z0-9]{3,24}\.blob\.core\.windows\.net$"#,
+            options: .regularExpression
+        ) != nil
         return hosts.contains(host) ||
-            (allowAzureSubdomains && (host == "azure.com" || host.hasSuffix(".azure.com")))
+            (allowAzureSubdomains && (host == "azure.com" || host.hasSuffix(".azure.com"))) ||
+            (trustedBlobHostIsValid && host == trustedBlobHost)
+    }
+
+    private static func serializedJSONByteCount(_ value: JSONValue) -> Int {
+        switch value {
+        case .null:
+            return 4
+        case .bool(let value):
+            return value ? 4 : 5
+        case .number(let value):
+            return javascriptNumberString(value).utf8.count
+        case .string(let value):
+            return serializedJSONStringByteCount(value)
+        case .array(let values):
+            return 2 + values.reduce(0) { $0 + serializedJSONByteCount($1) } + max(values.count - 1, 0)
+        case .object(let values):
+            return 2 + values.reduce(0) { count, entry in
+                count + serializedJSONStringByteCount(entry.key) + 1 + serializedJSONByteCount(entry.value)
+            } + max(values.count - 1, 0)
+        }
+    }
+
+    private static func serializedJSONStringByteCount(_ value: String) -> Int {
+        value.unicodeScalars.reduce(2) { count, scalar in
+            switch scalar.value {
+            case 0x08, 0x09, 0x0A, 0x0C, 0x0D, 0x22, 0x5C:
+                return count + 2
+            case 0x00...0x1F:
+                return count + 6
+            default:
+                return count + String(scalar).utf8.count
+            }
+        }
+    }
+
+    private static func javascriptNumberString(_ value: Double) -> String {
+        guard value != 0 else { return "0" }
+        let isNegative = value < 0
+        let raw = String(abs(value)).lowercased()
+        let exponentParts = raw.split(separator: "e", maxSplits: 1).map(String.init)
+        let mantissa = exponentParts[0]
+        let exponent = exponentParts.count == 2 ? Int(exponentParts[1]) ?? 0 : 0
+        let decimalPosition = (mantissa.firstIndex(of: ".").map {
+            mantissa.distance(from: mantissa.startIndex, to: $0)
+        } ?? mantissa.count) + exponent
+        var digits = mantissa.filter(\.isNumber)
+        while digits.count > 1, digits.last == "0" { digits.removeLast() }
+        let magnitude = abs(value)
+        let number: String
+        if magnitude >= 1e-6, magnitude < 1e21 {
+            if decimalPosition <= 0 {
+                number = "0." + String(repeating: "0", count: -decimalPosition) + digits
+            } else if decimalPosition >= digits.count {
+                number = digits + String(repeating: "0", count: decimalPosition - digits.count)
+            } else {
+                let split = digits.index(digits.startIndex, offsetBy: decimalPosition)
+                number = String(digits[..<split]) + "." + String(digits[split...])
+            }
+        } else {
+            let significant = String(digits.drop(while: { $0 == "0" }).reversed().drop(while: { $0 == "0" }).reversed())
+            let scientificExponent = decimalPosition - 1
+            let fraction = significant.count > 1 ? "." + significant.dropFirst() : ""
+            number = String(significant.prefix(1)) + fraction + "e" +
+                (scientificExponent >= 0 ? "+" : "") + String(scientificExponent)
+        }
+        return isNegative ? "-" + number : number
+    }
+
+    private static func validHTMLArtifactTimestamp(_ value: String) -> Bool {
+        guard value.range(
+            of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$"#,
+            options: .regularExpression
+        ) != nil else { return false }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: value) else { return false }
+        return formatter.string(from: date) == value
     }
 
     private static func checkKeys(
