@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { sanitizeManagedProviderCause, type ManagedProviderCause } from '../managed-provider-cause.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import type { VisualContext } from './visual-context.js';
 
@@ -138,9 +139,13 @@ function parseEvents(buffer: string): { events: { event: string; data: string }[
 }
 
 export class ChatAgentError extends Error {
-  constructor(readonly code: string | undefined, readonly retryAfterMs?: number) {
+  readonly providerCause: ManagedProviderCause | undefined;
+  constructor(readonly code: string | undefined, readonly retryAfterMs?: number, providerCause?: unknown) {
     super(code ? `Chat agent failed (${code})` : 'Chat agent failed');
     this.name = 'ChatAgentError';
+    this.providerCause = code !== undefined &&
+      ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'].includes(code)
+      ? sanitizeManagedProviderCause(providerCause) : undefined;
   }
 }
 
@@ -198,6 +203,7 @@ function chunkFromEvent(
 ): ConversationAgentChunk | undefined {
   if (event.event === 'error') {
     let retryAfterMs: number | undefined;
+    let providerCause: unknown;
     const retryAfter = headers.get('retry-after');
     if (retryAfter !== null) {
       const seconds = Number(retryAfter);
@@ -206,11 +212,12 @@ function chunkFromEvent(
     }
     try {
       const payload = JSON.parse(event.data) as Record<string, unknown>;
+      providerCause = payload?.providerCause;
       if (typeof payload?.retry_after === 'number' && Number.isFinite(payload.retry_after) && payload.retry_after >= 0) {
         retryAfterMs = payload.retry_after * 1_000;
       }
     } catch { /* Invalid error metadata is ignored. */ }
-    throw new ChatAgentError(errorCode(event.data), retryAfterMs);
+    throw new ChatAgentError(errorCode(event.data), retryAfterMs, providerCause);
   }
   if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
   let payload: unknown;

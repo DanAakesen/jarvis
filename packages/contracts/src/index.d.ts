@@ -893,11 +893,18 @@ export const systemSmokeCheckIds: readonly [
   'chat_navigation', 'chat_no_timestamp', 'chat_plain_approval',
 ];
 export type SystemSmokeCheckId = typeof systemSmokeCheckIds[number];
+export interface ManagedProviderCause {
+  readonly httpStatus?: number;
+  readonly code?: string;
+  readonly param?: string;
+  readonly exceptionType?: string;
+}
 export interface SystemSmokeEntry {
   id: SystemSmokeCheckId;
   status: SystemStatusValue;
   checkedAt: string;
   reason?: string;
+  providerCause?: ManagedProviderCause;
 }
 export interface SystemSmokeStatus {
   checkedAt: string;
