@@ -9221,3 +9221,19 @@ lowers Mac minutes.
 
 Phase 1a, the empty shell with no real screens (#1370), is unaffected. See
 [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS Phase 1a implementation boundary
+
+Phase 1a adds only the iPhone app target and its blank native glass root view.
+The orb icon asset is prepared for the owner to review before any first upload;
+no other screen or feature is authorized by this shell. The target uses the
+registered `com.danaakesen.jarvis` bundle ID, iOS 26.0 minimum, Swift 6 compiler
+in Swift 5 language mode, a local `JarvisCore` package, and
+`ITSAppUsesNonExemptEncryption = NO`.
+
+XcodeGen 2.46.0 and Xcode 26.6 follow the build-plan defaults. Linux CI tests
+the pure-Swift package and checks project/plist/entitlement metadata. The
+aggregate workflow selects the Mac simulator build only for ready pull requests
+whose changes select iOS; manual dispatch does not start a Mac job. The Mac
+build is unsigned and does not boot a simulator or run UI tests. Phase 1b
+signing, upload, credentials, and all later screens remain out of scope.

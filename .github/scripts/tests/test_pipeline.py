@@ -72,6 +72,14 @@ class ImpactTests(unittest.TestCase):
                 self.assertEqual({key for key, value in selection([path]).items() if value},
                                  {"vault-mirror", "python"})
 
+    def test_ios_changes_select_only_ios_and_python_without_deployment_inputs(self):
+        for path in ("apps/ios/project.yml", "apps/ios/Jarvis/ContentView.swift"):
+            with self.subTest(path=path):
+                self.assertEqual(checks_for(path), {"ios"})
+                self.assertEqual({key for key, value in selection([path]).items() if value},
+                                 {"ios", "python"})
+                self.assertEqual(deploy_parts(path), set())
+
     def test_shared_node_inputs_qualify_vault_mirror(self):
         for path in ("package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
                      "packages/contracts/src/status.js"):
@@ -121,6 +129,7 @@ class ImpactTests(unittest.TestCase):
 
     def test_workflow_only_changes_do_not_rebuild_applications(self):
         for path in (".github/workflows/ci.yml", ".github/workflows/codeql.yml",
+                     ".github/workflows/ios-ci.yml", ".github/workflows/ios-testflight.yml",
                      ".github/scripts/smoke_reasons.py"):
             self.assertEqual(deploy_parts(path), set())
 
@@ -129,7 +138,8 @@ class ImpactTests(unittest.TestCase):
                            [f"  {part}:\n    run: {part}" for part in PARTS])
         records = ["100644 blob " + "a" * 40 + "\tapps/backend/src/app.ts",
                    "100644 blob " + "b" * 40 + "\tapps/web/src/App.tsx",
-                   "100644 blob " + "c" * 40 + "\tinfra/main.bicep"]
+                   "100644 blob " + "c" * 40 + "\tinfra/main.bicep",
+                   "100644 blob " + "g" * 40 + "\tapps/ios/Jarvis/ContentView.swift"]
 
         def values(items, workflow=recipe, config="fixed"):
             with patch("pipeline_impact.git", side_effect=["\n".join(items), workflow]):
@@ -137,7 +147,9 @@ class ImpactTests(unittest.TestCase):
 
         initial = values(records)
         backend = values([records[0].replace("a" * 40, "d" * 40), *records[1:]])
+        ios = values([*records[:3], records[3].replace("g" * 40, "h" * 40)])
         self.assertNotEqual(initial["backend"], backend["backend"])
+        self.assertEqual(initial, ios)
         self.assertEqual(initial["web"], backend["web"])
         self.assertNotEqual(initial["backend"], values(records, config="changed")["backend"])
         infra = values([*records[:2], records[2].replace("c" * 40, "d" * 40)])
@@ -596,6 +608,22 @@ class SafeFailureTests(unittest.TestCase):
             "npm test --workspace @jarvis/contracts", "npm run test:vault-mirror",
             "npm run build:vault-mirror",
         ])
+
+    def test_ios_macos_build_is_cost_guarded(self):
+        source = (ROOT / ".github/workflows/ios-ci.yml").read_text()
+        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:", source)
+        self.assertIn("    needs: linux", source)
+        self.assertIn(
+            "    if: needs.linux.result == 'success' && github.event_name == 'pull_request' "
+            "&& github.event.pull_request.draft == false",
+            source,
+        )
+        self.assertIn("    runs-on: macos-26", source)
+        self.assertIn("    timeout-minutes: 20", source)
+        self.assertIn("      cancel-in-progress: true", source)
+        self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
+        self.assertNotIn("xlarge", source)
+        self.assertNotIn("simctl boot", source)
 
     def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
         source = (ROOT / ".github/workflows/ci.yml").read_text()
