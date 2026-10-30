@@ -9,6 +9,13 @@ claim. Only fixed internal error codes cross hosted/backend SSE, and the test UI
 keeps a busy or uncertain managed conversation blocked rather than treating a
 history refresh as claim recovery. No persistence schema or retry policy changes.
 
+Managed policy errors also carry optional structured `providerCause` diagnostics:
+bounded HTTP status, strictly validated provider code/parameter and exception
+class identifier, never message text. Hosted SSE, backend parsing/logging,
+conversation SSE, browser parsing and system smoke serialization each filter
+these fields. Smoke contracts add the optional object without changing existing
+closed reasons. See [the field contract](managed-policy-client.md#safe-policy-failure-diagnostics-1373).
+
 ## Runtime test candidate (#1350; 29 October 2026)
 
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque

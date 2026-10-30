@@ -10,6 +10,24 @@ to the initial work. Track the approved stages in
 
 ## Baseline investigation
 
+### Managed policy cause visibility (30 October 2026; #1373)
+
+Managed policy failures now retain the closed reason plus sanitized
+`providerCause` metadata across hosted/backend streams, backend failure logs,
+browser errors and system smoke status. See the
+[field contract](managed-policy-client.md#safe-policy-failure-diagnostics-1373).
+Provider messages and raw bodies remain excluded. Local fixtures cover safe and
+unsafe metadata, HTTP-200 error events, and unchanged uncertain-claim blocking.
+
+The 30 October live 4xx's exact parameter is not recoverable from the previous
+fixed reason. No live endpoint credentials or readable container telemetry were
+available for this repair. The earlier `model_bad_request_reasoning` result below
+belongs to a different request path; it does not identify this rejection.
+`_create_response` is deliberately unchanged pending a new safe cause. Remaining
+acceptance: capture that cause, reproduce/correct the rejected request, and
+complete an original-path Copilot test-chat turn. The synthetic `instructions`
+rejection is not live evidence. Do not reset claims or switch defaults.
+
 At 20:03 UTC on 29 October 2026, [PR #1362](https://github.com/DanAakesen/jarvis/pull/1362)
 merged as `6513c7e3`. [Deploy 40945569635](https://github.com/DanAakesen/jarvis/actions/runs/40945569635)
 stopped at `exact_qualification_missing` before applying changes because the

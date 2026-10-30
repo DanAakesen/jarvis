@@ -56,6 +56,7 @@ from jarvis_tools import (
     current_steering_fetcher,
     current_turn,
 )
+from managed_provider_cause import sanitize_provider_cause
 from model_contract import (
     MAX_ACKNOWLEDGMENT_CHARACTERS,
     AcknowledgmentBoundary,
@@ -1089,13 +1090,23 @@ def register_chat_invocation(
                 raise
             except Exception as exc:
                 code = chat_failure_code(exc)
-                logger.warning("chat.failed code=%s", code)
+                from managed_copilot import ManagedChatError
+
+                cause = (
+                    sanitize_provider_cause(exc.provider_cause)
+                    if isinstance(exc, ManagedChatError) and code in {
+                        "managed_policy_setup_failed", "managed_policy_turn_failed",
+                        "managed_response_failed",
+                    } else {}
+                )
+                logger.warning("chat.failed code=%s providerCause=%s", code, cause)
                 if (
                     visual_result is not None and visual_result["visualPath"] == "image"
                     and not visual_emitted
                 ):
                     yield f"event: visual\ndata: {json.dumps(visual_result)}\n\n"
-                yield f"event: error\ndata: {json.dumps({'code': code})}\n\n"
+                payload = {"code": code, **({"providerCause": cause} if cause else {})}
+                yield f"event: error\ndata: {json.dumps(payload)}\n\n"
             finally:
                 # Only a finished reply may start the summary refresh; it never delays or fails one.
                 if completed and memory_plan is not None:

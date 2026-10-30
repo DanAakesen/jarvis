@@ -11,6 +11,7 @@ import {
   type SystemStatusProbe,
 } from '../system-status.js';
 import type { SystemSmokeCheckId, SystemStatusValue } from '@jarvis/contracts';
+import { sanitizeManagedProviderCause, type ManagedProviderCause } from '../managed-provider-cause.js';
 
 const chatCanaryTimeoutMs = 240_000;
 const chatCanaryCacheMs = 60_000;
@@ -41,7 +42,12 @@ type AcceptanceCheckId =
   | 'chat_no_timestamp'
   | 'chat_plain_approval';
 type SuiteCheckId = AcceptanceCheckId | 'chat_canary';
-type CheckResult = { readonly status: SystemStatusValue; readonly reason?: string; readonly retryAfterMs?: number };
+type CheckResult = {
+  readonly status: SystemStatusValue;
+  readonly reason?: string;
+  readonly retryAfterMs?: number;
+  readonly providerCause?: ManagedProviderCause;
+};
 type SuiteResult = Record<SuiteCheckId, CheckResult>;
 
 const prompts = {
@@ -88,7 +94,7 @@ function result(status: SystemStatusValue, reason?: string): CheckResult {
   return { status, ...(reason && status === 'down' ? { reason } : {}) };
 }
 
-// The reason is always a fixed label; no code, message or payload from the failure is copied into a report.
+// The reason is always a fixed label; provider diagnostics are sanitized separately.
 function failureReason(error: unknown): string {
   if (error instanceof ChatAgentInvocationError) {
     return chatAgentInvocationReasons.has(error.reason) ? error.reason : 'agent_error';
@@ -238,8 +244,13 @@ async function checkPrompt(
         return failed(id, 'agent_error');
     }
   } catch (error) {
+    const reason = failureReason(error);
+    const providerCause = error instanceof ChatAgentError &&
+      ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'].includes(reason)
+      ? sanitizeManagedProviderCause(error.providerCause) : undefined;
     return {
-      ...failed(id, failureReason(error)),
+      ...failed(id, reason),
+      ...(providerCause ? { providerCause } : {}),
       ...(error instanceof ChatAgentError && error.retryAfterMs !== undefined
         ? { retryAfterMs: error.retryAfterMs } : {}),
     };
@@ -275,7 +286,11 @@ async function runSuite(agent: ConversationAgent | undefined): Promise<SuiteResu
         await delay(wait, controller.signal);
         check = await checkPrompt(id, acceptanceAgent, controller.signal);
       }
-      const safe = { status: check.status, ...(check.reason ? { reason: check.reason } : {}) };
+      const safe = {
+        status: check.status,
+        ...(check.reason ? { reason: check.reason } : {}),
+        ...(check.providerCause ? { providerCause: check.providerCause } : {}),
+      };
       return [id, safe];
     }))) as Record<AcceptanceCheckId, CheckResult>;
   };
