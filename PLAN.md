@@ -3381,6 +3381,7 @@ Every screen needs the owner's approval before it is built or shipped.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
+| P15-03 | [#1388](https://github.com/DanAakesen/jarvis/issues/1388) | JarvisCore networking and auth client layer (Phase 1c) | `JarvisCore` provides a fakeable HTTP transport, token storage and access-token seams; implements bearer-authenticated owner-session lifecycle and `/tools` calls with typed status/network errors and bounded retries only for idempotent requests; Linux tests cover cancellation, error mapping and tolerant Codable responses; no Apple-only framework or third-party dependency is introduced. | P15-01 | In progress |
 
 ## Factory canonical-status parity (16 October 2026)
 

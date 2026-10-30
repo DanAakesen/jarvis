@@ -158,6 +158,23 @@ final class JarvisCoreTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? JarvisClientError, .httpStatus(418))
         }
+
+        let longRetryAfter = FakeHTTPTransport([
+            .response(HTTPResponse(statusCode: 429, headers: ["Retry-After": "17"])),
+            .response(HTTPResponse(statusCode: 200, body: Data("[]".utf8))),
+        ])
+        let boundedClient = try makeClient(
+            transport: longRetryAfter,
+            retryPolicy: RetryPolicy(maximumRetries: 1, delay: .zero, maximumDelay: .seconds(2))
+        )
+        do {
+            _ = try await boundedClient.listTools()
+            XCTFail("Expected rate-limit error")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .rateLimited(retryAfter: .seconds(17)))
+        }
+        let requests = await longRetryAfter.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
     }
 
     func testRetriesTransientIdempotentRequestWithinBound() async throws {

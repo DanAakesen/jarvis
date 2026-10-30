@@ -42,7 +42,7 @@ public struct JarvisClientConfiguration: Sendable {
         retryPolicy: RetryPolicy = RetryPolicy()
     ) {
         self.baseURL = baseURL
-        self.requestTimeout = max(requestTimeout, .zero)
+        self.requestTimeout = max(requestTimeout, .milliseconds(1))
         self.retryPolicy = retryPolicy
     }
 }
@@ -94,6 +94,12 @@ public final class JarvisClient: Sendable {
         do {
             try await tokenStore.write(session.token)
         } catch {
+            _ = try? await send(
+                method: .delete,
+                path: ["auth", "session"],
+                authorization: .explicit(session.token),
+                idempotent: false
+            )
             throw JarvisClientError.tokenStoreFailure
         }
         return session
@@ -148,8 +154,10 @@ public final class JarvisClient: Sendable {
         messageId: String? = nil,
         as resultType: Result.Type = Result.self
     ) async throws -> ToolCallResponse<Result> {
-        guard name.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil,
-              messageId == nil || isValidMessageId(messageId!) else {
+        guard name.range(of: #"^[A-Za-z0-9_-]{1,64}$"#, options: .regularExpression) != nil else {
+            throw JarvisClientError.invalidRequest
+        }
+        if let messageId, !isValidMessageId(messageId) {
             throw JarvisClientError.invalidRequest
         }
         let headers = messageId.map { ["x-jarvis-message-id": $0] } ?? [:]
@@ -229,7 +237,8 @@ public final class JarvisClient: Sendable {
                     throw JarvisClientError.notOwner
                 case 429:
                     let retryAfter = Self.parseRetryAfter(response.header("Retry-After"))
-                    if idempotent, retries < configuration.retryPolicy.maximumRetries {
+                    let delayIsBounded = retryAfter.map { $0 <= configuration.retryPolicy.maximumDelay } ?? true
+                    if idempotent, retries < configuration.retryPolicy.maximumRetries, delayIsBounded {
                         try await waitBeforeRetry(retryAfter: retryAfter)
                         retries += 1
                         continue
@@ -265,11 +274,6 @@ public final class JarvisClient: Sendable {
                     throw JarvisClientError.timedOut
                 }
             } catch {
-                if idempotent, retries < configuration.retryPolicy.maximumRetries {
-                    try await waitBeforeRetry(retryAfter: nil)
-                    retries += 1
-                    continue
-                }
                 throw JarvisClientError.networkFailure
             }
         }

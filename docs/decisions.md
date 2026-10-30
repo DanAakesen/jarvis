@@ -1,3 +1,14 @@
+## 30 October 2026 — keep iOS networking in the pure-Swift core (P15-03 / #1388)
+
+`JarvisCore` owns the HTTP client and platform replacement seams for transport,
+token storage and access-token acquisition. It reuses the backend's owner-session
+and tools routes without adding a backend path or dependency. Session tokens are
+stored only through `TokenStore`; the Apple Keychain and Entra/MSAL adapters stay
+in the app target. A 401 clears the stored token and asks the access-token
+provider for sign-in; there is no refresh flow. Retries are bounded and limited
+to idempotent requests after transient failures, so tool and session mutations
+are sent at most once.
+
 ## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
 
 The owner requested repair after real Copilot test replies failed. A successful

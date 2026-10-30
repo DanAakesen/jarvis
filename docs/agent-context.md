@@ -6156,11 +6156,19 @@ chrome glass tokens. Stream replacement retains valid preview geometry and
 playback resume refreshes it. No private source image or physical iPhone
 acceptance is included. Composer visibility (#1303) remains separately owned.
 
-## iOS Phase 1a
+## iOS Phase 1c
 
 `apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
+
+`JarvisCore` owns the cross-platform HTTP client and the `HTTPTransport`,
+`TokenStore` and `AccessTokenProvider` seams. It calls the existing owner-session
+and tools routes, sends bearer authorization on every request, asks the provider
+to sign in again after a 401, and does not refresh sessions. Only idempotent
+requests retry transient failures, with bounded attempts and delay; tool and
+session writes are never retried. The Apple implementations remain in the app
+target, not this package.
 
 The SwiftUI app is generated from `apps/ios/project.yml` with XcodeGen 2.46.0.
 The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
