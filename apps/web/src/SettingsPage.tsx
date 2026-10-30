@@ -10,7 +10,7 @@ import { useWakeStatus } from './wake-store';
 import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
 import { revealWhenReady } from './page-navigation';
 import {
-  advancedProblems, isRoleOptions, isRoleSettings,
+  advancedProblems, isRoleOptions, isRoleSettings, modelRoles,
   type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings, type VoiceTuningSettings,
 } from './settings-advanced-data';
 import { formatDateTime, formatTimeOnly } from './format/date-time';
@@ -84,7 +84,13 @@ interface CredentialStatus {
   status: 'ok' | 'renew_soon' | 'failed' | 'unknown';
 }
 
-interface SettingsResponse { settings: Settings; options: SettingsOptions; credentials: CredentialStatus[] }
+type ModelWarnings = Partial<Record<ModelRole, string>>;
+interface SettingsResponse {
+  settings: Settings;
+  options: SettingsOptions;
+  credentials: CredentialStatus[];
+  modelWarnings?: ModelWarnings;
+}
 type LoadState = 'loading' | 'ready' | 'error';
 
 const optionLabels: Record<string, string> = {
@@ -163,7 +169,10 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
-  return validOptions && validCredentials &&
+  const validModelWarnings = value.modelWarnings === undefined || (isObject(value.modelWarnings) &&
+    Object.entries(value.modelWarnings).every(([role, warning]) =>
+      modelRoles.includes(role as ModelRole) && typeof warning === 'string' && warning.length <= 500));
+  return validOptions && validCredentials && validModelWarnings &&
     isObject(settings.appearance) &&
     isObject(settings.identity) &&
     typeof settings.identity.description === 'string' &&
@@ -259,7 +268,15 @@ async function requestSettings(
   }
   if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
   if (response.status === 503) throw new Error('Settings could not be loaded. Try again.');
-  if (!response.ok) throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'save'} settings (HTTP ${response.status}).`);
+  if (!response.ok) {
+    if (response.status === 400) {
+      const failure: unknown = await response.json().catch(() => null);
+      if (isObject(failure) && typeof failure.error === 'string' && failure.error.length <= 500) {
+        throw new Error(failure.error);
+      }
+    }
+    throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'save'} settings (HTTP ${response.status}).`);
+  }
   let result: unknown;
   try { result = await response.json(); } catch { throw new Error('Jarvis returned invalid settings. Try again.'); }
   if (!isSettingsResponse(result)) throw new Error('Jarvis returned invalid settings. Try again.');
@@ -329,6 +346,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [options, setOptions] = useState<SettingsOptions | null>(null);
+  const [modelWarnings, setModelWarnings] = useState<ModelWarnings>({});
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
   const [saving, setSaving] = useState(false);
   const [resettingPersonality, setResettingPersonality] = useState(false);
@@ -355,6 +373,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setModelWarnings(result.modelWarnings ?? {});
       setCredentials(result.credentials);
       cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setState('ready');
@@ -372,6 +391,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setModelWarnings(result.modelWarnings ?? {});
       setCredentials(result.credentials);
       cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setState('ready');
@@ -446,6 +466,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       setSavedSettings(result.settings);
       setSettings((current) => current ? ({ ...current, personality: { ...result.settings.personality } }) : current);
       setOptions(result.options);
+      setModelWarnings(result.modelWarnings ?? {});
       setPersonalityResetMessage('Reset');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Personality could not be reset. Try again.');
@@ -469,6 +490,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
       setSavedSettings(result.settings);
       setSettings(result.settings);
       setOptions(result.options);
+      setModelWarnings(result.modelWarnings ?? {});
       cacheVoiceWorkspacePreference(result.settings.voice.minimizeWindowsOnVoiceStart);
       setPersonalityResetMessage('');
       setMessage('Saved');
@@ -668,6 +690,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           </CollapsibleSection>
           )}
           {roleModels && settings.roles && <ModelsSection roles={settings.roles} options={roleModels} disabled={saving}
+            modelWarnings={modelWarnings}
             backendUrl={backendUrl} getAccessToken={getAccessToken}
             onChange={(role: ModelRole, value) => updateArea('roles', role, value)} />}
 

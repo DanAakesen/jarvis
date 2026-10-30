@@ -80,6 +80,7 @@ describe('Jarvis model tool', () => {
 
   it.each([
     ['model', { model: 'not-verified' }, 'Unsupported Jarvis model. Valid models: gpt-5.6-luna, gpt-6-luna.'],
+    ['Codex-only model', { model: 'gpt-6.1-sol' }, 'Unsupported Jarvis model. Valid models: gpt-5.6-luna, gpt-6-luna.'],
     ['reasoning', { reasoning: 'extreme' }, 'Unsupported Jarvis reasoning. Valid reasoning levels: none, low, medium, high.'],
   ])('refuses an unknown %s and lists verified options', async (_name, payload, reason) => {
     const { app, settingsStore, record } = fixture();

@@ -1,3 +1,14 @@
+## 30 October 2026 — filter role models by their runtime (#1375)
+
+Use the model list of the runtime that executes each role. Research executes
+through Codex, so it shares Codex's provider model and reasoning allowlists rather
+than inheriting Foundry chat deployments. Keep unsupported persisted choices
+unchanged, expose their reason and effective fallback in owner Settings, and reject
+new unsupported model selections server-side with allowed options. Existing chat
+and Factory model tools continue using their role-specific catalogue. No settings
+migration or live provider probe is needed while the runtime's model support is
+statically enumerated.
+
 ## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
 
 The owner requested repair after real Copilot test replies failed. A successful

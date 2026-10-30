@@ -61,9 +61,10 @@ function Toggle({ id, label, checked, disabled, onChange, hint }: {
 const keepEnterInside = (event: KeyboardEvent) => { if (event.key === 'Enter') event.preventDefault(); };
 
 /** Models per role, with reasoning limited to what each model supports, and the Foundry deployments behind them. */
-export function ModelsSection({ roles, options, onChange, disabled, backendUrl, getAccessToken }: {
+export function ModelsSection({ roles, options, onChange, disabled, backendUrl, getAccessToken, modelWarnings }: {
   roles: RoleSettings; options: Record<ModelRole, RoleOptions>; onChange: (role: ModelRole, value: RoleSettings[ModelRole]) => void;
   disabled: boolean; backendUrl: string | null; getAccessToken: () => Promise<string>;
+  modelWarnings?: Partial<Record<ModelRole, string>>;
 }) {
   const [catalogue, setCatalogue] = useState<ModelCatalogue | null>(null);
   const [catalogueError, setCatalogueError] = useState('');
@@ -115,7 +116,9 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
                     const allowed = effortsFor(options, role, model);
                     onChange(role, { model, reasoningEffort: (allowed.includes(current.reasoningEffort) ? current.reasoningEffort : allowed[0]) as RoleSettings[ModelRole]['reasoningEffort'] });
                   }}>
-                  {models.map((model) => <option key={model} value={model}>{model === 'default' ? 'Provider default' : model}</option>)}
+                  {models.map((model) => <option key={model} value={model} disabled={!options[role].models.includes(model)}>
+                    {model === 'default' ? 'Provider default' : model}
+                  </option>)}
                 </select>
                 <label className="visually-hidden" htmlFor={`role-${role}-effort`}>{roleLabels[role].label} reasoning</label>
                 <select id={`role-${role}-effort`} value={current.reasoningEffort} disabled={disabled || efforts.length < 2}
@@ -128,6 +131,9 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
                 <span className="role-badges" aria-label="Capabilities">
                   {capabilitiesFor(current.model).map((capability) => <span key={capability} className="model-badge">{capabilityLabels[capability] ?? capability}</span>)}
                 </span>
+              )}
+              {modelWarnings?.[role] && (
+                <p className="settings-validation-error role-model-warning" role="status">{modelWarnings[role]}</p>
               )}
             </li>
           );

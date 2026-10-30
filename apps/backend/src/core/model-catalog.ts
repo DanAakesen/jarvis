@@ -313,6 +313,7 @@ const roleCapabilities: Partial<Record<ModelRole, readonly ModelCapability[]>> =
 export function modelsForRole(catalogue: ModelCatalogue, role: ModelRole): string[] {
   if (role === 'codex') return [...codexModels];
   if (role === 'copilot') return [...copilotModels];
+  if (role === 'research') return [...codexModels];
   if (role === 'transcription') return ['mai-transcribe'];
   if (role === 'voice') {
     return voiceLiveModels.filter((model) =>
@@ -337,7 +338,7 @@ export function reasoningForModel(
   role: ModelRole,
   model: string,
 ): readonly ReasoningEffort[] {
-  if (role === 'codex') {
+  if (role === 'research' || role === 'codex') {
     return codexModels.includes(model as typeof codexModels[number]) ? reasoningEfforts : [];
   }
   if (role === 'copilot') {
