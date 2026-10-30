@@ -6184,6 +6184,15 @@ requests retry transient failures, with bounded attempts and delay; tool and
 session writes are never retried. The Apple implementations remain in the app
 target, not this package.
 
+P15-04 adds `SSEParser` and a streaming transport seam whose default adapts
+existing `HTTPTransport` fakes. `JarvisChatClient` reuses the authenticated
+client for the existing conversation session, turn, active-turn, cancel,
+history and multipart attachment routes. Stream events are typed; unknown
+event names are retained, server `error` events become typed failures, and
+consumer cancellation stops the stream. Reattach retries transient failures
+every two seconds for at most 15 minutes using an injectable clock. No backend
+route, Apple framework or third-party dependency is added.
+
 The SwiftUI app is generated from `apps/ios/project.yml` with XcodeGen 2.46.0.
 The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
 builds/tests the core and validates project, plist and entitlement metadata;
