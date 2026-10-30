@@ -3377,7 +3377,7 @@ Every screen needs the owner's approval before it is built or shipped.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | Not started |
+| P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
 
 ## Factory canonical-status parity (16 October 2026)
 
