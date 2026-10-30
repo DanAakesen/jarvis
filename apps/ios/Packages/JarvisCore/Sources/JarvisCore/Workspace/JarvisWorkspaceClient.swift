@@ -35,6 +35,7 @@ public final class JarvisWorkspaceClient: Sendable {
                         } catch {
                             await connection.clear()
                             guard Self.shouldReconnect(after: error) else { throw error }
+                            continuation.yield(.connectionInterrupted)
                         }
 
                         guard !Task.isCancelled else { break }
@@ -188,11 +189,12 @@ public final class JarvisWorkspaceClient: Sendable {
             }
         case "workspace-ready":
             guard let ready = try? JSONDecoder().decode(WorkspaceReadyEvent.self, from: Data(event.data.utf8)),
-                  Self.validSessionID(ready.sessionId) else {
+                  Self.validSessionID(ready.sessionId),
+                  ready.trustedBlobHost.map(Self.validTrustedBlobHost) ?? true else {
                 throw JarvisWorkspaceClientError.invalidResponse
             }
-            await connection.setSessionID(ready.sessionId)
-            decoded = .workspaceReady(sessionId: ready.sessionId)
+            await connection.setSessionID(ready.sessionId, trustedBlobHost: ready.trustedBlobHost)
+            decoded = .workspaceReady(sessionId: ready.sessionId, trustedBlobHost: ready.trustedBlobHost)
         case "workspace-command":
             guard let command = try? JSONDecoder().decode(WorkspaceCommandEvent.self, from: Data(event.data.utf8)),
                   command.expiresAtMilliseconds > 0 else {
@@ -200,7 +202,8 @@ public final class JarvisWorkspaceClient: Sendable {
             }
             decoded = .workspaceCommand(
                 command: command.command,
-                expiresAtMilliseconds: command.expiresAtMilliseconds
+                expiresAtMilliseconds: command.expiresAtMilliseconds,
+                trustedBlobHost: await connection.currentTrustedBlobHost()
             )
         case "workspace-cancel":
             guard let cancelled = try? JSONDecoder().decode(WorkspaceCancelEvent.self, from: Data(event.data.utf8)),
@@ -251,17 +254,32 @@ public final class JarvisWorkspaceClient: Sendable {
             options: .regularExpression
         ) != nil
     }
+
+    private static func validTrustedBlobHost(_ value: String) -> Bool {
+        value.range(
+            of: #"^[a-z0-9]{3,24}\.blob\.core\.windows\.net$"#,
+            options: .regularExpression
+        ) != nil
+    }
 }
 
 private actor WorkspaceConnectionState {
     private var sessionId: String?
+    private var trustedBlobHost: String?
 
     func currentSessionID() -> String? { sessionId }
-    func setSessionID(_ value: String) { sessionId = value }
-    func clear() { sessionId = nil }
+    func currentTrustedBlobHost() -> String? { trustedBlobHost }
+    func setSessionID(_ value: String, trustedBlobHost: String?) {
+        sessionId = value
+        self.trustedBlobHost = trustedBlobHost
+    }
+    func clear() {
+        sessionId = nil
+        trustedBlobHost = nil
+    }
 
     func clear(ifSessionID value: String) {
-        if sessionId == value { sessionId = nil }
+        if sessionId == value { clear() }
     }
 }
 
@@ -281,6 +299,7 @@ private struct WorkspaceAcknowledgementRequest: Encodable {
 
 private struct WorkspaceReadyEvent: Decodable {
     let sessionId: String
+    let trustedBlobHost: String?
 }
 
 private struct WorkspaceCommandEvent: Decodable {

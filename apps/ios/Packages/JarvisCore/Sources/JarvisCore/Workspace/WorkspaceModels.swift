@@ -79,9 +79,14 @@ public enum WorkspaceCommandOutcome: String, Codable, Equatable, Sendable {
 
 public enum WorkspaceEvent: Equatable, Sendable {
     case pendingConfirmationsChanged
-    case workspaceReady(sessionId: String)
-    case workspaceCommand(command: WorkspaceCommand, expiresAtMilliseconds: Int64)
+    case workspaceReady(sessionId: String, trustedBlobHost: String?)
+    case workspaceCommand(
+        command: WorkspaceCommand,
+        expiresAtMilliseconds: Int64,
+        trustedBlobHost: String?
+    )
     case workspaceCancel(commandId: String)
+    case connectionInterrupted
     case unknown(name: String, data: String)
 }
 
