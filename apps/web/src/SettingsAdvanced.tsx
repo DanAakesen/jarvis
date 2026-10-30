@@ -116,7 +116,9 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
                     const allowed = effortsFor(options, role, model);
                     onChange(role, { model, reasoningEffort: (allowed.includes(current.reasoningEffort) ? current.reasoningEffort : allowed[0]) as RoleSettings[ModelRole]['reasoningEffort'] });
                   }}>
-                  {models.map((model) => <option key={model} value={model}>{model === 'default' ? 'Provider default' : model}</option>)}
+                  {models.map((model) => <option key={model} value={model} disabled={!options[role].models.includes(model)}>
+                    {model === 'default' ? 'Provider default' : model}
+                  </option>)}
                 </select>
                 <label className="visually-hidden" htmlFor={`role-${role}-effort`}>{roleLabels[role].label} reasoning</label>
                 <select id={`role-${role}-effort`} value={current.reasoningEffort} disabled={disabled || efforts.length < 2}

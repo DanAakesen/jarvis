@@ -233,7 +233,7 @@ describe('SettingsPage', () => {
 
   it('shows the server reason when a settings patch is rejected', async () => {
     const user = userEvent.setup();
-    const reason = 'Unsupported research model for the Codex runtime. Valid models: default, gpt-6.1-sol.';
+    const reason = 'Unsupported research model for the Codex runtime (roles.research.model). Valid models: default, gpt-6.1-sol.';
     fetchMock.mockResolvedValueOnce(response(settingsResponse()))
       .mockResolvedValueOnce(response({ error: reason }, 400));
     renderSettingsPage();
@@ -737,13 +737,14 @@ describe('SettingsPage', () => {
       research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
       timeouts: { toolTimeoutSeconds: 30, longToolTimeoutSeconds: 320, backendHttpTimeoutSeconds: 10 },
       memory: { similarityThreshold: 0.35, searchTopK: 5, graphTextSimilarityThreshold: 0.12, automaticCapture: true },
-      roles: { chat: role('gpt-5.6-luna'), vision: role('gpt-6-luna'), research: role('gpt-5.6-luna'), voice: role('gpt-realtime-2.1'),
+      roles: { chat: role('gpt-5.6-luna'), vision: role('gpt-6-luna'), research: role('gpt-6.1-terra'), voice: role('gpt-realtime-2.1'),
         transcription: role('mai-transcribe'), embedding: role('text-embedding-3-small'), codex: role('default'), copilot: role('default') },
     };
     const roleOptions = (models: string[], efforts: string[]) => ({ models, reasoningEffortsByModel: Object.fromEntries(models.map((model) => [model, efforts])) });
     const advancedOptions = { ...options, roles: {
       chat: { models: ['gpt-5.6-luna', 'gpt-6-luna'], reasoningEffortsByModel: { 'gpt-5.6-luna': ['none', 'low'], 'gpt-6-luna': ['none', 'minimal', 'xhigh'] } },
-      vision: roleOptions(['gpt-6-luna'], ['none']), research: roleOptions(['gpt-5.6-luna'], ['none']), voice: roleOptions(['gpt-realtime-2.1'], ['none']),
+      vision: roleOptions(['gpt-6-luna'], ['none']), research: roleOptions(['default', 'gpt-6.1-sol'], ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']),
+      voice: roleOptions(['gpt-realtime-2.1'], ['none']),
       transcription: roleOptions(['mai-transcribe'], ['none']), embedding: roleOptions(['text-embedding-3-small'], ['none']),
       codex: roleOptions(['default'], ['none', 'high']), copilot: roleOptions(['default'], ['none']),
     } };
@@ -756,7 +757,7 @@ describe('SettingsPage', () => {
       if (url.endsWith('/settings') && init?.method === 'PATCH') return response({ settings: advanced, options: advancedOptions, credentials: [], modelWarnings: {} });
       return response({
         settings: advanced, options: advancedOptions, credentials: [],
-        modelWarnings: { research: 'The saved Research model is not supported by the Codex runtime. gpt-5.6-luna is used instead; choose a supported model to update it.' },
+        modelWarnings: { research: 'The saved Research model is not supported by the Codex runtime. gpt-6.1-terra is used instead; choose a supported model to update it.' },
       });
     });
     renderSettingsPage();
@@ -767,6 +768,10 @@ describe('SettingsPage', () => {
     expect(await within(modelsToggle).findByText(/ · 1 deployment$/)).not.toBeNull();
     const modelWarning = await screen.findByText(/not supported by the Codex runtime/);
     expect(modelWarning.getAttribute('role')).toBe('status');
+    const researchModel = screen.getByRole('combobox', { name: 'Research model' });
+    expect(researchModel).toHaveProperty('value', 'gpt-6.1-terra');
+    expect(within(researchModel).getByRole('option', { name: 'gpt-6.1-terra' })).toHaveProperty('disabled', true);
+    expect(within(researchModel).getByRole('option', { name: 'gpt-6.1-sol' })).toHaveProperty('disabled', false);
     await user.click(modelsToggle);
     // The older Jarvis model section gives way to Models when the backend sends roles.
     expect(screen.queryByRole('heading', { name: 'Jarvis', level: 2 })).toBeNull();

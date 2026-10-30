@@ -654,7 +654,7 @@ function storedModel(value: unknown): string | undefined {
 }
 
 function unsupportedModelReason(role: ModelRole, catalogue: ModelCatalogue): string {
-  return `Unsupported ${role} model for the ${modelRoleRuntimes[role]} runtime. Valid models: ${modelsForRole(catalogue, role).join(', ')}.`
+  return `Unsupported ${role} model for the ${modelRoleRuntimes[role]} runtime (roles.${role}.model). Valid models: ${modelsForRole(catalogue, role).join(', ')}.`
     .slice(0, 500);
 }
 
