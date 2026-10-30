@@ -9136,3 +9136,33 @@ safeguards proposed for the Face ID lock and Lock Screen approvals, and whether
 the owner's account has the role the API key needs, are not confirmed. CarPlay,
 the Apple Watch and Music are future intent only.
 See [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS App ID registered
+
+At the owner's request, the App ID `com.danaakesen.jarvis` (named Jarvis,
+explicit) and the App Group `group.com.danaakesen.jarvis` were registered in the
+owner's signed-in Apple Developer session, and the group was attached to the App
+ID. The saved state was read back from the portal. Nothing else was changed or
+created on the account: no keys, certificates, agreements or app record.
+
+Ticked: Push Notifications (Broadcast left off), Time Sensitive Notifications,
+App Groups, HealthKit, Maps, Push to Talk and Side Button Access, plus MusicKit
+under App Services and In-App Purchase, which Apple locks on. The owner added
+HealthKit, Maps, Push to Talk and Side Button Access beyond the plan. Nothing in
+the current design uses Maps or Push to Talk, and version 1 has no Health data.
+A tick only permits a capability: the app's entitlements file decides what a
+build uses. Side Button Access is limited to Japan, on iOS 26.2 or later, and
+starts a voice assistant through an App Intent. Clinical Health Records stay
+off.
+
+Left off on purpose: Data Protection, because the complete level cannot be read
+on a locked phone, which hands-free voice and CarPlay both need. Camera,
+microphone, location, photos and Face ID need no portal tick, only a purpose
+string in the app's Info.plist and iOS's own Allow prompt. CarPlay is not a tick
+either: it is a capability request that Apple must approve, and requests need
+the Account Holder role.
+
+Still open: the owner's role (Account Holder or Admin), who files the CarPlay
+request, and the owner's go for the foundation phase, which is still No. No
+implementation or setup is authorized.
+See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
