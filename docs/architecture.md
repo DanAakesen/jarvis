@@ -86,6 +86,17 @@ fixed dry run, selected settings, timing and cleanup. No inference, role, stored
 setting, worker credential or production runtime path changes. See
 [actual release evidence and remaining uncertainty](main-chat-harness-migration.md).
 
+For `codex exec` non-zero exits, the runner first preserves usage-limit
+classification, then recognizes only fixed model-unavailable, authentication,
+outdated-CLI and network categories. It logs the category and exit code, never
+the process output; unrecognized or ambiguous output stays generic. The failed
+event carries only `codex_model_unsupported`, `codex_auth`,
+`codex_client_outdated` or `codex_network`. The research smoke maps these to
+`research_codex_model_unsupported`, `research_codex_auth`,
+`research_codex_client_outdated` and `research_codex_network`; the backend and
+release formatter allowlists stay in exact parity. Unknown runner reasons and
+event details remain excluded from smoke results and release evidence.
+
 ## Foundry resource-query permission observations (#1341; 29 October 2026)
 
 The existing fixed Foundry resource query now counts `AzureDiagnostics` in the
