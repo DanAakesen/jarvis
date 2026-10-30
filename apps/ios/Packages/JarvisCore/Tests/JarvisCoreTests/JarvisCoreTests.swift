@@ -49,6 +49,27 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(request.headers["Authorization"], authorization("entra.fixture.token"))
     }
 
+    func testRevokesCreatedSessionWhenTokenCannotBeStored() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 201, body: sessionJSON)),
+            .response(HTTPResponse(statusCode: 204)),
+        ])
+        let tokenStore = FakeTokenStore(failWrites: true)
+        let client = try makeClient(transport: transport, tokenStore: tokenStore)
+
+        do {
+            _ = try await client.createOwnerSession()
+            XCTFail("Expected token-store error")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .tokenStoreFailure)
+        }
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.post, .delete])
+        XCTAssertEqual(requests[1].url.path, "/api/auth/session")
+        XCTAssertEqual(requests[1].headers["Authorization"], authorization("session.fixture.token"))
+    }
+
     func testRevokeAllSessionsUsesSharedRouteAndClearsToken() async throws {
         let transport = FakeHTTPTransport([
             .response(jsonResponse(status: 200, body: ["revoked": 3])),
@@ -376,9 +397,11 @@ private actor FakeHTTPTransport: HTTPTransport {
 
 private actor FakeTokenStore: TokenStore {
     private var token: String?
+    private let failWrites: Bool
 
-    init(token: String? = nil) {
+    init(token: String? = nil, failWrites: Bool = false) {
         self.token = token
+        self.failWrites = failWrites
     }
 
     func read() async throws -> String? {
@@ -386,12 +409,17 @@ private actor FakeTokenStore: TokenStore {
     }
 
     func write(_ token: String) async throws {
+        if failWrites { throw FakeTokenStoreError.writeFailed }
         self.token = token
     }
 
     func delete() async throws {
         token = nil
     }
+}
+
+private enum FakeTokenStoreError: Error {
+    case writeFailed
 }
 
 private actor FakeAccessTokenProvider: AccessTokenProvider {
