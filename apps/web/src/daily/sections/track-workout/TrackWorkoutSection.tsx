@@ -51,9 +51,9 @@ export default function TrackWorkoutSection({ backendUrl, getAccessToken, source
   const recent = useDailyPages(backendUrl, getAccessToken, hasLifts ? historyQuery : null, refreshVersion, { maxPages: 50 });
   const known = useDailyPages(backendUrl, getAccessToken, hasLifts ? liftQuery : null, refreshVersion,
     { maxPages: 50, autoLoad: true, settle: true });
-  const knownEntries = liftEntries(known.items);
+  const knownEntries = useMemo(() => liftEntries(known.items), [known.items]);
   const recentEntries = liftEntries(recent.items);
-  const options = useMemo(() => [...new Set(knownEntries.map(row => row.exerciseName))], [known.items]);
+  const options = useMemo(() => [...new Set(knownEntries.map(row => row.exerciseName))], [knownEntries]);
   const [values, setValues] = useState<LiftFormValues>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -157,7 +157,7 @@ export default function TrackWorkoutSection({ backendUrl, getAccessToken, source
   };
 
   return <section className="track-workout" aria-label="Track workout">
-    {!online && <p className="track-workout-offline" role="status">Offline. Lifts are not sent until you reconnect.</p>}
+    {!online && <p className="track-workout-offline" role="status">Offline. Reconnect to save lifts.</p>}
     <section aria-labelledby="lift-entry-heading">
       <h2 id="lift-entry-heading">Log a lift</h2>
       <form ref={form} className="lift-entry-form" onSubmit={event => { void submit(event); }} aria-busy={saving}>

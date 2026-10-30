@@ -1,3 +1,14 @@
+## 30 October 2026 — share the workout lift contract (P15-17 / #1423)
+
+Store one owner-scoped lift row per exercise entry, with kg, reps and a single
+set count; use normalized names for recall/grouping rather than adding an
+exercise registry. Keep create idempotent, corrections partial, and deletes
+soft. Expose history and latest-per-exercise reads through the existing Daily
+query/capability contract and owner-only write routes; service identities do
+not gain access. The web Track workout section and Dashboard Last lifts block
+are the v1 surfaces. iOS reuses the same routes in a separate screen issue;
+there is no iOS-specific backend path, chart, or coaching tool.
+
 ## 30 October 2026 — stabilize the GitHub chat acceptance read (#1415)
 
 Judge `chat_github_read` by a successful `github_read` / `issue_get` receipt for

@@ -89,4 +89,11 @@ describe('Track workout section', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
     await waitFor(() => expect(remove).toHaveBeenCalledWith(props.backendUrl, props.getAccessToken, entry.id, expect.any(AbortSignal)));
   });
+
+  it('disables saves and explains the offline state', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    mount();
+    expect(screen.getByText('Offline. Reconnect to save lifts.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save lift' })).toHaveProperty('disabled', true);
+  });
 });

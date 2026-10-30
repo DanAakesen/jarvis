@@ -41,8 +41,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
+function hasControlCharacters(value: string) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
 function parseName(value: unknown): { exerciseName: string; exerciseKey: string } | null {
-  if (typeof value !== 'string' || /[\u0000-\u001f\u007f]/u.test(value)) return null;
+  if (typeof value !== 'string' || hasControlCharacters(value)) return null;
   const exerciseName = value.trim();
   if (exerciseName.length < 1 || exerciseName.length > 80) return null;
   return { exerciseName, exerciseKey: exerciseName.toLowerCase() };
