@@ -1,6 +1,8 @@
 # iOS app build plan
 
-Status: the foundation phase is authorised. The owner answered the checklist on 29 October 2026 and gave the go for the foundation phase on 30 October 2026. Phase 1a is the first work and no implementation has landed yet. Later phases still need their own go. Every screen needs the owner's approval before it is built, merged or shipped (see Screen approval gate). This file is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
+Status: the foundation phase is authorised. The owner answered the checklist on 29 October 2026 and gave the go for the foundation phase on 30 October 2026. Phase 1a has merged; phase 1b adds the owner-started TestFlight workflow. The owner must configure its environment and start the first run after merging that workflow. Later phases still need their own go. Every screen needs the owner's approval before it is built, merged or shipped (see Screen approval gate). This file is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
+
+Backend rule (confirmed 30 October 2026): Jarvis is one unified backend with several frontends. The iPhone app reuses the routes, streams, tools, and artifacts the web app already uses, with no iOS-specific backend paths. An iPhone screen that needs something the web app does not already use is raised as an explicit decision before the backend changes. Anything an iPhone design needs that the backend does not already provide is flagged to Dan, who decides whether that backend build starts then.
 
 Related documents: `iOS app.md` (confirmed decisions), `docs/ios/integration-contract.md` (backend endpoints the app talks to) and `docs/ios/design/` (the concept board and the surfaces gallery).
 
@@ -12,7 +14,7 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 | --- | --- | --- |
 | Build machine | GitHub-hosted `macos-26` with a pinned Xcode 26.x (26.6 is the image default, with older 26.x versions installed beside it). Free for public repositories, but only while this repository stays public. At most 5 concurrent macOS jobs. Never use xlarge labels (see Cost guard). | Checked: runner names, the 5-job limit, free use on public repositories, the Xcode versions on the image (version 20261013.0424.1) and the 28 April 2026 SDK requirement (uploads need Xcode 26 or later). Gotcha 2 covers the Xcode 27 image. |
 | Project file | XcodeGen (`project.yml`). Do not hand-write the project file. Avoid Tuist: its agent flow needs an interactive browser login. | Checked: XcodeGen is not archived, its last push was on 13 October 2026 and its latest release is 2.46.0. Not re-read: the Tuist login claim, and XcodeGen's support for Xcode 26 and Swift 6. |
-| Signing and upload | `xcodebuild` with a Team App Store Connect API key (an Individual key cannot use the provisioning endpoints) and automatic signing, straight to TestFlight. No Fastlane, no certificates in the repository, no Mac. | Checked: the flags, in a mirror of the `xcodebuild` manual page (all three `-authenticationKey` flags are needed together), and Apple's rules for Team and Individual keys. Proven end to end in phase 1. The role is Unproven 1. |
+| Signing and upload | `xcodebuild` with a Team App Store Connect API key (an Individual key cannot use the provisioning endpoints) and automatic signing, straight to TestFlight. No Fastlane or certificates in the repository. | Checked: the flags, in a mirror of the `xcodebuild` manual page (all three `-authenticationKey` flags are needed together), and Apple's rules for Team and Individual keys. The first workflow archive/export/upload remains unproven (Unproven 1 and 3). |
 | Build number | The GitHub run number. Every upload needs a higher number. | My call |
 | Export compliance | `ITSAppUsesNonExemptEncryption` set to NO in the app's Info.plist: standard HTTPS only. It is the owner's declaration to Apple. | Checked: Apple says to set NO when the app, including the libraries it links, uses no encryption or only exempt forms, and that encryption built into the operating system, such as HTTPS through `URLSession`, is typically exempt. The same page says exempt encryption might still call for a year-end self-classification report to the US government. Whether that applies is the owner's call and is not researched here. |
 | Code split | A pure-Swift `JarvisCore` package with no Apple-framework imports, and a thin SwiftUI app layer. | Checked: Linux limit. My call: design. |
@@ -40,6 +42,16 @@ Owner decision, 30 October 2026: the owner approves every screen before it is de
 
 Phase 1a has no real screens (only an empty shell), so the gate does not apply to it.
 
+## Native iOS standards
+
+Owner decision, 30 October 2026: everything built for the iPhone follows the iOS standard way as much as possible and does not hardcode values each time something is built. The concept board cannot show this, but it applies when the app is built. The concept board is a visual reference only, not a source of literal values.
+
+1. System first. Use native components and styles: standard SwiftUI controls, `NavigationStack`, sheets with detents, Liquid Glass materials and the system glass button styles, SF Symbols, Dynamic Type, system colours and semantic tokens, and the system pickers and permission flows (for example the ReplayKit broadcast picker and AVFoundation capture). Light and dark appearance, reduced motion and reduced transparency then work automatically.
+2. Scrolling is the system behaviour: native `ScrollView` and `List`, system momentum and rubber-band bounce, overlay indicators, the iOS 26 scroll edge effects under glass bars, interactive keyboard dismissal, and scroll position and pull to refresh through system APIs. No custom scroll implementations and no fake scrollbars. The scrolling on the concept board is only an approximation.
+3. One shared layer for anything custom: a design-token and reusable-component layer is the single place for colours, spacing, radii, typography, glass modifiers, button styles and icons. No per-screen hardcoded values and no one-off styling.
+4. A custom component needs a stated reason why no system component fits. The reason goes in the screen issue and the pull request.
+5. Every screen issue and pull request is checked against this section as part of its acceptance.
+
 ## Cost guard
 
 Owner decision, 30 October 2026: build and test as much as possible off the Mac, and ship as much as possible on every GitHub build. Make every paid Mac run count. A Mac run is the only compile check for the SwiftUI layer, because the owner's PC has no Swift toolchain (WSL is not installed) and cloud agents run on Ubuntu.
@@ -59,7 +71,7 @@ Rules:
 
 ## Phase 1 is two pull requests
 
-Authorised on 30 October 2026 (checklist row 23 is now Yes). Phase 1a is the first work. Phase 1b waits for the owner's setup steps.
+Authorised on 30 October 2026 (checklist row 23 is now Yes). Phase 1a has merged. Phase 1b waits for the owner's GitHub environment and Apple key setup.
 
 **1a. Skeleton and checks.** Needs only the bundle ID. No Apple account steps and no secrets.
 
@@ -109,12 +121,16 @@ Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are
 A separate workflow, not called from `ci.yml`.
 
 - Trigger: manual dispatch only, started by the owner. No push trigger and no schedule, so nothing is uploaded unapproved. Never `pull_request` or `pull_request_target`, so fork pull requests can never reach the secrets.
-- A GitHub Environment named `ios-testflight`, limited to the main branch. Three secrets: `APP_STORE_CONNECT_KEY_P8` (the key file contents), `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`. One plain variable, `APPLE_TEAM_ID`. The owner sets them with `gh secret set` and `gh variable set`, never in chat. Names are proposals.
+- A GitHub Environment named `ios-testflight`, limited to the main branch. Three secrets: `APP_STORE_CONNECT_KEY_P8` (the key file contents), `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`. One plain variable, `APPLE_TEAM_ID`. Create these names exactly as written with `gh secret set` and `gh variable set`, never in chat.
 - `concurrency` group `ios-testflight` with `cancel-in-progress: false`.
 - One job builds, archives and uploads, so a manual run is also one Mac run and no separate compile run comes first.
 - Keep-alive: the monthly upload is a reminder to the owner to run this workflow, not a schedule. An automated keep-alive of the last approved build can be added later if the owner wants it.
-- Steps: write the key to a temporary file with mode 600 and delete it in a final step that always runs. Generate the project. `xcodebuild archive` with automatic signing, `-allowProvisioningUpdates`, the three `-authenticationKey...` flags, and the build number from the run number. `xcodebuild -exportArchive` with an export-options file that selects automatic signing, the team and the upload destination. Fallback if direct upload misbehaves: export the app file and upload it with `xcrun altool --upload-app` using the same key.
-- Never print the key, the key ID or the issuer ID.
+- Steps: check out, select Xcode 26.6, install XcodeGen 2.46.0 and generate the project; write the key to a temporary file with mode 600 and delete it in a final step that always runs. `xcodebuild archive` uses automatic signing, `-allowProvisioningUpdates`, the three `-authenticationKey...` flags, the team variable and the run number as `CURRENT_PROJECT_VERSION`. `xcodebuild -exportArchive` uses the committed export-options template with the team supplied at runtime, automatic signing and the upload destination.
+- Never print the key, key ID, issuer ID or team value. Xcode build output is withheld from workflow logs so signing identifiers cannot leak through tool diagnostics.
+- Owner setup, after the workflow merges: create the `ios-testflight` GitHub Environment and restrict deployments to `main`; add the three named secrets and `APPLE_TEAM_ID` variable to that environment; confirm the Actions budget guard is in place. Keep the `.p8` key in the owner's protected setup only, never in chat or the repository.
+- To ship, the owner opens **Actions → iOS TestFlight**, selects the `main` branch and clicks **Run workflow**. Do not dispatch it from a pull request or another ref. A merge to `main` does not run it.
+- The first real run is unproven (Unproven items 1 and 3 below). The owner should check the signing key's role supports provisioning, the archive succeeds with automatic signing, Xcode accepts the export options and completes the direct upload, the build number rises, and the build appears in TestFlight for installation. The workflow has not been run as part of this change.
+- Fallback, not enabled by default: if direct upload fails in the first real run, export the `.ipa` and upload it with `xcrun altool --upload-app` using the same key and IDs. Add that path only after the owner confirms the direct-upload failure.
 
 ## Apple Developer portal: App ID setup (owner)
 

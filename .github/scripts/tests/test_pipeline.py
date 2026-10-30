@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import shlex
 import subprocess
 import tempfile
@@ -52,6 +53,18 @@ def smoke():
     return {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
 
 
+def load_workflow(path):
+    source = subprocess.run(
+        ["ruby", "-ryaml", "-rjson", "-e",
+         "data = YAML.safe_load_file(ARGV.fetch(0), aliases: true); "
+         "data['on'] = data.delete(true) if data.key?(true); "
+         "puts JSON.generate(data)",
+         str(path)],
+        check=True, capture_output=True, text=True,
+    )
+    return json.loads(source.stdout)
+
+
 class ImpactTests(unittest.TestCase):
     def test_known_dependencies_are_selected(self):
         for path in ("apps/backend/src/app.ts", "db/migrations/a.sql"):
@@ -71,6 +84,14 @@ class ImpactTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual({key for key, value in selection([path]).items() if value},
                                  {"vault-mirror", "python"})
+
+    def test_ios_changes_select_only_ios_and_python_without_deployment_inputs(self):
+        for path in ("apps/ios/project.yml", "apps/ios/Jarvis/ContentView.swift"):
+            with self.subTest(path=path):
+                self.assertEqual(checks_for(path), {"ios"})
+                self.assertEqual({key for key, value in selection([path]).items() if value},
+                                 {"ios", "python"})
+                self.assertEqual(deploy_parts(path), set())
 
     def test_shared_node_inputs_qualify_vault_mirror(self):
         for path in ("package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
@@ -121,6 +142,7 @@ class ImpactTests(unittest.TestCase):
 
     def test_workflow_only_changes_do_not_rebuild_applications(self):
         for path in (".github/workflows/ci.yml", ".github/workflows/codeql.yml",
+                     ".github/workflows/ios-ci.yml", ".github/workflows/ios-testflight.yml",
                      ".github/scripts/smoke_reasons.py"):
             self.assertEqual(deploy_parts(path), set())
 
@@ -129,7 +151,8 @@ class ImpactTests(unittest.TestCase):
                            [f"  {part}:\n    run: {part}" for part in PARTS])
         records = ["100644 blob " + "a" * 40 + "\tapps/backend/src/app.ts",
                    "100644 blob " + "b" * 40 + "\tapps/web/src/App.tsx",
-                   "100644 blob " + "c" * 40 + "\tinfra/main.bicep"]
+                   "100644 blob " + "c" * 40 + "\tinfra/main.bicep",
+                   "100644 blob " + "g" * 40 + "\tapps/ios/Jarvis/ContentView.swift"]
 
         def values(items, workflow=recipe, config="fixed"):
             with patch("pipeline_impact.git", side_effect=["\n".join(items), workflow]):
@@ -137,7 +160,9 @@ class ImpactTests(unittest.TestCase):
 
         initial = values(records)
         backend = values([records[0].replace("a" * 40, "d" * 40), *records[1:]])
+        ios = values([*records[:3], records[3].replace("g" * 40, "h" * 40)])
         self.assertNotEqual(initial["backend"], backend["backend"])
+        self.assertEqual(initial, ios)
         self.assertEqual(initial["web"], backend["web"])
         self.assertNotEqual(initial["backend"], values(records, config="changed")["backend"])
         infra = values([*records[:2], records[2].replace("c" * 40, "d" * 40)])
@@ -596,6 +621,88 @@ class SafeFailureTests(unittest.TestCase):
             "npm test --workspace @jarvis/contracts", "npm run test:vault-mirror",
             "npm run build:vault-mirror",
         ])
+
+    def test_ios_macos_build_is_cost_guarded(self):
+        source = (ROOT / ".github/workflows/ios-ci.yml").read_text()
+        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:", source)
+        self.assertIn("    needs: linux", source)
+        self.assertIn(
+            "    if: needs.linux.result == 'success' && github.event_name == 'pull_request' "
+            "&& github.event.pull_request.draft == false",
+            source,
+        )
+        self.assertIn("    runs-on: macos-26", source)
+        self.assertIn("    timeout-minutes: 20", source)
+        self.assertIn("      cancel-in-progress: true", source)
+        self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
+        self.assertNotIn("xlarge", source)
+        self.assertNotIn("simctl boot", source)
+
+    def test_testflight_workflow_is_manual_guarded_and_isolated(self):
+        workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
+        workflow = load_workflow(workflow_path)
+        self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(workflow["concurrency"], {
+            "group": "ios-testflight", "cancel-in-progress": False,
+        })
+        self.assertEqual(len(workflow["jobs"]), 1)
+        job = next(iter(workflow["jobs"].values()))
+        self.assertEqual(job["environment"], "ios-testflight")
+        self.assertEqual(job["runs-on"], "macos-26")
+        self.assertEqual(job["timeout-minutes"], 30)
+        self.assertTrue(all(
+            "xlarge" not in label.lower()
+            for label in ([job["runs-on"]] if isinstance(job["runs-on"], str) else job["runs-on"])
+        ))
+
+        action_steps = [step["uses"] for step in job["steps"] if "uses" in step]
+        self.assertTrue(action_steps)
+        for action in action_steps:
+            with self.subTest(action=action):
+                self.assertRegex(action, r"^[^@]+@[0-9a-f]{40}$")
+        raw_workflow = workflow_path.read_text()
+        for line in raw_workflow.splitlines():
+            if "uses:" in line:
+                self.assertRegex(line, r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v\S+")
+        guard = next(step for step in job["steps"] if step.get("name") == "Require main branch")
+        self.assertEqual(guard["if"], "github.ref != 'refs/heads/main'")
+        self.assertIn("exit 1", guard["run"])
+        preflight = next(step for step in job["steps"] if step.get("name") == "Check signing configuration")
+        self.assertTrue({
+            "APP_STORE_CONNECT_KEY_P8", "APP_STORE_CONNECT_KEY_ID",
+            "APP_STORE_CONNECT_ISSUER_ID", "APPLE_TEAM_ID",
+        } <= set(preflight["env"]))
+
+        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
+        self.assertNotIn(
+            "./.github/workflows/ios-testflight.yml",
+            {job.get("uses") for job in ci["jobs"].values()},
+        )
+        self.assertEqual(deploy_parts(".github/workflows/ios-testflight.yml"), set())
+        options = plistlib.loads((ROOT / "apps/ios/ExportOptions.plist").read_bytes())
+        self.assertEqual(options["destination"], "upload")
+        self.assertEqual(options["method"], "app-store-connect")
+        self.assertEqual(options["signingStyle"], "automatic")
+        self.assertEqual(options["teamID"], "__APPLE_TEAM_ID__")
+
+        key_step = next(step for step in job["steps"] if step.get("name") == "Write App Store Connect key")
+        self.assertIn("umask 077", key_step["run"])
+        self.assertIn("chmod 600", key_step["run"])
+        cleanup = next(step for step in job["steps"] if step.get("name") == "Delete App Store Connect key")
+        self.assertEqual(cleanup["if"], "always()")
+        self.assertIn("rm -f", cleanup["run"])
+        for name in ("Archive with automatic signing", "Export and upload to TestFlight"):
+            step = next(step for step in job["steps"] if step.get("name") == name)
+            self.assertIn("2>&1", step["run"])
+            self.assertRegex(
+                step["run"],
+                r">\s+\"\$RUNNER_TEMP/(?:archive|export)\.log\"",
+            )
+            self.assertNotRegex(
+                step["run"],
+                r"(?m)^\s*echo\s+.*(?:APP_STORE_CONNECT|APPLE_TEAM_ID)",
+            )
 
     def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
         source = (ROOT / ".github/workflows/ci.yml").read_text()

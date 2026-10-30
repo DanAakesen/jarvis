@@ -1,0 +1,28 @@
+name: Jarvis
+options:
+  bundleIdPrefix: com.danaakesen
+  deploymentTarget:
+    iOS: "26.0"
+packages:
+  JarvisCore:
+    path: Packages/JarvisCore
+targets:
+  Jarvis:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Jarvis
+    dependencies:
+      - package: JarvisCore
+        product: JarvisCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        INFOPLIST_FILE: Jarvis/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_ENTITLEMENTS: Jarvis/Jarvis.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
