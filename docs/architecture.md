@@ -1336,6 +1336,15 @@ are never retried.
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
+### iOS navigation shell
+
+`JarvisCore` owns the pure-Swift destination list, navigation path, and sidebar
+open/closed state; Linux tests cover path normalization, navigation, and the
+sidebar state. The SwiftUI target binds that state to `NavigationStack` and
+renders the fixed-behind sidebar and title-only placeholders. No backend
+routes or iOS-specific integration paths are added. Chat and Voice remain
+placeholders until their screen work is integrated.
+
 ### iOS chat streaming (P15-04)
 
 `JarvisCore` parses server-sent events incrementally from bytes and keeps the
