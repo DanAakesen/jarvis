@@ -1,3 +1,20 @@
+## 30 October 2026 — build the approved native iPhone Voice screen (P15-11 / #1401)
+
+Use the approved Voice concept as a visual reference, not a source of literal
+values. Keep protocol/session logic in pure Swift `JarvisCore`, and implement
+audio, camera, screen capture and SwiftUI in thin Apple targets. Read the existing
+`voice.default_language` through `GET /settings`, use the same voice socket and
+vision routes as web, and add no iOS-specific backend path. The ReplayKit
+extension passes bounded screen JPEGs through the registered App Group. Keep the
+session active when the screen is minimized; do not make Face ID locking change
+voice lifecycle. Background audio, Bluetooth, route changes, call interruption
+handling, microphone recovery after device lock, microphone recovery after a
+phone call, CarPlay, Live Activity and Action Button remain unverified and are
+separate follow-ups requiring a real phone. Linux protocol/contract tests do not
+establish Apple target compilation or device acceptance. The current shell has no
+native sign-in UI, so the screen fails closed when the owner-session token is not
+already present; do not expand this screen into an unapproved auth implementation.
+
 ## 30 October 2026 — stabilize the GitHub chat acceptance read (#1415)
 
 Judge `chat_github_read` by a successful `github_read` / `issue_get` receipt for

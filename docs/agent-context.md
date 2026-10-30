@@ -6219,10 +6219,10 @@ the URLSession task. `KeychainTokenStore` stores the token as a generic password
 with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and synchronization
 disabled. `JarvisComposition` reads `JARVIS_API_BASE_URL` from the Info.plist
 build setting and accepts the access-token provider as an input; it adds no
-production host or sign-in implementation. There is no WebSocket seam in
-`JarvisCore` yet, so the app does not define a WebSocket adapter until #1391
-lands. App-target adapters are compile-checked by the Mac job only; CI does not
-boot a simulator or run adapter tests.
+production host or sign-in implementation. P15-11 supplies the app's
+`URLSessionWebSocketTransport` against the #1391 seam. App-target adapters are
+compile-checked by the existing ready-PR Mac job; Linux does not compile Apple
+frameworks.
 
 P15-05 adds `JarvisApprovalsClient` and `JarvisWorkspaceClient` on those same
 authenticated HTTP and SSE seams. Approvals decode only the pending-confirmation
@@ -6361,6 +6361,45 @@ Pass the web validator's optional trusted Blob host or registered tool names
 through `GeneratedViewDecodingContext` on `JSONDecoder.userInfo` when available.
 The Swift source status also accepts `running`, matching the runtime guard even
 though the TypeScript declaration and JSON schema omit it.
+
+### Native voice screen and audio (P15-11)
+
+The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
+values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
+used by both app and extension are in `apps/ios/Shared/VoiceScreenShareContract.swift`.
+`VoiceScreenModel` connects the existing Keychain token, `GET /settings`,
+`VoiceSessionClient`, and app-target URLSession/AVFoundation adapters. PCM16
+microphone capture and speaker playback use mono 24 kHz; speech-start immediately
+stops queued playback. The session can minimize to a persistent shell bar without
+ending audio or the screen-share monitor.
+
+Camera inspection uses the existing `/screen/frames` handle request; shared
+screen inspection uses the existing description request and sends its result on
+the same voice socket. The `JarvisBroadcast` ReplayKit extension writes only
+bounded JPEG frames and small lifecycle markers into the registered
+`group.com.danaakesen.jarvis` container; the host app reads the latest fresh frame
+and requests stop through that same container. No backend route or dependency
+was added. The Linux metadata check
+validates the extension target, its embed relationship, and both App Group
+entitlements. The existing ready-PR Mac build is the only Apple compile check;
+keep this PR in draft until Linux checks pass.
+
+The current shell has no native sign-in flow. Voice requires an owner-session
+token already present in Keychain; with an empty store it displays “Sign in
+required” and keeps session controls disabled. Do not invent a backend route or
+claim first-install voice acceptance until the separate native sign-in work is
+available.
+
+Run `swift build` and `swift test` from
+`apps/ios/Packages/JarvisCore`. These checks do not compile SwiftUI, AVFoundation,
+ReplayKit or camera code. Physical iPhone checks are still required for
+permission recovery, full-duplex audio, immediate barge-in, camera preview/photo,
+and starting/stopping screen share. Follow-ups to file separately: background
+audio; Bluetooth; audio route changes; call interruption handling; microphone
+recovery after device lock; microphone recovery after a phone call; CarPlay; Live
+Activity; and Action Button. These remain unverified. The extension App ID and
+its App Group provisioning also need the owner's portal check before signed
+device testing.
 
 ## iOS Phase 1b: owner-started TestFlight upload
 

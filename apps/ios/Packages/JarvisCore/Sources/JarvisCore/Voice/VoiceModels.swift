@@ -33,6 +33,8 @@ public enum VoiceClientMessage: Equatable, Sendable {
     case sessionEnd
     case cameraState(on: Bool)
     case playbackCompleted(responseID: String, audible: Bool)
+    case screenContext(VoiceScreenContext)
+    case screenContextUnavailable(itemID: String?, reason: VoiceScreenUnavailableReason?)
 
     public func jsonString() throws -> String {
         let encoder = JSONEncoder()
@@ -52,6 +54,14 @@ extension VoiceClientMessage: Encodable {
         case on
         case responseId
         case audible
+        case source
+        case capturedAt
+        case description
+        case question
+        case frameId
+        case itemId
+        case sharedWindowTitle
+        case reason
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -73,6 +83,19 @@ extension VoiceClientMessage: Encodable {
             try container.encode("jarvis.voice.playback.completed", forKey: .type)
             try container.encode(responseID, forKey: .responseId)
             try container.encode(audible, forKey: .audible)
+        case .screenContext(let context):
+            try container.encode("jarvis.screen.context", forKey: .type)
+            try container.encode(context.source, forKey: .source)
+            try container.encode(context.capturedAt, forKey: .capturedAt)
+            try container.encodeIfPresent(context.description, forKey: .description)
+            try container.encodeIfPresent(context.question, forKey: .question)
+            try container.encodeIfPresent(context.frameId, forKey: .frameId)
+            try container.encodeIfPresent(context.itemId, forKey: .itemId)
+            try container.encodeIfPresent(context.sharedWindowTitle, forKey: .sharedWindowTitle)
+        case .screenContextUnavailable(let itemID, let reason):
+            try container.encode("jarvis.screen.context.unavailable", forKey: .type)
+            try container.encodeIfPresent(itemID, forKey: .itemId)
+            try container.encodeIfPresent(reason, forKey: .reason)
         }
     }
 }
@@ -84,8 +107,12 @@ public enum VoiceServerMessage: Equatable, Sendable {
     case speechStarted
     case responseCreated(responseID: String?)
     case audioDelta(type: String, delta: String)
+    case transcriptionDelta(transcript: String, itemID: String?)
+    case assistantTranscriptDelta(String)
     case responseDone
     case responseCancelled
+    case visualContext(itemID: String?, path: String, reason: String?)
+    case screenContextUnavailable(itemID: String?, reason: String?)
     case unknown(type: String?, raw: String)
 
     public static func decode(_ raw: String) -> Self {
@@ -110,6 +137,11 @@ public enum VoiceServerMessage: Equatable, Sendable {
                 return .unknown(type: type, raw: raw)
             }
             return .transcriptionCompleted(transcript: payload.transcript, itemID: payload.itemID)
+        case "conversation.item.input_audio_transcription.delta":
+            guard let payload = try? JSONDecoder().decode(TranscriptionPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .transcriptionDelta(transcript: payload.transcript, itemID: payload.itemID)
         case "input_audio_buffer.speech_started", "speech_started":
             return .speechStarted
         case "response.created":
@@ -120,10 +152,24 @@ public enum VoiceServerMessage: Equatable, Sendable {
                 return .unknown(type: type, raw: raw)
             }
             return .audioDelta(type: type, delta: payload.delta)
+        case "response.audio_transcript.delta", "response.output_audio_transcript.delta":
+            guard let payload = try? JSONDecoder().decode(TextDeltaPayload.self, from: data) else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .assistantTranscriptDelta(payload.delta)
         case "response.done":
             return .responseDone
         case "response.cancelled":
             return .responseCancelled
+        case "jarvis.visual_context":
+            guard let payload = try? JSONDecoder().decode(VisualContextPayload.self, from: data),
+                  payload.visualPath == "image" || payload.visualPath == "caption" else {
+                return .unknown(type: type, raw: raw)
+            }
+            return .visualContext(itemID: payload.itemID, path: payload.visualPath, reason: payload.visualReason)
+        case "jarvis.screen.context.unavailable":
+            let payload = try? JSONDecoder().decode(ScreenContextUnavailablePayload.self, from: data)
+            return .screenContextUnavailable(itemID: payload?.itemID, reason: payload?.reason)
         default:
             return .unknown(type: type, raw: raw)
         }
@@ -134,6 +180,7 @@ public enum VoiceProtocolError: Error, Equatable, Sendable {
     case invalidJSON
     case invalidToken
     case invalidState
+    case invalidScreenContext
 }
 
 private struct SessionReadyPayload: Decodable {
@@ -181,4 +228,30 @@ private struct ResponseCreatedPayload: Decodable {
 
 private struct AudioDeltaPayload: Decodable {
     let delta: String
+}
+
+private struct TextDeltaPayload: Decodable {
+    let delta: String
+}
+
+private struct VisualContextPayload: Decodable {
+    let itemID: String?
+    let visualPath: String
+    let visualReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case itemID = "itemId"
+        case visualPath
+        case visualReason
+    }
+}
+
+private struct ScreenContextUnavailablePayload: Decodable {
+    let itemID: String?
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case itemID = "itemId"
+        case reason
+    }
 }
