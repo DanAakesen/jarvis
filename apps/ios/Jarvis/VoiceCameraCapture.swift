@@ -3,6 +3,7 @@ import CoreGraphics
 import CoreImage
 import CoreVideo
 import Foundation
+import ImageIO
 import QuartzCore
 
 final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
@@ -106,7 +107,10 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         guard let jpeg = context.jpegRepresentation(
             of: scaledImage,
             colorSpace: CGColorSpaceCreateDeviceRGB(),
-            options: [.lossyCompressionQuality: JarvisDesignTokens.voiceCameraJPEGQuality]
+            options: [
+                CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String):
+                    JarvisDesignTokens.voiceCameraJPEGQuality
+            ]
         ),
               jpeg.count <= JarvisDesignTokens.voiceCameraMaximumFrameBytes else {
             return
