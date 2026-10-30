@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "POST",
+      "path": "/api/conversation/sessions/12/turns",
+      "stream": {
+        "statusCode": 200,
+        "chunks": [
+          {"text": "event: user\ndata: {\"id\":\"42\",\"sessionId\":\"12\",\"role\":\"dan\",\"text\":\"Hello fixture\",\"model\":null,\"at\":\"2026-10-30T00:00:00.000Z\"}\n\n"},
+          {"text": "event: delta\ndata: {\"text\":\"Recovered\"}\n\n"}
+        ],
+        "drop": "network"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/conversation/sessions/12/turns/42/events",
+      "stream": {
+        "statusCode": 200,
+        "chunks": [
+          {"text": "event: user\ndata: {\"id\":\"42\",\"sessionId\":\"12\",\"role\":\"dan\",\"text\":\"Hello fixture\",\"model\":null,\"at\":\"2026-10-30T00:00:00.000Z\"}\n\nevent: delta\ndata: {\"text\":\"Recovered\"}\n\n"},
+          {"text": "event: delta\ndata: {\"text\":\" safely\"}\n\nevent: done\ndata: {\"id\":\"43\",\"sessionId\":\"12\",\"role\":\"jarvis\",\"text\":\"Recovered safely\",\"model\":\"fixture\",\"at\":\"2026-10-30T00:00:01.000Z\"}\n\n"}
+        ]
+      }
+    }
+  ]
+}

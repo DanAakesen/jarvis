@@ -1,3 +1,19 @@
+## 30 October 2026 — synthetic fixture replay in JarvisCore (P15-08 / #1393)
+
+Implement fixture replay through the existing HTTP and streaming transport seam
+and reuse `ChatClock` for deterministic delays. Keep the hand-written JSON sample
+scenarios in the test target's resources: the current app does not consume them,
+so no public `JarvisCoreFixtures` target or app/project change is justified.
+Never derive fixtures from real sessions. Test fixture files for sensitive
+patterns and non-example hosts as well as exercising their client behavior.
+
+The merged HTTP/chat prerequisites contained no approvals client. Add only the
+small approvals slice needed to load pending confirmations and resolve a
+decision through the web application's existing `/now` routes, sharing the
+authenticated HTTP client. No backend route or screen is added. Linux replay
+evidence is separate from owner live verification; #1393 stays open until that
+verification.
+
 ## 30 October 2026 — keep chat streaming in JarvisCore (P15-04 / #1389)
 
 Reuse the web application's conversation routes and event payloads; do not add

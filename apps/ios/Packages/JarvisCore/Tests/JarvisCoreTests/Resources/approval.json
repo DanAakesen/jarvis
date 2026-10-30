@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/now",
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "running": [],
+          "items": [],
+          "updatedAt": "2026-10-30T00:00:00.000Z",
+          "awayMode": false,
+          "confirmations": [
+            {"id": "fake_confirmation_0000000000000000000000000", "actionKind": "other", "summary": "Approve the synthetic no-op", "expiresAt": "2026-10-30T00:10:00.000Z"}
+          ]
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/now/confirmations/fake_confirmation_0000000000000000000000000",
+      "requestBody": {"decision": "approve"},
+      "response": {"statusCode": 204}
+    },
+    {
+      "method": "GET",
+      "path": "/api/now",
+      "response": {"statusCode": 200, "body": {"running": [], "items": [], "updatedAt": "2026-10-30T00:00:01.000Z", "awayMode": false, "confirmations": []}}
+    }
+  ]
+}
