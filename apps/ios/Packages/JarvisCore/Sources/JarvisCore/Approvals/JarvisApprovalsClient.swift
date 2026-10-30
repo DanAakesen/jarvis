@@ -1,76 +1,91 @@
 import Foundation
 
+public enum ConfirmationDecision: String, Codable, Sendable {
+    case approve
+    case reject
+}
+
+public enum ConfirmationActionKind: String, Codable, Sendable {
+    case merge, delete
+    case sendMail = "send_mail"
+    case calendarChange = "calendar_change"
+    case createRepository = "create_repository"
+    case computerUse = "computer_use"
+    case spendMoney = "spend_money"
+    case other
+}
+
+public struct PendingConfirmation: Codable, Equatable, Sendable {
+    public let id: String
+    public let actionKind: ConfirmationActionKind
+    public let summary: String
+    public let expiresAt: String
+}
+
+public struct PendingConfirmations: Codable, Equatable, Sendable {
+    public let confirmations: [PendingConfirmation]
+    public let awayMode: Bool
+    public let updatedAt: String
+}
+
+public enum JarvisApprovalsClientError: Error, Equatable, Sendable {
+    case invalidConfirmationID
+    case invalidResponse
+    case confirmationUnavailable
+    case awayMode
+}
+
+/// The confirmation subset of the existing Now routes, not a general Now-feed client.
 public final class JarvisApprovalsClient: Sendable {
     private let client: JarvisClient
 
-    public init(client: JarvisClient) {
-        self.client = client
-    }
+    public init(client: JarvisClient) { self.client = client }
 
-    public func pendingConfirmations() async throws -> [PendingConfirmation] {
-        let response = try await client.performChatRequest(
-            method: .get,
-            path: ["now"],
-            idempotent: true
+    public func pendingConfirmations() async throws -> PendingConfirmations {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get, path: ["now"], idempotent: true
         )
-        guard response.statusCode == 200,
-              let feed = try? JSONDecoder().decode(PendingConfirmationsResponse.self, from: response.body),
-              feed.confirmations.allSatisfy(Self.isValid) else {
+        guard response.statusCode == 200, response.body.count <= 1024 * 1024,
+              let result = try? JSONDecoder().decode(PendingConfirmations.self, from: response.body),
+              result.confirmations.count <= 10, Self.validTime(result.updatedAt),
+              result.confirmations.allSatisfy({
+                  Self.validID($0.id) && !$0.summary.isEmpty && $0.summary.utf16.count <= 4_000 &&
+                  Self.validTime($0.expiresAt)
+              }) else {
             throw JarvisApprovalsClientError.invalidResponse
         }
-        return feed.confirmations
+        return result
     }
 
-    public func decide(id: String, decision: ConfirmationDecision) async throws {
-        guard Self.validConfirmationID(id) else {
-            throw JarvisApprovalsClientError.invalidConfirmationID
-        }
-        let body: Data
+    public func resolveConfirmation(id: String, decision: ConfirmationDecision) async throws {
+        guard Self.validID(id) else { throw JarvisApprovalsClientError.invalidConfirmationID }
         do {
-            body = try JSONEncoder().encode(ConfirmationDecisionRequest(decision: decision))
-        } catch {
-            throw JarvisClientError.responseEncodingFailure
-        }
-
-        do {
-            let response = try await client.performChatRequest(
+            let response = try await client.performAuthenticatedRequest(
                 method: .post,
                 path: ["now", "confirmations", id],
-                body: body,
+                body: try JSONEncoder().encode(DecisionRequest(decision: decision)),
                 idempotent: false
             )
-            guard response.statusCode == 204 else {
-                throw JarvisApprovalsClientError.invalidResponse
-            }
-        } catch let error as JarvisClientError {
-            if case .httpStatus(404) = error {
-                throw JarvisApprovalsClientError.noLongerAvailable
-            }
-            throw error
+            guard response.statusCode == 204 else { throw JarvisApprovalsClientError.invalidResponse }
+        } catch JarvisClientError.httpStatus(404) {
+            throw JarvisApprovalsClientError.confirmationUnavailable
+        } catch JarvisClientError.httpStatus(409) {
+            throw JarvisApprovalsClientError.awayMode
         }
     }
 
-    private static func isValid(_ confirmation: PendingConfirmation) -> Bool {
-        let formatter = ISO8601DateFormatter()
-        let fractionalFormatter = ISO8601DateFormatter()
-        fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let hasValidExpiry = formatter.date(from: confirmation.expiresAt) != nil ||
-            fractionalFormatter.date(from: confirmation.expiresAt) != nil
-        return validConfirmationID(confirmation.id) &&
-            !confirmation.summary.isEmpty &&
-            confirmation.summary.utf16.count <= 4_000 &&
-            hasValidExpiry
-    }
-
-    private static func validConfirmationID(_ value: String) -> Bool {
+    private static func validID(_ value: String) -> Bool {
         value.range(of: #"^[A-Za-z0-9_-]{43}$"#, options: .regularExpression) != nil
     }
+
+    private static func validTime(_ value: String) -> Bool {
+        let formatter = ISO8601DateFormatter()
+        if formatter.date(from: value) != nil { return true }
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        return formatter.date(from: value) != nil
+    }
 }
 
-private struct PendingConfirmationsResponse: Decodable {
-    let confirmations: [PendingConfirmation]
-}
-
-private struct ConfirmationDecisionRequest: Encodable {
+private struct DecisionRequest: Encodable {
     let decision: ConfirmationDecision
 }

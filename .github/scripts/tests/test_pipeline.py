@@ -636,7 +636,38 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("      cancel-in-progress: true", source)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
-        self.assertNotIn("simctl boot", source)
+        self.assertIn("xcrun simctl boot", source)
+        self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance light", source)
+        self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
+        self.assertIn("main-light.png", source)
+        self.assertIn("main-dark.png", source)
+        self.assertIn("--screenshot-sidebar-open", source)
+        self.assertIn("sidebar-open-light.png", source)
+
+    def test_ios_screenshots_upload_and_update_single_pr_comment(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        job = workflow["jobs"]["macos"]
+        self.assertEqual(job["permissions"], {
+            "contents": "read", "issues": "write", "pull-requests": "write",
+        })
+        artifact = next(step for step in job["steps"] if step.get("name") == "Upload iOS screenshots")
+        self.assertEqual(
+            artifact["uses"],
+            "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+        )
+        self.assertEqual(artifact["with"]["retention-days"], 14)
+        self.assertEqual(artifact["with"]["if-no-files-found"], "error")
+        comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
+        self.assertEqual(comment["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertIn("ARTIFACT_URL", comment["env"])
+        self.assertIn("<!-- ios-screenshot-review -->", comment["run"])
+        self.assertIn("gh api --method PATCH", comment["run"])
+        self.assertIn("gh api --method POST", comment["run"])
+        self.assertNotIn("secrets.", (ROOT / ".github/workflows/ios-ci.yml").read_text())
+        self.assertIn(
+            "--screenshot-sidebar-open",
+            (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
+        )
 
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"

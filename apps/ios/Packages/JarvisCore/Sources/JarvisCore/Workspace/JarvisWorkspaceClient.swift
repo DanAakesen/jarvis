@@ -72,7 +72,7 @@ public final class JarvisWorkspaceClient: Sendable {
             throw JarvisClientError.responseEncodingFailure
         }
         do {
-            let response = try await client.performChatRequest(
+            let response = try await client.performAuthenticatedRequest(
                 method: .post,
                 path: ["now", "workspace", "state"],
                 body: body,
@@ -128,7 +128,7 @@ public final class JarvisWorkspaceClient: Sendable {
             throw JarvisClientError.responseEncodingFailure
         }
         do {
-            let response = try await client.performChatRequest(
+            let response = try await client.performAuthenticatedRequest(
                 method: .post,
                 path: ["now", "workspace", "commands", commandId, "ack"],
                 body: body,

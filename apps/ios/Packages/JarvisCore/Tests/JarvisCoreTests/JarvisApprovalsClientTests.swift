@@ -8,26 +8,30 @@ final class JarvisApprovalsClientTests: XCTestCase {
             HTTPResponse(statusCode: 200, body: json([
                 "confirmations": [[
                     "id": String(repeating: "A", count: 43),
-                    "actionKind": "model_deployment",
+                    "actionKind": "merge",
                     "summary": "Deploy the synthetic model",
                     "expiresAt": "2026-10-30T19:00:00.000Z",
                     "futureField": "ignored",
                 ]],
+                "awayMode": false,
+                "updatedAt": "2026-10-30T18:59:00.000Z",
                 "futureFeedField": true,
             ])),
         ])
         let approvals = makeApprovalsClient(transport: transport)
 
-        let confirmations = try await approvals.pendingConfirmations()
+        let pending = try await approvals.pendingConfirmations()
 
-        XCTAssertEqual(confirmations, [
+        XCTAssertEqual(pending.confirmations, [
             PendingConfirmation(
                 id: String(repeating: "A", count: 43),
-                actionKind: .modelDeployment,
+                actionKind: .merge,
                 summary: "Deploy the synthetic model",
                 expiresAt: "2026-10-30T19:00:00.000Z"
             ),
         ])
+        XCTAssertFalse(pending.awayMode)
+        XCTAssertEqual(pending.updatedAt, "2026-10-30T18:59:00.000Z")
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.first?.method, .get)
         XCTAssertEqual(requests.first?.url.path, "/api/now")
@@ -41,8 +45,8 @@ final class JarvisApprovalsClientTests: XCTestCase {
         let approvals = makeApprovalsClient(transport: transport)
         let id = String(repeating: "f", count: 43)
 
-        try await approvals.decide(id: id, decision: .approve)
-        try await approvals.decide(id: id, decision: .reject)
+        try await approvals.resolveConfirmation(id: id, decision: .approve)
+        try await approvals.resolveConfirmation(id: id, decision: .reject)
 
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.map(\.url.path), [
@@ -59,7 +63,8 @@ final class JarvisApprovalsClientTests: XCTestCase {
         let id = String(repeating: "B", count: 43)
         let cases: [(Int, any Error)] = [
             (403, JarvisClientError.notOwner),
-            (404, JarvisApprovalsClientError.noLongerAvailable),
+            (404, JarvisApprovalsClientError.confirmationUnavailable),
+            (409, JarvisApprovalsClientError.awayMode),
             (503, JarvisClientError.serviceUnavailable),
         ]
 
@@ -67,7 +72,7 @@ final class JarvisApprovalsClientTests: XCTestCase {
             let transport = FakeApprovalsTransport([HTTPResponse(statusCode: status)])
             let approvals = makeApprovalsClient(transport: transport)
             do {
-                try await approvals.decide(id: id, decision: .approve)
+                try await approvals.resolveConfirmation(id: id, decision: .approve)
                 XCTFail("Expected HTTP \(status) to fail")
             } catch {
                 XCTAssertEqual(String(describing: error), String(describing: expectedError))
@@ -78,10 +83,11 @@ final class JarvisApprovalsClientTests: XCTestCase {
 
         let notFound = FakeApprovalsTransport([HTTPResponse(statusCode: 404)])
         do {
-            try await makeApprovalsClient(transport: notFound).decide(id: id, decision: .reject)
+            try await makeApprovalsClient(transport: notFound)
+                .resolveConfirmation(id: id, decision: .reject)
             XCTFail("A missing confirmation must not succeed")
         } catch {
-            XCTAssertEqual(error as? JarvisApprovalsClientError, .noLongerAvailable)
+            XCTAssertEqual(error as? JarvisApprovalsClientError, .confirmationUnavailable)
         }
     }
 
@@ -94,12 +100,14 @@ final class JarvisApprovalsClientTests: XCTestCase {
                     "summary": "Synthetic",
                     "expiresAt": "not-a-date",
                 ]],
+                "awayMode": false,
+                "updatedAt": "2026-10-30T18:59:00.000Z",
             ])),
         ])
         let approvals = makeApprovalsClient(transport: transport)
 
         do {
-            try await approvals.decide(id: "not-an-id", decision: .approve)
+            try await approvals.resolveConfirmation(id: "not-an-id", decision: .approve)
             XCTFail("Expected local ID validation")
         } catch {
             XCTAssertEqual(error as? JarvisApprovalsClientError, .invalidConfirmationID)

@@ -1,3 +1,19 @@
+## 30 October 2026 — synthetic fixture replay in JarvisCore (P15-08 / #1393)
+
+Implement fixture replay through the existing HTTP and streaming transport seam
+and reuse `ChatClock` for deterministic delays. Keep the hand-written JSON sample
+scenarios in the test target's resources: the current app does not consume them,
+so no public `JarvisCoreFixtures` target or app/project change is justified.
+Never derive fixtures from real sessions. Test fixture files for sensitive
+patterns and non-example hosts as well as exercising their client behavior.
+
+The merged HTTP/chat prerequisites contained no approvals client. Add only the
+small approvals slice needed to load pending confirmations and resolve a
+decision through the web application's existing `/now` routes, sharing the
+authenticated HTTP client. No backend route or screen is added. Linux replay
+evidence is separate from owner live verification; #1393 stays open until that
+verification.
+
 ## 30 October 2026 — keep chat streaming in JarvisCore (P15-04 / #1389)
 
 Reuse the web application's conversation routes and event payloads; do not add
@@ -9319,3 +9335,21 @@ provisioning and Xcode 26's export-options behavior. The owner configures the
 environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
+
+## 30 October 2026 — ready-PR iOS screenshot artifact
+
+Extend the existing ready-PR-only `macos-26` simulator job rather than adding a
+second Mac workflow. After the unsigned build, boot an available iPhone simulator
+with `xcrun simctl`, capture the main screen in light and dark appearance, upload
+and capture the light-appearance open sidebar using the
+`--screenshot-sidebar-open` launch argument. Upload the PNGs as a 14-day Actions
+artifact and create/update a single bot comment with the artifact link. Keep the
+existing timeout and cancel-in-progress behavior; do not add signing, secrets or
+TestFlight work.
+
+GitHub workflow artifacts are downloadable archives and cannot be embedded as
+inline images in an issue comment; the comment links the artifact instead. Do not
+commit screenshots or publish them elsewhere. The sidebar launch argument
+initializes the actual navigation state and rendered drawer, not a mock view. The
+offline workflow tests pass, but hosted simulator, artifact and comment behavior
+remain unverified until a ready iOS pull request runs.
