@@ -159,6 +159,41 @@ final class JarvisWorkspaceClientTests: XCTestCase {
         }
     }
 
+    func testMapsInvalidAndStaleSnapshotStatuses() async throws {
+        for (status, expected) in [
+            (400, JarvisWorkspaceClientError.invalidSnapshot),
+            (409, JarvisWorkspaceClientError.staleConnection),
+        ] {
+            let sessionId = "12345678-1234-4234-8234-123456789abc"
+            let transport = FakeWorkspaceTransport(
+                streams: [.stream(sseResponse("workspace-ready", ["sessionId": sessionId], staysOpen: true))],
+                responses: [HTTPResponse(statusCode: status)]
+            )
+            let workspace = makeWorkspaceClient(transport: transport)
+            let listener = await listenForReady(workspace)
+
+            do {
+                try await workspace.register(WorkspaceSnapshot(windows: [], contextPanelOpen: false))
+                XCTFail("Expected status \(status) to fail")
+            } catch {
+                XCTAssertEqual(error as? JarvisWorkspaceClientError, expected)
+            }
+            if status == 409 {
+                do {
+                    try await workspace.acknowledge(
+                        commandId: "fixture_command",
+                        expiresAtMilliseconds: 5_000,
+                        applied: true
+                    )
+                    XCTFail("A stale session must not be reused")
+                } catch {
+                    XCTAssertEqual(error as? JarvisWorkspaceClientError, .noActiveConnection)
+                }
+            }
+            listener.cancel()
+        }
+    }
+
     func testDecodesWorkspaceAndApprovalEventsAndRetainsUnknownEvents() async throws {
         let sessionId = "12345678-1234-4234-8234-123456789abc"
         let events = [
@@ -246,6 +281,43 @@ final class JarvisWorkspaceClientTests: XCTestCase {
                 .delay(afterAttempt: 8),
             .seconds(4)
         )
+    }
+
+    func testReconnectsWhenAnEstablishedEventStreamDrops() async throws {
+        let first = "12345678-1234-4234-8234-123456789abc"
+        let second = "12345678-1234-4234-8234-123456789def"
+        let transport = FakeWorkspaceTransport(
+            streams: [
+                .stream(sseResponse(
+                    "workspace-ready",
+                    ["sessionId": first],
+                    failure: .network
+                )),
+                .stream(sseResponse("workspace-ready", ["sessionId": second], staysOpen: true)),
+            ],
+            responses: []
+        )
+        let workspace = makeWorkspaceClient(
+            transport: transport,
+            policy: WorkspaceReconnectPolicy(initialDelay: .milliseconds(5), maximumDelay: .milliseconds(10)),
+            clock: FakeWorkspaceClock(now: Date(timeIntervalSince1970: 1))
+        )
+        let listener = Task { () throws -> [WorkspaceEvent] in
+            var received: [WorkspaceEvent] = []
+            for try await event in workspace.events() {
+                received.append(event)
+                if received.count == 2 { return received }
+            }
+            return received
+        }
+
+        let received = try await listener.value
+        XCTAssertEqual(received, [
+            .workspaceReady(sessionId: first),
+            .workspaceReady(sessionId: second),
+        ])
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
     }
 
     private func makeWorkspaceClient(
@@ -367,14 +439,16 @@ private actor WorkspaceTokenProvider: AccessTokenProvider {
 private func sseResponse(
     _ name: String,
     _ value: [String: Any],
-    staysOpen: Bool = false
+    staysOpen: Bool = false,
+    failure: HTTPTransportFailure? = nil
 ) -> HTTPStreamResponse {
-    sseResponse(events: [(name, value)], staysOpen: staysOpen)
+    sseResponse(events: [(name, value)], staysOpen: staysOpen, failure: failure)
 }
 
 private func sseResponse(
     events: [(String, [String: Any])],
-    staysOpen: Bool = false
+    staysOpen: Bool = false,
+    failure: HTTPTransportFailure? = nil
 ) -> HTTPStreamResponse {
     let text = events.map { name, value in
         let data = try! JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
@@ -382,7 +456,11 @@ private func sseResponse(
     }.joined()
     let body = AsyncThrowingStream<Data, any Error> { continuation in
         continuation.yield(Data(text.utf8))
-        if !staysOpen { continuation.finish() }
+        if let failure {
+            continuation.finish(throwing: failure)
+        } else if !staysOpen {
+            continuation.finish()
+        }
     }
     return HTTPStreamResponse(statusCode: 200, body: body)
 }

@@ -215,6 +215,7 @@ public final class JarvisWorkspaceClient: Sendable {
     }
 
     private static func shouldReconnect(after error: any Error) -> Bool {
+        if error is HTTPTransportFailure { return true }
         guard let error = error as? JarvisClientError else { return false }
         switch error {
         case .networkFailure, .timedOut, .serviceUnavailable, .rateLimited:
