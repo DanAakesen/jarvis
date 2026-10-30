@@ -20,6 +20,8 @@
 	<false/>
 	<key>JARVIS_API_BASE_URL</key>
 	<string>$(JARVIS_API_BASE_URL)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Jarvis uses the camera only when you choose Take photo. The image stays on this device until you send it.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

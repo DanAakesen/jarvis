@@ -32,7 +32,6 @@ public final class JarvisNowFeedClient: Sendable {
             let response = try await client.performAuthenticatedRequest(
                 method: .post,
                 path: ["now", "activity", id, "dismiss"],
-                body: Data("{}".utf8),
                 idempotent: false
             )
             guard response.statusCode == 204 else {

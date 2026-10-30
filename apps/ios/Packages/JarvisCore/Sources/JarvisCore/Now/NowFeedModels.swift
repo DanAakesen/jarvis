@@ -1,6 +1,6 @@
 import Foundation
 
-public enum NowFeedActivityCategory: String, Codable, Equatable, Sendable {
+public enum NowFeedActivityCategory: String, Codable, Equatable, CaseIterable, Sendable {
     case attention
     case release
     case credential

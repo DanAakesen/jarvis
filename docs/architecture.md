@@ -1350,9 +1350,9 @@ the matching core seam in #1391 exists.
 `JarvisCore` owns the pure-Swift destination list, navigation path, and sidebar
 open/closed state; Linux tests cover path normalization, navigation, and the
 sidebar state. The SwiftUI target binds that state to `NavigationStack` and
-renders the fixed-behind sidebar and title-only placeholders. No backend
-routes or iOS-specific integration paths are added. Chat and Voice remain
-placeholders until their screen work is integrated.
+renders the fixed-behind sidebar and title-only placeholders for unbuilt
+destinations. P15-10 replaces the Chat root placeholder with the native chat
+screen. No iOS-specific backend routes are added.
 
 ### iOS chat streaming (P15-04)
 
@@ -1367,6 +1367,38 @@ interval for up to 15 minutes with an injectable clock. The routes and event
 payloads were checked against `apps/web/src/conversation-history.ts`,
 `apps/web/src/chat-attachments.ts` and `apps/backend/src/core/conversation.ts`;
 no contract gap requiring backend work was found.
+
+### iOS Chat screen (P15-10)
+
+`JarvisChatScreen` is the SwiftUI presentation layer; `JarvisChatModel` owns
+screen-scoped loading, streaming, cursor paging, attachment drafts, cancellation
+and reattachment. The shared `JarvisChatClient` remains responsible for the
+existing conversation routes and SSE contract. The screen refreshes final
+history after a turn so persisted `toolCalls` and attachments replace the
+streaming presentation. `ActiveChatTurnSelection` prefers the active turn for
+the latest displayed session and falls back to the first server-ordered turn.
+`ChatHistoryPagingState` preserves the cursor for older loaded pages when a
+turn refreshes the latest page. `ChatMessageGrouping` in `JarvisCore` keeps
+timestamp grouping deterministic and Linux-tested.
+
+`JarvisNowFeedClient` decodes the existing authenticated `GET /now` response,
+dismisses through `POST /now/activity/:id/dismiss`, and delegates confirmation
+decisions to `JarvisApprovalsClient`. The existing `/now/events` stream's
+`now`, `refresh`, `mode`, approval-status and `jarvis-activity` events trigger
+feed refreshes; a fresh `workspace-ready` also refreshes feed data and retries
+active-turn lookup. No activity, approval or chat route is added. File/photo
+input stays local until send and then uses the existing multipart attachment route.
+The web contract permits documents up to 20 MB and images up to 10 MB; the
+native client preserves those source limits.
+
+The app's synthetic fixture scenario is selected only by SwiftUI previews and
+the CI screenshot launch argument. It provides one sample text turn; attachment
+uploads and feed writes are visibly disabled in fixture mode rather than
+returning fake success. Normal app launches use the configured URLSession client
+and Keychain store. A native Entra/MSAL sign-in provider is not present in this
+checkout, so the app provider fails closed when no stored owner session exists.
+ReplayKit sharing is visibly disabled until a Broadcast Upload Extension and
+its stop lifecycle are implemented; both are follow-ups.
 
 ### iOS voice protocol (P15-06)
 
@@ -1392,7 +1424,9 @@ additional backend route or guessed message shape is introduced.
 `JarvisApprovalsClient` lists pending confirmations from the existing `GET /now`
 response and posts a single approve/reject decision to
 `POST /now/confirmations/:id`; 404 is a typed no-longer-available result, never
-success. `JarvisWorkspaceClient` consumes the authenticated `/now/events` SSE
+success. P15-10 adds `JarvisNowFeedClient` for the same `/now` snapshot and
+activity-dismissal route, reusing the confirmation client rather than adding a
+second decision path. `JarvisWorkspaceClient` consumes the authenticated `/now/events` SSE
 stream, retains the session ID issued by each `workspace-ready`, registers
 flat snapshots and acknowledges commands against that connection. It validates
 the 32-window and 1–300-character reason limits locally, bounds acknowledgement
@@ -1424,10 +1458,12 @@ pending a contract decision.
 `FixtureTransport` implements the core HTTP and streaming transport seam without
 network access. JSON scenarios match existing request methods and paths and
 return HTTP bodies or SSE chunks, including delays through the injectable
-`ChatClock`, dropped streams, and HTTP failures. Synthetic sample conversations
-live only in `JarvisCoreTests` resources; there is no shared fixtures target or
-app-target dependency. Linux tests exercise the real chat and tools clients
-against these resources, including history pagination and reattachment.
+`ChatClock`, dropped streams, and HTTP failures. Core client test conversations
+live in `JarvisCoreTests` resources; there is no shared fixtures target. The
+Chat screen has a separate synthetic scenario in the app target for SwiftUI
+previews and the existing simulator screenshot job only. Linux tests exercise
+the real chat and tools clients against test resources, including history
+pagination and reattachment.
 
 `JarvisApprovalsClient` reuses `JarvisClient` authentication and error mapping
 for the existing `GET /now` confirmations and `POST /now/confirmations/:id`
