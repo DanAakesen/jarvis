@@ -229,7 +229,14 @@ public final class JarvisChatClient: Sendable {
                         isReplayConnection = false
                     }
 
-                    let chatEvent = try Self.decode(event: event, sessionId: sessionId)
+                    let chatEvent: ChatEvent
+                    do {
+                        chatEvent = try Self.decode(event: event, sessionId: sessionId)
+                    } catch let error as JarvisChatClientError {
+                        throw error
+                    } catch {
+                        throw JarvisChatClientError.invalidResponse
+                    }
                     if case .error(let failure) = chatEvent {
                         throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
                     }

@@ -86,6 +86,28 @@ final class JarvisChatClientTests: XCTestCase {
         }
     }
 
+    func testMalformedEventFailsWithoutReattaching() async throws {
+        let transport = FakeChatTransport([
+            .stream(streamResponse(events:
+                event("user", [
+                    "id": "42", "sessionId": "12", "role": "dan", "text": "Hi",
+                    "model": NSNull(), "at": "2026-10-30T00:00:00.000Z",
+                ]) + "event: delta\ndata: {invalid json}\n\n"
+            )),
+        ])
+        let chat = makeChatClient(transport: transport)
+        let events = try await chat.sendTurn(sessionId: "12", text: "Hi")
+
+        do {
+            _ = try await collect(events)
+            XCTFail("Expected invalid stream response")
+        } catch {
+            XCTAssertEqual(error as? JarvisChatClientError, .invalidResponse)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+    }
+
     func testDroppedTurnStreamReattachesAndSuppressesReplayedEvents() async throws {
         let user = event("user", [
             "id": "42", "sessionId": "12", "role": "dan", "text": "Hi",
