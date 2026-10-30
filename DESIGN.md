@@ -2783,9 +2783,9 @@ SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
-stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
-unbuilt areas and Settings use title-only placeholders until their screen
-issues are implemented. Reduced Motion removes settling animation.
+stack state live in the pure-Swift `JarvisCore` package. The unbuilt
+areas and Settings use title-only placeholders until their screen issues are
+implemented. Reduced Motion removes settling animation.
 
 ## Native iOS Voice screen (P15-11; 30 October 2026)
 
@@ -2805,3 +2805,32 @@ keeps Stop visible while broadcasting.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
+
+## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
+
+The approved `docs/ios/design/board.html?screen=chat` frames guide composition,
+not literal data or dimensions. Keep Chat as the shell root: the transcript
+scrolls above a pinned composer, the compact Now bar sits immediately above it,
+and the navigation bar's bell opens Needs you. User and Jarvis messages use
+opposite alignment, a 24-hour timestamp at each sender/minute group, and
+translucent system glass. The activity sheet reuses the web feed's activity
+categories and shows away mode separately from its persisted activity items.
+
+Use SwiftUI's native `ScrollView`, text field, file and photo pickers, sheets,
+system button styles, SF Symbols and semantic type/color. `JarvisDesignTokens`
+in `JarvisDesignSystem.swift` is the shared source for custom geometry and
+motion, including existing sidebar values. Message bubbles are custom because
+the system has no conversation bubble with distinct sender alignment and a
+shared glass surface; the inline Now bar is custom because it combines live
+status and the pending confirmation's two actions in the composer stack; the
+activity sheet is custom because it groups the existing feed categories and
+confirmation decisions. Reduced Motion removes the message-arrival animation;
+system glass materials and opaque system-color fallbacks preserve readability
+when transparency is reduced.
+
+The composer Chat/Voice switch navigates to the native Voice screen. In Chat,
+Share screen stays visibly disabled with an accessibility explanation; screen
+sharing belongs to the Voice screen's broadcast flow.
+Synthetic preview and screenshot mode allows one fixture text turn; attachment
+uploads and activity writes are disabled with accessibility explanations, never
+simulated as successful backend actions.

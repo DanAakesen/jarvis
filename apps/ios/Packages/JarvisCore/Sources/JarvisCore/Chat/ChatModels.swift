@@ -15,6 +15,12 @@ public enum ConversationRole: String, Codable, Equatable, Sendable {
     case jarvis
 }
 
+public enum ChatAttachmentLimits {
+    public static let maximumCount = 5
+    public static let maximumFileBytes = 20 * 1024 * 1024
+    public static let maximumImageBytes = 10 * 1024 * 1024
+}
+
 public struct ChatSession: Codable, Equatable, Sendable {
     public let id: String
     public let channel: ConversationChannel
@@ -61,6 +67,19 @@ public struct ActiveChatTurn: Codable, Equatable, Sendable {
     public let sessionId: String
     public let messageId: String
     public let language: ChatLanguage
+}
+
+public enum ActiveChatTurnSelection {
+    public static func select(
+        turns: [ActiveChatTurn],
+        forSessionID sessionID: String?
+    ) -> ActiveChatTurn? {
+        guard let sessionID,
+              let matchingTurn = turns.first(where: { $0.sessionId == sessionID }) else {
+            return turns.first
+        }
+        return matchingTurn
+    }
 }
 
 public enum ChatToolOutcome: String, Codable, Equatable, Sendable {

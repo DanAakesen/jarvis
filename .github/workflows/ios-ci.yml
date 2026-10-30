@@ -133,14 +133,14 @@ jobs:
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
           xcrun simctl ui "$DEVICE_ID" appearance light
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"
           xcrun simctl ui "$DEVICE_ID" appearance dark
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
       - name: Upload iOS screenshots

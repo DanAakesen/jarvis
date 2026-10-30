@@ -12,6 +12,20 @@ Copilot test-chat turn. Preserve request shape, consumed-source and unknown-outc
 claim behavior until a new sanitized provider cause supplies evidence. Never
 include provider messages or raw responses in diagnostics.
 
+## Managed Copilot target persistence (#1350; 30 October 2026)
+
+Ordinary Bicep deployment carries forward only the existing backend's complete,
+validated Copilot agent name/version/fingerprint tuple. Missing values remain
+absent; partial or invalid tuples fail before deployment. Focused offline checks:
+`.github/scripts/tests/test_deploy_vault_mirror.py`,
+`bash -n .github/scripts/deploy_bicep.sh`, and
+`bicep build infra/main.bicep --stdout`.
+The 30 October main deployment ran no infra/backend/agent update, and its normal
+chat canary failed with the generic `acceptance_check_failed`; it did not capture
+a managed Copilot `providerCause`. No successful original-path Copilot turn is
+established. Do not change `_create_response` based on a synthetic rejection or
+infer that the generic current-chat canary diagnosed the Copilot request.
+
 ## Managed conversation failure repair (#1350; 29 October 2026)
 
 Use the production lazy wrapper with stateful synthetic claims in
@@ -1498,12 +1512,17 @@ identity and no-timestamp reasons appear as `not_reported_or_redacted` in
 artifacts (open web clients accept HTTP reasons only for down checks); read them
 in the `system.smoke_check` events instead.
 
-Only `rate_limit_exceeded` retries a check, once. A numeric SSE `retry_after`
+`rate_limit_exceeded` retries a check once. A numeric SSE `retry_after`
 (seconds) or HTTP `Retry-After` hint sets the wait, clamped to 30–60 seconds;
 without a valid hint it waits a full 60 seconds after the rejection. Retries
 re-enter the same pacing queue. A second throttle fails with the named reason,
 including `chat_canary`; other second-attempt failures retain their actual reason.
-Other errors, assertion failures and timeouts never retry. A rescued first
+`chat_github_read` also retries `github_issue_unavailable` once, through the same
+queue without the rate-limit backoff. Both retry causes share a two-attempt cap.
+A successful `github_read` / `issue_get` receipt for issue 700 with a nonblank
+title passes without requiring the reply to repeat the title. A failed retry
+retains its actual safe reason in acceptance/release evidence; other errors,
+assertion failures and timeouts never retry. A rescued first
 throttle is not retained in the report; inspect dependency telemetry too. #816's
 coordination client is never opened for smoke turns; the agent test
 `test_smoke_invocations_open_no_coordination_connection` pins that.
@@ -6288,23 +6307,42 @@ the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
-and captures the main screen in light and dark appearance plus the open sidebar in
-light appearance. The sidebar screenshot uses the `--screenshot-sidebar-open`
-launch argument to initialize the real navigation shell in its open state. It
-uploads those PNGs as a 14-day workflow artifact and posts or updates one pull request comment with
-the artifact link. GitHub comments cannot display files directly from workflow
-artifacts, so the images are not inline previews; open the artifact to view them.
-This job does not sign, use secrets, or upload to TestFlight.
+and captures the Chat screen in light and dark appearance plus the open sidebar
+in light appearance. Chat captures use `--screenshot-chat-fixture` to select
+clearly marked synthetic data without a backend; the sidebar capture also uses
+`--screenshot-sidebar-open` to initialize the real navigation shell in its open
+state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
+one pull request comment with the artifact link. GitHub comments cannot display
+files directly from workflow artifacts, so the images are not inline previews;
+open the artifact to view them. This job does not sign, use secrets, or upload
+to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
-SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
-and other enabled destinations plus Settings are title-only pages with native
-back navigation. Banking remains disabled and labeled Later. The fixed-behind
+SwiftUI binds them to a native `NavigationStack`. Chat is the root screen, and
+other enabled destinations plus Settings are title-only pages with native back
+navigation. Banking remains disabled and labeled Later. The fixed-behind
 sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
-its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
-`swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
-validation.
+its shared styling and gesture tokens are in `JarvisSidebar.swift`.
+
+P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
+screen state and calls the existing chat, Now-feed, approvals and workspace
+clients. The Now bar and Needs you sheet use existing `/now` snapshot, activity
+dismissal, confirmation and event routes. Final history supplies persisted tool
+outcomes; reattachment prefers the active turn for the latest displayed session,
+then falls back to the first server-ordered turn; the active-turn lookup repeats
+when the Now stream reconnects. `ChatHistoryPagingState` preserves the oldest
+loaded cursor across refreshes of the latest page. The web
+limits are five attachments, up to 20 MB for documents and
+10 MB for images. Local camera/photo data is uploaded only on send. Synthetic
+fixtures are selected only in previews and screenshot mode. The app has no
+native Entra sign-in provider, so its unavailable provider fails closed without
+an existing Keychain session. ReplayKit remains disabled until its Broadcast
+Upload Extension and Stop lifecycle exist. Fixture mode supports one sample
+text turn; attachment uploads and feed writes are disabled rather than faked.
+There is no backend route specific to iOS. Run `swift build` and `swift test` from
+`apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
+SwiftUI compile check.
 
 P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
 `WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English
@@ -6327,7 +6365,7 @@ though the TypeScript declaration and JSON schema omit it.
 ### Native voice screen and audio (P15-11)
 
 The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
-values are in `JarvisDesignTokens.swift`, and protocol/frame sharing constants
+values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
 used by both app and extension are in `apps/ios/Shared/VoiceScreenShareContract.swift`.
 `VoiceScreenModel` connects the existing Keychain token, `GET /settings`,
 `VoiceSessionClient`, and app-target URLSession/AVFoundation adapters. PCM16
