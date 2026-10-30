@@ -6170,11 +6170,93 @@ chrome glass tokens. Stream replacement retains valid preview geometry and
 playback resume refreshes it. No private source image or physical iPhone
 acceptance is included. Composer visibility (#1303) remains separately owned.
 
-## iOS Phase 1a
+## iOS Phase 1c
 
 `apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
+
+`JarvisCore` owns the cross-platform HTTP client and the `HTTPTransport`,
+`TokenStore` and `AccessTokenProvider` seams. It calls the existing owner-session
+and tools routes, sends bearer authorization on every request, asks the provider
+to sign in again after a 401, and does not refresh sessions. Only idempotent
+requests retry transient failures, with bounded attempts and delay; tool and
+session writes are never retried. The Apple implementations remain in the app
+target, not this package.
+
+P15-04 adds `SSEParser` and a streaming transport seam whose default adapts
+existing `HTTPTransport` fakes. `JarvisChatClient` reuses the authenticated
+client for the existing conversation session, turn, active-turn, cancel,
+history and multipart attachment routes. Stream events are typed; unknown
+event names are retained, server `error` events become typed failures, and
+consumer cancellation stops the stream. Reattach retries transient failures
+every two seconds for at most 15 minutes using an injectable clock. No backend
+route, Apple framework or third-party dependency is added.
+
+### Synthetic fixture scenarios (P15-08)
+
+`FixtureTransport` in `JarvisCore` replays HTTP responses and SSE chunks without
+opening a network connection. The sample scenarios are bundled only with
+`JarvisCoreTests`, under
+`apps/ios/Packages/JarvisCore/Tests/JarvisCoreTests/Resources/`. They cover a
+completed chat turn, a server error, a dropped stream and reattachment, empty
+and cursor-paginated history, a pending confirmation followed by approval, and
+listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
+routes through the authenticated HTTP client; no app-specific backend is used.
+
+To add a scenario:
+
+1. Check the existing backend/web route and payload source cited in
+   `docs/ios/integration-contract.md`; do not fill in UNVERIFIED details.
+2. Write one JSON file in the fixture resource directory for the scenario.
+   Include the request method and path for each exchange, with query matching
+   when pagination needs it, and the HTTP response or SSE chunks to replay.
+3. Use only newly written synthetic text and fake identifiers. Keep chat IDs
+   numeric to match the shared backend contract. Mark any required 43-character
+   confirmation ID as fake within the value. Do not copy real sessions, names,
+   tokens, hosts or identifiers; use only reserved example domains if needed.
+4. Add an end-to-end assertion using the real client and `FixtureTransport`,
+   including the terminal result and consumed exchanges. Inject a fake
+   `ChatClock` for response/chunk delays rather than waiting on wall time.
+5. Run `swift build` and `swift test` from
+   `apps/ios/Packages/JarvisCore`. The fixture safety tests scan resource files
+   for email addresses, bearer-token patterns, unmarked token-shaped IDs and
+   non-example hosts. Passing them is not permission to use real conversation
+   data, nor evidence of live service or owner acceptance.
+
+The format is `{"version": 1, "interactions": [...]}`. Interactions are ordered
+and single-use; a mismatch does not consume the next one. For example:
+
+```json
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/tools",
+      "delayMilliseconds": 10,
+      "response": {"statusCode": 200, "body": []}
+    }
+  ]
+}
+```
+
+An interaction may include `query` (an exact string-to-string map; omitted means
+no query) and `requestBody` (JSON equality, ignoring object key order). Choose
+exactly one result: `response` with `statusCode`, optional `headers` and JSON
+`body`; `stream` with `statusCode`, optional `headers` and `chunks`; or `failure`
+set to `"network"` or `"timedOut"`. Each chunk has `text` containing raw SSE
+framing and an optional `delayMilliseconds`. Set stream `drop` to `"network"`
+to fail after its chunks; put the reattach response in the next interaction.
+Use ordinary response status codes for 401, 429 (with a `Retry-After` header),
+and 503. Delays default to zero and are limited to five minutes each; the
+request timeout bounds playback.
+
+Load a resource's bytes with `Data(contentsOf:)`, then construct
+`FixtureTransport(scenario: data, clock: fakeClock)` and inject it into
+`JarvisClient`. `recordedRequests()` retains only method, path and query, never
+authorization headers, bodies or origins. Assert `remainingInteractions() == 0`
+at the end so an incomplete workflow cannot pass unnoticed.
 
 The SwiftUI app is generated from `apps/ios/project.yml` with XcodeGen 2.46.0.
 The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
@@ -6183,13 +6265,23 @@ the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
-and captures the main screen in light and dark appearance. It uploads those PNGs
-as a 14-day workflow artifact and posts or updates one pull request comment with
+and captures the main screen in light and dark appearance plus the open sidebar in
+light appearance. The sidebar screenshot uses the `--screenshot-sidebar-open`
+launch argument to initialize the real navigation shell in its open state. It
+uploads those PNGs as a 14-day workflow artifact and posts or updates one pull request comment with
 the artifact link. GitHub comments cannot display files directly from workflow
 artifacts, so the images are not inline previews; open the artifact to view them.
-The sidebar-open capture is deferred until the sidebar shell (#1399) provides a
-launch-argument-driven state. This job does not sign, use secrets, or upload to
-TestFlight.
+This job does not sign, use secrets, or upload to TestFlight.
+
+P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
+and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
+SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
+and other enabled destinations plus Settings are title-only pages with native
+back navigation. Banking remains disabled and labeled Later. The fixed-behind
+sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
+its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
+`swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
+validation.
 
 ## iOS Phase 1b: owner-started TestFlight upload
 

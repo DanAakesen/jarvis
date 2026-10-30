@@ -641,6 +641,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
         self.assertIn("main-light.png", source)
         self.assertIn("main-dark.png", source)
+        self.assertIn("--screenshot-sidebar-open", source)
+        self.assertIn("sidebar-open-light.png", source)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -662,6 +664,10 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("gh api --method PATCH", comment["run"])
         self.assertIn("gh api --method POST", comment["run"])
         self.assertNotIn("secrets.", (ROOT / ".github/workflows/ios-ci.yml").read_text())
+        self.assertIn(
+            "--screenshot-sidebar-open",
+            (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
+        )
 
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"

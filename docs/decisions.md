@@ -1,3 +1,41 @@
+## 30 October 2026 — synthetic fixture replay in JarvisCore (P15-08 / #1393)
+
+Implement fixture replay through the existing HTTP and streaming transport seam
+and reuse `ChatClock` for deterministic delays. Keep the hand-written JSON sample
+scenarios in the test target's resources: the current app does not consume them,
+so no public `JarvisCoreFixtures` target or app/project change is justified.
+Never derive fixtures from real sessions. Test fixture files for sensitive
+patterns and non-example hosts as well as exercising their client behavior.
+
+The merged HTTP/chat prerequisites contained no approvals client. Add only the
+small approvals slice needed to load pending confirmations and resolve a
+decision through the web application's existing `/now` routes, sharing the
+authenticated HTTP client. No backend route or screen is added. Linux replay
+evidence is separate from owner live verification; #1393 stays open until that
+verification.
+
+## 30 October 2026 — keep chat streaming in JarvisCore (P15-04 / #1389)
+
+Reuse the web application's conversation routes and event payloads; do not add
+an iOS-specific backend path. Keep SSE parsing byte-oriented, preserve unknown
+event names, and expose server error events as typed failures. A default
+streaming adapter keeps existing `HTTPTransport` fakes source-compatible. Retry
+reattachment only for transient failures, at the web client's two-second
+interval and within its 15-minute window; inject the clock for deterministic
+tests. The Linux-testable core owns the chat client and multipart encoding;
+Apple transport implementations remain in the app target.
+
+## 30 October 2026 — keep iOS networking in the pure-Swift core (P15-03 / #1388)
+
+`JarvisCore` owns the HTTP client and platform replacement seams for transport,
+token storage and access-token acquisition. It reuses the backend's owner-session
+and tools routes without adding a backend path or dependency. Session tokens are
+stored only through `TokenStore`; the Apple Keychain and Entra/MSAL adapters stay
+in the app target. A 401 clears the stored token and asks the access-token
+provider for sign-in; there is no refresh flow. Retries are bounded and limited
+to idempotent requests after transient failures, so tool and session mutations
+are sent at most once.
+
 ## 30 October 2026 — bounded managed-policy causes (#1373)
 
 Keep existing closed failure reasons and add optional `providerCause` rather than
@@ -9253,8 +9291,21 @@ aggregate workflow selects the Mac simulator build only for ready pull requests
 whose changes select iOS; manual dispatch does not start a Mac job. The Mac
 build is unsigned and does not boot a simulator or run UI tests. Phase 1b
 signing, upload and credentials were outside the Phase 1a implementation; later
-screens remain out of scope.
+screens remain out of scope for that foundation change.
 
+## 30 October 2026 — P15-13 iOS navigation shell
+
+The approved sidebar concept is implemented as a native SwiftUI shell. A custom
+fixed-behind sidebar is necessary for the specified right-side drag reveal,
+screen translation, dimming and blur; native `NavigationStack` owns page pushes
+and back behavior. Pure-Swift destination and navigation state stay in
+`JarvisCore` for Linux tests and future chat or voice navigation commands.
+
+The shell opens to a Chat placeholder. Chat, Voice, enabled unbuilt areas and
+Settings render title-only placeholders; Banking remains disabled and marked
+Later. The sidebar uses system colors, typography, scrolling and SF Symbols,
+with shared tokens for custom geometry and motion. No backend changes are part
+of this decision.
 ## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
 
 The TestFlight workflow is separate from aggregate CI and uses only
@@ -9279,13 +9330,15 @@ TestFlight availability. No run is started by this change.
 Extend the existing ready-PR-only `macos-26` simulator job rather than adding a
 second Mac workflow. After the unsigned build, boot an available iPhone simulator
 with `xcrun simctl`, capture the main screen in light and dark appearance, upload
-the PNGs as a 14-day Actions artifact, and create/update a single bot comment with
-the artifact link. Keep the existing timeout and cancel-in-progress behavior; do
-not add signing, secrets or TestFlight work.
+and capture the light-appearance open sidebar using the
+`--screenshot-sidebar-open` launch argument. Upload the PNGs as a 14-day Actions
+artifact and create/update a single bot comment with the artifact link. Keep the
+existing timeout and cancel-in-progress behavior; do not add signing, secrets or
+TestFlight work.
 
 GitHub workflow artifacts are downloadable archives and cannot be embedded as
 inline images in an issue comment; the comment links the artifact instead. Do not
-commit screenshots or publish them elsewhere. Add the sidebar-open capture only
-after #1399 supplies a real launch-argument-driven sidebar state. The offline
-workflow tests pass, but hosted simulator, artifact and comment behavior remain
-unverified until a ready iOS pull request runs.
+commit screenshots or publish them elsewhere. The sidebar launch argument
+initializes the actual navigation state and rendered drawer, not a mock view. The
+offline workflow tests pass, but hosted simulator, artifact and comment behavior
+remain unverified until a ready iOS pull request runs.
