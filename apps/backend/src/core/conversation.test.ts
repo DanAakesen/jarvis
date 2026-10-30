@@ -1309,12 +1309,16 @@ describe('conversation routes', () => {
     expect(store.addMessage).toHaveBeenCalledTimes(1);
   });
 
-  it('logs the agent failure code, not its content, and keeps the user-facing message honest', async () => {
+  it.each(['capability_instructions_too_large', 'managed_policy_turn_failed'])(
+    'logs the agent failure code %s, not its content, and keeps the user-facing message honest', async code => {
     const store = storeFixture();
     const logged: string[] = [];
     const chatAgent = {
       stream: vi.fn(async function* () {
-        throw new ChatAgentError('capability_instructions_too_large');
+        throw new ChatAgentError(code, undefined, {
+          httpStatus: 400, code: 'unsupported_parameter', param: 'instructions',
+          exceptionType: 'BadRequestError', message: 'private provider detail',
+        });
         yield 'unreachable';
       }),
     };
@@ -1336,10 +1340,19 @@ describe('conversation routes', () => {
 
     expect(response.body).toContain('event: error');
     expect(response.body).toContain('I could not finish the reply.');
-    expect(response.body).toContain('"code":"capability_instructions_too_large"');
+    expect(response.body).toContain(`"code":"${code}"`);
+    if (code === 'managed_policy_turn_failed') {
+      expect(response.body).toContain('"providerCause":{"httpStatus":400,"code":"unsupported_parameter","param":"instructions","exceptionType":"BadRequestError"}');
+    } else expect(response.body).not.toContain('providerCause');
+    expect(response.body).not.toContain('private provider detail');
     const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((item) => item.msg === 'conversation.reply_failed');
-    expect(entry).toMatchObject({ failure: 'Chat agent failed (capability_instructions_too_large)' });
+    expect(entry).toMatchObject({ failure: `Chat agent failed (${code})`,
+      ...(code === 'managed_policy_turn_failed' ? {
+        providerCause: { httpStatus: 400, code: 'unsupported_parameter', param: 'instructions',
+          exceptionType: 'BadRequestError' },
+      } : {}) });
+    expect(logged.join('')).not.toContain('private provider detail');
     expect(store.addMessage).toHaveBeenCalledTimes(1);
   });
 

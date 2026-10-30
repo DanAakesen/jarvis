@@ -9,6 +9,20 @@ provider for sign-in; there is no refresh flow. Retries are bounded and limited
 to idempotent requests after transient failures, so tool and session mutations
 are sent at most once.
 
+## 30 October 2026 — bounded managed-policy causes (#1373)
+
+Keep existing closed failure reasons and add optional `providerCause` rather than
+encoding provider text into the reason. Allow only HTTP status integers 100–599,
+provider code/parameter matching `[a-z0-9_.]{1,48}`, and bounded exception-class
+identifiers. Revalidate at each stream, logging, status and browser boundary;
+discard unknown fields and never copy messages. This preserves current consumers
+and claim safety while making a future provider rejection diagnosable.
+
+Do not treat the synthetic 400 fixture as a live diagnosis. The original rejected
+parameter and successful real Copilot turn remain unverified. Leave the request
+shape and conservative blocking policy unchanged until evidence supports a
+correction; non-blocking definitive 4xx recovery remains an owner decision.
+
 ## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
 
 The owner requested repair after real Copilot test replies failed. A successful
@@ -9249,4 +9263,24 @@ the pure-Swift package and checks project/plist/entitlement metadata. The
 aggregate workflow selects the Mac simulator build only for ready pull requests
 whose changes select iOS; manual dispatch does not start a Mac job. The Mac
 build is unsigned and does not boot a simulator or run UI tests. Phase 1b
-signing, upload, credentials, and all later screens remain out of scope.
+signing, upload and credentials were outside the Phase 1a implementation; later
+screens remain out of scope.
+
+## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
+
+The TestFlight workflow is separate from aggregate CI and uses only
+`workflow_dispatch`. Its single `macos-26` job uses the `ios-testflight`
+environment, requires the `main` ref, and builds, archives and uploads in one
+run with Xcode 26.6 and XcodeGen 2.46.0. App Store Connect credentials are
+environment secrets; the team is an environment variable supplied to the
+export options at runtime. The key is mode 600 and removed by an always-run
+cleanup step. Xcode output is captured so identifiers and team values are not
+written to logs. Direct upload is the default; `xcrun altool --upload-app` is
+only a documented fallback if the first real run establishes direct upload
+fails.
+
+The first archive/export/upload is unproven, including the key role needed for
+provisioning and Xcode 26's export-options behavior. The owner configures the
+environment and starts the first run after merge, then checks the signing
+authorization, archive, export/upload result, rising build number, and
+TestFlight availability. No run is started by this change.

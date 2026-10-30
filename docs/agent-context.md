@@ -1,3 +1,17 @@
+## Managed policy cause diagnostics (#1373; 30 October 2026)
+
+Use the existing hosted pytest/Ruff environment. Focused checks:
+`tests/test_managed_provider_cause.py`, `tests/test_managed_runtime_lifecycle.py`
+and `tests/test_chat_runtime.py`; backend managed-provider-cause, chat-agent,
+conversation, logging, chat-canary and system-status tests; contracts tests;
+web conversation-history tests. Run affected workspace lint/build checks.
+
+The HTTP-400 fixture's `instructions` parameter is synthetic, not a diagnosis.
+This environment could not establish the live rejected field or a successful
+Copilot test-chat turn. Preserve request shape, consumed-source and unknown-outcome
+claim behavior until a new sanitized provider cause supplies evidence. Never
+include provider messages or raw responses in diagnostics.
+
 ## Managed conversation failure repair (#1350; 29 October 2026)
 
 Use the production lazy wrapper with stateful synthetic claims in
@@ -6177,3 +6191,21 @@ the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac build uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`; it does not boot a simulator or run UI tests.
+
+## iOS Phase 1b: owner-started TestFlight upload
+
+`.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only
+on manual dispatch. The single `macos-26` job uses the `ios-testflight`
+environment; the owner must restrict that environment to the `main` branch and
+configure `APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`,
+`APP_STORE_CONNECT_ISSUER_ID`, and `APPLE_TEAM_ID` there before dispatching.
+The workflow refuses non-main refs, captures `xcodebuild` output rather than
+logging signing identifiers, writes the key with mode 600, and deletes it in
+an always-run cleanup step.
+
+Only the owner starts an upload: **Actions → iOS TestFlight**, select `main`,
+then **Run workflow**. A merge or pull request does not upload anything. The
+first archive and export/upload remain unproven; see the first-run checklist
+and disabled `xcrun altool --upload-app` fallback in
+[`docs/ios/build-plan.md`](ios/build-plan.md). Do not run or dispatch this
+workflow while reviewing changes.

@@ -32,8 +32,9 @@ TOKEN_SCOPE = "https://ai.azure.com/.default"
 class ManagedChatError(RuntimeError):
     """Fixed safe diagnostics; never include provider payloads or exceptions."""
 
-    def __init__(self, code: str):
+    def __init__(self, code: str, *, provider_cause: dict[str, Any] | None = None):
         self.code = code
+        self.provider_cause = provider_cause
         super().__init__(code)
 
 

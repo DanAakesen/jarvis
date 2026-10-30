@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "JarvisCore",
+    platforms: [.iOS(.v26)],
     products: [
         .library(name: "JarvisCore", targets: ["JarvisCore"]),
     ],

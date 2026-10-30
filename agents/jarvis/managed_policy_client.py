@@ -17,6 +17,7 @@ from typing import Any
 
 from jarvis_tools import BackendToolClient, current_message_id, model_tools
 from managed_copilot import ManagedChatError, ManagedTarget, NativeConversationBindings
+from managed_provider_cause import provider_cause
 from model_client import MAX_OUTPUT_TOKENS, AzureOpenAIResponsesClient, chat_model_tools
 from model_contract import ModelStreamChunk
 from state import ModelMessage, ModelSettings
@@ -220,11 +221,15 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
                              or error.code == "managed_response_failed")):
                     success = False
                 raise
-            except Exception:
+            except Exception as error:
                 if not turn.inference_attempted and self._tools.calls == calls_before:
                     success = False
-                    raise ManagedChatError("managed_policy_setup_failed") from None
-                raise ManagedChatError("managed_policy_turn_failed") from None
+                    raise ManagedChatError(
+                        "managed_policy_setup_failed", provider_cause=provider_cause(error)
+                    ) from None
+                raise ManagedChatError(
+                    "managed_policy_turn_failed", provider_cause=provider_cause(error)
+                ) from None
             finally:
                 current_message_id.reset(source_token)
                 self._native_turn.reset(native_token)

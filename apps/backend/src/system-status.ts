@@ -9,8 +9,12 @@ import type {
 import type { VaultIndexSummary } from './database/memory-store.js';
 import { systemSmokeCheckIds, vaultMirrorStatusViewSchema } from '@jarvis/contracts';
 import { z } from 'zod';
+import { sanitizeManagedProviderCause, type ManagedProviderCause } from './managed-provider-cause.js';
 
-export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & { reason?: string };
+export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & {
+  reason?: string;
+  providerCause?: ManagedProviderCause;
+};
 
 export type SystemStatusProbe = () => Promise<SystemStatusResult>;
 
@@ -313,15 +317,46 @@ export function safeSmokeReason(id: SystemSmokeCheckId, reason: unknown): string
     ? reason : undefined;
 }
 
+function safeSmokeProviderCause(
+  id: SystemSmokeCheckId,
+  status: SystemStatusValue,
+  reason: string | undefined,
+  value: unknown,
+): ManagedProviderCause | undefined {
+  return (status === 'down' || status === 'degraded') && reason !== undefined &&
+    safeSmokeReason(id, reason) !== undefined &&
+    ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'].includes(reason)
+    ? sanitizeManagedProviderCause(value) : undefined;
+}
+
+function safeSmokeEntry(
+  { reason: rawReason, providerCause: rawCause, ...entry }: SystemSmokeStatus['entries'][number],
+  includeDegraded: boolean,
+): SystemSmokeStatus['entries'][number] {
+  const reason = entry.status === 'down' || (includeDegraded && entry.status === 'degraded')
+    ? safeSmokeReason(entry.id, rawReason) : undefined;
+  const providerCause = safeSmokeProviderCause(entry.id, entry.status, reason, rawCause);
+  return { ...entry, ...(reason ? { reason } : {}), ...(providerCause ? { providerCause } : {}) };
+}
+
 export function systemSmokeHttpResponse(report: SystemSmokeStatus): SystemSmokeStatus {
   return {
     ...report,
-    entries: report.entries.map(({ reason, ...entry }) => ({
-      ...entry,
-      ...(entry.status === 'down' && reason !== undefined ? { reason } : {}),
-    })),
+    entries: report.entries.map((entry) => safeSmokeEntry(entry, false)),
   };
 }
+
+const providerCauseResponseSchema = {
+  type: 'object',
+  properties: {
+    httpStatus: { type: 'integer', minimum: 100, maximum: 599 },
+    code: { type: 'string', pattern: '^[a-z0-9_.]{1,48}(?![\\s\\S])' },
+    param: { type: 'string', pattern: '^[a-z0-9_.]{1,48}(?![\\s\\S])' },
+    exceptionType: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]{0,47}(?![\\s\\S])' },
+  },
+  minProperties: 1,
+  additionalProperties: false,
+} as const;
 
 export const systemStatusResponseSchema = {
   type: 'object',
@@ -343,6 +378,7 @@ export const systemStatusResponseSchema = {
               status: { type: 'string', enum: ['ok', 'degraded', 'down', 'unknown'] },
               checkedAt: { type: 'string', format: 'date-time' },
               reason: { type: 'string', minLength: 1, maxLength: 120 },
+              providerCause: providerCauseResponseSchema,
             },
             required: ['id', 'status', 'checkedAt'],
             additionalProperties: false,
@@ -391,6 +427,7 @@ properties: {
         status: { type: 'string', enum: ['ok', 'degraded', 'down', 'unknown'] },
         checkedAt: { type: 'string', format: 'date-time' },
         reason: { type: 'string', minLength: 1, maxLength: 120 },
+        providerCause: providerCauseResponseSchema,
       },
       required: ['id', 'status', 'checkedAt'],
       additionalProperties: false,
@@ -498,8 +535,8 @@ export function createSystemStatusReader(
       cached = undefined;
     },
     recordSmoke(report) {
-      latestSmoke = report;
-      if (cached) cached.value = { ...cached.value, smoke: report };
+      latestSmoke = { ...report, entries: report.entries.map((entry) => safeSmokeEntry(entry, true)) };
+      if (cached) cached.value = { ...cached.value, smoke: latestSmoke };
     },
   };
 }
@@ -537,11 +574,13 @@ export function createSystemSmokeReader(
           const reason = active.status === 'down' || active.status === 'degraded'
             ? safeSmokeReason(id, active.reason)
             : undefined;
+          const providerCause = safeSmokeProviderCause(id, active.status, reason, active.providerCause);
           return {
             id,
             status: isStatus(active.status) ? active.status : 'unknown',
             checkedAt: researchCheckedAt,
             ...(reason ? { reason } : {}),
+            ...(providerCause ? { providerCause } : {}),
           };
         }
         return {
