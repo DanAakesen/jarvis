@@ -112,7 +112,7 @@ struct JarvisChatScreen: View {
             await model.watchActivity()
         }
         .sheet(item: $activitySheet) { sheet in
-            JarvisActivitySheet(kind: sheet, model: model)
+            JarvisActivitySheet(model: model, kind: sheet)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
