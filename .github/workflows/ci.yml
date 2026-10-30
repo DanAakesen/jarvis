@@ -102,6 +102,11 @@ jobs:
     name: iOS
     needs: plan
     if: needs.plan.outputs.ios == 'true'
+    # The called workflow's simulator job comments on the pull request.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     uses: ./.github/workflows/ios-ci.yml
 
   infra:
