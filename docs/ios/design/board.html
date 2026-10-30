@@ -1165,6 +1165,274 @@ button.wsh-row { cursor: pointer; }
 .ios-ind { position: fixed; z-index: 99999; width: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text, #8a8a8a) 50%, transparent); opacity: 0; pointer-events: none; transition: opacity .3s ease; }
 .ios-ind.on { opacity: 1; transition-duration: .1s; }
 @media (prefers-reduced-motion: reduce) { .rb-on > * { translate: none; } }
+/* Gate: Sign-in and Lock. The real orb (#orb) is lifted above the gate backdrop and parked in the hero area; sheets sit above the orb. */
+.gate { position: absolute; inset: 0; z-index: 40; display: none; color: var(--text); font-family: var(--font-body); }
+.phone[data-gate] .gate { display: block; }
+.phone[data-gate] .pstage { z-index: 41; }
+.phone[data-gate] .pveil { display: none; }
+.phone[data-gate][data-stage] { --ox: calc(var(--w) / 2); --oy: 296px; --os: .92; --ob: 0px; --oo: 1; }
+.gate [hidden] { display: none !important; }
+.gate-bg { position: absolute; inset: 0; }
+.gate[data-kind="signin"] .gate-bg { background: var(--ambient); background-color: var(--page); }
+.gate[data-kind="lock"] .gate-bg { background: color-mix(in srgb, var(--page) 38%, var(--g-fill-bar)); -webkit-backdrop-filter: blur(30px) saturate(1.5); backdrop-filter: blur(30px) saturate(1.5); }
+.gate-body { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; padding: var(--safe-top) 24px 34px; }
+.gate-gap { flex: none; height: 368px; }
+.gate-word { margin: 0; font-size: 40px; line-height: 1.1; font-weight: 700; letter-spacing: -.03em; }
+.gate-foot { margin-top: auto; width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.gate-msg { margin: 0; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 22px; font-size: 15px; font-weight: 600; text-align: center; color: var(--text); }
+.gate-msg .ic { width: 20px; height: 20px; color: var(--danger); }
+.gate-msg[data-tone="muted"] .ic { color: var(--text-muted); }
+.gbtn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 54px; padding: 0 22px; border: 0; border-radius: 27px;
+  font: 600 17px/1.2 var(--font-body); color: var(--text); background: none; cursor: pointer; transition: transform .15s ease, opacity .2s ease;
+}
+.gbtn.primary { background: var(--accent); color: var(--accent-text); box-shadow: var(--g-shadow); }
+.gbtn.glass { background: var(--g-fill); -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4); }
+.gbtn:active:not(:disabled) { transform: scale(.97); opacity: .85; }
+.gbtn:disabled { cursor: default; }
+.gbtn:focus-visible, .gs-cancel:focus-visible, .gs-next:focus-visible, .gp-key:focus-visible, .gp-cancel:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.g-ms { width: 20px; height: 20px; flex: none; }
+.g-ms.lg { width: 28px; height: 28px; }
+.spin { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 2.5px solid currentColor; border-right-color: transparent; animation: gspin .8s linear infinite; }
+@keyframes gspin { to { transform: rotate(360deg); } }
+.fid { margin-top: 28px; width: 76px; height: 76px; color: var(--text); }
+.fid svg { width: 100%; height: 100%; }
+.gate[data-state="waiting"] .fid-f { animation: fid-scan 1.5s ease-in-out infinite; }
+.gate[data-state="failed"] .fid, .gate[data-state="passcode"] .fid { color: var(--danger); animation: fid-shake .45s ease; }
+.gate[data-state="signedout"] .fid { display: none; }
+@keyframes fid-scan { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+@keyframes fid-shake { 20% { transform: translateX(-8px); } 40% { transform: translateX(7px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(3px); } }
+.gsheet { position: absolute; inset: 0; z-index: 43; display: none; font-family: var(--font-body); }
+.gsheet[data-open] { display: block; }
+.gs-panel { position: absolute; left: 0; right: 0; bottom: 0; top: 56px; display: flex; flex-direction: column; border-radius: 38px 38px 0 0; overflow: hidden; background: var(--g-solid); color: var(--text); box-shadow: 0 -10px 40px rgb(0 0 0 / 30%); animation: gs-up .42s cubic-bezier(.32, .72, 0, 1); }
+.gsheet[data-open="web"]::before { content: ""; position: absolute; inset: 0; background: rgb(0 0 0 / 28%); }
+@keyframes gs-up { from { transform: translateY(100%); } }
+.gs-bar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 56px; padding: 0 16px; }
+.gs-cancel { min-width: 44px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--accent); font: 400 17px var(--font-body); cursor: pointer; }
+.gs-url { display: flex; align-items: center; gap: 5px; font-size: 15px; font-weight: 600; }
+.gs-url .ic { width: 14px; height: 14px; }
+.gs-pad { min-width: 44px; }
+.gs-page { flex: 1; display: flex; flex-direction: column; gap: 18px; padding: 36px 32px; background: #fff; color: #1b1b1b; }
+.gs-page h3 { margin: 0; font: 600 24px/1.2 "Segoe UI", var(--font-body); }
+.gs-field input { width: 100%; height: 44px; padding: 0 2px; border: 0; border-bottom: 1px solid #666; border-radius: 0; background: none; color: #1b1b1b; font: 400 16px "Segoe UI", var(--font-body); outline: none; }
+.gs-field input:focus { border-bottom: 2px solid #0067b8; }
+.gs-next { align-self: flex-end; min-width: 108px; min-height: 36px; padding: 0 20px; border: 0; border-radius: 2px; background: #0067b8; color: #fff; font: 400 15px "Segoe UI", var(--font-body); cursor: pointer; }
+.gsheet[data-open="pass"] { background: color-mix(in srgb, var(--page) 64%, transparent); -webkit-backdrop-filter: blur(44px) saturate(1.5); backdrop-filter: blur(44px) saturate(1.5); }
+html:has(.phone[data-gate]) .ios-ind { display: none; }
+.gp-wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: calc(var(--safe-top) + 74px) 0 40px; color: var(--text); }
+.gp-wrap h3 { margin: 0; font: 400 20px/1.2 var(--font-body); }
+.gp-dots { display: flex; gap: 22px; margin: 28px 0 40px; }
+.gp-dots i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--text); transition: background .12s ease; }
+.gp-dots i[data-on] { background: var(--text); }
+.gp-keys { display: grid; grid-template-columns: repeat(3, 78px); gap: 16px 24px; }
+.gp-key { width: 78px; height: 78px; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: var(--g-fill); color: var(--text); font: 400 32px/1 var(--font-body); cursor: pointer; -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); transition: background .12s ease; }
+.gp-key small { margin-top: 2px; font-size: 10px; font-weight: 600; letter-spacing: .14em; color: var(--text-muted); min-height: 11px; }
+.gp-key:active { background: color-mix(in srgb, var(--text) 30%, transparent); }
+.gp-cancel { position: absolute; right: 40px; bottom: 48px; min-height: 44px; padding: 0 6px; border: 0; background: none; color: var(--text); font: 400 18px var(--font-body); cursor: pointer; }
+@media (prefers-reduced-motion: reduce) {
+  .gs-panel { animation: none; }
+  .gate[data-state="waiting"] .fid-f { animation: none; }
+  .gate[data-state="failed"] .fid, .gate[data-state="passcode"] .fid { animation: none; }
+  .spin { animation-duration: 2.4s; }
+}
+/* Orb life on Sign-in and Lock: slow breathing, drifting inner glows, a press bump and a faster pulse while signing in. Transform and opacity only; the WebGL orb adds its own motes. */
+.phone[data-gate] .orb.gl .orb-glow { will-change: transform, opacity; }
+.phone[data-gate] .orb.gl .orb-glow.au { opacity: .5; animation: g-breathe 5.6s ease-in-out infinite; }
+.phone[data-gate] .orb.gl .orb-glow.cy { opacity: .42; animation: g-drift 11s ease-in-out infinite; }
+.phone[data-gate][data-gst="signing"] .orb.gl .orb-glow.au, .phone[data-gate][data-gst="web"] .orb.gl .orb-glow.au { opacity: .85; animation: g-pulse 1.15s ease-in-out infinite; }
+.phone[data-gate][data-gst="signing"] .orb.gl .orb-glow.cy, .phone[data-gate][data-gst="web"] .orb.gl .orb-glow.cy { animation-duration: 4.2s; }
+.phone[data-gate] .orb-gl { transform: scale(calc(1 + var(--gp, 0) * .07)); }
+@keyframes g-breathe { 0%, 100% { transform: scale(.94); opacity: .36; } 50% { transform: scale(1.08); opacity: .68; } }
+@keyframes g-pulse { 0%, 100% { transform: scale(.92); opacity: .6; } 50% { transform: scale(1.14); opacity: 1; } }
+@keyframes g-drift { 0%, 100% { transform: translate(-12px, 8px) scale(.96); opacity: .3; } 33% { transform: translate(14px, -6px) scale(1.06); opacity: .5; } 66% { transform: translate(-4px, -14px) scale(1); opacity: .38; } }
+@media (prefers-reduced-motion: reduce) {
+  .phone[data-gate] .orb.gl .orb-glow { animation: none !important; }
+  .phone[data-gate] .orb-gl { transform: none; }
+}
+/* Notes area: segmented Notes | Tasks | Graph, search scopes, native rows, graph canvas, pushed editor, sheets. */
+.phone { --f-people: var(--orb-thinking); --f-work: var(--accent); --f-personal: rgb(45 179 93); --f-general: var(--text-muted); --n-row: color-mix(in srgb, var(--highlight-solid) 70%, var(--page)); --n-ease: cubic-bezier(.32, .72, 0, 1); }
+:root[data-theme="dark"] .phone { --f-personal: rgb(61 220 132); --n-row: color-mix(in srgb, var(--highlight-solid) 8%, var(--page)); }
+#view-notes [hidden], .ned [hidden], .nsh [hidden] { display: none !important; }
+.attn.nplus { right: 12px; }
+.attn.nfilter { right: auto; left: 12px; width: auto; min-width: 44px; padding: 0 10px 0 14px; gap: 2px; border-radius: 22px; font: 600 15px/1 var(--font-body); }
+.attn.nfilter .ic { width: 16px; height: 16px; stroke-width: 2.2; }
+.nsearch { display: flex; align-items: center; }
+.nsearch .search { flex: 1; min-width: 0; }
+.ntxt { min-height: 44px; padding: 0 14px; border: 0; background: none; color: var(--accent); font: 400 17px/1.2 var(--font-body); cursor: pointer; transition: opacity .15s ease; }
+.ntxt:active { opacity: .5; }
+.nsearch .ntxt { padding: 0 16px 0 4px; }
+.nbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; color: var(--text); font: 600 16px/1.2 var(--font-body); cursor: pointer; transition: transform .2s var(--n-ease), opacity .15s ease; --frost-blur: 12px; }
+.nbtn:active:not(:disabled) { transform: scale(.96); }
+.nbtn:disabled { opacity: .45; cursor: default; }
+.nbtn.tint { color: var(--accent-text); }
+.nseg { --i: 0; position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); height: 40px; margin: 8px 16px 6px; padding: 3px; border-radius: 999px; --frost-blur: 16px; }
+.nseg > button { position: relative; z-index: 1; min-width: 0; padding: 0 6px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font: 600 14px/1 var(--font-body); cursor: pointer; transition: color .2s ease, opacity .15s ease; }
+.nseg > button:active { opacity: .6; }
+.nseg > button[aria-selected="true"] { color: var(--text); }
+.nseg-thumb { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: 999px; background: color-mix(in srgb, var(--text) 13%, transparent); box-shadow: 0 1px 4px rgb(0 0 0 / 14%); transform: translateX(calc(var(--i) * 100%)); transition: transform .35s var(--n-ease); }
+.nseg.mini { height: 32px; margin: 0 0 12px; width: 190px; }
+.nseg.mini > button { font-size: 13px; }
+.nseg > button:focus-visible, .nbtn:focus-visible, .ntxt:focus-visible, .nrow:focus-visible, .nfh:focus-visible, .nchip:focus-visible, .ntk-box:focus-visible, .nmenu button:focus-visible, .nsh-pill:focus-visible, .ned-back:focus-visible, .ned-save:focus-visible, .ng-pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nbanner { display: flex; align-items: center; gap: 10px; margin: 8px 16px; padding: 10px 14px; border-radius: 20px; background: color-mix(in srgb, var(--warn) 16%, transparent); font-size: 15px; }
+.nbanner[data-tone="error"] { background: color-mix(in srgb, var(--danger) 16%, transparent); }
+.nbanner .ic { width: 20px; height: 20px; color: var(--warn); }
+.nbanner[data-tone="error"] .ic { color: var(--danger); }
+.nbanner span { flex: 1; min-width: 0; }
+.nbanner .ntxt { min-height: 32px; padding: 0 4px; }
+.npane { padding-bottom: 24px; }
+.nchips { display: flex; gap: 8px; margin: 10px 0 2px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+.nchips::-webkit-scrollbar { display: none; }
+.nchip { flex: none; min-height: 34px; padding: 0 14px; border: 0; border-radius: 17px; background: var(--fill-group); color: var(--text); font: 500 15px/1 var(--font-body); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+.nchip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+.nfh { display: flex; align-items: center; gap: 8px; width: calc(100% - 40px); min-height: 44px; margin: 14px 20px 2px; padding: 0; border: 0; background: none; color: var(--text); font: 700 20px/1.25 var(--font-body); text-align: left; cursor: pointer; }
+.nfh .ic { width: 16px; height: 16px; stroke-width: 2.4; color: var(--text-muted); transition: transform .25s var(--n-ease); }
+.nfh[aria-expanded="false"] .ic { transform: rotate(-90deg); }
+.nfh i { width: 9px; height: 9px; border-radius: 50%; background: var(--fc, var(--f-general)); flex: none; }
+.nfh small { margin-left: auto; color: var(--text-muted); font: 400 15px/1 var(--font-body); }
+.nrow { display: grid; gap: 1px; width: 100%; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: background-color .15s ease; }
+.nrow:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.nrow .note-meta span { flex: 1; min-width: 0; }
+.nrow mark { background: color-mix(in srgb, var(--accent) 32%, transparent); color: inherit; border-radius: 3px; }
+.nrow .nk { color: var(--accent); font-weight: 500; font-size: 13px; }
+.nsw { overflow: hidden; touch-action: pan-y; }
+.nsw-act { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 22px; font: 600 15px/1 var(--font-body); color: #fff; }
+.nsw-act.l { left: 0; background: var(--success-bg, color-mix(in srgb, var(--accent) 88%, #000)); }
+.nsw-act.r { right: 0; background: color-mix(in srgb, var(--danger) 88%, #000); }
+.nsw-act .ic { width: 22px; height: 22px; margin-right: 8px; }
+.nsw-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 16px; background: var(--n-row); transform: translate3d(var(--dx, 0), 0, 0); transition: transform .35s var(--n-ease); }
+.nsw[data-drag] .nsw-row { transition: none; }
+.ntk-box { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -8px -9px -8px -10px; padding: 0; border: 0; background: none; cursor: pointer; }
+.ntk-box i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--text-muted); transition: background-color .2s ease, border-color .2s ease; }
+.ntk-box i .ic { width: 14px; height: 14px; stroke-width: 3; color: var(--accent-text); opacity: 0; transition: opacity .15s ease; }
+.ntk-box[aria-checked="true"] i { background: var(--accent); border-color: var(--accent); }
+.ntk-box[aria-checked="true"] i .ic { opacity: 1; }
+.ntk-box[data-p="high"] i { border-color: var(--danger); }
+.ntk-box[data-p="medium"] i { border-color: var(--warn); }
+.ntk-main { flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; border: 0; padding: 0; background: none; color: var(--text); font: inherit; cursor: pointer; }
+.ntk-main b { font-weight: 500; font-size: 17px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ntk-main small { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 13px; line-height: 16px; }
+.ntk-main small i { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--fc, var(--f-general)); }
+.ntk-main small .ic { width: 13px; height: 13px; }
+.ntk-main small .hi { color: var(--danger); }
+.ntk-main small .md { color: var(--warn); }
+.ntk-due { flex: none; font-size: 15px; color: var(--text-muted); }
+.ntk-done .ntk-main b { color: var(--text-muted); text-decoration: line-through; }
+.nsec-od { color: var(--danger); }
+.nsw + .nsw .nsw-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--sep); }
+.ntoast[hidden], .nscrim[hidden], .nmenu[hidden], .nsh[hidden] { display: none; }
+.phone[data-gm] .navbar .nav-title { opacity: 1; }
+.phone[data-gm] #notes-scroll .large-title, .phone[data-gm] #notes-scroll .nsearch { display: none; }
+.ngraph::before { content: ""; position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: 232px; background: linear-gradient(to bottom, var(--page) 58%, transparent); pointer-events: none; }
+.ng-tools, .ng-sel, .ng-pills { z-index: 2; }
+.ng-pill .ic { width: 16px; height: 16px; }
+.ng-tog { display: flex; justify-content: flex-end; margin: 10px 16px 0; }
+.nf .nseg { margin: 0 0 0 auto; width: 200px; }
+.nsh { color-scheme: light; }
+:root[data-theme="dark"] .nsh { color-scheme: dark; }
+.nf > input[type="date"], .nf > input[type="time"] { text-align: right; min-height: 36px; font-size: 17px; }
+.nsec-n { margin-left: 6px; color: var(--text-muted); font-weight: 400; font-size: 17px; }
+.nskel { display: grid; gap: 10px; margin: 18px 16px; }
+.nskel i { height: 58px; border-radius: 20px; background: linear-gradient(100deg, var(--fill-group) 30%, color-mix(in srgb, var(--text) 12%, transparent) 50%, var(--fill-group) 70%) 0 0 / 220% 100%; animation: nshim 1.4s linear infinite; }
+@keyframes nshim { to { background-position: -220% 0; } }
+.nstate { display: grid; justify-items: center; gap: 12px; padding: 56px 32px; text-align: center; }
+.nstate .ic { width: 44px; height: 44px; color: var(--text-muted); stroke-width: 1.4; }
+.nstate p { margin: 0; font-size: 17px; font-weight: 600; }
+.nmatch-h { margin: 18px 20px 6px; color: var(--text-muted); font: 600 13px/1.2 var(--font-body); text-transform: none; }
+/* Graph */
+.ngraph { position: absolute; inset: 0; background: var(--ambient); background-color: var(--page); touch-action: none; }
+.ng-cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; outline: none; cursor: grab; }
+.ng-cv:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+.ng-load { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.ng-load .ic { width: 32px; height: 32px; animation: gspin .9s linear infinite; color: var(--text-muted); }
+.ng-tools { position: absolute; right: 16px; bottom: 96px; display: flex; flex-direction: column; gap: 10px; }
+.ng-sel { position: absolute; left: 16px; right: 76px; bottom: 96px; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 8px 8px 18px; border-radius: 30px; --frost-blur: 22px; }
+.ng-st { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ng-st b { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ng-st small { color: var(--text-muted); font-size: 13px; }
+.ng-pills { position: absolute; left: 0; right: 0; bottom: 40px; display: flex; gap: 8px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+.ng-pills::-webkit-scrollbar { display: none; }
+.ng-pill { flex: none; display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 18px; color: var(--text); font: 500 14px/1 var(--font-body); cursor: pointer; --frost-blur: 14px; }
+.ng-pill i { width: 9px; height: 9px; border-radius: 50%; background: var(--fc, var(--f-general)); }
+.ng-pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+.phone[data-scr="notes"][data-ngraph] .ngraph { display: block; }
+#notes-scroll[data-mode="graph"] { overflow: hidden; pointer-events: none; z-index: 3; }
+#notes-scroll[data-mode="graph"] > * { pointer-events: auto; }
+#notes-scroll[data-mode="graph"] .npane, #notes-scroll[data-mode="graph"] .nskel { display: none; }
+/* Editor: pushed screen */
+.ned { position: absolute; inset: 0; z-index: 12; background: var(--ambient); background-color: var(--page); transform: translate3d(100%, 0, 0); visibility: hidden; transition: transform .42s var(--n-ease), visibility 0s .42s; }
+.ned.open { transform: none; visibility: visible; transition-delay: 0s; }
+.ned-edge { position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: calc(var(--safe-top) + var(--nav-h) + 16px); background: linear-gradient(to bottom, var(--g-fill-bar) 62%, transparent); -webkit-backdrop-filter: blur(18px) saturate(var(--g-sat)); backdrop-filter: blur(18px) saturate(var(--g-sat)); -webkit-mask-image: linear-gradient(#000 66%, transparent); mask-image: linear-gradient(#000 66%, transparent); pointer-events: none; }
+.ned-bar { position: absolute; z-index: 2; top: var(--safe-top); left: 0; right: 0; height: var(--nav-h); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px; }
+.ned-back { display: inline-flex; align-items: center; gap: 2px; height: 44px; padding: 0 16px 0 10px; border: 0; border-radius: 999px; color: var(--accent); font: 400 17px/1 var(--font-body); cursor: pointer; --frost-blur: 12px; }
+.ned-back .ic { width: 22px; height: 22px; stroke-width: 2.2; }
+.ned-st { flex: 1; min-width: 0; text-align: center; color: var(--text-muted); font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ned-st[data-tone="error"] { color: var(--danger); }
+.ned-save { height: 44px; padding: 0 20px; border: 0; border-radius: 999px; font: 600 16px/1 var(--font-body); cursor: pointer; --frost-blur: 12px; transition: opacity .2s ease, transform .2s var(--n-ease); }
+.ned-save:active:not(:disabled) { transform: scale(.95); }
+.ned-save:disabled { opacity: .4; cursor: default; }
+.ned-scroll { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: calc(var(--safe-top) + var(--nav-h) + 14px) 16px 48px; }
+.ned-scroll::-webkit-scrollbar { display: none; }
+.ned-title { margin: 0 4px 4px; font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.ned-meta { margin: 0 4px 14px; color: var(--text-muted); font-size: 13px; }
+.ned-ta { display: block; width: 100%; min-height: 300px; margin: 0; padding: 16px; border: 0; border-radius: 26px; outline: 0; resize: none; background: var(--fill-group); color: var(--text); font: 15px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.ned-ta:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ned-prev { padding: 16px 18px; border-radius: 26px; background: var(--fill-group); font-size: 16px; line-height: 1.55; min-height: 300px; }
+.ned-prev h1, .ned-prev h2, .ned-prev h3 { margin: 14px 0 6px; line-height: 1.25; }
+.ned-prev h1 { font-size: 22px; } .ned-prev h2 { font-size: 19px; } .ned-prev h3 { font-size: 17px; }
+.ned-prev > :first-child { margin-top: 0; }
+.ned-prev p { margin: 0 0 10px; }
+.ned-prev ul { margin: 0 0 10px; padding-left: 22px; }
+.ned-prev a { color: var(--accent); text-decoration: none; }
+.ned-prev code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; padding: 1px 5px; border-radius: 6px; background: color-mix(in srgb, var(--text) 10%, transparent); }
+.ned-h { margin: 22px 4px 8px; font-size: 20px; line-height: 25px; font-weight: 700; }
+.ned .group { margin: 0; }
+/* Sheets */
+.nscrim { position: absolute; inset: 0; z-index: 29; background: rgb(0 0 0 / 30%); opacity: 0; transition: opacity .3s ease; }
+.nscrim.on { opacity: 1; }
+.nsh { position: absolute; z-index: 30; left: 8px; right: 8px; bottom: 8px; height: var(--nh, 520px); max-height: calc(100% - var(--safe-top) - 8px); display: flex; flex-direction: column; padding: 8px 18px 18px; border-radius: 44px; background: var(--g-fill-bar); --frost-blur: 26px; visibility: hidden; transform: translate3d(0, calc(100% + 16px), 0); transition: transform .45s var(--n-ease), height .35s var(--n-ease), visibility 0s .45s; overflow: hidden; }
+.nsh.open { visibility: visible; transform: none; transition-delay: 0s; }
+.nsh[data-d="m"] { --nh: 520px; }
+.nsh[data-d="s"] { --nh: 300px; }
+.nsh[data-d="l"] { --nh: calc(100% - var(--safe-top) - 8px); }
+.nsh > :not(.grab) { position: relative; z-index: 1; }
+.nsh-hd { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; padding-top: 6px; }
+.nsh-hd h2 { margin: 0; flex: 1; text-align: center; font-size: 17px; line-height: 22px; font-weight: 600; }
+.nsh-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; display: flex; flex-direction: column; gap: 12px; padding: 6px 0 4px; }
+.nsh-body::-webkit-scrollbar { display: none; }
+.nsh-body .group { margin: 0; border-radius: 22px; }
+.nf { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 16px; }
+.nf > span { flex: none; min-width: 64px; color: var(--text-muted); font-size: 15px; }
+.nf > input, .nf > textarea { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 17px/1.3 var(--font-body); padding: 8px 0; }
+.nf > input::placeholder, .nf > textarea::placeholder { color: var(--text-muted); opacity: 1; }
+.nf:has(input:focus-visible, textarea:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 22px; }
+.nf.ta { align-items: stretch; }
+.nf.ta > textarea { min-height: 150px; resize: none; font: 15px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.nsh-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nsh-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); font: 500 16px/1 var(--font-body); cursor: pointer; transition: background-color .2s ease; }
+.nsh-pill .ic { width: 18px; height: 18px; color: var(--accent); }
+.nsh-pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+.nsh-pill[aria-pressed="true"] .ic { color: inherit; }
+.nsh-lab { margin: 4px 4px -4px; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+.nsh-acts { display: grid; gap: 10px; }
+.nsh-acts .nbtn { width: 100%; }
+.nsh-acts .danger { color: var(--danger); }
+.ncmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ncmp > div { padding: 12px 14px; border-radius: 20px; background: var(--fill-group); font-size: 14px; line-height: 1.5; min-width: 0; overflow-wrap: anywhere; }
+.ncmp b { display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-muted); }
+/* Menu and toast */
+.nmenu { position: absolute; z-index: 34; min-width: 200px; padding: 6px; border-radius: 22px; background: var(--g-fill-bar); --frost-blur: 26px; }
+.nmenu > button { position: relative; z-index: 1; display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 0 14px; border: 0; border-radius: 16px; background: none; color: var(--text); font: 400 17px/1.2 var(--font-body); text-align: left; cursor: pointer; }
+.nmenu > button:active { background: color-mix(in srgb, var(--text) 10%, transparent); }
+.nmenu > button .ic { width: 20px; height: 20px; color: var(--text-muted); }
+.nmenu > button[aria-checked="true"] .ic.ck { color: var(--accent); }
+.nmenu > button .ck { margin-left: auto; opacity: 0; }
+.nmenu > button[aria-checked="true"] .ck { opacity: 1; }
+.ntoast { position: absolute; z-index: 35; left: 16px; right: 16px; bottom: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 6px 4px 20px; border-radius: 26px; background: var(--g-fill-bar); --frost-blur: 24px; font-size: 15px; font-weight: 500; }
+.ntoast > * { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .nseg-thumb, .nsw-row, .ned, .nsh, .nscrim, .nfh .ic { transition: none; }
+  .nskel i, .ng-load .ic { animation: none; }
+}
 </style>
 </head>
 <body>
@@ -1224,6 +1492,14 @@ button.wsh-row { cursor: pointer; }
     <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M21 10h-6V4"/><path d="M3 14h6v6"/><path d="m15 10 7-7"/><path d="m2 22 7-7"/></symbol>
     <symbol id="i-up" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></symbol>
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-checklist" viewBox="0 0 24 24"><path d="m3.5 6.5 1.8 1.8 3-3.3"/><path d="M12 7h9"/><path d="m3.5 16.5 1.8 1.8 3-3.3"/><path d="M12 17h9"/></symbol>
+    <symbol id="i-graph" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="8" r="2.5"/><circle cx="9" cy="18" r="2.5"/><path d="m8.4 6.3 7.2 1.4M7.1 8.3l1.2 7.3M16.6 10.2l-6.2 6.3"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="m6 7 1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-rows" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/></symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
   </defs>
 </svg>
 <svg id="lens-defs" width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true" focusable="false"></svg>
@@ -1339,6 +1615,49 @@ button.wsh-row { cursor: pointer; }
         <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
       </label>
     </div>
+    <div class="ctl" id="ctl-gate" title="Sign-in and Lock screens. Also ?screen=signin&state=idle|signing|web|failed|denied|offline and ?screen=lock&state=waiting|failed|passcode|signedout, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Sign-in and Lock</span>
+        <select id="gate-sel">
+          <option value="">App (no gate)</option>
+          <option value="signin:idle">Sign-in: Idle</option>
+          <option value="signin:signing">Sign-in: Signing in</option>
+          <option value="signin:web">Sign-in: Web sheet</option>
+          <option value="signin:failed">Sign-in: Failed</option>
+          <option value="signin:denied">Sign-in: Not authorised</option>
+          <option value="signin:offline">Sign-in: Offline</option>
+          <option value="lock:waiting">Lock: Waiting for Face ID</option>
+          <option value="lock:failed">Lock: Face ID failed</option>
+          <option value="lock:passcode">Lock: Passcode</option>
+          <option value="lock:signedout">Lock: Signed out</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-notes" title="Notes area. Also ?screen=notes&tab=notes|tasks|graph&state=default|empty|loading|error|offline|search|noresults|newnote|newtask|editor|conflict, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Notes</span>
+        <select id="notes-sel">
+          <option value="">Notes: choose</option>
+          <option value="notes:default">Notes: List</option>
+          <option value="tasks:default">Notes: Tasks</option>
+          <option value="graph:default">Notes: Graph</option>
+          <option value="notes:search">Notes: Search</option>
+          <option value="notes:noresults">Notes: No results</option>
+          <option value="notes:empty">Notes: Empty</option>
+          <option value="tasks:empty">Tasks: Empty</option>
+          <option value="graph:empty">Graph: Empty</option>
+          <option value="notes:loading">Notes: Loading</option>
+          <option value="notes:error">Notes: Error</option>
+          <option value="notes:offline">Notes: Offline</option>
+          <option value="notes:editor">Notes: Editor</option>
+          <option value="notes:conflict">Notes: Conflict</option>
+          <option value="notes:newnote">Notes: New note</option>
+          <option value="tasks:newtask">Notes: New task</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
   </div>
 </header>
 
@@ -1438,40 +1757,48 @@ button.wsh-row { cursor: pointer; }
           </section>
 
           <section class="view" id="view-notes" aria-labelledby="t-notes" hidden>
-            <div class="scroller" id="notes-scroll" data-large="true">
+            <div class="ngraph" id="ngraph" hidden>
+              <canvas class="ng-cv" id="ng-cv" role="img" tabindex="0"></canvas>
+              <div class="ng-load" id="ng-load" role="status" hidden><svg class="ic" aria-hidden="true"><use href="#i-spin"/></svg></div>
+              <div class="ng-tools">
+                <button class="g-btn glass" id="ng-list" type="button"><svg class="ic" aria-hidden="true"><use href="#i-rows"/></svg></button>
+                <button class="g-btn glass" id="ng-reset" type="button"><svg class="ic" aria-hidden="true"><use href="#i-retry"/></svg></button>
+              </div>
+              <div class="ng-sel glass" id="ng-sel" data-flat hidden>
+                <span class="ng-st"><b id="ng-sel-t"></b><small id="ng-sel-m"></small></span>
+                <button class="nbtn tint" id="ng-open" type="button"></button>
+              </div>
+              <div class="ng-pills" id="ng-pills" role="group"></div>
+            </div>
+            <div class="scroller" id="notes-scroll" data-large="true" data-mode="notes">
               <h2 class="large-title" id="t-notes">Notes</h2>
-              <div class="search glass" role="search">
-                <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-                <input id="note-search" type="search" aria-label="Search notes" placeholder="Search" autocomplete="off">
-                <button class="clear" id="note-clear" type="button" aria-label="Clear search" hidden><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+              <div class="nsearch">
+                <div class="search glass" role="search">
+                  <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                  <input id="note-search" type="search" placeholder="Search" autocomplete="off" maxlength="200">
+                  <button class="clear" id="note-clear" type="button" hidden><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+                </div>
+                <button class="ntxt" id="n-cancel" type="button" hidden></button>
               </div>
-              <div id="notes-groups">
-                <section class="nsec">
-                  <h3 class="sec">Today</h3>
-                  <ul class="group">
-                    <li class="note"><span class="note-title">Packing list</span><span class="note-meta"><time>9:12</time><span>Passport, charger, sunscreen, the good headphones.</span></span></li>
-                    <li class="note"><span class="note-title">Meeting follow-ups</span><span class="note-meta"><time>8:40</time><span>Send the notes, book the next review, ask about the budget.</span></span></li>
-                  </ul>
-                </section>
-                <section class="nsec">
-                  <h3 class="sec">Previous 7 Days</h3>
-                  <ul class="group">
-                    <li class="note"><span class="note-title">Book ideas</span><span class="note-meta"><time>Monday</time><span>A slow detective story set on a canal boat.</span></span></li>
-                    <li class="note"><span class="note-title">Gift ideas</span><span class="note-meta"><time>Sunday</time><span>Something for the garden, a good notebook, tea.</span></span></li>
-                    <li class="note"><span class="note-title">Garden jobs</span><span class="note-meta"><time>Friday</time><span>Prune the roses, move the pots, order compost.</span></span></li>
-                    <li class="note"><span class="note-title">Podcast queue</span><span class="note-meta"><time>Thursday</time><span>Three episodes on sleep, one on bridges.</span></span></li>
-                  </ul>
-                </section>
-                <section class="nsec">
-                  <h3 class="sec">Earlier</h3>
-                  <ul class="group">
-                    <li class="note"><span class="note-title">Lentil soup</span><span class="note-meta"><time>3 Oct</time><span>Onion, carrot, cumin, one tin of tomatoes, patience.</span></span></li>
-                    <li class="note"><span class="note-title">Birthday plans</span><span class="note-meta"><time>28 Sep</time><span>Table for six, something with candles, no speeches.</span></span></li>
-                    <li class="note"><span class="note-title">Trip budget</span><span class="note-meta"><time>14 Sep</time><span>Train, hotel, food, one splurge.</span></span></li>
-                  </ul>
-                </section>
+              <div class="nseg glass" id="nseg" data-flat role="tablist" style="--n:3">
+                <span class="nseg-thumb" aria-hidden="true"></span>
+                <button type="button" role="tab" data-v="notes"></button>
+                <button type="button" role="tab" data-v="tasks"></button>
+                <button type="button" role="tab" data-v="graph"></button>
               </div>
-              <p class="empty" id="notes-empty" hidden>No notes match your search.</p>
+              <div class="nseg glass" id="nscope" data-flat role="tablist" style="--n:3" hidden>
+                <span class="nseg-thumb" aria-hidden="true"></span>
+                <button type="button" role="tab" data-v="all"></button>
+                <button type="button" role="tab" data-v="notes"></button>
+                <button type="button" role="tab" data-v="tasks"></button>
+              </div>
+              <div class="nbanner" id="nbanner" role="status" hidden><svg class="ic" aria-hidden="true"><use href="#i-offline"/></svg><span id="nbanner-t"></span><button class="ntxt" id="nbanner-b" type="button" hidden></button></div>
+              <div class="npane" id="np-notes" role="tabpanel"></div>
+              <div class="npane" id="np-tasks" role="tabpanel"></div>
+              <div class="npane" id="np-glist" role="tabpanel"></div>
+              <div class="npane" id="np-search" role="tabpanel"></div>
+              <div class="nskel" id="nskel" role="status" hidden><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="nstate" id="nstate" hidden><svg class="ic" aria-hidden="true"><use id="nstate-ic" href="#i-notes"/></svg><p id="nstate-t"></p><button class="nbtn glass" id="nstate-b" type="button" hidden></button></div>
             </div>
           </section>
 
@@ -1488,6 +1815,8 @@ button.wsh-row { cursor: pointer; }
 
         <header class="navbar" id="navbar">
           <p class="nav-title" id="nav-title">Chat</p>
+          <button class="attn nfilter" id="nfilter" type="button" aria-haspopup="menu" aria-expanded="false" hidden><span id="nfilter-t"></span><svg class="ic" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button class="attn nplus" id="nplus" type="button" aria-haspopup="menu" aria-expanded="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
           <button class="attn" id="attn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="apv" aria-label="Pending confirmations, 1"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg><span class="attn-n" id="attn-n" aria-hidden="true">1</span></button>
         </header>
         <div class="apv-scrim" id="apv-scrim" hidden></div>
@@ -1597,6 +1926,41 @@ button.wsh-row { cursor: pointer; }
           </div>
           <div class="sheet-body" id="sheet-body"></div>
         </section>
+
+        <section class="ned" id="ned" aria-labelledby="ned-title" inert>
+          <div class="ned-edge" aria-hidden="true"></div>
+          <header class="ned-bar">
+            <button class="ned-back glass" id="ned-back" type="button" data-flat><svg class="ic" aria-hidden="true"><use href="#i-chev-left"/></svg><span id="ned-back-t"></span></button>
+            <span class="ned-st" id="ned-st" role="status"></span>
+            <button class="ned-save glass tint" id="ned-save" type="button" data-flat></button>
+          </header>
+          <div class="ned-scroll" id="ned-scroll">
+            <h1 class="ned-title" id="ned-title"></h1>
+            <p class="ned-meta" id="ned-meta"></p>
+            <div class="nseg mini glass" id="ned-mode" data-flat role="tablist" style="--n:2">
+              <span class="nseg-thumb" aria-hidden="true"></span>
+              <button type="button" role="tab" data-v="edit"></button>
+              <button type="button" role="tab" data-v="preview"></button>
+            </div>
+            <textarea class="ned-ta" id="ned-ta" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+            <div class="ned-prev" id="ned-prev" hidden></div>
+            <h3 class="ned-h" id="ned-conn-h"></h3>
+            <ul class="group" id="ned-conn"></ul>
+          </div>
+        </section>
+
+        <div class="nscrim" id="nscrim" hidden></div>
+        <section class="nsh glass" id="nsh" data-flat role="dialog" aria-modal="true" aria-labelledby="nsh-title" data-d="m" inert>
+          <span class="grab" aria-hidden="true"></span>
+          <div class="nsh-hd">
+            <button class="g-btn glass" id="nsh-x" type="button" data-flat><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
+            <h2 id="nsh-title"></h2>
+            <button class="g-btn glass tint" id="nsh-ok" type="button" data-flat><svg class="ic" aria-hidden="true"><use href="#i-tick"/></svg></button>
+          </div>
+          <div class="nsh-body" id="nsh-body"></div>
+        </section>
+        <div class="nmenu glass" id="nmenu" data-flat role="menu" hidden></div>
+        <div class="ntoast glass" id="ntoast" data-flat role="status" hidden><span id="ntoast-t"></span><button class="ntxt" id="ntoast-b" type="button"></button></div>
         </div>
 
         <div class="edge-grab" id="edge-grab" aria-hidden="true"></div>
@@ -1636,6 +2000,52 @@ button.wsh-row { cursor: pointer; }
           </div>
         </div>
 
+        <div class="gate" id="gate" data-kind="signin" data-state="idle" role="region" aria-label="Jarvis" inert>
+          <div class="gate-bg"></div>
+          <div class="gate-body">
+            <div class="gate-gap"></div>
+            <h2 class="gate-word" id="g-word">Jarvis</h2>
+            <div class="fid" id="g-fid" hidden>
+              <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path class="fid-c" d="M14 6h-4a4 4 0 0 0-4 4v4M34 6h4a4 4 0 0 1 4 4v4M14 42h-4a4 4 0 0 1-4-4v-4M34 42h4a4 4 0 0 0 4-4v-4"/>
+                <path class="fid-f" d="M17 19v3.5M31 19v3.5M24 18v8.5a2 2 0 0 1-2 2h-1M17 33.5c2 2.2 4.2 3.2 7 3.2s5-1 7-3.2"/>
+              </svg>
+            </div>
+            <div class="gate-foot">
+              <p class="gate-msg" id="g-msg" role="alert" hidden><svg class="ic" id="g-msg-ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"></svg><span id="g-msg-t"></span></p>
+              <button class="gbtn primary" id="g-btn" type="button">
+                <span class="spin" id="g-spin" hidden aria-hidden="true"></span>
+                <svg class="g-ms" id="g-ms" viewBox="0 0 21 21" aria-hidden="true" focusable="false"><rect width="10" height="10" fill="#f25022"/><rect x="11" width="10" height="10" fill="#7fba00"/><rect y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg>
+                <span id="g-btn-t"></span>
+              </button>
+              <button class="gbtn glass" id="g-btn2" type="button" hidden></button>
+            </div>
+          </div>
+        </div>
+        <div class="gsheet" id="gweb" role="dialog" aria-modal="true" aria-label="login.microsoftonline.com" inert>
+          <div class="gs-panel">
+            <div class="gs-bar">
+              <button class="gs-cancel" id="gweb-cancel" type="button"></button>
+              <div class="gs-url"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg><span>login.microsoftonline.com</span></div>
+              <span class="gs-pad" aria-hidden="true"></span>
+            </div>
+            <div class="gs-page">
+              <svg class="g-ms lg" viewBox="0 0 21 21" aria-hidden="true" focusable="false"><rect width="10" height="10" fill="#f25022"/><rect x="11" width="10" height="10" fill="#7fba00"/><rect y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg>
+              <h3 id="gweb-h"></h3>
+              <label class="gs-field"><span class="sr" id="gweb-lbl"></span><input id="gweb-in" type="email" autocomplete="off" inputmode="email"></label>
+              <button class="gs-next" id="gweb-next" type="button"></button>
+            </div>
+          </div>
+        </div>
+        <div class="gsheet" id="gpass" role="dialog" aria-modal="true" aria-label="Passcode" inert>
+          <div class="gp-wrap">
+            <h3 id="gp-title"></h3>
+            <div class="gp-dots" id="gp-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="gp-keys" id="gp-keys"></div>
+            <button class="gp-cancel" id="gp-cancel" type="button"></button>
+          </div>
+        </div>
+
         <div class="home" aria-hidden="true"></div>
       </div>
     </div>
@@ -1667,6 +2077,31 @@ button.wsh-row { cursor: pointer; }
         <tr><th scope="row">Plus: Voice language (Chat and Voice)</th><td class="st">Web today</td><td>Web today: voice.defaultLanguage, 'da' or 'en' only, default Danish (settings.voice.default_language in apps/backend/src/core/settings.ts, GET/PATCH /settings, SettingsPage.tsx). The backend picks the Danish voice agent, transcribe model and voice (da-DK-JeppeNeural) or the English ones (voice/realtime.ts, relay.ts). Web mirror (ConversationMoreMenu.tsx, VoiceControls.tsx): the choice applies to chat now and to your next voice session; the live session keeps its language. Needs new backend: none. Same shared setting, no iOS-specific path; no Auto and no other languages.</td></tr>
         <tr><th scope="row">Orb behind the messages</th><td class="st">Web today</td><td>JarvisStage.tsx / .css: the stage orb sits behind the app, calm at idle (awake 0) and awake 0.72 while Jarvis works. The mock runs the web's own orb code (JarvisStageOrb.ts and jarvis-orb-motion.ts, three.js, bundled to orb-web.js); the room scene around it is not drawn. Mic and speech levels are sample values. If WebGL fails, a 2D imitation shows instead.</td></tr>
         <tr><th scope="row">Working line with the orb mark</th><td class="st">Web today</td><td>ToolCallChip.tsx (LivePhrase, TypedPhrase: 34 ms per character, caret, two light sweeps), live-phrase.ts (phrase from the running tool; Thinking… / Writing it up…), InputOrbCore.tsx variant "core" (the amber brain mark), styles.css .working-core. The web changes the line when the phase or tool changes; the mock rotates sample phases every 3.6 s.</td></tr>
+      </tbody>
+    </table>
+    <h2>Notes area</h2>
+    <table>
+      <thead><tr><th scope="col">Item</th><th scope="col">Status</th><th scope="col">Web today / backend</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Segments Notes / Tasks / Graph, search scopes All / Notes / Tasks</th><td class="st">Web today</td><td>Web today: NotesArea.tsx (tabs), /knowledge/search (notes and tasks scopes). The sample data is fictional.</td></tr>
+        <tr><th scope="row">Notes list with folders</th><td class="st">Web today</td><td>Web today: NotesTree.tsx over GET /notes/tree (People, Work, Personal, General, vault root). Native rows and collapsible groups are layout only.</td></tr>
+        <tr><th scope="row">Note editor, save, conflict</th><td class="st">Web today</td><td>Web today: GET/PUT /notes/note with the sha check; a stale sha returns 409 and the web shows the conflict. The Markdown preview, Reload / Compare / Keep mine and the discard sheet are client UI over the same routes.</td></tr>
+        <tr><th scope="row">New note and folder picker</th><td class="st">Web today</td><td>Web today: NoteFolderPicker.tsx, POST /notes/note. New folder uses the same create route.</td></tr>
+        <tr><th scope="row">Tasks: Overdue, Today, Upcoming, No date; tick</th><td class="st">Web today</td><td>Web today: TasksPanel.tsx over GET /vault/tasks and the complete route; Personal and Work scope, due date and time.</td></tr>
+        <tr><th scope="row">Priority when creating a task</th><td class="st new">Proposed</td><td>Needs new backend (Proposed): the create route has no priority; the update route has it.</td></tr>
+        <tr><th scope="row">Swipe to delete a note or task</th><td class="st new">Proposed</td><td>Needs new backend (Proposed): there is no delete route; the chat tool vault_delete needs a Now approval. Swipe to complete uses the existing complete route.</td></tr>
+        <tr><th scope="row">Recents ordering, offline cache</th><td class="st new">Proposed</td><td>Needs new backend (Proposed): no recents endpoint; offline shows a session copy with writes disabled.</td></tr>
+        <tr><th scope="row">Graph canvas</th><td class="st">Web today</td><td>Web today: GET /knowledge/graph (nodes, links, similar edges), the web graph view. Pan, zoom, tap and neighbour highlight are native client code, no backend change. The List toggle is for accessibility.</td></tr>
+      </tbody>
+    </table>
+    <h2>Sign-in and Lock</h2>
+    <table>
+      <thead><tr><th scope="col">Item</th><th scope="col">Status</th><th scope="col">Web today / backend</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Sign in with Microsoft</th><td class="st">Web today</td><td>Web today: Microsoft Entra sign-in via MSAL (apps/web/src/auth.ts, "Your Microsoft sign-in needs attention. Sign in again."); the backend verifies the Entra token (apps/backend/src/auth/verify.ts, hook.ts). iOS: the system web-authentication sheet returns the same token, no new backend path.</td></tr>
+        <tr><th scope="row">Not authorised</th><td class="st">Web today</td><td>Web today: the backend refuses any account that is not the owner (auth/session/routes.ts, 403) and the web shows the refusal without a name (App.test.tsx). iOS shows the same refusal and a Sign out button.</td></tr>
+        <tr><th scope="row">Failed and offline</th><td class="st">Web today</td><td>Web today: sign-in errors and an unreachable backend are shown by the web shell (auth.ts, backend-request.ts). iOS: short message plus Try again.</td></tr>
+        <tr><th scope="row">Lock with Face ID and passcode</th><td class="st">iOS native</td><td>iOS native: local biometric gate (LocalAuthentication, device passcode fallback after too many attempts). Needs new backend: none. It never leaves the device and does not change the session.</td></tr>
       </tbody>
     </table>
     <h2>Chat to Voice transition</h2>
@@ -2037,6 +2472,8 @@ button.wsh-row { cursor: pointer; }
     syncOrb();
     if (voiceHooks.onScreen) voiceHooks.onScreen(name);
   }
+  window.jvShowScreen = showScreen;
+  window.jvEdges = () => syncEdges();
 
   /* Escape closes the info popover, then the sidebar, then the keyboard, then the workspace sheet */
   document.addEventListener('keydown', e => {
@@ -2451,6 +2888,7 @@ button.wsh-row { cursor: pointer; }
   const LANG_NAME = { da: 'Danish', en: 'English' };
   function setLang(v, inVoice) {
     state.lang = v;
+    document.dispatchEvent(new CustomEvent('jv:lang', { detail: v }));
     ['#att-lang-v', '#vatt-lang-v'].forEach(s => { $(s).textContent = LANG_NAME[v]; });
     renderChips();
     announce('Voice language ' + LANG_NAME[v]);
@@ -3000,34 +3438,14 @@ button.wsh-row { cursor: pointer; }
     renderNow();
   };
 
-  /* Notes */
-  const search = $('#note-search'), clear = $('#note-clear'), empty = $('#notes-empty'), groups = $('#notes-groups');
-  function filterNotes() {
-    const q = search.value.trim().toLowerCase();
-    let shown = 0;
-    $$('.nsec', groups).forEach(sec => {
-      let any = 0;
-      $$('.note', sec).forEach(li => {
-        const hit = li.textContent.toLowerCase().includes(q);
-        li.hidden = !hit;
-        if (hit) any += 1;
-      });
-      sec.hidden = any === 0;
-      shown += any;
-    });
-    groups.hidden = shown === 0;
-    empty.hidden = shown !== 0;
-    clear.hidden = q === '';
-    syncEdges();
-  }
-  search.addEventListener('input', filterNotes);
-  clear.addEventListener('click', () => { search.value = ''; filterNotes(); search.focus(); });
+  /* Notes: the Notes area script is in its own block at the end of this file. */
 
   /* Orb: a glass sphere with a golden filament tangle, drawn on a canvas as an imitation of the web orb.
      The production orb is a Three.js scene; this only approximates it. */
   const orbFx = $('#orb-fx'), orbCtx = orbFx.getContext('2d');
   /* The real web orb (origin/main apps/web/src/JarvisStageOrb.ts + jarvis-orb-motion.ts, bundled into orb-web.js). If WebGL or the bundle is missing, the 2D imitation below stays. */
-  var orbGL = null, glTheme = '', glT0 = performance.now();
+  var orbGL = null, glTheme = '', glT0 = performance.now(), gatePulse = -1e9;
+  window.jvOrbPulse = () => { gatePulse = performance.now(); };
   try {
     if (window.JarvisOrbGL) {
       orbGL = window.JarvisOrbGL.create($('#orb-gl'));
@@ -3047,6 +3465,15 @@ button.wsh-row { cursor: pointer; }
     if (live && state.vmuted && m === 'listening') { st = 'idle'; awake = .8; }
     if (st === 'listening') input = .22 + .3 * Math.abs(Math.sin(t * 3.1)) * (.55 + .45 * Math.sin(t * .8));
     if (st === 'speaking') playback = .35 + .45 * Math.abs(Math.sin(t * 6.3) * Math.sin(t * 1.9 + .4));
+    if (phone.dataset.gate) {
+      const gs = phone.dataset.gst, calm = reduceMotion.matches, pu = calm ? 0 : Math.exp(-(now - gatePulse) / 420);
+      if (gs === 'signing' || gs === 'web') { st = 'thinking'; awake = calm ? .8 : .88 + .12 * Math.sin(t * 5.2); }
+      else {
+        awake = calm ? .34 : .34 + .1 * Math.sin(t * .9) + .32 * pu;
+        if (pu > .04) { st = 'listening'; input = .55 * pu; }
+      }
+      phone.style.setProperty('--gp', pu.toFixed(3));
+    }
     orbGL.frame(t, { awake, state: st, playback, input, reducedMotion: reduceMotion.matches });
   }
   const ORB_SIZE = 250, ORB_R = 52, ORB_PTS = 96;
@@ -3102,7 +3529,7 @@ button.wsh-row { cursor: pointer; }
     orbLast = now;
     orbV += (ORB_SPEED[orbMode()] - orbV) * Math.min(1, dt * 4);
     orbT += dt * orbV;
-    if (state.screen === 'voice' || now - orbDrawn > 32) { drawOrb(now); orbDrawn = now; }
+    if (state.screen === 'voice' || phone.dataset.gate || now - orbDrawn > 32) { drawOrb(now); orbDrawn = now; }
     orbRaf = requestAnimationFrame(orbFrame);
   }
   /* The one orb lives on the phone stage: it is drawn in Chat (capped at 30 fps, behind the messages) and Voice. With reduced motion, one still frame. */
@@ -3336,7 +3763,7 @@ button.wsh-row { cursor: pointer; }
   });
   // A swipe that starts anywhere in the right 12% opens it once it is clearly horizontal, so taps and scrolling there still work.
   phone.addEventListener('pointerdown', e => {
-    if (sbOpen || drag || e.button > 0 || e.target === edgeGrab || e.target.closest('input, textarea, video, .camtile, .sheet, .act, .apv, .wsheet, .kb')) return;
+    if (sbOpen || drag || e.button > 0 || e.target === edgeGrab || e.target.closest('input, textarea, video, .camtile, .sheet, .act, .apv, .wsheet, .kb, .gate, .gsheet, .nsw, .ngraph, .ned, .nsh, .nseg')) return;
     if (xFromRight(e) > phone.offsetWidth * .12) return;
     startDrag(e, phone, 0, false);
   });
@@ -4420,6 +4847,961 @@ button.wsh-row { cursor: pointer; }
     new ResizeObserver(() => refresh(el)).observe(el);
   });
   document.addEventListener('visibilitychange', () => ind.classList.remove('on'));
+})();
+
+/* Sign-in and Lock gate. Review states: ?screen=signin&state=idle|signing|web|failed|denied|offline, ?screen=lock&state=waiting|failed|passcode|signedout, &lang=en. */
+(() => {
+  const $ = s => document.querySelector(s);
+  const phone = $('#phone'), gate = $('#gate'), web = $('#gweb'), pass = $('#gpass'), pshell = $('#pshell'), sel = $('#gate-sel');
+  const orb = () => $('#orb');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const T = {
+    da: { signin: 'Log ind med Microsoft', signing: 'Logger ind', retry: 'Prøv igen', failed: 'Login mislykkedes', denied: 'Kontoen har ikke adgang', signout: 'Log ud', offline: 'Ingen forbindelse', unlock: 'Lås op', fidFail: 'Face ID mislykkedes', passcode: 'Adgangskode', enterPass: 'Indtast adgangskode', cancel: 'Annuller', signedout: 'Du er logget ud', login: 'Log ind', next: 'Næste', email: 'E-mail, telefon eller Skype' },
+    en: { signin: 'Sign in with Microsoft', signing: 'Signing in', retry: 'Try again', failed: 'Sign-in failed', denied: 'Account not allowed', signout: 'Sign out', offline: 'No connection', unlock: 'Unlock', fidFail: 'Face ID failed', passcode: 'Passcode', enterPass: 'Enter Passcode', cancel: 'Cancel', signedout: 'You are signed out', login: 'Sign in', next: 'Next', email: 'Email, phone, or Skype' }
+  };
+  const ICON = {
+    warn: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5"/><circle cx="12" cy="17.2" r=".6"/>',
+    deny: '<circle cx="12" cy="12" r="9"/><path d="m8.5 8.5 7 7M15.5 8.5l-7 7"/>',
+    wifi: '<path d="M2.5 9a15 15 0 0 1 19 0M5.7 12.6a10 10 0 0 1 12.6 0M9 16.2a5 5 0 0 1 6 0M3 3l18 18"/>',
+    user: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.7-5.5 7-5.5s6.2 1.9 7 5.5"/>'
+  };
+  const params = new URLSearchParams(location.search);
+  let lang = params.get('lang') === 'en' ? 'en' : 'da';
+  let kind = '', st = '', timer = 0, typed = '', saved = null;
+  const t = k => T[lang][k];
+
+  function setOrb(muted, conn) {
+    const o = orb();
+    if (!o) return;
+    if (muted) o.dataset.muted = '1'; else delete o.dataset.muted;
+    if (conn) o.dataset.conn = conn; else delete o.dataset.conn;
+  }
+  function render() {
+    if (!kind) return;
+    gate.dataset.kind = kind;
+    gate.dataset.state = st;
+    phone.dataset.gst = st;
+    const msg = $('#g-msg'), btn = $('#g-btn'), btn2 = $('#g-btn2');
+    const m = { msg: '', icon: '', tone: '' };
+    let label = t('signin'), busy = false, ms = true, second = '';
+    $('#g-word').hidden = kind !== 'signin';
+    $('#g-fid').hidden = kind !== 'lock';
+    if (kind === 'signin') {
+      if (st === 'signing' || st === 'web') { label = t('signing'); busy = true; ms = false; }
+      else if (st === 'failed') { Object.assign(m, { msg: t('failed'), icon: 'warn' }); label = t('retry'); ms = false; }
+      else if (st === 'denied') { Object.assign(m, { msg: t('denied'), icon: 'deny' }); label = t('signout'); ms = false; }
+      else if (st === 'offline') { Object.assign(m, { msg: t('offline'), icon: 'wifi' }); label = t('retry'); ms = false; }
+    } else {
+      ms = false;
+      label = t('unlock');
+      if (st === 'failed' || st === 'passcode') { Object.assign(m, { msg: st === 'failed' ? t('fidFail') : '', icon: 'warn' }); label = t('retry'); second = t('passcode'); }
+      else if (st === 'signedout') { Object.assign(m, { msg: t('signedout'), icon: 'user', tone: 'muted' }); label = t('login'); }
+    }
+    msg.hidden = !m.msg;
+    msg.dataset.tone = m.tone;
+    $('#g-msg-t').textContent = m.msg;
+    $('#g-msg-ic').innerHTML = ICON[m.icon] || '';
+    $('#g-msg-ic').setAttribute('fill', 'none');
+    $('#g-msg-ic').setAttribute('stroke', 'currentColor');
+    $('#g-msg-ic').setAttribute('stroke-width', '1.9');
+    $('#g-msg-ic').setAttribute('stroke-linecap', 'round');
+    $('#g-msg-ic').setAttribute('stroke-linejoin', 'round');
+    $('#g-btn-t').textContent = label;
+    $('#g-spin').hidden = !busy;
+    $('#g-ms').toggleAttribute('hidden', !ms);
+    btn.disabled = busy;
+    btn.setAttribute('aria-busy', String(busy));
+    btn2.hidden = !second;
+    btn2.textContent = second;
+    $('#gweb-cancel').textContent = t('cancel');
+    $('#gweb-h').textContent = t('login');
+    $('#gweb-lbl').textContent = t('email');
+    $('#gweb-in').placeholder = t('email');
+    $('#gweb-next').textContent = t('next');
+    $('#gp-title').textContent = t('enterPass');
+    $('#gp-cancel').textContent = t('cancel');
+    pass.setAttribute('aria-label', t('enterPass'));
+    setOrb(kind === 'signin' && st === 'denied', kind === 'signin' && st === 'offline' ? 'offline' : '');
+    openSheet(web, kind === 'signin' && st === 'web' ? 'web' : '');
+    openSheet(pass, kind === 'lock' && st === 'passcode' ? 'pass' : '');
+    if (sel) sel.value = kind + ':' + st;
+  }
+  function openSheet(el, mode) {
+    if (mode) el.dataset.open = mode; else delete el.dataset.open;
+    el.inert = !mode;
+    if (mode === 'pass') { typed = ''; dots(); }
+  }
+  function dots() { document.querySelectorAll('#gp-dots i').forEach((d, i) => { if (i < typed.length) d.dataset.on = ''; else delete d.dataset.on; }); }
+  function setGate(k, s) {
+    clearTimeout(timer);
+    if (!k) {
+      kind = ''; st = '';
+      delete phone.dataset.gate;
+      delete phone.dataset.gst;
+      phone.style.removeProperty('--gp');
+      gate.inert = true;
+      pshell.inert = false;
+      openSheet(web, ''); openSheet(pass, '');
+      if (saved) setOrb(saved.m, saved.c);
+      saved = null;
+      if (sel) sel.value = '';
+      return;
+    }
+    if (!kind) {
+      const o = orb();
+      saved = { m: !!(o && o.dataset.muted), c: (o && o.dataset.conn) || '' };
+    }
+    kind = k; st = s;
+    phone.dataset.gate = k;
+    gate.inert = false;
+    pshell.inert = true;
+    render();
+    if (window.placeOrb) window.placeOrb();
+    const first = web.dataset.open ? $('#gweb-in') : pass.dataset.open ? $('#gp-keys button') : $('#g-btn');
+    if (first && !first.disabled && !params.has('screen')) first.focus({ preventScroll: true });
+  }
+  $('#g-btn').addEventListener('click', () => {
+    if (kind === 'signin') {
+      if (st === 'denied') { setGate('signin', 'idle'); return; }
+      setGate('signin', 'signing');
+      timer = setTimeout(() => setGate('signin', 'web'), reduce.matches ? 300 : 900);
+    } else if (st === 'signedout') {
+      setGate('signin', 'idle');
+    } else if (st === 'failed' || st === 'passcode') {
+      setGate('lock', 'waiting');
+    } else {
+      timer = setTimeout(() => setGate(''), reduce.matches ? 200 : 700);
+    }
+  });
+  $('#g-btn2').addEventListener('click', () => setGate('lock', 'passcode'));
+  ['#g-btn', '#g-btn2'].forEach(s => $(s).addEventListener('pointerdown', () => window.jvOrbPulse && window.jvOrbPulse()));
+  gate.querySelector('.gate-body').addEventListener('pointerdown', e => { if (e.target === e.currentTarget && window.jvOrbPulse) window.jvOrbPulse(); });
+  $('#gweb-cancel').addEventListener('click', () => setGate('signin', 'idle'));
+  $('#gweb-next').addEventListener('click', () => setGate(''));
+  $('#gp-cancel').addEventListener('click', () => setGate('lock', 'failed'));
+  const KEYS = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], null, ['0', '']];
+  const keys = $('#gp-keys');
+  KEYS.forEach(k => {
+    if (!k) { keys.append(document.createElement('span')); return; }
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'gp-key'; b.setAttribute('aria-label', k[0]);
+    b.innerHTML = k[0] + '<small aria-hidden="true">' + k[1] + '</small>';
+    b.addEventListener('click', () => {
+      if (typed.length >= 6) return;
+      typed += k[0]; dots();
+      if (typed.length === 6) timer = setTimeout(() => setGate(''), 260);
+    });
+    keys.append(b);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !kind) return;
+    if (st === 'web') setGate('signin', 'idle');
+    else if (st === 'passcode') setGate('lock', 'failed');
+  });
+  document.addEventListener('jv:lang', e => { lang = e.detail === 'en' ? 'en' : 'da'; render(); });
+  if (sel) sel.addEventListener('change', () => { const [k, s] = sel.value.split(':'); setGate(k || '', s); });
+
+  const sc = params.get('screen'), want = params.get('state');
+  const ok = { signin: ['idle', 'signing', 'web', 'failed', 'denied', 'offline'], lock: ['waiting', 'failed', 'passcode', 'signedout'] };
+  if (ok[sc]) setGate(sc, ok[sc].includes(want) ? want : ok[sc][0]);
+})();
+
+/* Notes area. Review states: ?screen=notes&tab=notes|tasks|graph&state=default|empty|loading|error|offline|search|noresults|newnote|newtask|editor|conflict, &scope=notes|tasks, &lang=en. All content is fictional sample data. */
+(() => {
+  const $ = s => document.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const params = new URLSearchParams(location.search);
+  let lang = params.get('lang') === 'en' ? 'en' : 'da';
+  const phone = $('#phone'), view = $('#view-notes'), scroller = $('#notes-scroll'), navbar = $('#navbar');
+  const ned = $('#ned'), nsh = $('#nsh'), nscrim = $('#nscrim'), menu = $('#nmenu'), tbar = $('#ntoast');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const T = {
+    da: { title: 'Noter', notes: 'Noter', tasks: 'Opgaver', graph: 'Graf', all: 'Alle', search: 'Søg', cancel: 'Annuller', clear: 'Ryd', newNote: 'Ny note', newTask: 'Ny opgave', editTask: 'Opgave', add: 'Ny', overdue: 'Forfaldne', today: 'I dag', upcoming: 'Kommende', nodate: 'Uden dato', personal: 'Privat', work: 'Arbejde', emptyNotes: 'Ingen noter', emptyTasks: 'Ingen opgaver', emptyGraph: 'Ingen noter at vise', err: 'Kunne ikke hentes', retry: 'Prøv igen', offline: 'Offline. Viser en kopi', noRes: 'Ingen resultater', saved: 'Gemt', unsaved: 'Ikke gemt', saving: 'Gemmer…', conflict: 'Konflikt', save: 'Gem', back: 'Noter', edit: 'Rediger', preview: 'Vis', connected: 'Forbundet', done: 'Udført', del: 'Slet', deleted: 'Slettet', completed: 'Udført', undo: 'Fortryd', titleF: 'Titel', folder: 'Mappe', body: 'Tekst', text: 'Opgave', date: 'Dato', time: 'Tid', priority: 'Prioritet', pn: 'Normal', pm: 'Mellem', ph: 'Høj', scope: 'Område', changed: 'Ændret andetsteds', reload: 'Hent igen', compare: 'Sammenlign', keep: 'Behold min', yours: 'Din', latest: 'Seneste', discardT: 'Ikke gemt', discard: 'Kassér ændringer', keepEd: 'Fortsæt redigering', vroot: 'Rod', newFolder: 'Ny mappe', folderName: 'Mappenavn', open: 'Åbn', list: 'Liste', graphV: 'Graf', reset: 'Nulstil visning', filter: 'Filter', untitled: 'Uden titel', links: n => n + ' links', gl: (n, l) => 'Notegraf, ' + n + ' noter, ' + l + ' links', created: 'Oprettet' },
+    en: { title: 'Notes', notes: 'Notes', tasks: 'Tasks', graph: 'Graph', all: 'All', search: 'Search', cancel: 'Cancel', clear: 'Clear', newNote: 'New note', newTask: 'New task', editTask: 'Task', add: 'New', overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', nodate: 'No date', personal: 'Personal', work: 'Work', emptyNotes: 'No notes', emptyTasks: 'No tasks', emptyGraph: 'No notes to show', err: 'Could not load', retry: 'Try again', offline: 'Offline. Showing a copy', noRes: 'No results', saved: 'Saved', unsaved: 'Unsaved', saving: 'Saving…', conflict: 'Conflict', save: 'Save', back: 'Notes', edit: 'Edit', preview: 'Preview', connected: 'Connected', done: 'Done', del: 'Delete', deleted: 'Deleted', completed: 'Completed', undo: 'Undo', titleF: 'Title', folder: 'Folder', body: 'Text', text: 'Task', date: 'Date', time: 'Time', priority: 'Priority', pn: 'Normal', pm: 'Medium', ph: 'High', scope: 'Scope', changed: 'Changed elsewhere', reload: 'Reload', compare: 'Compare', keep: 'Keep mine', yours: 'Yours', latest: 'Latest', discardT: 'Unsaved changes', discard: 'Discard changes', keepEd: 'Keep editing', vroot: 'Vault root', newFolder: 'New folder', folderName: 'Folder name', open: 'Open', list: 'List', graphV: 'Graph', reset: 'Reset view', filter: 'Filter', untitled: 'Untitled', links: n => n + (n === 1 ? ' link' : ' links'), gl: (n, l) => 'Note graph, ' + n + ' notes, ' + l + ' links', created: 'Created' }
+  };
+  const t = k => T[lang][k];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const ic = (id, cls = '') => '<svg class="ic ' + cls + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
+  const p2 = n => String(n).padStart(2, '0');
+  const hm = d => p2(d.getHours()) + ':' + p2(d.getMinutes());
+  const loc = () => (lang === 'en' ? 'en-GB' : 'da-DK');
+  const NOW = new Date(2026, 9, 30, 9, 41);
+  const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const addDays = n => new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + n);
+  const fmtDay = d => new Intl.DateTimeFormat(loc(), { weekday: 'short', day: 'numeric', month: 'short' }).format(d);
+  const fmtMod = d => {
+    const diff = Math.round((dayStart(NOW) - dayStart(d)) / 864e5);
+    if (diff <= 0) return hm(d);
+    if (diff < 7) return new Intl.DateTimeFormat(loc(), { weekday: 'long' }).format(d);
+    return new Intl.DateTimeFormat(loc(), { day: 'numeric', month: 'short' }).format(d);
+  };
+  const scaleK = () => phone.getBoundingClientRect().width / phone.offsetWidth || 1;
+
+  /* Fictional sample data */
+  const FOLD = ['People', 'Work', 'Personal', 'General'];
+  const FC = { People: 'var(--f-people)', Work: 'var(--f-work)', Personal: 'var(--f-personal)', General: 'var(--f-general)' };
+  const RAW = [
+    ['People', 'Alex Example', 'Sample contact for the Acme account.', 40], ['People', 'Sam Sample', 'Sample vendor contact.', 3000], ['People', 'Jo Placeholder', 'Sample friend. Birthday in spring.', 9000],
+    ['People', 'Kim Demo', 'Sample travel companion.', 12000], ['People', 'Robin Test', 'Sample reviewer.', 15000], ['People', 'Pat Example', 'Sample finance contact.', 20000],
+    ['Work', 'Acme kickoff', 'Agenda, owners and the first milestone.', 95], ['Work', 'Roadmap draft', 'Three themes for the next quarter.', 200], ['Work', 'Weekly review', 'What moved, what is stuck, what is next.', 1700],
+    ['Work', 'Budget sketch', 'Rough numbers, nothing final.', 2900], ['Work', 'Launch checklist', 'Owners, dates and a go or no-go call.', 4400], ['Work', 'Retro notes', 'Keep, drop and try for the next sprint.', 5800],
+    ['Work', 'Vendor shortlist', 'Three sample vendors compared.', 7300], ['Work', 'Demo script', 'Five steps, ten minutes.', 8800],
+    ['Personal', 'Garden plan', 'Beds, pots and a compost corner.', 1400], ['Personal', 'Trip outline', 'Train, hotel and one long walk.', 6100], ['Personal', 'Reading list', 'Four sample titles for the winter.', 10100],
+    ['Personal', 'Workout plan', 'Three sessions a week.', 11000], ['Personal', 'Recipe ideas', 'Soup, bread and something green.', 13000], ['Personal', 'Gift list', 'Small ideas for the year.', 18000],
+    ['General', 'Ideas inbox', 'Loose thoughts to sort later.', 260], ['General', 'Glossary', 'Short definitions of sample terms.', 22000], ['General', 'Templates', 'Reusable note shapes.', 24000],
+    ['General', 'Reference links', 'Sample links to read again.', 26000], ['General', 'Meeting template', 'Goal, notes, decisions, next steps.', 28000], ['General', 'Quarterly goals', 'Three goals and how to measure them.', 30000]
+  ];
+  const LK = [[6, 0], [6, 1], [6, 7], [6, 10], [7, 8], [7, 25], [7, 9], [8, 11], [8, 24], [8, 0], [9, 12], [10, 13], [11, 8], [12, 1], [13, 6], [14, 18], [14, 19], [15, 16], [15, 3], [16, 20], [17, 18], [18, 19], [19, 2], [20, 7], [21, 22], [22, 24], [23, 21], [25, 20], [4, 12], [5, 9], [3, 2], [0, 1]];
+  const SIM = [[7, 11], [14, 15], [18, 17], [22, 24], [20, 25], [16, 23]];
+  const NOTES = RAW.map((r, i) => ({ id: i, folder: r[0], title: r[1], snip: r[2], mod: new Date(NOW - r[3] * 6e4), mine: false }));
+  const nbr = id => LK.filter(p => p[0] === id || p[1] === id).map(p => (p[0] === id ? p[1] : p[0]));
+  const deg = id => nbr(id).length;
+  NOTES.forEach(n => {
+    n.body = '# ' + n.title + '\n\n' + n.snip + '\n\n## Next\n\n- First sample step\n- Second sample step\n\n' + nbr(n.id).slice(0, 2).map(i => '[[' + RAW[i][1] + ']]').join(' ');
+  });
+  const TASKS = [
+    { id: 1, text: 'Send Acme recap', scope: 'work', pri: 'high', due: -2, time: '10:00', note: 6 },
+    { id: 2, text: 'Book sample appointment', scope: 'personal', pri: 'medium', due: -3, time: '', note: null },
+    { id: 3, text: 'Review roadmap draft', scope: 'work', pri: 'medium', due: 0, time: '14:30', note: 7 },
+    { id: 4, text: 'Call Alex Example', scope: 'work', pri: 'normal', due: 0, time: '16:00', note: 0 },
+    { id: 5, text: 'Water the plants', scope: 'personal', pri: 'normal', due: 0, time: '', note: 14 },
+    { id: 6, text: 'Draft budget sketch', scope: 'work', pri: 'normal', due: 3, time: '09:00', note: 9 },
+    { id: 7, text: 'Plan trip outline', scope: 'personal', pri: 'normal', due: 5, time: '', note: 15 },
+    { id: 8, text: 'Sort reference links', scope: 'work', pri: 'normal', due: null, time: '', note: 23 },
+    { id: 9, text: 'Pick the next book', scope: 'personal', pri: 'normal', due: null, time: '', note: 16 }
+  ].map(x => Object.assign({ done: false }, x));
+  let seq = 100;
+
+  const S = { tab: 'notes', st: 'default', q: '', searching: false, scope: 'all', folder: '', tscope: 'all', glist: false, coll: {}, sel: null };
+  const onNotes = () => phone.dataset.scr === 'notes';
+  const offline = () => S.st === 'offline';
+  const hl = (s, q) => {
+    const i = q ? s.toLowerCase().indexOf(q.toLowerCase()) : -1;
+    return i < 0 ? esc(s) : esc(s.slice(0, i)) + '<mark>' + esc(s.slice(i, i + q.length)) + '</mark>' + esc(s.slice(i + q.length));
+  };
+  const setSeg = (el, i) => {
+    el.style.setProperty('--i', i);
+    $$('[role="tab"]', el).forEach((b, k) => { b.setAttribute('aria-selected', k === i ? 'true' : 'false'); b.tabIndex = k === i ? 0 : -1; });
+  };
+
+  /* Menu and toast */
+  let menuAnchor = null;
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    if (menuAnchor) menuAnchor.setAttribute('aria-expanded', 'false');
+    menuAnchor = null;
+  }
+  function openMenu(anchor, items) {
+    closeMenu();
+    menu.innerHTML = items.map((it, i) => '<button type="button" role="' + (it.radio ? 'menuitemradio' : 'menuitem') + '"' + (it.radio ? ' aria-checked="' + !!it.checked + '"' : '') + ' data-i="' + i + '">' + (it.icon ? ic(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.radio ? ic('i-tick', 'ck') : '') + '</button>').join('');
+    menu.hidden = false; menuAnchor = anchor; menu._items = items;
+    anchor.setAttribute('aria-expanded', 'true');
+    const sk = scaleK(), pr = phone.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const left = ar.right - pr.left > pr.width / 2 ? (ar.right - pr.left) / sk - w : (ar.left - pr.left) / sk;
+    let top = (ar.bottom - pr.top) / sk + 8;
+    if (top + h > phone.offsetHeight - 24) top = (ar.top - pr.top) / sk - h - 8;
+    menu.style.left = Math.max(8, Math.min(left, phone.offsetWidth - w - 8)) + 'px';
+    menu.style.top = Math.max(8, top) + 'px';
+    menu.querySelector('button').focus();
+  }
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const it = menu._items[+b.dataset.i], a = menuAnchor;
+    closeMenu();
+    if (a) a.focus();
+    it.act();
+  });
+  menu.addEventListener('keydown', e => {
+    const bs = $$('button', menu), i = bs.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); bs[(i + 1) % bs.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!menu.hidden && !menu.contains(e.target) && !(menuAnchor && menuAnchor.contains(e.target))) closeMenu();
+  }, true);
+  let toastTimer = 0;
+  function toast(text, undo) {
+    $('#ntoast-t').textContent = text;
+    const b = $('#ntoast-b');
+    b.hidden = !undo;
+    b.onclick = () => { clearTimeout(toastTimer); tbar.hidden = true; if (undo) undo(); };
+    tbar.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { tbar.hidden = true; }, 4000);
+  }
+
+  /* Language */
+  function applyLang() {
+    $('#t-notes').textContent = t('title');
+    if (onNotes()) $('#nav-title').textContent = t('title');
+    const inp = $('#note-search');
+    inp.placeholder = t('search'); inp.setAttribute('aria-label', t('search'));
+    $('#note-clear').setAttribute('aria-label', t('clear'));
+    $('#n-cancel').textContent = t('cancel');
+    $$('#nseg [data-v]').forEach(b => { b.textContent = t(b.dataset.v); });
+    $$('#nscope [data-v]').forEach(b => { b.textContent = t(b.dataset.v); });
+    $$('#ned-mode [data-v]').forEach(b => { b.textContent = t(b.dataset.v === 'edit' ? 'edit' : 'preview'); });
+    $('#nplus').setAttribute('aria-label', t('add'));
+    $('#nfilter').setAttribute('aria-label', t('filter'));
+    $('#ng-list').setAttribute('aria-label', t('list')); $('#ng-list').title = t('list');
+    $('#ng-reset').setAttribute('aria-label', t('reset')); $('#ng-reset').title = t('reset');
+    $('#ng-open').textContent = t('open');
+    $('#ned-back-t').textContent = t('back');
+    $('#ned-save').textContent = t('save');
+    $('#ned-conn-h').textContent = t('connected');
+    $('#nsh-x').setAttribute('aria-label', t('cancel'));
+    $('#nsh-ok').setAttribute('aria-label', t('save'));
+    $('#ntoast-b').textContent = t('undo');
+    $('#nseg').setAttribute('aria-label', t('title')); $('#nscope').setAttribute('aria-label', t('search'));
+  }
+
+  /* Lists */
+  const sortedNotes = list => list.slice().sort((a, b) => b.mod - a.mod);
+  const noteRow = (n, q) => '<li><button class="nrow note" type="button" data-id="' + n.id + '"><span class="note-title">' + hl(n.title, q) + '</span><span class="note-meta"><time>' + fmtMod(n.mod) + '</time><span>' + hl(n.snip, q) + '</span></span></button></li>';
+  function notesPane() {
+    let h = '<div class="nchips" role="group" aria-label="' + esc(t('folder')) + '"><button class="nchip" type="button" data-f="" aria-pressed="' + !S.folder + '">' + esc(t('all')) + '</button>' + FOLD.map(f => '<button class="nchip" type="button" data-f="' + f + '" aria-pressed="' + (S.folder === f) + '">' + f + '</button>').join('') + '</div>';
+    FOLD.forEach(f => {
+      if (S.folder && S.folder !== f) return;
+      const items = sortedNotes(NOTES.filter(n => n.folder === f)), open = !S.coll[f];
+      h += '<button class="nfh" type="button" data-fold="' + f + '" aria-expanded="' + open + '">' + ic('i-chevron') + '<i style="--fc:' + FC[f] + '"></i>' + f + '<small>' + items.length + '</small></button>';
+      if (open) h += '<ul class="group">' + items.map(n => noteRow(n, '')).join('') + '</ul>';
+    });
+    return h;
+  }
+  const bucket = x => (x.due == null ? 'nodate' : x.due < 0 ? 'overdue' : x.due === 0 ? 'today' : 'upcoming');
+  const dueText = x => (x.due == null ? '' : x.due === 0 ? x.time : fmtDay(addDays(x.due)) + (x.time ? ' ' + x.time : ''));
+  const byDue = (a, b) => (a.due == null ? 9e3 : a.due) - (b.due == null ? 9e3 : b.due) || (a.time || '99').localeCompare(b.time || '99');
+  function taskRow(x, q) {
+    const pl = x.pri === 'high' ? '<span class="hi">' + ic('i-flag') + esc(t('ph')) + '</span>' : x.pri === 'medium' ? '<span class="md">' + ic('i-flag') + esc(t('pm')) + '</span>' : '';
+    const nt = x.note != null ? '<span>' + esc(NOTES[x.note].title) + '</span>' : '';
+    return '<li class="nsw" data-id="' + x.id + '"><button class="nsw-act l" type="button" tabindex="-1" aria-hidden="true" data-a="done">' + ic('i-tick') + esc(t('done')) + '</button><button class="nsw-act r" type="button" tabindex="-1" aria-hidden="true" data-a="del">' + ic('i-trash') + esc(t('del')) + '</button>' +
+      '<div class="nsw-row"><button class="ntk-box" type="button" role="checkbox" aria-checked="false" data-p="' + x.pri + '" aria-label="' + esc(x.text) + '"' + (offline() ? ' aria-disabled="true"' : '') + '><i>' + ic('i-tick') + '</i></button>' +
+      '<button class="ntk-main" type="button" aria-keyshortcuts="Delete"><b>' + hl(x.text, q) + '</b><small><i style="--fc:' + (x.scope === 'work' ? 'var(--f-work)' : 'var(--f-personal)') + '"></i>' + esc(t(x.scope)) + pl + nt + '</small></button>' +
+      '<span class="ntk-due"' + (x.due != null && x.due < 0 ? ' style="color:var(--danger)"' : '') + '>' + esc(dueText(x)) + '</span></div></li>';
+  }
+  const openTasks = () => TASKS.filter(x => !x.done && (S.tscope === 'all' || x.scope === S.tscope));
+  function tasksPane() {
+    const list = openTasks().sort(byDue);
+    return ['overdue', 'today', 'upcoming', 'nodate'].map(b => {
+      const items = list.filter(x => bucket(x) === b);
+      if (!items.length) return '';
+      return '<h3 class="sec' + (b === 'overdue' ? ' nsec-od' : '') + '">' + esc(t(b)) + '<span class="nsec-n">' + items.length + '</span></h3><ul class="group">' + items.map(x => taskRow(x, '')).join('') + '</ul>';
+    }).join('');
+  }
+  const noteHay = n => (n.title + ' ' + n.snip + ' ' + n.body).toLowerCase();
+  function searchResults() {
+    const q = S.q.trim(), lq = q.toLowerCase();
+    const ns = S.scope === 'tasks' ? [] : sortedNotes(NOTES.filter(n => noteHay(n).includes(lq)));
+    const ts = S.scope === 'notes' ? [] : TASKS.filter(x => !x.done && x.text.toLowerCase().includes(lq)).sort(byDue);
+    return { q, ns, ts };
+  }
+  function searchPane(r) {
+    let h = '';
+    if (r.ns.length) h += '<h3 class="nmatch-h">' + esc(t('notes')) + ' · ' + r.ns.length + '</h3><ul class="group">' + r.ns.map(n => noteRow(n, r.q)).join('') + '</ul>';
+    if (r.ts.length) h += '<h3 class="nmatch-h">' + esc(t('tasks')) + ' · ' + r.ts.length + '</h3><ul class="group">' + r.ts.map(x => taskRow(x, r.q)).join('') + '</ul>';
+    return h;
+  }
+  const gListPane = () => '<div class="ng-tog"><button class="nbtn glass" type="button" data-act="graph">' + ic('i-graph') + esc(t('graphV')) + '</button></div><ul class="group" style="margin-top:12px">' + NOTES.slice().sort((a, b) => deg(b.id) - deg(a.id) || a.title.localeCompare(b.title)).map(n => '<li><button class="nrow note" type="button" data-id="' + n.id + '"><span class="note-title">' + esc(n.title) + '</span><span class="note-meta"><span>' + esc(t('links')(deg(n.id))) + ' · ' + n.folder + '</span></span></button></li>').join('') + '</ul>';
+
+  function showState(icon, text, btn, act) {
+    const box = $('#nstate'), b = $('#nstate-b');
+    $('#nstate-ic').setAttribute('href', '#' + icon);
+    $('#nstate-t').textContent = text;
+    b.hidden = !btn; if (btn) b.textContent = btn;
+    b.dataset.act = act || '';
+    box.hidden = false;
+  }
+  function render() {
+    const q = S.q.trim(), sr = S.searching;
+    const mode = sr ? 'search' : S.tab === 'graph' ? (S.glist ? 'glist' : 'graph') : S.tab;
+    S.mode = mode;
+    const st = S.st, blocked = st === 'loading' || st === 'error';
+    const empty = st === 'empty' && !sr;
+    const showGraph = mode === 'graph' && !blocked && !empty;
+    scroller.dataset.mode = showGraph || (mode === 'graph' && st === 'loading') ? 'graph' : mode === 'graph' ? 'graph-off' : mode;
+    phone.toggleAttribute('data-gm', showGraph || (mode === 'graph' && st === 'loading'));
+    $('#ngraph').hidden = !(showGraph || (mode === 'graph' && st === 'loading'));
+    if (!$('#ngraph').hidden) scroller.scrollTop = 0;
+    $('#ng-load').hidden = st !== 'loading';
+    $('#nseg').hidden = sr; $('#nscope').hidden = !sr;
+    $('#n-cancel').hidden = !sr; $('#note-clear').hidden = q === '';
+    setSeg($('#nseg'), ['notes', 'tasks', 'graph'].indexOf(S.tab));
+    setSeg($('#nscope'), ['all', 'notes', 'tasks'].indexOf(S.scope));
+    const nf = $('#nfilter');
+    nf.hidden = !(onNotes() && S.tab === 'tasks' && !sr);
+    $('#nfilter-t').textContent = S.tscope === 'all' ? t('all') : t(S.tscope);
+    const np = $('#nplus');
+    np.disabled = offline(); np.hidden = !onNotes();
+    const bn = $('#nbanner');
+    bn.hidden = !offline(); bn.dataset.tone = 'warn'; $('#nbanner-t').textContent = t('offline');
+    ['notes', 'tasks', 'glist', 'search'].forEach(m => { const p = $('#np-' + m); p.hidden = true; p.innerHTML = ''; });
+    $('#nskel').hidden = !(st === 'loading' && mode !== 'graph');
+    $('#nstate').hidden = true;
+    if (st === 'error') showState('i-offline', t('err'), t('retry'), 'retry');
+    else if (empty) {
+      if (mode === 'notes') showState('i-notes', t('emptyNotes'), t('newNote'), 'newnote');
+      else if (mode === 'tasks') showState('i-checklist', t('emptyTasks'), t('newTask'), 'newtask');
+      else showState('i-graph', t('emptyGraph'));
+    } else if (mode === 'search' && st !== 'loading') {
+      const r = searchResults();
+      if (!q) { /* scopes only */ } else if (!r.ns.length && !r.ts.length) showState('i-search', t('noRes'));
+      else { const p = $('#np-search'); p.innerHTML = searchPane(r); p.hidden = false; }
+    } else if (mode === 'notes' && !blocked) { const p = $('#np-notes'); p.innerHTML = notesPane(); p.hidden = false; }
+    else if (mode === 'tasks' && !blocked) {
+      const p = $('#np-tasks'); p.innerHTML = tasksPane(); p.hidden = false;
+      if (!openTasks().length) showState('i-checklist', t('emptyTasks'), t('newTask'), 'newtask');
+    } else if (mode === 'glist' && !blocked) { const p = $('#np-glist'); p.innerHTML = gListPane(); p.hidden = false; }
+    if (showGraph) graphShow();
+    if (window.jvEdges) window.jvEdges();
+  }
+
+  function setTab(tab, focus) {
+    S.tab = tab; S.glist = false; S.sel = null;
+    render();
+    if (focus) { const b = $('#nseg [data-v="' + tab + '"]'); if (b) b.focus(); }
+  }
+  $('#nseg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) setTab(b.dataset.v); });
+  $('#nseg').addEventListener('keydown', e => {
+    const order = ['notes', 'tasks', 'graph'], i = order.indexOf(S.tab);
+    if (e.key === 'ArrowRight') { e.preventDefault(); setTab(order[Math.min(i + 1, 2)], true); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); setTab(order[Math.max(i - 1, 0)], true); }
+  });
+  $('#nscope').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { S.scope = b.dataset.v; render(); } });
+  $('#nscope').addEventListener('keydown', e => {
+    const order = ['all', 'notes', 'tasks'], i = order.indexOf(S.scope);
+    const j = e.key === 'ArrowRight' ? Math.min(i + 1, 2) : e.key === 'ArrowLeft' ? Math.max(i - 1, 0) : i;
+    if (j !== i) { e.preventDefault(); S.scope = order[j]; render(); $('#nscope [data-v="' + order[j] + '"]').focus(); }
+  });
+  const sIn = $('#note-search');
+  sIn.addEventListener('focus', () => { if (!S.searching) { S.searching = true; render(); } });
+  sIn.addEventListener('input', () => { S.q = sIn.value; render(); });
+  $('#note-clear').addEventListener('click', () => { sIn.value = ''; S.q = ''; render(); sIn.focus(); });
+  function endSearch() { S.searching = false; S.q = ''; sIn.value = ''; sIn.blur(); render(); }
+  $('#n-cancel').addEventListener('click', endSearch);
+  sIn.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endSearch(); } });
+
+  /* Task actions */
+  let noClick = 0;
+  function completeTask(id, li) {
+    if (offline()) return;
+    const x = TASKS.find(k => k.id === id);
+    if (!x || x.done) return;
+    x.done = true;
+    const box = li && li.querySelector('.ntk-box');
+    if (box) box.setAttribute('aria-checked', 'true');
+    if (li) { li.querySelector('.nsw-row').style.setProperty('--dx', '0px'); li.classList.add('ntk-done'); }
+    setTimeout(() => { render(); toast(t('completed'), () => { x.done = false; render(); }); }, reduce.matches ? 0 : 420);
+  }
+  function removeTask(id) {
+    if (offline()) return;
+    const i = TASKS.findIndex(k => k.id === id);
+    if (i < 0) return;
+    const [x] = TASKS.splice(i, 1);
+    render();
+    toast(t('deleted'), () => { TASKS.splice(Math.min(i, TASKS.length), 0, x); render(); });
+  }
+  view.addEventListener('click', e => {
+    if (Date.now() - noClick < 300) return;
+    const a = e.target.closest('.nsw-act');
+    if (a) { const li = a.closest('.nsw'), id = +li.dataset.id; if (a.dataset.a === 'done') completeTask(id, li); else removeTask(id); return; }
+    const box = e.target.closest('.ntk-box');
+    if (box) { const li = box.closest('.nsw'); if (box.getAttribute('aria-disabled') !== 'true') completeTask(+li.dataset.id, li); return; }
+    const main = e.target.closest('.ntk-main');
+    if (main) { const li = main.closest('.nsw'); if (li.dataset.open) { li.removeAttribute('data-open'); li.querySelector('.nsw-row').style.setProperty('--dx', '0px'); } else openSheet('task', { id: +li.dataset.id, from: main }); return; }
+    const row = e.target.closest('.nrow');
+    if (row) { openNote(+row.dataset.id, row); return; }
+    const fh = e.target.closest('.nfh');
+    if (fh) { S.coll[fh.dataset.fold] = !S.coll[fh.dataset.fold]; render(); const nb = $('.nfh[data-fold="' + fh.dataset.fold + '"]'); if (nb) nb.focus(); return; }
+    const ch = e.target.closest('.nchip');
+    if (ch) { S.folder = ch.dataset.f; render(); const nb = $('.nchip[data-f="' + ch.dataset.f + '"]'); if (nb) nb.focus(); return; }
+    const sb = e.target.closest('#nstate-b');
+    const tg = e.target.closest('.ng-tog button');
+    if (tg) { S.glist = false; render(); return; }
+    if (sb) {
+      if (sb.dataset.act === 'retry') { S.st = 'default'; render(); } else if (sb.dataset.act === 'newnote') openSheet('note', { from: sb }); else if (sb.dataset.act === 'newtask') openSheet('task', { from: sb });
+    }
+  });
+  view.addEventListener('keydown', e => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    const li = e.target.closest && e.target.closest('.nsw');
+    if (li && !e.target.closest('input')) { e.preventDefault(); removeTask(+li.dataset.id); }
+  });
+  /* Swipe: right reveals Done, left reveals Delete; a long pull commits */
+  let sw = null;
+  const SWF = 150, SWA = 96;
+  view.addEventListener('pointerdown', e => {
+    $$('.nsw[data-open]').forEach(li => { if (!li.contains(e.target)) { li.removeAttribute('data-open'); li.querySelector('.nsw-row').style.setProperty('--dx', '0px'); } });
+    const row = e.target.closest('.nsw-row');
+    if (!row || offline() || e.button > 0 || e.target.closest('.ntk-box')) return;
+    const li = row.parentElement;
+    sw = { li, row, x0: e.clientX, y0: e.clientY, base: li.dataset.open === 'l' ? SWA : li.dataset.open === 'r' ? -SWA : 0, lock: '', id: e.pointerId, dx: 0 };
+  });
+  view.addEventListener('pointermove', e => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const sk = scaleK(), dx = (e.clientX - sw.x0) / sk, dy = (e.clientY - sw.y0) / sk;
+    if (!sw.lock) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      sw.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (sw.lock === 'y') { sw = null; return; }
+      sw.li.dataset.drag = '1';
+      try { sw.row.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    }
+    sw.dx = Math.max(-280, Math.min(280, sw.base + dx));
+    sw.row.style.setProperty('--dx', sw.dx + 'px');
+  });
+  const swEnd = e => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const s = sw; sw = null;
+    if (s.lock !== 'x') return;
+    noClick = Date.now();
+    s.li.removeAttribute('data-drag');
+    const id = +s.li.dataset.id;
+    if (s.dx >= SWF) completeTask(id, s.li);
+    else if (s.dx <= -SWF) removeTask(id);
+    else if (s.dx > 56) { s.li.dataset.open = 'l'; s.row.style.setProperty('--dx', SWA + 'px'); }
+    else if (s.dx < -56) { s.li.dataset.open = 'r'; s.row.style.setProperty('--dx', -SWA + 'px'); }
+    else { s.li.removeAttribute('data-open'); s.row.style.setProperty('--dx', '0px'); }
+  };
+  view.addEventListener('pointerup', swEnd);
+  view.addEventListener('pointercancel', swEnd);
+
+  /* Inert and focus */
+  let sheetOpen = false, editorOpen = false, sh = null, ed = null;
+  const byId = id => NOTES.find(n => n.id === id);
+  const restore = el => { if (el && el.isConnected && !el.inert) { try { el.focus({ preventScroll: true }); } catch (err) { /* ignore */ } } };
+  function syncInert() {
+    const cover = sheetOpen || editorOpen;
+    view.inert = cover; navbar.inert = cover && onNotes();
+    ned.inert = !editorOpen || sheetOpen;
+    nsh.inert = !sheetOpen;
+  }
+
+  /* Graph */
+  const cv = $('#ng-cv');
+  const G = { ctx: null, byId: new Map(), edges: [], tx: 0, ty: 0, k: 1, w: 0, h: 0, dpr: 1, raf: 0, glide: 0, vx: 0, vy: 0, fitted: false, filter: '', tasksOnly: false, laid: false };
+  const ANCH = { People: [-130, -90], Work: [120, -70], Personal: [-110, 110], General: [130, 120] };
+  function addNode(n, x, y) {
+    const a = ANCH[n.folder] || [0, 0];
+    G.byId.set(n.id, { id: n.id, f: n.folder, x: x == null ? a[0] + (Math.random() - .5) * 60 : x, y: y == null ? a[1] + (Math.random() - .5) * 60 : y, vx: 0, vy: 0 });
+  }
+  function layout() {
+    if (G.laid) return;
+    G.laid = true;
+    let s = 11;
+    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    NOTES.forEach(n => { const a = ANCH[n.folder]; addNode(n, a[0] + (rnd() - .5) * 90, a[1] + (rnd() - .5) * 90); });
+    const ns = Array.from(G.byId.values()), es = LK.concat(SIM).map(p => [G.byId.get(p[0]), G.byId.get(p[1])]);
+    for (let it = 0; it < 320; it++) {
+      const cool = 1 - it / 320;
+      for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+        const a = ns[i], b = ns[j]; let dx = a.x - b.x, dy = a.y - b.y; const d2 = Math.max(dx * dx + dy * dy, 25), f = 2600 / d2, d = Math.sqrt(d2);
+        dx = dx / d * f; dy = dy / d * f; a.vx += dx; a.vy += dy; b.vx -= dx; b.vy -= dy;
+      }
+      es.forEach(([a, b]) => { const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 1, f = (d - 62) * .05; a.vx += dx / d * f; a.vy += dy / d * f; b.vx -= dx / d * f; b.vy -= dy / d * f; });
+      ns.forEach(n => { const a = ANCH[n.f]; n.vx += (a[0] - n.x) * .012 - n.x * .004; n.vy += (a[1] - n.y) * .012 - n.y * .004; const m = 14 * cool + 1; n.vx = Math.max(-m, Math.min(m, n.vx * .6)); n.vy = Math.max(-m, Math.min(m, n.vy * .6)); n.x += n.vx; n.y += n.vy; });
+    }
+  }
+  const ensureNodes = () => { layout(); NOTES.forEach(n => { if (!G.byId.has(n.id)) addNode(n); }); };
+  function size() {
+    G.w = cv.clientWidth; G.h = cv.clientHeight;
+    if (!G.w || !G.h) return false;
+    G.dpr = Math.min(3, (window.devicePixelRatio || 1) * scaleK());
+    const w = Math.round(G.w * G.dpr), h = Math.round(G.h * G.dpr);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    return true;
+  }
+  function fit() {
+    const ns = Array.from(G.byId.values());
+    if (!ns.length || !G.w) return;
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    ns.forEach(n => { x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x); y0 = Math.min(y0, n.y); y1 = Math.max(y1, n.y); });
+    const top = 190, bot = 200, aw = G.w - 40, ah = G.h - top - bot;
+    G.k = Math.max(.5, Math.min(2.4, aw / Math.max(x1 - x0, 1), ah / Math.max(y1 - y0, 1)));
+    G.tx = G.w / 2 - (x0 + x1) / 2 * G.k; G.ty = top + ah / 2 - (y0 + y1) / 2 * G.k;
+    G.fitted = true;
+  }
+  const redraw = () => { if (!G.raf) G.raf = requestAnimationFrame(draw); };
+  const selSet = () => (S.sel == null ? null : new Set(nbr(S.sel).concat(S.sel)));
+  function draw() {
+    G.raf = 0;
+    if (!G.w || !G.ctx || $('#ngraph').hidden) return;
+    const c = G.ctx, cs = getComputedStyle(phone), col = (n, f) => cs.getPropertyValue(n).trim() || f;
+    const text = col('--text', '#888'), acc = col('--accent', '#4c8dff'), page = col('--page', '#111');
+    const fv = { People: '--f-people', Work: '--f-work', Personal: '--f-personal' };
+    const fcol = f => col(fv[f] || '--f-general', '#999');
+    const ss = selSet(), tk = new Set(TASKS.filter(x => !x.done && x.note != null).map(x => x.note));
+    const fd = n => (G.filter && n.f !== G.filter) || (G.tasksOnly && !tk.has(n.id));
+    const sd = n => ss && !ss.has(n.id);
+    c.setTransform(G.dpr, 0, 0, G.dpr, 0, 0); c.clearRect(0, 0, G.w, G.h);
+    const X = n => n.x * G.k + G.tx, Y = n => n.y * G.k + G.ty;
+    c.lineCap = 'round';
+    LK.map(p => [p[0], p[1], 0]).concat(SIM.map(p => [p[0], p[1], 1])).forEach(([a, b, sim]) => {
+      const na = G.byId.get(a), nb = G.byId.get(b);
+      if (!na || !nb) return;
+      const rel = S.sel != null && (a === S.sel || b === S.sel);
+      let al = S.sel == null ? (sim ? .2 : .32) : rel ? .9 : .06;
+      if (fd(na) || fd(nb)) al *= .35;
+      c.globalAlpha = al; c.strokeStyle = rel ? acc : text; c.lineWidth = rel ? 2 : 1;
+      c.setLineDash(sim ? [4, 4] : []);
+      c.beginPath(); c.moveTo(X(na), Y(na)); c.lineTo(X(nb), Y(nb)); c.stroke();
+    });
+    c.setLineDash([]);
+    const kk = Math.min(1.3, Math.max(.8, G.k)), lab = [];
+    G.byId.forEach(n => {
+      const d = deg(n.id), r = (4.5 + Math.min(d, 8) * .9) * kk, x = X(n), y = Y(n);
+      if (x < -20 || y < -20 || x > G.w + 20 || y > G.h + 20) return;
+      const dim = fd(n) || sd(n);
+      c.globalAlpha = dim ? .2 : 1; c.fillStyle = fcol(n.f);
+      c.beginPath(); c.arc(x, y, r, 0, 7); c.fill();
+      if (n.id === S.sel) { c.globalAlpha = 1; c.strokeStyle = acc; c.lineWidth = 2.5; c.beginPath(); c.arc(x, y, r + 4, 0, 7); c.stroke(); }
+      if (tk.has(n.id)) { c.globalAlpha = dim ? .3 : 1; c.fillStyle = acc; c.strokeStyle = page; c.lineWidth = 1.5; c.beginPath(); c.arc(x + r * .8, y - r * .8, 3.4, 0, 7); c.fill(); c.stroke(); }
+      if (!dim && (n.id === S.sel || (ss && ss.has(n.id)) || (d >= 4 && G.k >= .7))) lab.push([n, x, y + r + 12]);
+    });
+    c.font = '500 12px ' + cs.fontFamily; c.textAlign = 'center'; c.lineJoin = 'round';
+    lab.forEach(([n, x, y]) => {
+      const m = byId(n.id), s = m.title.length > 18 ? m.title.slice(0, 17) + '…' : m.title;
+      c.globalAlpha = .85; c.strokeStyle = page; c.lineWidth = 3.5; c.strokeText(s, x, y);
+      c.globalAlpha = n.id === S.sel ? 1 : .8; c.fillStyle = text; c.fillText(s, x, y);
+    });
+    c.globalAlpha = 1;
+  }
+  function pills() {
+    const box = $('#ng-pills'), last = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.f : null;
+    box.setAttribute('aria-label', t('folder'));
+    box.innerHTML = FOLD.map(f => '<button class="ng-pill glass" data-flat type="button" data-f="' + f + '" aria-pressed="' + (G.filter === f) + '"><i style="--fc:' + (FC[f] || FC.General) + '"></i>' + esc(f) + '</button>').join('') + '<button class="ng-pill glass" data-flat type="button" data-f="@tasks" aria-pressed="' + G.tasksOnly + '">' + ic('i-checklist') + esc(t('tasks')) + '</button>';
+    if (last) { const b = box.querySelector('[data-f="' + last + '"]'); if (b) b.focus({ preventScroll: true }); }
+  }
+  function selUI() {
+    const chip = $('#ng-sel'), n = S.sel == null ? null : byId(S.sel);
+    chip.hidden = !n;
+    if (n) { $('#ng-sel-t').textContent = n.title; $('#ng-sel-m').textContent = t('links')(deg(n.id)) + ' · ' + n.folder; }
+  }
+  function graphShow() {
+    ensureNodes();
+    if (!G.ctx) G.ctx = cv.getContext('2d');
+    cv.setAttribute('aria-label', t('gl')(NOTES.length, LK.length + SIM.length));
+    if (!size()) return;
+    if (!G.fitted) fit();
+    pills(); selUI(); redraw();
+  }
+  const gpt = e => { const r = cv.getBoundingClientRect(), k = scaleK(); return { x: (e.clientX - r.left) / k, y: (e.clientY - r.top) / k }; };
+  function zoomAt(px, py, f) {
+    const nk = Math.max(.5, Math.min(4, G.k * f)); f = nk / G.k;
+    G.tx = px - (px - G.tx) * f; G.ty = py - (py - G.ty) * f; G.k = nk; redraw();
+  }
+  function hit(p) {
+    let best = null, bd = 1e9;
+    G.byId.forEach(n => {
+      const dx = n.x * G.k + G.tx - p.x, dy = n.y * G.k + G.ty - p.y, d = Math.sqrt(dx * dx + dy * dy), r = 4.5 + Math.min(deg(n.id), 8) * .9 + 12;
+      if (d < r && d < bd) { bd = d; best = n; }
+    });
+    return best;
+  }
+  function pick(n) {
+    if (n && n.id === S.sel) { openNote(n.id, cv); return; }
+    S.sel = n ? n.id : null; selUI(); redraw();
+  }
+  const ptrs = new Map();
+  let gest = null;
+  cv.addEventListener('pointerdown', e => {
+    cancelAnimationFrame(G.glide); G.vx = G.vy = 0;
+    try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    ptrs.set(e.pointerId, gpt(e));
+    gest = { moved: 0, t: Date.now(), p0: gpt(e), d0: 0, k0: G.k };
+    if (ptrs.size === 2) { const [a, b] = Array.from(ptrs.values()); gest.d0 = Math.hypot(a.x - b.x, a.y - b.y) || 1; gest.k0 = G.k; gest.moved = 99; }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId) || !gest) return;
+    const p = gpt(e), o = ptrs.get(e.pointerId);
+    ptrs.set(e.pointerId, p);
+    if (ptrs.size === 2) {
+      const [a, b] = Array.from(ptrs.values()), d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, gest.k0 * d / gest.d0 / G.k);
+    } else {
+      const dx = p.x - o.x, dy = p.y - o.y;
+      gest.moved += Math.abs(dx) + Math.abs(dy); G.tx += dx; G.ty += dy; G.vx = dx; G.vy = dy; redraw();
+    }
+  });
+  const gEnd = e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.delete(e.pointerId);
+    if (!gest || ptrs.size) return;
+    const g = gest; gest = null;
+    if (e.type === 'pointerup' && g.moved < 6 && Date.now() - g.t < 500) pick(hit(g.p0));
+    else if (!reduce.matches && (Math.abs(G.vx) > 1 || Math.abs(G.vy) > 1)) {
+      const step = () => { G.tx += G.vx; G.ty += G.vy; G.vx *= .92; G.vy *= .92; draw(); if (Math.abs(G.vx) > .2 || Math.abs(G.vy) > .2) G.glide = requestAnimationFrame(step); };
+      G.glide = requestAnimationFrame(step);
+    }
+  };
+  cv.addEventListener('pointerup', gEnd);
+  cv.addEventListener('pointercancel', gEnd);
+  cv.addEventListener('wheel', e => { e.preventDefault(); const p = gpt(e); zoomAt(p.x, p.y, Math.exp(-e.deltaY * .0016)); }, { passive: false });
+  cv.addEventListener('keydown', e => {
+    const m = { ArrowLeft: [40, 0], ArrowRight: [-40, 0], ArrowUp: [0, 40], ArrowDown: [0, -40] }[e.key];
+    if (m) { e.preventDefault(); G.tx += m[0]; G.ty += m[1]; redraw(); }
+    else if (e.key === '+' || e.key === '=') zoomAt(G.w / 2, G.h / 2, 1.25);
+    else if (e.key === '-') zoomAt(G.w / 2, G.h / 2, .8);
+    else if (e.key === 'Enter' && S.sel != null) openNote(S.sel, cv);
+    else if (e.key === 'Escape' && S.sel != null) { e.stopPropagation(); S.sel = null; selUI(); redraw(); }
+  });
+  $('#ng-open').addEventListener('click', () => { if (S.sel != null) openNote(S.sel, $('#ng-open')); });
+  $('#ng-reset').addEventListener('click', () => { S.sel = null; fit(); selUI(); redraw(); });
+  $('#ng-list').addEventListener('click', () => { S.glist = true; S.sel = null; render(); const b = $('.ng-tog button'); if (b) b.focus({ preventScroll: true }); });
+  $('#ng-pills').addEventListener('click', e => {
+    const b = e.target.closest('.ng-pill');
+    if (!b) return;
+    if (b.dataset.f === '@tasks') G.tasksOnly = !G.tasksOnly; else G.filter = G.filter === b.dataset.f ? '' : b.dataset.f;
+    pills(); redraw();
+  });
+  if (window.ResizeObserver) new ResizeObserver(() => { if (size()) { if (!G.fitted) fit(); redraw(); } }).observe(cv);
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  /* Editor */
+  const taEl = $('#ned-ta'), prev = $('#ned-prev');
+  function md(src) {
+    const inl = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/\*([^*]+)\*/g, '<i>$1</i>').replace(/\[\[([^\]]+)\]\]/g, '<a href="#" data-wl="$1">$1</a>');
+    let out = '', list = false;
+    src.split('\n').forEach(l => {
+      const h = /^(#{1,3}) (.*)$/.exec(l), li = /^[-*] (.*)$/.exec(l);
+      if (li) { if (!list) { out += '<ul>'; list = true; } out += '<li>' + inl(li[1]) + '</li>'; return; }
+      if (list) { out += '</ul>'; list = false; }
+      if (h) out += '<h' + h[1].length + '>' + inl(h[2]) + '</h' + h[1].length + '>';
+      else if (l.trim()) out += '<p>' + inl(l) + '</p>';
+    });
+    return out + (list ? '</ul>' : '');
+  }
+  function edStatus() {
+    if (!ed) return;
+    const st = $('#ned-st');
+    let txt = t('saved'), err = false;
+    if (S.st === 'conflict') { txt = t('conflict'); err = true; }
+    else if (offline()) txt = t('offline');
+    else if (ed.saving) txt = t('saving');
+    else if (ed.dirty) txt = t('unsaved');
+    st.textContent = txt;
+    if (err) st.dataset.tone = 'error'; else st.removeAttribute('data-tone');
+    $('#ned-save').disabled = offline() || ed.saving || !(ed.dirty || S.st === 'conflict');
+  }
+  function setMode(m) {
+    ed.mode = m;
+    setSeg($('#ned-mode'), m === 'edit' ? 0 : 1);
+    taEl.hidden = m !== 'edit'; prev.hidden = m === 'edit';
+    if (m === 'preview') prev.innerHTML = md(taEl.value);
+  }
+  function loadNote(id) {
+    const n = byId(id);
+    if (!n) return;
+    ed.id = id; ed.dirty = false; ed.saving = false;
+    $('#ned-title').textContent = n.title;
+    $('#ned-meta').textContent = n.folder + ' / ' + n.title + '.md · ' + fmtMod(n.mod);
+    taEl.value = n.body;
+    const nb = nbr(id);
+    $('#ned-conn-h').hidden = !nb.length;
+    $('#ned-conn').innerHTML = nb.map(i => { const m = byId(i); return m ? '<li><button class="nrow note" type="button" data-id="' + m.id + '"><span class="note-title">' + esc(m.title) + '</span><span class="note-meta"><span>' + m.folder + '</span></span></button></li>' : ''; }).join('');
+    setMode('edit'); edStatus();
+    $('#ned-scroll').scrollTop = 0;
+  }
+  function openNote(id, from) {
+    if (!byId(id)) return;
+    if (!ed) ed = { id, dirty: false, saving: false, mode: 'edit', from };
+    loadNote(id);
+    ned.classList.add('open'); editorOpen = true; syncInert();
+    $('#ned-back').focus({ preventScroll: true });
+  }
+  function closeEditor(silent) {
+    if (!editorOpen) return;
+    const from = ed && ed.from;
+    ned.classList.remove('open'); editorOpen = false; ed = null; syncInert();
+    if (!silent) { render(); restore(from); }
+  }
+  function guard(next) { if (ed && ed.dirty) openSheet('discard', { next, from: document.activeElement }); else next(); }
+  $('#ned-back').addEventListener('click', () => guard(() => closeEditor()));
+  $('#ned-mode').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b && ed) setMode(b.dataset.v); });
+  taEl.addEventListener('input', () => { if (ed) { ed.dirty = true; edStatus(); } });
+  $('#ned-save').addEventListener('click', () => {
+    if (!ed || offline()) return;
+    if (S.st === 'conflict') { openSheet('conflict', { from: $('#ned-save') }); return; }
+    ed.saving = true; edStatus();
+    setTimeout(() => {
+      if (!ed) return;
+      const n = byId(ed.id);
+      n.body = taEl.value; n.mod = NOW; ed.saving = false; ed.dirty = false;
+      edStatus();
+    }, reduce.matches ? 0 : 700);
+  });
+  ned.addEventListener('click', e => {
+    const wl = e.target.closest('a[data-wl]');
+    if (wl) { e.preventDefault(); const m = NOTES.find(n => n.title === wl.dataset.wl); if (m) guard(() => loadNote(m.id)); return; }
+    const r = e.target.closest('.nrow');
+    if (r) guard(() => loadNote(+r.dataset.id));
+  });
+  let eb = null;
+  ned.addEventListener('pointerdown', e => { const r = ned.getBoundingClientRect(); if (editorOpen && (e.clientX - r.left) / scaleK() < 28) eb = { x: e.clientX, id: e.pointerId }; });
+  const ebEnd = e => { if (eb && e.pointerId === eb.id) { const dx = (e.clientX - eb.x) / scaleK(); eb = null; if (e.type === 'pointerup' && dx > 80) guard(() => closeEditor()); } };
+  ned.addEventListener('pointerup', ebEnd); ned.addEventListener('pointercancel', ebEnd);
+
+  /* Sheets */
+  const iso = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+  const row = (label, inner, cls) => '<li class="nf' + (cls ? ' ' + cls : '') + '">' + (label ? '<span>' + esc(label) + '</span>' : '') + inner + '</li>';
+  const segHtml = (id, n, opts) => '<div class="nseg glass" id="' + id + '" data-flat role="tablist" style="--n:' + n + '"><span class="nseg-thumb" aria-hidden="true"></span>' + opts.map(o => '<button type="button" role="tab" data-v="' + o[0] + '">' + esc(o[1]) + '</button>').join('') + '</div>';
+  const okState = () => {
+    if (!sh) return;
+    let v = false;
+    if (sh.kind === 'note') v = !!$('#nf-title').value.trim() && !offline() && (sh.folder !== '@new' || !!$('#nf-fname').value.trim());
+    else if (sh.kind === 'task') v = !!$('#nf-text').value.trim() && !offline();
+    $('#nsh-ok').disabled = !v;
+  };
+  function folderPill() {
+    const f = sh.folder;
+    return '<i style="width:9px;height:9px;border-radius:50%;background:' + (f === '@new' ? FC.General : (FC[f] || FC.General)) + '"></i>' + esc(f === '@new' ? t('newFolder') : f) + ic('i-chev-down');
+  }
+  function openSheet(kind, o) {
+    o = o || {};
+    if (sheetOpen) return;
+    sh = { kind, o, from: o.from || document.activeElement, folder: S.folder || 'General', draft: null };
+    const body = $('#nsh-body'), ok = $('#nsh-ok');
+    ok.style.visibility = kind === 'note' || kind === 'task' ? '' : 'hidden'; ok.tabIndex = kind === 'note' || kind === 'task' ? 0 : -1;
+    nsh.dataset.d = kind === 'note' ? 'l' : kind === 'discard' ? 's' : 'm';
+    if (kind === 'note') {
+      $('#nsh-title').textContent = t('newNote');
+      body.innerHTML = '<ul class="group">' + row(t('titleF'), '<input id="nf-title" type="text" maxlength="120" autocomplete="off" placeholder="' + esc(t('titleF')) + '">') + row(t('folder'), '<button type="button" class="nsh-pill" id="nf-folder" aria-haspopup="menu" aria-expanded="false" style="margin-left:auto">' + folderPill() + '</button>') + row(t('folderName'), '<input id="nf-fname" type="text" maxlength="60" autocomplete="off">').replace('class="nf"', 'class="nf" id="nf-fname-row" hidden') + '</ul><ul class="group">' + row('', '<textarea id="nf-body" placeholder="' + esc(t('body')) + '" spellcheck="false"></textarea>', 'ta') + '</ul>';
+    } else if (kind === 'task') {
+      const x = o.id ? TASKS.find(k => k.id === o.id) : null;
+      sh.draft = { scope: x ? x.scope : 'work', pri: x ? x.pri : 'normal' };
+      $('#nsh-title').textContent = x ? t('editTask') : t('newTask');
+      const dv = x ? (x.due == null ? '' : iso(addDays(x.due))) : iso(addDays(0));
+      body.innerHTML = '<ul class="group">' + row('', '<input id="nf-text" type="text" maxlength="200" autocomplete="off" placeholder="' + esc(t('text')) + '" value="' + esc(x ? x.text : '') + '">') + '</ul>' +
+        '<ul class="group">' + row(t('date'), '<input id="nf-date" type="date" value="' + dv + '">') + row(t('time'), '<input id="nf-time" type="time" value="' + (x ? x.time : '') + '">') + '</ul>' +
+        '<ul class="group">' + row(t('scope'), segHtml('nf-scope', 2, [['work', t('work')], ['personal', t('personal')]])) + row(t('priority'), segHtml('nf-pri', 3, [['normal', t('pn')], ['medium', t('pm')], ['high', t('ph')]])) + '</ul>' +
+        (x ? '<div class="nsh-acts"><button class="nbtn glass danger" id="nf-del" type="button" data-flat>' + ic('i-trash') + esc(t('del')) + '</button></div>' : '');
+      setSeg($('#nf-scope'), sh.draft.scope === 'work' ? 0 : 1); setSeg($('#nf-pri'), ['normal', 'medium', 'high'].indexOf(sh.draft.pri));
+    } else if (kind === 'conflict') {
+      $('#nsh-title').textContent = t('changed');
+      body.innerHTML = '<div class="ncmp" id="nf-cmp" hidden><div><b>' + esc(t('yours')) + '</b><span id="nf-mine"></span></div><div><b>' + esc(t('latest')) + '</b><span id="nf-last"></span></div></div><div class="nsh-acts"><button class="nbtn glass" type="button" data-flat data-c="reload">' + ic('i-retry') + esc(t('reload')) + '</button><button class="nbtn glass" type="button" data-flat data-c="compare">' + esc(t('compare')) + '</button><button class="nbtn glass tint" type="button" data-flat data-c="keep">' + esc(t('keep')) + '</button></div>';
+    } else {
+      $('#nsh-title').textContent = t('discardT');
+      body.innerHTML = '<div class="nsh-acts"><button class="nbtn glass danger" type="button" data-flat data-c="discard">' + esc(t('discard')) + '</button><button class="nbtn glass" type="button" data-flat data-c="keepEd">' + esc(t('keepEd')) + '</button></div>';
+    }
+    $('#nsh-ok').disabled = kind === 'note' || kind === 'task';
+    sheetOpen = true; syncInert();
+    nscrim.hidden = false; void nscrim.offsetWidth; nscrim.classList.add('on');
+    nsh.classList.add('open');
+    okState();
+    const f = $('#nf-title') || $('#nf-text') || $('#nsh-x');
+    f.focus({ preventScroll: true });
+  }
+  function closeSheet(silent) {
+    if (!sheetOpen) return;
+    const from = sh && sh.from;
+    nsh.classList.remove('open'); nscrim.classList.remove('on'); nsh.style.transform = ''; nsh.style.transition = '';
+    sheetOpen = false; sh = null; syncInert();
+    setTimeout(() => { if (!sheetOpen) nscrim.hidden = true; }, 320);
+    if (!silent) restore(from);
+  }
+  function submit() {
+    if (!sh || $('#nsh-ok').disabled) return;
+    if (sh.kind === 'note') {
+      let f = sh.folder;
+      if (f === '@new') { f = $('#nf-fname').value.trim(); if (!FOLD.includes(f)) { FOLD.push(f); FC[f] = FC.General; } }
+      const ti = $('#nf-title').value.trim(), b = $('#nf-body').value;
+      const n = { id: seq++, folder: f, title: ti, snip: (b.split('\n').find(l => l.trim()) || '').slice(0, 80), mod: NOW, mine: true, body: b || '# ' + ti + '\n' };
+      NOTES.push(n); ensureNodes();
+      closeSheet(true); S.tab = 'notes'; S.folder = ''; S.searching = false; render();
+      openNote(n.id, null);
+    } else if (sh.kind === 'task') {
+      const txt = $('#nf-text').value.trim(), dv = $('#nf-date').value, tv = dv ? $('#nf-time').value : '';
+      let due = null;
+      if (dv) { const p = dv.split('-').map(Number); due = Math.round((new Date(p[0], p[1] - 1, p[2]) - dayStart(NOW)) / 864e5); }
+      const x = sh.o.id ? TASKS.find(k => k.id === sh.o.id) : null, d = sh.draft;
+      if (x) Object.assign(x, { text: txt, due, time: tv, scope: d.scope, pri: d.pri });
+      else { TASKS.push({ id: seq++, text: txt, scope: d.scope, pri: d.pri, due, time: tv, note: null, done: false }); if (!S.searching) S.tab = 'tasks'; }
+      closeSheet(); render();
+    }
+  }
+  $('#nsh-ok').addEventListener('click', submit);
+  $('#nsh-x').addEventListener('click', () => closeSheet());
+  nscrim.addEventListener('click', () => closeSheet());
+  nsh.addEventListener('input', okState);
+  nsh.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type === 'text') { e.preventDefault(); submit(); } });
+  nsh.addEventListener('click', e => {
+    if (!sh) return;
+    const sg = e.target.closest('.nseg [data-v]');
+    if (sg) { const seg = sg.closest('.nseg'); if (seg.id === 'nf-scope') { sh.draft.scope = sg.dataset.v; setSeg(seg, sg.dataset.v === 'work' ? 0 : 1); } else { sh.draft.pri = sg.dataset.v; setSeg(seg, ['normal', 'medium', 'high'].indexOf(sg.dataset.v)); } return; }
+    if (e.target.closest('#nf-folder')) {
+      const btn = $('#nf-folder');
+      openMenu(btn, FOLD.map(f => ({ label: f, radio: true, checked: sh.folder === f, act: () => { sh.folder = f; btn.innerHTML = folderPill(); $('#nf-fname-row').hidden = true; okState(); } })).concat([{ label: t('newFolder'), icon: 'i-folder-plus', act: () => { sh.folder = '@new'; btn.innerHTML = folderPill(); $('#nf-fname-row').hidden = false; $('#nf-fname').focus(); okState(); } }]));
+      return;
+    }
+    if (e.target.closest('#nf-del')) { const id = sh.o.id; closeSheet(true); removeTask(id); return; }
+    const c = e.target.closest('[data-c]');
+    if (!c) return;
+    const a = c.dataset.c, n = ed && byId(ed.id), latest = n ? n.body + '\n- Latest sample line' : '';
+    if (a === 'compare') { $('#nf-mine').textContent = taEl.value; $('#nf-last').textContent = latest; $('#nf-cmp').hidden = false; c.disabled = true; }
+    else if (a === 'reload' && n) { n.body = latest; S.st = 'default'; closeSheet(true); loadNote(n.id); syncInert(); restore($('#ned-back')); $('#nstate-b'); render(); }
+    else if (a === 'keep' && n) { n.body = taEl.value; n.mod = NOW; S.st = 'default'; if (ed) ed.dirty = false; closeSheet(true); edStatus(); restore($('#ned-save')); render(); }
+    else if (a === 'discard') { const nx = sh.o.next; if (ed) ed.dirty = false; closeSheet(true); if (nx) nx(); }
+    else if (a === 'keepEd') closeSheet();
+  });
+  let sd0 = null;
+  nsh.addEventListener('pointerdown', e => { if (e.target.closest('.grab, .nsh-hd') && !e.target.closest('button')) { sd0 = { y: e.clientY, id: e.pointerId, dy: 0 }; try { nsh.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } });
+  nsh.addEventListener('pointermove', e => { if (sd0 && e.pointerId === sd0.id) { sd0.dy = Math.max(0, (e.clientY - sd0.y) / scaleK()); nsh.style.transition = 'none'; nsh.style.transform = 'translate3d(0,' + sd0.dy + 'px,0)'; } });
+  const sdEnd = e => { if (sd0 && e.pointerId === sd0.id) { const d = sd0.dy; sd0 = null; nsh.style.transition = ''; if (d > 90) closeSheet(); else nsh.style.transform = ''; } };
+  nsh.addEventListener('pointerup', sdEnd); nsh.addEventListener('pointercancel', sdEnd);
+
+  /* Menus */
+  $('#nplus').setAttribute('aria-haspopup', 'menu'); $('#nfilter').setAttribute('aria-haspopup', 'menu');
+  $('#nplus').addEventListener('click', () => {
+    const b = $('#nplus');
+    if (!menu.hidden && menuAnchor === b) { closeMenu(); return; }
+    openMenu(b, [{ icon: 'i-notes', label: t('newNote'), act: () => openSheet('note', { from: b }) }, { icon: 'i-checklist', label: t('newTask'), act: () => openSheet('task', { from: b }) }]);
+  });
+  $('#nfilter').addEventListener('click', () => {
+    const b = $('#nfilter');
+    if (!menu.hidden && menuAnchor === b) { closeMenu(); return; }
+    openMenu(b, ['all', 'personal', 'work'].map(v => ({ label: t(v), radio: true, checked: S.tscope === v, act: () => { S.tscope = v; render(); } })));
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !onNotes()) return;
+    if (!menu.hidden) { const a = menuAnchor; closeMenu(); restore(a); }
+    else if (sheetOpen) closeSheet();
+    else if (editorOpen) guard(() => closeEditor());
+  });
+
+  /* Board wiring */
+  function apply(tab, state, scope) {
+    closeMenu(); if (sheetOpen) closeSheet(true); if (editorOpen) closeEditor(true);
+    Object.assign(S, { tab: tab || 'notes', st: 'default', q: '', searching: false, scope: scope || 'all', glist: false, sel: null });
+    sIn.value = '';
+    if (state === 'search' || state === 'noresults') { S.searching = true; S.q = state === 'search' ? 'acme' : 'zzz'; sIn.value = S.q; }
+    else if (['empty', 'loading', 'error', 'offline', 'conflict'].includes(state)) S.st = state;
+    render();
+    if (state === 'editor' || state === 'conflict') { openNote(6, null); if (state === 'conflict') openSheet('conflict', { from: $('#ned-back') }); }
+    else if (state === 'newnote') openSheet('note');
+    else if (state === 'newtask') openSheet('task');
+  }
+  function go(tab, state, scope) {
+    if (!onNotes() && window.jvShowScreen) window.jvShowScreen('notes');
+    apply(tab, state, scope);
+  }
+  const sel = $('#notes-sel');
+  if (sel) sel.addEventListener('change', () => { const v = sel.value.split(':'); go(v[0], v[1]); });
+  document.addEventListener('jv:lang', e => { lang = e.detail === 'en' ? 'en' : 'da'; applyLang(); if (onNotes()) { render(); if (ed) edStatus(); } });
+  function onScreen() {
+    const on = onNotes();
+    $('#nplus').hidden = !on;
+    if (on) { applyLang(); render(); return; }
+    closeMenu(); if (sheetOpen) closeSheet(true); if (editorOpen) closeEditor(true);
+    $('#nfilter').hidden = true; phone.removeAttribute('data-gm');
+  }
+  new MutationObserver(onScreen).observe(phone, { attributes: true, attributeFilter: ['data-scr'] });
+  applyLang();
+  if (params.get('screen') === 'notes') {
+    const tab = ['notes', 'tasks', 'graph'].includes(params.get('tab')) ? params.get('tab') : 'notes', state = params.get('state') || 'default';
+    apply(tab, state, ['notes', 'tasks'].includes(params.get('scope')) ? params.get('scope') : '');
+    if (sel) sel.value = tab + ':' + state;
+  } else render();
 })();
 
 </script>
