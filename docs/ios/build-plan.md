@@ -1,6 +1,6 @@
 # iOS app build plan
 
-Status: the foundation phase is authorised. The owner answered the checklist on 29 October 2026 and gave the go for the foundation phase on 30 October 2026. Phase 1a is the first work and no implementation has landed yet. Later phases still need their own go. This file is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
+Status: the foundation phase is authorised. The owner answered the checklist on 29 October 2026 and gave the go for the foundation phase on 30 October 2026. Phase 1a is the first work and no implementation has landed yet. Later phases still need their own go. Every screen needs the owner's approval before it is built, merged or shipped (see Screen approval gate). This file is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
 
 Related documents: `iOS app.md` (confirmed decisions), `docs/ios/integration-contract.md` (backend endpoints the app talks to) and `docs/ios/design/` (the concept board and the surfaces gallery).
 
@@ -26,7 +26,19 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 | Lock Screen approvals | Allowed. Yes or no only, with device authentication before the action and text that names what is approved. Backend work: integration contract, sections 7 and 8. | Owner answer for allowed. My call: the safeguards. |
 | Keychain class | AfterFirstUnlock, this device only, for the session token. Classes that need an unlocked phone cannot be read by a notification action or in CarPlay. | Checked for CarPlay: the CarPlay developer guide. My call: the choice. |
 | App icon | The orb, drawn and shown to the owner before the first upload. | My call |
-| Keep-alive | A monthly scheduled upload, because TestFlight builds become unavailable 90 days after upload. | Checked: Apple's TestFlight page |
+| Keep-alive | A monthly reminder to the owner to run the manual upload, because TestFlight builds become unavailable 90 days after upload. An automated keep-alive of the last approved build can be added later if the owner wants it. | Checked: Apple's TestFlight page. Owner decision, 30 October 2026: no unapproved upload. |
+
+## Screen approval gate
+
+Owner decision, 30 October 2026: the owner approves every screen before it is deployed. This supersedes the automatic uploads on merge in checklist row 19.
+
+1. Every screen is its own issue and its own pull request.
+2. Design gate: the dispatcher shows the owner the concept frame for the screen, and no builder starts on that screen until the owner has approved it.
+3. Code gate: the owner approves the screen's pull request before it merges.
+4. Ship gate: the TestFlight upload workflow runs by manual dispatch only, started by the owner, so nothing reaches the owner's phone unapproved.
+5. A screen that has not been approved is never built, merged or shipped.
+
+Phase 1a has no real screens (only an empty shell), so the gate does not apply to it.
 
 ## Cost guard
 
@@ -39,7 +51,7 @@ Rules:
 1. Keep logic in the pure-Swift `JarvisCore` package, which builds and tests on cheap Linux on every push. Cloud agents get the toolchain through `copilot-setup-steps`. The SwiftUI layer stays thin.
 2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the plist and the entitlements) and a Mac job that needs the Linux job to pass first.
 3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds for the simulator with `CODE_SIGNING_ALLOWED=NO`. It does not boot a simulator, run UI tests or take screenshots. Screenshots run only on manual dispatch.
-4. The TestFlight workflow builds, archives and uploads in one job on merge, so the merge run is also the ship run, with no separate compile run beforehand. The monthly keep-alive reuses it.
+4. The TestFlight workflow builds, archives and uploads in one job, started by the owner by manual dispatch, so the ship run is also the only compile run for that upload. Uploads happen only when the owner starts them, which also lowers Mac minutes.
 5. Authors keep pull requests in draft until the Linux checks pass and the change is final, and batch related changes. The expectation is one Mac run per pull request.
 6. Owner safety net: set a GitHub Actions budget in Billing, so usage stops at the limit if the repository ever becomes private.
 7. The dispatcher reviews Actions billing usage at the end of each iOS phase.
@@ -51,7 +63,7 @@ Authorised on 30 October 2026 (checklist row 23 is now Yes). Phase 1a is the fir
 
 **1a. Skeleton and checks.** Needs only the bundle ID. No Apple account steps and no secrets.
 
-**1b. TestFlight upload.** Needs the owner's setup steps 1 to 7. Phase 2 (Shell) can start as soon as 1a merges, because CI proves it compiles.
+**1b. TestFlight upload.** Needs the owner's setup steps 1 to 7. The workflow runs by manual dispatch only, started by the owner. Phase 2 (Shell) can start as soon as 1a merges, because CI proves it compiles, but each screen still passes the screen approval gate.
 
 Both pull requests add workflow files, so the owner merges them.
 
@@ -96,10 +108,11 @@ Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are
 
 A separate workflow, not called from `ci.yml`.
 
-- Triggers: push to main touching `apps/ios/`, a monthly schedule, and manual dispatch. Never `pull_request` or `pull_request_target`, so fork pull requests can never reach the secrets.
+- Trigger: manual dispatch only, started by the owner. No push trigger and no schedule, so nothing is uploaded unapproved. Never `pull_request` or `pull_request_target`, so fork pull requests can never reach the secrets.
 - A GitHub Environment named `ios-testflight`, limited to the main branch. Three secrets: `APP_STORE_CONNECT_KEY_P8` (the key file contents), `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`. One plain variable, `APPLE_TEAM_ID`. The owner sets them with `gh secret set` and `gh variable set`, never in chat. Names are proposals.
 - `concurrency` group `ios-testflight` with `cancel-in-progress: false`.
-- One job builds, archives and uploads, so the merge run is also the ship run and no separate compile run comes first. The monthly keep-alive reuses this workflow.
+- One job builds, archives and uploads, so a manual run is also one Mac run and no separate compile run comes first.
+- Keep-alive: the monthly upload is a reminder to the owner to run this workflow, not a schedule. An automated keep-alive of the last approved build can be added later if the owner wants it.
 - Steps: write the key to a temporary file with mode 600 and delete it in a final step that always runs. Generate the project. `xcodebuild archive` with automatic signing, `-allowProvisioningUpdates`, the three `-authenticationKey...` flags, and the build number from the run number. `xcodebuild -exportArchive` with an export-options file that selects automatic signing, the team and the upload destination. Fallback if direct upload misbehaves: export the app file and upload it with `xcrun altool --upload-app` using the same key.
 - Never print the key, the key ID or the issuer ID.
 
@@ -156,7 +169,7 @@ Music
 2. Xcode 27 has its own runner image (`xcode-27` and `xcode-27-xlarge`, arm64 only, generally available since 15 October 2026) and it still has open problems. Checked on 29 October 2026: the keychain can fail to unlock, which matters for signing (https://github.com/actions/runner-images/issues/14837), the watchOS 27.0 simulator runtime is registered twice (https://github.com/actions/runner-images/issues/14946), downloads can stall, and the Metal toolchain is missing. Stay on `macos-26` with Xcode 26.6 and revisit before Apple's next SDK deadline.
 3. The ARM runners have 7 GB of memory (Checked: GitHub's runners reference lists 3 vCPUs and 7 GB for the standard arm64 macOS runner). Build one scheme at a time.
 4. `macos-14` retires on 2 November 2026 (Checked: the announcements in the `macos-26` image readme). Do not use it.
-5. TestFlight builds become unavailable 90 days after upload. The monthly upload is the cure.
+5. TestFlight builds become unavailable 90 days after upload. A monthly manual upload by the owner is the cure.
 6. Each upload needs a unique, rising build number. A re-run keeps its run number, so a re-run after a successful upload would be refused as a duplicate. Fold the attempt number in if that ever matters.
 7. Without `ITSAppUsesNonExemptEncryption`, App Store Connect asks the encryption questions for each new version, and the key lets the owner skip them (Checked: Apple's export compliance pages). That TestFlight shows this as a Missing Compliance hold on every build is Not re-read.
 8. Internal testers need no Apple review. Only external testers do.
@@ -197,7 +210,7 @@ Music
 
 1b is done when:
 
-- A merge to main produces a build in TestFlight with a rising build number, using no certificate in the repository.
+- A manual dispatch started by the owner produces a build in TestFlight with a rising build number, using no certificate in the repository.
 - The owner installs it and sees the orb icon and a blank glass screen.
-- The monthly schedule and manual dispatch both start the workflow.
+- A merge to main does not start the workflow, and there is no schedule.
 - Fork pull requests demonstrably cannot read the signing environment.
