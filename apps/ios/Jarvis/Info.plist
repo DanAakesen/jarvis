@@ -20,6 +20,10 @@
 	<false/>
 	<key>JARVIS_API_BASE_URL</key>
 	<string>$(JARVIS_API_BASE_URL)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Jarvis uses the camera to share a frame during voice conversations.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Jarvis uses the microphone for voice conversations.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

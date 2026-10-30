@@ -11,16 +11,20 @@ enum JarvisComposition {
         bundle: Bundle = .main,
         session: URLSession = .shared
     ) throws -> JarvisClient {
+        try JarvisClient(
+            configuration: JarvisClientConfiguration(baseURL: apiBaseURL(bundle: bundle)),
+            transport: URLSessionTransport(session: session),
+            tokenStore: try KeychainTokenStore(),
+            accessTokenProvider: accessTokenProvider
+        )
+    }
+
+    static func apiBaseURL(bundle: Bundle = .main) throws -> URL {
         guard let value = bundle.object(forInfoDictionaryKey: "JARVIS_API_BASE_URL") as? String,
               !value.isEmpty,
               let baseURL = URL(string: value) else {
             throw JarvisCompositionError.missingBaseURL
         }
-        return try JarvisClient(
-            configuration: JarvisClientConfiguration(baseURL: baseURL),
-            transport: URLSessionTransport(session: session),
-            tokenStore: try KeychainTokenStore(),
-            accessTokenProvider: accessTokenProvider
-        )
+        return baseURL
     }
 }

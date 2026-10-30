@@ -2786,3 +2786,22 @@ and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
 stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
 unbuilt areas and Settings use title-only placeholders until their screen
 issues are implemented. Reduced Motion removes settling animation.
+
+## Native iOS Voice screen (P15-11; 30 October 2026)
+
+The approved `docs/ios/design/board.html?voice=idle` frame informs the
+composition, not literal values. Voice has no top bar: one orb and one short
+status line occupy the central field, with mute, add, captions and end controls
+anchored at the bottom. A downward swipe minimizes to a persistent voice bar.
+During screen sharing, a full-width status bar with Stop stays above the controls;
+the camera tile remains draggable in the thumb zone.
+
+Use system glass buttons, SF Symbols, semantic colours, type styles, permission
+prompts, sheets and the ReplayKit picker. The custom orb and camera tile are
+needed for the approved voice-focused layout and live camera preview; their
+dimensions, state colours and motion values come from the shared iOS token layer.
+The minimized bar preserves voice access outside the screen, and the share bar
+keeps Stop visible while broadcasting.
+Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
+control labels. The board remains a visual reference only; the rendered app and
+physical-device behavior require separate verification.

@@ -13,9 +13,14 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: Jarvis
+        excludes:
+          - "Broadcast/**"
+      - path: Shared/VoiceScreenShareContract.swift
     dependencies:
       - package: JarvisCore
         product: JarvisCore
+      - target: JarvisBroadcast
+        embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis
@@ -26,3 +31,22 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         CODE_SIGN_ENTITLEMENTS: Jarvis/Jarvis.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  JarvisBroadcast:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Jarvis/Broadcast
+      - path: Shared/VoiceScreenShareContract.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.broadcast
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        INFOPLIST_FILE: Jarvis/Broadcast/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_ENTITLEMENTS: Jarvis/Broadcast/JarvisBroadcast.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: Jarvis/Broadcast/ReplayKitStop.h
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "YES"

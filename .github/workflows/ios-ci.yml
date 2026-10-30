@@ -27,7 +27,13 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "exactly one application target is required" unless project["targets"].keys == ["Jarvis"] && project.dig("targets", "Jarvis", "type") == "application"
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast"]
+            abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
+            abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
+            dependencies = project.dig("targets", "Jarvis", "dependencies") || []
+            abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
+            bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
+            abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
             abort "unexpected deployment target" unless project.dig("targets", "Jarvis", "deploymentTarget") == "26.0"
             abort "unexpected bundle identifier" unless project.dig("targets", "Jarvis", "settings", "base", "PRODUCT_BUNDLE_IDENTIFIER") == "com.danaakesen.jarvis"
             abort "iPhone-only device family is required" unless project.dig("targets", "Jarvis", "settings", "base", "TARGETED_DEVICE_FAMILY") == "1"
@@ -44,8 +50,17 @@ jobs:
           assert Path("apps/ios/Jarvis/Assets.xcassets/AppIcon.appiconset/JarvisAppIcon.png").is_file()
           info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
           assert info["ITSAppUsesNonExemptEncryption"] is False
+          app_group = ["group.com.danaakesen.jarvis"]
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
-          assert entitlements == {}
+          assert entitlements["com.apple.security.application-groups"] == app_group
+          extension_entitlements = plistlib.loads(Path("apps/ios/Jarvis/Broadcast/JarvisBroadcast.entitlements").read_bytes())
+          assert extension_entitlements["com.apple.security.application-groups"] == app_group
+          extension_info = plistlib.loads(Path("apps/ios/Jarvis/Broadcast/Info.plist").read_bytes())
+          extension = extension_info["NSExtension"]
+          assert extension_info["CFBundlePackageType"] == "XPC!"
+          assert extension_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
+          assert extension["NSExtensionPointIdentifier"] == "com.apple.broadcast-services-upload"
+          assert extension["NSExtensionAttributes"]["RPBroadcastProcessMode"] == "RPBroadcastProcessModeSampleBuffer"
           PY
 
   macos:

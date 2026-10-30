@@ -25,6 +25,8 @@ public enum VoiceSessionEvent: Equatable, Sendable {
     case responseCreated(id: String?)
     case audioDelta
     case responseFinished
+    case responseCancelled
+    case playbackFinished(responseID: String)
     case connectionDropped
     case reconnectAttempt(Int)
     case reconnected
@@ -37,6 +39,7 @@ public enum VoiceSessionEvent: Equatable, Sendable {
 public struct VoiceSessionStateMachine: Sendable {
     public private(set) var state: VoiceSessionState = .idle
     private var responseID: String?
+    private var responseHasAudio = false
 
     public init() {}
 
@@ -56,6 +59,7 @@ public struct VoiceSessionStateMachine: Sendable {
             defer {
                 state = .listening
                 responseID = nil
+                responseHasAudio = false
             }
             if let responseID {
                 return [.interruptPlayback(responseID: responseID)]
@@ -63,17 +67,32 @@ public struct VoiceSessionStateMachine: Sendable {
         case .speechStarted where isLive:
             state = .listening
             responseID = nil
+            responseHasAudio = false
         case .responseCreated(let id) where isLive:
             responseID = id
+            responseHasAudio = false
             state = .ready
         case .audioDelta where isLive:
+            responseHasAudio = true
             state = .speaking
         case .responseFinished where isLive:
+            if !responseHasAudio || responseID == nil {
+                state = .listening
+                responseID = nil
+                responseHasAudio = false
+            }
+        case .responseCancelled where isLive:
             state = .listening
             responseID = nil
+            responseHasAudio = false
+        case .playbackFinished(let id) where isLive && state == .speaking && responseID == id:
+            state = .listening
+            responseID = nil
+            responseHasAudio = false
         case .connectionDropped where isLive:
             state = .reconnecting(attempt: 0)
             responseID = nil
+            responseHasAudio = false
         case .reconnectAttempt(let attempt) where isReconnecting:
             state = .reconnecting(attempt: attempt)
         case .reconnected where isReconnecting:
@@ -83,9 +102,11 @@ public struct VoiceSessionStateMachine: Sendable {
         case .sessionEnded, .endRequested:
             state = .ended
             responseID = nil
+            responseHasAudio = false
         case .failed:
             state = .failed
             responseID = nil
+            responseHasAudio = false
         default:
             break
         }
@@ -204,6 +225,7 @@ public actor VoiceSessionClient {
             receiveTask = Task { await self.receiveMessages() }
         } catch {
             if !userEnded { apply(.failed) }
+            await transport.close(code: 1011)
             clearCredentials()
             throw error
         }
@@ -244,6 +266,7 @@ public actor VoiceSessionClient {
     }
 
     public func playbackCompleted(responseID: String, audible: Bool) async throws {
+        apply(.playbackFinished(responseID: responseID))
         try await send(.playbackCompleted(responseID: responseID, audible: audible))
     }
 
@@ -315,8 +338,10 @@ public actor VoiceSessionClient {
             apply(.responseCreated(id: responseID))
         case .audioDelta:
             apply(.audioDelta)
-        case .responseDone, .responseCancelled:
+        case .responseDone:
             apply(.responseFinished)
+        case .responseCancelled:
+            apply(.responseCancelled)
         case .transcriptionCompleted, .transcriptionDelta, .assistantTranscriptDelta,
             .visualContext, .screenContextUnavailable, .unknown:
             break

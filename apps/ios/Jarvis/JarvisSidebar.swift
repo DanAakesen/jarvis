@@ -1,26 +1,6 @@
 import JarvisCore
 import SwiftUI
 
-enum JarvisDesignTokens {
-    static let sidebarWidthFraction: CGFloat = 0.74
-    static let sidebarMaximumWidth: CGFloat = 320
-    static let sidebarGestureStartFraction: CGFloat = 0.62
-    static let sidebarGestureMinimumDistance: CGFloat = 8
-    static let sidebarOpenThreshold: CGFloat = 0.5
-    static let sidebarRowHeight: CGFloat = 52
-    static let sidebarRowSpacing: CGFloat = 2
-    static let sidebarRowLabelSpacing: CGFloat = 14
-    static let sidebarHorizontalInset: CGFloat = 24
-    static let sidebarVerticalInset: CGFloat = 16
-    static let sidebarIconSize: CGFloat = 21
-    static let sidebarIconColumnWidth: CGFloat = 25
-    static let sidebarPressedOpacity: CGFloat = 0.58
-    static let sidebarSpringResponse: CGFloat = 0.36
-    static let sidebarSpringDamping: CGFloat = 0.88
-    static let screenDimOpacity: CGFloat = 0.12
-    static let screenBlurRadius: CGFloat = 4
-}
-
 private struct JarvisSidebarButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

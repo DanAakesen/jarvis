@@ -274,6 +274,35 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(body["mode"], "handle")
     }
 
+    func testInspectsSharedVoiceFrameThroughExistingScreenVisionRoute() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 200, body: [
+                "description": "A chart with three bars.",
+                "capturedAt": "2026-10-30T00:00:00.000Z",
+            ])),
+        ])
+        let client = try makeClient(
+            transport: transport,
+            tokenStore: FakeTokenStore(token: "session.fixture.token")
+        )
+
+        let inspection = try await client.inspectVoiceScreenFrame(
+            sessionId: "41",
+            jpeg: Data([0xff, 0xd8, 0x00, 0xff, 0xd9])
+        )
+
+        XCTAssertEqual(inspection.description, "A chart with three bars.")
+        let requests = await transport.recordedRequests()
+        let request = try XCTUnwrap(requests.first)
+        XCTAssertEqual(request.method, .post)
+        XCTAssertEqual(request.url.path, "/api/screen/frames")
+        XCTAssertEqual(request.headers["Authorization"], authorization("session.fixture.token"))
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(request.body)) as? [String: String]
+        )
+        XCTAssertEqual(body, ["sessionId": "41", "frame": "/9gA/9k="])
+    }
+
     func testRejectsInvalidVoiceFrameBeforeSending() async throws {
         let transport = FakeHTTPTransport([])
         let client = try makeClient(transport: transport)

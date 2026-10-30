@@ -142,6 +142,14 @@ final class VoiceProtocolTests: XCTestCase {
         machine.apply(.audioDelta)
         XCTAssertEqual(machine.state, .speaking)
         machine.apply(.responseFinished)
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.playbackFinished(responseID: "wrong-response"))
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.playbackFinished(responseID: "response-1"))
+        XCTAssertEqual(machine.state, .listening)
+        machine.apply(.responseCreated(id: "response-2"))
+        machine.apply(.audioDelta)
+        machine.apply(.responseCancelled)
         XCTAssertEqual(machine.state, .listening)
         machine.apply(.connectionDropped)
         XCTAssertEqual(machine.state, .reconnecting(attempt: 0))
@@ -306,6 +314,38 @@ final class VoiceSessionClientTests: XCTestCase {
         XCTAssertTrue(sleeps.isEmpty)
     }
 
+    func testSpeakingStateContinuesUntilPlaybackCompletion() async throws {
+        let (stream, continuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        let stateRecorder = VoiceStateRecorder()
+        let client = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!,
+            transport: FakeWebSocketTransport(streams: [stream]),
+            onStateChange: { state in
+                Task { await stateRecorder.record(state) }
+            }
+        )
+
+        try await client.start(accessToken: "fixture.token", language: .en)
+        continuation.yield(#"{"type":"jarvis.session.ready","sessionId":12}"#)
+        await waitForState(.listening, in: client)
+        continuation.yield(#"{"type":"response.created","response":{"id":"response-3"}}"#)
+        continuation.yield(#"{"type":"response.audio.delta","delta":"AAE="}"#)
+        continuation.yield(#"{"type":"response.done"}"#)
+        for _ in 0..<1_000 {
+            if await stateRecorder.count(of: .speaking) >= 2 { break }
+            await Task.yield()
+        }
+        let speakingUpdates = await stateRecorder.count(of: .speaking)
+        XCTAssertEqual(speakingUpdates, 2)
+        let stateBeforePlaybackCompletion = await client.state()
+        XCTAssertEqual(stateBeforePlaybackCompletion, .speaking)
+
+        try await client.playbackCompleted(responseID: "response-3", audible: true)
+        await waitForState(.listening, in: client)
+        continuation.finish()
+        try await client.end()
+    }
+
     private func waitForState(
         _ expected: VoiceSessionState,
         in client: VoiceSessionClient,
@@ -331,6 +371,18 @@ final class VoiceSessionClientTests: XCTestCase {
             await Task.yield()
         }
         XCTFail("Socket did not send \(count) messages containing \(fragment)", file: file, line: line)
+    }
+}
+
+private actor VoiceStateRecorder {
+    private var states: [VoiceSessionState] = []
+
+    func record(_ state: VoiceSessionState) {
+        states.append(state)
+    }
+
+    func count(of expected: VoiceSessionState) -> Int {
+        states.filter { $0 == expected }.count
     }
 }
 
