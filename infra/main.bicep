@@ -15,6 +15,13 @@ param backendImage string = ''
 @description('The Entra object ID of the hosted Jarvis agent. Empty keeps agent access disabled.')
 param jarvisAgentObjectId string = ''
 
+@description('The name of the separately provisioned managed Copilot comparison agent.')
+param foundryCopilotAgentName string = ''
+@description('The pinned version of the managed Copilot comparison agent.')
+param foundryCopilotAgentVersion string = ''
+@description('The SHA256 fingerprint of the managed Copilot comparison definition.')
+param foundryCopilotDefinitionSha256 string = ''
+
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
 
@@ -994,6 +1001,19 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               // English voice route; without it /voice is never registered (L102).
               name: 'VOICE_LIVE_ENDPOINT'
               value: 'wss://${foundryAccount.name}.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15'
+            }
+          ], empty(foundryCopilotAgentName) ? [] : [
+            {
+              name: 'FOUNDRY_COPILOT_AGENT_NAME'
+              value: foundryCopilotAgentName
+            }
+            {
+              name: 'FOUNDRY_COPILOT_AGENT_VERSION'
+              value: foundryCopilotAgentVersion
+            }
+            {
+              name: 'FOUNDRY_COPILOT_DEFINITION_SHA256'
+              value: foundryCopilotDefinitionSha256
             }
           ], empty(jarvisAgentObjectId) ? [] : [
             {

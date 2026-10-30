@@ -12,6 +12,20 @@ Copilot test-chat turn. Preserve request shape, consumed-source and unknown-outc
 claim behavior until a new sanitized provider cause supplies evidence. Never
 include provider messages or raw responses in diagnostics.
 
+## Managed Copilot target persistence (#1350; 30 October 2026)
+
+Ordinary Bicep deployment carries forward only the existing backend's complete,
+validated Copilot agent name/version/fingerprint tuple. Missing values remain
+absent; partial or invalid tuples fail before deployment. Focused offline checks:
+`.github/scripts/tests/test_deploy_vault_mirror.py`,
+`bash -n .github/scripts/deploy_bicep.sh`, and
+`bicep build infra/main.bicep --stdout`.
+The 30 October main deployment ran no infra/backend/agent update, and its normal
+chat canary failed with the generic `acceptance_check_failed`; it did not capture
+a managed Copilot `providerCause`. No successful original-path Copilot turn is
+established. Do not change `_create_response` based on a synthetic rejection or
+infer that the generic current-chat canary diagnosed the Copilot request.
+
 ## Managed conversation failure repair (#1350; 29 October 2026)
 
 Use the production lazy wrapper with stateful synthetic claims in
