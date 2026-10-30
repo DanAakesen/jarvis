@@ -44,6 +44,26 @@ public struct HTTPResponse: Sendable {
     }
 }
 
+public struct HTTPStreamResponse: Sendable {
+    public let statusCode: Int
+    public let headers: [String: String]
+    public let body: AsyncThrowingStream<Data, any Error>
+
+    public init(
+        statusCode: Int,
+        headers: [String: String] = [:],
+        body: AsyncThrowingStream<Data, any Error>
+    ) {
+        self.statusCode = statusCode
+        self.headers = headers
+        self.body = body
+    }
+
+    public func header(_ name: String) -> String? {
+        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+}
+
 public enum HTTPTransportFailure: Error, Sendable {
     case network
     case timedOut
@@ -51,4 +71,20 @@ public enum HTTPTransportFailure: Error, Sendable {
 
 public protocol HTTPTransport: Sendable {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse
+    func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse
+}
+
+public extension HTTPTransport {
+    func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse {
+        let response = try await send(request)
+        let body = AsyncThrowingStream<Data, any Error> { continuation in
+            if !response.body.isEmpty { continuation.yield(response.body) }
+            continuation.finish()
+        }
+        return HTTPStreamResponse(
+            statusCode: response.statusCode,
+            headers: response.headers,
+            body: body
+        )
+    }
 }

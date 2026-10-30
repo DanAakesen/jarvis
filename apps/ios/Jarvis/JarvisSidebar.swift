@@ -29,7 +29,7 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
     }
 }
 
-private struct JarvisSidebar: View {
+struct JarvisSidebar: View {
     @FocusState private var focusedDestination: JarvisDestination?
     @FocusState private var settingsFocused: Bool
     @State private var hoveredDestination: JarvisDestination?
@@ -56,7 +56,7 @@ private struct JarvisSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
-                .foregroundStyle(settingsFocused || settingsHovered ? .accentColor : .primary)
+                .foregroundStyle(settingsFocused || settingsHovered ? Color.accentColor : Color.primary)
                 .accessibilityLabel("Settings")
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
@@ -122,6 +122,6 @@ private struct JarvisSidebar: View {
 
     private func rowColor(for destination: JarvisDestination, selected: Bool) -> Color {
         guard destination.isNavigable else { return .secondary }
-        return selected ? .accentColor : .primary
+        return selected ? Color.accentColor : Color.primary
     }
 }

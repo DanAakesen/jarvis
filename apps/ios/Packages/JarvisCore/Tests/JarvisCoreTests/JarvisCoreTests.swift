@@ -69,6 +69,23 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertFalse(navigation.isSidebarOpen)
     }
 
+    func testStreamingTransportDefaultKeepsExistingFakesCompatible() async throws {
+        let body = Data("synthetic stream".utf8)
+        let transport = FakeHTTPTransport([.response(HTTPResponse(statusCode: 200, body: body))])
+        let response = try await transport.stream(HTTPRequest(
+            method: .get,
+            url: URL(string: "https://api.example.invalid/events")!,
+            timeout: .seconds(1)
+        ))
+        var received = Data()
+        for try await chunk in response.body {
+            received.append(chunk)
+        }
+
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(received, body)
+    }
+
     func testSessionLifecycleUsesBearerTokensAndPersistsSessionToken() async throws {
         let transport = FakeHTTPTransport([
             .response(jsonResponse(status: 201, body: sessionJSON)),
