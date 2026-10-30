@@ -111,6 +111,8 @@ final class VoiceProtocolTests: XCTestCase {
         XCTAssertEqual(machine.state, .listening)
         machine.apply(.connectionDropped)
         XCTAssertEqual(machine.state, .reconnecting(attempt: 0))
+        machine.apply(.microphoneActive)
+        XCTAssertEqual(machine.state, .reconnecting(attempt: 0))
         machine.apply(.reconnectAttempt(1))
         machine.apply(.reconnected)
         XCTAssertEqual(machine.state, .connecting)
@@ -127,6 +129,9 @@ final class VoiceProtocolTests: XCTestCase {
         machine.apply(.sessionReady)
         machine.apply(.responseCreated(id: "response-2"))
         machine.apply(.audioDelta)
+        machine.apply(.microphoneMuted)
+        machine.apply(.microphoneActive)
+        XCTAssertEqual(machine.state, .speaking)
 
         XCTAssertEqual(
             machine.apply(.speechStarted),
@@ -174,6 +179,8 @@ final class VoiceSessionClientTests: XCTestCase {
         try await client.sendAudio(Data([0x01, 0x02]))
         try await client.setMuted(true)
         try await client.setMuted(false)
+        try await client.setCameraState(on: false)
+        try await client.playbackCompleted(responseID: "response-2", audible: false)
 
         secondContinuation.yield(#"{"type":"response.created","response":{"id":"response-2"}}"#)
         secondContinuation.yield(#"{"type":"response.audio.delta","delta":"AAE="}"#)
@@ -194,6 +201,7 @@ final class VoiceSessionClientTests: XCTestCase {
         XCTAssertTrue(sent.contains(#"{"type":"jarvis.microphone.active"}"#))
         XCTAssertTrue(sent.contains(#"{"audio":"AQI=","type":"input_audio_buffer.append"}"#))
         XCTAssertTrue(sent.contains(#"{"type":"jarvis.microphone.muted"}"#))
+        XCTAssertTrue(sent.contains(#"{"on":false,"type":"jarvis.camera.state"}"#))
         XCTAssertTrue(sent.contains(#"{"audible":false,"responseId":"response-2","type":"jarvis.voice.playback.completed"}"#))
         XCTAssertTrue(sent.contains(#"{"type":"jarvis.session.end"}"#))
         let closedCodes = await transport.closedCodes()

@@ -6211,6 +6211,14 @@ its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
 validation.
 
+P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
+`WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English
+and Danish `/voice` endpoints and token subprotocols, preserves unknown server
+messages, and retries drops at most eight times with an injectable clock.
+Audio helpers only convert bounded PCM16 little-endian bytes to and from base64;
+audio capture and playback remain outside the package. Upgrade-header
+authentication and voice tool/error message shapes remain unverified.
+
 ## iOS Phase 1b: owner-started TestFlight upload
 
 `.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only

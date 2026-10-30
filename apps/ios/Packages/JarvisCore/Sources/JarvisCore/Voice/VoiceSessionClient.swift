@@ -50,9 +50,7 @@ public struct VoiceSessionStateMachine: Sendable {
         case .sessionReady where state == .connecting || state == .ready ||
             isReconnecting:
             state = .listening
-        case .microphoneActive where isLive:
-            state = .listening
-        case .microphoneMuted:
+        case .microphoneActive, .microphoneMuted:
             break
         case .speechStarted where state == .speaking:
             defer {
@@ -160,6 +158,7 @@ public actor VoiceSessionClient {
     private var reconnectAttempts = 0
     private var isConnected = false
     private var isMuted = false
+    private var cameraState: Bool?
     private var userEnded = false
 
     public init(
@@ -192,10 +191,17 @@ public actor VoiceSessionClient {
         do {
             try await transport.connect(url: target, subprotocols: subprotocols)
             isConnected = true
+            guard !userEnded, machine.state == .connecting else {
+                isConnected = false
+                await transport.close(code: 1000)
+                clearCredentials()
+                return
+            }
             machine.apply(.connected)
             receiveTask = Task { await self.receiveMessages() }
         } catch {
-            machine.apply(.failed)
+            if !userEnded { machine.apply(.failed) }
+            clearCredentials()
             throw error
         }
     }
@@ -214,6 +220,19 @@ public actor VoiceSessionClient {
         }
     }
 
+    public func setCameraState(on: Bool) async throws {
+        guard isLive else { throw VoiceProtocolError.invalidState }
+        guard cameraState != on else { return }
+        cameraState = on
+        if isConnected {
+            try await send(.cameraState(on: on))
+        }
+    }
+
+    public func playbackCompleted(responseID: String, audible: Bool) async throws {
+        try await send(.playbackCompleted(responseID: responseID, audible: audible))
+    }
+
     public func end() async throws {
         guard isLive else { return }
         userEnded = true
@@ -230,6 +249,7 @@ public actor VoiceSessionClient {
         }
         isConnected = false
         await transport.close(code: 1000)
+        clearCredentials()
         if let sendError { throw sendError }
     }
 
@@ -261,10 +281,14 @@ public actor VoiceSessionClient {
             machine.apply(.sessionReady)
             try await send(isMuted ? .microphoneMuted : .microphoneActive)
             machine.apply(isMuted ? .microphoneMuted : .microphoneActive)
+            if let cameraState {
+                try await send(.cameraState(on: cameraState))
+            }
         case .sessionEnded:
             machine.apply(.sessionEnded)
             isConnected = false
             await transport.close(code: 1000)
+            clearCredentials()
         case .speechStarted:
             let actions = machine.apply(.speechStarted)
             for action in actions {
@@ -288,7 +312,10 @@ public actor VoiceSessionClient {
         guard !userEnded, isLive,
               let endpoint,
               reconnectPolicy.maximumAttempts > 0 else {
-            if isLive { machine.apply(.failed) }
+            if isLive {
+                machine.apply(.failed)
+                clearCredentials()
+            }
             return
         }
 
@@ -298,6 +325,7 @@ public actor VoiceSessionClient {
         guard firstAttempt <= reconnectPolicy.maximumAttempts else {
             machine.apply(.reconnectExhausted)
             await transport.close(code: 1011)
+            clearCredentials()
             return
         }
         for attempt in firstAttempt...reconnectPolicy.maximumAttempts {
@@ -314,6 +342,10 @@ public actor VoiceSessionClient {
             guard !Task.isCancelled, !userEnded else { return }
             do {
                 try await transport.connect(url: endpoint, subprotocols: subprotocols)
+                guard !userEnded, isLive else {
+                    await transport.close(code: 1000)
+                    return
+                }
                 reconnectAttempts = attempt
                 isConnected = true
                 machine.apply(.reconnected)
@@ -322,13 +354,19 @@ public actor VoiceSessionClient {
                 reconnectAttempts = attempt
             }
         }
+        guard !userEnded, isLive else { return }
         machine.apply(.reconnectExhausted)
         await transport.close(code: 1011)
+        clearCredentials()
     }
 
     private func send(_ message: VoiceClientMessage) async throws {
         guard isConnected else { throw VoiceProtocolError.invalidState }
         try await transport.send(text: message.jsonString())
+    }
+
+    private func clearCredentials() {
+        subprotocols.removeAll(keepingCapacity: false)
     }
 
     private var isLive: Bool {
