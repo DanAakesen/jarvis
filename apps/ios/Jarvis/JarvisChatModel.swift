@@ -83,9 +83,9 @@ final class JarvisChatModel: ObservableObject {
     let startupError: String?
 
     init(client: JarvisClient?, fixtureMode: Bool = false, startupError: String? = nil) {
-        self.client = client.map(JarvisChatClient.init(client:))
-        nowClient = client.map(JarvisNowFeedClient.init(client:))
-        updatesClient = client.map(JarvisWorkspaceClient.init(client:))
+        self.client = client.map { JarvisChatClient(client: $0) }
+        nowClient = client.map { JarvisNowFeedClient(client: $0) }
+        updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
         language = Locale.current.language.languageCode?.identifier == "da" ? .da : .en
