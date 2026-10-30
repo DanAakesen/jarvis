@@ -2,6 +2,26 @@ import JarvisCore
 import SwiftUI
 
 enum JarvisDesignTokens {
+    static let controlMinimumHeight: CGFloat = 44
+    static let contentInset: CGFloat = 20
+    static let contentSpacing: CGFloat = 16
+    static let rowSpacing: CGFloat = 12
+    static let compactSpacing: CGFloat = 4
+    static let iconLabelSpacing: CGFloat = 6
+    static let chartLegendSpacing: CGFloat = 8
+    static let timelineMarkerTopInset: CGFloat = 7
+    static let surfaceCornerRadius: CGFloat = 16
+    static let listRowVerticalInset: CGFloat = 12
+    static let emptyStateHeight: CGFloat = 180
+    static let searchDebounceMilliseconds: Int64 = 250
+    static let filterAnimationDuration: Double = 0.18
+    static let chartHeight: CGFloat = 220
+    static let chartLineWidth: CGFloat = 2
+    static let chartMarkerSize: CGFloat = 8
+    static let chartMinimumBarWidth: CGFloat = 2
+    static let chartMinimumBarHeight: CGFloat = 1
+    static let chartAreaOpacity: Double = 0.16
+    static let iconSize: CGFloat = 20
     static let sidebarWidthFraction: CGFloat = 0.74
     static let sidebarMaximumWidth: CGFloat = 320
     static let sidebarGestureStartFraction: CGFloat = 0.62

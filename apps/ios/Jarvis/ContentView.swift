@@ -4,12 +4,16 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @GestureState private var sidebarDrag = SidebarDrag()
+    @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
     @State private var animationTargetProgress: CGFloat = 0
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?
 
-    init() {
+    init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
+        _workspaceRuntime = StateObject(
+            wrappedValue: WorkspaceRuntime(client: client, webAppURL: webAppURL)
+        )
         let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
@@ -49,8 +53,29 @@ struct ContentView: View {
                 ) {
                     JarvisPlaceholderView(destination: .chat)
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            JarvisPlaceholderView(destination: destination)
+                            if destination == .workspaces {
+                                WorkspacesView(runtime: workspaceRuntime)
+                            } else {
+                                JarvisPlaceholderView(destination: destination)
+                            }
                         }
+                }
+                .task { await workspaceRuntime.run() }
+                .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
+                    guard destination != nil,
+                          let destination = workspaceRuntime.consumeRequestedDestination() else {
+                        return
+                    }
+                    navigate(to: destination, drawerWidth: drawerWidth)
+                }
+                .sheet(
+                    item: Binding(
+                        get: { workspaceRuntime.presentedView },
+                        set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
+                    ),
+                    onDismiss: workspaceRuntime.userDismissedView
+                ) { presented in
+                    GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background(Color(uiColor: .systemBackground))

@@ -20,6 +20,8 @@
 	<false/>
 	<key>JARVIS_API_BASE_URL</key>
 	<string>$(JARVIS_API_BASE_URL)</string>
+	<key>JARVIS_WEB_APP_URL</key>
+	<string>$(JARVIS_WEB_APP_URL)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

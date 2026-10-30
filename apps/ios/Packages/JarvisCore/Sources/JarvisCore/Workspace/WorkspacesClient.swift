@@ -229,12 +229,18 @@ public final class JarvisWorkspacesClient: Sendable {
     }
 
     public func remove(_ item: SavedWorkspaceItem) async throws {
-        let response = try await client.performAuthenticatedRequest(
-            method: .delete,
-            path: ["workspaces", item.id],
-            body: try JSONEncoder().encode(WorkspaceItemDeleteRequest(confirm: true)),
-            idempotent: false
-        )
+        let response: HTTPResponse
+        do {
+            response = try await client.performAuthenticatedRequest(
+                method: .delete,
+                path: ["workspaces", item.id],
+                body: try JSONEncoder().encode(WorkspaceItemDeleteRequest(confirm: true)),
+                idempotent: false
+            )
+        } catch let error as JarvisClientError {
+            if case .httpStatus(404) = error { return }
+            throw error
+        }
         guard let result = try? JSONDecoder().decode(WorkspaceItemDeleteResponse.self, from: response.body),
               result.deleted else {
             throw WorkspacesClientError.invalidResponse
@@ -253,12 +259,18 @@ public final class JarvisWorkspacesClient: Sendable {
         } catch {
             throw JarvisClientError.responseEncodingFailure
         }
-        let response = try await client.performAuthenticatedRequest(
-            method: method,
-            path: path,
-            body: encodedBody,
-            idempotent: idempotent
-        )
+        let response: HTTPResponse
+        do {
+            response = try await client.performAuthenticatedRequest(
+                method: method,
+                path: path,
+                body: encodedBody,
+                idempotent: idempotent
+            )
+        } catch let error as JarvisClientError {
+            if case .httpStatus(404) = error { throw WorkspacesClientError.itemNotFound }
+            throw error
+        }
         do {
             return try JSONDecoder().decode(SavedWorkspaceItem.self, from: response.body)
         } catch {
