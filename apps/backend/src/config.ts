@@ -2,6 +2,7 @@ import type { Level } from 'pino';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { ConfigurationError } from './configuration-error.js';
 import { loadBackendLogsConfig, type BackendLogsConfig } from './operations/backend-logs.js';
+import { loadBackendLogProbeConfig, type BackendLogProbeConfig } from './operations/backend-log-authorization.js';
 import { normalizeFoundryProjectEndpoint, normalizeVoiceLiveEndpoint } from './voice/relay.js';
 export { ConfigurationError } from './configuration-error.js';
 
@@ -11,6 +12,7 @@ export interface BackendConfig {
   logLevel: Level;
   applicationInsightsConnectionString?: string;
   backendLogs?: BackendLogsConfig;
+  backendLogProbe?: BackendLogProbeConfig;
   keyVaultUri?: string;
   voiceLiveEndpoint?: string;
   foundryEndpoints?: {
@@ -21,6 +23,7 @@ export interface BackendConfig {
   foundryRunnerAgentName?: string;
   codexImageModel: string;
   foundryChatAgentName?: string;
+  foundryCopilot?: { agentName: string; version: string; fingerprint: string };
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
   codexToolModel: string;
@@ -144,6 +147,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryChatAgentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_CHAT_AGENT_NAME is configured');
   }
+  const copilotAgentName = env.FOUNDRY_COPILOT_AGENT_NAME || undefined;
+  const copilotVersion = env.FOUNDRY_COPILOT_AGENT_VERSION || undefined;
+  const copilotFingerprint = env.FOUNDRY_COPILOT_DEFINITION_SHA256 || undefined;
+  const copilotConfigured = [copilotAgentName, copilotVersion, copilotFingerprint].some(value => value !== undefined);
+  if (copilotConfigured && (!copilotAgentName || !copilotVersion || !copilotFingerprint || !foundryProjectEndpoint ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(copilotAgentName) ||
+      copilotAgentName === (foundryChatAgentName ?? 'jarvis') ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(copilotVersion) ||
+      !/^[0-9a-f]{64}$/u.test(copilotFingerprint))) {
+    throw new ConfigurationError('Copilot tests require a separate agent name, pinned version, definition SHA256 and existing Foundry project endpoint');
+  }
+  const foundryCopilot = copilotConfigured
+    ? { agentName: copilotAgentName!, version: copilotVersion!, fingerprint: copilotFingerprint! }
+    : undefined;
   const foundryMemoryEmbeddingDeploymentName = env.JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME;
   if (foundryMemoryEmbeddingDeploymentName !== undefined &&
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(foundryMemoryEmbeddingDeploymentName)) {
@@ -242,10 +259,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   }
   const auth = loadAuthConfig(env);
   const backendLogs = loadBackendLogsConfig(env);
+  const backendLogProbe = loadBackendLogProbeConfig(env);
 
   return {
     auth,
     ...(backendLogs ? { backendLogs } : {}),
+    ...(backendLogProbe ? { backendLogProbe } : {}),
     port: Number(port),
     logLevel: logLevel as Level,
     ...(origin === undefined ? {} : { staticWebAppOrigin: origin }),
@@ -258,6 +277,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryAccountResourceId === undefined ? {} : { foundryAccountResourceId }),
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
+    ...(foundryCopilot === undefined ? {} : { foundryCopilot }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,

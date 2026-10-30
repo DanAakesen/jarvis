@@ -214,6 +214,13 @@ current_message_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 current_chat_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_chat_session_id", default=None
 )
+# Set only after the stored source message is verified against backend history.
+current_chat_runtime_test: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_chat_runtime_test", default=None
+)
+current_chat_input_start: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "jarvis_chat_input_start", default=None
+)
 current_chat_turn_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_chat_turn_id", default=None
 )

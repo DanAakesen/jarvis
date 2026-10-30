@@ -17,7 +17,7 @@ interface WebhookOptions {
   readonly deliveryStore: WebhookDeliveryStore | null;
   readonly getSecret: () => Promise<string | undefined>;
   readonly isTrackedRepository?: (repository: string) => boolean;
-  readonly onMapping?: (mapping: GithubWebhookMapping) => Promise<void>;
+  readonly onMapping?: (mapping: GithubWebhookMapping, deliveryId?: string) => Promise<void>;
   readonly readWorkflowRun?: (repository: string, runId: number) => Promise<{ workflowId: number; cancelled: boolean }>;
 }
 
@@ -136,6 +136,23 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
             mapping = { ...mapping, workflowId: workflow.workflowId };
           } catch {
             request.log.error('github.webhook_workflow_unavailable');
+            return reply.code(503).send({ error: 'Webhook processing unavailable' });
+          }
+        }
+        // Issue labels may start paid work. A receipt is final only after the mapping succeeds;
+        // task persistence also binds the delivery ID to survive a crash before this receipt.
+        if (mapping.kind === 'issue_labeled') {
+          try {
+            if (await options.deliveryStore.hasDelivery(deliveryId)) return reply.code(202).send({ status: 'duplicate' });
+            await options.onMapping?.(mapping, deliveryId);
+            const inserted = await options.deliveryStore.record({ deliveryId, event, outcome: 'ok', mapping });
+            if (inserted) {
+              app.nowEventHub.publish({ type: 'refresh' });
+              if (invalidatesBoard && trackedBoardRepository) await publishBoardUpdate(mapping.repository);
+            }
+            return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
+          } catch {
+            request.log.error('github.webhook_mapping_failed');
             return reply.code(503).send({ error: 'Webhook processing unavailable' });
           }
         }

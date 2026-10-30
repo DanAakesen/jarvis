@@ -1,3 +1,270 @@
+## Managed test conversation failures (#1350; 29 October 2026)
+
+The managed text canary passed in Deploy 40928130267, but the owner reported
+failed real test-conversation replies. The first live cause remains unverified.
+This repair accepts omitted optional function-call status only within a completed
+response, preserves fixed managed error codes through the UI, and distinguishes
+known failures before inference from uncertain work. Native conversation creation
+waits until shared context is prepared. Known failed sources stay consumed;
+uncertain inference/action claims stay active and are never reset or replayed.
+Production-wrapper tests now use a stateful claim fixture for initial text/tool
+turns, safe follow-up, consumed-source rejection and uncertain-action blocking.
+Next: exact-head qualification/review and live original-path validation. No grant,
+default cutover or claim reset is included.
+
+CI found the release smoke formatter's hosted-origin list missing the newly
+preserved managed codes. Its static finite list now matches the backend; exact
+parity, unknown-code redaction and failure-only acceptance assertions stay intact.
+
+## Managed canary failure visibility (#1350; 29 October 2026)
+
+PR #1357 merged after qualification. Manual Deploy 40884299864 passed provisioning
+at 14:03:43 UTC, configured the pinned target and passed backend readiness, then
+failed the canary assertion at 14:05:08. All eight Current chat checks passed;
+research failed separately. The canary's private response was deleted and not
+uploaded, so its specific reason is unavailable through retained workflow logs.
+
+The local workflow-handoff correction reports only existing fixed reason/stage
+labels, bounded HTTP status and allowlisted model/effort constants on failure.
+The fallback stage is the known `managed_text_canary` operation; no new Python
+runtime instrumentation is included. It preserves the gate, private bodies, existing resource,
+credentials, roles and defaults. Metadata-based runtime availability currently
+does not consult canary success; it may offer Copilot despite a failed canary.
+Actual authenticated availability and a working managed response remain unverified.
+No availability policy change is included in this diagnostic correction.
+All 35 handoff/provisioning/deploy-plan tests, scoped Ruff, compilation and shell
+syntax checks pass locally; independent review found no blocker. Exact-head CI
+and a new reviewed handoff remain pending.
+
+## Managed identity readback correction (#1350; 29 October 2026)
+
+PR #1355 merged after full exact-head qualification. Automatic Deploy 40867958702
+applied all components and passed readiness and all eight chat smoke checks;
+research failed separately. Approved manual Deploy 40877005757 reused those
+components and reached `agent_identity_unverified` after validating one active
+comparison version, before endpoint pinning/backend activation/canary. Do not
+create a duplicate or infer a missing grant from that combined check.
+Its separate acceptance also reported `acceptance_check_failed` for chat canary,
+`github_issue_unavailable` for GitHub read and `research_runner_failed`.
+
+The local correction accepts documented unset identity status with enabled
+effective state and a valid unchanged principal. Explicit disabled/unknown
+states still fail; fixed codes distinguish the rejected component. All 30
+provisioning/handoff/deploy-plan tests, scoped Ruff, compilation and shell syntax
+checks pass locally. Reviewed qualification precedes another existing-resource handoff. No live
+correction, Copilot response or UI acceptance is claimed.
+
+## Runtime comparison candidate (#1350; 29 October 2026)
+
+The local candidate contains the managed protocol adapter and definition
+validator, immutable SQL test-session metadata, scoped history/default exclusion,
+source-verified bridge selection, and the approved chat-menu selector with a
+separate labelled test view. The managed option remains disabled until real
+definition/model/effort readback and deployment pass. Durable source/turn
+claims, agent-only binding routes/client and shared application-policy transport
+are now implemented locally. Identical backend disconnect/reattach and steering
+fixtures execute for both choices. The owner declined extra transcript filtering
+from normal search/context/summaries; preserve those existing contracts. No target, identity grant or production
+default was created or changed. The [adapter checkpoint](docs/managed-chat-adapter.md)
+lists the missing policy and provisioning evidence.
+
+The last-mile source is assembled: lazy Python factory, pinned backend target
+reader/configuration, authoritative fixed manifest read, scoped provisioning
+script and default-off manual Deploy handoff. That handoff creates the comparison
+agent using existing OIDC, configures only its three backend target values and
+calls a fixed text canary with the actual bridge identity. No new credential or
+blanket role grant is added. Local SQL execution was blocked by Forbidden pulling
+the pinned SQL Server image. Actual Database CI passed all four new runtime
+contracts and found three stale expected-table assertions in the shared schema
+inventory. The candidate adds the three table names without weakening equality.
+CI 40864485219 then passed Database and Web, but Backend found two lifecycle
+fixture shutdown timeouts after their assertions. Exact Node 22.23.3 reproduction
+identified an unrequested replacement fetch socket; teardown-only connection
+cleanup passes all four lifecycle cases locally. Exact-head requalification
+is pending. No live
+provisioning or canary has been run.
+
+The settings correction is merged in #1353. Deploy 40852006540 passed every chat
+smoke scenario at 09:55 UTC; research remains down independently with
+`research_runner_failed`. This is passing chat smoke evidence, not ordinary-chat,
+research or two-runtime acceptance. Local test evidence and open boundaries are
+recorded in [migration notes](docs/main-chat-harness-migration.md).
+
+## Whole-Jarvis logging scope replaces backend-only (#1341; 29 October 2026)
+
+The owner confirmed read-only logs for the backend, hosted agents, coding runners,
+deployments and supporting services, excluding unrelated projects. Retain the
+Foundry Reader assignment; its removal proposal is stopped and was never applied.
+The earlier narrow grant approval does not authorize new whole-system access.
+The current reader stays disabled. See [source inventory and grant proposal](docs/jarvis-logs.md).
+
+Independent local work adds a metadata-only catalogue to the existing preflight:
+exact canonical resources plus ownership tags, and known-table plan/resource-field
+metadata. Neither a shared workspace nor tags alone establishes ownership. Private
+values remain in the existing mode-0600 report; public output is fixed labels.
+No data query, new grant, security mode, credential, ingestion or retention change.
+Runtime multi-source reading, its single capability replacement, exact expanded
+grant approval, source routing and whole-system enforcement remain pending.
+
+The owner subsequently approved the exact issue scope update, inventory/design
+PR publication with test results, readiness and integration after checks. The one
+authorized issue-update retry succeeded. Reconcile current main `9f831509` without
+altering its chat/research fix; four documentation-prefix conflicts retain both
+scopes. Parent owns readiness/merge. New persistent grants remain unapproved.
+Combined local validation passes 35 backend-log Python tests, 45 pipeline tests
+and 13 main smoke-reason tests, scoped Ruff, byte compilation and diff checks.
+All eight inventory-only and fourteen main-only file blobs match their parents.
+No new Azure inventory execution or whole-system runtime implementation is claimed.
+
+## Test-settings correction (#1350; 29 October 2026)
+
+The owner requires tests to use the same role settings. The correction
+removes smoke's forced-none effort and separate token cap while retaining the
+existing saved-setting resolution and read-only guards. It records bounded
+effective-effort telemetry without adding fallback values. Local validation:
+1,025 hosted tests/Ruff/compilation and 56 research/vision tests plus backend lint
+pass. The owner approved including this correction with the finite diagnostics
+in #1353; exact-head qualification, independent review and live acceptance remain
+pending.
+See [local scope and remaining evidence](docs/smoke-settings-1350.md).
+
+## Live reasoning rejection and separate research evidence (#1350; 29 October 2026)
+
+PR #1351 merged after CI 40839366476. Deploy 40840605441 passed application/agent
+deployment and readiness, then failed live acceptance: the required chat scenarios
+report `model_bad_request_reasoning`; research is independently down. Primary
+Terra documentation supports none, so no parameter/setting change is justified
+yet. Prepare fixed reasoning code/subfield distinctions and separate research
+boundary reasons. Local checks pass 1,019 hosted tests, 349 focused backend tests,
+backend lint/build and 13 sanitizer tests. The full backend suite passes 6,902
+tests with one skip. The baseline is still unresolved.
+Preserve main `82fff9f5` and the original log task's scope. Next: reviewed normal
+release evidence before choosing a correction; managed path/UI work remains
+unreleased. See [migration evidence](docs/main-chat-harness-migration.md).
+
+## Reconcile log diagnostics with current main (#1341; 29 October 2026)
+
+Merge main `938bb48f` (#1351 chat rejection diagnostics) into log-diagnostic head
+`f8a94f6d`. Four documentation-prefix conflicts retain both scopes; PRODUCT
+merges automatically. All seven diagnostic-only and seven main-only file blobs
+remain identical to their respective parents. Combined validation passes 703
+backend tests across 13 suites, all 944 hosted-agent tests and 112 Python
+log/smoke/pipeline/deploy tests, backend lint/build, hosted-agent and log-script
+Ruff, and Python byte compilation. Broader root Ruff reports four inherited
+findings in main's unchanged smoke_reasons.py (I001 and three TRY004); preserve
+that blob. Local Node 24/npm 11 is distinct from pinned exact-head hosted CI.
+The owner separately approved this diagnostic PR's publication and test results,
+readiness and integration after checks. The parent owns readiness/merge; one
+previously denied creation retry is now authorized. No grant, workspace-mode
+change, foreign-control waiver or reader activation occurred.
+
+## Foundry log permission diagnosis (#1341; 29 October 2026)
+
+Main #1349 deployed as `c05cfada`; Deploy #40836577365 passed infrastructure,
+backend/web/agent rollout and readiness, then failed live chat/research acceptance.
+The actual backend identity matched. Unfiltered console, other-app and other-table
+queries returned 403; Foundry returned 400 and no foreign workspace was configured.
+These are pre-grant observations, not own-backend access or isolation proof.
+
+This follow-up corrects the fixed Foundry aggregate to `AzureDiagnostics` and asks
+for permission metadata. The backend classifies only fixed permission states in
+memory and discards identifiers/provider text. HTTP and permission verdicts stay
+separate, including metadata accompanying errors; a 400 or empty result never
+clears the existing resource-grant warning. The metadata preflight verifies the
+runtime Foundry target and reads paginated ARM `assignedTo` inventories at the
+workspace, Foundry and existing subscription scopes. Unavailable or truncated
+inventories remain incomplete; no Graph grant or additional access is requested.
+
+No role, workspace mode, foreign-control requirement or activation changes.
+Local validation passes 434 backend tests across ten suites, 29 Python log
+tests, 26 deploy-script tests and 45 pipeline tests, backend lint/build and scoped
+Ruff/byte compilation. Local Node 24/npm 11 differs from pinned CI Node 22/npm 10;
+exact-head hosted qualification remains pending. After review and normal main
+deployment, inspect the fixed verdicts and resolve any effective
+resource-log grant before the approved conditional grant and fresh-process proof.
+The separate migration task owns baseline chat BadRequest diagnosis.
+
+## Main chat harness migration (#1350; 29 October 2026)
+
+One [migration issue](https://github.com/DanAakesen/jarvis/issues/1350) is claimed
+by Codex. Stage 1 adds fixed rejected-field diagnostics to the existing chat
+failure and release evidence path; the live BadRequest root cause remains
+unresolved. The unchanged hosted baseline passes 930 local tests; the diagnostic
+candidate passes 944. Next: independent review/qualification, then actual release
+evidence before selecting a fix. Later runtime/UI/comparison/cutover stages remain
+pending. Dan approved Test agent runtime in the chat menu, Current/Copilot selection
+and a separate labelled conversation with no mid-conversation switch. The
+[migration notes](docs/main-chat-harness-migration.md) include manual test questions
+and outstanding model, grant and parity decisions. No production default changes.
+
+## Fixed backend-identity authorization observations (#1341; 29 October 2026)
+
+Main #1348 merged as `8d0288b0`. Deploy #40828872899 passed metadata preflight,
+Bicep, backend/web rollout, hosted agent version 159 and deterministic readiness.
+Live acceptance still failed with research down and chat `error_badrequesterror`;
+application fixes are applied, not accepted. No log grant or reader activation
+occurred. Preflight reported `existing_resource_log_grant_requires_review` and
+`negative_workspace_candidate_missing` after matching live identity, runtime,
+workspace, console schema and exact built-in permissions.
+
+The next scoped increment prepares fixed, read-only backend-identity observations
+through the existing authenticated deployment smoke route. Same-job private
+preflight data becomes a private Bicep parameter file; only validated target IDs
+enter backend configuration. The probe matches the credential's principal to the
+verified backend principal, runs only bounded aggregate queries, and returns fixed
+verdicts. It checks unfiltered console rows, other-app rows, another table, an
+actual foreign workspace when configured, and the existing Foundry resource
+query path. Missing controls, allowed-but-empty queries, provider errors and
+partial/malformed responses remain inconclusive. No grant, new credential,
+permission change, new route, model tool, UI, retention or reader enablement.
+
+Local validation passes 408 focused backend tests across nine suites and 24 backend-log Python tests,
+backend lint/build, scoped Ruff/byte compilation and Bicep 0.44.1 offline build.
+Compiled-template comparison preserves every resource property/role/retention/
+capacity/output after removing only four probe parameters and environment entries.
+Repository scripts pass 165 cases; three require missing PowerShell. Settings,
+capability, production-catalogue and parity tests are included in the 408 passing
+backend cases. Hosted qualification and live probe execution remain pending.
+
+Local synthetic checks and offline compilation qualify only this code; actual
+backend-identity observations require normal independent review and main release.
+They are cached once per backend process and carry a timestamp; new grants require
+fresh observations after the grant and full positive/negative proof. Neither a
+successful metadata preflight nor these observations alone authorizes activation.
+The real foreign-workspace control and existing-resource permission review remain
+blockers. No private IDs or log records may enter public pipeline evidence.
+
+## Backend log preflight ARM correction (#1341; 28 October 2026)
+
+29 October reconciliation integrates current main `10d6d170` (#1345). Only
+PLAN and agent-context prefixes conflict; both histories are retained. The verifier
+fix and test blobs match `9b920f85`; every #1345 implementation, migration and
+artifact blob is preserved from main. Fresh exact-head qualification is required.
+
+PR #1346 merged as `61d19366` after qualified CI #40759821759 and independent
+review. Main Deploy #40761349594 stopped before Bicep at
+`builtin_role_mismatch`; backend, agent, web, readiness and acceptance were
+skipped. No assignment or activation occurred. The verifier used the CLI-model
+`properties.roleType` instead of ARM REST `properties.type`. An ARM-shaped
+fixture reproduces the failure; the field correction and explicit rejection of
+CLI-only/custom-role shapes pass all 15 preflight tests, scoped Ruff and byte
+compilation. Exact permissions and all other gates remain. Next: independent
+review/normal qualification of this correction, then repeat the main preflight;
+only its actual successful readback can precede conditional grant/probe work.
+The earlier provider BadRequest/live-conversation failure remains unresolved.
+
+## Reconcile review fixes with current main (#1343; 28 October 2026)
+
+Integrate main `61d193668d94ac07c0c19df38eb8dd4a503ec37b` (merged #1346)
+into #1345 after recovery head `2f039761` passed CI 40760736915. The only
+overlap is five documentation prefixes; both entries are retained. Non-overlapping
+implementation, tests, workflows and artifacts retain their parent blobs; only
+documentation is combined/annotated. No Azure command, grant, activation or
+deployment is run here. Combined checks pass 388 backend tests, 14 synthetic
+Python preflight tests and backend lint/build. Full qualification must pass on the resulting
+head; earlier-head green is retained history, not its qualification. Coordinator
+review/merge remains separate. Do not retry the failed PR-body metadata write.
+
 ## Approved log activation preflight and awareness (#1341; 28 October 2026)
 
 PR #1342 is merged as `0df74dee`. The owner has approved persistent read access to
@@ -20,6 +287,41 @@ from naming an absent tool in disabled instructions. That guidance now avoids
 the absent tool name; all four pass in the 246-test rerun. Exact-head full hosted
 qualification remains pending. Repository script discovery passes all available
 checks; three existing setup tests require missing PowerShell.
+
+## Owner-approved review fixes (#1343; 28 October 2026)
+
+Implement the eight approved findings on `codex/fix-eight-review-gaps-1343` under
+[issue #1343](https://github.com/DanAakesen/jarvis/issues/1343), claimed by Codex.
+All eight fixes are implemented in [PR #1345](https://github.com/DanAakesen/jarvis/pull/1345)
+for independent review and coordinator release; no own
+merge or deployment. Scope covers issue delivery/origin and completion recovery,
+Gmail receipts, chat warning/queue reload persistence, oversized worker-start
+feedback and explicit Settings approval values. The owner's replacement for
+Settings is sticky mobile heading/Save, preserving desktop behavior; no draft
+guard/autosave/persistence. Optional audit findings and Azure log work are excluded.
+Local regression/aggregate checks and browser evidence are recorded in the PR
+and [validation report](docs/review-fixes-1343.md);
+SQL Server CI and physical iPhone/live acceptance remain distinct release evidence.
+Workflow-owned status cells are not edited by this change.
+
+Local checks: full web 2,447 and contracts 174 passed; final conversation rerun
+126 passed; backend/web lint and builds passed. Backend aggregate had 6,776
+passed, two failed, one skipped. Corrected the stale approval-text assertion;
+both affected suites then passed 16 tests with original limits. See the report
+for SQL CI, Node 22 and physical-device limits. Next: independent review and
+normal qualification. The coordinator marked the PR ready. Hosted SQL run
+40756774334 had 281 passes and two test-setup failures: the index query omitted
+the expected new index, and the second Workspaces rollback needed to unwind
+0068 again. Both are corrected without weakening assertions; qualification must
+run on the correction's new head.
+
+Qualification of `5cf8da23` passed (CI 40757610202): SQL 283, backend 6,778 plus
+one skipped, web 2,448, contracts 174. A subsequent bot finding reproduced loss
+of the whole recovery snapshot for a 100,001-character partial reply. The scoped
+follow-up aligns read/write validation to 512 KiB UTF-8, retains valid entries
+independently and prioritizes queue/warning data when partial context exceeds
+the snapshot budget. Boundary and ConversationHistory checks pass 141 tests;
+new-head CI is required before merge. Do not retry the failed PR-body update.
 
 ## Backend log reader (#1341; P11-42; 28 October 2026)
 
@@ -3067,6 +3369,15 @@ P14-55 connects the owner's training targets to every Health surface, P14-56 bui
 shared look and applies it to the overview, header and Health panel, and P14-57 applies
 it to the other sections; P14-52 is built in that look after P14-56, and the internal
 rename waits for all of them. The rows above keep their original working titles.
+
+## P15 — iOS app
+
+Preparation is done and the owner authorised the foundation phase on 30 October 2026.
+Every screen needs the owner's approval before it is built or shipped.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
 
 ## Factory canonical-status parity (16 October 2026)
 

@@ -1,3 +1,99 @@
+## Superseded scope — 29 October 2026
+
+The owner confirmed whole-Jarvis diagnostic log access, replacing backend-only
+scope. Retain the Foundry Reader assignment; its removal proposal was stopped and
+never applied. New expanded grants require exact approval. The existing tool is
+still disabled. [Whole-Jarvis inventory and design](jarvis-logs.md) is current;
+the backend-only restrictions and grant/qualification discussion below record
+implementation history and do not define the new feature scope.
+
+## Foundry resource-log correction — 29 October 2026
+
+Deploy [40836577365](https://github.com/DanAakesen/jarvis/actions/runs/40836577365)
+matched the backend identity and returned 403 for unfiltered console, other-app
+and other-table queries. Foundry returned 400; the real foreign-workspace control
+remained missing. Rollout/readiness passed, live chat/research acceptance failed.
+No log grant or reader enablement occurred.
+
+The prepared correction uses a fixed `AzureDiagnostics | ... | summarize Records=count()`
+resource query, matching the [supported Cognitive Services log table](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/supported-logs/microsoft-cognitiveservices-accounts-logs).
+Only that request adds `Prefer: include-permissions=true`. The
+[resource-query API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries)
+may filter inaccessible sources and return empty results or 4xx for absent data.
+The backend validates bounded `permissions.resources` and `permissions.dataSources`
+metadata, matching the expected resource and referenced data sources. It emits a
+separate fixed `foundry_permissions` state: missing/invalid metadata, resource not
+listed, no sources, sources not listed, an explicit resource/source table denial,
+or `table_not_explicitly_denied`. The last state means only that a listed path has
+no explicit denial for the queried table in this response. It is not an effective
+access or isolation proof. HTTP status remains separate, even for error responses.
+No metadata strings, identifiers, log rows, counts or provider text are exposed.
+The existing five-request/eight-second/4-KiB bounds and per-process cache remain.
+
+The ARM preflight additionally verifies the existing Foundry resource and reads
+fully paginated `assignedTo` inventories for the backend principal at workspace,
+Foundry and existing subscription scopes using API 2022-04-01. Microsoft documents
+[transitive group assignments](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest)
+for this filter. No Graph access or new permission is requested. A failed read,
+page/call/time limit or malformed inventory marks that scope incomplete. Private
+assignments and conditions remain in the existing mode-0600 report; pipeline
+output contains only fixed scope/grant-review labels.
+
+The existing resource Reader warning remains a blocker: in resource-or-workspace
+mode, [resource-level read access bypasses workspace conditions](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/granular-rbac-log-analytics).
+Do not change roles or workspace mode without separate specific approval. Do not
+silently waive the real foreign-workspace control; any qualification change must
+be reviewed and approved first. No new grant or activation is included here.
+
+## Current qualification: metadata passed, grant still off — 29 October 2026
+
+Deploy [40828872899](https://github.com/DanAakesen/jarvis/actions/runs/40828872899)
+passed live identity/runtime/workspace/schema/built-in-role checks. Its fixed
+verdicts include `access_mode_resource_or_workspace`,
+`existing_resource_log_grant_requires_review` and
+`negative_workspace_candidate_missing`. Bicep, backend, web, hosted agent 159 and
+readiness passed. Live acceptance failed again with research down and chat
+`error_badrequesterror`. No log assignment or reader activation occurred.
+
+The next increment prepares actual backend-identity observations through the
+existing authenticated `GET /status/smoke`, with one optional
+`backendLogAuthorization` object. Same-job private metadata configures the fixed
+workspace/app/principal and an actual foreign control if one exists. Metadata discovery first uses the resource group, then only existing
+subscription-metadata access; a denial/unavailable inventory is explicit and no
+permission is added. Missing controls remain missing; the reader flag stays off. The probe matches the token
+principal before querying and returns only fixed verdicts for unfiltered console,
+other-app, other-table, foreign-workspace and Foundry resource queries. All queries
+aggregate counts in a fixed last-24-hour window; no log text or rows are exposed.
+At most five requests share an eight-second deadline, each response is bounded to
+4 KiB, redirects/retries are disabled and cancellation cleanup never blocks.
+
+Azure's [resource-query API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries)
+can silently filter inaccessible data. Therefore `query_allowed` or
+`no_visible_rows` is an observation, not a successful negative proof. Missing,
+partial, malformed, denied and HTTP/transport failures remain distinct fixed
+states. Responses are cached once per backend process and timestamped; repeat
+freshly after any grant change. Baseline observations cannot establish the future
+conditional grant's enforcement. Actual positive controls, readback and all
+required post-grant isolation checks still precede activation.
+
+Private report and Bicep parameter files are never uploaded. A strict pipeline
+formatter emits only allowlisted verdicts and no identifiers/provider text.
+This stage creates no grant/credential, new endpoint/tool/UI, retention change or
+activation. The generic resource-grant warning still requires effective-access
+review, and a real foreign-workspace control is still required.
+
+## Live preflight blocker — ARM role classification, 28 October 2026
+
+The first main execution after #1346, Deploy #40761349594, stopped at
+`builtin_role_mismatch` before Bicep. Identity/runtime/workspace/schema checks
+precede that role check; permission inventory and enforcement were not reached.
+The verifier incorrectly used the CLI model's `properties.roleType` for a raw ARM
+response. The [2022-04-01 REST contract](https://learn.microsoft.com/en-us/rest/api/authorization/role-definitions/get?view=rest-authorization-2022-04-01)
+uses `properties.type`. The scoped correction keeps exact permission checks,
+with ARM-shaped positive and CLI-only/custom-role negative regressions. Fifteen
+synthetic tests pass; successful live rerun and subsequent grant/probes remain
+pending. No new permission or reader activation has occurred.
+
 ## Current activation status — owner approval received, 28 October 2026
 
 The owner approved persistent backend-only log reads plus basic workspace
@@ -80,7 +176,7 @@ remain visible. Raw Azure error bodies never reach the model.
 ## Configuration, currently off
 
 The tool is advertised but returns `unavailable` / `disabled` until explicitly
-configured. No token or query is requested while it is disabled.
+configured. The chat reader requests no token or query while disabled. Separately configured deployment-only authorization probes may run fixed aggregate observations while chat access remains off.
 
 | Setting | Value after approval and verification |
 | --- | --- |

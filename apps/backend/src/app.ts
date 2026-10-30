@@ -1,3 +1,4 @@
+import type { BackendLogAuthorizationProbe } from './operations/backend-log-authorization.js';
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
@@ -68,6 +69,9 @@ import {
 import { registerWebSocketPlugin } from './websocket.js';
 
 export interface BuildAppOptions {
+  readonly managedRuntime?: import('./core/managed-runtime-routes.js').ManagedRuntimeServices;
+  /** Supplied only after managed definition, settings and application-policy verification. */
+  readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
@@ -126,6 +130,7 @@ export interface BuildAppOptions {
   readonly systemStatusReader?: SystemStatusReader;
   readonly vaultMirrorStatusReader?: import('./vault-mirror-status.js').VaultMirrorStatusReader;
   readonly systemSmokeProbes?: Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>;
+  readonly backendLogAuthorizationProbe?: BackendLogAuthorizationProbe;
 }
 
 declare module 'fastify' {
@@ -135,6 +140,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     ownerObjectId: string;
     backendLogsConfigured: boolean;
+    backendLogAuthorizationProbe: BackendLogAuthorizationProbe | null;
     ownerSessionConnections: OwnerSessionConnectionRegistry | null;
     databaseStatus: () => boolean;
     projectStore: ProjectStore | null;
@@ -168,6 +174,8 @@ declare module 'fastify' {
     onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
+    conversationRuntimeTests: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader | null;
+    managedRuntime: import('./core/managed-runtime-routes.js').ManagedRuntimeServices | null;
     reflexClassifier: ReflexClassifier | null;
     approvalInterpreter: ApprovalInterpreter;
     browserAgent: BrowserAgent | null;
@@ -248,6 +256,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('backendLogsConfigured', config.backendLogs !== undefined);
+  app.decorate('backendLogAuthorizationProbe', options.backendLogAuthorizationProbe ?? null);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
     origin: (origin, callback) => callback(null, origin === undefined || origins.has(origin)),
@@ -348,6 +357,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('conversationRuntimeTests', options.conversationRuntimeTests ?? null);
+  app.decorate('managedRuntime', options.managedRuntime ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);
   app.decorate('conversationSummaryStore', options.conversationSummaryStore ?? null);
   if (options.conversationAttachments) {

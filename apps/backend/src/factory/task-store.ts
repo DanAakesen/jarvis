@@ -97,6 +97,7 @@ export interface ProactiveTaskSnapshot {
 }
 
 export interface CreateTaskInput {
+  issueDeliveryId?: string;
   projectId: string;
   title: string;
   request: string;
@@ -150,6 +151,9 @@ export interface TaskRuntimeVersion {
 }
 
 export interface TaskStore {
+  rememberIssueOrigin?(repository: string, issueNumber: number, messageId: string): Promise<void>;
+  getIssueOrigin?(repository: string, issueNumber: number): Promise<string | null>;
+  findByIssueDelivery?(deliveryId: string): Promise<TaskRecord | null>;
   claimCreation?(submissionId: string, fingerprint: string): Promise<
     | { kind: 'claimed' }
     | { kind: 'existing'; fingerprint: string; statusCode: number | null; response: unknown }

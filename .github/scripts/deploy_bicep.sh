@@ -23,7 +23,7 @@ if ! jq -e 'length > 0 and all(.[]; test("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:
 fi
 budget_parameters=$(mktemp "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/jarvis-budget-parameters.XXXXXX")
 chmod 600 "$budget_parameters"
-trap 'rm -f "$budget_parameters"' EXIT
+trap 'rm -f "$budget_parameters"; if [[ -n "${RUNNER_TEMP:-}" ]]; then rm -f "$RUNNER_TEMP/backend-log-probe.params.json"; fi' EXIT
 jq -n --argjson emails "$budget_emails" \
   '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
@@ -34,6 +34,10 @@ if [[ -z "$image" ]]; then
 fi
 
 parameters=(backendIdentityResourceId="$identity" sqlAdminGroupObjectId="$sql_group")
+if [[ -f "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/backend-log-preflight.private.json" ]]; then
+  python .github/scripts/backend_log_probe_parameters.py
+  parameters+=("@${RUNNER_TEMP}/backend-log-probe.params.json")
+fi
 vault_mirror_requested="${JARVIS_VAULT_MIRROR_ENABLED:-false}"
 vault_mirror_configuration_valid=true
 if [[ -n "${GITHUB_APP_ID:-}" ]]; then

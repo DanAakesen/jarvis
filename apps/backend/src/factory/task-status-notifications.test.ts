@@ -49,9 +49,10 @@ function fixture(persistedKeys = new Set<string>()) {
     addMessage: vi.fn(async () => null),
   } as unknown as ConversationStore;
   const notifications: TaskStatusNotificationStore = {
-    claim: vi.fn(async (taskId, state) => {
+    deliver: vi.fn(async (taskId, state, message) => {
       const key = `${taskId}:${state}`;
       if (persistedKeys.has(key)) return false;
+      await conversations.addMessage({ ...message, role: 'jarvis', model: null, allowEndedSession: true });
       persistedKeys.add(key);
       return true;
     }),
@@ -80,7 +81,17 @@ describe('task status notifications', () => {
       language: 'en',
       allowEndedSession: true,
     });
-    expect(test.notifications.claim).toHaveBeenCalledWith('42', 'Done');
+    expect(test.notifications.deliver).toHaveBeenCalledWith('42', 'Done', expect.objectContaining({ sessionId: '5' }));
+  });
+
+  it('retries a failed message write without consuming the completion receipt', async () => {
+    const test = fixture();
+    vi.mocked(test.conversations.addMessage).mockRejectedValueOnce(new Error('Synthetic database failure'));
+    await test.handler()(event('state_changed', { to: 'Done' }));
+    expect(test.conversations.addMessage).toHaveBeenCalledTimes(2);
+    expect(test.persistedKeys.has('42:Done')).toBe(true);
+    await test.handler()(event('state_changed', { to: 'Done' }));
+    expect(test.conversations.addMessage).toHaveBeenCalledTimes(2);
   });
 
   it('posts attention and PR-opened updates with task identity and outcome', async () => {
@@ -96,8 +107,8 @@ describe('task status notifications', () => {
     expect(test.conversations.addMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
       text: `Task 42 opened a pull request (PR: ${pullRequestUrl}).`,
     }));
-    expect(test.notifications.claim).toHaveBeenNthCalledWith(1, '42', 'NeedsAttention');
-    expect(test.notifications.claim).toHaveBeenNthCalledWith(2, '42', 'pull_request_opened');
+    expect(test.notifications.deliver).toHaveBeenNthCalledWith(1, '42', 'NeedsAttention', expect.any(Object));
+    expect(test.notifications.deliver).toHaveBeenNthCalledWith(2, '42', 'pull_request_opened', expect.any(Object));
   });
 
   it('still posts into the originating conversation after its voice session has ended', async () => {
@@ -130,7 +141,7 @@ describe('task status notifications', () => {
 
     expect(first.conversations.addMessage).toHaveBeenCalledOnce();
     expect(second.conversations.addMessage).not.toHaveBeenCalled();
-    expect(second.notifications.claim).toHaveBeenCalledWith('42', 'Done');
+    expect(second.notifications.deliver).toHaveBeenCalledWith('42', 'Done', expect.any(Object));
   });
 
   it('routes committed task events from the application event hub', async () => {
@@ -163,7 +174,10 @@ describe('task status notifications', () => {
         }],
       })) } as unknown as TaskStore,
       conversationStore: conversations,
-      taskStatusNotificationStore: { claim: vi.fn(async () => true) },
+      taskStatusNotificationStore: { deliver: vi.fn(async (_task, _state, message) => {
+        await conversations.addMessage({ ...message, role: 'jarvis', model: null, allowEndedSession: true });
+        return true;
+      }) },
     });
 
     try {
@@ -212,7 +226,10 @@ describe('task status notifications', () => {
         read: vi.fn(async () => ({ mode: 'away', source: 'manual', changedAt: null })),
       },
       ownerInteractions: { notify } as unknown as OwnerInteractionService,
-      taskStatusNotificationStore: { claim: vi.fn(async () => true) },
+      taskStatusNotificationStore: { deliver: vi.fn(async (_task, _state, message) => {
+        await conversations.addMessage({ ...message, role: 'jarvis', model: null, allowEndedSession: true });
+        return true;
+      }) },
     });
     const events = [
       event('pull_request_opened', { url: pullRequestUrl }),

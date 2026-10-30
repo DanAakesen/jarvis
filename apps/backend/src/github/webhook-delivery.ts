@@ -10,6 +10,7 @@ export interface WebhookDeliveryInput {
 }
 
 export interface WebhookDeliveryStore {
+  hasDelivery(deliveryId: string): Promise<boolean>;
   record(input: WebhookDeliveryInput): Promise<boolean>;
   recordPullRequest(mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>): Promise<void>;
 }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { TelemetrySink } from './logging.js';
 
-export type AlertType = 'deployment_failure' | 'sandbox_crash' | 'credential_expiry' | 'budget_threshold';
+export type AlertType = 'task_start_failure' | 'deployment_failure' | 'sandbox_crash' | 'credential_expiry' | 'budget_threshold';
 
 export interface ActivityAlert {
   type: AlertType;

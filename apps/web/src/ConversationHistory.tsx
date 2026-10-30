@@ -1,3 +1,6 @@
+import { RuntimeTestSelector, type RuntimeTestAvailability } from './RuntimeTestSelector';
+import { RuntimeTestConversation } from './RuntimeTestConversation';
+import { conversationRecoveryKey, readConversationRecovery, saveConversationRecovery } from './conversation-recovery';
 import { copySendDiagnostic, observeSendDiagnostic } from './send-diagnostic';
 import { ReviewSummary } from './ReviewSummary';
 import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -33,6 +36,7 @@ import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 import {
   createChatSession,
+  loadRuntimeTestAvailability,
   loadActiveChatTurns,
   type RecoverableTurn,
   loadImageArtifactUrl,
@@ -43,6 +47,7 @@ import {
   type ChatMessage,
   type ChatFoodInvitation,
   type ChatSession,
+  type RuntimeTestSession,
   type ConversationHistoryMessage,
   type ConversationHistoryToolCall,
 } from './conversation-history';
@@ -228,6 +233,20 @@ export function ConversationHistory({
   const sessionCommands = useSessionCommandRegistry();
   useEffect(() => sessionCommands?.register({ setLanguage }), [sessionCommands]);
   const [session, setSession] = useState<ChatSession | null>(null);
+  const [runtimeSelectorOpen, setRuntimeSelectorOpen] = useState(false);
+  const [runtimeAvailability, setRuntimeAvailability] = useState<RuntimeTestAvailability>({});
+  const [runtimeAvailabilityError, setRuntimeAvailabilityError] = useState('');
+  const [testSession, setTestSession] = useState<RuntimeTestSession | null>(null);
+  useEffect(() => {
+    if (!runtimeSelectorOpen) return;
+    const controller = new AbortController();
+    void loadRuntimeTestAvailability(tokenProvider, config, controller.signal).then(value => {
+      if (!controller.signal.aborted) setRuntimeAvailability(value);
+    }).catch(() => {
+      if (!controller.signal.aborted) setRuntimeAvailabilityError('Could not check runtime availability. Close this dialog and try again.');
+    });
+    return () => controller.abort();
+  }, [config, runtimeSelectorOpen, tokenProvider]);
   const sessionSetup = useRef<{ language: 'da' | 'en'; controller: AbortController; promise: Promise<ChatSession> } | null>(null);
   const ensureChatSession = useCallback((requestedLanguage: 'da' | 'en'): Promise<ChatSession> => {
     if (session?.language === requestedLanguage) return Promise.resolve(session);
@@ -266,9 +285,19 @@ export function ConversationHistory({
   }
   const [draft, setDraft] = useState(readDraft);
   const [sending, setSending] = useState(false);
-  const [queue, setQueue] = useState<QueuedMessage[]>([]);
+  const recoveryKey = conversationRecoveryKey(config.backendUrl, client.getActiveAccount?.()?.homeAccountId ?? 'owner');
+  const [recovered] = useState(() => readConversationRecovery(recoveryKey));
+  const [queue, setQueue] = useState<QueuedMessage[]>(recovered.queue);
+  const [queuePaused, setQueuePaused] = useState(recovered.queue.length > 0);
+  const [recoveryUnavailable, setRecoveryUnavailable] = useState(false);
   const [activeMessage, setActiveMessage] = useState<QueuedMessage | null>(null);
-  const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
+  const [failedTurns, setFailedTurns] = useState<FailedTurn[]>(recovered.failedTurns);
+  useLayoutEffect(() => {
+    const unavailable = !saveConversationRecovery(recoveryKey, { queue, failedTurns });
+    let active = true;
+    queueMicrotask(() => { if (active) setRecoveryUnavailable(unavailable); });
+    return () => { active = false; };
+  }, [failedTurns, queue, recoveryKey]);
   const [streamedText, setStreamedText] = useState('');
   const [streamedAcknowledgment, setStreamedAcknowledgment] = useState('');
   const [foodInvitation, setFoodInvitation] = useState<ChatFoodInvitation | null>(null);
@@ -329,7 +358,7 @@ export function ConversationHistory({
   const wasBusy = useRef(false);
   const hasFocusedInput = useRef(false);
   const hasLoadedOlder = useRef(false);
-  const nextQueueId = useRef(0);
+  const nextQueueId = useRef(Math.max(0, ...recovered.queue.map(item => item.id), ...recovered.failedTurns.map(item => item.id)));
   const turnInFlight = useRef(false);
   const draftValue = useRef(draft);
   useEffect(() => { writeDraft(draft); }, [draft]);
@@ -943,11 +972,11 @@ export function ConversationHistory({
   }, [session, config, camera, screenShare, restoreFiles, tokenProvider, ensureChatSession]);
 
   useEffect(() => {
-    if (sending || voiceActive || turnInFlight.current || queue.length === 0) return;
+    if (queuePaused || sending || voiceActive || turnInFlight.current || queue.length === 0) return;
     const next = queue[0]!;
     setQueue((current) => current.filter((message) => message.id !== next.id));
     void runTurn(next);
-  }, [queue, sending, voiceActive, runTurn]);
+  }, [queue, queuePaused, sending, voiceActive, runTurn]);
 
   useEffect(() => {
     let active = true;
@@ -1279,6 +1308,11 @@ export function ConversationHistory({
         <p className={`queue-count${queue.length === 0 ? ' visually-hidden' : ''}`} aria-live="polite" aria-atomic="true">
           {`${queue.length} ${queue.length === 1 ? 'message' : 'messages'} queued`}
         </p>
+        {recoveryUnavailable && <p className="chat-error" role="alert">This browser could not save chat recovery. Keep this tab open to retain queued messages and reply warnings.</p>}
+        {queuePaused && queue.length > 0 && <div className="queue-recovery" role="status">
+          <p>Unsent messages restored. Review them before sending.</p>
+          <button className="secondary-button" type="button" onClick={() => setQueuePaused(false)}>Send queued messages</button>
+        </div>}
         {queue.length > 0 && <ol className="conversation-messages queued-messages" aria-label="Queued messages">
           {queue.map((message) => (
             <li className="conversation-message" data-speaker="dan" key={message.id}>
@@ -1289,6 +1323,7 @@ export function ConversationHistory({
                   aria-label={`Remove queued message: ${message.text}`}
                   onClick={() => {
                     discardFiles((message.attachments ?? []).map((file) => file.id));
+                    if (queue.length === 1) setQueuePaused(false);
                     setQueue((current) => current.filter((item) => item.id !== message.id));
                   }}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -1307,6 +1342,14 @@ export function ConversationHistory({
   return (
     <section className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation"
       data-history-hosted={hosted || undefined} data-file-drag={fileDrag || undefined} {...fileDragHandlers}>
+      {runtimeSelectorOpen && <RuntimeTestSelector availability={runtimeAvailability}
+        disabledReason={runtimeAvailabilityError || (sending || voiceActive ? 'Finish the current reply or voice conversation before opening a test.' : undefined)}
+        onClose={() => setRuntimeSelectorOpen(false)} onStart={async runtime => {
+          const created = await createChatSession(tokenProvider, config, language, undefined, runtime);
+          setTestSession({ ...created, runtimeTest: runtime });
+        }} />}
+      {testSession && <RuntimeTestConversation session={testSession} config={config} getAccessToken={tokenProvider}
+        onClose={() => setTestSession(null)} />}
       {/* Hosted history lives in the shared workspace window; this element keeps the overview mounted in place. */}
       <div ref={hosted ? undefined : transcript} className={hosted ? 'conversation-dock' : 'conversation-transcript'}
         hidden={voiceActive} tabIndex={hosted ? undefined : 0} aria-label={hosted ? undefined : 'Conversation history'}
@@ -1420,7 +1463,8 @@ export function ConversationHistory({
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
-          actions={[...captureActions, ...primaryActions]} align="start" icon="plus" />
+          actions={[...captureActions, ...primaryActions]} align="start" icon="plus"
+          onTestRuntime={() => { setRuntimeAvailability({}); setRuntimeAvailabilityError(''); setRuntimeSelectorOpen(true); }} />
         {screenShare?.sharing && <>
           <span className="visually-hidden" role="status">Screen shared with Jarvis</span>
           <button className="composer-screen-stop" data-preserve-typing-focus type="button"

@@ -673,6 +673,8 @@ async function confirmIssueCreation(
         title: action.title,
         body: action.body,
         executor: action.executor,
+        ...(action.confirmation.proposal.sourceMessageId ? { originMessageId: action.confirmation.proposal.sourceMessageId } : {}),
+        tasks: request.server.taskStore,
         ...(action.taskCode ? { expectedTaskCode: action.taskCode } : {}),
         expectedRepository: action.repository,
         projects: request.server.projectStore,
@@ -820,6 +822,8 @@ export const factoryTools: readonly JarvisTool[] = [
               body: draft.body,
               ...(draft.executor !== undefined ? { executor: draft.executor } : {}),
               expectedRepository: repository,
+              originMessageId: source.id,
+              tasks: request.server.taskStore,
               projects: request.server.projectStore,
               github: request.server.githubIssueClient,
             });

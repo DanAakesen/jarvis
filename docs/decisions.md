@@ -1,3 +1,151 @@
+## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
+
+The owner requested repair after real Copilot test replies failed. A successful
+minimal canary does not qualify user context, claims, shared policy or tool rounds.
+The pinned OpenAI SDK 3.24.0 and its
+[function-call model](https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_function_tool_call.py)
+define function-call status as optional. Accept omission/null only after the
+parent response is explicitly completed; explicit unfinished/unknown statuses and
+the final-only no-tool boundary still fail before dispatch. This corrects a
+reproduced contract mismatch, not a proven attribution of the owner's failure.
+
+Known failures before inference and before any backend tool call may finish a
+claim as failed, while the source remains permanently consumed. Unknown inference,
+cancellation and possible tool effects retain the claim. Show fixed failure codes
+and actual blocked-state guidance; do not silently clear claims, resend messages,
+change model/settings or switch the production default.
+
+## 29 October 2026 — use the documented optional identity status (#1350)
+
+The [Foundry governance contract](https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin)
+defines effective agent `state` separately from optional Entra identity `status`.
+Provisioning may accept unset status only alongside enabled effective state and
+a valid principal UUID, retaining that principal across endpoint readback.
+Explicit disabled/unknown states remain blocked. This corrects a schema mismatch;
+it does not prove the exact field behind live `agent_identity_unverified`, enable
+an identity, grant access or authorize a replacement resource. Reconcile and reuse
+the existing exact single-version candidate before another handoff.
+
+## 29 October 2026 — first runtime comparison boundaries (#1350)
+
+The owner subsequently declined extra exclusion from search, recent context and
+rolling summaries. Jarvis is a personal side project not yet in use; do not add
+multi-user architecture or additional isolation features. This does not authorize
+deletion or a context reset. Runtime/source binding still prevents duplicate work
+and preserves the existing authentication boundary.
+
+The owner approved retaining the Python bridge temporarily to preserve voice
+fallback, starting with existing Jarvis tools with extra harness shell/web/subagent
+tools disabled, and keeping test conversations out of normal chat history. These
+extend the approved chat-menu selector and fresh labelled conversation; they do
+not authorize new identities, role grants, production default changes or removal
+of the old runtime. Actual target/model/region support and persistent access
+changes require specific evidence and applicable owner authorization.
+
+## 29 October 2026 — whole-Jarvis diagnostic scope supersedes backend-only (#1341)
+
+The owner confirmed all logs belonging to Jarvis: backend, hosted agents, coding
+runners, deployments and supporting services, excluding unrelated projects. Stop
+the Foundry Reader removal proposal; it was never approved or applied. Preserve
+that assignment. Earlier backend-only grant approval does not authorize broader
+persistent permissions. Keep the existing issue and disabled reader state.
+
+Map actual source stores/readers and ownership first. A shared workspace is not
+assumed entirely owned. Independent metadata preparation admits only exact known
+infrastructure IDs with ownership tags and records known table plan/resource-field
+metadata privately. Unknown sources and missing collection remain gaps. Propose
+one condition-restricted workspace Data Reader assignment only after the exact
+resource/table manifest and provider support are verified; reuse existing GitHub,
+SQL and Blob access. Exact grants and final qualification remain unapproved.
+Source adapters replace/expand one existing capability, with redaction, bounded
+reads and honest availability. No security, retention, collection or credential
+change is authorized merely by the scope confirmation. See [design](jarvis-logs.md).
+
+## 29 October 2026 — tests use the owner's selected role settings (#1350)
+
+The owner clarified that the visible chat setting is not none and explicitly
+requires tests to use the same settings. A closed UI selection is not a verified
+database readback. The candidate removes the smoke-only effort/token-budget
+overrides, preserves saved values and records effective request settings. It does
+not assert ordinary chat is broken from a forced-none test failure. Synthetic
+regressions pass; the owner approved publication with #1353. Review, qualification
+and live acceptance are pending. No screenshot or
+private configuration record is included. See [local report](smoke-settings-1350.md).
+
+## 29 October 2026 — preserve Terra settings while distinguishing its rejection (#1350)
+
+Deploy 40840605441 passed backend/agent/readiness and failed live conversation
+acceptance with model_bad_request_reasoning. Smoke forces none, but Microsoft's
+Terra announcement and OpenAI's model contract explicitly support that effort;
+the Azure reasoning guide lists Terra reasoning/Responses support. The documented
+contract and live result conflict without identifying the service's rejection
+code/subfield. Preserve saved settings and request construction, retain fixed
+reasoning distinctions, and separately classify the existing research runner
+boundary. Do not assume a shared root cause or use a parameter removal/effort
+fallback as a fix. All new diagnostic outputs are application-owned constants;
+provider text and worker events remain private. Live correction is unresolved.
+See [migration evidence and primary sources](main-chat-harness-migration.md).
+
+## 29 October 2026 — distinguish Foundry table errors from log permission evidence (#1341)
+
+The first actual Foundry probe returned 400 while querying `AppTraces`.
+[Cognitive Services supported logs](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/supported-logs/microsoft-cognitiveservices-accounts-logs)
+use `AzureDiagnostics`. Use that fixed aggregate and request the
+[resource API's permission metadata](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries).
+Classify resource/data-source/deny-table metadata only in bounded backend memory;
+return fixed states separately from the HTTP verdict. A 400, empty response or
+absence of an explicit table denial does not prove isolation or clear existing
+grant concerns. No roles, access mode or activation changes are authorized here.
+
+Use the documented ARM [assignedTo filter](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest)
+for the verified backend service principal at workspace, verified Foundry and
+existing subscription scopes. It includes transitive group grants without new
+directory access. Paginate within the fixed existing budget, otherwise report an
+incomplete scope. Preserve raw conditions only in the private report. The real
+foreign-workspace requirement stays unchanged pending any explicit owner-approved
+qualification change. The separate migration task owns chat failure diagnosis.
+
+## 29 October 2026 — controlled main chat harness migration (#1350)
+
+Dan approved one migration issue with staged draft PRs: fix the baseline, build a
+temporarily switchable managed path, compare identical test scenarios, then cut
+over with evidence and authorization before retiring replaced runtime code.
+Preserve native voice, identity, tools/approvals, durable memory/artifacts and
+separate subscription-backed Factory workers. Dan subsequently approved Test
+agent runtime in the chat menu, Current/Copilot choice and a separate labelled
+conversation without switching midway. Provide manual test questions, with no
+new question-button feature implied. These are confirmed scope/design decisions;
+model/region, persistent access grants and parity thresholds remain open. The
+first candidate only retains fixed rejected-field diagnostics; it does not prove
+the live error fixed or authorize cutover. See
+[migration evidence and open decisions](main-chat-harness-migration.md).
+
+## 29 October 2026 — observe actual backend authorization before a log grant (#1341)
+
+The corrected main preflight passed but surfaced an existing resource-log grant
+requiring review and no foreign-workspace control. The ordinary deployment
+succeeded for backend/web/agent/readiness, while live model acceptance remained
+unhealthy. Preserve these distinct facts; no grant or activation is inferred.
+Prepare fixed aggregate reads as the verified backend identity through the
+existing deployment smoke route. Keep private target values inside the same job's
+preflight/parameter files and runtime configuration, and emit only fixed verdicts.
+Use bounded work, exact principal matching, no caller queries, no log text,
+nonblocking cancellation, explicit missing/partial/error states and one-process
+caching with timestamps. Empty negatives are not exclusion proof; a grant change
+needs fresh post-change observations and positive controls. No role mutation,
+new credential, route/auth allowance, UI or reader enablement is included.
+
+## 28 October 2026 — correct the backend-log preflight ARM role shape (#1341)
+
+The first main preflight (#40761349594) failed closed before Bicep because the
+role verifier read `properties.roleType`, the CLI model field. The raw ARM REST
+2022-04-01 schema uses `properties.type`. An ARM-shaped fixture reproduced the
+failure before correction. Read the documented ARM field while retaining exact
+built-in identity/actions/dataActions and empty exclusions. Reject custom-role
+and CLI-only shapes. Fifteen preflight tests, scoped Ruff and byte compilation
+pass; actual role permissions/inventory/enforcement still await the normal main
+rerun. No assignment, access-mode change, new credential or activation occurred.
+
 ## 28 October 2026 — approved backend-only log grant; executable preflight first (#1341)
 
 The owner explicitly approved persistent access to Jarvis's backend log records
@@ -18,6 +166,32 @@ no assignment or feature enablement is inferred. Main-chat instructions and tool
 descriptions must reflect configured/unavailable log state and retained ingestion
 lag. Existing permission boundaries and the requirement for real backend-identity
 positive/negative proof before activation remain.
+
+## 28 October 2026 — Eight review fixes and mobile Settings replacement (#1343)
+
+Dan approved the eight reviewed fixes and explicitly approved issue/draft-PR
+publication. For Settings, he replaced the proposed unsaved-draft fix with a
+sticky mobile heading and Save at the top. Preserve desktop behavior and do not
+add Settings guards, autosave or draft persistence.
+
+Use persisted delivery identity, independent of active task state, to prevent
+old label replays from starting work again. Save issue conversation origin before
+publishing the worker label. Commit task-status messages and deduplication keys
+atomically; a failed transaction remains retryable. Surface a too-large worker
+prompt as a retained Now alert tied to the existing issue. Keep uncertain Gmail
+writes uncertain and approval cards explicit about changed values/units.
+
+For chat reload recovery, reuse tab-local storage, isolate backend/account scopes
+and restore queued messages for review before sending. These are unsent drafts,
+not approval to repeat a completed or uncertain server action. No optional audit
+feature, Azure log permission, paid worker, real email send or health write is
+included. Draft delivery remains subject to independent review and coordinator release.
+
+Review follow-up: use the same per-entry validator on write and read, matching
+the backend's 512 KiB UTF-8 partial-reply limit. Reject invalid entries separately
+so a bad warning cannot discard unrelated queued drafts. Under the existing
+snapshot bound, prioritize unsent messages and uncertainty warnings over partial
+context; report incomplete saving through the existing recovery feedback.
 
 ## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
 
@@ -7778,6 +7952,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L134** | A decision was requested on a stale premise | #396 asked Dan to pick a Danish voice because PRODUCT.md, architecture.md and the provisioner all said Harper. The live code had used Jeppe since P5-08 (`DANISH_REALTIME_VOICE`), so the question was already answered and the fix I proposed (re-provision `jarvis-voice-mai`) would have changed only an unused fallback. Docs lagged the code by a week. | Before asking Dan to decide or filing a change, confirm the current value in the code that runs in production (and its tests), not in the docs; correct the docs in the same change |
 | **L135** | The new in-app board returned 502 on every read in production | #806 shipped the board columns and deployed green, but `GET /factory/board` failed with `factory.board_read_failed` on every call (117 in 15 minutes). The reader compared the number of blockers GitHub lists for an issue with the summary count `blocked_by`, which counts only open blockers while the list includes closed ones; #721, #723 and #732 each had a closed blocker beside an open one, so the whole board threw. The unit test passed because its fake dependency items had no `state` field, unlike real GitHub data, and the handler swallowed the cause so the log showed only the event name. The reader now keeps only open blockers and rejects entries without a state. A second defect appeared in the same first live call: GitHub returns `closed_at` without milliseconds and the shared contract requires them, so the web correctly rejected the 200 payload; the reader now normalises `closedAt` to ISO with milliseconds, with a test that runs the built board through `isFactoryBoard`. | Shape test fixtures from a recorded real response, and check a new read path against live data (compare the counts it assumes) before calling it done; after deploying a new endpoint, query its error event in the logs and call it once with real data |
 | **L136** | The Voice Live schema guard covered only core tools | #1153’s reconnecting voice was caused by Voice Live rejecting `session.update` with `invalid_function_parameters`: configured Daily health, nutrition and coach tools had root `oneOf` schemas, while the L121 guard inspected only `coreModule.tools`. The model-facing schemas now flatten typed root object alternatives, while the registered full schemas remain the server-side validation contract; the production-catalogue test checks all configured tools. | Guard every tool in the full production composition, including features enabled only when their stores are configured; keep schema simplification model-facing and preserve authoritative server validation |
+| **L137** | ARM REST and Azure CLI model shapes | The first backend-log preflight failed at `builtin_role_mismatch`: its `az rest` verifier and synthetic fixture both used CLI-model `properties.roleType`, while ARM returns `properties.type`. | Build wire-response fixtures from the exact REST version being called; do not substitute a CLI's normalized output. Keep fail-closed permission checks, and test both the documented positive shape and rejected normalized/custom-role shapes. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
@@ -8893,3 +9068,155 @@ Close and user-requested workspace camera commands control the same continuous
 sampled delivery. Startup still needs browser permission; session/sign-out,
 permission loss, fatal errors and budget exhaustion still stop it. No guarantee
 of background iOS capture or uninterrupted device access is made.
+
+## 29 October 2026 — iOS direction; design before implementation
+
+Owner-confirmed direction is limited to GitHub-based macOS builds, reuse of the
+existing Jarvis backend, and native SwiftUI/iOS features and controls. The next
+step is an agreed version 1 design/prototype; Dan may work locally on his PC.
+Scope, layouts, retained branding, prototype tools and build/authentication setup
+remain unconfirmed. No implementation or setup is authorized. The discussion,
+proposals and dated references are recorded in [iOS app](../iOS%20app.md).
+Migration and logging work continues independently.
+
+## 29 October 2026 — iOS usage context and design decisions
+
+The owner stated that the iPhone app will mostly be used while lifting weights,
+running on a treadmill and driving, with minimal hands-on time and the screen
+only glanced at, so the experience should be largely hands-free. Generative UI
+workspaces and Jarvis control of the app itself (opening, closing and arranging
+workspaces and navigating) are essential on iOS, as on the web. The owner also
+confirmed these design decisions: native iOS glass and controls rather than the
+web chrome; no bottom tab bar, with chat and voice switching from the composer;
+areas open from a right-edge swipe-only sidebar, chosen for the prototype and to
+be judged by use; an iOS take on the web composer, not final; the existing orb
+design carries over; the phone has no presence picker and always uses On the
+move; no paid design tools. GitHub Replica is ruled out because it does not run
+on the owner's Windows PC. The HTML concept board is local scratch and cannot
+establish native behaviour. Scope, sidebar contents, workspace presentation,
+assistive access to the sidebar, presence behaviour with workspaces and
+build/authentication setup remain unconfirmed. No implementation or setup is
+authorized. See [iOS app](../iOS%20app.md).
+
+## 29 October 2026 — iOS sidebar order, naming and removed control
+
+The owner removed the "Jump or ask" control from the iOS sidebar, asked for the
+area to be named simply Chat instead of Chat and voice and to be the first
+option from below, followed by Notes, Health, Software Factory, banking (later)
+and the rest, and asked for a code symbol as the Software Factory icon. The
+owner also asked that the sidebar not be dragged far from thumb reach, so rows
+and icons sit close to the right edge. The prototype lists the areas upward from
+the thumb end and still shows a row of pinned shortcuts, which is not decided.
+The final list of areas, the pinned shortcuts and assistive access to the
+swipe-only sidebar remain unconfirmed. No implementation or setup is authorized.
+See [iOS app](../iOS%20app.md).
+
+## 29 October 2026 — iOS version 1 answers
+
+The owner answered the version 1 checklist and accepted the recommendation on
+every row except two. The Face ID lock is now on by default, set up at the first
+sign-in, and approvals from the Lock Screen are allowed. Otherwise: hands-free
+means a session the owner starts, with no always-listening wake word, and it
+keeps running with the screen locked, ends itself after 10 minutes of silence
+and pauses for calls and Siri. Version 1 is iPhone only (an iPhone 16 Pro Max on
+iOS 27.2, with an Apple Watch), minimum iOS 26, TestFlight only, with English
+text and English and Danish voice. Sign-in stays Microsoft with 10 days idle.
+Only Apple crash reports are collected, and version 1 has no Health or location
+data and no offline mode. In the sidebar the pinned-shortcuts row is removed and
+the list sits low, nearest the thumb; a one-time hint teaches the edge swipe and
+VoiceOver gets an Open sidebar action. Workspaces open as a full-height sheet,
+one at a time. Version 1 is chat, voice, workspaces, app control and settings,
+with Notes and Health next and unbuilt areas shown as Coming later. TestFlight
+uploads run automatically after each merge to main, signing goes through an App
+Store Connect API key, the design docs are committed to the repository, and
+small backend endpoints for push and Live Activity tokens may follow. The bundle
+ID is com.danaakesen.jarvis, being registered. The owner answered No to starting
+the foundation phase, so no implementation or setup is authorized. The
+safeguards proposed for the Face ID lock and Lock Screen approvals, and whether
+the owner's account has the role the API key needs, are not confirmed. CarPlay,
+the Apple Watch and Music are future intent only.
+See [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS App ID registered
+
+At the owner's request, the App ID `com.danaakesen.jarvis` (named Jarvis,
+explicit) and the App Group `group.com.danaakesen.jarvis` were registered in the
+owner's signed-in Apple Developer session, and the group was attached to the App
+ID. The saved state was read back from the portal. Nothing else was changed or
+created on the account: no keys, certificates, agreements or app record.
+
+Ticked: Push Notifications (Broadcast left off), Time Sensitive Notifications,
+App Groups, HealthKit, Maps, Push to Talk and Side Button Access, plus MusicKit
+under App Services and In-App Purchase, which Apple locks on. The owner added
+HealthKit, Maps, Push to Talk and Side Button Access beyond the plan. Nothing in
+the current design uses Maps or Push to Talk, and version 1 has no Health data.
+A tick only permits a capability: the app's entitlements file decides what a
+build uses. Side Button Access is limited to Japan, on iOS 26.2 or later, and
+starts a voice assistant through an App Intent. Clinical Health Records stay
+off.
+
+Left off on purpose: Data Protection, because the complete level cannot be read
+on a locked phone, which hands-free voice and CarPlay both need. Camera,
+microphone, location, photos and Face ID need no portal tick, only a purpose
+string in the app's Info.plist and iOS's own Allow prompt. CarPlay is not a tick
+either: it is a capability request that Apple must approve, and requests need
+the Account Holder role.
+
+Still open: the owner's role (Account Holder or Admin), who files the CarPlay
+request, and the owner's go for the foundation phase, which is still No. No
+implementation or setup is authorized.
+See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS foundation phase go and Mac cost guard
+
+The owner gave the go for the iOS foundation phase, replacing the earlier No.
+Phase 1a, the project skeleton and checks, is the first work. Later phases still
+need their own go. The owner also set the build policy: build and test as much as
+possible locally, and ship as much as possible on every GitHub build.
+
+The cost guard follows from that. The owner's PC has no Swift toolchain and cloud
+agents run on Ubuntu, so a Mac run is the only compile check for the SwiftUI
+layer. Standard `macos-26` runners are free while the repository is public and
+the account is personal. Larger macOS runners are billed even for public
+repositories and are not available to a personal account, so xlarge labels are
+never used. The workflows are designed as if the minutes were billed: GitHub
+lists $0.062 per macOS minute for private repositories, roughly $0.60 to $0.90
+for a 10 to 15 minute run (estimate).
+
+Rules, set out in the build plan: logic stays in the pure-Swift `JarvisCore`
+package, tested on Linux on every push. The iOS CI has a Linux job and a Mac job
+that runs only after it passes, only for ready pull requests that touch
+`apps/ios/` or shared inputs, with per-pull-request cancellation, a 20 minute
+timeout, a SwiftPM cache, a simulator build without signing, and no simulator
+boot, UI tests or screenshots. Screenshots run only on manual dispatch. The
+TestFlight workflow builds, archives and uploads in one job on merge. Authors
+keep pull requests in draft until the Linux checks pass and batch related
+changes. The owner should set a GitHub Actions budget in Billing as a safety net.
+The dispatcher reviews Actions billing usage at the end of each iOS phase. A
+local Linux Swift toolchain for the owner is optional and needs the owner's go.
+See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS screen approval gate
+
+The owner said: "I want to make sure i greenlight every screen before its deployed."
+
+Every screen is its own issue and its own pull request. Design gate: the
+dispatcher shows the owner the concept frame for the screen, and no builder
+starts on that screen until the owner has approved it. Code gate: the owner
+approves the screen's pull request before it merges. A screen that has not been
+approved is never built, merged or shipped.
+
+Ship gate: the TestFlight upload workflow runs by manual dispatch only, started
+by the owner, so nothing reaches the owner's phone unapproved. The automatic
+push-to-main trigger is removed, and checklist row 19 (automatic uploads) is
+superseded. The monthly keep-alive no longer uploads: it is a reminder to the
+owner to run the manual upload, because TestFlight builds expire after 90 days.
+An automated keep-alive of the last approved build can be added later if the
+owner wants it. The other safeguards stay: the signing environment is limited to
+main, there is no `pull_request` trigger, the secrets live only in the
+environment, and build, archive and upload stay in one job, so a manual run is
+also one Mac run. Uploads only happen when the owner starts them, which also
+lowers Mac minutes.
+
+Phase 1a, the empty shell with no real screens (#1370), is unaffected. See
+[build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).

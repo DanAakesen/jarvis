@@ -1,3 +1,155 @@
+## Managed turn failure boundaries (#1350; 29 October 2026)
+
+The managed policy transport creates/binds its native conversation immediately
+before the first response request, after shared context preparation. It records
+whether inference was attempted across all rounds. An ordinary setup failure with
+no inference attempt and no backend tool call can terminate its claim as failed;
+the source remains consumed. Unknown inference or tool outcomes retain the active
+claim. Only fixed internal error codes cross hosted/backend SSE, and the test UI
+keeps a busy or uncertain managed conversation blocked rather than treating a
+history refresh as claim recovery. No persistence schema or retry policy changes.
+
+## Runtime test candidate (#1350; 29 October 2026)
+
+Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
+server-only native conversation reference to existing SQL sessions. The normal UI
+feed explicitly excludes test sessions; internal context/source reads retain
+global history. Explicit test-session history is scoped. A source
+message history lookup resolves the stored session and returns its runtime
+selection for the Python verifier. A caller runtime flag never selects the
+agent. The retained bridge uses the original client for normal, Current-test and
+voice traffic; only a verified stored Copilot selection may use an injected
+managed chat client. Unconfigured managed selections fail without fallback.
+
+The independent managed protocol adapter uses an agent-scoped HTTP Responses
+client and native conversation continuations, with existing backend function
+execution. Its definition validator requires the selected model/effort, immutable
+version, exact functions and disabled extra built-ins. It is not wired into
+production. Durable turn/source claims and an internal agent-authenticated binding
+client now cover provider creation and continuations; uncertain work stays active
+without automatic replay. `ManagedPolicyClient` reuses the existing application
+policies through a narrow provider transport seam. The lazy factory and pinned
+backend target reader are wired behind three optional target configuration values;
+no managed target has been activated by this preparation. SQL personal memory, blob artifacts, the
+Voice Live relay and subscription-backed Factory are unchanged.
+
+The UI keeps normal chat mounted and opens a new labelled test conversation from
+the chat menu. Default active-turn discovery excludes test sessions. Availability
+fails closed for unverified Copilot; it is not a substitute for live model access
+or authorization. See [adapter boundaries](managed-chat-adapter.md).
+
+The existing AAD-protected hosted Invocations endpoint also accepts two exact
+administrative operations. The manifest operation reads static Jarvis instructions
+and authoritative function schemas without user context, inference or function
+execution. The fixed text canary uses the actual bridge credential and an owned
+synthetic native conversation; it reads no history and executes no tools. Normal
+chat still requires delegated authorization and verified stored source messages.
+The default-off manual Deploy job uses these operations with existing OIDC and
+never assigns roles or changes the normal runtime default.
+
+## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
+
+The approved feature scope now includes Jarvis backend, agents, runners, deployment
+and supporting-service diagnostics, excluding unrelated projects. Preserve existing
+Foundry Reader; no new role or activation follows from the scope confirmation.
+Sources span shared Log Analytics/Application Insights, Foundry resource queries,
+existing SQL/Blob task/check evidence and repository-scoped GitHub Actions logs.
+Coverage, retention and current reader evidence are mapped in [the design](jarvis-logs.md).
+
+The existing private metadata preflight gains an ownership-planning catalogue from
+resource-group resources and workspace table metadata. Exact fixed infrastructure
+IDs and matching ownership tags are necessary; arbitrary tagged resources are
+excluded. Known tables expose only plan and presence of a resource-ID column.
+No source record, schema string or ID is added to public verdicts. The catalogue
+explicitly leaves workspace-wide ownership, routing, historical ownership and
+provider enforcement unverified. Metadata lists remain bounded and private; no
+runtime log adapter, capability duplication, new grant or ingestion change occurs.
+
+## Smoke request parity (#1350; 29 October 2026)
+
+The hosted-client candidate resolves smoke reasoning and output budget
+through the same values as normal chat. Model/effort observations use the existing
+span with a finite effort label; unrecognized labels are flagged without being
+copied or replaced. No session setting, provider endpoint, source authorization,
+tool catalogue or voice path changes. Review, qualification and live acceptance are
+pending; [local evidence](smoke-settings-1350.md) distinguishes test drift
+from any actual ordinary-chat failure.
+
+## Separate model and research rejection evidence (#1350; 29 October 2026)
+
+Hosted chat adds fixed distinctions for known reasoning rejection codes and
+reasoning-object versus effort subfields. The research smoke boundary separately
+classifies its existing settings/Foundry runner/result failures. Both finite
+allowlists survive the existing status and release sanitizers, without provider
+bodies, nested property names, operation text or runner events. Research keeps its
+fixed dry run, selected settings, timing and cleanup. No inference, role, stored
+setting, worker credential or production runtime path changes. See
+[actual release evidence and remaining uncertainty](main-chat-harness-migration.md).
+
+For `codex exec` non-zero exits, the runner first preserves usage-limit
+classification, then recognizes only fixed model-unavailable, authentication,
+outdated-CLI and network categories. It logs the category and exit code, never
+the process output; unrecognized or ambiguous output stays generic. The failed
+event carries only `codex_model_unsupported`, `codex_auth`,
+`codex_client_outdated` or `codex_network`. The research smoke maps these to
+`research_codex_model_unsupported`, `research_codex_auth`,
+`research_codex_client_outdated` and `research_codex_network`; the backend and
+release formatter allowlists stay in exact parity. Unknown runner reasons and
+event details remain excluded from smoke results and release evidence.
+
+## Foundry resource-query permission observations (#1341; 29 October 2026)
+
+The existing fixed Foundry resource query now counts `AzureDiagnostics` in the
+same 24-hour window and requests `include-permissions=true`. Bounded response
+metadata is validated and classified in memory; only a fixed `foundry_permissions`
+verdict leaves the backend. No resource/data-source identifiers, deny-table names,
+provider errors or aggregate counts are returned. HTTP query status stays
+independent of permission metadata. Empty results, missing/invalid metadata and
+400 responses cannot establish denied access. Request count, deadline, response
+cap, authentication, cache lifecycle and disabled reader remain unchanged.
+
+The existing ARM preflight validates the runtime Foundry target and collects
+paginated `assignedTo` results for the verified principal at workspace, Foundry
+and already-readable subscription scopes. This includes transitive group grants
+without Graph. Raw assignments/conditions stay in the existing private report;
+only fixed read/unavailable and grant-review labels are public. Incomplete scopes
+never establish a complete effective inventory. This stage changes no grant or
+workspace security mode and does not weaken the foreign-control qualification.
+
+## Main chat baseline diagnostics (#1350; 29 October 2026)
+
+Hosted chat maps known rejected top-level request fields from an OpenAI SDK
+BadRequestError to fixed failure codes. Backend smoke and release sanitization
+retain the same finite set without retaining provider text or nested schema names.
+Unknown fields retain the existing generic error. The live failure remains
+unresolved; invocation, request settings, native voice, persistence, tools and
+Factory boundaries are unchanged. The managed-harness path is planned, not wired
+or provisioned. See [migration notes](main-chat-harness-migration.md).
+
+## Backend log authorization observation path (#1341; 29 October 2026)
+
+The existing main-only preflight report remains mode 0600 in RUNNER_TEMP. A
+same-job consumer validates its target/shape, ownership, permissions and freshness
+and writes a private Bicep parameter file. Only the verified workspace, principal,
+app and an actual reported foreign workspace control configure read-only probes.
+Control discovery can fall back to workspace metadata already readable in the
+same subscription; no new access is requested and missing controls stay missing.
+No private report, parameter file or raw smoke response is uploaded. The parameter
+file is removed on deployment-script exit. Deployment fingerprints include the
+consumer; changed inputs requalify infrastructure and downstream components.
+
+The backend reuses its managed-identity credential and existing authenticated
+`GET /status/smoke`. A probe matches the token principal, executes at most five
+fixed aggregate queries concurrently under one eight-second total deadline and
+4 KiB per-response bound, and caches fixed observations once per process. It reads
+no message/stack/Log_s fields, follows no redirect, accepts no caller selector and
+retries nothing. The HTTP response has one optional fixed-schema observation
+object; the pipeline emits only allowlisted verdicts. Existing smoke entries,
+model checks, authentication boundaries and reader availability remain unchanged.
+A zero count, a partial response or a missing control is never isolation proof.
+A new permission change needs fresh post-change observations, not this cache.
+No role assignment, credential or activation is added by this increment.
+
 ## Backend log activation boundary and awareness (#1341; 28 October 2026)
 
 Owner approval now covers the built-in Log Analytics Data Reader's query, data
@@ -20,6 +172,36 @@ self-diagnosis when configured, otherwise explicitly refuse availability claims.
 The descriptor also identifies disabled/unconfigured state and distinguishes
 configuration from successful live access. Existing sensitive audit handling,
 read metadata and returned failure/partial/freshness semantics remain intact.
+
+## Issue delivery and chat recovery (#1343; 28 October 2026)
+
+Migration 0068 adds a unique nullable issue delivery ID to tasks and an internal
+repository/issue-to-source-message association. The create_issue tool saves that
+verified source before adding Jarvis's worker label. Label pickup looks up the
+origin and creates a chat-sourced task. Existing completed delivery receipts
+short-circuit old webhook replay; new receipts commit after mapping succeeds.
+Task creation also binds the delivery ID transactionally, covering concurrent
+pickup and a crash between task creation and delivery-receipt persistence.
+
+Task-status delivery now inserts its message and task/state receipt in one SQL
+transaction. The event handler retries once after a failed transaction; the
+receipt also makes an uncertain post-commit retry safe. If both attempts fail,
+the failure stays logged and a later event replay can retry because no receipt
+was consumed. This is not a new outbound notification channel or scheduler.
+Oversized startup persists a deduplicated Now alert through the existing alert
+store. Gmail receipts and Settings approval summaries reuse existing execution
+and approval boundaries.
+
+Browser tab recovery uses sessionStorage scoped by backend/account for queued
+text/file references and terminal error context. A stored snapshot expires after
+24 hours without update. Writer and reader share per-entry validation, including
+the backend's 512 KiB UTF-8 partial-reply limit; invalid warning entries do not
+discard valid queued messages. The two-million-character snapshot bound remains.
+When partial contexts exceed it, saving keeps warnings and queued messages first;
+if necessary it falls back to the queue alone. Incomplete saves and storage write
+failures are visible through the existing recovery warning. Recovery never resubmits a server-accepted turn and
+restored queued requests require an explicit Send queued messages action. The
+Settings change only moves the explicit Save control at phone width.
 
 ## Retained backend log reader (#1341; P11-42; 28 October 2026)
 

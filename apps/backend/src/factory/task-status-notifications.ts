@@ -90,17 +90,12 @@ export function createTaskStatusNotificationHandler(options: {
       if (!sessionId) return false;
       const session = await options.conversations.getSession(sessionId);
       if (!session) return false;
-      if (!await options.notifications.claim(event.taskId, state)) return true;
-
       const text = taskStatusMessage(event.taskId, state, notification.url ?? pullRequestUrl(event, task), session.language);
-      await options.conversations.addMessage({
-        sessionId,
-        role: 'jarvis',
-        text,
-        model: null,
-        language: session.language,
-        allowEndedSession: true,
-      });
+      const message = { sessionId, text, language: session.language };
+      // A failed transaction leaves no receipt. One bounded retry is safe even if
+      // the first connection lost its response after commit: the receipt deduplicates it.
+      try { await options.notifications.deliver(event.taskId, state, message); }
+      catch { await options.notifications.deliver(event.taskId, state, message); }
       return true;
     } catch {
       options.onError();

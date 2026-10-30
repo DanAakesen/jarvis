@@ -13,7 +13,8 @@ import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
-const { loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+const { loadRuntimeTestAvailability, loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
+  loadRuntimeTestAvailability: vi.fn(),
   loadActiveChatTurns: vi.fn(),
   loadConversationHistory: vi.fn(),
   loadImageArtifactUrl: vi.fn(),
@@ -25,7 +26,7 @@ const { loadActiveChatTurns, loadConversationHistory, loadImageArtifactUrl, crea
 vi.mock('./conversation-history', async (importOriginal) => ({
   ...await importOriginal<typeof import('./conversation-history')>(),
   loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn,
-  loadActiveChatTurns,
+  loadActiveChatTurns, loadRuntimeTestAvailability,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -161,6 +162,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   MockDictationRecognition.failStart = false;
   loadActiveChatTurns.mockResolvedValue([]);
+  loadRuntimeTestAvailability.mockResolvedValue({ current: { available: true }, copilot: { available: false, reason: 'Not verified.' } });
   loadImageArtifactUrl.mockReset();
   voiceSessions.length = 0;
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
@@ -174,6 +176,26 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it('opens a labelled separate runtime test only after Start and preserves the normal draft on return', async () => {
+    const user = userEvent.setup();
+    createChatSession.mockResolvedValue({ id: '70', language: 'en', runtimeTest: 'current' });
+    renderConversation();
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Keep my normal draft');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Test agent runtime' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Current' })).toHaveProperty('disabled', false));
+    expect(createChatSession).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('radio', { name: 'Current' }));
+    await user.click(screen.getByRole('button', { name: 'Open test conversation' }));
+    await screen.findByRole('heading', { name: 'Current test conversation' });
+    expect(createChatSession).toHaveBeenCalledExactlyOnceWith(getAccessToken, config, 'en', undefined, 'current');
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledWith(getAccessToken, config, undefined, '70'));
+    await user.click(screen.getByRole('button', { name: 'Return to normal conversation' }));
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('value', 'Keep my normal draft');
+    expect(sessionStorage.getItem('jarvis.chat.draft')).toBe('Keep my normal draft');
+    expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
   it.each(['Send', 'More options', 'Dictate'])('preserves typing focus through the recorded later mouse-down on %s, activating only on click', async (name) => {
     vi.stubGlobal('SpeechRecognition', MockDictationRecognition);
     sendChatTurn.mockImplementation(() => new Promise(() => {}));
@@ -605,7 +627,7 @@ describe('ConversationHistory', () => {
     const plus = screen.getByRole('button', { name: 'More options' });
     await user.click(plus);
     const items = screen.getAllByRole('menuitem');
-    expect(items.map(item => item.textContent)).toEqual(['Language', ...(phone ? ['Copy Send diagnostic'] : []), 'Voice', 'Attach file or photo']);
+    expect(items.map(item => item.textContent)).toEqual(['Language', 'Test agent runtime', ...(phone ? ['Copy Send diagnostic'] : []), 'Voice', 'Attach file or photo']);
     expect(document.activeElement).toBe(items[0]);
     await user.keyboard('{End}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Attach file or photo' }));
@@ -1364,6 +1386,55 @@ describe('ConversationHistory', () => {
     await act(async () => finishes[2]!());
     expect(screen.queryByRole('list', { name: 'Queued messages' })).toBeNull();
     expect(sendChatTurn.mock.calls.map((call) => call[3])).toEqual(['First', 'Second', 'Third']);
+  });
+
+  it.each(['send', 'remove'] as const)('restores queued text paused after remount and supports explicit %s', async (action) => {
+    sendChatTurn.mockImplementationOnce(() => new Promise(() => {}));
+    const view = renderConversation();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Synthetic pending turn' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: 'Synthetic queued follow-up' } });
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    await screen.findByRole('button', { name: 'Remove queued message: Synthetic queued follow-up' });
+    view.unmount();
+    sendChatTurn.mockClear();
+    renderConversation();
+    await screen.findByRole('button', { name: 'Send queued messages' });
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    sendChatTurn.mockResolvedValueOnce(assistantMessage);
+    if (action === 'remove') {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove queued message: Synthetic queued follow-up' }));
+      expect(screen.queryByRole('button', { name: 'Send queued messages' })).toBeNull();
+      const freshInput = screen.getByRole('textbox', { name: 'Message Jarvis' });
+      fireEvent.change(freshInput, { target: { value: 'Synthetic fresh message' } });
+      fireEvent.keyDown(freshInput, { key: 'Enter', ctrlKey: true });
+      await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+      expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Synthetic fresh message');
+      return;
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Send queued messages' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(sendChatTurn.mock.calls[0]?.[3]).toBe('Synthetic queued follow-up');
+  });
+
+  it('retains a terminal warning and partial reply with its submitted message after remount', async () => {
+    const savedUser = { ...userMessage, channel: 'chat' as const, language: 'da' as const, toolCalls: [] };
+    loadConversationHistory.mockResolvedValue({ messages: [savedUser], nextCursor: null });
+    sendChatTurn.mockImplementationOnce(async (_client, _config, _session, _text, onUser, onDelta) => {
+      onUser(userMessage); onDelta('Synthetic partial reply');
+      throw new Error('An action may have completed; check status before retrying.');
+    });
+    const view = renderConversation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: userMessage.text } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('An action may have completed; check status before retrying.');
+    view.unmount();
+    renderConversation();
+    expect(await screen.findByText('An action may have completed; check status before retrying.')).not.toBeNull();
+    expect(screen.getByText('Synthetic partial reply')).not.toBeNull();
+    expect(sendChatTurn).toHaveBeenCalledOnce();
   });
 
   it('keeps a failed turn visible and drains a queued message after error', async () => {

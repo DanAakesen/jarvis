@@ -225,7 +225,7 @@ describe('Jarvis settings tools', () => {
 
     expect(runConfirmed).toHaveBeenCalledWith(
       'other',
-      'Change chat model settings and the per-day vision budget in Jarvis settings.',
+      'Change chat reasoning: high and vision budget: USD 2 per day in Jarvis settings.',
       expect.any(Function),
       expect.any(AbortSignal),
     );
@@ -236,6 +236,16 @@ describe('Jarvis settings tools', () => {
       'roles.chat.reasoning_effort': '"high"',
       'global.vision_daily_budget_usd': '2',
     });
+  });
+
+  it('shows the proposed model and reasoning values in the approval card', async () => {
+    const runConfirmed = vi.fn(async (_kind, _summary, action) => action());
+    const { app } = fixture({ ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService });
+    const response = await app.inject({ method: 'POST', url: '/tools/update_settings', headers,
+      payload: { settings: { roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' } } } } });
+    expect(response.json().outcome).toBe('ok');
+    expect(runConfirmed.mock.calls[0]?.[1]).toContain('chat model: gpt-5.6-luna');
+    expect(runConfirmed.mock.calls[0]?.[1]).toContain('chat reasoning: high');
   });
 
   it('refuses unsupported or credential-like keys without writing', async () => {

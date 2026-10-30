@@ -1,3 +1,4 @@
+import { chatAgentFailureReasons, chatAgentInvocationReasons } from '../system-status.js';
 import { presentNutritionList } from './food-presentation.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { RecoverableChat } from './recoverable-chat.js';
@@ -14,6 +15,8 @@ import type {
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
+  ChatAgentError,
+  ChatAgentInvocationError,
   CHAT_AGENT_DIAGNOSTIC_PHASES,
   CHAT_AGENT_PHASES,
   createFoundryAgentSessionId,
@@ -45,6 +48,8 @@ import { normalizeVisualContext, visualContextSchema, persistedVisualContextSche
 import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
 import { approvalDeciderFor } from './approval-interpreter.js';
+import { readRuntimeTests } from './runtime-test-availability.js';
+import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -206,6 +211,7 @@ const steeringMessagesSchema = {
 
 interface ActiveChatTurn {
   readonly sessionId: string;
+  readonly runtimeTest?: 'current' | 'copilot';
   rootMessageId: string;
   phase: 'model' | 'tools' | 'finishing';
   consumedThrough: string;
@@ -226,6 +232,7 @@ const sessionSchema = {
     language: { type: 'string', enum: ['da', 'en'] },
     startedAt: { type: 'string', format: 'date-time' },
     endedAt: { type: ['string', 'null'], format: 'date-time' },
+    runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
   },
   required: ['id', 'channel', 'language', 'startedAt', 'endedAt'],
   additionalProperties: false,
@@ -289,6 +296,7 @@ const historySchema = {
       },
     },
     nextCursor: { type: ['string', 'null'] },
+    runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
   },
   required: ['messages', 'nextCursor'],
   additionalProperties: false,
@@ -387,13 +395,19 @@ return {
   id: 'conversation',
   tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
   registerRoutes: async (app) => {
+    registerManagedRuntimeRoutes(app);
+    const runtimeTests = () => readRuntimeTests({
+      storageAvailable: app.conversationStore !== null,
+      currentAvailable: app.conversationAgent !== null,
+      readVerified: app.managedRuntime ? app.conversationRuntimeTests : null,
+    });
     const activeTurns = new Map<string, ActiveChatTurn>();
     const recoverableTurns = new Map<string, RecoverableChat>();
     app.addHook('onClose', async () => {
       for (const turn of recoverableTurns.values()) turn.controller.abort();
     });
     app.get('/conversation/turns/active', async () => ({
-      turns: [...activeTurns.values()].flatMap(active => {
+      turns: [...activeTurns.values()].filter(active => active.runtimeTest === undefined).flatMap(active => {
         const turn = recoverableTurns.get(active.rootMessageId);
         return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId, language: turn.language }] : [];
       }),
@@ -633,6 +647,9 @@ return {
       const session = await store.getSession(sessionId);
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
+      if (session.runtimeTest && !(await runtimeTests())[session.runtimeTest].available) {
+        return reply.code(503).send({ error: 'The selected test runtime is unavailable. No other runtime was used.' });
+      }
       let attachmentContext: ConversationAttachmentContext[] = [];
       if (attachmentIds.length > 0) {
         const principal = request.principal;
@@ -658,6 +675,7 @@ return {
         : `screen:chat:${createHash('sha256').update(`${sessionId}:${visualTurnKey}`).digest('hex')}`;
       const activeTurn: ActiveChatTurn = {
         sessionId,
+        ...(session.runtimeTest ? { runtimeTest: session.runtimeTest } : {}),
         rootMessageId: '',
         phase: 'model',
         consumedThrough: '',
@@ -956,8 +974,12 @@ return {
               'conversation.reply_failed',
             );
             publishActivity('failed');
+            const code = error instanceof ChatAgentError && error.code !== undefined && chatAgentFailureReasons.has(error.code)
+              ? error.code : error instanceof ChatAgentInvocationError && chatAgentInvocationReasons.has(error.reason)
+                ? error.reason : undefined;
             yield streamEvent('error', {
               error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+              ...(code === undefined ? {} : { code }),
             });
           }
         } finally {
@@ -1105,13 +1127,19 @@ return {
       return { messages };
     });
 
-    app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage } }>('/conversation/sessions', {
+    app.get('/conversation/runtime-tests', async (_request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      return runtimeTests();
+    });
+
+    app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage; runtimeTest?: 'current' | 'copilot' } }>('/conversation/sessions', {
       schema: {
         body: {
           type: 'object',
           properties: {
             channel: { type: 'string', enum: ['chat', 'voice'] },
             language: { type: 'string', enum: ['da', 'en'] },
+            runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
           },
           required: ['channel', 'language'],
           additionalProperties: false,
@@ -1120,7 +1148,20 @@ return {
       },
     }, async (request, reply) => {
       if (!app.conversationStore) return reply.code(503).send({ error: 'Conversation storage unavailable' });
-      const session = await app.conversationStore.createSession(request.body);
+      const { runtimeTest } = request.body;
+      if (runtimeTest && request.body.channel !== 'chat') {
+        return reply.code(400).send({ error: 'Runtime tests require a new chat conversation.' });
+      }
+      if (runtimeTest && !(await runtimeTests())[runtimeTest].available) {
+        return reply.code(503).send({ error: 'The selected test runtime is unavailable. No other runtime was used.' });
+      }
+      const session = await app.conversationStore.createSession({
+        ...request.body,
+        ...(runtimeTest ? { ownerObjectId: request.principal!.objectId } : {}),
+      });
+      if (runtimeTest && session.runtimeTest !== runtimeTest) {
+        return reply.code(503).send({ error: 'Test conversation storage is unavailable.' });
+      }
       return reply.code(201).send(session);
     });
 
@@ -1189,13 +1230,15 @@ return {
       return reply.code(201).send(message);
     });
 
-    app.get<{ Querystring: { before?: string; limit?: number } }>('/conversation/history', {
+    app.get<{ Querystring: { before?: string; limit?: number; sessionId?: string; sourceMessageId?: string } }>('/conversation/history', {
       schema: {
         querystring: {
           type: 'object',
           properties: {
             before: idSchema,
             limit: { type: 'integer', minimum: 1, maximum: 100 },
+            sessionId: idSchema,
+            sourceMessageId: idSchema,
           },
           additionalProperties: false,
         },
@@ -1203,9 +1246,28 @@ return {
       },
     }, async (request, reply) => {
       if (!app.conversationStore) return reply.code(503).send({ error: 'Conversation storage unavailable' });
-      const { before, limit = 50 } = request.query;
+      const { before, limit = 50, sessionId, sourceMessageId } = request.query;
       if (before !== undefined && !validId(before)) return reply.code(400).send({ error: 'Invalid history cursor' });
-      return app.conversationStore.getHistory({ limit, ...(before === undefined ? {} : { before }) });
+      if (sessionId && sourceMessageId) return reply.code(400).send({ error: 'Use one history scope.' });
+      if (sessionId && !validId(sessionId) || sourceMessageId && !validId(sourceMessageId)) {
+        return reply.code(400).send({ error: 'Invalid history scope.' });
+      }
+      const resolvedSessionId = sourceMessageId
+        ? await app.conversationStore.getMessageSessionId?.(sourceMessageId)
+        : sessionId;
+      if ((sourceMessageId || sessionId) && !resolvedSessionId) {
+        return reply.code(404).send({ error: 'Conversation source not found.' });
+      }
+      const session = resolvedSessionId ? await app.conversationStore.getSession(resolvedSessionId) : null;
+      if (resolvedSessionId && !session) return reply.code(404).send({ error: 'Conversation source not found.' });
+      // The stored source selects the test scope. A request flag never chooses its runtime.
+      const page = await app.conversationStore.getHistory({
+        limit,
+        ...(before === undefined ? {} : { before }),
+        ...(sessionId || session?.runtimeTest ? { sessionId: resolvedSessionId! } : {}),
+        ...(!sourceMessageId && !sessionId ? { excludeRuntimeTests: true } : {}),
+      });
+      return { ...page, ...(sourceMessageId && session?.runtimeTest ? { runtimeTest: session.runtimeTest } : {}) };
     });
 
     app.get<{

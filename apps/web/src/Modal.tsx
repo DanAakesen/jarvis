@@ -8,12 +8,14 @@ import { useOverlayMotion } from './overlay-motion';
  * viewport, with a close button, Escape, a click outside to close, a focus trap, and focus returned on close.
  * `busy` blocks every way of closing while an action is in flight.
  */
-export function Modal({ title, titleId, onClose, busy = false, dirty = false, className, children, footer }: {
+export function Modal({ title, titleId, onClose, busy = false, dirty = false, allowDismissAfterEdit = false, className, children, footer }: {
   title: string;
   titleId: string;
   onClose: () => void;
   busy?: boolean;
   dirty?: boolean;
+  /** For disposable choices without draft changes, such as the runtime selector. */
+  allowDismissAfterEdit?: boolean;
   className?: string;
   children: ReactNode;
   footer?: ReactNode;
@@ -24,7 +26,7 @@ export function Modal({ title, titleId, onClose, busy = false, dirty = false, cl
   const pressStartedOutside = useRef(false);
   const edited = useRef(false);
   const close = () => { if (!busy) onClose(); };
-  const dismiss = () => { if (!dirty && !edited.current && isTopModal(dialog.current)) close(); };
+  const dismiss = () => { if (!dirty && (!edited.current || allowDismissAfterEdit) && isTopModal(dialog.current)) close(); };
   const { onKeyDown } = useModalLifecycle({ dialog, boundary: backdrop, onDismiss: dismiss });
 
   return createPortal(

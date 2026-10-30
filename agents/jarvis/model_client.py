@@ -239,6 +239,22 @@ def mode_context(settings: ModelSettings) -> str:
     )
 
 
+def chat_model_tools(definitions: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Apply the existing normal-chat schema boundary to prepared tool definitions."""
+    tools = list(definitions)
+    for tool in tools:
+        if tool["name"] == "get_system_health":
+            parameters = tool["parameters"]
+            tool["parameters"] = {
+                **parameters,
+                "properties": {
+                    name: value for name, value in parameters["properties"].items()
+                    if name != "operation"
+                },
+            }
+    return tools
+
+
 def personalize_instructions(
     instructions: str, settings: ModelSettings | None, language: str = "da"
 ) -> str:
@@ -547,9 +563,24 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             reasoning_effort=os.getenv("JARVIS_REASONING_EFFORT", "").strip() or None,
         )
 
+    async def _create_response(self, request: dict[str, Any]) -> Any:
+        """Provider transport seam; application policies remain in _complete."""
+        return await self._client.responses.create(**request)
+
     def diagnostics(self) -> str:
         """Short, secret-free status of the backend tools for troubleshooting."""
         return self._tools.diagnostics()
+
+    async def managed_definition_manifest(self) -> dict[str, Any]:
+        """Static instructions and authoritative schemas for the existing deploy caller.
+
+        No model request, personal context/settings read, or function execution.
+        Foundry's existing invocation authorization protects this administrative read.
+        """
+        return {"instructions": compose_identity_instructions(
+                    DEFAULT_MODEL_SETTINGS.identity_description, "en",
+                ) + "\n\n" + CHAT_INSTRUCTIONS["en"],
+                "tools": chat_model_tools(model_tools(await self._tools.tools()))}
 
     async def session_settings(self) -> ModelSettings:
         """Load the effective settings that this hosted session will retain."""
@@ -902,12 +933,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 if use_anthropic and self._anthropic_client is None:
                     raise RuntimeError("Foundry Claude client is unavailable")
                 reasoning_effort = (
-                    "none" if role == "smoke" else
                     settings.reasoning_effort if settings is not None else self._reasoning_effort
                 )
-                max_output_tokens = (
-                    min(self._max_output_tokens, 256)
-                    if role == "smoke" else self._max_output_tokens
+                # Smoke must exercise the selected model settings. A separate
+                # effort or token cap can reject/starve an otherwise valid chat.
+                max_output_tokens = self._max_output_tokens
+                span.set_attribute(
+                    "gen_ai.request.reasoning_effort",
+                    reasoning_effort if reasoning_effort in {
+                        "none", "minimal", "low", "medium", "high", "xhigh",
+                    } else "unspecified" if reasoning_effort is None else "unsupported",
                 )
                 span.set_attribute("gen_ai.request.model", model_name)
                 with latency_span("prompt_build") as prompt_span:
@@ -1016,18 +1051,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             for name in SMOKE_TOOL_ORDER if name in definitions
                         ]
                     else:
-                        tools = list(definitions.values())
-                        for tool in tools:
-                            if tool["name"] == "get_system_health":
-                                parameters = tool["parameters"]
-                                tool["parameters"] = {
-                                    **parameters,
-                                    "properties": {
-                                        name: value
-                                        for name, value in parameters["properties"].items()
-                                        if name != "operation"
-                                    },
-                                }
+                        tools = chat_model_tools(list(definitions.values()))
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
                 steering_fetcher = current_steering_fetcher.get()
@@ -1220,7 +1244,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     latency_span("model_request"),
                                     latency_span("model_request_max"),
                                 ):
-                                    stream = await self._client.responses.create(**request)
+                                    stream = await self._create_response(request)
                             except Exception as exc:
                                 if (
                                     image_request

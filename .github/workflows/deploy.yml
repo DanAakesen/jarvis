@@ -15,6 +15,12 @@ on:
       - '!docs/**'
       - 'docs/features.md'
   workflow_dispatch:
+    inputs:
+      provision_managed_chat:
+        description: Provision and verify the separate managed chat comparison
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -462,6 +468,28 @@ jobs:
             curl --fail --silent --show-error --max-time 20 "https://$STATIC_WEB_APP_HOST$path" | grep -q '<div id="root">'
           done
 
+  managed-chat-comparison:
+    name: Manual managed chat comparison
+    needs: [plan, infra, backend, agent, smoke]
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.provision_managed_chat == true && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Provision and verify the explicitly requested comparison
+        run: bash .github/scripts/provision_managed_chat_handoff.sh
+
   acceptance:
     name: Live conversation acceptance
     needs: [plan, smoke]
@@ -515,6 +543,9 @@ jobs:
           fi
           # Validate the complete fixed check set before logging any identifiers.
           python .github/scripts/smoke_reasons.py "$response" --evidence acceptance-evidence.json
+          if ! python .github/scripts/backend_log_probe_verdicts.py "$response"; then
+            echo "::warning::Backend log authorization observations unavailable; no activation performed."
+          fi
           {
             echo "### Backend smoke checks"
             echo
