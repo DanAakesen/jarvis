@@ -77,6 +77,50 @@ describe('research smoke evidence', () => {
     expect(JSON.stringify(report)).not.toMatch(/PRIVATE/u);
   });
 
+  it.each([
+    ['codex_model_unsupported', 'research_codex_model_unsupported'],
+    ['codex_auth', 'research_codex_auth'],
+    ['codex_client_outdated', 'research_codex_client_outdated'],
+    ['codex_network', 'research_codex_network'],
+  ] as const)('reports only the fixed %s category from a failed runner event', async (category, reason) => {
+    const client = fixture({
+      status: 'failed',
+      error: 'Codex web research failed',
+      events: [{
+        at: 1,
+        kind: 'failed',
+        data: { reason: category, output: 'PRIVATE_RAW_CODEX_OUTPUT' },
+      }],
+    });
+    const report = await createResearchSmokeProbe({
+      configured: true, clientFor: () => client,
+      selectModel: async () => ({ model: 'fixture-model', reasoningEffort: 'none' }),
+    })();
+
+    expect(report).toEqual({ status: 'down', details: { configured: true }, reason });
+    expect(JSON.stringify(report)).not.toContain('PRIVATE_RAW_CODEX_OUTPUT');
+    expect(client.deleteSession).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an unknown failed-event reason generic and out of the smoke report', async () => {
+    const client = fixture({
+      status: 'failed',
+      error: 'PRIVATE_PROVIDER_FAILURE',
+      events: [{
+        at: 1,
+        kind: 'failed',
+        data: { reason: 'codex_private_provider_text', output: 'PRIVATE_RAW_CODEX_OUTPUT' },
+      }],
+    });
+    const report = await createResearchSmokeProbe({
+      configured: true, clientFor: () => client,
+      selectModel: async () => ({ model: 'fixture-model', reasoningEffort: 'none' }),
+    })();
+
+    expect(report).toEqual({ status: 'down', details: { configured: true }, reason: 'research_runner_failed' });
+    expect(JSON.stringify(report)).not.toMatch(/PRIVATE/u);
+  });
+
   it.each([400, 401, 403, 404, 429, 500, 502, 503, 504])('retains only the fixed runner HTTP %s boundary', async (status) => {
     const client = fixture();
     client.startCodexTool.mockRejectedValue(new FoundryClientError('http', 'PRIVATE_OPERATION', status));

@@ -1,10 +1,14 @@
 import { FoundryClientError } from '../foundry/client.js';
 import { researchSmokeFailureReasons, type SystemStatusResult } from '../system-status.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
-import { runCodexToolResult, type WebResearchClient } from './web-research.js';
+import { CodexToolFailure, runCodexToolResult, type WebResearchClient } from './web-research.js';
 
 /** Classify the existing runner boundary without exposing its body, events or error text. */
 export function researchSmokeFailureReason(error: unknown): string {
+  if (error instanceof CodexToolFailure) {
+    const reason = `research_${error.category}`;
+    return researchSmokeFailureReasons.has(reason) ? reason : 'research_unavailable';
+  }
   if (error instanceof FoundryClientError) {
     const reason = error.kind === 'http'
       ? `research_runner_http_${error.statusCode}` : `research_runner_${error.kind}`;
