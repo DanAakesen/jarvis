@@ -10,6 +10,13 @@ to the initial work. Track the approved stages in
 
 ## Baseline investigation
 
+At 20:03 UTC on 29 October 2026, [PR #1362](https://github.com/DanAakesen/jarvis/pull/1362)
+merged as `6513c7e3`. [Deploy 40945569635](https://github.com/DanAakesen/jarvis/actions/runs/40945569635)
+stopped at `exact_qualification_missing` before applying changes because the
+passing CI receipt covered the earlier tree, before the concurrent iOS
+documentation changes in PR #1363. Combined-tree qualification, deployment and
+real owner-session chat verification were pending at this checkpoint.
+
 Deploy [40928130267](https://github.com/DanAakesen/jarvis/actions/runs/40928130267)
 passed the managed text canary at 18:12 UTC on 29 October and all Current chat
 checks. Separate research acceptance still failed. The owner subsequently reported
