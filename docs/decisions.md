@@ -1,3 +1,14 @@
+## 30 October 2026 — stabilize the GitHub chat acceptance read (#1415)
+
+Judge `chat_github_read` by a successful `github_read` / `issue_get` receipt for
+issue 700 with a nonblank title, not by whether the model repeats that title.
+Retry `github_issue_unavailable` once through the existing pacing/deadline wrapper;
+share the two-attempt limit with rate-limit recovery. Keep the final safe failure
+reason and aggregate failure visible in existing acceptance/release evidence.
+Deploy 41130636015 showed this isolated read assertion failing; deterministic
+regressions cover recovery and genuine failures. Repeated live acceptance after
+deployment remains unverified.
+
 ## 30 October 2026 — keep the voice protocol in JarvisCore (P15-06 / #1391)
 
 Use the web client's `/voice` and `/voice/da` routes and its

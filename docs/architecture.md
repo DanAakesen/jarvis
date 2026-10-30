@@ -3728,12 +3728,16 @@ any other unexpected exception remains `agent_error`. These
 `chatAgentInvocationReasons` are mirrored by the Python formatter with a parity
 test, and cancellation is never relabelled by the invocation client.
 `rate_limit_exceeded` is explicitly allowed in hosted, canary, smoke-log and
-artifact reasons. Only that failure retries its check once: wait 60 seconds
+artifact reasons. That failure retries its check once: wait 60 seconds
 after rejection by default, or use a numeric SSE `retry_after` (seconds) /
 HTTP `Retry-After` hint clamped to 30–60 seconds, then re-enter the same queue.
 The second result is final; a second throttle names `rate_limit_exceeded` on
-both the check and aggregate canary. Other errors, assertion failures and
-timeouts never retry. Smoke prompts are read-only or no-op, so repeating them
+both the check and aggregate canary. The read-only `chat_github_read` check also
+retries `github_issue_unavailable` once through the same pacing queue, sharing
+the two-attempt cap. It requires a successful `github_read` / `issue_get` receipt
+for issue 700 with a nonblank title, not a title repeated in reply text. A failed
+retry retains its safe reason in release evidence. Other errors, assertion
+failures and timeouts never retry. Smoke prompts are read-only or no-op, so repeating them
 has no side effects; a rescued throttle is not recorded in the report.
 Capacity remains unchanged. Two consecutive production releases with first-attempt
 acceptance and zero throttled spans remain required live verification.
