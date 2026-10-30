@@ -5391,7 +5391,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     G.laid = true;
     let s = 11;
     const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    NOTES.forEach(n => { const a = ANCH[n.folder]; addNode(n, a[0] + (rnd() - .5) * 90, a[1] + (rnd() - .5) * 90); });
+    NOTES.forEach(n => { const a = ANCH[n.folder] || [0, 0]; addNode(n, a[0] + (rnd() - .5) * 90, a[1] + (rnd() - .5) * 90); });
     const ns = Array.from(G.byId.values()), es = LK.concat(SIM).map(p => [G.byId.get(p[0]), G.byId.get(p[1])]);
     for (let it = 0; it < 320; it++) {
       const cool = 1 - it / 320;
@@ -5400,7 +5400,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
         dx = dx / d * f; dy = dy / d * f; a.vx += dx; a.vy += dy; b.vx -= dx; b.vy -= dy;
       }
       es.forEach(([a, b]) => { const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 1, f = (d - 62) * .05; a.vx += dx / d * f; a.vy += dy / d * f; b.vx -= dx / d * f; b.vy -= dy / d * f; });
-      ns.forEach(n => { const a = ANCH[n.f]; n.vx += (a[0] - n.x) * .012 - n.x * .004; n.vy += (a[1] - n.y) * .012 - n.y * .004; const m = 14 * cool + 1; n.vx = Math.max(-m, Math.min(m, n.vx * .6)); n.vy = Math.max(-m, Math.min(m, n.vy * .6)); n.x += n.vx; n.y += n.vy; });
+      ns.forEach(n => { const a = ANCH[n.f] || [0, 0]; n.vx += (a[0] - n.x) * .012 - n.x * .004; n.vy += (a[1] - n.y) * .012 - n.y * .004; const m = 14 * cool + 1; n.vx = Math.max(-m, Math.min(m, n.vx * .6)); n.vy = Math.max(-m, Math.min(m, n.vy * .6)); n.x += n.vx; n.y += n.vy; });
     }
   }
   const ensureNodes = () => { layout(); NOTES.forEach(n => { if (!G.byId.has(n.id)) addNode(n); }); };
