@@ -9,6 +9,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "JarvisCore"),
-        .testTarget(name: "JarvisCoreTests", dependencies: ["JarvisCore"]),
+        .testTarget(
+            name: "JarvisCoreTests",
+            dependencies: ["JarvisCore"],
+            resources: [.copy("Resources")]
+        ),
     ]
 )

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "POST",
+      "path": "/api/conversation/sessions/12/turns",
+      "stream": {
+        "statusCode": 200,
+        "chunks": [
+          {"text": "event: error\ndata: {\"code\":\"fixture_failure\",\"error\":\"Synthetic turn failure\"}\n\n"}
+        ]
+      }
+    }
+  ]
+}

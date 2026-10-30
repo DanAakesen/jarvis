@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/conversation/history",
+      "query": {"limit": "20"},
+      "response": {"statusCode": 200, "body": {"messages": [], "nextCursor": null}}
+    },
+    {
+      "method": "GET",
+      "path": "/api/conversation/history",
+      "query": {"limit": "1", "sessionId": "12"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "messages": [
+            {"id": "43", "sessionId": "12", "channel": "chat", "language": "en", "role": "jarvis", "text": "Synthetic history", "model": "fixture", "interrupted": false, "voiceMinutes": null, "at": "2026-10-30T00:00:01.000Z", "toolCalls": [{"id": "90", "tool": "get_system_health", "outcome": "ok", "taskId": null, "artifactId": null}], "attachments": []}
+          ],
+          "nextCursor": "43"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/conversation/history",
+      "query": {"limit": "1", "before": "43", "sessionId": "12"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "messages": [
+            {"id": "42", "sessionId": "12", "channel": "chat", "language": "en", "role": "dan", "text": "Hello fixture", "model": null, "interrupted": false, "voiceMinutes": null, "at": "2026-10-30T00:00:00.000Z", "toolCalls": [], "attachments": []}
+          ],
+          "nextCursor": null
+        }
+      }
+    }
+  ]
+}

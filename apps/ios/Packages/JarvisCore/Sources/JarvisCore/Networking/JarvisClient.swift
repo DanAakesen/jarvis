@@ -187,7 +187,8 @@ public final class JarvisClient: Sendable {
         idempotent: Bool,
         queryItems: [URLQueryItem] = [],
         accept: String = "application/json",
-        contentType: String? = "application/json"
+        contentType: String? = "application/json",
+        timeout: Duration? = nil
     ) async throws -> HTTPResponse {
         let request = try await makeRequest(
             method: method,
@@ -197,7 +198,8 @@ public final class JarvisClient: Sendable {
             authorization: authorization,
             queryItems: queryItems,
             accept: accept,
-            contentType: contentType
+            contentType: contentType,
+            timeout: timeout
         )
 
         var retries = 0
@@ -255,7 +257,7 @@ public final class JarvisClient: Sendable {
         }
     }
 
-    func performChatRequest(
+    func performAuthenticatedRequest(
         method: HTTPMethod,
         path: [String],
         queryItems: [URLQueryItem] = [],
@@ -263,7 +265,8 @@ public final class JarvisClient: Sendable {
         body: Data? = nil,
         contentType: String? = "application/json",
         idempotent: Bool,
-        accept: String = "application/json"
+        accept: String = "application/json",
+        timeout: Duration? = nil
     ) async throws -> HTTPResponse {
         try await send(
             method: method,
@@ -274,7 +277,8 @@ public final class JarvisClient: Sendable {
             idempotent: idempotent,
             queryItems: queryItems,
             accept: accept,
-            contentType: contentType
+            contentType: contentType,
+            timeout: timeout
         )
     }
 
@@ -336,7 +340,8 @@ public final class JarvisClient: Sendable {
         authorization: Authorization,
         queryItems: [URLQueryItem],
         accept: String,
-        contentType: String?
+        contentType: String?,
+        timeout: Duration? = nil
     ) async throws -> HTTPRequest {
         var url = configuration.baseURL
         for component in path { url.append(path: component) }
@@ -359,7 +364,7 @@ public final class JarvisClient: Sendable {
             url: url,
             headers: requestHeaders,
             body: body,
-            timeout: configuration.requestTimeout
+            timeout: min(timeout ?? configuration.requestTimeout, configuration.requestTimeout)
         )
         let token: String
         switch authorization {
@@ -380,7 +385,7 @@ public final class JarvisClient: Sendable {
             url: url,
             headers: requestHeaders,
             body: body,
-            timeout: configuration.requestTimeout
+            timeout: unsignedRequest.timeout
         )
     }
 

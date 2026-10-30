@@ -9,6 +9,17 @@ struct ContentView: View {
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?
 
+    init() {
+        let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
+        var initialNavigation = JarvisNavigationState()
+        if sidebarInitiallyOpen {
+            initialNavigation.openSidebar()
+        }
+        _navigation = State(initialValue: initialNavigation)
+        _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
+        _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let drawerWidth = min(

@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "POST",
+      "path": "/api/conversation/sessions",
+      "requestBody": {"channel": "chat", "language": "en"},
+      "response": {"statusCode": 201, "body": {"id": "12", "channel": "chat", "language": "en"}}
+    },
+    {
+      "method": "POST",
+      "path": "/api/conversation/sessions/12/turns",
+      "requestBody": {"text": "Hello fixture"},
+      "stream": {
+        "statusCode": 200,
+        "headers": {"Content-Type": "text/event-stream"},
+        "chunks": [
+          {"text": "event: user\ndata: {\"id\":\"42\",\"sessionId\":\"12\",\"role\":\"dan\",\"text\":\"Hello fixture\",\"model\":null,\"at\":\"2026-10-30T00:00:00.000Z\"}\n\n"},
+          {"text": "event: delta\ndata: {\"text\":\"Hello\"}\n\n", "delayMilliseconds": 10},
+          {"text": "event: delta\ndata: {\"text\":\" from\"}\n\n", "delayMilliseconds": 20},
+          {"text": "event: delta\ndata: {\"text\":\" fixtures\"}\n\n", "delayMilliseconds": 30},
+          {"text": "event: done\ndata: {\"id\":\"43\",\"sessionId\":\"12\",\"role\":\"jarvis\",\"text\":\"Hello from fixtures\",\"model\":\"fixture\",\"at\":\"2026-10-30T00:00:01.000Z\"}\n\n"}
+        ]
+      }
+    }
+  ]
+}

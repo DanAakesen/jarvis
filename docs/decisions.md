@@ -1,3 +1,44 @@
+## 30 October 2026 — keep the voice protocol in JarvisCore (P15-06 / #1391)
+
+Use the web client's `/voice` and `/voice/da` routes and its
+`jarvis.voice.v1` plus `jarvis.auth.TOKEN` subprotocols. Keep the WebSocket
+replaceable for Linux tests; do not add an iOS backend route or Apple framework
+to `JarvisCore`. The core models known client/server messages, retains unknown
+server JSON, and owns only protocol state and PCM16/base64 conversion—not audio
+capture or playback. Speech during a response immediately emits an interrupt
+action and an inaudible playback-completion message.
+
+Reconnect after drops with a fake-clock-testable 1, 2, 4, 8, then capped
+10-second backoff, for at most eight attempts. A user-ended session is terminal.
+The exact acceptance of an Authorization header during upgrade and the shapes
+of tool/error messages remain open; neither is guessed or implemented here.
+
+## 30 October 2026 — keep generated-view models in JarvisCore (P15-07 / #1392)
+
+Decode the existing version-1 web contract into typed renderer data and actions
+inside the Linux-testable pure-Swift core. Keep rendering and HTML execution out
+of scope; retain the raw JSON for unknown renderers and unsupported versions.
+The parity test reads `packages/contracts/src/index.js` directly, so no web
+contract export or backend route is needed. The runtime `isGeneratedView` guard
+accepts source status `running` although the TypeScript declaration and JSON
+schema omit it; follow runtime behavior and leave the web contract unchanged.
+
+## 30 October 2026 — synthetic fixture replay in JarvisCore (P15-08 / #1393)
+
+Implement fixture replay through the existing HTTP and streaming transport seam
+and reuse `ChatClock` for deterministic delays. Keep the hand-written JSON sample
+scenarios in the test target's resources: the current app does not consume them,
+so no public `JarvisCoreFixtures` target or app/project change is justified.
+Never derive fixtures from real sessions. Test fixture files for sensitive
+patterns and non-example hosts as well as exercising their client behavior.
+
+The merged HTTP/chat prerequisites contained no approvals client. Add only the
+small approvals slice needed to load pending confirmations and resolve a
+decision through the web application's existing `/now` routes, sharing the
+authenticated HTTP client. No backend route or screen is added. Linux replay
+evidence is separate from owner live verification; #1393 stays open until that
+verification.
+
 ## 30 October 2026 — keep chat streaming in JarvisCore (P15-04 / #1389)
 
 Reuse the web application's conversation routes and event payloads; do not add
@@ -8,6 +49,17 @@ reattachment only for transient failures, at the web client's two-second
 interval and within its 15-minute window; inject the clock for deterministic
 tests. The Linux-testable core owns the chat client and multipart encoding;
 Apple transport implementations remain in the app target.
+
+## 30 October 2026 — keep approvals and workspace control in JarvisCore (P15-05 / #1390)
+
+Reuse `GET /now`, the confirmation decision route and the authenticated
+`/now/events` plus workspace registration/acknowledgement routes already used
+by the web app. Never retry a confirmation decision; treat 404 as no longer
+available. Workspace acknowledgements are single-send and use the server event's
+expiry to bound the request timeout. Reconnect with a capped, injectable backoff,
+clear the old session ID, and do not assume event replay or re-register state.
+Keep this issue headless: no push, notifications, screen, backend route or
+Apple-only dependency.
 
 ## 30 October 2026 — keep iOS networking in the pure-Swift core (P15-03 / #1388)
 
@@ -9325,3 +9377,21 @@ values. The checked-out `JarvisCore` has no WebSocket seam, so defer its Apple
 adapter until #1391 lands rather than inventing or changing the contract.
 The existing Mac job compiles these app-target adapters but does not run
 simulator tests.
+
+## 30 October 2026 — ready-PR iOS screenshot artifact
+
+Extend the existing ready-PR-only `macos-26` simulator job rather than adding a
+second Mac workflow. After the unsigned build, boot an available iPhone simulator
+with `xcrun simctl`, capture the main screen in light and dark appearance, upload
+and capture the light-appearance open sidebar using the
+`--screenshot-sidebar-open` launch argument. Upload the PNGs as a 14-day Actions
+artifact and create/update a single bot comment with the artifact link. Keep the
+existing timeout and cancel-in-progress behavior; do not add signing, secrets or
+TestFlight work.
+
+GitHub workflow artifacts are downloadable archives and cannot be embedded as
+inline images in an issue comment; the comment links the artifact instead. Do not
+commit screenshots or publish them elsewhere. The sidebar launch argument
+initializes the actual navigation state and rendered drawer, not a mock view. The
+offline workflow tests pass, but hosted simulator, artifact and comment behavior
+remain unverified until a ready iOS pull request runs.
