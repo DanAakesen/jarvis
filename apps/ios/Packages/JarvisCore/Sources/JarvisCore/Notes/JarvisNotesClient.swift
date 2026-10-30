@@ -39,6 +39,11 @@ public struct VaultNoteWrite: Codable, Equatable, Sendable {
     public let url: String
 }
 
+public enum JarvisNotesLanguage: String, Codable, Equatable, Sendable {
+    case da
+    case en
+}
+
 public enum VaultTaskState: String, Sendable {
     case open
     case done
@@ -229,6 +234,15 @@ public final class JarvisNotesClient: Sendable {
 
     public init(client: JarvisClient) {
         self.client = client
+    }
+
+    public func languagePreference() async throws -> JarvisNotesLanguage {
+        let response = try await request(method: .get, path: ["settings"], idempotent: true)
+        guard response.body.count <= 4 * 1024 * 1024,
+              let settings = try? JSONDecoder().decode(NotesLanguageResponse.self, from: response.body) else {
+            throw JarvisNotesClientError.invalidResponse
+        }
+        return settings.settings.voice.defaultLanguage
     }
 
     public func folderTree() async throws -> VaultNoteTree {
@@ -566,6 +580,18 @@ public final class JarvisNotesClient: Sendable {
     private static func directory(_ path: String) -> String {
         guard let separator = path.lastIndex(of: "/") else { return "" }
         return String(path[..<separator])
+    }
+
+    private struct NotesLanguageResponse: Decodable {
+        let settings: NotesLanguageSettings
+    }
+
+    private struct NotesLanguageSettings: Decodable {
+        let voice: NotesVoiceSettings
+    }
+
+    private struct NotesVoiceSettings: Decodable {
+        let defaultLanguage: JarvisNotesLanguage
     }
 }
 

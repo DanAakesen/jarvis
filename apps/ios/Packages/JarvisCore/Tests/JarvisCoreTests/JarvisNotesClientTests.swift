@@ -3,6 +3,18 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisNotesClientTests: XCTestCase {
+    func testReadsTheSharedLanguageSetting() async throws {
+        let transport = try notesFixture("notes-language")
+        let notes = JarvisNotesClient(client: try makeClient(transport))
+
+        let preference = try await notes.languagePreference()
+        XCTAssertEqual(preference, .en)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.get])
+        XCTAssertEqual(requests.map(\.path), ["/api/settings"])
+        await assertConsumed(transport)
+    }
+
     func testNotesTreeListReadCreateAndConflictUseSharedRoutes() async throws {
         let transport = try notesFixture("notes")
         let notes = JarvisNotesClient(client: try makeClient(transport))
@@ -94,6 +106,27 @@ final class JarvisNotesClientTests: XCTestCase {
         XCTAssertEqual(requests.map(\.path), ["/api/knowledge/graph", "/api/knowledge/search"])
         XCTAssertEqual(requests.last?.query, ["q": "synthetic note"])
         await assertConsumed(transport)
+    }
+
+    func testFolderTreeAndGraphPositionsAreStableAndBounded() throws {
+        let folders = JarvisNotesPresentation.folderTree(["Work/Projects", "Work", "Personal/Plans"])
+        XCTAssertEqual(folders.map(\.path), ["Personal", "Work"])
+        XCTAssertEqual(folders[1].children.map(\.path), ["Work/Projects"])
+
+        let graph = try JSONDecoder().decode(KnowledgeGraph.self, from: Data("""
+        {
+          "nodes": [
+            {"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","path":"Work/a_note.md","title":"A","folder":"Work","directory":"Work","updatedAt":"2026-10-30T00:00:00Z","degree":1},
+            {"id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","path":"Work/b_note.md","title":"B","folder":"Work","directory":"Work","updatedAt":"2026-10-30T00:00:00Z","degree":1}
+          ],
+          "edges": [],
+          "updatedAt":"2026-10-30T00:00:00Z"
+        }
+        """.utf8))
+        let positions = JarvisNotesPresentation.graphPositions(graph)
+        XCTAssertEqual(positions.count, 2)
+        XCTAssertTrue(positions.values.allSatisfy { (0...1).contains($0.x) && (0...1).contains($0.y) })
+        XCTAssertEqual(positions, JarvisNotesPresentation.graphPositions(graph))
     }
 
     func testRejectsUnsafeNotePathsAndTaskTimesWithoutADateBeforeRequests() async throws {

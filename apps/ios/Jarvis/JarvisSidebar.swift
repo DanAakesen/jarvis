@@ -19,6 +19,33 @@ enum JarvisDesignTokens {
     static let sidebarSpringDamping: CGFloat = 0.88
     static let screenDimOpacity: CGFloat = 0.12
     static let screenBlurRadius: CGFloat = 4
+    static let notesHorizontalInset: CGFloat = 16
+    static let notesSectionSpacing: CGFloat = 12
+    static let notesControlHeight: CGFloat = 44
+    static let notesRowMinimumHeight: CGFloat = 52
+    static let notesIconSize: CGFloat = 18
+    static let notesChipSpacing: CGFloat = 18
+    static let notesGraphNodeRadius: CGFloat = 5
+    static let notesGraphEdgeWidth: CGFloat = 1
+    static let notesInlineSpacing: CGFloat = 4
+    static let notesMetadataSpacing: CGFloat = 8
+    static let notesChevronSize: CGFloat = 12
+    static let notesTaskActionSize: CGFloat = 22
+    static let notesEmptyIconSize: CGFloat = 28
+    static let notesCompactInset: CGFloat = 2
+    static let notesEditorInset: CGFloat = 4
+    static let notesEditorMinimumHeight: CGFloat = 120
+    static let notesConflictPreviewMaximumHeight: CGFloat = 120
+    static let notesConflictPanelRadius: CGFloat = 16
+    static let notesGraphSelectionStroke: CGFloat = 2
+    static let notesGraphNodeLabelWidth: CGFloat = 96
+    static let notesGraphMinimumZoom: CGFloat = 0.65
+    static let notesGraphMaximumZoom: CGFloat = 4
+    static let notesGraphEmphasizedOpacity: Double = 0.38
+    static let notesGraphDimmedOpacity: Double = 0.12
+    static let notesGraphNeighbourOpacity: Double = 0.72
+    static let notesGraphNodeOpacity: Double = 0.46
+    static let notesSearchSnippetLineLimit = 2
 }
 
 private struct JarvisSidebarButtonStyle: ButtonStyle {

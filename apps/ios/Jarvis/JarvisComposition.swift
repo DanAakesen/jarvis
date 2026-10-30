@@ -24,3 +24,11 @@ enum JarvisComposition {
         )
     }
 }
+
+struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {
+    func currentToken(for request: HTTPRequest) async throws -> String {
+        throw JarvisClientError.signInRequired
+    }
+
+    func requestSignIn() async {}
+}

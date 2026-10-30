@@ -2786,3 +2786,24 @@ and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
 stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
 unbuilt areas and Settings use title-only placeholders until their screen
 issues are implemented. Reduced Motion removes settling animation.
+
+## Native iOS Notes area (P15-12; 30 October 2026)
+
+The approved iPhone area has four text-only segments (Notes, Tasks, List and
+Graph), with content aligned beneath one title/refresh row. The bottom search
+and plus action stay fixed above the keyboard; Notes adds folder filters directly
+above them. Native SwiftUI Lists, DisclosureGroups, sheets, navigation, system
+materials, semantic colors and SF Symbols provide the interaction and appearance.
+Selection tints labels and icons, never row surfaces. The graph uses a native
+Canvas renderer with pan/zoom and an accessible list alternative.
+
+Custom geometry lives in `JarvisDesignTokens` in
+`apps/ios/Jarvis/JarvisSidebar.swift`; cross-platform tree and deterministic
+graph-position logic lives in `JarvisCore`. The checked-in concept board still
+shows three tabs and two plus-menu actions, while this approved issue requires
+four tabs and creation of notes, folders and tasks. The implementation follows
+the four-tab issue and omits standalone New folder because the shared backend
+has no folder-create route; notes saved beneath a nested path create the folder.
+No note delete/rename/move, task delete, task-create priority, or offline cache
+is represented. Interface language comes from the existing read-only
+`voice.defaultLanguage` setting.

@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var animationTargetProgress: CGFloat = 0
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?
+    @State private var notesClient: JarvisNotesClient?
 
     init() {
         let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
@@ -18,6 +19,7 @@ struct ContentView: View {
         _navigation = State(initialValue: initialNavigation)
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
+        _notesClient = State(initialValue: Self.makeNotesClient())
     }
 
     var body: some View {
@@ -49,7 +51,14 @@ struct ContentView: View {
                 ) {
                     JarvisPlaceholderView(destination: .chat)
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            JarvisPlaceholderView(destination: destination)
+                            if destination == .notes {
+                                JarvisNotesArea(
+                                    client: notesClient,
+                                    onRetryConfiguration: { notesClient = Self.makeNotesClient() }
+                                )
+                            } else {
+                                JarvisPlaceholderView(destination: destination)
+                            }
                         }
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
@@ -226,6 +235,17 @@ struct ContentView: View {
 
     private func closeSidebar() {
         setSidebarOpen(false)
+    }
+
+    private static func makeNotesClient() -> JarvisNotesClient? {
+        do {
+            let client = try JarvisComposition.makeClient(
+                accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+            )
+            return JarvisNotesClient(client: client)
+        } catch {
+            return nil
+        }
     }
 }
 

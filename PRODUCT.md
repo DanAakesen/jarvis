@@ -1083,6 +1083,26 @@ done unless it is consent, a destructive-action warning or recovery guidance.
 Freshness, stale, partial, failed-refresh and estimated states keep a short
 visible marker.
 
+#### Native iOS Notes area (P15-12; 30 October 2026)
+
+The approved iPhone version presents the shared vault in four tabs: Notes, Tasks,
+List and Graph. Notes group Markdown files by folder; Tasks group open
+Personal/Work tasks by Overdue, Today, Upcoming and No date; List lazily browses
+the vault tree; Graph pans and zooms the knowledge graph and offers a list
+alternative. A persistent bottom search supports All, Notes and Tasks scopes.
+Creating and editing notes use the shared vault routes; editing saves only with
+the version returned by the note read. Tasks can be completed, and new tasks
+include title, scope and optional date/time. Interface copy follows the shared
+`voice.defaultLanguage` setting (`da` or `en`).
+
+This iOS navigation is an approved native presentation of the existing web
+capabilities, not a new backend surface. Notes are path-sorted rather than
+recent-first. A folder appears only when a note is created beneath it; there is
+no standalone folder action. Note delete/rename/move, task delete, task priority
+on creation and offline caching are not available. The app has no native
+Microsoft sign-in provider yet; an existing stored owner session can be used,
+but a new or expired session cannot be established from this screen.
+
 Notes with open in-scope tasks use the Tasks map colour and a slightly larger mark.
 The map legend shows how many notes are marked and toggles that colour without
 hiding notes; hovering a marked note shows its open-task count. Counts come from the

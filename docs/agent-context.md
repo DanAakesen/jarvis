@@ -6325,6 +6325,24 @@ its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
 validation.
 
+P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
+reuses the contracts in section 11 of `docs/ios/integration-contract.md`, including
+read-only `GET /settings` for `voice.defaultLanguage`; keep the web/backend
+source files there authoritative and do not add iOS routes.
+Synthetic note/task/graph fixture scenarios and Linux tests live in
+`JarvisCoreTests`. The SwiftUI area provides Notes, Tasks, List and Graph tabs,
+creation sheets, conditional note saves and conflict recovery. It depends on an
+existing stored owner session: no native Entra sign-in provider exists yet, and
+the app must show an error instead of using fixture content when sign-in is
+unavailable. No standalone folder creation, destructive note/task action,
+task-create priority or offline cache is implemented.
+
+Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
+checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
+check and is gated on a ready pull request; do not add simulator boots, UI tests
+or screenshots to CI. The current screenshot workflow covers only the app's
+main screen and sidebar, so Notes-tab/state screenshots are not produced by CI.
+
 P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
 `WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English
 and Danish `/voice` endpoints and token subprotocols, preserves unknown server

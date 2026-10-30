@@ -9363,6 +9363,25 @@ Settings render title-only placeholders; Banking remains disabled and marked
 Later. The sidebar uses system colors, typography, scrolling and SF Symbols,
 with shared tokens for custom geometry and motion. No backend changes are part
 of this decision.
+
+## 30 October 2026 — P15-12 iOS Notes area
+
+Implement the owner's approved Notes concept as four native tabs, following the
+issue's Notes/Tasks/List/Graph requirement even though the checked-in concept
+board currently shows only three tabs. Reuse the web app's existing vault and
+knowledge routes through `JarvisNotesClient`; keep note saves conditional on the
+SHA returned by the current note read, and load graph data before resolving
+search node IDs. Read `voice.defaultLanguage` from the existing `/settings`
+route for Danish/English interface copy without writing any settings.
+
+Do not invent backend operations for standalone folder creation, note
+delete/rename/move, task delete or task priority on create. Creating a note at a
+nested path may establish its folder. Do not add a local database or offline
+cache. The app does not yet have a native Entra provider, so existing stored
+sessions can access the routes but first-time/expired-session sign-in remains a
+separate gap. The cost guard also remains binding: CI must not gain additional
+Mac builds, simulator boots, UI tests or screenshot states. No backend route,
+dependency or CI job is added by this screen.
 ## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
 
 The TestFlight workflow is separate from aggregate CI and uses only

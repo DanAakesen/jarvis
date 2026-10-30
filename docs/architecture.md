@@ -1358,6 +1358,25 @@ renders the fixed-behind sidebar and title-only placeholders. No backend
 routes or iOS-specific integration paths are added. Chat and Voice remain
 placeholders until their screen work is integrated.
 
+### iOS Notes area (P15-12)
+
+The Notes destination composes the existing `JarvisNotesClient` from the shared
+`JarvisClient`, app `URLSessionTransport` and Keychain token store. The client
+uses only the shared routes documented in `docs/ios/integration-contract.md`:
+`GET /settings` (read-only `voice.defaultLanguage`), `/notes/tree`, `/notes`,
+`/notes/note`, `/vault/tasks`, `/knowledge/graph` and `/knowledge/search`.
+Graph search loads the graph before resolving result node IDs. The SwiftUI
+destination owns presentation state; typed route validation, task grouping,
+folder-tree construction and deterministic graph positions live in `JarvisCore`.
+No iOS-only backend route, local database or offline cache is added.
+
+The app currently has no native Entra sign-in provider. The Notes composition
+can use a stored owner session; when none is available, the provider returns a
+visible sign-in error rather than generating a token or fixture response.
+Standalone folder creation, note delete/rename/move, task delete and priority
+on task creation remain unavailable because the shared backend has no matching
+screen route or payload.
+
 ### iOS chat streaming (P15-04)
 
 `JarvisCore` parses server-sent events incrementally from bytes and keeps the
