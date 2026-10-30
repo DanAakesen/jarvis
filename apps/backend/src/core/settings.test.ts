@@ -10,7 +10,7 @@ import type { AwayModeStore } from './away-mode.js';
 import { capabilityInstructions } from './capability-instructions.js';
 import { checkAgentContract } from './agent-contract.js';
 import { DANISH_REALTIME_VOICE } from '../voice/realtime.js';
-import { fallbackModelCatalogue } from './model-catalog.js';
+import { codexModels, fallbackModelCatalogue } from './model-catalog.js';
 import type { ModelCatalogue } from '@jarvis/contracts';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -92,6 +92,39 @@ describe('settings API', () => {
         .toEqual({ roles: { chat: { reasoningEffort: 'high' } } });
     }
     expect(values).toEqual({});
+  });
+
+  it('limits Research to Codex models, explains unsupported selections, and flags stale saved models', async () => {
+    const { store, values } = createStore();
+    values['roles.research.model'] = JSON.stringify('gpt-6.1-terra');
+    const app = fixture(store, undefined, undefined, undefined, undefined, terraCatalogue);
+
+    const initial = await app.inject({ url: '/settings', headers: authorization });
+    expect(initial.json().options.roles.research.models).toEqual(codexModels);
+    expect(initial.json().options.roles.research.models).not.toContain('gpt-6.1-terra');
+    expect(initial.json().options.roles.research.reasoningEffortsByModel['gpt-6.1-sol'])
+      .toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+    expect(initial.json().settings.roles.research.model).toBe('gpt-5.6-luna');
+    expect(initial.json().modelWarnings.research)
+      .toContain('not supported by the Codex runtime');
+    expect(initial.json().modelWarnings.research).toContain('gpt-5.6-luna is used instead');
+
+    const rejected = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: { research: { model: 'gpt-6.1-terra' } } } },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json().error).toContain('Unsupported research model for the Codex runtime');
+    expect(rejected.json().error).toContain('gpt-6.1-sol');
+    expect(values['roles.research.model']).toBe('"gpt-6.1-terra"');
+
+    const accepted = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: { research: { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' } } } },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().settings.roles.research).toEqual({ model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' });
+    expect(accepted.json().modelWarnings.research).toBeUndefined();
   });
 
   it.each(['roles.chat.model', 'jarvis.model'])('preserves the saved chat model in %s when Terra becomes available', async (key) => {

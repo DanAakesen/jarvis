@@ -1094,6 +1094,29 @@ describe('Software Factory Jarvis tools', () => {
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused']);
   });
 
+  it('uses Codex runtime model options for Factory task changes', async () => {
+    const { app, taskStore } = fixture();
+    const unsupported = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'codex', model: 'gpt-5.3-codex' },
+    });
+    expect(unsupported.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('Unsupported codex model.') },
+    });
+    expect(unsupported.json().result.refused).toContain('gpt-6.1-sol');
+    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
+
+    const supported = await app.inject({
+      method: 'POST', url: '/tools/set_task_model', headers,
+      payload: { taskId: '42', agent: 'codex', model: 'gpt-6.1-sol', reasoning: 'xhigh' },
+    });
+    expect(supported.json()).toMatchObject({
+      outcome: 'ok',
+      result: { agent: 'codex', model: 'gpt-6.1-sol', reasoning: 'xhigh', state: 'Ready' },
+    });
+  });
+
   it('accepts supported Codex reasoning levels for ready tasks', async () => {
     const { app, taskStore } = fixture();
     const response = await app.inject({

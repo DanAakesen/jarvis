@@ -625,6 +625,39 @@ const modelFieldRoles: Record<string, ModelRole> = {
   'copilot.model': 'copilot',
 };
 
+const modelRoleRuntimes: Record<ModelRole, string> = {
+  chat: 'Foundry',
+  vision: 'Foundry',
+  research: 'Codex',
+  voice: 'Voice Live',
+  transcription: 'Voice Live',
+  embedding: 'Foundry',
+  codex: 'Codex',
+  copilot: 'GitHub Copilot',
+};
+
+const legacyModelKeys: Partial<Record<ModelRole, string>> = {
+  chat: 'jarvis.model',
+  voice: 'voice.en.model',
+  transcription: 'voice.stt.model',
+  codex: 'codex.model',
+  copilot: 'copilot.model',
+};
+
+function storedModel(value: unknown): string | undefined {
+  try {
+    const parsed: unknown = value === undefined ? undefined : JSON.parse(String(value));
+    return typeof parsed === 'string' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function unsupportedModelReason(role: ModelRole, catalogue: ModelCatalogue): string {
+  return `Unsupported ${role} model for the ${modelRoleRuntimes[role]} runtime. Valid models: ${modelsForRole(catalogue, role).join(', ')}.`
+    .slice(0, 500);
+}
+
 export function settingsFieldsForCatalogue(catalogue: ModelCatalogue, current: Settings): SettingField[] {
   const fields: SettingField[] = [];
   const visit = (properties: Record<string, FieldSchema>, prefix = '') => {
@@ -718,7 +751,9 @@ export function settingsPatchRefusal(value: unknown, catalogue: ModelCatalogue, 
         : Object.entries(modelFieldRoles).find(([path, mapped]) =>
           mapped === role && (key === 'model' ? path.endsWith('Model') || path.endsWith('.model') : path.endsWith('.reasoning')))?.[0]
           ?? `roles.${role}.${key}`;
-    if (!modelsForRole(catalogue, role).includes(model)) return hint(pathFor('model'));
+    if (!modelsForRole(catalogue, role).includes(model)) {
+      return update.model === undefined ? hint(pathFor('model')) : unsupportedModelReason(role, catalogue);
+    }
     if (!isRolePatch(role, update, current.roles[role], catalogue)) {
       const path = pathFor('reasoningEffort');
       return hint(path, {
@@ -918,6 +953,24 @@ export async function readSettings(
   return mergeSettings(parseStoredValues(await settingsStore.read(), catalogue), catalogue);
 }
 
+export async function readSettingsWithModelWarnings(
+  settingsStore: SettingsStore,
+  catalogue: ModelCatalogue = fallbackModelCatalogue(),
+): Promise<{ settings: Settings; modelWarnings: Partial<Record<ModelRole, string>> }> {
+  const values = await settingsStore.read();
+  const settings = mergeSettings(parseStoredValues(values, catalogue), catalogue);
+  const modelWarnings: Partial<Record<ModelRole, string>> = {};
+  for (const role of modelRoles) {
+    const savedModel = storedModel(values[settingKeys.roles[role].model]) ??
+      (legacyModelKeys[role] ? storedModel(values[legacyModelKeys[role]!]) : undefined);
+    if (savedModel !== undefined && !modelsForRole(catalogue, role).includes(savedModel)) {
+      const label = `${role[0]!.toUpperCase()}${role.slice(1)}`;
+      modelWarnings[role] = `The saved ${label} model is not supported by the ${modelRoleRuntimes[role]} runtime. ${settings.roles[role].model} is used instead; choose a supported model to update it.`;
+    }
+  }
+  return { settings, modelWarnings };
+}
+
 function flattenSettings(settings: SettingsPatch): { key: string; value: string }[] {
   const entries: { key: string; value: string }[] = [];
   for (const area of Object.keys(settings) as (keyof Settings)[]) {
@@ -1088,9 +1141,11 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const catalogue = await app.modelCatalogue.read();
     const credentials = await app.credentialStatusStore?.list() ?? [];
+    const { settings, modelWarnings } = await readSettingsWithModelWarnings(app.settingsStore, catalogue);
     return {
-      settings: await readSettings(app.settingsStore, catalogue),
+      settings,
       options: settingsOptionsForCatalogue(catalogue),
+      modelWarnings,
       credentials,
     };
   });
@@ -1275,16 +1330,18 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     const catalogue = await app.modelCatalogue.read();
     const current = await readSettings(app.settingsStore, catalogue);
     const patch = validateSettingsPatch(body.settings, catalogue, current);
-    if (!patch) return reply.code(400).send({ error: 'Invalid setting value' });
+    if (!patch) return reply.code(400).send({ error: settingsPatchRefusal(body.settings, catalogue, current) });
     const embeddingModelChanged = patch.roles?.embedding?.model !== undefined &&
       patch.roles.embedding.model !== current.roles.embedding.model;
     await app.settingsStore.write(patch);
     publishSettingsChanged(app);
     if (embeddingModelChanged) await app.onEmbeddingModelChanged?.(app.backgroundJobs);
     const credentials = await app.credentialStatusStore?.list() ?? [];
+    const { settings, modelWarnings } = await readSettingsWithModelWarnings(app.settingsStore, catalogue);
     return {
-      settings: await readSettings(app.settingsStore, catalogue),
+      settings,
       options: settingsOptionsForCatalogue(catalogue),
+      modelWarnings,
       credentials,
     };
   });

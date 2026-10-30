@@ -61,9 +61,10 @@ function Toggle({ id, label, checked, disabled, onChange, hint }: {
 const keepEnterInside = (event: KeyboardEvent) => { if (event.key === 'Enter') event.preventDefault(); };
 
 /** Models per role, with reasoning limited to what each model supports, and the Foundry deployments behind them. */
-export function ModelsSection({ roles, options, onChange, disabled, backendUrl, getAccessToken }: {
+export function ModelsSection({ roles, options, onChange, disabled, backendUrl, getAccessToken, modelWarnings }: {
   roles: RoleSettings; options: Record<ModelRole, RoleOptions>; onChange: (role: ModelRole, value: RoleSettings[ModelRole]) => void;
   disabled: boolean; backendUrl: string | null; getAccessToken: () => Promise<string>;
+  modelWarnings?: Partial<Record<ModelRole, string>>;
 }) {
   const [catalogue, setCatalogue] = useState<ModelCatalogue | null>(null);
   const [catalogueError, setCatalogueError] = useState('');
@@ -128,6 +129,9 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
                 <span className="role-badges" aria-label="Capabilities">
                   {capabilitiesFor(current.model).map((capability) => <span key={capability} className="model-badge">{capabilityLabels[capability] ?? capability}</span>)}
                 </span>
+              )}
+              {modelWarnings?.[role] && (
+                <p className="settings-validation-error role-model-warning" role="status">{modelWarnings[role]}</p>
               )}
             </li>
           );

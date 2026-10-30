@@ -125,17 +125,31 @@ describe('Foundry model catalogue', () => {
 
   it('offers provider-supported coding models and their reasoning efforts independently of Foundry deployments', () => {
     const catalogue = fallbackModelCatalogue();
+    const withFoundryOnlyModel = {
+      ...catalogue,
+      deployments: [...catalogue.deployments, {
+        name: 'gpt-6.1-terra', model: 'gpt-6.1-terra', version: '2026-10-26',
+        sku: 'GlobalStandard', capacity: 1, capabilities: ['chat', 'responses'] as const,
+        reasoningEfforts: ['none', 'low', 'medium', 'high', 'xhigh'] as const,
+      }],
+    };
 
     expect(modelsForRole(catalogue, 'codex')).toEqual(codexModels);
     expect(modelsForRole(catalogue, 'codex')).toContain('gpt-6.1-sol');
     expect(modelsForRole(catalogue, 'codex')).toContain('gpt-6-astra');
     expect(modelsForRole(catalogue, 'codex')).not.toContain('gpt-5.3-codex');
+    expect(modelsForRole(withFoundryOnlyModel, 'research')).toEqual(codexModels);
+    expect(modelsForRole(withFoundryOnlyModel, 'research')).not.toContain('gpt-6.1-terra');
     expect(modelsForRole(catalogue, 'copilot')).toEqual(copilotModels);
     expect(modelsForRole(catalogue, 'copilot')).toContain('claude-sonnet-4.6');
     expect(reasoningForModel(catalogue, 'codex', 'gpt-6.1-sol'))
       .toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+    expect(reasoningForModel(catalogue, 'research', 'gpt-6.1-sol'))
+      .toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
     expect(reasoningForModel(catalogue, 'copilot', 'gpt-5.4')).toEqual(['none', 'low', 'medium', 'high']);
     expect(reasoningForModel(catalogue, 'copilot', 'unsupported-model')).toEqual([]);
+    expect(isRoleModelSupported(catalogue, 'research', 'gpt-6.1-sol', 'xhigh')).toBe(true);
+    expect(isRoleModelSupported(withFoundryOnlyModel, 'research', 'gpt-6.1-terra', 'high')).toBe(false);
     expect(isRoleModelSupported(catalogue, 'copilot', 'gpt-5.4', 'high')).toBe(true);
     expect(isRoleModelSupported(catalogue, 'copilot', 'gpt-5.4', 'xhigh')).toBe(false);
   });

@@ -86,8 +86,8 @@ function settingsResponse(current: typeof settings & { global: typeof settings.g
   expiresAt: string | null;
   lastRenewedAt: string | null;
   status: 'ok' | 'renew_soon' | 'failed' | 'unknown';
-}[] = []) {
-  return { settings: current, options, credentials };
+}[] = [], modelWarnings?: Record<string, string>) {
+  return { settings: current, options, credentials, ...(modelWarnings ? { modelWarnings } : {}) };
 }
 
 function renderSettingsPage(url: string | null = backendUrl, healthUpload?: ReactNode, deepLinkTargets = false) {
@@ -739,8 +739,11 @@ describe('SettingsPage', () => {
       const url = String(input);
       if (url.endsWith('/models')) return response(catalogue);
       if (url.endsWith('/models/deployments/gpt-6-luna') && init?.method === 'DELETE') return response({ status: 'approval_pending', name: 'gpt-6-luna' }, 202);
-      if (url.endsWith('/settings') && init?.method === 'PATCH') return response({ settings: advanced, options: advancedOptions, credentials: [] });
-      return response({ settings: advanced, options: advancedOptions, credentials: [] });
+      if (url.endsWith('/settings') && init?.method === 'PATCH') return response({ settings: advanced, options: advancedOptions, credentials: [], modelWarnings: {} });
+      return response({
+        settings: advanced, options: advancedOptions, credentials: [],
+        modelWarnings: { research: 'The saved Research model is not supported by the Codex runtime. gpt-5.6-luna is used instead; choose a supported model to update it.' },
+      });
     });
     renderSettingsPage();
 
@@ -748,6 +751,8 @@ describe('SettingsPage', () => {
     const modelsToggle = screen.getByRole('button', { name: /^Models/ });
     await user.click(modelsToggle);
     expect(await within(modelsToggle).findByText(/ · 1 deployment$/)).not.toBeNull();
+    const modelWarning = await screen.findByText(/not supported by the Codex runtime/);
+    expect(modelWarning.getAttribute('role')).toBe('status');
     await user.click(modelsToggle);
     // The older Jarvis model section gives way to Models when the backend sends roles.
     expect(screen.queryByRole('heading', { name: 'Jarvis', level: 2 })).toBeNull();

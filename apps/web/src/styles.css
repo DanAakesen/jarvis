@@ -3634,6 +3634,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .role-list, .deployment-list { display: grid; gap: var(--space-2); margin: var(--space-3) 0 0; padding: 0; list-style: none; }
 .role-row { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 1.6fr); align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-3);
   border-radius: var(--radius-panel); background: color-mix(in srgb, var(--text) 3%, transparent); }
+.role-row .role-model-warning { grid-column: 1 / -1; margin: 0; }
 .role-name { display: grid; font-weight: 650; }
 .role-hint { color: var(--text-muted); font-size: var(--type-caption); font-weight: 500; }
 .role-controls { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(120px, 1fr); gap: var(--space-2); }
