@@ -1,3 +1,42 @@
+## Approved runtime test entry (#1350; 29 October 2026)
+
+The existing chat menu will contain Test agent runtime. Dan chooses Current or
+Copilot and opens a separate, clearly labelled conversation. Normal chats stay
+unchanged; do not switch runtimes mid-conversation. The local candidate opens an
+accessible selector and then a labelled modal conversation, keeping the normal
+chat mounted with its session and draft. Unknown or unverified availability
+disables the option with a reason. The test view uses scoped history, streaming,
+Stop reply and explicit uncertain-outcome recovery. Desktop/phone Chromium fixture
+inspection covers both themes, focus return, failure/retry and streamed replies;
+it does not establish live provider acceptance. It adds no new page, global
+default control or dual-send behavior. Further material interaction choices stay
+open; see [migration notes](docs/main-chat-harness-migration.md).
+
+The test entry follows Language and precedes the existing capture/Voice/Attach
+actions. Voice and Attach remain adjacent at the end nearest Plus; keyboard order
+continues to follow the visible menu.
+
+Failure recovery preserves known sign-in, HTTP and fixed managed diagnostic
+messages. A busy/uncertain managed conversation explains its blocked state and
+retains Return to normal conversation; refreshing history cannot unlock the
+claim. Other uncertain delivery still requires history/action-status review and
+never resends automatically. No layout, menu placement or new action is added.
+
+## Mobile Settings Save (#1343; 28 October 2026)
+
+At the existing 700px phone breakpoint, the Settings header stays beneath the
+shared top bar while scrolling. Its single explicit Save button moves into that
+header, retains its 44px touch target, and shows pending/success/error feedback
+there. Desktop retains the footer control; resizing moves the same action
+between locations without changing the form draft or save behavior. The sticky
+surface uses shared glass, spacing and z-order tokens. Synthetic Chromium
+captures cover 390px, 320px and a focused 500px-high viewport; that last check
+approximates reduced screen space and does not prove physical iOS keyboard behavior.
+
+Restored chat queues show their retained bubbles and a Send queued messages
+control. Reload does not automatically execute these unsent requests. Terminal
+reply warnings remain associated with their submitted message after reload.
+
 ## Mobile composer controls while typing (#1315; 27 October 2026)
 
 Preserve typing focus on the toolbar press, then let native click open Plus,

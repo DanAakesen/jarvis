@@ -54,7 +54,7 @@ export function JarvisPage({
         <ConversationToast notification={{ id: 0, message: themeError, error: true }} onDismiss={dismissThemeError}
           action={{ label: 'Retry', onSelect: retryTheme }} />
       )}
-      <ConversationHistory
+      <ConversationHistory key={JSON.stringify([config.backendUrl, client.getActiveAccount?.()?.homeAccountId ?? 'owner'])}
         client={client}
         getAccessToken={getAccessToken}
         config={config}

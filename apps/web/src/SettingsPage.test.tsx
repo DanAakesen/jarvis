@@ -159,6 +159,25 @@ describe('SettingsPage', () => {
     document.documentElement.removeAttribute('data-motion');
   });
 
+  it('puts the single explicit Save in the mobile header and keeps the desktop footer unchanged', async () => {
+    const original = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: (query: string) => ({
+      matches: query === '(max-width: 700px)', media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }) });
+    fetchMock.mockImplementation(async () => response(settingsResponse()));
+    const mobile = renderSettingsPage();
+    const save = await screen.findByRole('button', { name: 'Save settings' });
+    expect(save.closest('.settings-header')).not.toBeNull();
+    expect(save.getAttribute('form')).toBe('settings-form');
+    expect(mobile.container.querySelector('.settings-save-desktop')).toBeNull();
+    mobile.unmount();
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: original });
+    const desktop = renderSettingsPage();
+    const desktopSave = await screen.findByRole('button', { name: 'Save settings' });
+    expect(desktopSave.closest('.settings-header')).toBeNull();
+    expect(desktop.container.querySelectorAll('.settings-save')).toHaveLength(1);
+  });
+
   it('ignores unknown Settings hashes without opening or scrolling a section', async () => {
     window.history.replaceState({}, '', '/settings#unknown-section');
     localStorage.setItem('jarvis.sections.settings.projects', '0');

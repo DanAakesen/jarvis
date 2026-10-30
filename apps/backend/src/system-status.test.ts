@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createFoundryInvocationConversationAgent, type ConversationAgent } from './core/chat-agent.js';
+import { ChatAgentError, createFoundryInvocationConversationAgent, type ConversationAgent } from './core/chat-agent.js';
 import { createChatAcceptanceProbes } from './core/chat-canary.js';
-import { assessVaultIndex, chatAgentFailureReasons, createSystemSmokeReader, createSystemStatusReader, summarizeSystemStatus, systemSmokeHttpResponse } from './system-status.js';
+import { assessVaultIndex, chatAgentFailureReasons, createSystemSmokeReader, createSystemStatusReader, summarizeSystemStatus, systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from './system-status.js';
 import { isSystemSmokeStatus, systemSmokeCheckIds } from '@jarvis/contracts';
+import Fastify from 'fastify';
 
 const smokeCheckedAt = '2026-10-14T01:03:29.169Z';
 const vaultStatusNow = Date.parse('2026-10-25T12:00:00.000Z');
@@ -47,6 +48,83 @@ function expectSmokeFailures(
 }
 
 describe('system status reader', () => {
+  it('propagates safe managed causes through the canary, retained status and HTTP serializers', async () => {
+    const now = () => Date.parse(smokeCheckedAt);
+    const providerCause = {
+      httpStatus: 400, code: 'invalid_request', param: 'reasoning.effort', exceptionType: 'BadRequestError',
+    };
+    const agent: ConversationAgent = {
+      async *stream() {
+        yield '';
+        throw new ChatAgentError('managed_policy_turn_failed', undefined, providerCause);
+      },
+    };
+    const report = await runChatSmoke(agent);
+    const status = createSystemStatusReader({}, undefined, now);
+    status.recordSmoke(report);
+    const retained = await status.read();
+    expect(retained.smoke?.entries.find(({ id }) => id === 'chat_identity')).toMatchObject({
+      status: 'degraded', reason: 'managed_policy_turn_failed', providerCause,
+    });
+    expect(status.peek()?.smoke).toEqual(report);
+    expect(isSystemSmokeStatus(report)).toBe(true);
+
+    const wire = systemSmokeHttpResponse(report);
+    expect(wire.entries.find(({ id }) => id === 'chat_identity')).not.toHaveProperty('providerCause');
+    expect(wire.entries.find(({ id }) => id === 'chat_capabilities')).toMatchObject({
+      reason: 'managed_policy_turn_failed', providerCause,
+    });
+    const app = Fastify();
+    app.get('/smoke', { schema: { response: { 200: systemSmokeResponseSchema } } }, () => wire);
+    app.get('/status', { schema: { response: { 200: systemStatusResponseSchema } } }, () => retained);
+    try {
+      const [smokeResponse, statusResponse] = await Promise.all([
+        app.inject('/smoke'), app.inject('/status'),
+      ]);
+      expect(smokeResponse.statusCode).toBe(200);
+      expect(statusResponse.statusCode).toBe(200);
+      expect(smokeResponse.json()).toEqual(wire);
+      expect(statusResponse.json()).toEqual(retained);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('re-sanitizes causes and restricts them to managed chat failures at every status boundary', async () => {
+    const now = () => Date.parse(smokeCheckedAt);
+    const providerCause = {
+      httpStatus: 400, code: 'invalid_request', param: 'secret\n', exceptionType: 'BadRequestError\n',
+      message: 'private text', token: 'never-retain',
+    };
+    const status = createSystemStatusReader({}, undefined, now);
+    const report = await createSystemSmokeReader(status, {
+      chat_capabilities: async () => ({ status: 'down', reason: 'managed_policy_setup_failed', providerCause }),
+      chat_identity: async () => ({ status: 'degraded', reason: 'managed_response_failed', providerCause }),
+      chat_jobs: async () => ({ status: 'down', reason: 'context_unavailable', providerCause }),
+      chat_navigation: async () => ({ status: 'ok', reason: 'managed_policy_turn_failed', providerCause }),
+      research: async () => ({ status: 'down', reason: 'managed_policy_turn_failed', providerCause }),
+    }, now).run();
+    for (const id of ['chat_capabilities', 'chat_identity']) {
+      expect(report.entries.find((entry) => entry.id === id)?.providerCause).toEqual({
+        httpStatus: 400, code: 'invalid_request',
+      });
+    }
+    for (const id of ['chat_jobs', 'chat_navigation', 'research']) {
+      expect(report.entries.find((entry) => entry.id === id)).not.toHaveProperty('providerCause');
+    }
+    const tampered = {
+      ...report,
+      entries: report.entries.map((entry) => ({
+        ...entry,
+        providerCause: { ...providerCause, httpStatus: 600, code: 'unsafe\n' },
+      })),
+    };
+    status.recordSmoke(tampered);
+    expect((await status.read()).smoke?.entries.every((entry) => entry.providerCause === undefined)).toBe(true);
+    expect(systemSmokeHttpResponse(tampered).entries.every((entry) => entry.providerCause === undefined)).toBe(true);
+    expect(JSON.stringify({ report, retained: status.peek() })).not.toMatch(/secret|private|message|never-retain|token/u);
+  });
+
   it('uses a verified no-op sync as fresh evidence when indexed chunks have not changed', () => {
     const result = assessVaultIndex(oldVaultChunks, {
       outcome: 'ok',

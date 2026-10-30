@@ -9,8 +9,12 @@ import type {
 import type { VaultIndexSummary } from './database/memory-store.js';
 import { systemSmokeCheckIds, vaultMirrorStatusViewSchema } from '@jarvis/contracts';
 import { z } from 'zod';
+import { sanitizeManagedProviderCause, type ManagedProviderCause } from './managed-provider-cause.js';
 
-export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & { reason?: string };
+export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & {
+  reason?: string;
+  providerCause?: ManagedProviderCause;
+};
 
 export type SystemStatusProbe = () => Promise<SystemStatusResult>;
 
@@ -93,6 +97,32 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
+export const researchSmokeFailureReasons: ReadonlySet<string> = new Set([
+  'research_settings_unavailable',
+  'research_runner_auth',
+  'research_runner_timeout',
+  'research_runner_aborted',
+  'research_runner_transport',
+  'research_runner_protocol',
+  'research_runner_http_400',
+  'research_runner_http_401',
+  'research_runner_http_403',
+  'research_runner_http_404',
+  'research_runner_http_429',
+  'research_runner_http_500',
+  'research_runner_http_502',
+  'research_runner_http_503',
+  'research_runner_http_504',
+  'research_usage_limit',
+  'research_codex_model_unsupported',
+  'research_codex_auth',
+  'research_codex_client_outdated',
+  'research_codex_network',
+  'research_runner_failed',
+  'research_result_missing',
+  'research_result_invalid',
+  'research_unavailable',
+]);
 export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'backend_unavailable',
   'catalogue_unavailable',
@@ -130,8 +160,98 @@ export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
   'error_authenticationerror',
   'error_permissiondeniederror',
   'error_badrequesterror',
+  'model_bad_request_model',
+  'model_bad_request_instructions',
+  'model_bad_request_input',
+  'model_bad_request_output_limit',
+  'model_bad_request_storage',
+  'model_bad_request_streaming',
+  'model_bad_request_tools',
+  'model_bad_request_reasoning',
+  'model_bad_request_include',
+  'model_reasoning_parameter_unsupported',
+  'model_reasoning_effort_unsupported',
+  'model_reasoning_value_unsupported',
+  'model_reasoning_effort_value_unsupported',
+  'model_reasoning_value_invalid',
+  'model_reasoning_effort_value_invalid',
+  'model_reasoning_request_invalid',
+  'model_reasoning_effort_request_invalid',
   'error_internalservererror',
   'tool_loop_stalled',
+  // Fixed internal managed runtime failures; never arbitrary provider codes.
+  'managed_session_busy',
+  'managed_source_already_claimed',
+  'managed_target_mismatch',
+  'managed_unavailable',
+  'managed_agent_builtin_tools_enabled',
+  'managed_agent_definition_mismatch',
+  'managed_agent_definition_missing',
+  'managed_agent_extra_skills',
+  'managed_agent_function_tools_mismatch',
+  'managed_agent_toolset_missing',
+  'managed_agent_unsupported_setting',
+  'managed_agent_version_mismatch',
+  'managed_backend_endpoint_invalid',
+  'managed_binding_invalid',
+  'managed_binding_unavailable',
+  'managed_claim_missing',
+  'managed_client_retries_enabled',
+  'managed_conversation_missing',
+  'managed_definition_instructions_missing',
+  'managed_definition_tools_invalid',
+  'managed_endpoint_invalid',
+  'managed_endpoint_selector_mismatch',
+  'managed_existing_credential_unavailable',
+  'managed_final_only_tool_call',
+  'managed_immutable_target_missing',
+  'managed_input_boundary_invalid',
+  'managed_input_cursor_rewound',
+  'managed_input_empty',
+  'managed_input_item_unsupported',
+  'managed_input_unsupported',
+  'managed_limits_invalid',
+  'managed_model_forbidden',
+  'managed_model_unauthorized',
+  'managed_policy_catalogue_changed',
+  'managed_policy_image_unverified',
+  'managed_policy_smoke_unavailable',
+  'managed_policy_setup_failed',
+  'managed_policy_turn_failed',
+  'managed_probe_conversation_missing',
+  'managed_probe_empty_or_unfinished',
+  'managed_probe_failed',
+  'managed_probe_incomplete',
+  'managed_probe_requested_tool',
+  'managed_probe_settings_mismatch',
+  'managed_probe_timeout',
+  'managed_project_endpoint_mismatch',
+  'managed_provider_failure',
+  'managed_readback_forbidden',
+  'managed_readback_invalid',
+  'managed_readback_unauthorized',
+  'managed_readback_unavailable',
+  'managed_response_empty',
+  'managed_response_failed',
+  'managed_response_item_unsupported',
+  'managed_response_unfinished',
+  'managed_reviewed_definition_mismatch',
+  'managed_reviewed_fingerprint_mismatch',
+  'managed_seed_input_invalid',
+  'managed_source_context_missing',
+  'managed_steering_source_unclaimed',
+  'managed_summary_history_policy_pending',
+  'managed_target_invalid',
+  'managed_target_missing',
+  'managed_target_settings_mismatch',
+  'managed_tool_arguments_invalid',
+  'managed_tool_call_invalid',
+  'managed_tool_call_unfinished',
+  'managed_tool_repeated',
+  'managed_tool_round_limit',
+  'managed_tool_schema_unsupported',
+  'managed_turn_already_claimed',
+  'managed_voice_requires_backend_relay',
 ]);
 // Assigned by the backend itself while calling or reading the hosted agent; never copied from a payload.
 export const chatAgentInvocationReasons: ReadonlySet<string> = new Set([
@@ -160,6 +280,7 @@ const sharedChatFailureReasons = [
   'agent_error', 'timeout', ...chatAgentFailureReasons, ...chatAgentInvocationReasons,
 ] as const;
 const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
+  research: researchSmokeFailureReasons,
   agent_contract: new Set([
     'Tool count exceeds the agent limit.',
     'A tool name is invalid.',
@@ -196,15 +317,46 @@ export function safeSmokeReason(id: SystemSmokeCheckId, reason: unknown): string
     ? reason : undefined;
 }
 
+function safeSmokeProviderCause(
+  id: SystemSmokeCheckId,
+  status: SystemStatusValue,
+  reason: string | undefined,
+  value: unknown,
+): ManagedProviderCause | undefined {
+  return (status === 'down' || status === 'degraded') && reason !== undefined &&
+    safeSmokeReason(id, reason) !== undefined &&
+    ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'].includes(reason)
+    ? sanitizeManagedProviderCause(value) : undefined;
+}
+
+function safeSmokeEntry(
+  { reason: rawReason, providerCause: rawCause, ...entry }: SystemSmokeStatus['entries'][number],
+  includeDegraded: boolean,
+): SystemSmokeStatus['entries'][number] {
+  const reason = entry.status === 'down' || (includeDegraded && entry.status === 'degraded')
+    ? safeSmokeReason(entry.id, rawReason) : undefined;
+  const providerCause = safeSmokeProviderCause(entry.id, entry.status, reason, rawCause);
+  return { ...entry, ...(reason ? { reason } : {}), ...(providerCause ? { providerCause } : {}) };
+}
+
 export function systemSmokeHttpResponse(report: SystemSmokeStatus): SystemSmokeStatus {
   return {
     ...report,
-    entries: report.entries.map(({ reason, ...entry }) => ({
-      ...entry,
-      ...(entry.status === 'down' && reason !== undefined ? { reason } : {}),
-    })),
+    entries: report.entries.map((entry) => safeSmokeEntry(entry, false)),
   };
 }
+
+const providerCauseResponseSchema = {
+  type: 'object',
+  properties: {
+    httpStatus: { type: 'integer', minimum: 100, maximum: 599 },
+    code: { type: 'string', pattern: '^[a-z0-9_.]{1,48}(?![\\s\\S])' },
+    param: { type: 'string', pattern: '^[a-z0-9_.]{1,48}(?![\\s\\S])' },
+    exceptionType: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]{0,47}(?![\\s\\S])' },
+  },
+  minProperties: 1,
+  additionalProperties: false,
+} as const;
 
 export const systemStatusResponseSchema = {
   type: 'object',
@@ -226,6 +378,7 @@ export const systemStatusResponseSchema = {
               status: { type: 'string', enum: ['ok', 'degraded', 'down', 'unknown'] },
               checkedAt: { type: 'string', format: 'date-time' },
               reason: { type: 'string', minLength: 1, maxLength: 120 },
+              providerCause: providerCauseResponseSchema,
             },
             required: ['id', 'status', 'checkedAt'],
             additionalProperties: false,
@@ -274,6 +427,7 @@ properties: {
         status: { type: 'string', enum: ['ok', 'degraded', 'down', 'unknown'] },
         checkedAt: { type: 'string', format: 'date-time' },
         reason: { type: 'string', minLength: 1, maxLength: 120 },
+        providerCause: providerCauseResponseSchema,
       },
       required: ['id', 'status', 'checkedAt'],
       additionalProperties: false,
@@ -381,8 +535,8 @@ export function createSystemStatusReader(
       cached = undefined;
     },
     recordSmoke(report) {
-      latestSmoke = report;
-      if (cached) cached.value = { ...cached.value, smoke: report };
+      latestSmoke = { ...report, entries: report.entries.map((entry) => safeSmokeEntry(entry, true)) };
+      if (cached) cached.value = { ...cached.value, smoke: latestSmoke };
     },
   };
 }
@@ -420,11 +574,13 @@ export function createSystemSmokeReader(
           const reason = active.status === 'down' || active.status === 'degraded'
             ? safeSmokeReason(id, active.reason)
             : undefined;
+          const providerCause = safeSmokeProviderCause(id, active.status, reason, active.providerCause);
           return {
             id,
             status: isStatus(active.status) ? active.status : 'unknown',
             checkedAt: researchCheckedAt,
             ...(reason ? { reason } : {}),
+            ...(providerCause ? { providerCause } : {}),
           };
         }
         return {

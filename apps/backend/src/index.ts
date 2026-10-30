@@ -1,3 +1,5 @@
+import { createBackendLogAuthorizationProbe } from './operations/backend-log-authorization.js';
+import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
@@ -14,6 +16,8 @@ import { createSettingsStore } from './database/settings-store.js';
 import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
+import { createRuntimeSessionStore } from './database/runtime-session-store.js';
+import { createManagedTargetReader } from './core/managed-target-reader.js';
 import { createConversationSummaryStore } from './database/conversation-summary-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createPhoneStatusModule } from './phone/status.js';
@@ -82,7 +86,6 @@ import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
 import { createGitHubIssueClient } from './github/issues.js';
-import { startIssueTask } from './factory/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryHandler } from './github/delivery.js';
@@ -107,7 +110,8 @@ import { createBackgroundJobStore } from './database/background-job-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
-import { createWebResearchModule, runCodexToolResult } from './core/web-research.js';
+import { createWebResearchModule } from './core/web-research.js';
+import { createResearchSmokeProbe } from './core/research-smoke.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createConfirmationStore } from './database/confirmation-store.js';
@@ -129,6 +133,7 @@ import { createWeatherModule } from './core/weather.js';
 import { assessVaultIndex, createSystemStatusReader } from './system-status.js';
 import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
 import { createProductionModules } from './production-modules.js';
+import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createPushStore } from './database/push-store.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
@@ -221,7 +226,7 @@ try {
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone ||
-    config.phone || sleepResourceId
+    config.phone || sleepResourceId || config.backendLogs || config.backendLogProbe
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -464,6 +469,24 @@ try {
         return token.token;
       },
     )
+    : undefined;
+  const readManagedTarget = config.foundryCopilot && config.foundryProjectEndpoint && credential && settingsStore
+    ? createManagedTargetReader({
+      projectEndpoint: config.foundryProjectEndpoint,
+      ...config.foundryCopilot,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Managed target identity unavailable');
+        return token.token;
+      },
+      readSelectedSettings: async () => {
+        const selected = (await readSettings(settingsStore, await modelCatalogue.read())).roles.chat;
+        return { model: selected.model, effort: selected.reasoningEffort };
+      },
+    }) : undefined;
+  const managedRuntime = readManagedTarget && database
+    ? { sessions: createRuntimeSessionStore(database.pool), readTargetMetadata: readManagedTarget,
+      readVerifiedTarget: async () => (await readManagedTarget())?.target ?? null }
     : undefined;
   const vaultClient = githubAppTokenIssuer
     ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
@@ -758,14 +781,16 @@ try {
     } : {}),
     isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
       trackedRepositories.has(repository.toLowerCase()),
-    onMapping: async (mapping) => {
+    onMapping: async (mapping, deliveryId) => {
       if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
-        const result = await startIssueTask({
+        const result = await handleIssueLabel({
+          alerts: alertActivityStore ?? null,
           projects: projectStore,
           tasks: taskStore,
           github: githubIssueClient,
           repository: mapping.repository,
           issue: mapping.number,
+          ...(deliveryId ? { deliveryId } : {}),
         });
         if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
           'not-an-issue', 'prompt-too-large'].includes(result.kind)) {
@@ -912,6 +937,14 @@ try {
   });
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
+    backendLogs: createBackendLogsModule({
+      config: config.backendLogs,
+      getToken: credential ? async (signal) => {
+        const token = await credential.getToken('https://api.loganalytics.io/.default', { abortSignal: signal });
+        if (!token) throw new Error('Backend log identity unavailable');
+        return token.token;
+      } : undefined,
+    }),
     conversation: createConversationModule(frameStore),
     factory: factoryModule,
     sleep: createSleepModule(containerAppScaler),
@@ -1009,38 +1042,16 @@ try {
         details: { configured: true },
       };
     },
-    research: async () => {
-      if (!webResearchModule || !config.foundryRunnerAgentName) {
-        return { status: 'down' as const, details: { configured: false } };
-      }
-      try {
+    research: createResearchSmokeProbe({
+      configured: Boolean(webResearchModule && config.foundryRunnerAgentName),
+      clientFor: () => clientFor(config.foundryRunnerAgentName!),
+      selectModel: async () => {
         const selected = settingsStore
           ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.research
           : undefined;
-        await runCodexToolResult(
-          clientFor(config.foundryRunnerAgentName),
-          'web_research',
-          'Dry run only: answer with one short sentence and no sources; do not browse or save anything.',
-          selected?.model ?? config.codexToolModel,
-          // A Codex dry run routinely takes 15-25 s; 20 s made the gate flaky (L127).
-          AbortSignal.timeout(45_000),
-          45_000,
-          1_000,
-          (value) => {
-            if (typeof value !== 'object' || value === null || Array.isArray(value) ||
-                typeof (value as Record<string, unknown>).answer !== 'string' ||
-                !Array.isArray((value as Record<string, unknown>).sources)) {
-              throw new Error('Research smoke response is invalid');
-            }
-            return true;
-          },
-          { reasoningEffort: selected?.reasoningEffort ?? 'none' },
-        );
-        return { status: 'ok' as const, details: { configured: true } };
-      } catch {
-        return { status: 'down' as const, details: { configured: true } };
-      }
-    },
+        return selected ?? { model: config.codexToolModel, reasoningEffort: 'none' };
+      },
+    }),
     agent_contract: async () => {
       const app = runtime.app;
       if (!app) return { status: 'down' as const, reason: 'Agent contract could not be checked.' };
@@ -1131,6 +1142,13 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(managedRuntime && readManagedTarget ? {
+      managedRuntime,
+      conversationRuntimeTests: async () => ({
+        current: { available: Boolean(conversationAgent) },
+        copilot: { available: Boolean(await readManagedTarget()) },
+      }),
+    } : {}),
     ...(healthUpload && healthProcessor && healthCapabilities ? { healthUpload, healthProcessor, healthCapabilities } : {}),
     ...(ownerSessions ? { ownerSessions } : {}),
     ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),
@@ -1143,6 +1161,15 @@ try {
     systemStatusReader,
     vaultMirrorStatusReader,
     systemSmokeProbes,
+    ...(config.backendLogProbe && credential ? { backendLogAuthorizationProbe: createBackendLogAuthorizationProbe({
+      config: config.backendLogProbe,
+      ...(config.foundryAccountResourceId ? { foundryResourceId: config.foundryAccountResourceId } : {}),
+      getToken: async (signal) => {
+        const token = await credential.getToken('https://api.loganalytics.io/.default', { abortSignal: signal });
+        if (!token) throw new Error('Backend log probe identity unavailable');
+        return token.token;
+      },
+    }) } : {}),
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(approvalInterpreter ? { approvalInterpreter } : {}),

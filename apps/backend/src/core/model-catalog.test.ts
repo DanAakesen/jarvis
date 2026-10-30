@@ -20,6 +20,28 @@ const armDeployment = {
 };
 
 describe('Foundry model catalogue', () => {
+  it('discovers Terra for chat with its supported existing reasoning choices', async () => {
+    const reader = createArmModelCatalogueReader({
+      resourceId,
+      getToken: async () => 'managed-identity-token',
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ value: [{
+        ...armDeployment,
+        name: 'gpt-6.1-terra',
+        properties: { model: { name: 'gpt-6.1-terra', version: '2026-10-26' } },
+      }] }))),
+    });
+    const catalogue = await reader.read();
+    expect(catalogue.source).toBe('arm');
+    expect(modelsForRole(catalogue, 'chat')).toContain('gpt-6.1-terra');
+    expect(reasoningForModel(catalogue, 'chat', 'gpt-6.1-terra'))
+      .toEqual(['none', 'low', 'medium', 'high', 'xhigh']);
+    expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6.1-terra', 'none')).toBe(true);
+    expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6.1-terra', 'minimal')).toBe(false);
+    expect(modelsForRole(catalogue, 'codex')).not.toContain('gpt-6.1-terra');
+    expect(modelsForRole(catalogue, 'copilot')).not.toContain('gpt-6.1-terra');
+    expect(modelsForRole(catalogue, 'vision')).not.toContain('gpt-6.1-terra');
+  });
+
   it('reads live ARM deployments and caches the normalized result for five minutes', async () => {
     let time = 1_000;
     const getToken = vi.fn(async () => 'managed-identity-token');

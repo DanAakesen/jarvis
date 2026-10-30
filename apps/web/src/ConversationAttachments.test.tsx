@@ -292,9 +292,9 @@ describe('composer attachments', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     const menu = screen.getByRole('menu');
     const items = within(menu).getAllByRole('menuitem');
-    expect(items[0]?.textContent).toContain('Language');
-    expect(items[1]?.textContent).toContain('Voice');
-    expect(items[2]?.getAttribute('aria-label') ?? items[2]?.textContent).toContain('Attach file or photo');
+    expect(items.map(item => item.getAttribute('aria-label') ?? item.textContent)).toEqual([
+      'Language', 'Test agent runtime', 'Voice', 'Attach file or photo',
+    ]);
   });
 });
 

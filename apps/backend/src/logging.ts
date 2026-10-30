@@ -4,6 +4,7 @@ import type { Contracts } from 'applicationinsights';
 import type { BackendConfig } from './config.js';
 import { systemSmokeCheckIds } from '@jarvis/contracts';
 import { safeSmokeReason } from './system-status.js';
+import { sanitizeManagedProviderCause } from './managed-provider-cause.js';
 import { voiceStages, voiceTimeoutStages, voiceEventTypes } from './voice/diagnostics.js';
 
 // This is the external export boundary, replaced by an offline sink in tests.
@@ -112,6 +113,19 @@ const events = new Set([
 
 export function isRegisteredLogEvent(event: string): boolean {
   return events.has(event);
+}
+
+/** Historical logs are untrusted. Reuse the export allowlist, then omit free text and identifiers. */
+export function safeHistoricalLogFields(input: Record<string, unknown>): Record<string, unknown> {
+  const categories = new Set([
+    'kind', 'method', 'reason', 'phase', 'stage', 'lastStage', 'outcome', 'decision', 'status',
+    'language', 'scope', 'source', 'channel', 'closedBy', 'family', 'verdict', 'cachePath',
+    'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
+    'errorCode', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
+  ]);
+  return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
+    typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
+    (typeof value === 'string' && categories.has(key))));
 }
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -632,6 +646,10 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
       input.msg === 'voice.upstream_event_error' || input.msg === 'voice.partials_unavailable' ||
       input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
+    if (input.msg === 'conversation.reply_failed') {
+      const cause = sanitizeManagedProviderCause(input.providerCause);
+      if (cause) fields.providerCause = cause;
+    }
     // Short, fixed-vocabulary diagnostics only: our own error messages and upstream close reasons.
     if (typeof input.failure === 'string' && /^[A-Za-z0-9 .:,'()_-]{1,120}$/.test(input.failure)) {
       fields.failure = input.failure;

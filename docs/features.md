@@ -1,8 +1,21 @@
+## Main chat managed harness (#1350; 29 October 2026)
+
+**In progress:** baseline investigation and fixed failure diagnostics.
+**Planned:** switchable managed main-chat path, identical automated comparisons
+and the approved separate runtime-test conversation through the existing chat
+menu. Manual comparison questions and evidence limits are in the
+[migration notes](main-chat-harness-migration.md). No live parity, UI delivery or
+production cutover is claimed.
+
 # Features
 
 The complete list of what Jarvis does or will do, for UI design and planning. Each row names where Dan uses the feature and how far it has got. Requirements live in [PRODUCT.md](../PRODUCT.md) and tasks in [PLAN.md](../PLAN.md); this file is the index.
 
 **Keep it current:** every task PR that adds, changes, removes or verifies a feature updates its row here (see [Finish a task](agent-context.md#finish-a-task)). New planned tasks add their rows as Planned.
+
+## Review follow-up (#1343; 28 October 2026)
+
+Issue-label pickup retains a durable delivery ID and conversation origin. Completion messages and receipts commit atomically. Gmail receipts distinguish approval/cancellation/uncertainty, oversized startup has a Now alert, and Settings approvals show proposed values. Mobile Settings keeps the heading and explicit Save at the top; desktop keeps footer Save. These changes are local draft implementation, not deployed acceptance.
 
 ## Legend
 
@@ -53,7 +66,7 @@ and privacy tests; production and physical-phone acceptance remain unverified.
 | Read workspace windows | Ask Jarvis to read a chart, timeline, list/table or HTML report by window title/focus; bounded untrusted text prefers page content and falls back to owner-scoped generated views | Voice/chat | Workspace | Built backend/contracts offline; page content reporting depends on #640; live acceptance unverified | | P9-52 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live; first production sign-in is recorded in `docs/decisions.md` (L63) | 2026-10-06 | P0-08, P0-09 |
-| Chat | Open at the latest messages with typing focus; Enter/Send steers a reply in progress, retaining its partial response as interrupted; tool execution continues until the next round boundary picks up new messages; Ctrl+Enter adds to the removable FIFO queue, whose bubbles show Queued and captured language with an accessible count; queued turns advance after success or error; failed-turn feedback and next drafts survive; thinking precedes open-surface Markdown streaming; history refresh dedupes saved messages by ID. Send, language and voice entry remain available during replies; starting voice leaves the chat reply streaming into history. The queue is local to the mounted conversation, not persisted across navigation/reload. Backend uses owner-scoped hosted-agent session affinity with a single no-affinity rejection fallback and content-free session/phase latency events; verified history is reloaded on every invocation. | Screen | Main page | Live; chat/composer refinements deployed and verified on 13 October (#787); P9-84 latency improvement still awaits post-deploy verification | 2026-10-13 | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25, P8-26, P8-35, P9-84 |
+| Chat | Open at the latest messages with typing focus; Enter/Send steers a reply in progress, retaining its partial response as interrupted; tool execution continues until the next round boundary picks up new messages; Ctrl+Enter adds to the removable FIFO queue, whose bubbles show Queued and captured language with an accessible count; queued turns advance after success or error; failed-turn feedback and next drafts survive; thinking precedes open-surface Markdown streaming; history refresh dedupes saved messages by ID. Send, language and voice entry remain available during replies; starting voice leaves the chat reply streaming into history. Queue drafts and terminal warnings now survive reload in backend/account-scoped tab storage; restored queued requests wait for explicit Send queued messages (#1343, synthetic regression evidence; live/device acceptance pending). Backend uses owner-scoped hosted-agent session affinity with a single no-affinity rejection fallback and content-free session/phase latency events; verified history is reloaded on every invocation. | Screen | Main page | Live; chat/composer refinements deployed and verified on 13 October (#787); P9-84 latency improvement still awaits post-deploy verification | 2026-10-13 | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25, P8-26, P8-35, P9-84 |
 | Conversation search | Search saved messages by keywords and UTC date range, optionally narrowed to chat, voice or phone; receive message IDs and concise excerpts as evidence | Voice/chat | Authenticated `/conversation/search` and `conversation_search` tool | Built offline; production SQL full-text availability unverified |  | P9-24 |
 | Conversation attachments | Upload a screenshot or supported document, attach up to five files to a chat turn, and ask Jarvis questions; image descriptions and bounded document text are available through untrusted context and read tools | Voice/chat | Owner-only `/conversation/attachments` routes and `attachment_list`/`attachment_read` tools | Built offline; live Foundry and Blob acceptance unverified |  | P9-66 |
 | Issue attachments | Confirm a bug issue or issue comment with private file descriptions and error text; optionally review one screenshot and explicitly confirm its named public publication | Voice/chat; public image review requires connected chat | Sensitive `create_issue`, `issue_comment`, `confirm_create_issue`; dedicated GitHub attachment branch | Backend/contracts implemented; live publication and deferred upload UI acceptance unverified | | P9-67 |
@@ -147,7 +160,7 @@ and privacy tests; production and physical-phone acceptance remain unverified.
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |
 | --- | --- | --- | --- | --- | --- | --- |
-| Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built |  | P1-11, P8-13 |
+| Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built; #1337 prepares Terra as deployed main-chat option/default, preserving saved choices; quota/capacity/Azure rates, owner selection and rollout pending |  | P1-11, P8-13, #1337 |
 | Fixed Danish voice | See the actual Danish voice, Jeppe, as read-only; load retired Harper preferences without errors | Screen and Settings API | Settings → Voice; `/settings` | Live; deployed and verified in Settings on 13 October (#791) | 2026-10-13 | P9-97 |
 | Settings by voice and chat | Discover current settings, catalogue-matched options, numeric bounds and field/Now-confirmation guidance, optionally by area; set, clear or reset custom appearance colours; invalid updates identify the field and valid values without echoing submitted values. Model-role and daily vision budget changes require Now confirmation; credentials are never returned | Voice/chat | `get_settings`, `update_settings`, `set_theme`; `set_jarvis_model` alias | Built, not verified live; live agent/Now integration remains unverified |  | P9-12, P9-55, P9-58 |
 | Weather and home location | Read current conditions and up to seven forecast days for the configured home or a geocoded place; save home city and coordinates; open a sourced weather report in the workspace | Voice/chat and Settings API | `weather`; shared Settings model; workspace report | Backend implemented offline; live Open-Meteo and signed-in workspace acceptance unverified |  | P9-34 |

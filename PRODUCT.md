@@ -1,3 +1,106 @@
+## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
+
+Read-only diagnostic access covers Jarvis's backend, hosted AI agents, coding
+runners, deployments and supporting services, excluding unrelated projects. This
+replaces the earlier backend-only scope. Retain the existing Foundry Reader role.
+New persistent grants require exact approval; the existing narrow approval is not
+expanded implicitly. One authenticated sensitive log capability must describe
+actual enabled sources, with bounded reads, redaction, untrusted-evidence handling,
+retained-history/ingestion-delay disclosure and honest source coverage. A read grant
+cannot create missing history. No duplicate legacy feature, repair action,
+arbitrary query/exec, credential, collection or retention change is implied.
+The current implementation remains disabled; [whole-scope design](docs/jarvis-logs.md)
+is preparation, not a claim of deployed coverage.
+
+## Runtime test failure recovery (#1350; 29 October 2026)
+
+The owner requested repair of failed Copilot test replies. Show meaningful,
+sanitized failure information instead of describing every failure as interruption.
+A history refresh must not imply that an uncertain managed turn is cleared or
+replayable. Preserve the existing return-to-normal action and explicit sending;
+no automatic resend, claim reset, new runtime controls or default change.
+
+## Approved main chat harness replacement (#1350; 29 October 2026)
+
+Replace the custom main chat loop through a controlled, switchable Foundry
+Copilot-harness migration after fixing the live baseline. Preserve native audio,
+Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate
+subscription-backed Factory workers. Automated comparisons use identical test
+scenarios. Dan can test Current or Copilot through Test agent runtime in the chat
+menu, opening a separate labelled conversation with no mid-conversation switch;
+normal chats stay unchanged. The local candidate implements this selector and
+session-scoped test view; Copilot stays unavailable until its live definition,
+settings, bindings and application policies are verified. The owner also approved
+retaining the Python bridge temporarily for voice fallback, using existing Jarvis
+tools only initially, and excluding test conversations from normal history. Cutover,
+rollback and retirement follow proven parity and required authorization. See
+[migration scope and open decisions](docs/main-chat-harness-migration.md).
+
+Jarvis is the owner's personal side project, not a multi-user product. The owner
+does not require extra pre-live exclusion of test transcripts from search, recent
+context or rolling summaries. Preserve existing authenticated owner checks and
+the approved separate UI history. No context wipe is included.
+
+## Backend log authorization qualification (#1341; 29 October 2026)
+
+Retained backend-log chat access remains disabled until Azure isolation is proven.
+The existing deployment smoke route may return bounded, fixed authorization
+observations from the verified backend identity. It exposes no log records,
+private Azure IDs, credentials, arbitrary query input, new model tool or UI.
+Empty negative queries and missing real controls never establish exclusion.
+This verification stage neither assigns roles nor enables the reader.
+Foundry resource verification uses the supported fixed log table and privately
+classifies permission metadata into fixed verdicts. It never exposes metadata
+identifiers or treats absent data, HTTP 400 or metadata as isolation proof.
+
+## Backend log awareness and approved activation (#1341; 28 October 2026)
+
+The owner has approved persistent read-only access to backend records and basic
+workspace metadata, excluding other applications. Activation remains off until
+live target, schema, effective-access and enforcement checks are complete.
+Main chat explicitly names `read_backend_logs` for self-diagnosis when configured;
+while disabled/unconfigured it must say log access is unavailable. The tool
+catalogue carries the same availability distinction. These are retained,
+backend-only diagnostics that can lag minutes; tool results establish current
+access and data availability. They are never advertised as an instantaneous
+stream or other-app log access. No new UI or log/retention changes.
+
+## Review fixes (#1343; 28 October 2026)
+
+The eight owner-approved fixes preserve one task per signed issue-label delivery,
+carry the verified conversation origin through issue creation and label pickup,
+and write task-status messages atomically with their delivery receipts. Retried
+writes cannot consume a receipt without the message. Oversized issue startup
+shows a retained Now alert naming the existing issue instead of implying work
+started or creating another issue.
+
+Gmail receipts distinguish waiting for approval, cancellation, completed writes
+and uncertain outcomes. Settings approvals name each proposed model, reasoning
+value and vision budget in USD per day.
+
+Chat warnings and unsent queued messages survive reload in this tab, scoped to
+the backend and signed-in account. Restored queued messages wait for the owner's
+explicit Send queued messages action. Missing browser storage is reported.
+Supported partial replies up to 512 KiB in UTF-8 survive recovery. Invalid
+warning entries do not discard valid queued messages; when recovery reaches its
+storage bound, unsent messages and uncertainty warnings take priority over
+partial reply context, and incomplete saving is reported.
+On mobile, Settings keeps its heading and explicit Save in a sticky top; desktop
+keeps its existing footer Save. No Settings navigation guard, autosave or draft
+persistence is added. Live/device and SQL integration acceptance remain separate
+from local synthetic checks; implementation does not activate other features.
+
+## Read-only backend log troubleshooting (#1341; P11-42; 28 October 2026)
+
+Owner-approved chat access covers only Jarvis's own retained backend runtime
+diagnostics, with secrets/free text excluded before model exposure. The reader
+uses the authenticated sensitive read-tool path, reports time windows, ingestion
+delay, partial/truncated/unavailable results, and treats logs only as untrusted
+evidence. No UI, repairs, arbitrary KQL, other-app access or retention change.
+Implementation is default off; the exact persistent Azure grant still requires
+owner approval and deployed isolation proof. See [the contract and activation
+plan](docs/backend-logs.md).
+
 ## Compact screen Stop control (#1333; 27 October 2026)
 
 While a screen is shared, the composer shows one compact icon-only red square
@@ -629,7 +732,7 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 | Area | Setting | Default |
 | --- | --- | --- |
-| Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat and hosted Danish fallback); voice role `gpt-realtime-2.1` (Danish and English Voice Live) |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
@@ -643,6 +746,18 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 | Global | Max parallel tasks; sleep switch | Set by Dan |
 | Backend global setting | Maximum automatic check-fix attempts (`global.max_check_attempts`) | 3 (0–10; 0 disables automatic repair) |
 | New projects | Owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | `DanAakesen`, private, `DanAakesen/templates`, Copilot, Deliver a PR, 1, `main` |
+
+GPT-6.1 Terra main-chat preparation (#1337) preserves saved model choices. Changing
+the code default does not replace Dan's saved `roles.chat.model` or legacy
+`jarvis.model`; rollout must inspect that effective setting and update only chat
+through Settings after deployment. Active session choices remain intact. Danish
+`/voice/da` uses the realtime voice role when `options.connect` is configured;
+only the `connectDanish` hosted-agent fallback inherits chat settings. Separate
+voice, vision, research, coding and image-generation defaults are unchanged.
+The template requests capacity 150 through the normal authenticated deployment
+path; actual allocation and live acceptance remain unverified. Dan accepts the
+existing budget alerts with USD 20/month authorized for Terra; no new spending
+guard or other role change is part of this work.
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
@@ -1091,7 +1206,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
-| Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Jarvis: model and reasoning (chat and hosted Danish fallback); voice-role model for Danish and English Voice Live | Change (applies to new sessions) |
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Identity and role: shared description (up to 2,000 characters), distinct from tone/style | Change; apply to active voice after provider acknowledgement, otherwise reconnect |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset; preserves the separate identity description |

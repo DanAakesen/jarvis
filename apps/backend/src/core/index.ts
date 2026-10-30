@@ -1,3 +1,4 @@
+import { backendLogAuthorizationSchema } from '../operations/backend-log-authorization.js';
 import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
@@ -110,7 +111,7 @@ export const coreModule: BackendModule = {
     app.get('/status/smoke', {
       config: { jarvisDeploySmoke: true },
       schema: { response: {
-        200: systemSmokeResponseSchema,
+        200: { ...systemSmokeResponseSchema, properties: { ...systemSmokeResponseSchema.properties, backendLogAuthorization: backendLogAuthorizationSchema } },
         401: {
           type: 'object',
           properties: { error: { type: 'string', const: 'Unauthorized' } },
@@ -121,13 +122,15 @@ export const coreModule: BackendModule = {
     }, async (request, reply) => {
       if (!request.principal && !request.deployPrincipal) return reply.code(401).send({ error: 'Unauthorized' });
       reply.header('Cache-Control', 'no-store');
-      const report = await app.systemSmokeReader.run();
+      const [report, observations] = await Promise.all([
+        app.systemSmokeReader.run(), app.backendLogAuthorizationProbe?.read(),
+      ]);
       for (const entry of report.entries) {
         request.log.info({
           checkId: entry.id, status: entry.status, reason: entry.reason,
         }, 'system.smoke_check');
       }
-      return systemSmokeHttpResponse(report);
+      return { ...systemSmokeHttpResponse(report), ...(observations ? { backendLogAuthorization: observations } : {}) };
     });
     app.get('/health', {
       schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },

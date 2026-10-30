@@ -164,6 +164,20 @@ describe('Google Calendar and Gmail tools', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps uncertain Gmail outcomes visible through the real tool boundary', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async () => { throw new GoogleApiError('uncertain'); });
+    const { app, setLatest } = appFor(request);
+    const staged = await app.inject({ method: 'POST', url: '/tools/mail_send', headers: confirmHeaders('42'),
+      payload: { to: ['synthetic@example.test'], subject: 'Synthetic subject', body: 'Synthetic body' } });
+    expect(staged.json().confirmation).toContain('Awaiting your approval');
+    expect(staged.json().confirmation).not.toContain('Synthetic subject');
+    confirmMessage(setLatest);
+    const result = await app.inject({ method: 'POST', url: '/tools/mail_confirm_action', headers: confirmHeaders('43'),
+      payload: { confirmationCode: staged.json().result.confirmationCode } });
+    expect(result.json()).toMatchObject({ outcome: 'error', confirmation: expect.stringContaining('Check Google Calendar or Gmail before trying again') });
+    expect(request).toHaveBeenCalledOnce();
+  });
+
   it.each(['expired', 'cancelled', 'provider-failed'] as const)(
     'does not repeat a write after an actual %s stage', async (state) => {
       let now = Date.now();

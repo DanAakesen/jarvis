@@ -1,5 +1,5 @@
 import { isWebResearchResult, type WebResearchResult, type WebResearchSource } from '@jarvis/contracts';
-import type { CodexToolName, FoundryClient } from '../foundry/client.js';
+import type { CodexToolName, FoundryClient, InvocationSnapshot } from '../foundry/client.js';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -16,8 +16,28 @@ const cleanupTimeoutMs = 5_000;
 
 export type WebResearchClient = Pick<FoundryClient, 'startCodexTool' | 'status' | 'cancel' | 'deleteSession'>;
 
+export const codexToolFailureReasons = [
+  'codex_model_unsupported',
+  'codex_auth',
+  'codex_client_outdated',
+  'codex_network',
+] as const;
+export type CodexToolFailureReason = typeof codexToolFailureReasons[number];
+
+export class CodexToolFailure extends ToolFailure {
+  constructor(readonly category: CodexToolFailureReason, message: string) {
+    super(message);
+  }
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function codexFailureReason(snapshot: InvocationSnapshot): CodexToolFailureReason | undefined {
+  const failedEvent = [...snapshot.events].reverse().find((event) => event.kind === 'failed');
+  const reason = failedEvent?.data.reason;
+  return codexToolFailureReasons.find((category) => category === reason);
 }
 
 function delay(ms: number, signal: AbortSignal): Promise<void> {
@@ -98,6 +118,8 @@ export async function runCodexToolResult<T>(
         if (snapshot.error === 'Codex usage limit reached') {
           throw new ToolRefusal('Codex usage limit reached.');
         }
+        const category = codexFailureReason(snapshot);
+        if (category) throw new CodexToolFailure(category, `${name} could not complete.`);
         throw new ToolFailure(`${name} could not complete.`);
       }
       await delay(Math.min(pollInterval, deadline - Date.now()), signal);

@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Jarvis for iPhone · system surfaces</title>
+<style>
+/* Tokens match the concept board (ios-lab), which copies the brand colours from apps/web/src/styles.css. */
+:root {
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+  color-scheme: light;
+  --page: #f6f0e6;
+  --text: #17202a;
+  --text-muted: #5c564f;
+  --accent: #14768d;
+  --accent-text: #fff;
+  --record-stop: #e5383b;
+  --orb-listening: #2aa4c2;
+  --orb-thinking: #e8a23a;
+  --orb-in-a: rgb(10 46 62 / 88%);
+  --orb-in-b: rgb(10 46 62 / 72%);
+  --ambient:
+    radial-gradient(60% 36% at 12% 10%, rgb(20 118 141 / 24%), transparent 70%),
+    radial-gradient(54% 34% at 94% 20%, rgb(232 162 58 / 30%), transparent 70%),
+    radial-gradient(70% 38% at 24% 98%, rgb(45 179 93 / 18%), transparent 70%),
+    radial-gradient(54% 30% at 92% 80%, rgb(47 128 237 / 16%), transparent 70%);
+  --sep: rgb(60 50 30 / 16%);
+  --g-fill: rgb(255 255 255 / 30%);
+  --g-fill-bar: rgb(255 255 255 / 44%);
+  --g-sat: 1.7;
+  --g-shadow: 0 10px 30px rgb(60 45 20 / 16%), 0 1px 3px rgb(60 45 20 / 12%);
+  --g-solid: #efe8dc;
+  --rim-hi: rgb(255 255 255 / 100%);
+  --rim-mid: rgb(255 255 255 / 60%);
+  --rim-lo: rgb(70 55 30 / 14%);
+  --sheen: rgb(255 255 255 / 50%);
+  --board-bg: #e4ddd0;
+  --board-bar: #f1ebe0;
+  --board-text: #17202a;
+  --board-muted: #4f4a44;
+  --board-rule: #c9bfae;
+  --focus: #14768d;
+}
+:root[data-theme="dark"], .force-dark {
+  color-scheme: dark;
+  --page: #07090f;
+  --text: #f3fff9;
+  --text-muted: #c0ccd2;
+  --accent: #52dcfa;
+  --accent-text: #04161d;
+  --orb-listening: #52dcfa;
+  --orb-thinking: #ffb45c;
+  --orb-in-a: rgb(8 40 56 / 62%);
+  --orb-in-b: rgb(6 30 44 / 46%);
+  --ambient:
+    radial-gradient(60% 36% at 12% 10%, rgb(82 220 250 / 30%), transparent 70%),
+    radial-gradient(54% 34% at 94% 20%, rgb(255 180 92 / 26%), transparent 70%),
+    radial-gradient(70% 38% at 24% 98%, rgb(61 220 132 / 16%), transparent 70%),
+    radial-gradient(54% 30% at 92% 80%, rgb(59 139 255 / 20%), transparent 70%);
+  --sep: rgb(226 246 255 / 14%);
+  --g-fill: rgb(255 255 255 / 7%);
+  --g-fill-bar: rgb(16 22 30 / 36%);
+  --g-shadow: 0 12px 34px rgb(0 0 0 / 42%), 0 1px 3px rgb(0 0 0 / 30%);
+  --g-solid: #161c24;
+  --rim-hi: rgb(255 255 255 / 85%);
+  --rim-mid: rgb(255 255 255 / 34%);
+  --rim-lo: rgb(255 255 255 / 5%);
+  --sheen: rgb(255 255 255 / 13%);
+}
+:root[data-theme="dark"] {
+  --board-bg: #03060a;
+  --board-bar: #0b1118;
+  --board-text: #f3fff9;
+  --board-muted: #b7c4ca;
+  --board-rule: rgb(226 246 255 / 14%);
+  --focus: #8be9ff;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--board-bg); color: var(--board-text); font: 15px/1.45 var(--font-body); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Board chrome */
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 12px 20px; background: var(--board-bar); border-bottom: 1px solid var(--board-rule); }
+.head h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.2px; }
+.head p { flex: 1 1 340px; margin: 0; color: var(--board-muted); font-size: 13px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--board-rule); border-radius: 10px; background: color-mix(in srgb, var(--board-text) 5%, transparent); }
+.seg label { position: relative; display: block; }
+.seg input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.seg span { display: grid; place-items: center; min-height: 28px; padding: 0 12px; border-radius: 8px; color: var(--board-muted); font-size: 12px; font-weight: 600; }
+.seg input:checked + span { background: var(--board-text); color: var(--board-bg); }
+.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (pointer: coarse) { .seg span { min-height: 44px; } }
+
+.gallery { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 40px 30px; padding: 26px 20px 56px; }
+.fig { --s: .68; --fw: 393px; --fh: 852px; width: calc(var(--fw) * var(--s)); margin: 0; }
+.fig.land { --fw: 852px; --fh: 393px; }
+.fig.card { --fh: 452px; }
+.fig.sheet { --fh: 660px; }
+.frame { position: relative; width: calc(var(--fw) * var(--s)); height: calc(var(--fh) * var(--s)); }
+.fig figcaption { margin-top: 12px; }
+.fig h2 { margin: 0 0 3px; font-size: 14px; font-weight: 650; }
+.fig p { margin: 0; color: var(--board-muted); font-size: 13px; line-height: 1.45; }
+.fig p + p { margin-top: 5px; }
+
+/* Screen illustrations (393 x 852 points, scaled down) */
+.screen {
+  position: absolute; left: 0; top: 0; width: var(--fw); height: var(--fh); overflow: hidden; isolation: isolate;
+  transform: scale(var(--s)); transform-origin: 0 0; border-radius: 56px;
+  background: var(--page); color: var(--text); font: 17px/1.3 var(--font-body); -webkit-font-smoothing: antialiased;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--board-text) 14%, transparent);
+}
+.screen::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ambient); }
+.screen.card { border-radius: 34px; }
+.screen.wide { border-radius: 46px; }
+.screen.pure { background: #000; }
+.island { position: absolute; z-index: 50; top: 11px; left: 50%; width: 126px; height: 37px; margin-left: -63px; border-radius: 19px; background: #000; }
+.home { position: absolute; z-index: 51; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--text); opacity: .55; }
+.sbar { position: absolute; z-index: 45; top: 0; left: 0; right: 0; height: 59px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 50px; font-size: 17px; font-weight: 600; }
+.batt { position: relative; width: 27px; height: 13px; border-radius: 4px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 45%, transparent); }
+.batt::before { content: ""; position: absolute; inset: 2px 7px 2px 2px; border-radius: 2px; background: var(--text); }
+.ic { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Liquid glass, frosted base (same recipe as the board) */
+.glass { position: relative; background: var(--g-fill); box-shadow: var(--g-shadow); -webkit-backdrop-filter: blur(16px) saturate(var(--g-sat)); backdrop-filter: blur(16px) saturate(var(--g-sat)); }
+.glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(120% 160% at 8% -20%, var(--sheen), transparent 55%); }
+.glass::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from 215deg, var(--rim-hi), var(--rim-lo) 26%, transparent 48%, var(--rim-mid) 72%, var(--rim-hi));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.bar-fill { background: var(--g-fill-bar); }
+@media (prefers-reduced-transparency: reduce) { .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--g-solid); } }
+
+/* Orb (small renditions of the real orb) */
+.mo {
+  --c: var(--orb-listening); --d: 40px; position: relative; flex: none; display: block; width: var(--d); height: var(--d); overflow: hidden; border-radius: 50%;
+  background: radial-gradient(circle at 50% 46%, var(--orb-in-b), var(--orb-in-a) 82%);
+  box-shadow: inset 0 0 0 max(1px, calc(var(--d) / 28)) color-mix(in srgb, var(--c) 82%, transparent), inset 0 0 calc(var(--d) * .3) color-mix(in srgb, var(--c) 34%, transparent);
+}
+.mo::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(ellipse 44% 28% at 31% 19%, rgb(255 255 255 / 42%), transparent 72%); }
+.mo[data-state="thinking"], .mo[data-state="speaking"] { --c: var(--orb-thinking); }
+.mo[data-state="lost"] { --c: #8d98a1; opacity: .8; }
+.halo { position: relative; display: grid; place-items: center; flex: none; }
+.halo::before { content: ""; position: absolute; inset: -22%; border-radius: 50%; filter: blur(12px); background: radial-gradient(circle, color-mix(in srgb, var(--c, var(--orb-listening)) 44%, transparent) 0, color-mix(in srgb, var(--c, var(--orb-listening)) 14%, transparent) 48%, transparent 70%); }
+.halo[data-state="lost"]::before { opacity: .35; }
+.fil { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: color-mix(in srgb, var(--c) 34%, transparent); stroke-width: .9; animation: turn 60s linear infinite; }
+@keyframes turn { to { transform: rotate(360deg); } }
+
+/* Live waveform */
+.wave { --tone: var(--orb-listening); display: flex; align-items: center; justify-content: space-between; height: 30px; }
+.wave i { display: block; width: 4px; height: 30px; border-radius: 2px; background: var(--tone); transform: scaleY(var(--h)); animation: wv 1.6s ease-in-out infinite; animation-delay: calc(var(--n) * -.13s); }
+.bars { --tone: var(--orb-listening); display: flex; align-items: center; gap: 2.5px; height: 18px; }
+.bars i { display: block; width: 3px; height: 18px; border-radius: 2px; background: var(--tone); transform: scaleY(var(--h)); animation: wv 1.4s ease-in-out infinite; animation-delay: calc(var(--n) * -.23s); }
+@keyframes wv { 0%, 100% { transform: scaleY(var(--h)); } 50% { transform: scaleY(calc(var(--h) * .45 + .1)); } }
+@media (prefers-reduced-motion: reduce) { .wave i, .bars i, .fil { animation: none; } }
+
+/* Live Activity, notification, buttons */
+.la { position: absolute; left: 16px; right: 16px; bottom: 150px; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 28px; background: var(--g-fill-bar); }
+.la-top { display: flex; align-items: center; gap: 12px; }
+.la-txt { display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.2; }
+.la-txt b { font-size: 17px; font-weight: 650; }
+.la-txt span { margin-top: 2px; font-size: 13px; color: var(--text-muted); }
+.la-time { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.la-btns { display: flex; gap: 10px; }
+.la-btn { display: flex; flex: 1; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: 23px; font-size: 16px; font-weight: 600; }
+.la-btn.end { background: color-mix(in srgb, var(--record-stop) 80%, transparent); color: #fff; }
+.app-ico { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.track { height: 8px; overflow: hidden; border-radius: 4px; background: color-mix(in srgb, var(--text) 16%, transparent); }
+.track i { display: block; height: 100%; border-radius: 4px; background: var(--orb-thinking); }
+.ls-date { position: absolute; top: 96px; left: 0; right: 0; text-align: center; font-size: 20px; font-weight: 600; opacity: .88; }
+.ls-time { position: absolute; top: 122px; left: 0; right: 0; text-align: center; font-size: 100px; font-weight: 700; letter-spacing: -3px; line-height: 1.05; }
+.ls-ctl { position: absolute; bottom: 56px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; }
+.ls-ctl.l { left: 44px; }
+.ls-ctl.r { right: 44px; }
+.ls-ctl .ic { width: 24px; height: 24px; }
+.stack { position: absolute; left: 16px; right: 16px; bottom: 140px; display: flex; flex-direction: column; gap: 10px; }
+.stack .la { position: relative; left: auto; right: auto; bottom: auto; }
+.note { display: grid; grid-template-columns: 38px 1fr auto; column-gap: 12px; padding: 14px 16px 0; border-radius: 28px; background: var(--g-fill-bar); }
+.note b { align-self: center; font-size: 16px; font-weight: 650; }
+.note-when { align-self: center; font-size: 13px; color: var(--text-muted); }
+.note-body { grid-column: 2 / 4; margin: 2px 0 12px; font-size: 15px; line-height: 1.3; }
+.note-acts { grid-column: 1 / 4; margin: 0 -16px; }
+.note-acts span { display: block; padding: 12px 16px; border-top: 1px solid var(--sep); font-size: 16px; font-weight: 500; color: var(--accent); }
+
+/* Dynamic Island states */
+.isl-demo { display: flex; flex-direction: column; align-items: center; gap: 34px; padding: 34px 16px; background: linear-gradient(165deg, #1b2733, #090d12); }
+.isl-demo::before { display: none; }
+.isl-row { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.isl-lab { font-size: 13px; color: var(--text-muted); text-align: center; }
+.isl-c { display: flex; align-items: center; justify-content: space-between; width: 232px; height: 37px; padding: 0 14px; border-radius: 19px; background: #000; }
+.isl-pair { display: flex; align-items: center; gap: 8px; }
+.isl-p { display: flex; align-items: center; justify-content: flex-end; width: 126px; height: 37px; padding: 0 14px; border-radius: 19px; background: #000; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--orb-thinking); }
+.isl-m { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 50%; background: #000; }
+.isl-x { display: flex; flex-direction: column; gap: 12px; width: 361px; padding: 18px; border-radius: 46px; background: #000; }
+.isl-x .la-btn { background: rgb(255 255 255 / 14%); height: 44px; }
+.isl-x .la-btn.end { background: var(--record-stop); }
+
+/* Widgets and controls sheet */
+.sheet { display: flex; flex-direction: column; gap: 18px; padding: 22px 20px; }
+.sheet-sec { display: flex; flex-direction: column; gap: 8px; }
+.sec-label { font-size: 13px; color: var(--text-muted); }
+.wrow { display: flex; gap: 16px; }
+.wg { position: relative; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 16px; border-radius: 30px; background: var(--g-fill-bar); }
+.wg.sm { width: 158px; height: 158px; }
+.wg.md { width: 332px; height: 158px; }
+.wg strong { font-size: 15px; font-weight: 650; line-height: 1.2; }
+.wg small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); line-height: 1.25; }
+.wg .big { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -2px; }
+.wrow.lsw { align-items: center; gap: 14px; }
+.cw { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--g-fill-bar); }
+.cw svg.ring { position: absolute; width: 64px; height: 64px; transform: rotate(-90deg); fill: none; stroke-width: 5; }
+.cw { position: relative; }
+.rw { display: flex; flex-direction: column; justify-content: center; width: 158px; height: 64px; padding: 0 14px; border-radius: 18px; background: var(--g-fill-bar); }
+.rw strong { font-size: 14px; font-weight: 650; }
+.rw small { font-size: 12px; color: var(--text-muted); }
+.inline-w { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.ctl { display: flex; flex-direction: column; justify-content: space-between; width: 158px; height: 74px; padding: 12px 14px; border-radius: 22px; background: var(--g-fill-bar); }
+.ctl span { font-size: 14px; font-weight: 600; }
+.ctl .ic { color: var(--accent); }
+
+/* StandBy */
+.sb { display: grid; grid-template-columns: 1fr 1.25fr; align-items: center; height: 100%; padding: 0 56px; }
+.sb-orb { display: grid; place-items: center; }
+.sb-txt { display: flex; flex-direction: column; gap: 6px; }
+.sb-name { font-size: 22px; font-weight: 600; color: var(--text-muted); }
+.sb-state { font-size: 60px; font-weight: 700; letter-spacing: -1.5px; line-height: 1.05; }
+.sb-timer { font-size: 36px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+
+/* Sign-in and connection lost */
+.centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 80px 36px 90px; text-align: center; }
+.centre h3 { margin: 18px 0 0; font-size: 34px; font-weight: 700; letter-spacing: -.8px; }
+.centre p { max-width: 300px; margin: 0; font-size: 17px; color: var(--text-muted); }
+.si-btn { display: grid; place-items: center; width: 100%; max-width: 320px; height: 54px; margin-top: 18px; border-radius: 27px; font-size: 17px; font-weight: 650; background: color-mix(in srgb, var(--accent) 78%, transparent); color: var(--accent-text); }
+.centre p.fine { margin-top: 4px; font-size: 14px; }
+.si-ico { display: grid; place-items: center; width: 92px; height: 92px; border-radius: 50%; background: var(--g-fill-bar); color: var(--accent); }
+.si-ico .ic { width: 44px; height: 44px; stroke-width: 1.5; }
+.si-alt { margin-top: 10px; padding: 8px 16px; font-size: 17px; font-weight: 600; color: var(--accent); }
+.centre.up { padding-bottom: 240px; }
+.nav-title { position: absolute; top: 59px; left: 0; right: 0; height: 44px; display: grid; place-items: center; font-size: 17px; font-weight: 600; }
+.rc-pill { position: absolute; top: 116px; left: 50%; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; transform: translateX(-50%); border-radius: 20px; font-size: 15px; font-weight: 600; white-space: nowrap; background: var(--g-fill-bar); }
+.rc-btns { display: flex; gap: 10px; width: 100%; max-width: 320px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path d="M3 3l18 18"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+    <symbol id="i-flash" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><path d="M6 6h12"/><path d="M12 12h.01"/></symbol>
+    <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-orbit" viewBox="0 0 250 250"><ellipse cx="125" cy="125" rx="104" ry="38"/><ellipse cx="125" cy="125" rx="104" ry="38" transform="rotate(60 125 125)"/><ellipse cx="125" cy="125" rx="104" ry="38" transform="rotate(120 125 125)"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-scan-face" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+  </defs>
+</svg>
+
+<header class="head">
+  <h1>Jarvis for iPhone: system surfaces</h1>
+  <p>Concept illustrations of what Jarvis shows outside the app. Sample content only; every surface is a proposal for review.</p>
+  <div class="seg" role="radiogroup" aria-label="Theme">
+    <label><input type="radio" name="theme" value="dark" checked><span>Dark</span></label>
+    <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+  </div>
+</header>
+
+<main class="gallery">
+
+  <figure class="fig">
+    <div class="frame" role="img" aria-label="Concept: iPhone Lock Screen with a Jarvis Live Activity during a hands-free session. It shows the on-the-move state, a live waveform, a 12 minute timer, and Mute and End buttons.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span></span><span class="batt"></span></div>
+        <div class="ls-date">Thursday 29 October</div>
+        <div class="ls-time">17:42</div>
+        <div class="la glass">
+          <div class="la-top">
+            <span class="halo" style="--c: var(--orb-listening)"><span class="mo" data-state="listening" style="--d:46px"></span></span>
+            <div class="la-txt"><b>Jarvis</b><span>On the move · listening</span></div>
+            <span class="la-time">12:04</span>
+          </div>
+          <div class="wave" data-n="26"></div>
+          <div class="la-btns">
+            <span class="la-btn glass"><svg class="ic"><use href="#i-mic-off"/></svg>Mute</span>
+            <span class="la-btn end"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+          </div>
+        </div>
+        <div class="ls-ctl l glass"><svg class="ic"><use href="#i-flash"/></svg></div>
+        <div class="ls-ctl r glass"><svg class="ic"><use href="#i-camera"/></svg></div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Lock Screen: hands-free session</h2>
+      <p>A Live Activity keeps the session visible and controllable without unlocking. Mute and End are real buttons, so nobody has to wake the phone at the gym or in the car.</p>
+      <p>Needs: ActivityKit and App Intents. No special approval from Apple.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig card">
+    <div class="frame" role="img" aria-label="Concept: three Dynamic Island states for Jarvis. Compact shows the orb and a waveform. Minimal shows only the orb beside another activity. Expanded shows the orb, a timer, a waveform, and Mute and End buttons.">
+      <div class="screen card force-dark isl-demo" aria-hidden="true">
+        <div class="isl-row">
+          <div class="isl-c"><span class="mo" data-state="listening" style="--d:22px"></span><span class="bars" data-n="5"></span></div>
+          <span class="isl-lab">Compact: you are in another app</span>
+        </div>
+        <div class="isl-row">
+          <div class="isl-pair"><div class="isl-p">4:20</div><div class="isl-m"><span class="mo" data-state="listening" style="--d:26px"></span></div></div>
+          <span class="isl-lab">Minimal: another activity shares the island</span>
+        </div>
+        <div class="isl-row">
+          <div class="isl-x">
+            <div class="la-top">
+              <span class="mo" data-state="speaking" style="--d:40px"></span>
+              <div class="la-txt"><b>Jarvis</b><span>On the move · speaking</span></div>
+              <span class="la-time">12:04</span>
+            </div>
+            <div class="wave" data-n="26" style="--tone: var(--orb-thinking)"></div>
+            <div class="la-btns">
+              <span class="la-btn"><svg class="ic"><use href="#i-mic-off"/></svg>Mute</span>
+              <span class="la-btn end"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+            </div>
+          </div>
+          <span class="isl-lab">Expanded: press and hold the island</span>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Dynamic Island</h2>
+      <p>The orb colour follows the session: blue while listening, amber while thinking or speaking. It is the same Live Activity as on the Lock Screen, so there is no extra build work.</p>
+      <p>Needs: ActivityKit.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig">
+    <div class="frame" role="img" aria-label="Concept: iPhone Lock Screen with a Software Factory Live Activity showing checks running, three of five steps done, and     a Jarvis notification asking to merge a change into main, with Approve and Decline actions.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span></span><span class="batt"></span></div>
+        <div class="ls-date">Thursday 29 October</div>
+        <div class="ls-time">17:42</div>
+        <div class="stack">
+          <div class="la glass">
+            <div class="la-top">
+              <span class="app-ico"><svg class="ic"><use href="#i-code"/></svg></span>
+              <div class="la-txt"><b>Software Factory</b><span>Checks running · step 3 of 5</span></div>
+              <span class="la-time">4 min</span>
+            </div>
+            <div class="track"><i style="width:60%"></i></div>
+          </div>
+          <div class="note glass">
+            <span class="mo" data-state="thinking" style="--d:38px"></span>
+            <b>Jarvis</b><span class="note-when">now</span>
+            <p class="note-body" style="margin-block: 2px 12px">Merge "Update help page text" into main? Expires in 5 minutes.</p>
+            <div class="note-acts"><span>Approve</span><span>Decline</span></div>
+          </div>
+        </div>
+        <div class="ls-ctl l glass"><span class="mo" data-state="listening" style="--d:28px"></span></div>
+        <div class="ls-ctl r glass"><svg class="ic"><use href="#i-camera"/></svg></div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Lock Screen: tasks and decisions</h2>
+      <p>Long Software Factory work shows progress as a Live Activity that the backend updates by push. A decision arrives as a notification that names exactly what is approved. Approve and Decline work from the Lock Screen, and iOS asks for Face ID or the passcode first. Tapping the notification opens Jarvis instead. The bottom-left control starts a session.</p>
+      <p>Needs: APNs (a key only the Apple account owner can create), a device-token endpoint, and a push when a confirmation is created. Approving reuses the existing confirmation route: single-use, owner-only, and it expires within five minutes.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig sheet">
+    <div class="frame" role="img" aria-label="Concept sheet of Jarvis widgets and controls with sample content: Home Screen widgets for Talk and tasks waiting, a Software Factory progress widget, Lock Screen widgets, and Talk and Mute controls.">
+      <div class="screen card sheet" aria-hidden="true">
+        <div class="sheet-sec">
+          <span class="sec-label">Home Screen</span>
+          <div class="wrow">
+            <div class="wg sm glass">
+              <span class="halo" style="width:52px;height:52px"><span class="mo" data-state="listening" style="--d:52px"></span></span>
+              <strong>Talk to Jarvis<small>Starts a hands-free session</small></strong>
+            </div>
+            <div class="wg sm glass">
+              <span class="big">2</span>
+              <strong>Waiting for you<small>Decisions from tasks</small></strong>
+            </div>
+          </div>
+          <div class="wg md glass">
+            <div class="la-top">
+              <span class="app-ico" style="width:40px;height:40px"><svg class="ic"><use href="#i-code"/></svg></span>
+              <div class="la-txt"><b style="font-size:15px">Software Factory</b><span>Checks running · step 3 of 5</span></div>
+            </div>
+            <div class="track"><i style="width:60%"></i></div>
+          </div>
+        </div>
+        <div class="sheet-sec">
+          <span class="sec-label">Lock Screen</span>
+          <span class="inline-w">Jarvis · 2 waiting for you</span>
+          <div class="wrow lsw">
+            <span class="cw">
+              <svg class="ring" viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" stroke="color-mix(in srgb, var(--text) 18%, transparent)"/><circle cx="32" cy="32" r="28" stroke="var(--orb-thinking)" stroke-linecap="round" stroke-dasharray="105.6 175.9"/></svg>
+              <svg class="ic"><use href="#i-code"/></svg>
+            </span>
+            <div class="rw"><strong>Jarvis</strong><small>2 waiting for you</small></div>
+          </div>
+        </div>
+        <div class="sheet-sec">
+          <span class="sec-label">Controls: Control Center, Lock Screen, Action Button</span>
+          <div class="wrow">
+            <div class="ctl glass"><svg class="ic"><use href="#i-mic"/></svg><span>Talk to Jarvis</span></div>
+            <div class="ctl glass"><svg class="ic"><use href="#i-mic-off"/></svg><span>Mute session</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Widgets and controls</h2>
+      <p>One tap on Talk starts a hands-free session from the Home Screen, the Lock Screen, Control Center, or the Action Button on models that have one.</p>
+      <p>Needs: WidgetKit and App Intents. Widgets only show what the backend already knows.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig land">
+    <div class="frame" role="img" aria-label="Concept: iPhone StandBy in landscape showing a large orb, the word Listening, and a 12 minute timer for a Jarvis hands-free session.">
+      <div class="screen wide pure force-dark" aria-hidden="true">
+        <div class="sb">
+          <div class="sb-orb">
+            <span class="halo" style="width:220px;height:220px"><span class="mo" data-state="listening" style="--d:220px"><svg class="fil" viewBox="0 0 250 250"><use href="#i-orbit"/></svg></span></span>
+          </div>
+          <div class="sb-txt">
+            <span class="sb-name">Jarvis · on the move</span>
+            <span class="sb-state">Listening</span>
+            <span class="sb-timer">12:04</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <h2>StandBy and car dock</h2>
+      <p>Landscape on a charger turns the Live Activity into a full-screen glance from arm's length: the gym bench, the car mount, the desk.</p>
+      <p>Needs: large type in the Live Activity layout. Nothing else.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig">
+    <div class="frame" role="img" aria-label="Concept: Jarvis sign-in screen with the orb, the name Jarvis, a Continue with Microsoft button, and a note that a Face ID lock is offered right after sign-in.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="centre">
+          <span class="halo" style="width:168px;height:168px"><span class="mo" data-state="listening" style="--d:168px"><svg class="fil" viewBox="0 0 250 250"><use href="#i-orbit"/></svg></span></span>
+          <h3>Jarvis</h3>
+          <p>Sign in once with your Microsoft account. This iPhone stays signed in while you use it.</p>
+          <span class="si-btn glass">Continue with Microsoft</span>
+          <p class="fine">A Face ID lock is offered right after you sign in.</p>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Sign-in</h2>
+      <p>One Microsoft sign-in. The app then holds the 10-day owner session in the Keychain, so there is no daily Microsoft prompt. The Face ID lock is a separate, local step.</p>
+      <p>Needs: a native redirect registered in Entra by the owner.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig">
+    <div class="frame" role="img" aria-label="Concept: Jarvis screen offered right after the first sign-in. A face-scan icon sits above the title Lock Jarvis with Face ID, a short explanation, a Turn on Face ID button and a Not now option.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="centre">
+          <span class="si-ico glass"><svg class="ic"><use href="#i-scan-face"/></svg></span>
+          <h3 style="font-size:30px">Lock Jarvis with Face ID</h3>
+          <p>On by default. History, workspaces and settings stay private. A running voice session is never interrupted.</p>
+          <span class="si-btn glass">Turn on Face ID</span>
+          <span class="si-alt">Not now</span>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>First sign-in: Face ID lock</h2>
+      <p>Offered once, right after the first Microsoft sign-in. The passcode works when Face ID does not, and Settings can turn the lock off.</p>
+      <p>Needs: LocalAuthentication and a Face ID usage description. The Not now option, and the rule that a running session is never interrupted, are defaults the owner has not confirmed yet.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig">
+    <div class="frame" role="img" aria-label="Concept: Jarvis locked screen. A lock icon, the text Jarvis is locked and an Unlock with Face ID button sit above a strip showing the voice session still running, with a 12 minute timer and Mute and End buttons.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="centre up">
+          <span class="si-ico glass"><svg class="ic"><use href="#i-lock"/></svg></span>
+          <h3 style="font-size:30px">Jarvis is locked</h3>
+          <p>Your voice session is still running. Unlock to see history and workspaces.</p>
+          <span class="si-btn glass">Unlock with Face ID</span>
+        </div>
+        <div class="la glass" style="bottom:56px">
+          <div class="la-top">
+            <span class="halo" style="--c: var(--orb-listening)"><span class="mo" data-state="listening" style="--d:46px"></span></span>
+            <div class="la-txt"><b>Jarvis</b><span>On the move · listening</span></div>
+            <span class="la-time">12:04</span>
+          </div>
+          <div class="la-btns">
+            <span class="la-btn glass"><svg class="ic"><use href="#i-mic-off"/></svg>Mute</span>
+            <span class="la-btn end"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+          </div>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>App locked</h2>
+      <p>A cover shows until Face ID succeeds, so history and workspaces stay private. A running session is never cut off, and Mute and End stay on the cover and in the Live Activity.</p>
+      <p>Needs: LocalAuthentication. Starting the microphone from a locked phone (Action Button or a Lock Screen control) is unproven and needs a real-device test.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig">
+    <div class="frame" role="img" aria-label="Concept: Jarvis voice screen after losing connection. A pill says Reconnecting, attempt 3 of 8, the orb is dimmed, and Retry now and End buttons are shown.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="nav-title">Voice</div>
+        <div class="rc-pill glass"><svg class="ic"><use href="#i-wifi-off"/></svg>Reconnecting · attempt 3 of 8</div>
+        <div class="centre">
+          <span class="halo" data-state="lost" style="--c:#8d98a1;width:200px;height:200px"><span class="mo" data-state="lost" style="--d:200px"><svg class="fil" viewBox="0 0 250 250"><use href="#i-orbit"/></svg></span></span>
+          <h3 style="font-size:26px">Connection lost</h3>
+          <p>Your last words are saved. Jarvis picks up where you left off.</p>
+          <div class="rc-btns">
+            <span class="la-btn glass">Retry now</span>
+            <span class="la-btn glass"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+          </div>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Connection lost</h2>
+      <p>Tunnels and gym basements happen. The orb dims, the screen says what is going on, and a soft sound plus a haptic marks the drop. Retries follow the web client: 8 attempts, up to 10 seconds apart.</p>
+      <p>Needs: real-device tests for lock, Bluetooth and tunnels.</p>
+    </figcaption>
+  </figure>
+
+</main>
+
+<script>
+const H = [.35, .5, .7, .55, .9, .6, .4, .8, 1, .7, .45, .6, .85, .5, .35, .65, .9, .55, .4, .3, .5, .75, .6, .4, .55, .35];
+document.querySelectorAll('[data-n]').forEach((el) => {
+  for (let i = 0; i < Number(el.dataset.n); i += 1) {
+    const bar = document.createElement('i');
+    bar.style.setProperty('--h', H[i % H.length]);
+    bar.style.setProperty('--n', i);
+    el.append(bar);
+  }
+});
+document.querySelectorAll('input[name="theme"]').forEach((input) => {
+  input.addEventListener('change', () => { document.documentElement.dataset.theme = input.value; });
+});
+</script>
+</body>
+</html>

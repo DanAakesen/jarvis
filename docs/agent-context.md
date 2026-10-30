@@ -1,3 +1,345 @@
+## Managed policy cause diagnostics (#1373; 30 October 2026)
+
+Use the existing hosted pytest/Ruff environment. Focused checks:
+`tests/test_managed_provider_cause.py`, `tests/test_managed_runtime_lifecycle.py`
+and `tests/test_chat_runtime.py`; backend managed-provider-cause, chat-agent,
+conversation, logging, chat-canary and system-status tests; contracts tests;
+web conversation-history tests. Run affected workspace lint/build checks.
+
+The HTTP-400 fixture's `instructions` parameter is synthetic, not a diagnosis.
+This environment could not establish the live rejected field or a successful
+Copilot test-chat turn. Preserve request shape, consumed-source and unknown-outcome
+claim behavior until a new sanitized provider cause supplies evidence. Never
+include provider messages or raw responses in diagnostics.
+
+## Managed conversation failure repair (#1350; 29 October 2026)
+
+Use the production lazy wrapper with stateful synthetic claims in
+`agents/jarvis/tests/test_managed_runtime_lifecycle.py`. A known setup failure may
+finish its source as failed only before any inference attempt and with no backend
+tool call; cancellation, unknown inference and possible actions retain the claim.
+Do not reset an existing uncertain claim or replay a consumed source. Preserve
+exact finite managed codes through hosted error SSE, backend SSE and the test UI.
+Run hosted pytest/Ruff, backend conversation/status checks and lint/build, and
+web stream/test-conversation checks and lint/build. Fixtures cannot establish the
+first live failure cause; no live logs or owner request replay is available here.
+
+Also run the complete `.github/scripts/tests` unittest suite: the release smoke
+formatter must retain exactly the backend's fixed hosted-origin codes. Preserve
+the exact-parity assertion and redaction of unknown managed-looking codes.
+The correction passes all 203 script tests and 185 scoped hosted/wrapper tests.
+Local script tests require PowerShell; temporary PowerShell 7.5.4 with writable
+XDG cache/config/data directories satisfies that existing dependency. The two
+smoke files retain the same five pre-existing Ruff findings as the prior head.
+
+## Managed canary diagnostics (#1350; 29 October 2026)
+
+Manual Deploy 40884299864 passed provisioning/configuration/readiness but failed
+the canary assertion. Its exact reason was discarded; retained artifacts contain
+normal acceptance, release plan and receipt only. Preserve private responses;
+emit only existing allowlisted reason/stage, bounded HTTP status and model/effort
+constants. The known fallback stage is `managed_text_canary`; runtime code is
+unchanged. Run handoff/provisioning/deploy-plan tests, Ruff, compilation and shell syntax.
+No new grants, fallback, reset, resource or retry belongs in this correction.
+The availability guard checks metadata, not canary success; do not claim that
+selectability proves working inference. No live availability request was made.
+
+## Managed identity readback failure (#1350; 29 October 2026)
+
+Manual Deploy 40877005757 failed at `agent_identity_unverified` after an active
+comparison version was verified; backend activation and canary did not run.
+Microsoft documents identity status as optional. Preserve enabled effective
+state, UUID principal, exact existing version/definition and post-pin principal
+checks while accepting unset status. Keep explicit disabled/unknown states
+blocked. No actual missing permission or exact failed field is proven. Do not
+create another resource/version or add grants. Run provisioning/handoff tests,
+scoped Ruff/compilation and exact-head CI before reviewed release and handoff.
+
+## Runtime comparison preparation (#1350; 29 October 2026)
+
+Use the existing pinned dependencies; the protocol adapter adds no production
+package. Hosted checks cover managed protocol/definition, source routing and
+retained voice. Backend checks cover runtime session/store/migration and routes;
+web checks cover selector/client/scoped conversation/menu/Modal and unchanged
+normal chat. The repeatable synthetic browser check is
+`scripts/check-runtime-test-browser.mjs`; its output is under
+`docs/ui/screenshots/runtime-test-1350/`. These are offline checks, not live parity.
+SQL integration requires the existing isolated database harness; no live migration
+was applied in this preparation. Do not enable the managed option from local
+configuration alone. See [remaining gates](managed-chat-adapter.md).
+
+The comparison handoff is an explicit main-only manual Deploy dispatch with
+`provision_managed_chat=true`, after exact-head qualification. Normal pushes do
+not create the comparison agent. See [provisioning steps](managed-chat-provisioning.md).
+No new Azure login or credentials are needed. A real permission rejection must be
+reported by operation/current identity/scope before proposing a missing grant.
+The fixed manifest operation exports only static instructions/current schemas;
+it does not read personal context or invoke a tool. The canary has the same
+210-second invocation ceiling as the existing chat bridge and never executes
+functions. SQL qualification remains blocked locally by a Forbidden image pull;
+do not substitute a different image. Database CI subsequently applied the committed
+migrations and passed all four new runtime integration cases. After the three
+stale schema-inventory assertions were corrected, CI 40864485219 passed Database
+and Web. Backend failed only two lifecycle fixture teardown hooks: Node 22.23.3
+left an unrequested fetch replacement socket after abort. The fixture now closes
+its connections during teardown, with all lifecycle assertions unchanged; all
+four cases pass locally on that exact Node version. Full CI requalification is
+still pending.
+
+## Whole-Jarvis log preparation (#1341; 29 October 2026)
+
+Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,
+exclude unrelated projects, preserve redaction/bounds and keep the reader disabled
+until expanded access is specifically approved and proven. Do not remove the role
+or apply the earlier backend-only grant as though it authorized whole-system reads.
+See [inventory/design/grant proposal](jarvis-logs.md). Issue #1341 remains canonical.
+After the initial denial, the owner specifically approved its scope update and
+inventory/design PR publication, test disclosures, readiness and integration after
+checks. The one authorized issue-update retry succeeded. Parent owns readiness
+and merge. Keep new grants and reader activation outside that publication step.
+
+Local metadata preparation reads only existing-authorized ARM resource/table lists.
+Exact canonical ID plus ownership tag is required; table plan/_ResourceId metadata
+is not proof of routed data or enforcement. Keep the catalogue private, fixed
+public labels, and all negative/unavailable states honest. Runtime source adapters,
+capability replacement, grant execution and live qualification are still pending.
+Run Python backend-log and pipeline tests, scoped Ruff/byte compilation and diff
+checks. No actual log data, credentials or private identifiers enter GitHub.
+
+## Smoke/normal settings parity (#1350; 29 October 2026)
+
+The owner explicitly requires the same role settings in tests. Use the selected
+model, reasoning and configured output budget; keep unsupported settings visible
+rather than substituting another value. Run hosted tests/Ruff/compileall and
+research-smoke/foundry-model tests plus backend lint. Local results: 1,025 hosted
+and 56 backend tests passed. These do not prove the server's stored settings,
+provider acceptance or ordinary-chat failure. Saved settings stay unchanged;
+the owner approved publication with #1353, followed by normal checks/review. See
+[local report](smoke-settings-1350.md).
+
+## Reasoning and research smoke checks (#1350; 29 October 2026)
+
+The real Deploy 40840605441 reports model_bad_request_reasoning in all required
+chat scenarios; it does not prove none unsupported. Microsoft's Terra announcement
+and OpenAI's model contract explicitly support none. Keep settings and model
+requests intact until actual rejection detail identifies a correction. Run hosted
+pytest/Ruff/compileall, backend research-smoke/web-research/system-status/chat-agent/
+chat-canary/status tests plus lint/build, and Python test_smoke_reasons.py. Fixtures
+must cover unknown/malformed provider metadata, independent runner HTTP/auth/
+timeout/quota/result cases, cleanup, retained/HTTP reports and raw-detail redaction.
+No real worker or subscription/API operation belongs in those tests. Preserve
+current main's #1352 log-probe changes and separate authorization boundaries.
+
+Local follow-up: 1,019 hosted tests, hosted Ruff/compileall, 349 focused backend
+tests, full backend 6,902 passed/one skipped, backend lint/build and 13 sanitizer
+tests pass. Node 24/npm 11 local evidence does not replace pinned Node 22/npm 10
+qualification. No live correction or new provider operation is claimed.
+
+## Foundry resource-log diagnosis (#1341; 29 October 2026)
+
+Deploy #40836577365 is terminal: rollout/readiness passed and live acceptance
+failed. Backend identity matched; console/other-app/other-table returned 403,
+Foundry returned 400, and the real foreign control is absent. The reader is off.
+This scoped follow-up uses fixed `AzureDiagnostics` aggregates and
+`Prefer: include-permissions=true` only for the existing Foundry resource query.
+It classifies bounded permission metadata privately and emits only fixed states,
+separate from query status. None is an activation or isolation eligibility flag.
+
+The metadata-only preflight verifies the Foundry ID from existing backend
+configuration and reads `assignedTo` inventories at workspace, Foundry and
+subscription scope using API 2022-04-01. ARM includes transitive group assignments;
+no directory credential or permission is needed. Consume every page within the
+existing budget or mark the scope unavailable/incomplete. Preserve all conditions
+only in the existing private report. Do not change roles, workspace mode, reader
+availability or the documented real-foreign-control requirement. Run focused
+probe/reader/status/auth/config tests, backend lint/build and Python log/script
+checks. All fixtures stay synthetic. Parent owns review/merge and live results;
+the separate migration task owns chat BadRequest investigation.
+
+## Main chat baseline checks (#1350; 29 October 2026)
+
+Use the engineering skill. Run hosted-agent pytest/Ruff/compileall, backend
+system-status and chat-agent/canary checks, and Python test_smoke_reasons.py.
+Fixtures must contain synthetic SDK errors and prove raw messages, codes, nested
+property names and URLs never reach the failure stream/log or retained smoke
+artifact. No live request, login, grant, worker or model switch is part of local
+validation. The new failure codes diagnose a rejected field, not its root cause.
+Preserve #1341/#1349 log observations and their separate authorization gates.
+See [migration notes and manual test questions](main-chat-harness-migration.md).
+
+## Backend-log authorization observations (#1341; 29 October 2026)
+
+Deploy #40828872899 is terminal: metadata/infrastructure/backend/web/agent/readiness
+passed, live acceptance failed. Logs remain disabled. The preflight's resource
+log-grant warning and missing foreign workspace control are unresolved.
+The next reviewed stage adds fixed aggregate observations to the existing smoke
+route using the actual backend credential; no new endpoint/auth allowance/grant.
+Private preflight data is consumed in that same infrastructure job, never uploaded.
+`backend_log_probe_parameters.py` validates freshness/ownership/shape; its private
+Bicep parameter file is deleted on script exit. `backend_log_probe_verdicts.py`
+emits only fixed values from the optional smoke object. Do not treat its
+`authorization_observations` stage or empty/allowed negative queries as proof.
+Missing foreign controls stay `not_configured`; no fake workspace is substituted.
+After an empty resource-group inventory, metadata discovery may list workspaces
+already visible to the same deploy identity in the existing subscription. A failed
+read remains unavailable; do not request new permission to make the inventory work.
+The probe caches once per process; grant changes require a fresh backend process
+and post-change proof before enabling the separate reader flag.
+Run focused authorization/reader/status/auth/config tests, Python backend-log and
+deployment-script tests, backend lint/build, Ruff/byte compilation and offline
+Bicep compilation. All fixtures must be synthetic. Preserve the existing approved
+scope, actual negative controls, grant readback and no-private-ID publication.
+Do not retry the denied PR-body metadata writes.
+
+## Backend log preflight ARM wire contract (#1341; 28 October 2026)
+
+29 October: reconcile #1348 with main `10d6d170` without altering #1345 runtime,
+migration, UI or artifact blobs. Retain both documentation prefixes and requalify
+the resulting head through normal synchronize CI. Readiness/merge are owner
+approved; the parent integrates. No Azure grant or activation is applied here.
+
+Deploy #40761349594 failed closed before Bicep at `builtin_role_mismatch`.
+The `az rest` role-definition response uses `properties.type`, not the CLI
+model's `roleType`. Keep the exact built-in permission allowlist and reject
+custom/CLI-only shapes. Run `PYTHONPATH=.github/scripts python -m unittest
+discover -s .github/scripts/tests -p test_backend_log_preflight.py`, scoped Ruff
+and byte compilation. Fifteen synthetic tests pass for the correction; no live
+rerun, grant or enablement is claimed. Existing Azure scope approval persists.
+
+## Current-main reconciliation for #1345 (28 October 2026)
+
+Main `61d19366` adds #1346 log preflight/guidance; merge it into review-fix
+head `2f039761` while preserving both scopes. Only PLAN, PRODUCT, agent-context,
+architecture and decisions prepend conflicts overlap; retain both sets of text.
+Non-overlapping implementation/test/workflow/artifact blobs are verified unchanged
+from their respective parent; only documentation is combined/annotated.
+Run combined synthetic log/settings/capability and factory/Gmail regressions,
+the 14 Python preflight fixtures, backend lint/build and exact-head hosted CI.
+No live preflight/Azure access or PR-body metadata retry belongs to this task.
+Local combined results: 388 backend and 14 Python preflight tests, backend
+lint/build passed. Exact-head hosted qualification is still required.
+
+## Owner-approved log activation preflight and awareness (#1341; 28 October 2026)
+
+Owner approval for persistent backend-only log reads plus basic workspace metadata
+is received; do not ask again for this scope or a new Azure sign-in. Existing
+qualified main-only OIDC is the execution route. This follow-up first installs a
+fixed read-only metadata preflight before infrastructure deployment, with no role
+assignment or reader enablement. Preserve the no-private-identifier publication
+boundary and never upload `backend-log-preflight.private.json`.
+
+Run Python `test_backend_log_preflight.py`, pipeline/deploy tests, Ruff and byte
+compilation; backend settings/capability/registry/production-module/log-reader
+suites plus lint/build. Fixtures are synthetic. No local test establishes live
+Azure grants, group membership, supported conditional access or negative data
+isolation. After review and normal release, inspect only content-free preflight
+verdicts and continue the approved assignment/probe/activation work. Stop if live
+identity/schema differs, broader access is unresolved or foreign workspace proof
+is unavailable; never widen permissions or switch modes as a workaround.
+
+## Eight review fixes: validation (#1343; 28 October 2026)
+
+Scope: issue-label replay, issue conversation origin, atomic completion receipts,
+honest Gmail receipts/uncertainty, chat warning/queue reload recovery, sticky
+mobile Settings Save, visible oversized-start failure, explicit Settings approvals.
+The owner expressly replaced Settings draft preservation: do not add guards,
+autosave or draft persistence. Azure logs #1341/#1342 and optional audit ideas
+remain separate.
+
+Use synthetic fixtures only. Run full backend/web tests, contracts and backend/web
+lint/build. Migration 0068 and transaction/concurrency regressions additionally
+require the normal isolated SQL Server CI job; local unit mocks are not proof of
+SQL behavior. Chromium screenshots live under `docs/ui/screenshots/fix-eight-1343/`;
+390/320px and a focused short viewport are simulated, not physical iPhone acceptance.
+No Azure access, real workers, mail sends, notifications or health writes are part
+of these checks. Local verification results are recorded in
+[PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) and the
+[validation report](review-fixes-1343.md).
+
+Local results: full web 2,447, contracts 174, final ConversationHistory 126 and
+backend/web lint/build passed. Backend aggregate: 6,776 passed, two failed, one
+skipped; the stale Settings approval assertion was corrected and both affected
+suites passed a 16-test rerun with original timeouts. Preserve that aggregate
+failure distinction. The coordinator subsequently marked the PR ready. Hosted
+SQL run 40756774334 had 281 passes and two test-setup failures, corrected by
+including the issue-delivery index in its catalog query and unwinding newer
+migrations again before the second Workspaces rollback. Preserve every index,
+round-trip and latest-only assertion. New-head hosted qualification is required.
+
+CI 40757610202 passed on `5cf8da23`: SQL 283, backend 6,778/one skipped, web
+2,448 and contracts 174. The next recovery hardening fixes the confirmed bot
+finding at discussion_r4405317215. Run conversation-recovery and
+ConversationHistory tests, web lint/build and new-head hosted CI. Boundaries cover
+100,000/100,001 ASCII characters, exact 512 KiB ASCII and multibyte replies,
+invalid warning isolation and snapshot-budget compaction that retains queued
+messages and uncertainty warnings. No PR-body metadata retry is authorized.
+
+## Backend log reader checks (#1341; P11-42; 28 October 2026)
+
+Follow-up review found that rejected Content-Length cleanup could await a
+transport cancellation forever and retain the single-query gate. Cleanup is now
+nonblocking, consistent with the streamed-body path. Two synthetic regressions
+use invalid/oversized lengths and never-resolving cancellation, then prove another
+query enters the provider. All 44 reader tests and backend lint/build pass.
+The original head's qualification is superseded;
+normal exact-head hosted checks are required for this correction. No permission
+or activation change is included.
+
+Use the engineering skill. Run backend `operations/backend-logs.test.ts`, signed
+`auth/auth.test.ts`, registry, production-module, config, logging/source and shared
+capability-budget suites, then backend tests/lint/build and normal hosted checks.
+All records must be synthetic. Configuration stays off; no new log role,
+assignment, access-mode, retention, ingestion or credential change is part of this
+PR. [Backend logs](backend-logs.md) contains the exact conditional-grant proposal
+and action-time owner approval/live isolation gates. Do not infer Azure proof
+from local fixtures or widen workspace access when a query fails.
+
+Local results: seven focused suites/262 tests, final reader/instruction rerun/59,
+backend lint/build and hosted agent 930 tests/Ruff/byte compilation pass. The full
+backend aggregate has 6,760 passed, one failed, one skipped: workspace session
+language `en` acknowledgement timed out and passes its isolated single-worker
+rerun under original limits. No timeout/check was weakened. Repository script
+checks: 141 passed, three cannot launch missing `pwsh`. Node 24.19.0/npm 11.9.0
+were available locally; normal hosted Node 22 qualification is pending while the
+PR remains draft. Frozen dependency installation used public versions with the
+same integrity pins after a configured mirror 403; lockfile bytes are restored.
+
+## Terra main-chat preparation checks (#1337; 27 October 2026)
+
+Run backend model-catalog, settings, model-tools, settings-tools and
+agent-contract tests, backend lint/build, hosted-agent tests/Ruff/byte compilation,
+and Bicep v0.44.1 offline build/lint. Terra has a required `terraChatCapacity`
+parameter, now supplied as 150 in committed `main.parameters.json`, matching the
+established chat allocation. PR CI remains offline; the normal main-only
+Deploy/OIDC path validates live Azure acceptance. No new sign-in is needed to
+prepare this request, and available quota is not claimed. Stop/report any Azure
+quota/capacity rejection without silently changing allocations or access.
+After the normal release, inspect and
+update only the saved chat model through Settings. Do not interpret the code
+default as the owner's active model. No Azure login, paid inference or live
+settings mutation belongs in this preparation.
+
+Local results on Node 24.19.0/npm 11.9.0: focused backend 219 passed, full backend
+300 files/6,718 passed/one skipped; hosted agent 930 passed plus Ruff/byte
+compilation. Backend ESLint/TypeScript and standalone Bicep v0.44.1 build/lint
+pass. Compiled baseline comparison changes only the new Terra resource/required
+parameter and the following decision deployment's ordering dependency. Repository
+script checks: 141 passed; three cannot launch missing `pwsh`. The public npm
+mirror substitution used the same integrity-pinned tarballs and restored the
+lockfile byte-for-byte. Draft #1338 is not hosted qualification; independent
+review, Node 22 CI, Azure acceptance and saved owner selection remain
+pending. No live/cost verification is implied by the synthetic tests.
+Microsoft's public Global Standard list rates are now sourced in `infra/README.md`;
+account rates, Azure context-tier billing rules and actual quota/capacity remain
+unverified. Dan approved USD 20/month, accepted existing alerts and declined a
+new spending guard. No new runtime price/budget implementation or login handoff
+is required. Keep review/qualification and main-only deployment controls intact.
+28 October continuation: the updated saved-default regression asserts the stored
+model key, owner Settings readback and new agent Settings readback while retaining
+reasoning/other settings. All five focused suites pass 220 tests, plus backend
+lint/build and updated Bicep v0.44.1 build/lint. Existing runtime/agent code stays
+unchanged; full backend/hosted-agent results above are retained prior evidence.
+
 ## Deadline notification checks (#1335; 27 October 2026)
 
 Run backend `proactive/detect.test.ts`, `proactive/deadline-notifications.test.ts`,
@@ -5827,3 +6169,35 @@ continuous frame/aspect-change assertions and commands. Controls use existing
 chrome glass tokens. Stream replacement retains valid preview geometry and
 playback resume refreshes it. No private source image or physical iPhone
 acceptance is included. Composer visibility (#1303) remains separately owned.
+
+## iOS Phase 1a
+
+`apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
+Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
+installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
+
+The SwiftUI app is generated from `apps/ios/project.yml` with XcodeGen 2.46.0.
+The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
+builds/tests the core and validates project, plist and entitlement metadata;
+the macOS job builds for the generic iOS Simulator only after Linux passes, and
+only for a ready pull request. Manual dispatch runs the Linux checks without
+starting a Mac build. The Mac build uses Xcode 26.6 and
+`CODE_SIGNING_ALLOWED=NO`; it does not boot a simulator or run UI tests.
+
+## iOS Phase 1b: owner-started TestFlight upload
+
+`.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only
+on manual dispatch. The single `macos-26` job uses the `ios-testflight`
+environment; the owner must restrict that environment to the `main` branch and
+configure `APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`,
+`APP_STORE_CONNECT_ISSUER_ID`, and `APPLE_TEAM_ID` there before dispatching.
+The workflow refuses non-main refs, captures `xcodebuild` output rather than
+logging signing identifiers, writes the key with mode 600, and deletes it in
+an always-run cleanup step.
+
+Only the owner starts an upload: **Actions → iOS TestFlight**, select `main`,
+then **Run workflow**. A merge or pull request does not upload anything. The
+first archive and export/upload remain unproven; see the first-run checklist
+and disabled `xcrun altool --upload-app` fallback in
+[`docs/ios/build-plan.md`](ios/build-plan.md). Do not run or dispatch this
+workflow while reviewing changes.

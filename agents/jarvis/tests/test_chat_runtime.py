@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from openai import BadRequestError
 from starlette.testclient import TestClient
 
 import chat_runtime
@@ -20,6 +21,7 @@ from jarvis_tools import (
     BackendToolClient,
     BackendUnavailable,
     current_chat_phase_setter,
+    current_chat_runtime_test,
     current_chat_session_id,
     current_chat_turn_id,
     current_message_id,
@@ -85,6 +87,102 @@ def app_with(loader):
     model = FakeModel()
     app = create_app(model, configure_observability=None, chat_context_loader=loader)
     return app, model
+
+
+def test_provisioning_manifest_is_a_fixed_metadata_read_without_user_context() -> None:
+    class ManifestModel(FakeModel):
+        async def managed_definition_manifest(self):
+            return {"instructions": "Static fixture identity", "tools": []}
+
+    async def no_history(*_args):
+        raise AssertionError("Administrative metadata cannot read user history")
+
+    model = ManifestModel()
+    app = create_app(model, configure_observability=None, chat_context_loader=no_history)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={"operation": "managed_definition_manifest"})
+        extra = client.post("/invocations", json={
+            "operation": "managed_definition_manifest", "text": "arbitrary input",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+        malformed = client.post("/invocations", json={
+            "operation": {}, "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 200
+    assert response.json() == {"instructions": "Static fixture identity", "tools": []}
+    assert response.headers["cache-control"] == "no-store"
+    assert extra.status_code == malformed.status_code == 400
+    assert model.chat_calls == 0
+
+
+def test_fixed_managed_canary_does_not_accept_text_or_expose_probe_errors() -> None:
+    class Probe:
+        async def probe_target(self):
+            raise ValueError("Private provider payload")
+
+    app = create_app(FakeModel(), copilot_chat_client=Probe(), configure_observability=None)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={"operation": "managed_text_canary"})
+        extra = client.post("/invocations", json={
+            "operation": "managed_text_canary", "text": "Do something else",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 503
+    assert response.json() == {"status": "down", "reason": "error_valueerror"}
+    assert "Private" not in response.text
+    assert extra.status_code == 400
+
+
+@pytest.mark.parametrize("stored_runtime", [None, "current", "copilot"])
+def test_runtime_selection_comes_only_from_verified_history(stored_runtime) -> None:
+    async def context(*_args):
+        current_chat_runtime_test.set(stored_runtime)
+        return []
+
+    current, copilot = FakeModel(), FakeModel()
+    app = create_app(
+        current, copilot_chat_client=copilot,
+        configure_observability=None, chat_context_loader=context,
+    )
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 200
+    assert "event: done" in response.text
+    assert current.chat_calls == (0 if stored_runtime == "copilot" else 1)
+    assert copilot.chat_calls == (1 if stored_runtime == "copilot" else 0)
+    assert current.closed  # The retained voice client keeps its existing lifecycle.
+
+
+def test_untrusted_payload_cannot_request_a_runtime() -> None:
+    async def context(*_args):
+        raise AssertionError("Invalid payload must not reach source verification")
+
+    app, current = app_with(context)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "runtimeTest": "copilot",
+        })
+    assert response.status_code == 400
+    assert current.chat_calls == 0
+
+
+def test_unconfigured_copilot_selection_never_falls_back() -> None:
+    async def context(*_args):
+        current_chat_runtime_test.set("copilot")
+        return []
+
+    app, current = app_with(context)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 503
+    assert current.chat_calls == 0
 
 
 def test_chat_streams_text_and_sets_tool_source_message() -> None:
@@ -1037,6 +1135,83 @@ def test_stalled_tool_loop_uses_a_content_free_failure_code() -> None:
     )
 
 
+@pytest.mark.parametrize(("parameter", "code"), [
+    ("model", "model_bad_request_model"),
+    ("instructions", "model_bad_request_instructions"),
+    ("input[0].content[0].text", "model_bad_request_input"),
+    ("max_output_tokens", "model_bad_request_output_limit"),
+    ("store", "model_bad_request_storage"),
+    ("stream", "model_bad_request_streaming"),
+    ("tools[0].parameters.private_fixture_property", "model_bad_request_tools"),
+    ("reasoning.effort", "model_bad_request_reasoning"),
+    ("include[0]", "model_bad_request_include"),
+    (None, "error_badrequesterror"),
+    ("private_fixture_parameter", "error_badrequesterror"),
+    ("model_private_fixture", "error_badrequesterror"),
+    ("tools" + "x" * 256, "error_badrequesterror"),
+    ({"private": "fixture"}, "error_badrequesterror"),
+])
+@pytest.mark.parametrize("provider_code", [
+    "PRIVATE_PROVIDER_CODE", "unsupported_parameter", "unsupported_value", "invalid_value",
+    "invalid_request_error", {"private": "fixture"},
+])
+def test_model_rejection_retains_only_a_fixed_field_code(
+    parameter, code, provider_code, caplog,
+) -> None:
+    error = BadRequestError(
+        "PRIVATE_PROVIDER_MESSAGE",
+        response=httpx.Response(400, request=httpx.Request("POST", "https://fixture.invalid")),
+        body={"param": parameter, "code": provider_code, "input": "PRIVATE_INPUT"},
+    )
+    if parameter == "reasoning.effort":
+        code = {
+            "unsupported_parameter": "model_reasoning_effort_unsupported",
+            "unsupported_value": "model_reasoning_effort_value_unsupported",
+            "invalid_value": "model_reasoning_effort_value_invalid",
+            "invalid_request_error": "model_reasoning_effort_request_invalid",
+        }.get(error.code, code)
+
+    class RejectedModel(FakeModel):
+        async def complete_chat(self, *_args, **_kwargs) -> AsyncIterator[str]:
+            raise error
+            yield ""
+
+    app = create_app(
+        RejectedModel(), configure_observability=None,
+        chat_context_loader=lambda *_args: _context(),
+    )
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+
+    assert response.status_code == 200
+    assert f'"code": "{code}"' in response.text
+    assert f"chat.failed code={code}" in caplog.text
+    assert "event: done" not in response.text
+    retained = response.text + caplog.text
+    for private in ("PRIVATE_PROVIDER_MESSAGE", "PRIVATE_PROVIDER_CODE", "PRIVATE_INPUT",
+                    "private_fixture", "fixture.invalid"):
+        assert private not in retained
+
+
+@pytest.mark.parametrize(("provider_code", "expected"), [
+    ("unsupported_parameter", "model_reasoning_parameter_unsupported"),
+    ("unsupported_value", "model_reasoning_value_unsupported"),
+    ("invalid_value", "model_reasoning_value_invalid"),
+    ("invalid_request_error", "model_reasoning_request_invalid"),
+    ("unsupported_parameter PRIVATE_FIXTURE", "model_bad_request_reasoning"),
+])
+def test_reasoning_object_and_effort_rejections_remain_distinct(provider_code, expected) -> None:
+    error = BadRequestError(
+        "PRIVATE_PROVIDER_MESSAGE",
+        response=httpx.Response(400, request=httpx.Request("POST", "https://fixture.invalid")),
+        body={"param": "reasoning", "code": provider_code},
+    )
+    assert chat_runtime.chat_failure_code(error) == expected
+
+
 async def _context() -> list[ModelMessage]:
     return []
 
@@ -1099,7 +1274,7 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
     assert result[1].source_message_id is None
     assert sorted(request_timeouts) == sorted([
         ("https://backend.example/me", 17),
-        ("https://backend.example/conversation/history?limit=100", 17),
+        ("https://backend.example/conversation/history?sourceMessageId=42&limit=100", 17),
         ("https://backend.example/conversation/summary", 5),
     ])
 
@@ -1404,3 +1579,59 @@ def test_history_uses_the_default_timeout_when_agent_settings_are_refused(monkey
     assert asyncio.run(chat_runtime.load_verified_history(TOKEN, "42", "Hi", "en")) == []
     # The summary fetch is capped at 5 s so a slow backend cannot hold the first token.
     assert sorted(timeouts) == [5, 10, 10]
+
+
+@pytest.mark.parametrize("code", [
+    "managed_session_busy", "managed_source_already_claimed", "managed_target_mismatch",
+    "managed_unavailable", "managed_binding_invalid", "managed_turn_already_claimed",
+    "managed_tool_call_unfinished", "managed_policy_setup_failed", "managed_policy_turn_failed",
+    "managed_response_failed",
+    "managed_target_settings_mismatch", "managed_reviewed_fingerprint_mismatch",
+])
+def test_managed_failure_preserves_only_exact_internal_codes(code: str) -> None:
+    from managed_copilot import ManagedChatError
+
+    assert chat_runtime.chat_failure_code(ManagedChatError(code)) == code
+
+
+def test_managed_failure_rejects_unknown_or_forged_code_and_message() -> None:
+    from managed_copilot import ManagedChatError
+
+    for code in [
+        "private_provider_detail", "managed_future_unreviewed", "managed_session_busy\nprivate",
+    ]:
+        assert chat_runtime.chat_failure_code(ManagedChatError(code)) == "error_managedchaterror"
+    forged = RuntimeError("managed_session_busy")
+    forged.code = "managed_session_busy"
+    assert chat_runtime.chat_failure_code(forged) == "error_runtimeerror"
+
+
+@pytest.mark.parametrize("code", ["managed_binding_invalid", "managed_policy_turn_failed"])
+def test_managed_stream_error_retains_code_without_provider_content(code) -> None:
+    from managed_copilot import ManagedChatError
+
+    class ManagedFailedModel(FakeModel):
+        async def complete_chat(self, messages, language, *, settings=None):
+            raise ManagedChatError(code, provider_cause={
+                "httpStatus": 400, "code": "unsupported_parameter", "param": "instructions",
+                "message": "private provider body", "exceptionType": "BadRequestError",
+            }) from RuntimeError(
+                "private provider body",
+            )
+            yield ""
+
+    app = create_app(ManagedFailedModel(), configure_observability=None,
+                     chat_context_loader=lambda *_args: _context())
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Hello", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert "event: error" in response.text
+    assert f'"code": "{code}"' in response.text
+    if code == "managed_policy_turn_failed":
+        assert '"httpStatus": 400' in response.text
+        assert '"param": "instructions"' in response.text
+    else:
+        assert "providerCause" not in response.text
+    assert "private provider body" not in response.text

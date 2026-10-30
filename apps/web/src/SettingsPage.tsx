@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
@@ -290,6 +290,14 @@ function SelectField({
   );
 }
 
+const phoneSettingsQuery = '(max-width: 700px)';
+const phoneSettingsSnapshot = () => window.matchMedia?.(phoneSettingsQuery).matches ?? false;
+const subscribePhoneSettings = (changed: () => void) => {
+  const media = window.matchMedia?.(phoneSettingsQuery);
+  media?.addEventListener?.('change', changed);
+  return () => media?.removeEventListener?.('change', changed);
+};
+
 export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, trainingTargets, healthUpload, proactive, memory, account, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
@@ -315,6 +323,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   /** Leaves Settings for the previous page (or Jarvis when Settings was opened directly). */
   onBack?: () => void;
 }) {
+  const phone = useSyncExternalStore(subscribePhoneSettings, phoneSettingsSnapshot, () => false);
   const themePreference = useThemePreference();
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
@@ -588,6 +597,17 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           </button>
         )}
         <h1 id="settings-heading">Settings</h1>
+      {phone && state === 'ready' && settings && options && (
+      <div className="settings-save settings-save-mobile">
+        <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
+          {error || message}
+        </p>
+        <button className="primary-button" type="submit" form="settings-form" disabled={saveDisabled} aria-busy={(saving && !resettingPersonality) || undefined} aria-label={saving && !resettingPersonality ? 'Saving…' : undefined}>
+          <span className="button-label">Save settings</span>
+          {saving && !resettingPersonality && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Saving settings…" /></span>}
+        </button>
+      </div>
+      )}
       </header>
       {presence}
       {notifications}
@@ -872,8 +892,8 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           {account}
         </section>
       )}
-      {state === 'ready' && settings && options && (
-      <div className="settings-save">
+      {!phone && state === 'ready' && settings && options && (
+      <div className="settings-save settings-save-desktop">
         <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
           {error || message}
         </p>

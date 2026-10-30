@@ -49,6 +49,15 @@ param vaultMirrorMaxDeletes int = 3
 @description('A ChatGPT-supported model for Codex hosted-runner tools.')
 param codexToolModel string = 'gpt-5.5'
 
+@description('Requested GlobalStandard throughput allocation for GPT-6.1 Terra main chat. Azure validates model/SKU limits and subscription quota during normal deployment; this is not a reserved PTU purchase.')
+@minValue(1)
+param terraChatCapacity int
+
+@description('Private main-preflight inputs for fixed backend-identity authorization observations. Empty keeps probes off; these never enable log reads or assign roles.')
+param backendLogProbeWorkspaceId string = ''
+param backendLogProbePrincipalId string = ''
+param backendLogProbeAppName string = ''
+param backendLogProbeForeignWorkspaceId string = ''
 
 @description('The subscription currency amount for the monthly resource group budget (300 DKK).')
 param monthlyBudgetAmount int = 300
@@ -625,13 +634,34 @@ resource gpt61SolDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
   }
 }
 
+// Main-chat option/default requested 27 October. Request the established chat
+// throughput allocation; normal main-only Deploy validates Azure acceptance.
+resource gpt61TerraChatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-6.1-terra'
+  dependsOn: [
+    gpt61SolDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: terraChatCapacity
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-6.1-terra'
+      version: '2026-10-26'
+    }
+  }
+}
+
 // Alternative decision provider (Dan's choice, 10 October): selectable in Settings next to Jev. The deployment
 // name cannot contain "microsoft" (reserved word). Quota for this model is 60 requests per minute.
 resource decision1Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'decision-1'
   dependsOn: [
-    gpt61SolDeployment
+    gpt61TerraChatDeployment
   ]
   sku: {
     name: 'GlobalStandard'
@@ -872,6 +902,22 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'FOUNDRY_RUNTIME_ENDPOINT'
               value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_WORKSPACE_ID'
+              value: backendLogProbeWorkspaceId
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_PRINCIPAL_ID'
+              value: backendLogProbePrincipalId
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_APP_NAME'
+              value: backendLogProbeAppName
+            }
+            {
+              name: 'JARVIS_BACKEND_LOGS_PROBE_FOREIGN_WORKSPACE_ID'
+              value: backendLogProbeForeignWorkspaceId
             }
             {
               name: 'FOUNDRY_ACCOUNT_RESOURCE_ID'

@@ -1008,6 +1008,8 @@ def test_codex_tool_reports_usage_limits_and_timeout_and_cancels_process(tmp_pat
     ))
     monkeypatch.setattr(app, "_store_codex_login_if_newer", lambda _text: asyncio.sleep(0, result=False))
     monkeypatch.setattr(app, "_codex_tool_timeout", lambda: 0.01)
+    warnings = []
+    monkeypatch.setattr(app.LOGGER, "warning", lambda message, *args: warnings.append(message % args))
 
     class Process:
         def __init__(self, stderr=b"", hang=False):
@@ -1016,9 +1018,10 @@ def test_codex_tool_reports_usage_limits_and_timeout_and_cancels_process(tmp_pat
             self.returncode = None if hang else 1
             self.killed = False
             self.finished = asyncio.Event()
+            if stderr:
+                self.stderr.feed_data(stderr)
             if not hang:
                 self.stdout.feed_eof()
-                self.stderr.feed_data(stderr)
                 self.stderr.feed_eof()
                 self.finished.set()
 
@@ -1036,7 +1039,10 @@ def test_codex_tool_reports_usage_limits_and_timeout_and_cancels_process(tmp_pat
 
     processes = []
     async def create_process(*_args, **_kwargs):
-        process = Process(stderr=b"Codex usage limit reached" if not processes else b"", hang=bool(processes))
+        process = Process(
+            stderr=b"Authentication failed: Codex usage limit reached" if not processes else b"Authentication failed",
+            hang=bool(processes),
+        )
         processes.append(process)
         return process
     monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
@@ -1048,10 +1054,121 @@ def test_codex_tool_reports_usage_limits_and_timeout_and_cancels_process(tmp_pat
 
     assert usage_limited.status == "failed"
     assert usage_limited.error == "Codex usage limit reached"
+    assert next(event["data"] for event in usage_limited.events if event["kind"] == "failed")["reason"] == "codex_usage_limit"
     assert timed_out.status == "failed"
     assert timed_out.error == "Codex web research timed out"
+    assert next(event["data"] for event in timed_out.events if event["kind"] == "failed")["reason"] == "timeout"
+    assert warnings == [
+        "Codex tool failed category=codex_usage_limit exit_code=1",
+        "Codex tool failed category=timeout exit_code=-9",
+    ]
     assert processes[1].killed
     assert list(scratch_root.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("output", "expected_reason", "logged_category"),
+    [
+        ("MODEL IS NOT SUPPORTED for your account; PRIVATE_RAW_CODEX_OUTPUT", "codex_model_unsupported", "codex_model_unsupported"),
+        ("Authentication failed; PRIVATE_RAW_CODEX_OUTPUT", "codex_auth", "codex_auth"),
+        ("This version of Codex is no longer supported; PRIVATE_RAW_CODEX_OUTPUT", "codex_client_outdated", "codex_client_outdated"),
+        ("DNS lookup failed; PRIVATE_RAW_CODEX_OUTPUT", "codex_network", "codex_network"),
+        ("Unrecognized PRIVATE_RAW_CODEX_OUTPUT", None, "codex_failure"),
+    ],
+)
+def test_codex_tool_classifies_failed_output_without_retaining_it(
+    tmp_path, monkeypatch, output, expected_reason, logged_category,
+):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "_credentials_for", lambda *_args, **_kwargs: asyncio.sleep(
+        0, result={"codex_login": "test-login-only"},
+    ))
+    monkeypatch.setattr(app, "_store_codex_login_if_newer", lambda _text: asyncio.sleep(0, result=False))
+    warnings = []
+    monkeypatch.setattr(app.LOGGER, "warning", lambda message, *args: warnings.append(message % args))
+
+    class Process:
+        returncode = 23
+
+        def __init__(self):
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.stdout.feed_eof()
+            self.stderr.feed_data(output.encode())
+            self.stderr.feed_eof()
+
+        async def wait(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+    async def create_process(*_args, **_kwargs):
+        return Process()
+
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    state = app.TaskState("classified", "session", "codex", "", mode="codex-tool")
+    prompt = "PRIVATE_PROMPT_MARKER"
+
+    asyncio.run(app._run_codex_tool(state, "web_research", prompt))
+
+    failed = next(event["data"] for event in state.events if event["kind"] == "failed")
+    assert state.status == "failed"
+    assert state.error == "Codex web research failed"
+    if expected_reason:
+        assert failed["reason"] == expected_reason
+    else:
+        assert "reason" not in failed
+    assert warnings == [f"Codex tool failed category={logged_category} exit_code=23"]
+    serialized = json.dumps(state.events) + app._task_state_path(state.session_id, state.invocation_id).read_text()
+    assert "PRIVATE_RAW_CODEX_OUTPUT" not in serialized
+    assert "PRIVATE_PROMPT_MARKER" not in serialized
+    assert "PRIVATE_RAW_CODEX_OUTPUT" not in warnings[0]
+
+
+def test_codex_tool_output_limit_precedes_failure_classification(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
+    monkeypatch.setattr(app, "MAX_CODEX_TOOL_STREAM_BYTES", 8)
+    monkeypatch.setattr(app, "_credentials_for", lambda *_args, **_kwargs: asyncio.sleep(
+        0, result={"codex_login": "test-login-only"},
+    ))
+    monkeypatch.setattr(app, "_store_codex_login_if_newer", lambda _text: asyncio.sleep(0, result=False))
+    warnings = []
+    monkeypatch.setattr(app.LOGGER, "warning", lambda message, *args: warnings.append(message % args))
+
+    class Process:
+        returncode = 23
+
+        def __init__(self):
+            self.stdout = asyncio.StreamReader()
+            self.stderr = asyncio.StreamReader()
+            self.stdout.feed_eof()
+            self.stderr.feed_data(b"Authentication failed; PRIVATE_RAW_CODEX_OUTPUT")
+            self.stderr.feed_eof()
+
+        async def wait(self):
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+            self.stdout.feed_eof()
+            self.stderr.feed_eof()
+
+    async def create_process(*_args, **_kwargs):
+        return Process()
+
+    monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
+    state = app.TaskState("output-limit", "session", "codex", "", mode="codex-tool")
+
+    asyncio.run(app._run_codex_tool(state, "web_research", "query"))
+
+    failed = next(event["data"] for event in state.events if event["kind"] == "failed")
+    assert state.error == "Codex web research output exceeded the size limit"
+    assert failed["reason"] == "output_limit"
+    assert warnings == ["Codex tool failed category=output_limit exit_code=23"]
+    assert "PRIVATE_RAW_CODEX_OUTPUT" not in json.dumps(state.events)
 
 
 def test_codex_tool_cancellation_kills_child_and_removes_auth_file(tmp_path, monkeypatch):

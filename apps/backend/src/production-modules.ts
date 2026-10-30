@@ -25,6 +25,7 @@ export interface ProductionModules {
   readonly voiceRelay: BackendModule | undefined;
   readonly daily: BackendModule | undefined;
   readonly proactive?: BackendModule | undefined;
+  readonly backendLogs?: BackendModule | undefined;
 }
 
 export function createProductionModules(modules: ProductionModules): BackendModule[] {
@@ -53,5 +54,6 @@ export function createProductionModules(modules: ProductionModules): BackendModu
     ...(modules.voiceRelay ? [modules.voiceRelay] : []),
     ...(modules.daily ? [modules.daily] : []),
     ...(modules.proactive ? [modules.proactive] : []),
+    ...(modules.backendLogs ? [modules.backendLogs] : []),
   ];
 }
