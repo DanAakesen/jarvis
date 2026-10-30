@@ -1606,12 +1606,16 @@ def test_managed_failure_rejects_unknown_or_forged_code_and_message() -> None:
     assert chat_runtime.chat_failure_code(forged) == "error_runtimeerror"
 
 
-def test_managed_stream_error_retains_code_without_provider_content() -> None:
+@pytest.mark.parametrize("code", ["managed_binding_invalid", "managed_policy_turn_failed"])
+def test_managed_stream_error_retains_code_without_provider_content(code) -> None:
     from managed_copilot import ManagedChatError
 
     class ManagedFailedModel(FakeModel):
         async def complete_chat(self, messages, language, *, settings=None):
-            raise ManagedChatError("managed_binding_invalid") from RuntimeError(
+            raise ManagedChatError(code, provider_cause={
+                "httpStatus": 400, "code": "unsupported_parameter", "param": "instructions",
+                "message": "private provider body", "exceptionType": "BadRequestError",
+            }) from RuntimeError(
                 "private provider body",
             )
             yield ""
@@ -1624,5 +1628,10 @@ def test_managed_stream_error_retains_code_without_provider_content() -> None:
             "delegatedAuthorization": AUTHORIZATION,
         })
     assert "event: error" in response.text
-    assert '"code": "managed_binding_invalid"' in response.text
+    assert f'"code": "{code}"' in response.text
+    if code == "managed_policy_turn_failed":
+        assert '"httpStatus": 400' in response.text
+        assert '"param": "instructions"' in response.text
+    else:
+        assert "providerCause" not in response.text
     assert "private provider body" not in response.text

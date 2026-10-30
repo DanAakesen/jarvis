@@ -9,13 +9,14 @@ import subprocess
 
 PARTS = ("infra", "backend", "web", "agent")
 CHECKS = ("web", "backend", "vault-mirror", "database", "foundry", "runner", "jarvis-agent",
-          "infra", "python")
+          "infra", "python", "ios")
 NODE_CHECKS = {"web", "backend", "vault-mirror", "database", "foundry"}
 CHECK_ONLY_WORKFLOWS = {
     "backend-ci.yml", "ci.yml", "codeql.yml", "copilot-ready.yml", "copilot-setup-steps.yml",
     "database-ci.yml", "foundry-contract.yml", "jarvis-agent-ci.yml", "plan-status.yml",
     "pr-title.yml", "project-board.yml", "runner-ci.yml", "runner-deploy.yml", "web-ci.yml",
     "worker-label.yml", "voice-probe.yml", "danish-voice-agent.yml", "vault-mirror-ci.yml",
+    "ios-ci.yml", "ios-testflight.yml",
 }
 CHECK_ONLY_SCRIPTS = {
     "deploy_plan.py", "deploy_smoke.py", "smoke_reasons.py", "pipeline_impact.py",
@@ -32,6 +33,8 @@ def git(*args: str) -> str:
 
 
 def deploy_parts(path: str) -> set[str]:
+    if path.startswith("apps/ios/"):
+        return set()
     # These Markdown/JSON files really enter the backend image.
     if path in {"docs/features.md", "agents/jarvis/presence-instructions.json"}:
         return {"backend"} | ({"agent"} if path.startswith("agents/") else set())
@@ -79,6 +82,8 @@ def deploy_parts(path: str) -> set[str]:
 
 
 def checks_for(path: str) -> set[str]:
+    if path.startswith("apps/ios/"):
+        return {"ios"}
     if path == "docs/features.md":
         return {"backend"}
     if path.startswith("docs/reference/"):

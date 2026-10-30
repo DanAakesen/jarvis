@@ -43,11 +43,12 @@ jobs:
       runner: ${{ steps.impact.outputs.runner }}
       jarvis-agent: ${{ steps.impact.outputs.jarvis-agent }}
       infra: ${{ steps.impact.outputs.infra }}
+      ios: ${{ steps.impact.outputs.ios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
       - id: impact
@@ -97,6 +98,12 @@ jobs:
     if: needs.plan.outputs.jarvis-agent == 'true'
     uses: ./.github/workflows/jarvis-agent-ci.yml
 
+  ios:
+    name: iOS
+    needs: plan
+    if: needs.plan.outputs.ios == 'true'
+    uses: ./.github/workflows/ios-ci.yml
+
   infra:
     name: Infrastructure offline build and lint
     needs: plan
@@ -125,7 +132,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
       - name: Check present Python components
@@ -145,7 +152,7 @@ jobs:
   result:
     name: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && 'Draft CI not qualified' || 'CI result' }}
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    needs: [plan, web, backend, vault-mirror, database, foundry, runner, jarvis-agent, infra, python]
+    needs: [plan, web, backend, vault-mirror, database, foundry, runner, jarvis-agent, infra, python, ios]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -153,7 +160,7 @@ jobs:
       pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
       - name: Require selected checks and record exact tested tree

@@ -318,6 +318,52 @@ test('system smoke contract requires the ordered allowlisted checks and sanitize
   }), false);
 });
 
+test('system smoke provider causes accept only bounded structured managed chat diagnostics', () => {
+  const withCause = (providerCause, overrides = {}) => ({
+    checkedAt: '2026-10-08T02:00:00.000Z',
+    entries: systemSmokeCheckIds.map((id) => ({
+      id, status: 'ok', checkedAt: '2026-10-08T02:00:00.000Z',
+      ...(id === 'chat_capabilities'
+        ? { status: 'down', reason: 'managed_policy_turn_failed', providerCause, ...overrides } : {}),
+    })),
+  });
+  const safe = {
+    httpStatus: 400, code: 'invalid_request', param: 'reasoning.effort', exceptionType: 'BadRequestError',
+  };
+  assert.equal(isSystemSmokeStatus(withCause(safe)), true);
+  for (const reason of ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed']) {
+    assert.equal(isSystemSmokeStatus(withCause(safe, { reason })), true);
+    assert.equal(isSystemSmokeStatus(withCause(safe, { reason, status: 'degraded' })), true);
+  }
+  for (const cause of [
+    {}, [], null, 'private',
+    { ...safe, message: 'private' }, { ...safe, token: 'private' },
+    ...[99, 600, 400.5, '400', NaN].map((httpStatus) => ({ httpStatus })),
+    ...['', 'a'.repeat(49), 'unsafe\n', 'unsafe\r', 'unsafe\r\n', 'private data', 'UPPER', 'https://secret']
+      .flatMap((value) => [{ code: value }, { param: value }]),
+    ...['', 'a'.repeat(49), 'BadRequestError\n', 'BadRequestError\r', '1Error', 'error.name', 'private data']
+      .map((exceptionType) => ({ exceptionType })),
+  ]) {
+    assert.equal(isSystemSmokeStatus(withCause(cause)), false, JSON.stringify(cause));
+  }
+  assert.equal(isSystemSmokeStatus(withCause({ httpStatus: 100 })), true);
+  assert.equal(isSystemSmokeStatus(withCause({ httpStatus: 599 })), true);
+  assert.equal(isSystemSmokeStatus(withCause({ code: 'a'.repeat(48), exceptionType: '_'.repeat(48) })), true);
+  for (const overrides of [
+    { status: 'ok' }, { status: 'unknown' }, { reason: 'context_unavailable' }, { reason: undefined },
+  ]) {
+    assert.equal(isSystemSmokeStatus(withCause(safe, overrides)), false);
+  }
+  for (const id of ['research', 'agent_contract', 'chat_canary']) {
+    const report = withCause(safe);
+    const cause = report.entries.find((entry) => entry.id === 'chat_capabilities');
+    const target = report.entries.find((entry) => entry.id === id);
+    Object.assign(target, { status: cause.status, reason: cause.reason, providerCause: cause.providerCause });
+    delete cause.providerCause;
+    assert.equal(isSystemSmokeStatus(report), false);
+  }
+});
+
 test('model catalogue contracts restrict roles, capabilities and reasoning efforts', () => {
   assert.deepEqual(modelRoles, ['chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot']);
   assert.deepEqual(reasoningEfforts, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);

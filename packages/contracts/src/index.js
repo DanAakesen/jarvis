@@ -587,6 +587,18 @@ function hasControlCharacters(value) {
   });
 }
 
+function isManagedProviderCause(value) {
+  if (!isObject(value) || Object.keys(value).length === 0) return false;
+  return Object.entries(value).every(([key, field]) => {
+    if (key === 'httpStatus') return Number.isInteger(field) && field >= 100 && field <= 599;
+    if (key === 'code' || key === 'param') {
+      return typeof field === 'string' && /^[a-z0-9_.]{1,48}(?![\s\S])/u.test(field);
+    }
+    return key === 'exceptionType' && typeof field === 'string' &&
+      /^[A-Za-z_][A-Za-z0-9_]{0,47}(?![\s\S])/u.test(field);
+  });
+}
+
 export function isSystemSmokeStatus(value) {
   if (!isObject(value) || Object.keys(value).some((key) => !['checkedAt', 'entries'].includes(key)) ||
       !Array.isArray(value.entries) || value.entries.length !== systemSmokeCheckIds.length) return false;
@@ -597,13 +609,18 @@ export function isSystemSmokeStatus(value) {
   if (!validTime(value.checkedAt)) return false;
   return value.entries.every((entry, index) =>
     isObject(entry) &&
-    Object.keys(entry).every((key) => ['id', 'status', 'checkedAt', 'reason'].includes(key)) &&
-    Object.keys(entry).length === (entry.reason === undefined ? 3 : 4) &&
+    Object.keys(entry).every((key) => ['id', 'status', 'checkedAt', 'reason', 'providerCause'].includes(key)) &&
+    Object.keys(entry).length === 3 + (entry.reason === undefined ? 0 : 1) +
+      (entry.providerCause === undefined ? 0 : 1) &&
     entry.id === systemSmokeCheckIds[index] &&
     ['ok', 'degraded', 'down', 'unknown'].includes(entry.status) &&
     (entry.reason === undefined ||
       (['degraded', 'down'].includes(entry.status) &&
         boundedString(entry.reason, 120, 1) && !hasControlCharacters(entry.reason))) &&
+    (entry.providerCause === undefined ||
+      (entry.id.startsWith('chat_') && entry.id !== 'chat_canary' &&
+        ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'].includes(entry.reason) &&
+        isManagedProviderCause(entry.providerCause))) &&
     validTime(entry.checkedAt));
 }
 
