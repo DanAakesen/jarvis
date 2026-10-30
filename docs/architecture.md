@@ -1359,6 +1359,23 @@ payloads were checked against `apps/web/src/conversation-history.ts`,
 `apps/web/src/chat-attachments.ts` and `apps/backend/src/core/conversation.ts`;
 no contract gap requiring backend work was found.
 
+### iOS fixture replay (P15-08)
+
+`FixtureTransport` implements the core HTTP and streaming transport seam without
+network access. JSON scenarios match existing request methods and paths and
+return HTTP bodies or SSE chunks, including delays through the injectable
+`ChatClock`, dropped streams, and HTTP failures. Synthetic sample conversations
+live only in `JarvisCoreTests` resources; there is no shared fixtures target or
+app-target dependency. Linux tests exercise the real chat and tools clients
+against these resources, including history pagination and reattachment.
+
+The merged core had no approvals client. The small `JarvisApprovalsClient`
+therefore reuses `JarvisClient` authentication and error mapping for the existing
+`GET /now` confirmations and `POST /now/confirmations/:id` decision routes.
+The contract comes from `apps/backend/src/core/now.ts` and
+`apps/web/src/now-feed.ts`; approvals are not a new backend capability. Fixture
+success does not establish live service, device, or owner acceptance.
+
 ## Web skeleton and configuration
 
 - `Modal` shares `useModalLifecycle` with mobile navigation and context sheets:

@@ -6193,6 +6193,71 @@ consumer cancellation stops the stream. Reattach retries transient failures
 every two seconds for at most 15 minutes using an injectable clock. No backend
 route, Apple framework or third-party dependency is added.
 
+### Synthetic fixture scenarios (P15-08)
+
+`FixtureTransport` in `JarvisCore` replays HTTP responses and SSE chunks without
+opening a network connection. The sample scenarios are bundled only with
+`JarvisCoreTests`, under
+`apps/ios/Packages/JarvisCore/Tests/JarvisCoreTests/Resources/`. They cover a
+completed chat turn, a server error, a dropped stream and reattachment, empty
+and cursor-paginated history, a pending confirmation followed by approval, and
+listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
+routes through the authenticated HTTP client; no app-specific backend is used.
+
+To add a scenario:
+
+1. Check the existing backend/web route and payload source cited in
+   `docs/ios/integration-contract.md`; do not fill in UNVERIFIED details.
+2. Write one JSON file in the fixture resource directory for the scenario.
+   Include the request method and path for each exchange, with query matching
+   when pagination needs it, and the HTTP response or SSE chunks to replay.
+3. Use only newly written synthetic text and fake identifiers. Keep chat IDs
+   numeric to match the shared backend contract. Mark any required 43-character
+   confirmation ID as fake within the value. Do not copy real sessions, names,
+   tokens, hosts or identifiers; use only reserved example domains if needed.
+4. Add an end-to-end assertion using the real client and `FixtureTransport`,
+   including the terminal result and consumed exchanges. Inject a fake
+   `ChatClock` for response/chunk delays rather than waiting on wall time.
+5. Run `swift build` and `swift test` from
+   `apps/ios/Packages/JarvisCore`. The fixture safety tests scan resource files
+   for email addresses, bearer-token patterns, unmarked token-shaped IDs and
+   non-example hosts. Passing them is not permission to use real conversation
+   data, nor evidence of live service or owner acceptance.
+
+The format is `{"version": 1, "interactions": [...]}`. Interactions are ordered
+and single-use; a mismatch does not consume the next one. For example:
+
+```json
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/tools",
+      "delayMilliseconds": 10,
+      "response": {"statusCode": 200, "body": []}
+    }
+  ]
+}
+```
+
+An interaction may include `query` (an exact string-to-string map; omitted means
+no query) and `requestBody` (JSON equality, ignoring object key order). Choose
+exactly one result: `response` with `statusCode`, optional `headers` and JSON
+`body`; `stream` with `statusCode`, optional `headers` and `chunks`; or `failure`
+set to `"network"` or `"timedOut"`. Each chunk has `text` containing raw SSE
+framing and an optional `delayMilliseconds`. Set stream `drop` to `"network"`
+to fail after its chunks; put the reattach response in the next interaction.
+Use ordinary response status codes for 401, 429 (with a `Retry-After` header),
+and 503. Delays default to zero and are limited to five minutes each; the
+request timeout bounds playback.
+
+Load a resource's bytes with `Data(contentsOf:)`, then construct
+`FixtureTransport(scenario: data, clock: fakeClock)` and inject it into
+`JarvisClient`. `recordedRequests()` retains only method, path and query, never
+authorization headers, bodies or origins. Assert `remainingInteractions() == 0`
+at the end so an incomplete workflow cannot pass unnoticed.
+
 The SwiftUI app is generated from `apps/ios/project.yml` with XcodeGen 2.46.0.
 The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
 builds/tests the core and validates project, plist and entitlement metadata;
