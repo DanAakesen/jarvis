@@ -1,4 +1,5 @@
 import CoreImage
+import ImageIO
 import CoreGraphics
 import CoreMedia
 import CoreVideo
@@ -70,7 +71,10 @@ final class SampleHandler: RPBroadcastSampleHandler {
         guard let jpeg = context.jpegRepresentation(
             of: scaledImage,
             colorSpace: CGColorSpaceCreateDeviceRGB(),
-            options: [.lossyCompressionQuality: VoiceScreenShareContract.jpegQuality]
+            options: [
+                CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String):
+                    VoiceScreenShareContract.jpegQuality
+            ]
         ),
               jpeg.count <= VoiceScreenShareContract.maximumFrameBytes else {
             return
