@@ -973,10 +973,12 @@ No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
 
 Implemented receipt-based issue-700 validation and one paced retry for
 `github_issue_unavailable`, sharing the existing two-attempt cap with throttling.
-Focused backend acceptance/status/logging tests (503), smoke-reason tests (13),
-backend lint and build pass. Genuine read failures retain their safe reason and
-fail the aggregate. Next: security review and normal CI, then repeated live
-acceptance on unchanged production; local fixtures do not prove live stability.
+Full backend tests (7,236 passed, one skipped), smoke-reason tests (13), backend
+lint and build pass. Genuine read failures retain their safe reason and fail the
+aggregate. Review and secret scan found no issues; CodeQL found no Python alerts
+but skipped JavaScript because its database was too large. Next: normal CI and
+repeated live acceptance on unchanged production; local fixtures do not prove
+live stability.
 
 ## Chat acceptance fix-forward (#820, 17 October 2026)
 
