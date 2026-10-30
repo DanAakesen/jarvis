@@ -1,3 +1,18 @@
+## 30 October 2026 — keep the voice protocol in JarvisCore (P15-06 / #1391)
+
+Use the web client's `/voice` and `/voice/da` routes and its
+`jarvis.voice.v1` plus `jarvis.auth.TOKEN` subprotocols. Keep the WebSocket
+replaceable for Linux tests; do not add an iOS backend route or Apple framework
+to `JarvisCore`. The core models known client/server messages, retains unknown
+server JSON, and owns only protocol state and PCM16/base64 conversion—not audio
+capture or playback. Speech during a response immediately emits an interrupt
+action and an inaudible playback-completion message.
+
+Reconnect after drops with a fake-clock-testable 1, 2, 4, 8, then capped
+10-second backoff, for at most eight attempts. A user-ended session is terminal.
+The exact acceptance of an Authorization header during upgrade and the shapes
+of tool/error messages remain open; neither is guessed or implemented here.
+
 ## 30 October 2026 — keep generated-view models in JarvisCore (P15-07 / #1392)
 
 Decode the existing version-1 web contract into typed renderer data and actions

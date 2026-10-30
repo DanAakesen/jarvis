@@ -6294,6 +6294,14 @@ its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
 validation.
 
+P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
+`WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English
+and Danish `/voice` endpoints and token subprotocols, preserves unknown server
+messages, and retries drops at most eight times with an injectable clock.
+Audio helpers only convert bounded PCM16 little-endian bytes to and from base64;
+audio capture and playback remain outside the package. Upgrade-header
+authentication and voice tool/error message shapes remain unverified.
+
 P15-07 adds pure-Swift Codable models and path-specific validation for all
 contracted generated-view renderers, actions, and stored HTML artifacts. It does
 not render views or add routes. The parity test reads

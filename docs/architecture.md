@@ -1359,6 +1359,25 @@ payloads were checked against `apps/web/src/conversation-history.ts`,
 `apps/web/src/chat-attachments.ts` and `apps/backend/src/core/conversation.ts`;
 no contract gap requiring backend work was found.
 
+### iOS voice protocol (P15-06)
+
+`JarvisCore` owns the voice WebSocket protocol models, endpoint selection,
+PCM16/base64 helpers, session state machine, and bounded reconnect coordinator.
+`WebSocketTransport` remains an abstract seam; the app supplies the platform
+adapter. English connects to `/voice` and Danish to `/voice/da`, preserving the
+configured backend base path and sending the supplied access token through the
+same `jarvis.voice.v1` and `jarvis.auth.TOKEN` subprotocols as the web client.
+Speech-start events interrupt the current response immediately and report
+playback completion as inaudible. Microphone activation, mute, end, and
+reconnection are handled without capturing or playing audio in this package.
+
+Reconnects use an injectable `ChatClock` and exponential delays of 1, 2, 4, 8,
+then at most 10 seconds, for no more than eight attempts. A user-ended session
+does not reconnect. Unknown or malformed server messages retain their raw JSON
+instead of failing the stream. Tool/error message payloads and whether the
+WebSocket upgrade accepts an Authorization header remain unverified; no
+additional backend route or guessed message shape is introduced.
+
 ### iOS approvals and workspace commands (P15-05)
 
 `JarvisApprovalsClient` lists pending confirmations from the existing `GET /now`
