@@ -1,3 +1,17 @@
+## Managed policy cause diagnostics (#1373; 30 October 2026)
+
+Use the existing hosted pytest/Ruff environment. Focused checks:
+`tests/test_managed_provider_cause.py`, `tests/test_managed_runtime_lifecycle.py`
+and `tests/test_chat_runtime.py`; backend managed-provider-cause, chat-agent,
+conversation, logging, chat-canary and system-status tests; contracts tests;
+web conversation-history tests. Run affected workspace lint/build checks.
+
+The HTTP-400 fixture's `instructions` parameter is synthetic, not a diagnosis.
+This environment could not establish the live rejected field or a successful
+Copilot test-chat turn. Preserve request shape, consumed-source and unknown-outcome
+claim behavior until a new sanitized provider cause supplies evidence. Never
+include provider messages or raw responses in diagnostics.
+
 ## Managed conversation failure repair (#1350; 29 October 2026)
 
 Use the production lazy wrapper with stateful synthetic claims in

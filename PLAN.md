@@ -1,3 +1,16 @@
+## Managed policy failure causes (#1373; 30 October 2026)
+
+Implemented optional sanitized `providerCause` across hosted error events,
+backend failure logging/chat streams, browser errors and system smoke contracts.
+Closed reasons and uncertain-claim blocking remain unchanged. Focused offline
+tests cover allow-lists, unsafe values and synthetic provider rejection.
+
+Blocked acceptance: the original live rejected parameter is not yet known, and
+no original-path Copilot turn was verified. `_create_response` remains unchanged
+rather than weakening policy based on a hypothesis. Next: capture a new safe
+cause, reproduce/correct that request rejection and qualify a live turn. No grant,
+deployment, claim reset or default cutover is included.
+
 ## Managed test conversation failures (#1350; 29 October 2026)
 
 The managed text canary passed in Deploy 40928130267, but the owner reported

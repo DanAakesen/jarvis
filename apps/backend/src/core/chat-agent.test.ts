@@ -89,6 +89,28 @@ describe('Foundry Invocations chat agent', () => {
       message: 'Chat agent failed (rate_limit_exceeded)',
     });
   });
+  it('retains only sanitized provider causes in hosted HTTP-200 error events', async () => {
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      `event: error\ndata: ${JSON.stringify({
+        code: 'managed_policy_turn_failed',
+        providerCause: { httpStatus: 400, code: 'unsupported_parameter', param: 'instructions',
+          exceptionType: 'BadRequestError', message: 'PRIVATE' },
+      })}\n\n`,
+    ])));
+    const consume = async () => {
+      for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+        expect(chunk).toBeUndefined();
+      }
+    };
+    const error = await consume().catch((value: unknown) => value);
+    expect(error).toMatchObject({
+      code: 'managed_policy_turn_failed',
+      providerCause: { httpStatus: 400, code: 'unsupported_parameter', param: 'instructions',
+        exceptionType: 'BadRequestError' },
+    });
+    expect(JSON.stringify(error)).not.toContain('PRIVATE');
+  });
+
   it('accepts a description-free handle and keeps deferred caption evidence internal and bounded', async () => {
     const onVisualResult = vi.fn();
     const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId: 'a'.repeat(32) };

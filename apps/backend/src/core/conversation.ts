@@ -970,7 +970,9 @@ return {
             yield streamEvent('error', { error: 'Reply stopped. An action may already have completed; check its status before trying again.' });
           } else {
             request.log.warn(
-              { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown' },
+              { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown',
+                ...(error instanceof ChatAgentError && error.providerCause
+                  ? { providerCause: error.providerCause } : {}) },
               'conversation.reply_failed',
             );
             publishActivity('failed');
@@ -980,6 +982,8 @@ return {
             yield streamEvent('error', {
               error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
               ...(code === undefined ? {} : { code }),
+              ...(error instanceof ChatAgentError && error.providerCause
+                ? { providerCause: error.providerCause } : {}),
             });
           }
         } finally {

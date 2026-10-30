@@ -1,3 +1,17 @@
+## 30 October 2026 — bounded managed-policy causes (#1373)
+
+Keep existing closed failure reasons and add optional `providerCause` rather than
+encoding provider text into the reason. Allow only HTTP status integers 100–599,
+provider code/parameter matching `[a-z0-9_.]{1,48}`, and bounded exception-class
+identifiers. Revalidate at each stream, logging, status and browser boundary;
+discard unknown fields and never copy messages. This preserves current consumers
+and claim safety while making a future provider rejection diagnosable.
+
+Do not treat the synthetic 400 fixture as a live diagnosis. The original rejected
+parameter and successful real Copilot turn remain unverified. Leave the request
+shape and conservative blocking policy unchanged until evidence supports a
+correction; non-blocking definitive 4xx recovery remains an owner decision.
+
 ## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
 
 The owner requested repair after real Copilot test replies failed. A successful
