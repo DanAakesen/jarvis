@@ -9324,3 +9324,21 @@ provisioning and Xcode 26's export-options behavior. The owner configures the
 environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
+
+## 30 October 2026 — ready-PR iOS screenshot artifact
+
+Extend the existing ready-PR-only `macos-26` simulator job rather than adding a
+second Mac workflow. After the unsigned build, boot an available iPhone simulator
+with `xcrun simctl`, capture the main screen in light and dark appearance, upload
+and capture the light-appearance open sidebar using the
+`--screenshot-sidebar-open` launch argument. Upload the PNGs as a 14-day Actions
+artifact and create/update a single bot comment with the artifact link. Keep the
+existing timeout and cancel-in-progress behavior; do not add signing, secrets or
+TestFlight work.
+
+GitHub workflow artifacts are downloadable archives and cannot be embedded as
+inline images in an issue comment; the comment links the artifact instead. Do not
+commit screenshots or publish them elsewhere. The sidebar launch argument
+initializes the actual navigation state and rendered drawer, not a mock view. The
+offline workflow tests pass, but hosted simulator, artifact and comment behavior
+remain unverified until a ready iOS pull request runs.

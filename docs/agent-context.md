@@ -6263,8 +6263,15 @@ The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
 builds/tests the core and validates project, plist and entitlement metadata;
 the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
-starting a Mac build. The Mac build uses Xcode 26.6 and
-`CODE_SIGNING_ALLOWED=NO`; it does not boot a simulator or run UI tests.
+starting a Mac build. The Mac job uses Xcode 26.6 and
+`CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
+and captures the main screen in light and dark appearance plus the open sidebar in
+light appearance. The sidebar screenshot uses the `--screenshot-sidebar-open`
+launch argument to initialize the real navigation shell in its open state. It
+uploads those PNGs as a 14-day workflow artifact and posts or updates one pull request comment with
+the artifact link. GitHub comments cannot display files directly from workflow
+artifacts, so the images are not inline previews; open the artifact to view them.
+This job does not sign, use secrets, or upload to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
