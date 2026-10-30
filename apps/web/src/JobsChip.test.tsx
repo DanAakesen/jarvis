@@ -21,7 +21,7 @@ function publishJob(job: BackgroundJob) {
   publishStoreJob(job);
 }
 
-function stubFetch(mode: 'present' | 'away', jobs: BackgroundJob[] = []) {
+function stubFetch(mode: 'present' | 'away', jobs: BackgroundJob[] = [], resultOpenStatus = 200) {
   serverJobs = new Map(jobs.map((job) => [job.jobId, job]));
   const dismissed = new Set<string>();
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -32,6 +32,9 @@ function stubFetch(mode: 'present' | 'away', jobs: BackgroundJob[] = []) {
       const id = path.split('/')[2]!;
       dismissed.add(id);
       return json({ dismissedJobIds: [id] });
+    }
+    if (/^\/jobs\/[a-f0-9-]+\/open-result$/u.test(path) && init?.method === 'POST') {
+      return json({ opened: true }, resultOpenStatus);
     }
     if (path === '/jobs/dismissals/import' && init?.method === 'POST') {
       const { jobIds } = JSON.parse(String(init.body)) as { jobIds: string[] };
@@ -539,6 +542,49 @@ describe('job tabs', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Dismissing…' })).toBeNull());
     expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · done/ })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('offers a persisted research report after reload when Workspace delivery is pending', async () => {
+    const reportJob = job({
+      status: 'done',
+      step: 3,
+      viewId: 'research-progress',
+      resultId: 'research:11111111-1111-4111-8111-111111111111',
+      resultDelivery: 'pending',
+    });
+    const fetchMock = stubFetch('present', [reportJob]);
+    const onResult = vi.fn(() => false);
+    mount(onResult);
+
+    await screen.findByRole('button', { name: /Show background work/ });
+    openHistoryJob(/^Research: Microsoft Foundry IQ/);
+    expect(screen.getByText('Report saved. Workspace delivery is pending.')).not.toBeNull();
+    expect(onResult).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open report' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      `https://api.example.com/jobs/${reportJob.jobId}/open-result`,
+      expect.objectContaining({ method: 'POST' }),
+    ));
+    expect(onResult).not.toHaveBeenCalled();
+  });
+
+  it('keeps a recovery action and reports an unconfirmed result-open attempt', async () => {
+    const reportJob = job({
+      status: 'done',
+      step: 3,
+      resultId: 'research:11111111-1111-4111-8111-111111111111',
+      resultDelivery: 'unknown',
+    });
+    stubFetch('present', [reportJob], 503);
+    mount();
+    await screen.findByRole('button', { name: /Show background work/ });
+    openHistoryJob(/^Research: Microsoft Foundry IQ/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open report' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('Jarvis could not confirm opening the saved report. Try again.');
+    expect(screen.getByRole('button', { name: 'Open report' })).toHaveProperty('disabled', false);
   });
 
   it('delivers a hydrated running job when it finishes, even if other live updates arrive during result-window hydration', async () => {

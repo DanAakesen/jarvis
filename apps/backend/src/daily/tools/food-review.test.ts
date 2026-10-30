@@ -1,13 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
-import type { BrowserConfirmationDelivery, ConfirmationActionKind } from '../../core/owner-interactions.js';
+import { createOwnerInteractionService, type BrowserConfirmationDelivery, type ConfirmationActionKind } from '../../core/owner-interactions.js';
+import { approvalDeciderFor } from '../../core/approval-interpreter.js';
+import type { ConfirmationStore } from '../../database/confirmation-store.js';
 import type { MealInput } from '../nutrition/model.js';
 import { createToolRegistry, ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { fridaReference, type FridaLookup, type LookupComponent } from '../nutrition/frida.js';
 import type { DailyFoodLookup } from '../query.js';
+import { dailyFoodLookupTool } from './food-lookup.js';
 import { dailyFoodReviewTool } from './food-review.js';
+import { confirmToolCall } from '../../core/tool-calls.js';
 import { foodReviewSchema } from '../nutrition/review.js';
+import { buildApp } from '../../app.js';
+import { loadConfig } from '../../config.js';
+import { coreModule } from '../../core/index.js';
+import { conversationModule } from '../../core/conversation.js';
+import type { ConversationHistoryMessage, ConversationStore } from '../../core/conversation-store.js';
 import {
   executeRealtimeCapabilityCall, VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL,
 } from '../../voice/realtime.js';
@@ -88,7 +97,7 @@ function fixture() {
   const staged = Promise.withResolvers<void>();
   const runConfirmed = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
     operationSignal?: AbortSignal, delivery?: BrowserConfirmationDelivery): Promise<T> => {
-    expect(delivery).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
+    expect(delivery).toMatchObject({ channel: 'browser', lifetimeSeconds: 120 });
     staged.resolve();
     const answer = await decision.promise;
     operationSignal?.throwIfAborted();
@@ -101,6 +110,7 @@ function fixture() {
   const conversationStore = {
     getSession: vi.fn(async () => session),
     getHistory: vi.fn(async () => ({ messages: [{ ...source, attachments }], nextCursor: null })),
+    getDanMessagesAfter: vi.fn(async () => [] as { id: string; text: string; language: 'en' }[]),
   };
   const request = {
     server: { ownerObjectId: owner, conversationStore,
@@ -118,7 +128,7 @@ function fixture() {
       confidence: 'accurate', captureMethod: 'mixed', provenance: { energyKcal: { source: 'user-exact' } }, ...overrides });
     rows.set('retained-key', saved); return saved;
   };
-  return { tool, request, store, nutrition, rows, runConfirmed, staged: staged.promise,
+  return { tool, request, store, conversationStore, nutrition, rows, runConfirmed, staged: staged.promise,
     approve: () => decision.resolve('approve'), reject: () => decision.resolve('reject'), mode, session, seed, lookup,
     setAttachments: (value: typeof photo[]) => { attachments = value; } };
 }
@@ -133,25 +143,248 @@ async function executeThroughVoiceCapability(
     call_id: 'food-review-discovery', arguments: '{}',
   }, registry, request, signal(), discovered, undefined, false));
   expect(discovery).toMatchObject({
-    outcome: 'ok', result: { capabilities: [expect.objectContaining({ name: 'daily_food_review' })] },
+    outcome: 'ok', result: { capabilities: [expect.objectContaining({ name: 'health_food_review' })] },
   });
   return executeRealtimeCapabilityCall({
     type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_EXECUTION_TOOL,
     call_id: 'food-review-execution',
-    arguments: JSON.stringify({ capability: 'daily_food_review', arguments: input }),
+    arguments: JSON.stringify({ capability: 'health_food_review', arguments: input }),
   }, registry, request, signal(), discovered, undefined, false);
 }
 
 describe('inactive internal food proposal review', () => {
+  it.each([{ earlierRefusal: false, lookupOnly: false }, { earlierRefusal: true, lookupOnly: false },
+    { earlierRefusal: false, lookupOnly: true, completeList: false },
+    { earlierRefusal: false, lookupOnly: true, completeList: true },
+    { earlierRefusal: false, lookupOnly: true, completeList: false, standalone: true }])('presents actual nutrition through browser tools ($earlierRefusal, lookup only: $lookupOnly)', async ({ earlierRefusal, lookupOnly, completeList, standalone }) => {
+    const f = fixture();
+    f.session.channel = 'chat';
+    f.session.id = '41';
+    const config = { ...loadConfig({}), logLevel: 'silent' as const };
+    config.auth.ownerObjectId = owner;
+    const messages: ConversationHistoryMessage[] = earlierRefusal ? [{
+      id: '40', sessionId: '41', role: 'jarvis', text: 'Unavailable in a phone session. Use browser approval.',
+      model: null, at, channel: 'chat', language: 'en', interrupted: false, voiceMinutes: null,
+      toolCalls: [], attachments: [],
+    }] : [];
+    let nextId = 42;
+    const conversationStore: ConversationStore = {
+      createSession: vi.fn(async () => ({ ...f.session, channel: 'chat', language: 'en' })),
+      endSession: vi.fn(async () => true),
+      getSession: vi.fn(async () => ({ ...f.session, channel: 'chat', language: 'en' })),
+      getDanMessageIdBySourceItemId: vi.fn(async () => null),
+      addMessage: vi.fn(async input => {
+        const message: ConversationHistoryMessage = { ...input, id: String(nextId++), at: new Date(),
+          channel: 'chat', language: 'en', interrupted: false, voiceMinutes: null, toolCalls: [], attachments: [] };
+        messages.push(message);
+        return message;
+      }),
+      getHistory: vi.fn(async ({ limit }) => ({ messages: [...messages].reverse().slice(0, limit), nextCursor: null })),
+      readRecentUserMessages: vi.fn(async () => []),
+      getDanMessagesAfter: vi.fn(async ({ after }) => messages.filter(message => message.role === 'dan' && BigInt(message.id) > BigInt(after))
+        .map(({ id, text }) => ({ id, text, language: 'en' as const }))),
+    };
+    const service = createOwnerInteractionService({ ownerObjectId: owner, conversationStore,
+      onConfirmationsChanged: () => app.nowEventHub.publish({ type: 'refresh' }),
+      onConfirmationPending: (confirmation, foodEstimate) => {
+        if (foodEstimate) app.nowEventHub.publish({ type: 'food_estimate_pending', ...foodEstimate, confirmation });
+      }, store: {
+      createConfirmation: vi.fn(async () => {}),
+      resolveConfirmation: vi.fn(async () => 'approved'),
+      consumeApproval: vi.fn(async () => true),
+      cancelConfirmation: vi.fn(async () => {}),
+      expireConfirmation: vi.fn(async () => false),
+      expirePendingConfirmations: vi.fn(async () => {}),
+    } });
+    const tool = standalone ? dailyFoodLookupTool(f.lookup) : dailyFoodReviewTool(f.nutrition, Date.now, f.lookup);
+    const ownerHeaders = { authorization: ['Bearer', 'owner.payload.signature'].join(' '), 'user-agent': 'Synthetic Mobile Browser' };
+    const agentHeaders = { authorization: ['Bearer', 'agent.payload.signature'].join(' '), 'x-jarvis-message-id': '42' };
+    const app = buildApp(config, undefined, {
+      auth: async token => token.startsWith('agent.') ? { kind: 'jarvis-agent', objectId: 'agent', tenantId: config.auth.tenantId }
+        : { objectId: owner, tenantId: config.auth.tenantId, displayName: 'Synthetic owner' },
+      modules: [coreModule, conversationModule, { id: 'synthetic-food', registerRoutes: async () => {}, tools: [tool] }],
+      conversationStore, ownerInteractions: service, awayModeStore: f.request.server.awayModeStore!,
+      toolCallStore: { record: vi.fn(async () => {}) },
+      conversationAgent: { stream: async function* () {
+        const catalogue = await app.inject({ method: 'GET', url: '/tools', headers: agentHeaders });
+        expect(catalogue.json()).toContainEqual(expect.objectContaining({
+          name: tool.name, ...(standalone ? {} : { description: expect.stringContaining('a mobile browser is NOT a telephone call') }),
+        }));
+        expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+        const lookupPayload = (grams: number) => {
+          const components = [{ name: 'Synthetic food', grams, preparationMethod: null }];
+          return standalone ? { components } : { change: { operation: 'lookup_components', components } };
+        };
+        const lookup = await app.inject({ method: 'POST', url: `/tools/${tool.name}`, headers: agentHeaders, payload: lookupPayload(100) });
+        expect(lookup.json()).toMatchObject({ outcome: 'ok', result: { intakeLogged: false } });
+        expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+        if (lookupOnly) {
+          await app.inject({ method: 'POST', url: `/tools/${tool.name}`, headers: agentHeaders, payload: lookupPayload(75) });
+          app.nowEventHub.publish({ type: 'food_estimate_result', sessionId: 'another-session', sourceMessageId: '42', summary: 'Wrong session' });
+          app.nowEventHub.publish({ type: 'food_estimate_result', sessionId: '41', sourceMessageId: 'other-source', summary: 'Wrong source' });
+          yield completeList ? 'Checked it.\n- Protein: 8 g\n- Calories: 150 kcal\n- Fat: 15 g' : 'Checked it.'; return;
+        }
+        const pending = app.inject({ method: 'POST', url: '/tools/health_food_review', headers: agentHeaders,
+          payload: { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
+            referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } } }).then(response => response.json());
+        const receipt = await pending;
+        expect(receipt).toMatchObject({ outcome: 'ok', result: { status: 'committed',
+          record: { energy_kcal: 200, capture_method: 'text' } } });
+        yield JSON.stringify(receipt.result);
+        expect(await service.resolveFoodEstimateReply!({ ...messages.find(message => message.id === '43')!, id: '44' },
+          approvalDeciderFor(f.request), signal())).toBe(false);
+      } },
+      nowFeedStore: { read: async () => ({ running: [], items: [], updatedAt: new Date().toISOString() }),
+        dismiss: vi.fn(async () => false) },
+    });
+    try {
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const response = await fetch(`${address}/conversation/sessions/41/turns`, {
+        method: 'POST', headers: { ...ownerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'Estimate this synthetic food portion.' }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      expect(response.status).toBe(200);
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let body = '';
+      if (lookupOnly) {
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          body += decoder.decode(chunk.value, { stream: true });
+        }
+        expect(body).toContain('event: done');
+        const doneFrame = body.split('\n\n').find(frame => frame.startsWith('event: done\n'))!;
+        const delivered = JSON.parse(doneFrame.split('\ndata: ')[1]!);
+        expect(delivered.text).toBe(messages.at(-1)?.text);
+        expect(delivered.text).toContain('- Carbohydrates: 225 g\n- Fiber: 8 g');
+        expect(delivered.text.match(/Protein:/gu)).toHaveLength(1);
+        expect(body).not.toContain('event: food_invitation');
+        expect(messages.at(-1)?.text).toContain('Checked it.');
+        expect(messages.at(-1)?.text).not.toContain('Wrong');
+        expect(messages.at(-1)?.text).toContain('- Protein: 8 g\n- Calories: 150 kcal\n- Fat: 15 g');
+        expect(messages.at(-1)?.text.match(/Protein:/gu)).toHaveLength(1);
+        expect(messages.at(-1)?.text).not.toContain('200 kcal');
+        expect(f.store.log).not.toHaveBeenCalled();
+        expect(service.pendingBrowserConfirmations()).toEqual([]);
+        return;
+      }
+      while (!body.includes('event: food_invitation\n')) {
+        const chunk = await reader.read();
+        expect(chunk.done).toBe(false);
+        body += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(body).toContain('Review this exact food estimate for logging in Now. Nothing has changed.');
+      expect(body).toContain('Synthetic portion');
+      expect(body).toContain('- Protein: 10 g');
+      expect(body).toContain('- Calories: 200 kcal');
+      expect(body).toContain('- Fat: 20 g');
+      expect(body).toContain('Uncertainty:');
+      expect(body).not.toContain('committed');
+      expect(f.store.log).not.toHaveBeenCalled();
+      const reply = await app.inject({ method: 'POST', url: '/conversation/sessions/41/steer',
+        headers: ownerHeaders, payload: { text: 'Log it', language: 'en' } });
+      expect(reply.statusCode).toBe(202);
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        body += decoder.decode(chunk.value, { stream: true });
+      }
+      expect(body).toContain('committed');
+      expect(body).toContain('event: food_invitation\ndata: null');
+      expect(body).not.toContain('event: error');
+      expect(f.store.log).toHaveBeenCalledOnce();
+      expect(service.pendingBrowserConfirmations()).toEqual([]);
+    } finally { await app.close(); }
+  });
+
+  it('does not stage an estimate superseded by cancellation during reference preparation', async () => {
+    const f = fixture();
+    f.lookup.mockImplementation(async components => {
+      f.conversationStore.getDanMessagesAfter.mockResolvedValue([{ id: '43', text: 'Cancel that.', language: 'en' }]);
+      return syntheticLookup(components);
+    });
+    await expect(f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
+      referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } }, f.request, signal()))
+      .rejects.toThrow('superseded');
+    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.store.log).not.toHaveBeenCalled();
+  });
+
+  it.each([110_000, 121_000])('keeps preparation plus review inside the existing operation budget (%d ms review)', async reviewMs => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), ms);
+      return controller.signal;
+    });
+    try {
+      const f = fixture();
+      f.lookup.mockImplementation(async components => {
+        await new Promise(resolve => setTimeout(resolve, 60_000));
+        return syntheticLookup(components);
+      });
+      const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
+        referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } };
+      const result = f.tool.execute(input, f.request, signal());
+      const checked = reviewMs > 120_000 ? expect(result).rejects.toThrow() :
+        expect(result).resolves.toMatchObject({ status: 'committed', record: { energy_kcal: 200 } });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await f.staged;
+      expect(f.store.log).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(reviewMs);
+      f.approve();
+      await checked;
+      expect(f.store.log).toHaveBeenCalledTimes(reviewMs > 120_000 ? 0 : 1);
+      expect(timeout).toHaveBeenCalledWith(180_000);
+    } finally {
+      timeout.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(['chat', 'voice'])('commits the pending %s estimate from a natural reply once and recovers the receipt on retry', async channel => {
+    const f = fixture();
+    f.session.channel = channel;
+    const confirmations: ConfirmationStore = {
+      createConfirmation: vi.fn(async () => {}),
+      resolveConfirmation: vi.fn(async (_id, _owner, _conversation, decision) => decision === 'approve' ? 'approved' : 'rejected'),
+      consumeApproval: vi.fn(async () => true),
+      cancelConfirmation: vi.fn(async () => {}),
+      expireConfirmation: vi.fn(async () => false),
+      expirePendingConfirmations: vi.fn(async () => {}),
+    };
+    const service = createOwnerInteractionService({ ownerObjectId: owner, store: confirmations,
+      conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) } });
+    f.runConfirmed.mockImplementation((...args) => service.runConfirmed(...args));
+    const result = channel === 'voice' ? executeThroughVoiceCapability(f.tool, f.request, estimate())
+      : f.tool.execute(estimate(), f.request, signal());
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    expect(f.store.log).not.toHaveBeenCalled();
+    const reply = { id: '43', sessionId: f.session.id, role: 'dan' as const,
+      text: 'yes, log that', model: null, at: new Date() };
+    expect(await service.resolveFoodEstimateReply!(reply, approvalDeciderFor(f.request), signal())).toBe(true);
+    const receipt = await result;
+    expect(channel === 'voice' ? JSON.parse(receipt as string).result : receipt).toMatchObject({
+      status: 'committed', record: { meal_name: 'Synthetic portion', energy_kcal: 200, capture_method: channel === 'chat' ? 'text' : 'voice' },
+    });
+    expect(await service.resolveFoodEstimateReply!({ ...reply, id: '44' }, approvalDeciderFor(f.request), signal())).toBe(false);
+    expect(await f.tool.execute(estimate(), f.request, signal())).toMatchObject({ status: 'committed' });
+    expect(f.store.log).toHaveBeenCalledOnce();
+    expect(confirmations.consumeApproval).toHaveBeenCalledOnce();
+  });
+
   it('keeps estimate and correction writes behind browser approval through compact voice dispatch', async () => {
     const estimateFixture = fixture();
     const estimateResult = executeThroughVoiceCapability(estimateFixture.tool, estimateFixture.request, estimate());
     await estimateFixture.staged;
     expect(estimateFixture.store.log).not.toHaveBeenCalled();
-    expect(estimateFixture.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
+    expect(estimateFixture.runConfirmed.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
+      foodEstimate: { sessionId: 'session', sourceMessageId: '42' } });
     estimateFixture.approve();
     expect(JSON.parse(await estimateResult)).toMatchObject({
-      tool: 'daily_food_review', outcome: 'ok', result: { status: 'committed' },
+      tool: 'health_food_review', outcome: 'ok', result: { status: 'committed' },
     });
     expect(estimateFixture.store.log).toHaveBeenCalledOnce();
 
@@ -164,7 +397,7 @@ describe('inactive internal food proposal review', () => {
     expect(correctionFixture.store.correct).not.toHaveBeenCalled();
     correctionFixture.reject();
     expect(JSON.parse(await correctionResult)).toMatchObject({
-      tool: 'daily_food_review', outcome: 'refused', result: { refused: 'Dan rejected the request.' },
+      tool: 'health_food_review', outcome: 'refused', result: { refused: 'Dan rejected the request.' },
     });
     expect(correctionFixture.store.correct).not.toHaveBeenCalled();
   });
@@ -193,8 +426,9 @@ describe('inactive internal food proposal review', () => {
     const result = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.store.log).not.toHaveBeenCalled();
-    expect(f.runConfirmed.mock.calls[0]![4]).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 200 kcal');
+    expect(f.runConfirmed.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
+      foodEstimate: { sessionId: 'session', sourceMessageId: '42' } });
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('- Calories: 200 kcal');
     input.change.food.energyKcal = 999;
     f.approve();
     expect(await result).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice' } });
@@ -209,7 +443,9 @@ describe('inactive internal food proposal review', () => {
     const f = fixture(); f.session.channel = 'chat'; f.setAttachments([photo]);
     const firstComponents = [{ name: 'Synthetic rice', grams: 100, preparationMethod: null }];
     const lookedUp = await f.tool.execute({ change: { operation: 'lookup_components', components: firstComponents } }, f.request, signal());
-    expect(lookedUp).toMatchObject({ intakeLogged: false, status: 'complete', totals: { energyKcal: 200 } });
+    expect(lookedUp).toMatchObject({ intakeLogged: false, status: 'complete', totals: { energyKcal: 200 },
+      presentation: expect.stringContaining('- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 20 g') });
+    expect(confirmToolCall('health_food_review', 'ok', lookedUp)).toContain('- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 20 g');
     expect(f.store.log).not.toHaveBeenCalled(); expect(f.runConfirmed).not.toHaveBeenCalled();
 
     const changed = [{ name: 'Synthetic lentils', grams: 75, preparationMethod: 'boiled' }];
@@ -218,7 +454,7 @@ describe('inactive internal food proposal review', () => {
     const pending = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.lookup).toHaveBeenLastCalledWith(changed, f.request, expect.any(AbortSignal));
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 150 kcal');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('- Calories: 150 kcal');
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('"referenceFood":"Frida Synthetic lentils"');
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('DTU National Food Institute');
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('Capture: "photo"');
@@ -249,7 +485,8 @@ describe('inactive internal food proposal review', () => {
     const unresolved = await f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal',
       referenceComponents: [{ name: 'Synthetic unmatched food', grams: 100, preparationMethod: null }] } } }, f.request, signal());
     expect(unresolved).toMatchObject({ status: 'needs_details', intakeLogged: false,
-      lookup: { totals: { energyKcal: null }, unknowns: ['0:no_match'] } });
+      lookup: { totals: { energyKcal: null }, unknowns: ['0:no_match'] },
+      presentation: expect.stringContaining('- Calories: unknown (not zero) kcal') });
     expect(f.runConfirmed).not.toHaveBeenCalled(); expect(f.store.log).not.toHaveBeenCalled();
   });
   it('keeps unknown nutrients null and recovers failed lookups without claiming an estimate', async () => {
@@ -269,7 +506,7 @@ describe('inactive internal food proposal review', () => {
     const pending = f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal',
       referenceComponents: [{ name: 'Synthetic unknown macro', grams: 100, preparationMethod: null }] } } }, f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('protein unknown (not zero) g');
+    expect(f.runConfirmed.mock.calls[0]![1]).toContain('- Protein: unknown (not zero) g');
     expect(f.runConfirmed.mock.calls[0]![1]).toContain('nutrient_missing:proteinGrams');
     f.approve();
     expect(await pending).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null } });

@@ -20,4 +20,18 @@ describe('explicit vision requests', () => {
       expect(isCameraRequest(text)).toBe(false);
     },
   );
+  it.each(['What do you see?', 'What can you see?', 'Tell me what you see',
+    'Can you see anything?', 'Do you see something?', 'Hvad kan du se?', 'Hvad ser du?', 'Kan du se noget?'])(
+    'routes a generic visual question to the screen only while sharing: %s', (text) => {
+      expect(isScreenRequest(text, true)).toBe(true);
+      expect(isScreenRequest(text, false)).toBe(false);
+      expect(isScreenRequest(text)).toBe(false);
+    },
+  );
+  it.each(['What am I holding?', 'Can you see me?', 'Look at my camera and tell me what you see',
+    'Hvad holder jeg?', 'Kig på mit kamera, hvad kan du se?', 'How is the weather?', 'Turn camera off'])(
+    'does not redirect camera-specific or unrelated text to an active screen: %s', (text) => {
+      expect(isScreenRequest(text, true)).toBe(false);
+    },
+  );
 });

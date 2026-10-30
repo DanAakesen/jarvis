@@ -258,6 +258,11 @@ export function createWebhookDeliveryStore(
         throw error;
       }
     },
+    async hasDelivery(deliveryId) {
+      const { recordset } = await pool.request().input('deliveryId', sql.NVarChar(100), deliveryId)
+        .query(`SELECT delivery_id FROM dbo.webhook_deliveries WHERE delivery_id = @deliveryId;`);
+      return recordset.length > 0;
+    },
     async record({ deliveryId, event, outcome, mapping }) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);

@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
+from openai import BadRequestError
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
@@ -41,7 +42,10 @@ from jarvis_tools import (
     BACKEND_HTTP_TIMEOUT_SECONDS,
     BackendUnavailable,
     backend_settings_from_environment,
+    current_chat_acknowledgment_enabled,
+    current_chat_input_start,
     current_chat_phase_setter,
+    current_chat_runtime_test,
     current_chat_session_id,
     current_chat_turn_id,
     current_conversation,
@@ -52,7 +56,12 @@ from jarvis_tools import (
     current_steering_fetcher,
     current_turn,
 )
-from model_contract import StreamingModelClient, ToolLoopStalled
+from model_contract import (
+    MAX_ACKNOWLEDGMENT_CHARACTERS,
+    AcknowledgmentBoundary,
+    StreamingModelClient,
+    ToolLoopStalled,
+)
 from state import ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
@@ -68,11 +77,126 @@ MAX_REQUEST_BYTES = 64 * 1024
 
 logger = logging.getLogger("chat_runtime")
 
+MODEL_REJECTION_FIELDS = {
+    "model": "model_bad_request_model",
+    "instructions": "model_bad_request_instructions",
+    "input": "model_bad_request_input",
+    "max_output_tokens": "model_bad_request_output_limit",
+    "store": "model_bad_request_storage",
+    "stream": "model_bad_request_streaming",
+    "tools": "model_bad_request_tools",
+    "reasoning": "model_bad_request_reasoning",
+    "include": "model_bad_request_include",
+}
+REASONING_REJECTIONS = {
+    ("reasoning", "unsupported_parameter"): "model_reasoning_parameter_unsupported",
+    ("reasoning.effort", "unsupported_parameter"): "model_reasoning_effort_unsupported",
+    ("reasoning", "unsupported_value"): "model_reasoning_value_unsupported",
+    ("reasoning.effort", "unsupported_value"): "model_reasoning_effort_value_unsupported",
+    ("reasoning", "invalid_value"): "model_reasoning_value_invalid",
+    ("reasoning.effort", "invalid_value"): "model_reasoning_effort_value_invalid",
+    ("reasoning", "invalid_request_error"): "model_reasoning_request_invalid",
+    ("reasoning.effort", "invalid_request_error"): "model_reasoning_effort_request_invalid",
+}
+
 
 def chat_failure_code(exc: BaseException) -> str:
     """A short, content-free cause for a failed turn: a known code or only the exception class."""
+    from managed_copilot import ManagedChatError
+
+    # Only our managed exception type and reviewed internal labels may cross the stream.
+    managed_codes = frozenset({
+        "managed_session_busy",
+        "managed_source_already_claimed",
+        "managed_target_mismatch",
+        "managed_unavailable",
+        "managed_agent_builtin_tools_enabled",
+        "managed_agent_definition_mismatch",
+        "managed_agent_definition_missing",
+        "managed_agent_extra_skills",
+        "managed_agent_function_tools_mismatch",
+        "managed_agent_toolset_missing",
+        "managed_agent_unsupported_setting",
+        "managed_agent_version_mismatch",
+        "managed_backend_endpoint_invalid",
+        "managed_binding_invalid",
+        "managed_binding_unavailable",
+        "managed_claim_missing",
+        "managed_client_retries_enabled",
+        "managed_conversation_missing",
+        "managed_definition_instructions_missing",
+        "managed_definition_tools_invalid",
+        "managed_endpoint_invalid",
+        "managed_endpoint_selector_mismatch",
+        "managed_existing_credential_unavailable",
+        "managed_final_only_tool_call",
+        "managed_immutable_target_missing",
+        "managed_input_boundary_invalid",
+        "managed_input_cursor_rewound",
+        "managed_input_empty",
+        "managed_input_item_unsupported",
+        "managed_input_unsupported",
+        "managed_limits_invalid",
+        "managed_model_forbidden",
+        "managed_model_unauthorized",
+        "managed_policy_catalogue_changed",
+        "managed_policy_image_unverified",
+        "managed_policy_smoke_unavailable",
+        "managed_policy_setup_failed",
+        "managed_policy_turn_failed",
+        "managed_probe_conversation_missing",
+        "managed_probe_empty_or_unfinished",
+        "managed_probe_failed",
+        "managed_probe_incomplete",
+        "managed_probe_requested_tool",
+        "managed_probe_settings_mismatch",
+        "managed_probe_timeout",
+        "managed_project_endpoint_mismatch",
+        "managed_provider_failure",
+        "managed_readback_forbidden",
+        "managed_readback_invalid",
+        "managed_readback_unauthorized",
+        "managed_readback_unavailable",
+        "managed_response_empty",
+        "managed_response_failed",
+        "managed_response_item_unsupported",
+        "managed_response_unfinished",
+        "managed_reviewed_definition_mismatch",
+        "managed_reviewed_fingerprint_mismatch",
+        "managed_seed_input_invalid",
+        "managed_source_context_missing",
+        "managed_steering_source_unclaimed",
+        "managed_summary_history_policy_pending",
+        "managed_target_invalid",
+        "managed_target_missing",
+        "managed_target_settings_mismatch",
+        "managed_tool_arguments_invalid",
+        "managed_tool_call_invalid",
+        "managed_tool_call_unfinished",
+        "managed_tool_repeated",
+        "managed_tool_round_limit",
+        "managed_tool_schema_unsupported",
+        "managed_turn_already_claimed",
+        "managed_voice_requires_backend_relay",
+    })
+    if (isinstance(exc, ManagedChatError) and isinstance(exc.code, str)
+            and exc.code in managed_codes):
+        return exc.code
     if isinstance(exc, ToolLoopStalled):
         return exc.code
+    if isinstance(exc, BadRequestError):
+        # SDK metadata is untrusted. Emit only our fixed field classification;
+        # never copy messages, provider codes, schema property names or values.
+        parameter = exc.param
+        if isinstance(parameter, str) and len(parameter) <= 256:
+            provider_code = exc.code
+            if isinstance(provider_code, str):
+                rejection = REASONING_REJECTIONS.get((parameter, provider_code))
+                if rejection is not None:
+                    return rejection
+            field = parameter.partition(".")[0].partition("[")[0]
+            if field in MODEL_REJECTION_FIELDS:
+                return MODEL_REJECTION_FIELDS[field]
     code = getattr(exc, "code", None) if isinstance(exc, BackendUnavailable) else None
     if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
         return code
@@ -179,6 +303,7 @@ async def load_verified_history(
     backend_url, scope = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
     current_memory_plan.set(None)
+    current_chat_runtime_test.set(None)
     with latency_span("chat_history_verification"):
         async with httpx.AsyncClient(
             timeout=BACKEND_HTTP_TIMEOUT_SECONDS, follow_redirects=False
@@ -190,7 +315,8 @@ async def load_verified_history(
             profile, response, summary_state = await asyncio.gather(
                 client.get(f"{backend_url}/me", headers=headers, timeout=configured_timeout),
                 client.get(
-                    f"{backend_url}/conversation/history?limit={MAX_HISTORY_MESSAGES}",
+                    f"{backend_url}/conversation/history?sourceMessageId={message_id}"
+                    f"&limit={MAX_HISTORY_MESSAGES}",
                     headers=headers,
                     timeout=configured_timeout,
                 ),
@@ -223,6 +349,10 @@ async def load_verified_history(
     ):
         return None
     session_id = current.get("sessionId")
+    runtime_test = page.get("runtimeTest")
+    if runtime_test not in {None, "current", "copilot"}:
+        raise RuntimeError("Conversation runtime selection is invalid")
+    current_chat_runtime_test.set(runtime_test)
     current_chat_session_id.set(
         session_id if isinstance(session_id, str) and MESSAGE_ID.fullmatch(session_id) else None
     )
@@ -439,6 +569,8 @@ def register_chat_invocation(
     app: VoiceAgentServerHost,
     model_client: StreamingModelClient,
     context_loader: ChatContextLoader = load_verified_history,
+    *,
+    copilot_model_client: StreamingModelClient | None = None,
 ) -> None:
     @app.invoke_handler
     async def chat(request: Request):
@@ -454,6 +586,40 @@ def register_chat_invocation(
             return JSONResponse({"error": "Invalid request"}, status_code=400)
         finally:
             body[:] = b"\0" * len(body)
+
+        # Fixed administrative reads/probe through the already authenticated Foundry
+        # invocation endpoint. They never accept user text, delegated context or tools.
+        operation = payload.get("operation") if isinstance(payload, dict) else None
+        if isinstance(operation, str) and operation in {
+            "managed_definition_manifest", "managed_text_canary",
+        } and payload == {
+            "operation": operation,
+        }:
+            manifest = operation == "managed_definition_manifest"
+            owner = model_client if manifest else copilot_model_client
+            method = "managed_definition_manifest" if manifest else "probe_target"
+            action = getattr(owner, method, None)
+            if not callable(action):
+                return JSONResponse(
+                    {"status": "down", "reason": "managed_not_configured"}, status_code=503,
+                )
+            try:
+                if manifest:
+                    result = await action()
+                else:
+                    # Same 210-second invocation ceiling as the backend chat bridge.
+                    async with asyncio.timeout(210):
+                        result = await action()
+                encoded = json.dumps(result, ensure_ascii=False).encode("utf-8")
+                if len(encoded) > 2 * MAX_OUTPUT_BYTES:
+                    raise RuntimeError("Managed metadata exceeds the existing response bound")
+                return JSONResponse(result, headers={"Cache-Control": "no-store"})
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                return JSONResponse(
+                    {"status": "down", "reason": chat_failure_code(exc)}, status_code=503,
+                )
 
         smoke = isinstance(payload, dict) and payload.get("smoke") is True
         smoke_history = payload.get("smokeHistory") if isinstance(payload, dict) else None
@@ -609,12 +775,15 @@ def register_chat_invocation(
         phase_timings_token = current_chat_phase_timings.set(phase_timings)
         try:
             current_chat_session_id.set(None)
+            current_chat_runtime_test.set(None)
             current_memory_plan.set(None)
             history = (
                 () if smoke else await context_loader(match.group(1), message_id, text, language)
             )
             chat_session_id = current_chat_session_id.get()
+            runtime_test = current_chat_runtime_test.get()
             current_chat_session_id.set(None)
+            current_chat_runtime_test.set(None)
             memory_plan = current_memory_plan.get()
             current_memory_plan.set(None)
         except asyncio.CancelledError:
@@ -628,6 +797,14 @@ def register_chat_invocation(
                 {"error": "Unauthorized or unverified conversation message"},
                 status_code=401,
             )
+        selected_model = model_client
+        if runtime_test == "copilot":
+            if copilot_model_client is None:
+                return JSONResponse(
+                    {"error": "The Copilot runtime has not passed configuration verification"},
+                    status_code=503,
+                )
+            selected_model = copilot_model_client
         backend_http_timeout = current_backend_http_timeout_seconds.get()
         current_backend_http_timeout_seconds.set(int(BACKEND_HTTP_TIMEOUT_SECONDS))
 
@@ -641,6 +818,9 @@ def register_chat_invocation(
             turn_token = current_turn.set(None if smoke else message_id)
             chat_turn_token = current_chat_turn_id.set(turn_id)
             chat_session_token = current_chat_session_id.set(chat_session_id)
+            runtime_test_token = current_chat_runtime_test.set(runtime_test)
+            input_start_token = current_chat_input_start.set(None)
+            acknowledgment_token = current_chat_acknowledgment_enabled.set(not steering)
             smoke_calls: list[dict[str, Any]] = []
             smoke_token = current_smoke_invocation.set(smoke)
             smoke_approval_token = current_smoke_approval.set(smoke and smoke_approval is True)
@@ -656,6 +836,7 @@ def register_chat_invocation(
             steering_fetcher_token = None
             phase_setter_token = None
             first_delta = True
+            acknowledgment_sent = False
             visual_emitted = False
             completed = False
             try:
@@ -783,6 +964,7 @@ def register_chat_invocation(
                     messages = tuple(
                         ModelMessage(item["role"], item["text"]) for item in smoke_history
                     )
+                current_chat_input_start.set(len(messages))
                 current_visual = visual or (
                     {
                         "source": "screen",
@@ -841,7 +1023,7 @@ def register_chat_invocation(
                         source_message_id=None if smoke else message_id,
                     )
                 )
-                chat = model_client.complete_chat(
+                chat = selected_model.complete_chat(
                     messages,
                     language,
                     **({"smoke": True} if smoke else {}),
@@ -856,6 +1038,26 @@ def register_chat_invocation(
                         )
                     await resources.enter_async_context(aclosing(chat))
                     async for delta in chat:
+                        if isinstance(delta, AcknowledgmentBoundary):
+                            if (
+                                acknowledgment_sent
+                                or not delta.text.strip()
+                                or len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS
+                            ):
+                                if len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS:
+                                    raise RuntimeError(
+                                        "Chat acknowledgment exceeded the size limit"
+                                    )
+                                continue
+                            output_bytes += len(delta.text.encode("utf-8"))
+                            if output_bytes > MAX_OUTPUT_BYTES:
+                                raise RuntimeError("Chat response exceeded the size limit")
+                            acknowledgment_sent = True
+                            yield (
+                                "event: acknowledgment\ndata: "
+                                f"{json.dumps({'text': delta.text}, ensure_ascii=False)}\n\n"
+                            )
+                            continue
                         if not delta:
                             continue
                         output_bytes += len(delta.encode("utf-8"))
@@ -909,6 +1111,9 @@ def register_chat_invocation(
                 current_turn.reset(turn_token)
                 current_chat_turn_id.reset(chat_turn_token)
                 current_chat_session_id.reset(chat_session_token)
+                current_chat_runtime_test.reset(runtime_test_token)
+                current_chat_input_start.reset(input_start_token)
+                current_chat_acknowledgment_enabled.reset(acknowledgment_token)
                 current_visual_result.reset(visual_token)
                 current_image_reservation.reset(image_reservation_token)
                 current_visual_fallback.reset(visual_fallback_token)

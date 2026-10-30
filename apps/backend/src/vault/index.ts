@@ -96,6 +96,11 @@ export interface MemoryEmbeddingLogFields {
 
 export interface VaultModule extends BackendModule {
   synchronize(signal: AbortSignal): Promise<{ readonly added: number; readonly changed: number; readonly removed: number }>;
+  syncStatus(): {
+    readonly outcome: VaultIndexOutcome['outcome'];
+    readonly latestAttemptAt: string | null;
+    readonly lastSuccessfulAt: string | null;
+  };
   reembed(
     signal: AbortSignal,
     progress: (step: number, detail: string) => Promise<void>,
@@ -121,7 +126,7 @@ interface MemoryApiItem {
 
 interface VaultIndexOutcome {
   readonly outcome: 'pending' | 'ok' | 'error';
-  readonly at: string;
+  readonly at: string | null;
   readonly added?: number;
   readonly changed?: number;
   readonly removed?: number;
@@ -780,7 +785,7 @@ export function createVaultModule(options: {
   readonly embeddingModel?: string;
   readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
   readonly settingsStore?: SettingsStore;
-  readonly recordFolioGraph?: (
+  readonly recordWorkspaceGraph?: (
     query: string,
     highlight: readonly string[],
     createdAt: string,
@@ -794,7 +799,9 @@ export function createVaultModule(options: {
   let indexStatus: 'pending' | 'ready' | 'failed' = 'pending';
   let appMissing = false;
   let lastVaultSyncAt: string | null = null;
-  let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
+  let latestSyncAttemptAt: string | null = null;
+  let lastSuccessfulSyncAt: string | null = null;
+  let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: null };
   let directoryTree: VaultDirectoryTree | undefined;
   const pendingVaultDeletions = new Set<string>();
   let graphCache: { readonly key: string; readonly value: Promise<KnowledgeGraph> } | undefined;
@@ -995,24 +1002,29 @@ export function createVaultModule(options: {
   }
 
   function synchronize(signal: AbortSignal) {
-    synchronization ??= performSynchronization(signal)
-      .then(({ summary, directoryTree: nextDirectoryTree }) => {
-        indexStatus = 'ready';
-        appMissing = false;
-        lastVaultSyncAt = new Date().toISOString();
-        lastIndexOutcome = { outcome: 'ok', at: lastVaultSyncAt, ...summary };
-        directoryTree = { ...nextDirectoryTree, updatedAt: lastVaultSyncAt };
-        graphCache = undefined;
-        return summary;
-      })
-      .catch((error: unknown) => {
-        indexStatus = 'failed';
-        appMissing = error instanceof VaultAppNotInstalledError;
-        lastVaultSyncAt = new Date().toISOString();
-        lastIndexOutcome = { outcome: 'error', at: lastVaultSyncAt };
-        throw error;
-      })
-      .finally(() => { synchronization = undefined; });
+    if (!synchronization) {
+      latestSyncAttemptAt = new Date().toISOString();
+      lastIndexOutcome = { outcome: 'pending', at: latestSyncAttemptAt };
+      synchronization = performSynchronization(signal)
+        .then(({ summary, directoryTree: nextDirectoryTree }) => {
+          indexStatus = 'ready';
+          appMissing = false;
+          lastSuccessfulSyncAt = new Date().toISOString();
+          lastVaultSyncAt = lastSuccessfulSyncAt;
+          lastIndexOutcome = { outcome: 'ok', at: lastSuccessfulSyncAt, ...summary };
+          directoryTree = { ...nextDirectoryTree, updatedAt: lastSuccessfulSyncAt };
+          graphCache = undefined;
+          return summary;
+        })
+        .catch((error: unknown) => {
+          indexStatus = 'failed';
+          appMissing = error instanceof VaultAppNotInstalledError;
+          lastVaultSyncAt = new Date().toISOString();
+          lastIndexOutcome = { outcome: 'error', at: lastVaultSyncAt };
+          throw error;
+        })
+        .finally(() => { synchronization = undefined; });
+    }
     return synchronization;
   }
 
@@ -1505,7 +1517,7 @@ export function createVaultModule(options: {
           operation: 'focus',
           viewId: 'knowledge-graph',
         }, signal);
-        await options.recordFolioGraph?.(query, highlight, new Date().toISOString());
+        await options.recordWorkspaceGraph?.(query, highlight, new Date().toISOString());
         const summary = hits.length > 0
           ? `Found ${hits.length} vault match${hits.length === 1 ? '' : 'es'}; top hit: ${hits[0]!.path} — ${snippet(hits[0]!.content)}`
           : `No vault notes matched “${query}”.`;
@@ -1704,6 +1716,13 @@ export function createVaultModule(options: {
     id: 'vault',
     tools,
     synchronize,
+    syncStatus() {
+      return {
+        outcome: lastIndexOutcome.outcome,
+        latestAttemptAt: latestSyncAttemptAt,
+        lastSuccessfulAt: lastSuccessfulSyncAt,
+      };
+    },
     reembed,
     registerRoutes: async (app) => {
       const ownerOnly = (request: FastifyRequest, reply: import('fastify').FastifyReply): boolean => {
@@ -2343,6 +2362,8 @@ export function createVaultModule(options: {
         }
         return {
           lastVaultSyncAt,
+          latestSyncAttemptAt,
+          lastSuccessfulSyncAt,
           notesByFolder: counts,
           lastIndexOutcome,
         };

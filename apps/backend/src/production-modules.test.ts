@@ -5,7 +5,7 @@ import { FrameStore } from './vision/frame-store.js';
 import { createConversationModule } from './core/conversation.js';
 import { coreModule } from './core/index.js';
 import { createBrowserAgentModule } from './core/browser-agent.js';
-import { createFolioModule } from './core/folio.js';
+import { createWorkspacesModule } from './core/workspaces.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { createHtmlViewModule } from './core/html-view.js';
 import { createImageGenerationModule } from './core/image-generation.js';
@@ -25,6 +25,7 @@ import { createScreenVisionModule } from './vision/screen.js';
 import { createVisionWatchModule } from './vision/watch.js';
 import { createVoiceRelayModule } from './voice/relay.js';
 import { createProductionModules } from './production-modules.js';
+import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { composeDaily } from './daily/composition.js';
@@ -41,8 +42,8 @@ const limits = JSON.parse(readFileSync(
 )) as { maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
 const dailyToolNames = [
-  'daily_query', 'daily_show', 'daily_food', 'daily_food_review', 'daily_saved_food', 'daily_nutrition_targets', 'daily_nutrition_suggest',
-  'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
+  'health_query', 'health_show', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
+  'health_summary', 'health_nutrition_history', 'health_coach_status',
 ];
 const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback', 'owner_reminders'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
@@ -52,6 +53,7 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
   const frameStore = new FrameStore();
   return createProductionModules({
     core: coreModule,
+    backendLogs: createBackendLogsModule(),
     conversation: createConversationModule(frameStore),
     factory: factoryModule,
     sleep: createSleepModule(null),
@@ -68,7 +70,7 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
     imageGeneration: createImageGenerationModule({} as never),
     htmlView: createHtmlViewModule({} as never),
     weather: createWeatherModule({} as never),
-    folio: createFolioModule({} as never, {} as never),
+    workspaces: createWorkspacesModule({} as never, {} as never),
     workspacePins: createWorkspacePinsModule({} as never),
     screenVision: createScreenVisionModule({} as never, frameStore),
     visionWatch: createVisionWatchModule({} as never),
@@ -124,8 +126,8 @@ describe('production tool catalogue', () => {
     expect(modules.map(({ id }) => id)).toEqual([
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
-      'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive',
+      'browser-agent', 'image-generation', 'html-view', 'weather', 'workspaces', 'workspace-pins',
+      'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive', 'backend-logs',
     ]);
   });
 
@@ -154,7 +156,7 @@ describe('production tool catalogue', () => {
     };
 
     expect(tools.map(({ name }) => name)).toEqual(expect.arrayContaining([
-      'daily_health_summary', 'daily_nutrition_history', 'daily_coach_status',
+      'health_summary', 'health_nutrition_history', 'health_coach_status',
     ]));
     for (const tool of tools) {
       const schema = toModelToolSchema(tool.inputSchema) as Record<string, unknown>;
@@ -214,7 +216,7 @@ describe('production tool catalogue', () => {
     const off = modulesWithEveryFeature({ daily: false });
     expect(off.map(({ id }) => id)).toEqual(on.map(({ id }) => id).filter((id) => id !== 'daily'));
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
-    expect(offNames.filter((name) => name.startsWith('daily_'))).toEqual([]);
+    expect(offNames.filter((name) => name.startsWith('health_') || name.startsWith('daily_'))).toEqual([]);
     expect(createToolRegistry(on).list().map(({ name }) => name).filter((name) => !dailyToolNames.includes(name)))
       .toEqual(offNames);
     expect(on.find(({ id }) => id === 'daily')!.tools.map(({ name }) => name)).toEqual(dailyToolNames);

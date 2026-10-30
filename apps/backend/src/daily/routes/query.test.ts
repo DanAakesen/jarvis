@@ -102,7 +102,7 @@ describe('inactive Daily HTTP/module integration', () => {
     f.changes.publish({ owner: owner.toUpperCase(), sources: [dailyQuerySources.metrics] });
     expect(publish).toHaveBeenCalledExactlyOnceWith({ type: 'refresh' });
     const capabilities = await f.app.inject({ url: '/daily/capabilities', headers: headers() });
-    expect(capabilities.json()).toMatchObject({ stage: 'read-only', tools: ['daily_query', 'daily_show'],
+    expect(capabilities.json()).toMatchObject({ stage: 'read-only', tools: ['health_query', 'health_show'],
       refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'] } });
     await f.app.close();
     f.changes.publish({ owner, sources: [dailyQuerySources.metrics] });

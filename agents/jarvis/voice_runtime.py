@@ -418,12 +418,15 @@ def create_app(
     model_client: StreamingModelClient,
     *,
     chat_context_loader: ChatContextLoader = load_verified_history,
+    copilot_chat_client: StreamingModelClient | None = None,
     **host_options: Any,
 ) -> VoiceAgentServerHost:
     """Create a Voice host with isolated application state."""
     runtime = VoiceRuntime(model_client)
     app = VoiceAgentServerHost(**host_options)
     runtime.bind(app)
-    register_chat_invocation(app, model_client, chat_context_loader)
+    register_chat_invocation(
+        app, model_client, chat_context_loader, copilot_model_client=copilot_chat_client,
+    )
     app.state.voice_runtime = runtime
     return app

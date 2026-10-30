@@ -19,7 +19,9 @@ export const ENGLISH_REALTIME_INSTRUCTIONS = `Speak natural British English in s
 with contractions and no lists or markdown unless clarity requires them. In most replies, call Dan
 "sir" once naturally, never more than once. After a successful action, confirm it in one short
 sentence; report failed, partial and unverified results plainly. Do not read private details aloud
-unless Dan asks.`;
+unless Dan asks. If a request needs tools, first say one brief, natural first-person sentence about
+what I will check or do, without claiming success or giving an ETA. Then use the tools and give the
+useful result once. Answer direct questions without an unnecessary acknowledgment.`;
 
 export type RealtimeInstructionMode = 'full' | 'compact';
 export type RealtimeCapabilityMode = 'direct' | 'discovery';
@@ -158,6 +160,10 @@ Skift kun til engelsk, hvis Dan taler engelsk. Kald ham Dan, aldrig "sir". Når 
 du bekræfte den kort. Meld fejl, delvise resultater og ubekræftede resultater tydeligt. Læs ikke titler,
 tidspunkter, steder, navne, adresser, beløb, referencer, koder eller andre private detaljer højt, medmindre
 Dan beder om dem.
+Hvis en anmodning kræver værktøjer, skal du først sige én kort, naturlig sætning i første person om,
+hvad du vil undersøge eller gøre, uden at påstå, at det allerede er lykkedes, eller give et tidsestimat.
+Brug derefter værktøjerne, og giv resultatet én gang. Besvar direkte spørgsmål uden en unødvendig
+indledning.
 
 ${additionalRealtimeInstructions(
     personality, presence, projects, memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
@@ -166,8 +172,8 @@ ${additionalRealtimeInstructions(
 
 function voiceCapabilityGuidance(language: 'da' | 'en'): string {
   return language === 'da'
-      ? `Brug først jarvis_discover_capabilities for at finde den relevante kapabilitet og dens skema. Kald derefter jarvis_execute_capability med det nøjagtige kapabilitetsnavn og argumenterne. Skemaet er vejledning; backend validerer stadig alle argumenter og anvender den eksisterende adgangs- og godkendelsespolitik. En mundtlig accept erstatter aldrig godkendelse i Now.`
-      : `Use jarvis_discover_capabilities first to find the relevant capability and its schema. Then call jarvis_execute_capability with the exact capability name and arguments. The schema guides the call; the backend still validates every argument and applies the existing authorization and approval policy. Spoken agreement never replaces approval in Now.`;
+      ? `Brug først jarvis_discover_capabilities for at finde den relevante kapabilitet og dens skema. Kald derefter jarvis_execute_capability med det nøjagtige kapabilitetsnavn og argumenterne. Skemaet er vejledning; backend validerer stadig alle argumenter og anvender den eksisterende adgangs- og godkendelsespolitik. En mundtlig accept erstatter ikke godkendelse i Now, undtagen når backend knytter Dans næste svar til det aktuelle afventende madestimat. Opret aldrig estimatet igen fra et ja; bekræft kun det faktiske værktøjsresultat.`
+      : `Use jarvis_discover_capabilities first to find the relevant capability and its schema. Then call jarvis_execute_capability with the exact capability name and arguments. The schema guides the call; the backend still validates every argument and applies the existing authorization and approval policy. Spoken agreement does not replace approval in Now, except when the backend binds Dan's next reply to the current pending food estimate. Never restage an estimate from a yes; report only the actual tool result.`;
 }
 
 function compactInstructions(
@@ -358,9 +364,9 @@ export function createRealtimeSessionUpdate(
   return {
     type: 'session.update',
     session: {
-      instructions: capabilityMode === 'discovery'
+      instructions: `${capabilityMode === 'discovery'
         ? `${instructions}\n\n${voiceCapabilityGuidance(language)}`
-        : instructions,
+        : instructions}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. Stage food estimates with health_food_review log_estimate before inviting confirmation; prose or lookup alone creates no pending proposal. Only the backend can bind a new reply to that exact proposal. Never use historical agreement or claim a write without a committed tool receipt.`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },

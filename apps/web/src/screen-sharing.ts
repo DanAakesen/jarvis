@@ -5,7 +5,6 @@ import { isVisualCapturedAt, isVisualFrameId, isVisualQuestion, parseVisualTurnC
 
 const MAX_FRAME_BYTES = 1_000_000;
 const MAX_SHARED_WINDOW_TITLE_CHARACTERS = 300;
-const CAMERA_IDLE_TIMEOUT_MS = 10 * 60_000;
 const INSPECTION_TIMEOUT_MS = 30_000;
 
 export interface ScreenShareController {
@@ -25,8 +24,6 @@ export interface ScreenShareController {
   readonly conversation?: boolean;
   readonly observationNotice?: string;
   inspectTurn?(sessionId: string, question: string, signal?: AbortSignal, turnId?: string): Promise<VisualTurnContext>;
-  /** Camera only: a user turn resets the idle shutdown, even while docked. */
-  recordActivity?(): void;
   switchCamera?(): Promise<void>;
   /** Faces the camera the given way, starting it when it is off. Never asks for more than `start` does. */
   selectFacing?(facing: 'user' | 'environment', onError?: (message: string) => void): Promise<boolean>;
@@ -173,7 +170,6 @@ function useVisionCapture(
   const streamRef = useRef<MediaStream | null>(null);
   const startRequestRef = useRef(0);
   const startPendingRef = useRef(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inspectionRef = useRef<AbortController | null>(null);
   const frameRequests = useRef(new Set<AbortController>());
   const cameraTurnRequest = useRef(0);
@@ -198,8 +194,6 @@ function useVisionCapture(
     setObservationNotice('');
     startRequestRef.current += 1;
     startPendingRef.current = false;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
     inspectionRef.current?.abort();
     inspectionRef.current = null;
     for (const request of frameRequests.current) request.abort();
@@ -212,15 +206,6 @@ function useVisionCapture(
     setStarting(false);
     setInspecting(false);
   }, [source]);
-
-  const recordActivity = useCallback(() => {
-    if (source !== 'camera' || !streamRef.current) return;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      stop();
-      setError('Camera turned off after ten minutes without a user turn. Turn it on to continue.');
-    }, CAMERA_IDLE_TIMEOUT_MS);
-  }, [source, stop]);
 
   const startCapture = useCallback(async (onError?: (message: string) => void, exactFacing = false): Promise<boolean> => {
     setError('');
@@ -276,7 +261,6 @@ function useVisionCapture(
       streamRef.current = stream;
       if (source === 'camera') setPreviewStream(stream);
       track.addEventListener('ended', stop, { once: true });
-      recordActivity();
       setSharing(true);
       return true;
     } catch (reason) {
@@ -295,7 +279,7 @@ function useVisionCapture(
         setStarting(false);
       }
     }
-  }, [label, recordActivity, source, stop]);
+  }, [label, source, stop]);
 
   const start = useCallback(async (onError?: (message: string) => void) => {
     return startCapture(onError);
@@ -304,7 +288,6 @@ function useVisionCapture(
   useEffect(() => () => {
     startRequestRef.current += 1;
     startPendingRef.current = false;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     inspectionRef.current?.abort();
     inspectionRef.current = null;
     for (const request of frameRequests.current) request.abort();
@@ -553,7 +536,7 @@ function useVisionCapture(
   }, [facing, startCapture, stop]);
 
   return source === 'camera'
-    ? { sharing, starting, inspecting, error, start, stop, inspect, captureFrame, previewStream, recordActivity,
+    ? { sharing, starting, inspecting, error, start, stop, inspect, captureFrame, previewStream,
       conversation, observationNotice, ...(conversation ? { inspectTurn } : {}),
       ...(facing ? { facing } : {}), switchCamera, selectFacing }
     : { sharing, starting, inspecting, error, start, stop, inspect, captureFrame };

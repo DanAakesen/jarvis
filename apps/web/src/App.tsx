@@ -44,8 +44,8 @@ import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
 import { FactoryIssueNavigationContext, NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useFocusedFactoryIssue, useVisibleSettingsSection, waitForFactoryIssue, type FactoryIssueNavigator, type NavigateRequest } from './page-navigation';
-import { FolioPane } from './Folio';
-import { MobileCaption, MobileMenu } from './MobileShell';
+import { WorkspacesPane } from './Workspaces';
+import { MobileBottomNav, MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
 import { readPageWindows, useReadback } from './window-readback';
@@ -176,7 +176,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
   const shellElement = useRef<HTMLDivElement>(null);
-  usePhoneChatViewport(shellElement, signedIn && phone && !voiceActive);
   // Phone shell: the open windows list and the page menu are sheets opened from the top bar.
   const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
   const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
@@ -184,22 +183,24 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const closeMenu = useCallback(() => setMenuOpen(false), [setMenuOpen]);
   // Jarvis switching the page Dan is looking at (P9-40): the route changes with the usual page transition, then the
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
-  // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
-  const [folioOpen, setFolioOpen] = useState(false);
-  const [folioPath, setFolioPath] = useState(pathname);
-  if (folioPath !== pathname) {
-    setFolioPath(pathname);
-    setFolioOpen(false);
+  // The Workspaces pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
+  const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const mobileChatScreen = home && !workspacesOpen;
+  usePhoneChatViewport(shellElement, signedIn && phone && mobileChatScreen && !voiceActive);
+  const [workspacesPath, setWorkspacesPath] = useState(pathname);
+  if (workspacesPath !== pathname) {
+    setWorkspacesPath(pathname);
+    setWorkspacesOpen(false);
   }
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [areaSections, setAreaSections] = useState<AreaSections | null>(null);
   const closePagePanels = useCallback(() => {
-    if (document.activeElement?.closest('#folio-pane')) {
+    if (document.activeElement?.closest('#workspaces-pane')) {
       document.getElementById('content')?.focus({ preventScroll: true });
     }
-    setFolioOpen(false);
+    setWorkspacesOpen(false);
     setNavigationOpen(false);
-  }, [setFolioOpen, setNavigationOpen]);
+  }, [setWorkspacesOpen, setNavigationOpen]);
   const openTaskRef = useRef<(taskId: string) => void>(() => {});
   const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
@@ -210,7 +211,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     const target = resolveNavigation(request, dailyEnabled);
     if (!target.ok) return false;
     if (target.issueNumber !== undefined) return false;
-    if (target.pane === 'folio') { setFolioOpen(true); return true; }
+    if (target.pane === 'workspaces') { setWorkspacesOpen(true); return true; }
     if (pathnameRef.current !== target.path && navigationGuard.current) return false;
     closePagePanels();
     if (pathnameRef.current !== target.path) navigate(target.path);
@@ -221,7 +222,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     cancelReveal.current();
     cancelReveal.current = revealId ? revealWhenReady(() => document.getElementById(revealId), reduced) : () => {};
     return true;
-  }, [closePagePanels, dailyEnabled, navigate, setFolioOpen]);
+  }, [closePagePanels, dailyEnabled, navigate, setWorkspacesOpen]);
   useEffect(() => () => cancelReveal.current(), []);
   useEffect(() => {
     if (pathname !== '/factory/kanban') issueNavigationAbort.current?.abort();
@@ -243,13 +244,14 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   if (JSON.stringify(viewHistory.current) !== JSON.stringify(location)) setViewHistory({ current: location, previous: viewHistory.current });
   const view: LookingAtView = useMemo(() => ({
     ...location,
-    folioOpen,
+    workspacesOpen,
+    folioOpen: workspacesOpen,
     ...(frontViewId && location.issueNumber === undefined ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
-  }), [folioOpen, frontViewId, location, viewHistory.previous]);
-  // The page and Folio pane Dan is reading, reported as windows with their text (P9-63).
-  const pageKey = `${viewPage}|${viewSection ?? ''}|${folioOpen}`;
-  const pageReadback = useReadback(() => ({ key: pageKey, windows: readPageWindows(viewPage, viewSection, folioOpen) }), signedIn, pageKey);
+  }), [workspacesOpen, frontViewId, location, viewHistory.previous]);
+  // The page and Workspaces pane Dan is reading, reported as windows with their text (P9-63).
+  const pageKey = `${viewPage}|${viewSection ?? ''}|${workspacesOpen}`;
+  const pageReadback = useReadback(() => ({ key: pageKey, windows: readPageWindows(viewPage, viewSection, workspacesOpen) }), signedIn, pageKey);
   const pageWindows = pageReadback?.key === pageKey ? pageReadback.windows : undefined;
   const snapshotWindows = useMemo(
     () => pageWindows?.length ? [...openWindows, ...pageWindows].slice(0, 32) : openWindows,
@@ -384,7 +386,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     setChatOutPath(pathname);
     if (chatOut) setChatOut(false);
   }
-  // On phones there is no rail: the chat bar is the dock at the bottom of every page (Dan, 8 October).
+  // Phone typing belongs to Chat; the mounted session still survives page navigation.
   const chatPlace: 'home' | 'out' | 'rail' = !signedIn || home ? 'home' : phone || chatOut ? 'out' : 'rail';
   const railOrb = useRef<HTMLButtonElement>(null);
   const { railTipProps, railTip } = useRailTip();
@@ -523,7 +525,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       id: cameraPreviewViewId,
       title: 'Camera preview',
       presentation: 'camera-preview' as const,
-      initialGeometry: { x: 0.7, y: 0.02, width: 0.29, height: 0.42, columns: 1 },
+      initialGeometry: { x: 0.76, y: 0.02, width: 0.23, height: 0.32, columns: 1 },
       onClose: camera.stop,
       content: { status: 'ready' as const, content: <CameraPreview camera={camera} /> },
     }] : []),
@@ -589,21 +591,21 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     ? areaSectionLinks(activeArea.path, areaSections) : null;
   // The navigation panel only exists for an area with more than one page; otherwise there is nothing to choose.
   const navigationAvailable = navigationItems.length > 1 || activeArea?.sections === true;
-  const navigationShown = navigationOpen && navigationAvailable && !folioOpen;
+  const navigationShown = navigationOpen && navigationAvailable && !workspacesOpen;
 
-  // The left sidebar slot holds either the area navigation or the Folio, and whichever is open collapses on a press that starts
+  // The left sidebar slot holds either the area navigation or Workspaces, and whichever is open collapses on a press that starts
   // and ends outside it. The rail is exempt because its buttons toggle the panels themselves, and a press that starts inside
   // (resizing the panel) never closes it, wherever the pointer is released.
-  const sidebarShown = navigationShown || folioOpen;
+  const sidebarShown = navigationShown || workspacesOpen;
   useEffect(() => {
     if (!sidebarShown) return;
     let pressedOutside = false;
-    const outside = (target: EventTarget | null) => target instanceof Element && !target.closest('#area-navigation, #folio-pane, .area-rail');
+    const outside = (target: EventTarget | null) => target instanceof Element && !target.closest('#area-navigation, #workspaces-pane, .area-rail');
     const onDown = (event: PointerEvent) => { pressedOutside = outside(event.target); };
     const onUp = (event: PointerEvent) => {
       const dismiss = pressedOutside && outside(event.target);
       pressedOutside = false;
-      if (dismiss) { setNavigationOpen(false); setFolioOpen(false); }
+      if (dismiss) { setNavigationOpen(false); setWorkspacesOpen(false); }
     };
     const onCancel = () => { pressedOutside = false; };
     document.addEventListener('pointerdown', onDown);
@@ -680,7 +682,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
 
   return (
     <TaskWindowsContext.Provider value={signedIn ? taskWindowsApi : null}>
-    <div ref={shellElement} className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
+    <div ref={shellElement} className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || workspacesOpen)} data-workspaces-open={signedIn && workspacesOpen}
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
       data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen}
       style={{ ...panelWidths, '--conversation-composer-height': `${conversationComposerHeight}px` } as CSSProperties}
@@ -697,7 +699,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               data-rail-tip={navigationShown ? 'Collapse navigation' : 'Expand navigation'}
               aria-expanded={navigationShown}
               aria-controls="area-navigation"
-              onClick={() => { setFolioOpen(false); setNavigationOpen((open) => !open); }}
+              onClick={() => { setWorkspacesOpen(false); setNavigationOpen((open) => !open); }}
             >
               <ShellIcon name="navigation" />
             </button>
@@ -707,11 +709,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" data-tone={area.id} data-rail-tip={area.label} to={`/${area.path}`} aria-label={area.label} onClick={(event) => {
-              setFolioOpen(false);
+              setWorkspacesOpen(false);
               if (area.sections && activeArea?.id === area.id) {
                 // Already on this area: toggle its pages and keep the page the owner is on instead of reloading the first one.
                 event.preventDefault();
-                setNavigationOpen((open) => folioOpen || !open);
+                setNavigationOpen((open) => workspacesOpen || !open);
                 return;
               }
               setNavigationOpen(area.navigation.length > 1 || area.sections === true);
@@ -719,9 +721,9 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
-          <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} data-tone="folio" data-rail-tip="Folio" type="button" aria-label="Folio" aria-pressed={folioOpen}
-            aria-controls="folio-pane" onClick={() => setFolioOpen((open) => !open)}>
-            <ShellIcon name="folio" /><span className="visually-hidden">Folio</span>
+          <button className={`rail-link rail-workspaces${workspacesOpen ? ' active' : ''}`} data-tone="workspaces" data-rail-tip="Workspaces" type="button" aria-label="Workspaces" aria-pressed={workspacesOpen}
+            aria-controls="workspaces-pane" onClick={() => setWorkspacesOpen((open) => !open)}>
+            <ShellIcon name="workspaces" /><span className="visually-hidden">Workspaces</span>
           </button>
           {!home && (
             <button ref={railOrb} className="input-orb rail-chat-orb" type="button" aria-expanded={chatOut} aria-controls="conversation-composer"
@@ -765,8 +767,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             min={sidebarLimits.min} max={sidebarLimits.max} onChange={changeSidebarWidth} />}
         </aside>
       )}
-      {signedIn && <FolioPane backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} open={folioOpen}
-        onClose={() => setFolioOpen(false)} refreshKey={openWindows.length} />}
+      {signedIn && <WorkspacesPane backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} open={workspacesOpen}
+        onClose={() => setWorkspacesOpen(false)} refreshKey={openWindows.length} />}
       <header className="app-topbar">
         <div className="topbar-context">
           <Link className="brand" to="/" aria-label="Jarvis home" onClick={closePagePanels}>Jarvis</Link>
@@ -801,12 +803,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
             >
               <ShellIcon name="context" />
             </button>
-            {phone && (
-              <button className="topbar-icon-button mobile-menu-button" type="button" aria-label="Menu" aria-expanded={menuOpen}
-                aria-controls="mobile-menu" onClick={() => setMenuOpen((open) => !open)}>
-                <ShellIcon name="navigation" />
-              </button>
-            )}
             <NavLink className="settings-link" to="/settings" aria-label="Settings" title="Settings" onClick={closePagePanels}>
               <ShellIcon name="settings" />
             </NavLink>
@@ -840,6 +836,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   camera={camera}
                   screenShare={screenShare}
                   docked={chatPlace === 'rail'}
+                  phone={phone}
+                  composerVisible={!phone || mobileChatScreen}
                   {...(chatPlace === 'out' && !phone ? { onDismiss: collapseChat } : {})}
                 />
               )}
@@ -875,7 +873,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
+          <MobileBottomNav menuOpen={menuOpen} dailyEnabled={dailyEnabled} workspacesOpen={workspacesOpen}
+            onToggleWorkspaces={() => { setNavigationOpen(false); setWorkspacesOpen((open) => !open); }}
+            onOpenMenu={() => setMenuOpen((open) => !open)} onNavigate={closePagePanels} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels}
+            onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
             {...(sectionLinks && activeArea ? { sections: { label: activeArea.label, links: sectionLinks } } : {})} />
         </>
       )}

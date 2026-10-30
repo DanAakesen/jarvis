@@ -7,7 +7,7 @@ import {
   WorkspaceHtmlArtifactStore,
   type WorkspaceHtmlSource,
 } from '../database/workspace-html-artifact-store.js';
-import type { FolioStore } from '../database/folio-store.js';
+import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import { validateHtmlApp } from './html-artifact-validation.js';
 import { isJarvisToolCall } from './tool-origin.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -105,7 +105,7 @@ function htmlView(artifactId: string, title: string) {
 
 function createHtmlViewTool(
   artifacts: WorkspaceHtmlArtifactStore,
-  folio?: FolioStore,
+  workspaceItems?: WorkspaceItemsStore,
 ): BackendModule['tools'][number] {
   return {
     name: 'create_html_view',
@@ -130,7 +130,7 @@ function createHtmlViewTool(
         input.sources as WorkspaceHtmlSource[],
         signal,
       );
-      await folio?.record(ownerId, {
+      await workspaceItems?.record(ownerId, {
         id: `html_app:${artifact.id}`,
         kind: 'html_app',
         sourceId: artifact.id,
@@ -193,7 +193,7 @@ function readHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModule[
 function updateHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModule['tools'][number] {
   return {
     name: 'update_html_view',
-    description: 'When Dan refers to an existing HTML report or app, edit it with update_html_view instead of creating a new one. Read with read_html_view first. Keep its artifactId, Folio entry and pin state; store a new version and update the existing window. Omitted title and sources are preserved; sources replaces the list when supplied. Use a valid self-contained HTML document within 512 KB, up to 50 HTTPS sources, no base element or script src.',
+    description: 'When Dan refers to an existing HTML report or app, edit it with update_html_view instead of creating a new one. Read with read_html_view first. Keep its artifactId, Workspaces entry and pin state; store a new version and update the existing window. Omitted title and sources are preserved; sources replaces the list when supplied. Use a valid self-contained HTML document within 512 KB, up to 50 HTTPS sources, no base element or script src.',
     inputSchema: updateHtmlViewSchema,
     bodyLimit: maxToolBodyBytes,
     sensitive: true,
@@ -236,10 +236,10 @@ function updateHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
   };
 }
 
-export function createHtmlViewModule(artifacts: WorkspaceHtmlArtifactStore, folio?: FolioStore): BackendModule {
+export function createHtmlViewModule(artifacts: WorkspaceHtmlArtifactStore, workspaceItems?: WorkspaceItemsStore): BackendModule {
   return {
     id: 'html-view',
-    tools: [createHtmlViewTool(artifacts, folio), readHtmlViewTool(artifacts), updateHtmlViewTool(artifacts)],
+    tools: [createHtmlViewTool(artifacts, workspaceItems), readHtmlViewTool(artifacts), updateHtmlViewTool(artifacts)],
     registerRoutes: async (app: FastifyInstance) => {
       app.get<{ Params: { artifactId: string } }>('/factory/workspace-artifacts/html/:artifactId', {
         schema: {

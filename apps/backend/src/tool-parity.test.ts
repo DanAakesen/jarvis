@@ -17,6 +17,7 @@ import type { BackendModule } from './modules.js';
 import { createVoiceRelayModule } from './voice/relay.js';
 import { VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL } from './voice/realtime.js';
 import { createGoogleModule } from './google/tools.js';
+import { createWorkspacesModule } from './core/workspaces.js';
 import type sql from 'mssql';
 import { composeDaily } from './daily/composition.js';
 import type { ConversationStore } from './core/conversation-store.js';
@@ -27,6 +28,11 @@ const apps: ReturnType<typeof buildApp>[] = [];
 const parityExecute = vi.fn(async () => ({ status: 'synthetic-ok' }));
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+
+function projectSelectorDescription(schema: unknown): string {
+  const properties = (schema as { properties?: Record<string, { description?: string }> }).properties;
+  return properties?.project?.description ?? '';
+}
 
 const browserAgent = {
   runClause: async () => ({}),
@@ -41,6 +47,7 @@ const additionalTools: BackendModule = {
     ...createBrowserAgentModule(browserAgent).tools,
     ...createVaultModule({} as never).tools,
     ...createHtmlResearchModule(() => ({} as never), 'gpt-5.5', {} as never).tools,
+    ...createWorkspacesModule({} as never, {} as never).tools,
     ...createGoogleModule({
       request: async () => { throw new Error('Parity fixtures must not call Google'); },
     }, { timeZone: 'Europe/Copenhagen' }).tools,
@@ -183,6 +190,9 @@ describe('voice and chat tool parity', () => {
     const response = await app.inject({ url: '/tools', headers });
     expect(response.statusCode).toBe(200);
     const catalogue = response.json() as { name: string; inputSchema: unknown }[];
+    const createIssue = catalogue.find(({ name }) => name === 'create_issue');
+    expect(createIssue).toBeDefined();
+    expect(projectSelectorDescription(createIssue?.inputSchema)).toContain('Natural references');
 
     if (voice) {
       const { socket } = await voice.start(language);
@@ -194,7 +204,7 @@ describe('voice and chat tool parity', () => {
     expect(catalogue.map(({ name }) => name)).toEqual(expect.arrayContaining([
       'mail_search', 'calendar_create_event', 'calendar_create_events',
       'calendar_get_pending_change', 'calendar_confirm_change', 'vault_search', 'get_system_health',
-      'daily_query', 'daily_food', 'daily_food_review',
+      'health_query', 'health_food', 'health_food_review',
     ]));
     expect(missingInstructionTools(capabilityInstructions(defaultSettings.memory), catalogue)).toEqual([]);
   });
@@ -221,50 +231,45 @@ describe('voice and chat tool parity', () => {
 
     const toolOutput = (callId: string) => fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === callId)?.item.output;
-    fallback.event('response.function_call_arguments.done', {
-      name: 'parity_probe', call_id: 'unadvertised', arguments: '{"value":"synthetic"}',
-    });
-    await vi.waitFor(() => expect(toolOutput('unadvertised')).toBeDefined());
+    const call = async (name: string, callId: string, args: string) => {
+      const responseId = `${callId}_response`;
+      fallback.event('response.created', { response: { id: responseId } });
+      fallback.event('response.function_call_arguments.done', { name, call_id: callId, arguments: args });
+      expect(toolOutput(callId)).toBeUndefined();
+      fallback.event('response.done', { response: { id: responseId, status: 'completed' } });
+      await vi.waitFor(() => expect(toolOutput(callId)).toBeDefined());
+    };
+    await call('parity_probe', 'unadvertised', '{"value":"synthetic"}');
     expect(JSON.parse(toolOutput('unadvertised') as string)).toMatchObject({ outcome: 'refused' });
     expect(parityExecute).not.toHaveBeenCalled();
 
     const discovered: string[] = [];
+    let discoveredIssueParameters: unknown;
     let offset: number | null = 0;
     let page = 0;
     do {
       const callId = `page_${page++}`;
-      fallback.event('response.function_call_arguments.done', {
-        name: VOICE_CAPABILITY_DISCOVERY_TOOL,
-        call_id: callId,
-        arguments: JSON.stringify({ offset }),
-      });
-      await vi.waitFor(() => expect(toolOutput(callId)).toBeDefined());
+      await call(VOICE_CAPABILITY_DISCOVERY_TOOL, callId, JSON.stringify({ offset }));
       const output = JSON.parse(toolOutput(callId) as string) as {
-        outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
+        outcome: string;         result: { capabilities: { name: string; parameters: unknown }[]; nextOffset: number | null };
       };
       expect(output.outcome).toBe('ok');
       discovered.push(...output.result.capabilities.map(({ name }) => name));
+      discoveredIssueParameters ??= output.result.capabilities.find(({ name }) => name === 'create_issue')?.parameters;
       offset = output.result.nextOffset;
     } while (offset !== null);
     expect(discovered.sort()).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(projectSelectorDescription(discoveredIssueParameters)).toContain('Natural references');
 
-    fallback.event('response.function_call_arguments.done', {
-      name: VOICE_CAPABILITY_EXECUTION_TOOL,
-      call_id: 'advertised',
-      arguments: JSON.stringify({ capability: 'parity_probe', arguments: { value: 'synthetic' } }),
-    });
-    await vi.waitFor(() => expect(toolOutput('advertised')).toBeDefined());
+    await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'advertised',
+      JSON.stringify({ capability: 'parity_probe', arguments: { value: 'synthetic' } }));
     expect(JSON.parse(toolOutput('advertised') as string)).toMatchObject({
       tool: 'parity_probe', outcome: 'ok', result: { status: 'synthetic-ok' },
     });
     expect(parityExecute).toHaveBeenCalledOnce();
 
-    fallback.event('response.function_call_arguments.done', {
-      name: VOICE_CAPABILITY_EXECUTION_TOOL,
-      call_id: 'system_health',
-      arguments: JSON.stringify({ capability: 'get_system_health', arguments: {} }),
-    });
-    await vi.waitFor(() => expect(toolOutput('system_health')).toBeDefined());
+    await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'system_health',
+      JSON.stringify({ capability: 'get_system_health', arguments: {} }));
     expect(JSON.parse(toolOutput('system_health') as string)).toMatchObject({
       tool: 'get_system_health', outcome: 'ok', result: { components: expect.any(Array) },
     });

@@ -14,8 +14,7 @@
 /* Messages scroll up under the controls and fade out at the top edge of the window. */
 .conversation-window-host > .conversation-transcript {
   padding: var(--space-7) var(--space-5) var(--space-4);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
-  mask-image: linear-gradient(to bottom, transparent 0, var(--ink-solid) 64px);
+
 }
 .conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: var(--space-2); padding: 0 var(--space-4) 0 var(--space-3); border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 6%, var(--surface)); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-latest svg { width: 18px; height: 18px; flex: 0 0 auto; }
@@ -25,6 +24,9 @@
 /* Typing mode on the Jarvis page: the workspace fills the stage above the composer without its own panel chrome. */
 .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) { display: flex; flex-direction: column; }
 .app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
+/* Keep the room failure notice above the desktop workspace, never between its
+   initially docked history and composer. Positioned history already shares a seam. */
+.app-shell[data-phone="false"][data-voice-active="false"] .jarvis-stage-fallback { order: -2; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area:not([hidden]):has(.workspace-tabs) { display: block; order: -1; flex: 0 0 auto; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .workspace-shell-area { order: -1; flex: 1; min-height: 0; overflow: hidden; }
@@ -70,9 +72,10 @@
 .conversation-loading, .conversation-history-error { padding-block: var(--space-3); }
 .conversation-loading > p, .conversation-empty { color: var(--text-muted); font-size: var(--type-small); }
 .conversation-history-error > p { color: var(--error); }
-.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: var(--space-5); flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
+.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: var(--space-5); flex: 0 0 auto; width: 100%; max-width: none; margin: 0 auto; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius-window); background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input-slot { display: contents; }
 .conversation-input-slot[data-positioned] { display: block; flex: 0 0 auto; height: var(--conversation-composer-height, 52px); }
+.conversation-input-slot[hidden] { display: none; }
 /* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
 .app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page { --chat-width: 100%; }
 /* In typing mode the voice wrappers dissolve into the shared composer grid. Feedback is portalled outside the composer. */
@@ -84,7 +87,7 @@
 .conversation-input[data-voice-active="true"] { display: block; margin: auto; }
 .conversation-history > p, .history-feedback p, .history-error { font-size: var(--type-body); }
 .conversation-messages { margin: var(--space-5) 0; padding: 0; list-style: none; }
-.conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0; padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
+.conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0 calc(var(--space-4) + var(--space-2)); padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 75%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
 .conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -151,6 +154,9 @@
 .conversation-history .composer-send:active:not(:disabled) svg { transform: scale(.86); }
 .conversation-history .composer-send:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
 .conversation-history .composer-send:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.conversation-history .composer-dictate { display: none; }
+.conversation-history .composer-dictate svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.conversation-history .composer-dictate:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* The plane slides into place when sending becomes possible, and flies out then glides back in, dimmed, after a send. */
 @keyframes composer-send-arm { from { transform: translate(-3px, 3px) scale(.82); } }
 @keyframes composer-send-launch {
@@ -237,6 +243,8 @@
 .streaming-reply, .interrupted-reply { overflow-wrap: anywhere; }
 .streaming-reply .markdown-content { display: contents; }
 .streaming-reply .markdown-content > p:last-child { display: inline; }
+.streaming-acknowledgment { margin: var(--space-2) 0; color: var(--text); overflow-wrap: anywhere; }
+.streaming-food-invitation p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .streaming-message { max-width: min(88%, 62ch); margin: var(--space-4) 0; animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .streaming-reply { margin: var(--space-2) 0; color: var(--text); }
 .chat-thinking { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); }
@@ -264,6 +272,31 @@
   .conversation-history .composer { gap: var(--space-1); }
 }
 
+.app-shell .conversation-input[data-voice-active="false"] { grid-template-columns: minmax(0, 1fr); }
+.app-shell .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: none; }
+.app-shell .conversation-history .composer { grid-template-columns: 44px minmax(0, 1fr) 44px 44px; gap: var(--space-2); }
+.app-shell .conversation-history .composer > .composer-more { grid-column: 1; grid-row: 1; padding: 0; }
+.app-shell .conversation-history .composer > textarea,
+.app-shell .conversation-history .composer > .composer-prompt { grid-column: 1 / -1; }
+.app-shell .conversation-history .composer > .composer-more,
+.app-shell .conversation-history .composer > .composer-dictate,
+.app-shell .conversation-history .composer > .composer-send { grid-row: 2; }
+.app-shell .conversation-history .composer-more .more-menu-trigger { width: 44px; height: 44px; border: 0; background: transparent; box-shadow: none; color: var(--focus); }
+.app-shell .conversation-history .composer-more .more-menu-trigger svg { width: 24px; height: 24px; }
+.app-shell .conversation-history .composer > .composer-dictate { display: inline-flex; grid-column: 3; min-height: 44px; align-items: center; justify-content: center; gap: 0; padding: 0; border: 0; box-shadow: none; border-radius: var(--radius-control); background: transparent; color: var(--glass-glow-warm); font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; }
+.app-shell .conversation-history .composer > .composer-dictate:hover:not(:disabled) { background: var(--glass-hover); }
+.app-shell .conversation-history .composer > .composer-dictate:active:not(:disabled) { background: var(--glass-pressed); }
+.app-shell .conversation-history .composer > .composer-dictate:disabled { color: var(--disabled-text); cursor: not-allowed; }
+.app-shell .conversation-history .composer > .composer-screen-stop { display: inline-grid; grid-column: 2; justify-self: end; place-items: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--record-stop); cursor: pointer; }
+.app-shell .conversation-history .composer-screen-stop svg { width: 20px; height: 20px; flex: 0 0 auto; fill: currentColor; }
+.app-shell .conversation-history .composer-screen-stop:hover { background: var(--error-wash); }
+.app-shell .conversation-history .composer-screen-stop:active { background: var(--glass-pressed); }
+.app-shell .conversation-history .composer-screen-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
+.app-shell .conversation-history .composer > .composer-send { display: grid; grid-column: 4; width: 44px; height: 44px; }
+.app-shell .conversation-history .composer-status { grid-column: 1 / -1; }
+.app-shell .conversation-history .composer textarea { max-height: 160px; overflow-y: auto; }
+.app-shell .conversation-history .composer > .composer-dictate:focus-visible { outline-offset: 0; }
+
 @media (max-width: 380px) {
   .conversation-greeting { padding: var(--space-2); }
   .conversation-greeting h2 { font-size: var(--type-subheading); line-height: var(--line-tight); }
@@ -273,7 +306,16 @@
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-voice-active="false"] .shell-main { display: flex; flex-direction: column; }
   .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-shell-area { padding: var(--space-3) var(--space-3) 0; }
-  .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; height: var(--conversation-height, auto); max-height: min(var(--conversation-height, min(46dvh, 420px)), 100%); }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not([hidden], .workspace-window-minimized) {
+    position: relative; inset: auto; align-self: stretch; flex: 1 1 auto; width: 100%; height: auto; max-height: none; min-height: 0;
+    overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; animation: none;
+  }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation::before { content: none; }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation:focus-within { box-shadow: none; }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation .workspace-window-heading { display: none; }
+  .app-shell[data-phone="true"][data-voice-active="false"] .workspace-window-conversation .conversation-window-host > .conversation-transcript {
+    padding: var(--space-3); -webkit-mask-image: none; mask-image: none;
+  }
   .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation .workspace-window-heading { position: relative; flex-shrink: 0; min-height: 50px; }
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
@@ -425,28 +467,20 @@
 @media (prefers-reduced-motion: reduce) { .tool-chip .assembling-j-block, .tool-chip[data-state="running"]::after { animation: none; } }
 :root[data-motion="reduced"] :is(.tool-chip .assembling-j-block, .tool-chip[data-state="running"]::after) { animation: none; }
 
-.composer-live { display: grid; grid-column: 1 / -1; grid-row: 2; gap: var(--space-2); min-width: 0; margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--type-caption); }
-.composer-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); box-shadow: 0 0 8px var(--error); animation: kanban-live 2s ease-in-out infinite; }
-.composer-live-stop { min-height: 44px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
-.composer-live-stop:hover { background: var(--error-wash); }
-.composer-live-stop:disabled { opacity: .6; cursor: default; }
-.composer-live-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.composer-live-stop:active:not(:disabled) { background: var(--glass-hover); transform: scale(.97); }
-.conversation-input[data-voice-active="false"]:has(.composer-live) .action-row { align-self: start; }
-.composer-live-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .composer-live-dot { animation: none; } }
 /* A turn whose tools ran but Jarvis has not replied yet: a slim Jarvis-side row of chips. */
 .conversation-message.conversation-tools-only { padding: var(--space-2) var(--space-3); }
 .conversation-tools-only .message-tools { margin: 0; }
 
-/* Time on the bubble (Dan, 7 October): a small glass tag sitting on the top-right rim, shown on hover or focus. */
+/* Message times sit below the bubble, shown on hover or focus on pointer devices. */
 .conversation-message .message-metadata {
-  position: absolute; z-index: 1; top: -9px; right: 12px; display: block; margin: 0; padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-pill); background: var(--stage-slab); backdrop-filter: blur(10px);
-  border: 1px solid var(--rule);
+  position: absolute; top: calc(100% + var(--space-1)); right: var(--space-2); display: flex; margin: 0; padding: 0;
   color: var(--text-muted); font-size: var(--type-caption); line-height: var(--line-tight); white-space: nowrap; pointer-events: none;
 }
+.conversation-message[data-speaker="jarvis"] .message-metadata { right: auto; left: var(--space-2); }
 .conversation-message .message-metadata:has(> time:only-child:empty) { display: none; }
+@media (max-width: 700px) {
+  .conversation-message .message-metadata { position: static; width: fit-content; margin: var(--space-2) 0 0 auto; }
+}
 .conversation-message[data-speaker="dan"] > .message-visual-status {
   margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-small); white-space: normal;
 }
@@ -517,12 +551,12 @@
 @keyframes phrase-shine { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 @media (prefers-reduced-motion: reduce) { .live-phrase[data-typed] { animation: none; color: var(--text-muted); background: none; } }
 :root[data-motion="reduced"] .live-phrase[data-typed] { animation: none; color: var(--text-muted); background: none; }
-/* Bubbles v3 (Dan, 7 October): the conversation already sits on blurred glass, so bubbles carry no fill of their own.
-   A fine rim (warm for Dan, cool for Jarvis) and the faintest tint shape them; the text sits on the window's glass. */
+/* Match the Plus sheet frost behind sharp text; retain the existing rims/tints. */
 .conversation-message[data-speaker="dan"],
 .conversation-message[data-speaker="jarvis"] {
-  background: transparent;
-  backdrop-filter: none;
+  background: var(--chrome-glass-surface);
+  backdrop-filter: blur(var(--readability-glass-blur));
+  -webkit-backdrop-filter: blur(var(--readability-glass-blur));
   box-shadow: none;
 }
 .conversation-message[data-speaker="dan"] {
@@ -613,6 +647,7 @@
 
 .conversation-history .composer > textarea, .conversation-history .composer > .composer-prompt { grid-row: 1; grid-column: 1; }
 .conversation-history .composer > .composer-more, .conversation-history .composer > .composer-send { grid-row: 1; }
+.conversation-history .composer:has(.composer-attachments > .attachment-chips, .composer-attachments > .attachment-hint, .composer-attachments > .chat-error) > :is(textarea, .composer-prompt, .composer-more, .composer-send) { grid-row: 2; }
 .conversation-history .composer textarea::placeholder { color: transparent; }
 .composer-prompt { align-self: center; min-width: 0; padding: 0 var(--space-1); overflow: hidden; color: var(--text-muted); font-size: var(--type-body); line-height: var(--line-body);
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity var(--motion-state) var(--ease-standard); }
@@ -718,4 +753,29 @@
 }
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"] .workspace-shell-area .workspace-window {
   pointer-events: auto;
+}
+/* Feedback participates in dock measurement but stays above the composer surface. */
+.conversation-input-stack { width: 100%; max-width: var(--chat-width); margin-inline: auto; }
+.composer-feedback:empty { display: none; }
+.composer-feedback { min-width: 0; }
+.composer-feedback > .composer-status { margin: 0 0 var(--space-2); padding: var(--space-2); border-radius: var(--radius-control); background: var(--surface-translucent); }
+.app-shell .conversation-history .composer > :is(textarea, .composer-prompt) { grid-column: 1 / -1; grid-row: 1; }
+.app-shell .conversation-history .composer > :is(.composer-more, .composer-screen-stop, .composer-dictate, .composer-send) { grid-row: 2; }
+
+/* Attachment pills stay inside the composer; only their errors live in feedback. */
+.app-shell .conversation-history .composer:has(.attachment-chips) > :is(textarea, .composer-prompt) { grid-row: 2; }
+.app-shell .conversation-history .composer:has(.attachment-chips) > :is(.composer-more, .composer-screen-stop, .composer-dictate, .composer-send) { grid-row: 3; }
+
+/* Align each item's fade with the scrollport without masking its ancestors.
+   Extend the mask beyond the box to preserve timestamps and focus outlines. */
+.conversation-window-host > .conversation-transcript [data-transcript-fade] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent var(--transcript-fade-start), var(--ink-solid) calc(var(--transcript-fade-start) + 64px));
+  mask-image: linear-gradient(to bottom, transparent var(--transcript-fade-start), var(--ink-solid) calc(var(--transcript-fade-start) + 64px));
+  mask-position: -16px -16px;
+  mask-size: calc(100% + 32px) calc(100% + 64px);
+  mask-repeat: no-repeat;
+  mask-clip: no-clip;
+}
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .app-shell[data-phone="true"][data-voice-active="false"] .conversation-window-host > .conversation-transcript [data-transcript-fade] { mask-image: none; -webkit-mask-image: none; }
 }

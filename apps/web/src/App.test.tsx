@@ -76,6 +76,7 @@ vi.mock('./auth', () => ({
   saveSignInReturnPath, takeSignInReturnPath,
 }));
 vi.mock('./conversation-history', () => ({
+  loadActiveChatTurns: vi.fn(async () => []),
   loadConversationHistory,
   createChatSession,
   sendChatTurn,
@@ -583,7 +584,7 @@ describe('App shell', () => {
     { daily: false, proactive: true },
     { daily: true, proactive: true },
     { daily: true, proactive: false },
-  ])('lists the same pages in the phone menu as the rail (daily $daily, proactive $proactive)', async ({ daily, proactive }) => {
+  ])('lists secondary destinations beside persistent phone navigation (daily $daily, proactive $proactive)', async ({ daily, proactive }) => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -591,11 +592,19 @@ describe('App shell', () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     const user = userEvent.setup();
     render(<MemoryRouter><App config={config} dailyEnabled={daily} pushEnabled={false} proactiveEnabled={proactive} /></MemoryRouter>);
-    const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
+    await screen.findByRole('navigation', { name: 'Areas' });
+    const mobileNavigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
+    expect(mobileNavigation.getByRole('link', { name: 'Chat' })).not.toBeNull();
+    expect(Boolean(mobileNavigation.queryByRole('link', { name: 'Health' }))).toBe(daily);
+    expect(mobileNavigation.getByRole('button', { name: 'Workspaces' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Menu' }));
     const pages = within(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('navigation', { name: 'Pages' }));
-    const railPages = rail.getAllByRole('link').map((link) => link.getAttribute('aria-label')!.replace('Conversation', 'Jarvis'));
-    expect(pages.getAllByRole('link').map((link) => link.textContent)).toEqual([...railPages, 'Settings']);
+    expect(pages.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      ...(proactive ? ['Proactive'] : []), 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings',
+    ]);
+    expect(pages.queryByRole('link', { name: 'Chat' })).toBeNull();
+    expect(pages.queryByRole('link', { name: 'Health' })).toBeNull();
+    expect(pages.getByRole('button', { name: 'Context panel' })).not.toBeNull();
     expect(pages.queryByRole('link', { name: 'Proactive' }) !== null).toBe(proactive);
   });
 
@@ -603,17 +612,17 @@ describe('App shell', () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     render(<MemoryRouter><App config={config} dailyEnabled pushEnabled={false} /></MemoryRouter>);
     const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
-    const folio = rail.getByRole('button', { name: 'Folio' });
-    for (const control of [...rail.getAllByRole('link'), folio]) {
+    const workspaces = rail.getByRole('button', { name: 'Workspaces' });
+    for (const control of [...rail.getAllByRole('link'), workspaces]) {
       const name = control.getAttribute('aria-label')!;
       expect(control.getAttribute('data-rail-tip'), name).toBeTruthy();
       expect(control.getAttribute('data-tone'), name).toBeTruthy();
       expect(control.hasAttribute('title'), name).toBe(false);
     }
     expect(new Set(rail.getAllByRole('link').map((link) => link.getAttribute('data-tone'))).size).toBe(rail.getAllByRole('link').length);
-    fireEvent.pointerOver(folio, { pointerType: 'mouse' });
+    fireEvent.pointerOver(workspaces, { pointerType: 'mouse' });
     const tip = document.body.querySelector('.rail-tip')!;
-    expect(tip.textContent).toBe('Folio');
+    expect(tip.textContent).toBe('Workspaces');
     expect(tip.getAttribute('data-open')).toBe('true');
   });
 
@@ -705,26 +714,29 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.queryByText('Waking Jarvis…')).toBeNull());
   });
 
-  it('keeps phone voice on the current page and leaves header controls available through entry and exit', async () => {
+  it('keeps phone voice running internally off Chat and restores its controls only on Chat', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
     })));
     const user = userEvent.setup();
-    await renderSignedIn('/settings');
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
+    await renderSignedIn();
     const shell = document.querySelector('.app-shell')!;
     expect(shell.getAttribute('data-phone')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: 'Settings' }));
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
     expect(shell.getAttribute('data-voice-active')).toBe('true');
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
-    await user.click(screen.getByRole('button', { name: 'Menu' }));
-    expect(screen.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
-    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('button', { name: 'End voice' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+    expect(document.querySelector('.conversation-input-slot')?.hasAttribute('hidden')).toBe(true);
+    await user.click(screen.getByRole('link', { name: 'Chat' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(shell.getAttribute('data-voice-active')).toBe('false');
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
   });
 
   it('enters fullscreen voice immediately and restores the typing shell when voice ends', async () => {
@@ -844,8 +856,7 @@ describe('App shell', () => {
       return respond(input, init);
     });
     await renderSignedIn('/', true);
-    if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
-    const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
+    const navigation = phone ? screen.getByRole('navigation', { name: 'Mobile navigation' }) : screen.getByRole('navigation', { name: 'Areas' });
     expectNoDailyInRenderedContent(document.body);
     fireEvent.click(within(navigation).getByRole('link', { name: 'Health' }));
     await screen.findByRole('heading', { name: 'Training' });
@@ -1206,7 +1217,7 @@ describe('App shell', () => {
       expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
       await user.click(screen.getByRole('button', { name: 'More options' }));
       expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
-      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Enable video' })).not.toBeNull();
     } finally {
       Reflect.deleteProperty(navigator, 'mediaDevices');
     }
@@ -1216,7 +1227,7 @@ describe('App shell', () => {
     await renderSignedIn();
     await user.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.queryByRole('menuitem', { name: 'Share screen' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Enable video' })).not.toBeNull();
   });
   it('keeps chat progress and tool feedback in the conversation, never in the header', async () => {
     const user = userEvent.setup();
@@ -1428,10 +1439,10 @@ describe('App shell', () => {
       }
       return original(input, init);
     });
+    sessionStorage.setItem('jarvis.chat.draft', 'Unsent navigation fixture');
     await renderSignedIn(path);
     await waitFor(() => expect(activityStream).not.toBeNull());
-    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
-    fireEvent.change(input, { target: { value: 'Unsent navigation fixture' } });
+    const input = document.getElementById('message')!;
     workspace.ready();
     workspace.publishCommand({ commandId: 'status-first', operation: 'navigate', page: 'status' });
     await waitFor(() => expect(workspace.ack('status-first')).toBeTruthy());
@@ -1439,7 +1450,8 @@ describe('App shell', () => {
       body: { sessionId: '12345678-1234-4234-8234-123456789abc', applied: true },
       heading: 'Status', current: 'page', home: 'false', draft: 'Unsent navigation fixture',
     }]);
-    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+    expect(document.getElementById('message')).toBe(input);
+    expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBe(phone ? null : input);
     expect(input).toHaveProperty('value', 'Unsent navigation fixture');
     expect(screen.queryByRole('listitem', { name: 'SQL database' })).toBeNull();
     workspace.publishCommand({ commandId: 'status-follow-up', operation: 'navigate', page: 'status' });
@@ -1592,10 +1604,10 @@ describe('App shell', () => {
       await renderSignedIn('/status');
       await waitFor(() => expect(activityStream).not.toBeNull());
       await act(async () => { workspace.ready(); });
-      fireEvent.click(screen.getByRole('button', { name: 'Folio' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Workspaces' }));
       const content = document.getElementById('content')!;
-      act(() => { screen.getByRole('button', { name: 'Close the Folio' }).focus(); });
-      expect(document.activeElement?.closest('#folio-pane')).not.toBeNull();
+      act(() => { screen.getByRole('button', { name: 'Close Workspaces' }).focus(); });
+      expect(document.activeElement?.closest('#workspaces-pane')).not.toBeNull();
       const startedAt = Date.now();
       const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
       const advanceClock = () => { clock.mockReturnValue(startedAt + elapsed); };
@@ -1613,7 +1625,7 @@ describe('App shell', () => {
           },
         );
         expect(screen.getByRole('heading', { level: 1, name: 'Status' })).not.toBeNull();
-        expect(document.querySelector('.app-shell')?.getAttribute('data-folio-open')).toBe('false');
+        expect(document.querySelector('.app-shell')?.getAttribute('data-workspaces-open')).toBe('false');
         expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/same-page-clock/ack'))).toHaveLength(1);
       } finally {
         content.removeEventListener('focus', advanceClock);
@@ -1757,19 +1769,18 @@ describe('App shell', () => {
     await user.click(menu);
     expect(menu.getAttribute('aria-expanded')).toBe('true');
     const sheet = screen.getByRole('dialog', { name: 'Go to' });
-    const home = within(sheet).getByRole('link', { name: 'Jarvis' });
     const usage = within(sheet).getByRole('link', { name: 'Usage' });
     const factory = within(sheet).getByRole('link', { name: 'Software Factory' });
     const notes = within(sheet).getByRole('link', { name: 'Notes' });
     expect(factory.compareDocumentPosition(notes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(sheet).queryByRole('link', { name: 'Tasks' })).toBeNull();
-    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBe('page');
     expect(usage.hasAttribute('aria-current')).toBe(false);
     await user.click(usage);
     expect(menu.getAttribute('aria-expanded')).toBe('false');
     await user.click(menu);
     expect(usage.getAttribute('aria-current')).toBe('page');
-    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(within(screen.getByRole('navigation', { name: 'Mobile navigation' })).getByRole('link', { name: 'Chat' }).hasAttribute('aria-current')).toBe(false);
     expect(sheet.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     await user.keyboard('{Escape}');
     expect(menu.getAttribute('aria-expanded')).toBe('false');
@@ -2002,24 +2013,128 @@ describe('App shell', () => {
     expect(await screen.findByRole('navigation', { name: 'Health' })).toBeTruthy();
   });
 
-  it('closes the Folio on a press outside it, as it does the area navigation, and not on a press inside it or on the rail', async () => {
+  it('closes Workspaces on a press outside it, as it does the area navigation, and not on a press inside it or on the rail', async () => {
     const user = userEvent.setup();
     await renderSignedIn('/');
     const shell = document.querySelector('.app-shell')!;
-    await user.click(screen.getByRole('button', { name: 'Folio' }));
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
-    const pane = document.getElementById('folio-pane')!;
+    await user.click(screen.getByRole('button', { name: 'Workspaces' }));
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+    const pane = document.getElementById('workspaces-pane')!;
     const content = document.getElementById('content')!;
     const press = (down: Element, up: Element = down) => { fireEvent.pointerDown(down); fireEvent.pointerUp(up); };
 
     press(pane);
     press(screen.getByRole('navigation', { name: 'Areas' }));
     press(pane, content);
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
 
     press(content);
-    await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
+    await waitFor(() => expect(shell.getAttribute('data-workspaces-open')).toBe('false'));
     expect(shell.getAttribute('data-navigation-open')).toBe('false');
+  });
+
+  it.each([true, false])('keeps the composer on Chat only on phones and preserves its draft (phone=%s)', async (phone) => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: phone && query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('innerHeight', 844);
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Unsent navigation draft' } });
+    input.focus();
+    viewport.height = 480;
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    const shell = document.querySelector('.app-shell')!;
+    if (phone) expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    if (phone) {
+      fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+      fireEvent.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: 'Settings' }));
+    } else fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
+    await waitFor(() => expect(shell.getAttribute('data-home')).toBe('false'));
+    expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(phone);
+    expect(input.isConnected).toBe(true);
+    expect(input).toHaveProperty('value', 'Unsent navigation draft');
+    if (phone) {
+      expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+      expect(document.activeElement).not.toBe(input);
+      expect(shell.hasAttribute('data-keyboard-open')).toBe(false);
+    }
+    viewport.height = 844;
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    fireEvent.click(screen.getByRole('link', { name: phone ? 'Chat' : 'Jarvis home' }));
+    await waitFor(() => expect(shell.getAttribute('data-home')).toBe('true'));
+    expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(false);
+    expect(input).toHaveProperty('value', 'Unsent navigation draft');
+    if (phone) {
+      expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+      input.focus();
+      viewport.height = 480;
+      act(() => { viewport.dispatchEvent(new Event('resize')); });
+      expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    }
+  });
+
+  it('hides the mobile composer for Workspaces, restores it on close or Chat, and keeps Menu as an overlay', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Workspaces navigation draft' } });
+    const navigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
+    const shell = document.querySelector('.app-shell')!;
+    await user.click(navigation.getByRole('button', { name: 'Menu' }));
+    expect(input.closest('[hidden]')).toBeNull();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menu', { name: 'More options' })).toBeTruthy();
+    expect(input.closest('[hidden]')).toBeNull();
+    await user.keyboard('{Escape}');
+    for (const destination of ['close', 'Chat']) {
+      await user.click(navigation.getByRole('button', { name: 'Workspaces' }));
+      expect(shell.getAttribute('data-home')).toBe('true');
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+      expect(input.closest('.conversation-input-slot')?.hasAttribute('hidden')).toBe(true);
+      expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
+      expect(shell.hasAttribute('data-keyboard-open')).toBe(false);
+      if (destination === 'close') await user.click(screen.getByRole('button', { name: 'Close Workspaces' }));
+      else await user.click(navigation.getByRole('link', { name: 'Chat' }));
+      expect(shell.getAttribute('data-workspaces-open')).toBe('false');
+      expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+      expect(input).toHaveProperty('value', 'Workspaces navigation draft');
+    }
+  });
+
+  it('keeps untouched phone startup navigation available despite composer autofocus, then follows keyboard resize', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+    let height = 844;
+    vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('innerHeight', height);
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockImplementation(() => height);
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    const shell = document.querySelector('.app-shell')!;
+    expect(screen.getByRole('navigation', { name: 'Mobile navigation' })).toBeTruthy();
+    expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+    viewport.height = height = 480;
+    vi.stubGlobal('innerHeight', height);
+    act(() => { window.dispatchEvent(new Event('resize')); viewport.dispatchEvent(new Event('resize')); });
+    expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    viewport.height = height = 844;
+    vi.stubGlobal('innerHeight', height);
+    act(() => { viewport.dispatchEvent(new Event('resize')); window.dispatchEvent(new Event('resize')); });
+    expect(document.activeElement).toBe(input);
+    expect(shell.getAttribute('data-keyboard-open')).toBe('false');
   });
 
   it('lists the Health pages under Health in the phone menu and nowhere else', async () => {
@@ -2064,20 +2179,20 @@ describe('App shell', () => {
     ['Conversation', '/'],
     ['Jarvis home', '/'],
     ['Settings', '/'],
-  ])('closes the Folio when selecting %s from %s on desktop', async (name, path) => {
+  ])('closes Workspaces when selecting %s from %s on desktop', async (name, path) => {
     const user = userEvent.setup();
     await renderSignedIn(path);
     const shell = document.querySelector('.app-shell')!;
-    const folio = screen.getByRole('button', { name: 'Folio' });
-    await user.click(folio);
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    const workspaces = screen.getByRole('button', { name: 'Workspaces' });
+    await user.click(workspaces);
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
     await user.click(screen.getByRole('link', { name }));
-    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('false');
     expect(shell.getAttribute('data-navigation-open')).toBe('false');
-    expect(folio.getAttribute('aria-pressed')).toBe('false');
+    expect(workspaces.getAttribute('aria-pressed')).toBe('false');
   });
 
-  it('closes the Folio when a phone menu selects the same page or a different page', async () => {
+  it('closes Workspaces when phone navigation selects Chat or a menu destination', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
@@ -2085,19 +2200,24 @@ describe('App shell', () => {
     const user = userEvent.setup();
     await renderSignedIn();
     const menu = screen.getByRole('button', { name: 'Menu' });
+    const mobileNavigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
     const shell = document.querySelector('.app-shell')!;
-    for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
-      await user.click(menu);
-      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Folio' }));
-      expect(shell.getAttribute('data-folio-open')).toBe('true');
-      await user.click(menu);
-      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
-      expect(shell.getAttribute('data-folio-open')).toBe('false');
+    for (const page of ['Chat', 'Usage', 'Usage', 'Settings']) {
+      await user.click(mobileNavigation.getByRole('button', { name: 'Workspaces' }));
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+      expect(document.getElementById('workspaces-pane')?.hidden).toBe(false);
+      if (page === 'Chat') await user.click(mobileNavigation.getByRole('link', { name: 'Chat' }));
+      else {
+        await user.click(menu);
+        await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
+      }
+      expect(shell.getAttribute('data-workspaces-open')).toBe('false');
+      expect(mobileNavigation.getByRole('button', { name: 'Workspaces' }).getAttribute('aria-pressed')).toBe('false');
       expect(menu.getAttribute('aria-expanded')).toBe('false');
     }
   });
 
-  it('closes the Folio for Jarvis navigation even when the page does not change', async () => {
+  it('closes Workspaces for Jarvis navigation even when the page does not change', async () => {
     const user = userEvent.setup();
     streamWorkspaceCommands();
     await renderSignedIn();
@@ -2109,9 +2229,9 @@ describe('App shell', () => {
     });
     const shell = document.querySelector('.app-shell')!;
     for (const [index, page] of ['home', 'usage'].entries()) {
-      await user.click(screen.getByRole('button', { name: 'Folio' }));
-      expect(shell.getAttribute('data-folio-open')).toBe('true');
-      const commandId = `leave-folio-${index}`;
+      await user.click(screen.getByRole('button', { name: 'Workspaces' }));
+      expect(shell.getAttribute('data-workspaces-open')).toBe('true');
+      const commandId = `leave-workspaces-${index}`;
       act(() => {
         activityStream!.enqueue(new TextEncoder().encode(
           `event: workspace-command\ndata: ${JSON.stringify({
@@ -2120,26 +2240,26 @@ describe('App shell', () => {
           })}\n\n`,
         ));
       });
-      await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
-      expect(document.activeElement?.closest('#folio-pane')).toBeNull();
+      await waitFor(() => expect(shell.getAttribute('data-workspaces-open')).toBe('false'));
+      expect(document.activeElement?.closest('#workspaces-pane')).toBeNull();
       await waitFor(() => expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith(`/commands/${commandId}/ack`))).toBeTruthy());
     }
   });
 
-  it('does not reopen the Folio after history navigation returns to its previous page', async () => {
+  it('does not reopen Workspaces after history navigation returns to its previous page', async () => {
     const user = userEvent.setup();
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
     render(<MemoryRouter initialEntries={['/', '/usage']} initialIndex={1}>
       <App config={config} /><HistoryControls />
     </MemoryRouter>);
     await screen.findByRole('navigation', { name: 'Areas' });
-    await user.click(screen.getByRole('button', { name: 'Folio' }));
+    await user.click(screen.getByRole('button', { name: 'Workspaces' }));
     const shell = document.querySelector('.app-shell')!;
-    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Previous page' }));
-    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Next page' }));
-    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-workspaces-open')).toBe('false');
   });
 
   it('opens a local camera preview, docks it without stopping capture, and lets Jarvis restore and close it', async () => {
@@ -2170,13 +2290,14 @@ describe('App shell', () => {
     await user.type(input, 'Keep my draft');
 
     await user.click(screen.getByRole('button', { name: 'More options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
-    expect(await screen.findByText('Front camera on')).not.toBeNull();
+    await user.click(screen.getByRole('menuitem', { name: 'Enable video' }));
+    expect(await screen.findByRole('button', { name: 'Close camera preview' })).not.toBeNull();
+    expect(screen.queryByText('Front camera on')).toBeNull();
     const preview = screen.getByRole('article', { name: 'Camera preview' });
     const video = within(preview).getByLabelText('Live camera preview') as HTMLVideoElement;
     expect(video.srcObject).toBe(stream);
     expect(input.closest('.conversation-input')?.querySelector('.camera-status')).toBeNull();
-    expect(within(preview).getByRole('button', { name: 'Camera off' })).not.toBeNull();
+    expect(preview.querySelector('.camera-status-control')?.getAttribute('aria-label')).toBe('Close camera preview');
     expect(getUserMedia).toHaveBeenCalledWith({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: 'user' } },
       audio: false,
@@ -2184,7 +2305,7 @@ describe('App shell', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/now/workspace/state') &&
       JSON.parse(String(init?.body)).windows.some((window: { viewId: string; title: string }) =>
         window.viewId === 'camera-preview' && window.title === 'Camera preview'))).toBe(true));
-    await user.click(within(preview).getByRole('button', { name: 'Minimise Camera preview' }));
+    expect(await workspace.command('minimise-camera', 'minimise', 'camera-preview')).toMatchObject({ applied: true });
     expect(preview.getAttribute('aria-hidden')).toBe('true');
     expect(track.stop).not.toHaveBeenCalled();
     expect(video.srcObject).toBe(stream);
@@ -2198,11 +2319,13 @@ describe('App shell', () => {
     expect(screen.queryByText('Front camera on')).toBeNull();
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/screen/frames'))).toBe(false);
     await user.click(screen.getByRole('button', { name: 'More options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
-    expect(await screen.findByRole('article', { name: 'Camera preview' })).not.toBeNull();
+    await user.click(screen.getByRole('menuitem', { name: 'Enable video' }));
+    const restoredPreview = await screen.findByRole('article', { name: 'Camera preview' });
     await user.click(screen.getByRole('button', { name: 'Start voice' }));
     expect(voiceSessions[0]?.setCameraState).toHaveBeenCalledWith(true);
-    await user.click(screen.getByRole('button', { name: 'Camera off' }));
+    const cameraClose = restoredPreview.querySelector<HTMLButtonElement>('.camera-status-control')!;
+    expect(cameraClose.getAttribute('aria-label')).toBe('Close camera preview');
+    await user.click(cameraClose);
     await waitFor(() => expect(voiceSessions[0]?.setCameraState).toHaveBeenLastCalledWith(false));
     expect(screen.queryByRole('article', { name: 'Camera preview' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'End voice' }));
@@ -2229,7 +2352,8 @@ describe('App shell', () => {
       expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({
         video: expect.objectContaining({ facingMode: { ideal: 'user' } }),
       }));
-      expect(screen.getByText('Camera on - direction unavailable')).not.toBeNull();
+      expect(screen.getByLabelText('Live camera preview')).not.toBeNull();
+      expect(screen.queryByText('Camera on - direction unavailable')).toBeNull();
       expect(await workspace.command('close-reopened-camera', 'close', 'camera-preview')).toMatchObject({ applied: true });
       expect(track.stop).toHaveBeenCalledOnce();
     } else {

@@ -8,12 +8,13 @@ import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
 import { shutdown } from '../shutdown.js';
-import { ChatAgentError, createFoundryAgentSessionId } from './chat-agent.js';
+import { ChatAgentError, ChatAgentInvocationError, createFoundryAgentSessionId } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
 import { createConversationModule } from './conversation.js';
 import { FrameStore } from '../vision/frame-store.js';
+import { createOwnerInteractionService, type OwnerInteractionService } from './owner-interactions.js';
 
 const config = loadConfig({});
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -87,6 +88,34 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
+  it('delivers only food invitations bound to the active source and removes its event subscription', async () => {
+    const confirmation = { id: 'a'.repeat(43), actionKind: 'other' as const,
+      summary: 'Synthetic estimate: 200 kcal.', expiresAt: new Date(Date.now() + 120_000).toISOString() };
+    const app = createApp(storeFixture({
+      addMessage: vi.fn(async input => ({ ...message, ...input })),
+    }), { conversationAgent: { stream: async function* () {
+      app.nowEventHub.publish({ type: 'food_estimate_pending', sessionId: '99', sourceMessageId: '42',
+        confirmation: { ...confirmation, summary: 'Other session secret' } });
+      app.nowEventHub.publish({ type: 'food_estimate_pending', sessionId: '41', sourceMessageId: '40',
+        confirmation: { ...confirmation, summary: 'Earlier source secret' } });
+      app.nowEventHub.publish({ type: 'food_estimate_pending', sessionId: '41', sourceMessageId: '42', confirmation });
+      yield 'No food has been logged.';
+    } } });
+    const originalSubscribe = app.nowEventHub.subscribe.bind(app.nowEventHub);
+    const unsubscribe = vi.fn();
+    vi.spyOn(app.nowEventHub, 'subscribe').mockImplementation(listener => {
+      const stop = originalSubscribe(listener);
+      return () => { unsubscribe(); stop(); };
+    });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+      headers, payload: { text: 'Estimate this portion.' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain(`event: food_invitation\ndata: ${JSON.stringify(confirmation)}`);
+    expect(response.body).not.toContain('Other session secret');
+    expect(response.body).not.toContain('Earlier source secret');
+    expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { outcome: 'image', path: 'image', reason: 'image_accepted' },
     { outcome: 'rejected', path: 'caption', reason: 'image_rejected' },
@@ -366,6 +395,7 @@ describe('conversation routes', () => {
         return message;
       }),
     });
+
     const agent = { stream: vi.fn(async function* () { yield 'One answer.'; }) };
     const app = createApp(store, { conversationAgent: agent });
     const payload = { text: 'What?', visualContext: { source: 'screen',
@@ -373,6 +403,39 @@ describe('conversation routes', () => {
     expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(200);
     expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(409);
     expect(agent.stream).toHaveBeenCalledOnce();
+  });
+  it('streams the acknowledgment before the final reply without persisting it as part of that reply', async () => {
+    const stored: { role: string; text: string }[] = [];
+    const store = storeFixture({
+      addMessage: vi.fn(async (input) => {
+        stored.push({ role: input.role, text: input.text });
+        return { ...message, role: input.role, text: input.text };
+      }),
+    });
+    const acknowledgment = "I'll check the saved targets.";
+    const agent = {
+      stream: vi.fn(async function* () {
+        yield acknowledgment;
+        yield { type: 'acknowledgment' as const, text: acknowledgment };
+        yield 'The targets match.';
+      }),
+    };
+    const app = createApp(store, { conversationAgent: agent });
+
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Compare my saved targets.' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.indexOf(`event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}`))
+      .toBeLessThan(response.body.indexOf(`event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}`));
+    expect(response.body.indexOf('event: acknowledgment'))
+      .toBeLessThan(response.body.indexOf(`event: delta\ndata: {"text":"The targets match."}`));
+    expect(stored).toEqual([
+      { role: 'dan', text: 'Compare my saved targets.' },
+      { role: 'jarvis', text: 'The targets match.' },
+    ]);
   });
   it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
     const visualContext = {
@@ -718,6 +781,154 @@ describe('conversation routes', () => {
     }));
   });
 
+  it('resolves a natural food reply without aborting or replaying the active model/tool round', async () => {
+    const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
+      conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) }, store: {
+      createConfirmation: vi.fn(async () => {}),
+      resolveConfirmation: vi.fn(async () => 'approved'),
+      consumeApproval: vi.fn(async () => true),
+      cancelConfirmation: vi.fn(async () => {}),
+      expireConfirmation: vi.fn(async () => false),
+      expirePendingConfirmations: vi.fn(async () => {}),
+    } });
+    const approval = { id: '43', text: 'yes, log that', language: 'en' as const };
+    const store = storeFixture({
+      addMessage: vi.fn(async input => ({ ...message, at: new Date(),
+        id: input.role === 'dan' && input.text === approval.text ? '43' : '42', role: input.role, text: input.text })),
+      getDanMessagesAfter: vi.fn(async ({ after }) => BigInt(after) < 43n ? [approval] : []),
+    });
+    const action = vi.fn(async () => 'Logged.');
+    const appRef: { current?: ReturnType<typeof buildApp> } = {};
+    const chatAgent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
+      const pending = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, signal,
+        { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
+      await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+      const response = await appRef.current!.inject({
+        method: 'POST', url: '/conversation/sessions/41/steer', headers,
+        payload: { text: approval.text, language: 'en' },
+      });
+      expect(response.statusCode).toBe(202);
+      expect(signal.aborted).toBe(false);
+      yield await pending;
+    }) };
+    const app = createApp(store, { ownerInteractions: service, conversationAgent: chatAgent });
+    appRef.current = app;
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Review synthetic portion.' } });
+    expect(response.body).toContain('event: done');
+    expect(response.body).toContain('Logged.');
+    expect(response.body).not.toContain('event: interrupted');
+    expect(chatAgent.stream).toHaveBeenCalledOnce();
+    expect(action).toHaveBeenCalledOnce();
+  });
+
+  it.each(['approve', 'cancel', 'expire', 'disconnect_after_commit'] as const)('recovers a disconnected exact food proposal: %s', async decision => {
+    const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
+      onConfirmationPending: (confirmation, foodEstimate) => {
+        if (foodEstimate) app.nowEventHub.publish({ type: 'food_estimate_pending', ...foodEstimate, confirmation });
+      },
+      onConfirmationsChanged: () => app.nowEventHub.publish({ type: 'refresh' }),
+      store: {
+        createConfirmation: vi.fn(async () => {}), resolveConfirmation: vi.fn(async () => 'approved'),
+        consumeApproval: vi.fn(async () => true), cancelConfirmation: vi.fn(async () => {}),
+        expireConfirmation: vi.fn(async () => true), expirePendingConfirmations: vi.fn(async () => {}),
+      } });
+    const committed = Promise.withResolvers<void>();
+    const deliver = Promise.withResolvers<void>();
+    const approved = decision === 'approve' || decision === 'disconnect_after_commit';
+    const action = vi.fn(async () => { committed.resolve(); return 'Synthetic meal saved once.'; });
+    const store = storeFixture({ addMessage: vi.fn(async input => ({ ...message, ...input,
+      id: input.role === 'dan' ? '42' : '44' })) });
+    let agentSignal!: AbortSignal;
+    const agent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
+      agentSignal = signal;
+      const result = await service.runConfirmed('other', 'Synthetic portion: 200 kcal.', action, signal,
+        { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
+      if (decision === 'disconnect_after_commit') await deliver.promise;
+      yield result;
+    }) };
+    const app = createApp(store, { conversationAgent: agent, ownerInteractions: service });
+    // Fetch may retain pooled sockets after abort/replay on Node 22. Dispose this
+    // fixture's transports only during teardown, after all recovery assertions.
+    app.addHook('preClose', async () => { app.server.closeAllConnections(); });
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const transport = new AbortController();
+    const response = await fetch(`${address}/conversation/sessions/41/turns`, {
+      method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'Estimate synthetic meal' }), signal: transport.signal,
+    });
+    const reader = response.body!.getReader();
+    let wire = '';
+    while (!wire.includes('food_invitation')) wire += new TextDecoder().decode((await reader.read()).value);
+    const invitation = service.pendingBrowserConfirmations()[0]!;
+    for (const suffix of ['events', 'cancel']) {
+      const wrongSession = await app.inject({ method: suffix === 'events' ? 'GET' : 'POST',
+        url: `/conversation/sessions/99/turns/42/${suffix}`, headers });
+      expect(wrongSession.statusCode).toBe(404);
+    }
+    expect(agentSignal.aborted).toBe(false);
+    expect(action).not.toHaveBeenCalled();
+    if (decision === 'disconnect_after_commit') {
+      await service.resolveBrowserConfirmation(invitation.id, 'approve');
+      await committed.promise; // Side effect committed, final response deliberately not emitted yet.
+      expect(action).toHaveBeenCalledOnce();
+    }
+    transport.abort();
+    await reader.cancel().catch(() => {});
+    expect(agentSignal.aborted).toBe(false);
+    expect(invitation.summary).toBe('Synthetic portion: 200 kcal.');
+    const replay = fetch(`${address}/conversation/sessions/41/turns/42/events`, { headers });
+    if (decision === 'approve') await service.resolveBrowserConfirmation(invitation.id, 'approve');
+    else if (decision === 'cancel') await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns/42/cancel', headers });
+    else if (decision === 'disconnect_after_commit') deliver.resolve();
+    else {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 121_000);
+      await service.expirePendingConfirmations();
+      expect(await service.resolveBrowserConfirmation(invitation.id, 'approve')).toBe(false);
+      vi.restoreAllMocks();
+    }
+    const recovered = await (await replay).text();
+    expect(recovered).toContain(approved ? 'event: done' : 'event: error');
+    expect(action).toHaveBeenCalledTimes(approved ? 1 : 0);
+    // A second attachment after the write/response cannot execute the meal again.
+    const again = await app.inject({ method: 'GET', url: '/conversation/sessions/41/turns/42/events', headers });
+    expect(again.body).toBe(recovered);
+    expect(agent.stream).toHaveBeenCalledOnce();
+    expect(agent.stream).toHaveBeenCalledWith(expect.objectContaining({ messageId: '42', turnId: '42' }),
+      headers.authorization, expect.any(AbortSignal));
+    expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+  });
+
+  it('does not let an older approval interrupt the response to a newer cancellation', async () => {
+    const olderReply = Promise.withResolvers<boolean>();
+    const resolveFoodEstimateReply = vi.fn(async (reply: { id: string }) => reply.id === '43' ? olderReply.promise : true);
+    const store = storeFixture({
+      addMessage: vi.fn(async input => ({ ...message, role: input.role, text: input.text,
+        id: input.text === 'yes, log that' ? '43' : input.text === 'cancel' ? '44' : '42' })),
+    });
+    const appRef: { current?: ReturnType<typeof buildApp> } = {};
+    const chatAgent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
+      const steer = (text: string) => appRef.current!.inject({ method: 'POST',
+        url: '/conversation/sessions/41/steer', headers, payload: { text, language: 'en' } });
+      const first = Promise.resolve(steer('yes, log that'));
+      await vi.waitFor(() => expect(resolveFoodEstimateReply).toHaveBeenCalledOnce());
+      expect((await steer('cancel')).statusCode).toBe(202);
+      olderReply.resolve(false);
+      expect((await first).statusCode).toBe(202);
+      expect(signal.aborted).toBe(false);
+      yield 'Cancelled. Nothing logged.';
+    }) };
+    const app = createApp(store, { conversationAgent: chatAgent,
+      ownerInteractions: { resolveFoodEstimateReply } as unknown as OwnerInteractionService });
+    appRef.current = app;
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Review synthetic portion.' } });
+    expect(response.body).toContain('event: done');
+    expect(response.body).toContain('Cancelled. Nothing logged.');
+    expect(response.body).not.toContain('event: error');
+    expect(chatAgent.stream).toHaveBeenCalledOnce();
+  });
+
   it('does not abort tools and consumes steering at the next model-round boundary', async () => {
     const steeringMessage = { id: '43', text: 'Answer in English.', language: 'en' as const };
     const store = storeFixture({
@@ -895,7 +1106,7 @@ describe('conversation routes', () => {
       expect(JSON.stringify(decision)).not.toContain(transcript);
     });
 
-    it.each(['disconnect', 'shutdown'])('cancels both the agent and reflex on chat %s', async (reason) => {
+    it.each(['disconnect', 'shutdown'])('keeps disconnected work alive and cancels on explicit stop or shutdown: %s', async (reason) => {
       const store = storeFixture();
       let agentSignal!: AbortSignal;
       let resolveAgentAbort!: () => void;
@@ -951,6 +1162,11 @@ describe('conversation routes', () => {
         controller.abort();
         serverResponse.destroy();
         await reader.cancel().catch(() => {});
+        expect(agentSignal.aborted).toBe(false);
+        const active = await app.inject({ method: 'GET', url: '/conversation/turns/active', headers });
+        expect(active.json().turns).toEqual([{ sessionId: '41', messageId: '42', language: 'da' }]);
+        const stopped = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns/42/cancel', headers });
+        expect(stopped.statusCode).toBe(200);
       }
       await Promise.all([agentAborted, reflexAborted]);
 
@@ -1120,11 +1336,50 @@ describe('conversation routes', () => {
 
     expect(response.body).toContain('event: error');
     expect(response.body).toContain('I could not finish the reply.');
-    expect(response.body).not.toContain('capability_instructions_too_large');
+    expect(response.body).toContain('"code":"capability_instructions_too_large"');
     const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((item) => item.msg === 'conversation.reply_failed');
     expect(entry).toMatchObject({ failure: 'Chat agent failed (capability_instructions_too_large)' });
     expect(store.addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    new ChatAgentError('managed_session_busy'),
+    new ChatAgentError('managed_source_already_claimed'),
+    new ChatAgentError('managed_target_mismatch'),
+    new ChatAgentError('managed_unavailable'),
+    new ChatAgentError('managed_tool_call_unfinished'),
+    new ChatAgentError('managed_policy_turn_failed'),
+    new ChatAgentError('managed_policy_setup_failed'),
+    new ChatAgentError('managed_response_failed'),
+    new ChatAgentInvocationError('private transport detail', 'agent_stream_ended'),
+    new ChatAgentInvocationError('private transport detail', 'agent_http_403'),
+  ])('retains finite typed failure code with uncertainty warning for %s', async (error) => {
+    const store = storeFixture();
+    const app = createApp(store, { conversationAgent: { stream: vi.fn(async function* () { throw error; yield 'unreachable'; }) } });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Hello' } });
+    const code = error instanceof ChatAgentError ? error.code : error.reason;
+    expect(response.body).toContain(JSON.stringify({ code }).slice(1, -1));
+    expect(response.body).toContain('A task action may still have completed; check its status before trying again.');
+    expect(response.body).not.toContain('private transport detail');
+    expect(store.addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    new ChatAgentError('private_provider_detail'),
+    new ChatAgentError('managed_future_unreviewed'),
+    new ChatAgentInvocationError('private transport detail', 'private_provider_detail' as 'agent_stream_ended'),
+    Object.assign(new Error('private provider detail'), { code: 'managed_session_busy', name: 'ChatAgentError' }),
+  ])('drops unknown or forged failure codes from SSE for %s', async (error) => {
+    const app = createApp(storeFixture(), { conversationAgent: { stream: vi.fn(async function* () { throw error; yield 'unreachable'; }) } });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'Hello' } });
+    expect(response.body).toContain('event: error');
+    expect(response.body).not.toContain('"code":');
+    expect(response.body).not.toContain('private');
+    expect(response.body).not.toContain('managed_future_unreviewed');
+    expect(response.body).toContain('A task action may still have completed');
   });
 
   it('rejects invalid session fields and unauthenticated callers', async () => {
@@ -1199,7 +1454,7 @@ describe('conversation routes', () => {
       messages: [{ id: '42', toolCalls: [{ id: '90', outcome: 'refused' }] }],
       nextCursor: null,
     });
-    expect(store.getHistory).toHaveBeenCalledWith({ limit: 25, before: '50' });
+    expect(store.getHistory).toHaveBeenCalledWith({ limit: 25, before: '50', excludeRuntimeTests: true });
     expect(invalidCursor.statusCode).toBe(400);
     expect(invalidSession.statusCode).toBe(400);
     expect(store.getHistory).toHaveBeenCalledOnce();

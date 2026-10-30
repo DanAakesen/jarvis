@@ -5,8 +5,8 @@ export type LivePhase = 'thinking' | 'working' | 'composing';
 const toolActivity: ReadonlyArray<readonly [RegExp, string]> = [
   [/^image_generation$/u, 'Drawing it…'],
   [/^(vault_write|vault_delete)$/u, 'Updating your notes…'],
-  [/^(vault_|show_knowledge|folio_)/u, 'Searching your notes…'],
-  [/^daily_/u, 'Checking your health data…'],
+  [/^(vault_|show_knowledge|workspaces_|folio_)/u, 'Searching your notes…'],
+  [/^(daily_|health_)/u, 'Checking your health data…'],
   [/^calendar_/u, 'Checking your calendar…'],
   [/^mail_/u, 'Going through your mail…'],
   [/^memory_/u, 'Checking what I remember…'],

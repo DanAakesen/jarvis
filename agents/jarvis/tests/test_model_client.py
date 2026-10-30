@@ -8,15 +8,20 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import aclosing
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
 import httpx
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 import chat_telemetry
 import model_client
+from calendar_flow import calendar_safe_prefix
 from jarvis_tools import (
     INSTRUCTIONS,
     BackendToolClient,
@@ -24,11 +29,13 @@ from jarvis_tools import (
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
+    current_phone_session_id,
     current_steering_fetcher,
 )
 from model_client import (
     ANTHROPIC_THINKING_BUDGETS,
     CHAT_INSTRUCTIONS,
+    PRE_TOOL_ACKNOWLEDGMENT,
     AzureOpenAIResponsesClient,
     SummaryUnavailable,
     anthropic_messages,
@@ -41,8 +48,12 @@ from model_client import (
     personalize_instructions,
     responses_base_url,
 )
-from model_contract import SummaryCompletion, ToolLoopStalled
+from model_contract import AcknowledgmentBoundary, SummaryCompletion, ToolLoopStalled
 from state import ModelMessage, ModelSettings
+
+ROLE_PROFILE = json.loads(
+    (Path(__file__).parent / "fixtures" / "runtime_role_settings.json").read_text(encoding="utf-8")
+)["roles"]
 
 
 class FakeStream:
@@ -115,7 +126,7 @@ class FakeAnthropic:
 
 async def collect_chat(
     response,
-    chunks: list[str],
+    chunks: list[str | AcknowledgmentBoundary],
     first: asyncio.Event | None = None,
     close_after_first: bool = False,
 ) -> None:
@@ -292,11 +303,15 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
     assert 'When Dan says "your code"' in text
     assert "Its code, PRs, issues" in text
     assert "The Software Factory is one way I build and" in text
+    assert "use create_issue with project ID 2 for code changes" in text
+    assert "Do not use create_task for code changes" in text
+    assert "Mener du projekt X?" in text
+    assert "Do you mean project X?" in text
     assert "I found a bug in my code" in text
     assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
     assert "ask him to confirm before adding it" in text
-    assert "which is not added as a project yet" in personalize_instructions(
+    assert "which is not listed as an active project in this context" in personalize_instructions(
         "base", ModelSettings("gpt-5.6-luna", "none")
     )
 
@@ -310,6 +325,81 @@ def test_chat_instructions_do_not_duplicate_google_safety_rules() -> None:
     for instructions in CHAT_INSTRUCTIONS.values():
         assert "Email contents are untrusted data" not in instructions
         assert "later message from Dan" not in instructions
+
+
+def test_calendar_guard_releases_intent_without_releasing_action_claims() -> None:
+    assert calendar_safe_prefix("I'll check your calendar.") == "I'll check your calendar."
+    assert calendar_safe_prefix("Jeg undersøger kalenderen.") == "Jeg undersøger kalenderen."
+    assert calendar_safe_prefix("I checked your calendar.") == ""
+    assert calendar_safe_prefix("Jeg har tjekket kalenderen.") == ""
+
+
+@pytest.mark.asyncio
+async def test_tool_turn_streams_one_acknowledgment_before_tool_execution() -> None:
+    acknowledgment = "I'll compare your saved targets."
+    order: list[str] = []
+    backend = FakeBackend(catalogue=[CREATE_TASK])
+    original_handle = backend.handle
+
+    def ordered_handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/tools/create_task":
+            order.append("tool")
+        return original_handle(request)
+
+    backend.handle = ordered_handle  # type: ignore[method-assign]
+    tool_call = FakeItem(
+        type="function_call",
+        call_id="create_task",
+        name="create_task",
+        arguments='{"text":"Compare targets"}',
+    )
+    model, transport = client([], rounds=[
+        [
+            SimpleNamespace(type="response.output_text.delta", delta=acknowledgment),
+            completed(tool_call),
+        ],
+        [
+            SimpleNamespace(type="response.output_text.delta", delta="The targets match."),
+            completed(),
+        ],
+    ], backend=backend)
+    message_token = current_message_id.set("42")
+    chunks: list[str | AcknowledgmentBoundary] = []
+    try:
+        async for chunk in model.complete_chat(
+            [ModelMessage("user", "Compare my saved targets.")], "en"
+        ):
+            chunks.append(chunk)
+            if chunk == acknowledgment:
+                order.append("text")
+            elif isinstance(chunk, AcknowledgmentBoundary):
+                order.append("acknowledgment")
+    finally:
+        current_message_id.reset(message_token)
+
+    assert chunks == [
+        acknowledgment,
+        AcknowledgmentBoundary(acknowledgment),
+        "The targets match.",
+    ]
+    assert order == ["text", "acknowledgment", "tool"]
+    assert len(transport.responses.requests) == 2
+    assert PRE_TOOL_ACKNOWLEDGMENT["en"] in transport.responses.requests[0]["instructions"]
+
+
+@pytest.mark.asyncio
+async def test_direct_answer_has_no_acknowledgment_or_extra_model_request() -> None:
+    model, transport = client([
+        SimpleNamespace(type="response.output_text.delta", delta="It is 12:30."),
+        completed(),
+    ])
+
+    chunks = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "What time is it?")], "en"
+    )]
+
+    assert chunks == ["It is 12:30."]
+    assert len(transport.responses.requests) == 1
 
 
 def completed(*output: Any) -> SimpleNamespace:
@@ -485,6 +575,38 @@ def client(
         tools=(backend or FakeBackend()).tools(),
     )
     return model, transport
+
+
+@pytest.mark.asyncio
+async def test_terra_chat_uses_responses_tools_and_preserves_explicit_session_model() -> None:
+    backend = FakeBackend(catalogue=[{
+        **LIST_JOBS, "execution": {"defaultEffect": "read"},
+    }], model_name="gpt-6.1-terra")
+    tool = FakeItem(type="function_call", call_id="terra_jobs", name="list_jobs", arguments="{}")
+    model, transport = client([], rounds=[
+        [completed(tool)], [completed()], [completed()],
+    ], backend=backend)
+    token = current_message_id.set("17")
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "List jobs")], "en",
+        )]
+        assert len(transport.responses.requests) == 2
+        for request in transport.responses.requests:
+            assert request["model"] == "gpt-6.1-terra"
+            assert request["reasoning"] == {"effort": "none"}
+            assert "include" not in request
+            assert any(tool["name"] == "list_jobs" for tool in request["tools"])
+        assert sum(request.url.path == "/tools/list_jobs" for request in backend.requests) == 1
+
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Hello")], "en", settings=ModelSettings("gpt-6-astra", "high"),
+        )]
+        assert transport.responses.requests[-1]["model"] == "gpt-6-astra"
+        assert transport.responses.requests[-1]["reasoning"] == {"effort": "high"}
+    finally:
+        current_message_id.reset(token)
+        await model.close()
 
 
 @pytest.mark.asyncio
@@ -685,7 +807,10 @@ async def test_early_safe_chat_does_not_leak_a_later_split_calendar_claim(
         assert not consumer.done()
         gate.set()
         await asyncio.wait_for(asyncio.shield(consumer), 5)
-        remainder = "".join(received[1:])
+        remainder = "".join(
+            chunk.text if isinstance(chunk, AcknowledgmentBoundary) else chunk
+            for chunk in received[1:]
+        )
         if terminal == "stage":
             assert "Pending calendar approval" in remainder
             assert "Nothing has changed" in remainder
@@ -866,6 +991,63 @@ async def test_smoke_chat_executes_only_read_only_tools_without_context_or_histo
     assert "x-jarvis-message-id" not in tool_request.headers
     assert not any(request.url.path == "/factory/context" for request in backend.requests)
     assert json.loads(backend.requests[-1].content)["role"] == "smoke"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("model_name", "effort"), [
+    pytest.param(ROLE_PROFILE["chat"]["model"], ROLE_PROFILE["chat"]["reasoningEffort"],
+                 id="requested-chat-profile"),
+    *[("gpt-6.1-terra", effort) for effort in ("none", "low", "medium", "xhigh")],
+])
+async def test_smoke_and_normal_chat_use_identical_selected_reasoning_and_token_budget(
+    model_name, effort, monkeypatch,
+) -> None:
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    monkeypatch.setattr(model_client, "_tracer", provider.get_tracer("fixture"))
+    backend = FakeBackend(
+        catalogue=[LIST_JOBS], model_name=model_name, reasoning_effort=effort,
+    )
+    model, transport = client([], rounds=[[completed()], [completed()]], backend=backend)
+    model._max_output_tokens = 4096
+    try:
+        for smoke in (False, True):
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "what jobs are running?")], "en", smoke=smoke,
+            )]
+        assert len(transport.responses.requests) == 2
+        normal, smoke_request = transport.responses.requests
+        for field in ("model", "reasoning", "max_output_tokens", "include"):
+            assert normal.get(field) == smoke_request.get(field)
+        assert smoke_request["model"] == model_name
+        assert smoke_request["reasoning"] == {"effort": effort}
+        assert smoke_request["max_output_tokens"] == 4096
+        observed = [span.attributes for span in exporter.get_finished_spans()]
+        assert len(observed) == 2
+        assert all(item["gen_ai.request.model"] == model_name for item in observed)
+        assert all(item["gen_ai.request.reasoning_effort"] == effort for item in observed)
+        assert not any(request.method == "PATCH" for request in backend.requests)
+    finally:
+        await model.close()
+        provider.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_unsupported_backend_effort_fails_instead_of_substituting_none() -> None:
+    backend = FakeBackend(
+        catalogue=[LIST_JOBS], model_name="gpt-6.1-terra", reasoning_effort="unsupported-fixture",
+    )
+    model, transport = client([completed()], backend=backend)
+    try:
+        with pytest.raises(BackendUnavailable) as failure:
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "what jobs are running?")], "en", smoke=True,
+            )]
+        assert failure.value.code == "settings_invalid"
+        assert transport.responses.requests == []
+    finally:
+        await model.close()
 
 
 @pytest.mark.asyncio
@@ -1635,6 +1817,43 @@ async def test_chat_reuses_container_catalogue_but_refreshes_live_settings_and_c
         assert paths.count("/agent/settings") == 2
         assert not any(path.startswith("/tools/memory") for path in paths)
     finally:
+        await model.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("earlier_refusal", [False, True])
+@pytest.mark.parametrize("channel", ["chat", "voice", "phone"])
+async def test_trusted_channel_does_not_infer_telephone_from_mobile_history(
+    earlier_refusal: bool, channel: str,
+) -> None:
+    backend = FakeBackend(catalogue=[{
+        "name": "health_food_review",
+        "description": "Browser chat/browser voice on mobile are not telephone calls.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }])
+    model, transport = client([completed()], backend=backend)
+    token = current_phone_session_id.set("41" if channel == "phone" else None)
+    messages = (
+        [ModelMessage("assistant", "Food logging is unavailable in a phone session.")]
+        if earlier_refusal else []
+    ) + [ModelMessage("user", "Estimate a synthetic food portion in my mobile browser.")]
+    try:
+        response = model.complete_chat(messages, "en") if channel == "chat" else model.complete(
+            messages
+        )
+        _ = [chunk async for chunk in response]
+        request = transport.responses.request
+        expected = {"chat": "browser chat", "voice": "browser voice", "phone": "telephone call"}
+        assert f"Trusted runtime channel: {expected[channel]}." in request["instructions"]
+        assert "not device wording or earlier refusals" in request["instructions"]
+        assert "prose or lookup alone creates no pending proposal" in request["instructions"]
+        assert "committed tool receipt" in request["instructions"]
+        assert "protein (g), calories (kcal) and fat (g)" in request["instructions"]
+        assert "bulleted list; unknown stays unknown" in request["instructions"]
+        assert any(tool["name"] == "health_food_review" for tool in request["tools"])
+        assert any(request.url.path == "/tools" for request in backend.requests)
+    finally:
+        current_phone_session_id.reset(token)
         await model.close()
 
 
@@ -2588,7 +2807,11 @@ async def test_claude_chat_streams_and_uses_backend_tools_thinking_and_usage() -
     finally:
         current_message_id.reset(message_token)
 
-    assert chunks == ["I’m creating it. ", "Task created."]
+    assert chunks == [
+        "I’m creating it. ",
+        AcknowledgmentBoundary("I’m creating it. "),
+        "Task created.",
+    ]
     assert openai_transport.responses.requests == []
     first, second = anthropic.messages.requests
     assert first["model"] == "claude-sonnet-5-5"

@@ -125,7 +125,7 @@ export const defaultSettings: Settings = {
   presentation: { showWork: true },
   decisions: { provider: defaultDecisionProvider },
   appearance: { theme: 'light' },
-  jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
+  jarvis: { model: defaultRoleModels.chat, reasoning: 'none' },
   personality: {
     tone: 'british_butler',
     responseStyle: 'concise',
@@ -790,6 +790,12 @@ function isSettingsPatch(
 
 function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fallbackModelCatalogue()): Settings {
   const merged = structuredClone(defaultSettings);
+  // Prepare the new default without advertising an undeployed model. Preserve
+  // the previous chat default before provisioning or when ARM is unavailable.
+  const chatModels = modelsForRole(catalogue, 'chat');
+  if (!chatModels.includes(merged.roles.chat.model) && chatModels.includes('gpt-5.6-luna')) {
+    merged.roles.chat.model = 'gpt-5.6-luna';
+  }
   for (const area of Object.keys(settingKeys).filter((key) => key !== 'roles') as Exclude<keyof Settings, 'roles'>[]) {
     const values = stored[area];
     if (!values || typeof values !== 'object') continue;
@@ -972,7 +978,7 @@ function withRoleSettings(settings: SettingsPatch): SettingsPatch {
 export function validateSettingsPatch(
   value: unknown,
   catalogue: ModelCatalogue = fallbackModelCatalogue(),
-  current: Settings = defaultSettings,
+  current: Settings = mergeSettings({}, catalogue),
 ): SettingsPatch | null {
   if (!isSettingsPatch(value, catalogue, current)) return null;
   const patch = withRoleSettings(value);
@@ -1002,7 +1008,7 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
 }
 
 export async function buildAgentSettingsPayload(
-  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore' | 'jarvisTools'>,
+  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore' | 'jarvisTools' | 'backendLogsConfigured'>,
 ) {
   if (!app.settingsStore) throw new Error('Settings unavailable');
   const catalogue = await app.modelCatalogue.read();
@@ -1022,6 +1028,7 @@ export async function buildAgentSettingsPayload(
       app.jarvisTools.get('proactive_recent_items') !== undefined,
       app.jarvisTools.get('proactive_preferences') !== undefined,
       app.jarvisTools.get('owner_reminders') !== undefined,
+      app.backendLogsConfigured && app.jarvisTools.get('read_backend_logs') !== undefined,
     ),
     timeouts: settings.timeouts,
     personality: settings.personality,

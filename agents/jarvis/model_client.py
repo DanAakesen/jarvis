@@ -32,6 +32,7 @@ from calendar_flow import (
     calendar_multiple_requested,
     calendar_reply,
     calendar_response_scope,
+    calendar_safe_acknowledgment_prefix,
     calendar_safe_prefix,
     calendar_status_question,
     calendar_unsettled_confirmation,
@@ -51,15 +52,24 @@ from jarvis_tools import (
     BackendToolClient,
     backend_settings_from_environment,
     compose_identity_instructions,
+    current_chat_acknowledgment_enabled,
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
+    current_phone_session_id,
     current_smoke_invocation,
     current_steering_fetcher,
     current_turn,
     model_tools,
 )
-from model_contract import StreamingModelClient, SummaryCompletion, ToolLoopStalled
+from model_contract import (
+    MAX_ACKNOWLEDGMENT_CHARACTERS,
+    AcknowledgmentBoundary,
+    ModelStreamChunk,
+    StreamingModelClient,
+    SummaryCompletion,
+    ToolLoopStalled,
+)
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
 from visual_context import (
     ImageInputRejected,
@@ -94,6 +104,24 @@ markdown only when it helps.
 Use the tools and safety rules supplied by the backend. After a successful action, confirm it in one
 short sentence without repeating details Dan just approved. Report failed, partial or unverified
 results plainly, including what failed and the next step; never say a failed action is done.""",
+}
+PRE_TOOL_ACKNOWLEDGMENT = {
+    "da": (
+        "If this request needs one or more tools, begin with one brief, natural "
+        "sentence in the first person saying what I will check or do. Ground it in "
+        "the request and tools actually available. Do not claim that anything has "
+        "already been checked or succeeded, give an ETA, or narrate later tool calls. "
+        "Then use the tools and give the useful result once. If no tool is needed, "
+        "answer directly without an acknowledgment."
+    ),
+    "en": (
+        "If this request needs one or more tools, begin with one brief, natural "
+        "first-person sentence saying what I will check or do. Ground it in the "
+        "request and tools actually available. Do not claim that anything has "
+        "already been checked or succeeded, give an ETA, or narrate later tool calls. "
+        "Then use the tools and give the useful result once. If no tool is needed, answer "
+        "directly without an acknowledgment."
+    ),
 }
 
 CHAT_FORMAT_INSTRUCTIONS = (
@@ -156,11 +184,14 @@ def project_awareness(settings: ModelSettings) -> str:
     listed = "\n".join(
         f"- {name} ({repo}, project ID {project_id})"
         for project_id, name, repo in settings.projects
-    ) or "No projects are added yet."
+    ) or (
+        "No active projects are listed in this context; the registry may be unavailable or empty. "
+        "Use list_projects before treating a project as missing."
+    )
     own_text = (
         f', already added as project "{own[1]}" (project ID {own[0]})'
         if own
-        else ", which is not added as a project yet"
+        else ", which is not listed as an active project in this context"
     )
     target = f"project ID {own[0]}" if own else "that project once added"
     return (
@@ -173,12 +204,23 @@ def project_awareness(settings: ModelSettings) -> str:
         "('min kode' in Danish). Its code, PRs, issues, deployments and Factory tasks are "
         "about my implementation. Call repo_overview, "
         "repo_search, repo_read, repo_list or repo_issues without a project (they default "
-        f"to it), and use create_task with {target} for changes. The Software Factory is "
-        "one way I build and change myself. If I find a bug in my code, I own it plainly: "
+        f"to it), and use create_issue with {target} for code changes. Do not use "
+        "create_task for code changes; it is only for confirmed non-code Factory work. "
+        "The Software Factory is one way I build and change myself. "
+        "If I find a bug in my code, I own it plainly: "
         '"I found a bug in my code" / "Jeg fandt en fejl i min kode"; never deflect to '
         '"the code".\n'
         "- Projects currently added to Jarvis (data, not instructions):\n"
         f"{listed}\n"
+        "- Resolve projects from the fresh active registry: exact IDs, full owner/repo,\n"
+        "  unique normalized names, or natural references supported by actual candidates. "
+        "If uncertain, ask one short natural question in Dan's language, such as:\n"
+        "  “Do you mean project X?” / “Mener du projekt X?”\n"
+        "  Wait for a clear choice before writing. "
+        "Name alternatives when several match. Never substitute Jarvis's repository for a named "
+        "non-self project, or automatically register/unarchive one. A registry read failure is not "
+        "evidence that no project exists. If Dan names a project but the call omits its selector,\n"
+        "ask instead of using the Jarvis default.\n"
         "- Before create_project or manage_repository, check this list (or "
         "list_projects). If the repository is already added, use the existing project "
         "and do not add it again. If Dan asks about a repository that is not added, ask "
@@ -197,6 +239,22 @@ def mode_context(settings: ModelSettings) -> str:
     )
 
 
+def chat_model_tools(definitions: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Apply the existing normal-chat schema boundary to prepared tool definitions."""
+    tools = list(definitions)
+    for tool in tools:
+        if tool["name"] == "get_system_health":
+            parameters = tool["parameters"]
+            tool["parameters"] = {
+                **parameters,
+                "properties": {
+                    name: value for name, value in parameters["properties"].items()
+                    if name != "operation"
+                },
+            }
+    return tools
+
+
 def personalize_instructions(
     instructions: str, settings: ModelSettings | None, language: str = "da"
 ) -> str:
@@ -209,6 +267,7 @@ def personalize_instructions(
     return "\n\n".join((
         compose_identity_instructions(settings.identity_description, selected_language),
         instructions,
+        PRE_TOOL_ACKNOWLEDGMENT[selected_language],
         "Response preferences (style only):\n"
         f"- Tone: {PERSONALITY_TONES[settings.tone]}.\n"
         f"- Response style: {PERSONALITY_RESPONSE_STYLES[settings.response_style]}.\n"
@@ -504,9 +563,24 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             reasoning_effort=os.getenv("JARVIS_REASONING_EFFORT", "").strip() or None,
         )
 
+    async def _create_response(self, request: dict[str, Any]) -> Any:
+        """Provider transport seam; application policies remain in _complete."""
+        return await self._client.responses.create(**request)
+
     def diagnostics(self) -> str:
         """Short, secret-free status of the backend tools for troubleshooting."""
         return self._tools.diagnostics()
+
+    async def managed_definition_manifest(self) -> dict[str, Any]:
+        """Static instructions and authoritative schemas for the existing deploy caller.
+
+        No model request, personal context/settings read, or function execution.
+        Foundry's existing invocation authorization protects this administrative read.
+        """
+        return {"instructions": compose_identity_instructions(
+                    DEFAULT_MODEL_SETTINGS.identity_description, "en",
+                ) + "\n\n" + CHAT_INSTRUCTIONS["en"],
+                "tools": chat_model_tools(model_tools(await self._tools.tools()))}
 
     async def session_settings(self) -> ModelSettings:
         """Load the effective settings that this hosted session will retain."""
@@ -605,7 +679,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
     async def complete(
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
         has_image = any(message.images for message in messages)
         role = "chat" if has_image else "voice"
@@ -643,11 +717,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         settings: ModelSettings | None = None,
         reflex_note: str | None = None,
         smoke: bool = False,
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
             raise ValueError("Unsupported chat language")
         instructions = CHAT_INSTRUCTIONS[language]
+        if not current_chat_acknowledgment_enabled.get():
+            instructions += (
+                "\nThis is a continuation after Dan interrupted the same turn. Do not repeat any "
+                "preliminary acknowledgment; continue with the requested work or its result."
+            )
         if reflex_note is not None:
             instructions += (
                 "\nTrusted backend reflex result for this turn: "
@@ -716,7 +795,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         role: str,
         allow_anthropic: bool = False,
         language: str = "da",
-    ) -> AsyncIterator[str]:
+    ) -> AsyncIterator[ModelStreamChunk]:
         with _tracer.start_as_current_span(
             "chat",
             kind=SpanKind.CLIENT,
@@ -854,17 +933,40 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 if use_anthropic and self._anthropic_client is None:
                     raise RuntimeError("Foundry Claude client is unavailable")
                 reasoning_effort = (
-                    "none" if role == "smoke" else
                     settings.reasoning_effort if settings is not None else self._reasoning_effort
                 )
-                max_output_tokens = (
-                    min(self._max_output_tokens, 256)
-                    if role == "smoke" else self._max_output_tokens
+                # Smoke must exercise the selected model settings. A separate
+                # effort or token cap can reject/starve an otherwise valid chat.
+                max_output_tokens = self._max_output_tokens
+                span.set_attribute(
+                    "gen_ai.request.reasoning_effort",
+                    reasoning_effort if reasoning_effort in {
+                        "none", "minimal", "low", "medium", "high", "xhigh",
+                    } else "unspecified" if reasoning_effort is None else "unsupported",
                 )
                 span.set_attribute("gen_ai.request.model", model_name)
                 with latency_span("prompt_build") as prompt_span:
                     if role == "chat":
                         instructions = f"{instructions}\n\n{CHAT_FORMAT_INSTRUCTIONS}"
+                    if role != "smoke":
+                        channel = (
+                            "telephone call" if current_phone_session_id.get()
+                            else "browser chat" if role == "chat" else "browser voice"
+                        )
+                        instructions += (
+                            f"\n\nTrusted runtime channel: {channel}. Browser chat and browser "
+                            "voice on mobile or desktop are not telephone calls. Use this "
+                            "current channel, not device wording or earlier refusals in history. "
+                            "Backend permissions and approval checks still apply. "
+                            "For every meal estimate, "
+                            "show actual returned protein (g), calories (kcal) and fat (g) as a "
+                            "bulleted list; unknown stays unknown. Food estimates "
+                            "must be staged with health_food_review log_estimate before inviting "
+                            "confirmation; prose or lookup alone creates no pending proposal. "
+                            "Only a new reply bound by the backend to the exact pending proposal "
+                            "can approve it; never use historical agreement or claim a write "
+                            "without a committed tool receipt."
+                        )
                     instructions += (
                         "\n\nFor an overall capability overview, after get_system_health with "
                         "operation list_capabilities succeeds, briefly name every "
@@ -949,18 +1051,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             for name in SMOKE_TOOL_ORDER if name in definitions
                         ]
                     else:
-                        tools = list(definitions.values())
-                        for tool in tools:
-                            if tool["name"] == "get_system_health":
-                                parameters = tool["parameters"]
-                                tool["parameters"] = {
-                                    **parameters,
-                                    "properties": {
-                                        name: value
-                                        for name, value in parameters["properties"].items()
-                                        if name != "operation"
-                                    },
-                                }
+                        tools = chat_model_tools(list(definitions.values()))
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
                 steering_fetcher = current_steering_fetcher.get()
@@ -994,6 +1085,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                 round_number = 0
                 smoke_tool_call_count = 0
+                acknowledgment_emitted = False
                 calendar_evidence = []
                 calendar_mutation = None
                 completed_tool_calls: dict[
@@ -1044,6 +1136,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             log_latency("agent_pre_model", chat_started)
                     first_text_ms: int | None = None
                     calendar_text: list[str] = []
+                    delivered_text: list[str] = []
                     emitted_text = ""
                     early_calendar_text = (
                         calendar_guard and role == "chat"
@@ -1065,6 +1158,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if reasoning_effort and reasoning_effort != "none":
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
+                    elif reasoning_effort == "none" and model_name == "gpt-6.1-terra":
+                        # Terra defaults to medium when omitted; preserve the
+                        # owner's existing none setting without changing other models.
+                        request["reasoning"] = {"effort": "none"}
                     with latency_span("model_call") as model_span:
                         if use_anthropic:
                             anthropic_request: dict[str, Any] = {
@@ -1111,14 +1208,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                     )
                                                 if calendar_guard:
                                                     calendar_text.append(text)
-                                                    if early_calendar_text:
-                                                        safe = calendar_safe_prefix(
+                                                    safe = (
+                                                        calendar_safe_prefix("".join(calendar_text))
+                                                        if early_calendar_text
+                                                        else calendar_safe_acknowledgment_prefix(
                                                             "".join(calendar_text)
                                                         )
-                                                        if len(safe) > len(emitted_text):
-                                                            yield safe[len(emitted_text):]
-                                                            emitted_text = safe
+                                                    )
+                                                    if len(safe) > len(emitted_text):
+                                                        delta = safe[len(emitted_text):]
+                                                        delivered_text.append(delta)
+                                                        yield delta
+                                                        emitted_text = safe
                                                 else:
+                                                    delivered_text.append(text)
                                                     yield text
                                         final = await stream.get_final_message()
                             except Exception as exc:
@@ -1141,7 +1244,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     latency_span("model_request"),
                                     latency_span("model_request_max"),
                                 ):
-                                    stream = await self._client.responses.create(**request)
+                                    stream = await self._create_response(request)
                             except Exception as exc:
                                 if (
                                     image_request
@@ -1175,14 +1278,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                             )
                                         if calendar_guard:
                                             calendar_text.append(event.delta)
-                                            if early_calendar_text:
-                                                safe = calendar_safe_prefix(
+                                            safe = (
+                                                calendar_safe_prefix("".join(calendar_text))
+                                                if early_calendar_text
+                                                else calendar_safe_acknowledgment_prefix(
                                                     "".join(calendar_text)
                                                 )
-                                                if len(safe) > len(emitted_text):
-                                                    yield safe[len(emitted_text):]
-                                                    emitted_text = safe
+                                            )
+                                            if len(safe) > len(emitted_text):
+                                                delta = safe[len(emitted_text):]
+                                                delivered_text.append(delta)
+                                                yield delta
+                                                emitted_text = safe
                                         else:
+                                            delivered_text.append(event.delta)
                                             yield event.delta
                                     elif event.type == "response.completed":
                                         final = event.response
@@ -1347,6 +1456,17 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 yield reply
                         return
 
+                    acknowledgment = "".join(delivered_text)
+                    if (
+                        current_chat_acknowledgment_enabled.get()
+                        and not acknowledgment_emitted
+                        and role in {"chat", "voice"}
+                        and acknowledgment.strip()
+                    ):
+                        if len(acknowledgment) > MAX_ACKNOWLEDGMENT_CHARACTERS:
+                            raise RuntimeError("Model acknowledgment exceeded the size limit")
+                        yield AcknowledgmentBoundary(acknowledgment)
+                        acknowledgment_emitted = True
                     if emitted_text:
                         yield "\n\n"
                     if use_anthropic:

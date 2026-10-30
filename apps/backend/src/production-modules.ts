@@ -18,13 +18,14 @@ export interface ProductionModules {
   readonly imageGeneration: BackendModule | undefined;
   readonly htmlView: BackendModule | undefined;
   readonly weather: BackendModule | undefined;
-  readonly folio: BackendModule | undefined;
+  readonly workspaces: BackendModule | undefined;
   readonly workspacePins: BackendModule | undefined;
   readonly screenVision: BackendModule | undefined;
   readonly visionWatch: BackendModule | undefined;
   readonly voiceRelay: BackendModule | undefined;
   readonly daily: BackendModule | undefined;
   readonly proactive?: BackendModule | undefined;
+  readonly backendLogs?: BackendModule | undefined;
 }
 
 export function createProductionModules(modules: ProductionModules): BackendModule[] {
@@ -46,12 +47,13 @@ export function createProductionModules(modules: ProductionModules): BackendModu
     ...(modules.imageGeneration ? [modules.imageGeneration] : []),
     ...(modules.htmlView ? [modules.htmlView] : []),
     ...(modules.weather ? [modules.weather] : []),
-    ...(modules.folio ? [modules.folio] : []),
+    ...(modules.workspaces ? [modules.workspaces] : []),
     ...(modules.workspacePins ? [modules.workspacePins] : []),
     ...(modules.screenVision ? [modules.screenVision] : []),
     ...(modules.visionWatch ? [modules.visionWatch] : []),
     ...(modules.voiceRelay ? [modules.voiceRelay] : []),
     ...(modules.daily ? [modules.daily] : []),
     ...(modules.proactive ? [modules.proactive] : []),
+    ...(modules.backendLogs ? [modules.backendLogs] : []),
   ];
 }

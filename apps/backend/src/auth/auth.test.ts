@@ -9,6 +9,7 @@ import { coreModule } from '../core/index.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { createTokenVerifier, runnerEventsRole } from './verify.js';
 import { loadAuthConfig } from './config.js';
+import { createBackendLogsModule } from '../operations/backend-logs.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const issuer = `https://login.microsoftonline.com/${config.auth.tenantId}/v2.0`;
@@ -275,6 +276,37 @@ const pcBridgeConfig = loadConfig({ ENTRA_PC_BRIDGE_CLIENT_ID: pcBridgeClientId 
 const bearer = (value: string) => ['Bearer', value].join(' ');
 const agentClaims: JWTPayload = { oid: agentObjectId, name: undefined, scp: undefined, roles: ['Jarvis.Tools'], idtyp: 'app' };
 
+describe('backend log reader authorization', () => {
+  it('accepts only owner and configured Jarvis agent identities and redacts their audits', async () => {
+    const record = vi.fn(async () => {});
+    const module = createBackendLogsModule();
+    const app = buildApp(agentConfig, undefined, {
+      auth: createTokenVerifier(agentConfig.auth, createRemoteJWKSet(url)),
+      modules: [coreModule, module], toolCallStore: { record },
+    });
+    apps.push(app);
+    const call = (authorization?: string) => app.inject({ method: 'POST', url: '/tools/read_backend_logs',
+      headers: { ...(authorization ? { authorization } : {}), 'x-jarvis-message-id': '42' }, payload: {} });
+    expect((await call()).statusCode).toBe(401);
+    for (const claims of [
+      { oid: '00000000-0000-0000-0000-000000000000' },
+      { oid: '22222222-2222-4222-8222-222222222222', scp: undefined, roles: [runnerEventsRole], idtyp: 'app' },
+      { aud: 'https://management.azure.com/', iss: `https://sts.windows.net/${config.auth.tenantId}/`,
+        ver: '1.0', oid: config.auth.deployObjectId, scp: undefined, idtyp: 'app' },
+    ]) expect((await call(bearer(await token(claims)))).statusCode).toBe(403);
+    expect(record).not.toHaveBeenCalled();
+    for (const claims of [{}, agentClaims]) {
+      const response = await call(bearer(await token(claims)));
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'unavailable', reason: 'disabled' } });
+    }
+    expect(record).toHaveBeenCalledTimes(2);
+    for (const [audit] of record.mock.calls as unknown[][]) {
+      expect(audit).toMatchObject({ arguments: { redacted: true }, result: { redacted: true } });
+    }
+  });
+});
+
 function agentFixture(backendConfig = agentConfig) {
   const records: string[] = [];
   const output = new Writable({ write(chunk: Buffer, _enc, done) { records.push(chunk.toString()); done(); } });
@@ -295,6 +327,39 @@ function agentFixture(backendConfig = agentConfig) {
   apps.push(app);
   return { app, record, seen, records, executed: () => executed };
 }
+
+describe('conversation recovery route authorization', () => {
+  const routes = [
+    { method: 'GET' as const, url: '/conversation/turns/active', ownerStatus: 200 },
+    { method: 'GET' as const, url: '/conversation/sessions/41/turns/42/events', ownerStatus: 404 },
+    { method: 'POST' as const, url: '/conversation/sessions/41/turns/42/cancel', ownerStatus: 404 },
+  ];
+  it.each(routes)('requires the owner for $method $url', async ({ method, url: path, ownerStatus }) => {
+    const app = buildApp(agentConfig, undefined, {
+      auth: createTokenVerifier(agentConfig.auth, createRemoteJWKSet(url)),
+    });
+    apps.push(app);
+    expect((await app.inject({ method, url: path })).statusCode).toBe(401);
+    for (const claims of [
+      { oid: '00000000-0000-0000-0000-000000000000' },
+      agentClaims,
+      { oid: '22222222-2222-4222-8222-222222222222', scp: undefined, roles: [runnerEventsRole], idtyp: 'app' },
+      { aud: 'https://management.azure.com/', iss: `https://sts.windows.net/${config.auth.tenantId}/`,
+        ver: '1.0', oid: config.auth.deployObjectId, scp: undefined, idtyp: 'app' },
+    ]) {
+      const response = await app.inject({ method, url: path, headers: { authorization: bearer(await token(claims)) } });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'Forbidden' });
+    }
+    // Positive control proves these are registered business routes, not generic auth on a missing path.
+    const owner = await app.inject({ method, url: path, headers: { authorization: bearer(await token()) } });
+    expect(owner.statusCode).toBe(ownerStatus);
+    expect(owner.json()).toEqual(ownerStatus === 200 ? { turns: [] } : {
+      error: method === 'POST' ? 'Chat turn not found'
+        : 'This reply cannot be reattached. Check saved conversation and action status before trying again.',
+    });
+  });
+});
 
 describe('Jarvis agent identity on the tool routes', () => {
   it('lets the configured agent list and call tools as an app-only principal', async () => {

@@ -1,0 +1,98 @@
+[
+  {
+    "control": "Send",
+    "baseline": true,
+    "mode": "recorded-order replay with modelled default focus",
+    "mouseDownPrevented": false,
+    "beforeY": 419,
+    "afterY": 707,
+    "clickHitOriginalButton": false,
+    "actionOccurred": false,
+    "sendCount": 0,
+    "errors": []
+  },
+  {
+    "control": "Plus",
+    "baseline": true,
+    "mode": "recorded-order replay with modelled default focus",
+    "mouseDownPrevented": false,
+    "beforeY": 419,
+    "afterY": 707,
+    "clickHitOriginalButton": false,
+    "actionOccurred": false,
+    "sendCount": 0,
+    "errors": []
+  },
+  {
+    "control": "Dictate",
+    "baseline": true,
+    "mode": "recorded-order replay with modelled default focus",
+    "mouseDownPrevented": false,
+    "beforeY": 419,
+    "afterY": 707,
+    "clickHitOriginalButton": false,
+    "actionOccurred": false,
+    "sendCount": 0,
+    "errors": []
+  },
+  {
+    "control": "Send",
+    "baseline": false,
+    "mode": "recorded-order replay with modelled default focus",
+    "mouseDownPrevented": true,
+    "beforeY": 419,
+    "afterY": 419,
+    "clickHitOriginalButton": true,
+    "actionOccurred": true,
+    "sendCount": 1,
+    "errors": []
+  },
+  {
+    "control": "Plus",
+    "baseline": false,
+    "mode": "recorded-order replay with modelled default focus",
+    "mouseDownPrevented": true,
+    "beforeY": 419,
+    "afterY": 419,
+    "clickHitOriginalButton": true,
+    "actionOccurred": true,
+    "sendCount": 0,
+    "errors": []
+  },
+  {
+    "control": "Dictate",
+    "baseline": false,
+    "mode": "recorded-order replay with modelled default focus",
+    "mouseDownPrevented": true,
+    "beforeY": 419,
+    "afterY": 419,
+    "clickHitOriginalButton": true,
+    "actionOccurred": true,
+    "sendCount": 0,
+    "errors": []
+  },
+  {
+    "control": "Send",
+    "baseline": false,
+    "mode": "native Chromium touch",
+    "actionOccurred": true,
+    "sendCount": 1,
+    "errors": []
+  },
+  {
+    "control": "Plus",
+    "baseline": false,
+    "mode": "native Chromium touch",
+    "actionOccurred": true,
+    "sendCount": 0,
+    "errors": []
+  },
+  {
+    "control": "Dictate",
+    "baseline": false,
+    "mode": "native Chromium touch",
+    "actionOccurred": true,
+    "sendCount": 0,
+    "errors": []
+  }
+]

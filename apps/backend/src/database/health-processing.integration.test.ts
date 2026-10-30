@@ -311,7 +311,7 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect(await readModel().workoutDetail('declared', signal())).toMatchObject({ detail: { avgHeartRate: { qty: 110, units: 'count/min' } } });
     expect((await inbox())[0]).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes), processing_status: 'processed' });
   });
-  it('projects retained metric, sleep and workout metadata safely through SQL and daily_query', async () => {
+  it('projects retained metric, sleep and workout metadata safely through SQL and health_query', async () => {
     const device = await provision();
     const value = {
       data: {
@@ -355,7 +355,7 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect(heartRate.items[0]).toMatchObject({ avg_value: 95, unit: 'bpm', sources: ['Synthetic HR Source'], sourcesTruncated: false });
 
     const module = createDailyModules(true, createDailyData(pool, owner, now))[0]!;
-    const queryTool = module.tools.find(tool => tool.name === 'daily_query')!;
+    const queryTool = module.tools.find(tool => tool.name === 'health_query')!;
     const workoutDetail = await queryTool.execute({ source: dailyQuerySources.workout, workoutId: 'synthetic-projection-workout' }, {
       server: { ownerObjectId: owner }, principal: { objectId: owner },
     } as unknown as FastifyRequest, signal()) as { items: { additionalMetrics: { metric_name: string }[]; detail: Record<string, unknown> }[] };

@@ -24,6 +24,8 @@ interface BackgroundJobRow {
   view_id: string | null;
   started_at: Date | string;
   updated_at: Date | string;
+  result_workspace_item_id?: string | null;
+  result_delivery_status?: BackgroundJob['resultDelivery'] | null;
   retry_input?: string | null;
   retry_job_id?: string | null;
 }
@@ -53,6 +55,7 @@ export interface BackgroundJobStore {
   recentFailures?(from: Date, to: Date, signal: AbortSignal): Promise<{ count: number; retryable: boolean }>;
   create(job: BackgroundJob, retryInput?: ResearchJobRetryInput, retryOf?: string): Promise<boolean>;
   update(job: BackgroundJob): Promise<BackgroundJob | null>;
+  updateResultDelivery(jobId: string, resultDelivery: NonNullable<BackgroundJob['resultDelivery']>): Promise<BackgroundJob | null>;
   list(): Promise<BackgroundJob[]>;
   get(jobId: string): Promise<StoredBackgroundJobDetails | null>;
   reconcileInterrupted(): Promise<BackgroundJob[]>;
@@ -65,6 +68,12 @@ export interface BackgroundJobDismissalResult {
 }
 
 function mapJob(row: BackgroundJobRow): BackgroundJob {
+  const hasResultId = row.result_workspace_item_id != null;
+  const hasResultDelivery = row.result_delivery_status != null;
+  if (hasResultId !== hasResultDelivery) throw new Error('Stored research result reference is incomplete');
+  const resultFields = row.result_workspace_item_id != null && row.result_delivery_status != null
+    ? { resultId: row.result_workspace_item_id, resultDelivery: row.result_delivery_status }
+    : {};
   const job: BackgroundJob = {
     jobId: row.job_id.toLowerCase(),
     kind: row.kind,
@@ -74,6 +83,7 @@ function mapJob(row: BackgroundJobRow): BackgroundJob {
     steps: row.steps,
     ...(row.detail === null ? {} : { detail: row.detail }),
     ...(row.view_id === null ? {} : { viewId: row.view_id }),
+    ...resultFields,
     startedAt: row.started_at instanceof Date ? row.started_at.toISOString() : new Date(row.started_at).toISOString(),
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : new Date(row.updated_at).toISOString(),
   };
@@ -91,6 +101,8 @@ function addJobInputs(request: sql.Request, job: BackgroundJob, retryInput?: Res
     .input('steps', sql.TinyInt, job.steps)
     .input('detail', sql.NVarChar(120), job.detail ?? null)
     .input('viewId', sql.NVarChar(200), job.viewId ?? null)
+    .input('resultWorkspaceItemId', sql.NVarChar(80), job.resultId ?? null)
+    .input('resultDeliveryStatus', sql.NVarChar(16), job.resultDelivery ?? null)
     .input('startedAt', sql.DateTime2(7), new Date(job.startedAt))
     .input('updatedAt', sql.DateTime2(7), new Date(job.updatedAt))
     .input('retryInput', sql.NVarChar(sql.MAX), retryInput ? JSON.stringify(retryInput) : null);
@@ -148,7 +160,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       const { recordset } = await pool.request()
         .input('ownerObjectId', sql.UniqueIdentifier, ownerObjectId)
         .query<BackgroundJobRow>(`SELECT TOP (1000) job.job_id, job.kind, job.title, job.status, job.step, job.steps,
-          job.detail, job.view_id, job.started_at, job.updated_at
+          job.detail, job.view_id, job.result_workspace_item_id, job.result_delivery_status, job.started_at, job.updated_at
           FROM dbo.background_jobs AS job
           WHERE job.started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
             AND NOT EXISTS (SELECT 1 FROM dbo.background_job_dismissals AS dismissal
@@ -239,23 +251,28 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         let persistedRetryInput = retryInput;
         if (retryOf) {
           if (retryOf.toLowerCase() === job.jobId.toLowerCase()) throw new TypeError('A research job cannot retry itself');
-          const { recordset, rowsAffected } = await new sql.Request(transaction)
+          const { recordset } = await new sql.Request(transaction)
             .input('retryOf', sql.NVarChar(36), retryOf.toLowerCase())
             .input('retryJobId', sql.NVarChar(36), job.jobId.toLowerCase())
-            .query<{ retry_input: string }>(`UPDATE dbo.background_jobs SET retry_job_id = @retryJobId
-              OUTPUT INSERTED.retry_input
-              WHERE job_id = @retryOf AND kind = N'research' AND status = N'failed'
-                AND retry_input IS NOT NULL AND retry_job_id IS NULL;`);
+            .query<{ retry_input: string }>(`DECLARE @updated TABLE (job_id nvarchar(36) COLLATE Latin1_General_100_BIN2 NOT NULL);
+              UPDATE dbo.background_jobs SET retry_job_id = @retryJobId
+                OUTPUT INSERTED.job_id INTO @updated
+                WHERE job_id = @retryOf AND kind = N'research' AND status = N'failed'
+                  AND retry_input IS NOT NULL AND retry_job_id IS NULL;
+              SELECT job.retry_input FROM dbo.background_jobs AS job
+                INNER JOIN @updated AS updated ON updated.job_id = job.job_id;`);
           const storedRetryInput = recordset[0] ? parseRetryInput(recordset[0].retry_input) : undefined;
-          if (rowsAffected[0] !== 1 || !storedRetryInput) {
+          if (recordset.length !== 1 || !storedRetryInput) {
             await transaction.rollback();
             return false;
           }
           persistedRetryInput = storedRetryInput;
         }
         await addJobInputs(new sql.Request(transaction), job, persistedRetryInput).query(`INSERT dbo.background_jobs
-          (job_id, kind, title, status, step, steps, detail, view_id, started_at, updated_at, retry_input)
-          VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @startedAt, @updatedAt, @retryInput);`);
+          (job_id, kind, title, status, step, steps, detail, view_id, result_workspace_item_id, result_delivery_status,
+            started_at, updated_at, retry_input)
+          VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @resultWorkspaceItemId,
+            @resultDeliveryStatus, @startedAt, @updatedAt, @retryInput);`);
         await insertStep(transaction, job);
         await transaction.commit();
         return true;
@@ -269,11 +286,15 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
-        const { recordset } = await addJobInputs(new sql.Request(transaction), job).query<BackgroundJobRow>(`UPDATE dbo.background_jobs
-          SET status = @status, step = @step, detail = @detail, view_id = @viewId, updated_at = @updatedAt
-          OUTPUT INSERTED.job_id, INSERTED.kind, INSERTED.title, INSERTED.status, INSERTED.step,
-            INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.started_at, INSERTED.updated_at
-          WHERE job_id = @jobId AND status = N'running';`);
+        const { recordset } = await addJobInputs(new sql.Request(transaction), job).query<BackgroundJobRow>(`DECLARE @updated TABLE (job_id nvarchar(36) COLLATE Latin1_General_100_BIN2 NOT NULL);
+          UPDATE dbo.background_jobs
+            SET status = @status, step = @step, detail = @detail, view_id = @viewId,
+              result_workspace_item_id = @resultWorkspaceItemId, result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
+            OUTPUT INSERTED.job_id INTO @updated
+            WHERE job_id = @jobId AND status = N'running';
+          SELECT job.job_id, job.kind, job.title, job.status, job.step, job.steps, job.detail, job.view_id,
+            job.result_workspace_item_id, job.result_delivery_status, job.started_at, job.updated_at
+            FROM dbo.background_jobs AS job INNER JOIN @updated AS updated ON updated.job_id = job.job_id;`);
         const updated = recordset[0] ? mapJob(recordset[0]) : null;
         if (updated) await insertStep(transaction, updated);
         await transaction.commit();
@@ -282,6 +303,25 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         await transaction.rollback();
         throw error;
       }
+    },
+    async updateResultDelivery(jobId, resultDelivery) {
+      if (!uuidPattern.test(jobId) || !['pending', 'unknown', 'failed', 'delivered'].includes(resultDelivery)) {
+        throw new TypeError('Invalid research result delivery update');
+      }
+      const { recordset } = await pool.request()
+        .input('jobId', sql.NVarChar(36), jobId.toLowerCase())
+        .input('resultDeliveryStatus', sql.NVarChar(16), resultDelivery)
+        .input('updatedAt', sql.DateTime2(7), new Date())
+        .query<BackgroundJobRow>(`DECLARE @updated TABLE (job_id nvarchar(36) COLLATE Latin1_General_100_BIN2 NOT NULL);
+          UPDATE dbo.background_jobs
+            SET result_delivery_status = @resultDeliveryStatus, updated_at = @updatedAt
+            OUTPUT INSERTED.job_id INTO @updated
+            WHERE job_id = @jobId AND status = N'done' AND result_workspace_item_id IS NOT NULL
+              AND (result_delivery_status <> N'delivered' OR @resultDeliveryStatus = N'delivered');
+          SELECT job.job_id, job.kind, job.title, job.status, job.step, job.steps, job.detail, job.view_id,
+            job.result_workspace_item_id, job.result_delivery_status, job.started_at, job.updated_at
+            FROM dbo.background_jobs AS job INNER JOIN @updated AS updated ON updated.job_id = job.job_id;`);
+      return recordset[0] ? mapJob(recordset[0]) : null;
     },
     async recentFailures(from, to, signal) {
       signal.throwIfAborted();
@@ -303,7 +343,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
     async list() {
       await pruneJobs(pool);
       const { recordset } = await pool.request().query<BackgroundJobRow>(`SELECT job_id, kind, title, status, step, steps,
-        detail, view_id, started_at, updated_at
+        detail, view_id, result_workspace_item_id, result_delivery_status, started_at, updated_at
         FROM dbo.background_jobs
         WHERE started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
         ORDER BY started_at DESC;`);
@@ -312,8 +352,8 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
     async get(jobId) {
       const { recordset } = await pool.request()
         .input('jobId', sql.NVarChar(36), jobId.toLowerCase())
-        .query<BackgroundJobRow>(`SELECT job_id, kind, title, status, step, steps, detail, view_id, started_at,
-          updated_at, retry_input, retry_job_id
+        .query<BackgroundJobRow>(`SELECT job_id, kind, title, status, step, steps, detail, view_id,
+          result_workspace_item_id, result_delivery_status, started_at, updated_at, retry_input, retry_job_id
           FROM dbo.background_jobs WHERE job_id = @jobId
             AND started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME());`);
       const row = recordset[0];
@@ -341,13 +381,16 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
-        const { recordset } = await new sql.Request(transaction).query<BackgroundJobRow>(`UPDATE dbo.background_jobs
-          SET status = N'failed',
-            detail = CASE WHEN kind = N'proactive' THEN N'Interrupted by a restart' ELSE N'interrupted by restart' END,
-            updated_at = SYSUTCDATETIME()
-          OUTPUT INSERTED.job_id, INSERTED.kind, INSERTED.title, INSERTED.status, INSERTED.step,
-            INSERTED.steps, INSERTED.detail, INSERTED.view_id, INSERTED.started_at, INSERTED.updated_at
-          WHERE status = N'running';`);
+        const { recordset } = await new sql.Request(transaction).query<BackgroundJobRow>(`DECLARE @updated TABLE (job_id nvarchar(36) COLLATE Latin1_General_100_BIN2 NOT NULL);
+          UPDATE dbo.background_jobs
+            SET status = N'failed',
+              detail = CASE WHEN kind = N'proactive' THEN N'Interrupted by a restart' ELSE N'interrupted by restart' END,
+              updated_at = SYSUTCDATETIME()
+            OUTPUT INSERTED.job_id INTO @updated
+            WHERE status = N'running';
+          SELECT job.job_id, job.kind, job.title, job.status, job.step, job.steps, job.detail, job.view_id,
+            job.result_workspace_item_id, job.result_delivery_status, job.started_at, job.updated_at
+            FROM dbo.background_jobs AS job INNER JOIN @updated AS updated ON updated.job_id = job.job_id;`);
         const jobs = recordset.map(mapJob);
         for (const job of jobs) await insertStep(transaction, job);
         await transaction.commit();

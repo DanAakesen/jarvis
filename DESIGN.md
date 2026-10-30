@@ -1,4 +1,198 @@
+## Approved runtime test entry (#1350; 29 October 2026)
+
+The existing chat menu will contain Test agent runtime. Dan chooses Current or
+Copilot and opens a separate, clearly labelled conversation. Normal chats stay
+unchanged; do not switch runtimes mid-conversation. The local candidate opens an
+accessible selector and then a labelled modal conversation, keeping the normal
+chat mounted with its session and draft. Unknown or unverified availability
+disables the option with a reason. The test view uses scoped history, streaming,
+Stop reply and explicit uncertain-outcome recovery. Desktop/phone Chromium fixture
+inspection covers both themes, focus return, failure/retry and streamed replies;
+it does not establish live provider acceptance. It adds no new page, global
+default control or dual-send behavior. Further material interaction choices stay
+open; see [migration notes](docs/main-chat-harness-migration.md).
+
+The test entry follows Language and precedes the existing capture/Voice/Attach
+actions. Voice and Attach remain adjacent at the end nearest Plus; keyboard order
+continues to follow the visible menu.
+
+Failure recovery preserves known sign-in, HTTP and fixed managed diagnostic
+messages. A busy/uncertain managed conversation explains its blocked state and
+retains Return to normal conversation; refreshing history cannot unlock the
+claim. Other uncertain delivery still requires history/action-status review and
+never resends automatically. No layout, menu placement or new action is added.
+
+## Mobile Settings Save (#1343; 28 October 2026)
+
+At the existing 700px phone breakpoint, the Settings header stays beneath the
+shared top bar while scrolling. Its single explicit Save button moves into that
+header, retains its 44px touch target, and shows pending/success/error feedback
+there. Desktop retains the footer control; resizing moves the same action
+between locations without changing the form draft or save behavior. The sticky
+surface uses shared glass, spacing and z-order tokens. Synthetic Chromium
+captures cover 390px, 320px and a focused 500px-high viewport; that last check
+approximates reduced screen space and does not prove physical iOS keyboard behavior.
+
+Restored chat queues show their retained bubbles and a Send queued messages
+control. Reload does not automatically execute these unsent requests. Terminal
+reply warnings remain associated with their submitted message after reload.
+
+## Mobile composer controls while typing (#1315; 27 October 2026)
+
+Preserve typing focus on the toolbar press, then let native click open Plus,
+toggle Dictate or submit Send. Menu-item focus remains intentional after opening.
+Use the existing form/control geometry; no visual or bubble/fade changes.
+
+## Temporary Send diagnostic (local, 26 October 2026)
+
+A temporary Copy Send diagnostic item in the phone Plus menu writes only the
+bounded trace on explicit press, using existing toast feedback. Attach remains
+nearest Plus. No typing-area geometry or Send behavior changes.
+
 # Design
+
+## Chat bubble frost (#1324; 26 October 2026)
+
+Plus, bubbles and header share the lighter 16px readability blur and existing translucent fill.
+Only the shown mobile history state restores both composer top-corner radii,
+including border pseudo-elements. Desktop and the hidden state retain their existing treatment.
+Preserve bubble geometry, rims, tints, text and the desktop transcript's 64px
+fade. Apply that fade directly to painted transcript items with scrollport-aligned
+offsets, rather than masking their ancestor. Extend item masks to retain timestamp
+and focus overflow. Keep the window blur on a background pseudo-element so it
+does not intercept bubble backdrop sampling. Phone typing mode retains no fade.
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
+## Mobile chat scroll focus (26 October 2026; local)
+
+Outside touch dismissal waits for a completed tap. Movement, native scrolling
+or pointer cancellation abandons dismissal without preventing browser defaults.
+Keep composer/menu exemptions and the mobile Send focus guard unchanged.
+## Meal estimate lists (#1321; 26 October 2026)
+
+Chat invitations and Now confirmations render server summary bullets as semantic
+lists, preserving literal proposal text and unknowns. Voice history also renders
+these nutrition bullets as lists. Existing Health tool chips translate retained
+Daily names for display. Reuse existing typography and surfaces without new controls.
+Synthetic component browser evidence is in `docs/ui/screenshots/1321/`.
+
+## Composer Plus readability (#1319; 26 October 2026)
+
+Scope the stronger 24px blur to `.composer-more` popups, including its Language flyout, and retain the existing translucent chrome fill. Use manual native popovers to render these sheets in the top layer, outside the composer backdrop root, while keeping their DOM ancestry and picker input intact. Other glass surfaces retain their tokens. Render Language first in DOM order, then capture actions, Voice and Attach last nearest Plus; keyboard traversal follows the visible order. Reuse the existing ShellIcon waveform for Voice and retain the Dictate microphone. This locally supersedes the shared popup material from #1301.
+
+## Mobile Send focus (#1315; 26 October 2026)
+
+When the phone message field is focused, prevent the Send primary pointer-down
+from transferring focus. Keep native click/form submission, keyboard activation
+and cancellation semantics; do not send on pointer-down or refocus after an
+asynchronous reply. Control geometry and desktop focus behavior stay unchanged.
+
+
+## Desktop composer parity (#1309; 26 October 2026)
+
+Reuse the phone composer's two-row layout and existing glass/control tokens on
+desktop. The outer measured stack owns width and dock stacking; the inner glass
+surface fills it without an independent chat-width cap. Workspace canvases isolate
+front/maximized windows, so the dock context clears them without exceeding modal
+layers. Voice moves into Plus, and errors use the shared above-surface feedback.
+The room-unavailable status flows above the desktop workspace in typing mode,
+so it cannot separate the initial docked history from the composer. Message
+timestamps already sit beneath bubbles; desktop navigation is unchanged.
+
+## Mobile Chat-only composer (#1303; 26 October 2026)
+
+The phone message composer is visible on Chat only, with the Workspaces pane closed. Other pages keep
+their navigation clearance without reserving the hidden composer height. Keep
+the conversation mounted to retain drafts/session state; returning to Chat reveals
+the existing composer. Desktop is unchanged; voice sessions stay mounted but their composer controls
+are also visible only on Chat.
+Workspaces is a separate browsing screen despite retaining the route. Menu remains
+an overlay on Chat and does not hide the composer.
+
+## Preview controls and resumed video (#1304; 26 October 2026)
+
+Switch/close reuse the shared chrome glass fill/blur and normal hover/pressed tokens, without a separate tint or outer preview box. Visible Live/direction badges are removed; named icon controls, startup/error feedback and focus outlines remain. Keep the last measured aspect during stream replacement and refresh dimensions on playing as well as metadata/resize. This supersedes the tinted control treatment below.
+
+## Attachment chooser source (#1306; 26 October 2026)
+
+Keep the attachment row mounted when opening the system file/photo chooser.
+Its transparent native file input shares that row's bounds instead of a clipped
+1px position elsewhere in the composer. Selection closes the menu and restores
+plus focus; cancellation retains the source. Other actions keep their existing
+closure behavior. Synthetic actual-App evidence and physical-iPhone limits are
+in `docs/ui/screenshots/1306/README.md`.
+
+## Chat return and cancellation (#1311; 26 October 2026)
+
+Reattachment uses the existing live conversation bubble, streamed text and exact
+food invitation. Preserve the existing no-Stop-button interaction; cancellation
+remains an explicit backend mechanism, not a new visible control. Leaving the page only
+detaches transport. Returning refreshes saved history and reattaches active work.
+No composer geometry, styling or dictation behavior changes.
+
+
+## Settled glass correction (#1301; 26 October 2026)
+
+Voice-mode follow-up: the typing composer is hidden and its wrapper is
+intentionally transparent. Runtime QA found the visible replacement voice bar
+still used the old 90% fill/24px blur; it now shares the chrome-glass material.
+The header already retained the shared material in voice mode. Actual-room
+SwiftShader and synthetic voice-state evidence are in the #1301 QA folder.
+
+The header joins the composer, bottom navigation and menu popups under the
+shared `--chrome-glass-surface` / `--chrome-glass-blur` tokens in `styles.css`.
+Use one stable partial fill and 10px blur rather than the phone cascade's old
+24px blur and the header's 90% fill. Menu entrance moves the sheet without
+fading its material opacity; removing the wrapper-plus-sheet fade prevents the
+transparent-first/filled-later appearance. Other overlay motion is unchanged.
+Dock current/pressed/expanded states use the existing focus color and a slightly
+stronger icon stroke, with plain item backgrounds and unchanged label color.
+Hover/press also act on the icon so touch hover cannot leave a filled box.
+Keyboard focus outlines remain. This supersedes #1296's header exclusion.
+Synthetic settled App captures and scene-transmission measurements are in
+`docs/ui/screenshots/1301/`; no physical-device acceptance is claimed.
+
+
+## Unified video delivery (#1317; 26 October 2026)
+
+Enable video is the only camera start action. Remove separate Watch/Stop watching
+and manual Look at camera actions. Existing chat/voice status text says Connecting
+until a frame is accepted, then Receiving camera updates with the shared budget.
+A failed request or 15 seconds without acceptance shows delayed/retrying feedback.
+Turn camera off and preview Close remain the stop controls; errors use existing
+feedback and stop the camera. No new styling or animation system.
+
+## Camera and conversation surface refinement (#1296; 26 October 2026)
+
+Drag the camera video directly with touch or a pointer; switch/close remain
+overlaid, with a quiet theme-tinted translucent fill and 8px blur. Keep the
+preview free of an outer frame. Cancelled dragging restores its previous offset;
+viewport resizing restores the fitted starting placement. Repeated plus presses
+open/close its menu, including with the language flyout open. Composer icons
+stay borderless. Scope clearer glass to the composer, bottom navigation and
+menu popups (58% of the existing theme surface), retaining readable text and
+icons. Do not dim/blur the chat when opening menus or change the header.
+Private references could not be downloaded by this executor; synthetic actual-App
+screenshots in `docs/ui/screenshots/1296/` were inspected instead.
+
+
+## Workspaces pane and phone chat times (#1279)
+
+The saved-item pane and its implementation are named Workspaces in the rail,
+phone menu, pane heading, components, data models, backend store and selectors.
+New clients use `workspaces` navigation and `workspacesOpen`; legacy
+`folio`/`folioOpen` values and API/tool names remain supported for existing
+clients. On screens up to 700px wide, chat time metadata follows the message
+text inside the bubble and aligns to its right; on wider screens it remains on
+the bubble's top-right rim.
 
 ## Health area naming (20 October 2026)
 
@@ -39,7 +233,7 @@ delivered by #1147.
 ## Entry-field focus (20 October 2026; P14-32)
 
 Every text entry field (input, select, textarea, `.form-control` and the Notes,
-Folio and Tasks search bars) shares one focus treatment: no outline, a thin
+Workspaces and Tasks search bars) shares one focus treatment: no outline, a thin
 border that shifts to a tint of `--focus` (`--field-focus-rule`) and a short soft
 light underneath (`--field-focus-glow`), echoing the composer. Fields in shared
 containers read the tint through `--field-rim`, so it applies at any specificity.
@@ -230,6 +424,22 @@ whenever a background-work pair is present. Only the running icon rotates, and
 neither OS nor app reduced-motion mode allows that animation. Preserve the
 background-work popover contents, delivery and dismissal.
 
+Food-estimate confirmation (#1277) keeps this exact proposal and its existing
+Approve/Reject fallback, but no longer requires opening the popover to approve:
+the owner's next natural text/browser-voice reply can confirm the current
+estimate. No new control, layout or animation is introduced. Corrections and
+deletions retain the separate approval controls; expiry and cancellation remain
+visible through the existing feed.
+The exact Now review remains available while food logging waits for approval.
+Typed chat presents that same review as plain text in the live Jarvis bubble,
+followed by one ordinary sentence inviting a reply. Reveal the conversation and
+follow the invitation when it arrives; no separate popover action is required.
+Remove withdrawn, expired and finished live invitations. Reuse the existing
+bubble and composer, with no new heading, control, accent border or animation.
+In present-mode browser voice, announce the staged estimate and invite a new reply
+without waiting for the blocking tool to return. Initial acknowledgement is not
+the invitation; retain the same proposal and existing controls, with no new chrome.
+
 The summary remains in the header on phones instead of inside the windows
 sheet; the separate windows button counts windows only. Keep the existing
 individual desktop job tabs and phone window sheet. Settings, presence and
@@ -286,6 +496,47 @@ or rewrite, desktop geometry while the phone layout is active. No new shell,
 keyboard-height estimate, focus-scroll workaround or keyboard-fit animation.
 This narrows the earlier manual-placement descriptions to desktop. Controlled
 Chromium layout evidence does not establish physical iPhone/Safari acceptance.
+
+## Mobile navigation and composer actions (#1287; 25 October 2026)
+
+The #1293 correction gives the phone draft its own full-width row. Plus,
+Dictate and Send are borderless 44px icon controls in a second row; accessible
+names and focus indicators remain. Dictate keeps its pressed Stop state through
+speech pauses; interim text updates the draft in place until finalized. Explicit
+Stop retains trailing recognition results without restarting. Attachment pills (including upload progress
+and ready image thumbnails) stay inside the composer above the draft. Only
+draft/attachment errors and selection problems sit above the composer surface
+and participate in its dock measurement. A visible
+keyboard inset removes navigation clearance; navigation is hidden while covered.
+The #1295 follow-up also reclaims navigation space while the message is focused when
+layout and visual viewports shrink together. #1299 requires an observed shrink or
+measurable inset: initial programmatic focus alone leaves navigation available. Navigation returns when focus leaves
+the composer/options or on observed viewport expansion; no browser mode is inferred from an owner image.
+
+Keep Chat, optional Health, Workspaces and Menu in the bottom navigation.
+The menu uses six entries per horizontal page, a compact three-dot swipe cue,
+and arrow-key paging. Escape, outside press and the Menu toggle dismiss it;
+there is no Close/Previous/Next row. The backdrop is clear without blur. Header,
+menu and composer use the existing subtly translucent chat surface token.
+
+The following captures document the earlier #1287 layout, superseded by #1293:
+
+The approved [reference mockup](https://github.com/DanAakesen/jarvis/blob/9cca3271948539828938f103442563811d3b526d/docs/design/1287-selected-mobile-reference.png)
+was fetched from its named reference branch and compared at a matching 390×844
+viewport. The 176px sheet sits immediately above the composer and dock; its
+two-row page starts at the top edge like the reference. The plus popover stays
+within both 320px and 390px viewports, and timestamps render below loaded
+bubbles. Synthetic Chromium captures show the [loaded conversation](docs/ui/screenshots/mobile-navigation-1287/shell-390.jpg),
+[390px plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-390.jpg),
+[320px plus actions](docs/ui/screenshots/mobile-navigation-1287/plus-actions-320.jpg),
+[draft dictation](docs/ui/screenshots/mobile-navigation-1287/dictation-draft-390.jpg),
+[first menu page](docs/ui/screenshots/mobile-navigation-1287/menu-open-390.jpg),
+[swiped second page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-390.jpg),
+[320px first page](docs/ui/screenshots/mobile-navigation-1287/menu-page1-320.jpg),
+[320px second page](docs/ui/screenshots/mobile-navigation-1287/menu-page2-320.jpg),
+and [narrow shell](docs/ui/screenshots/mobile-navigation-1287/shell-320.jpg). The
+browser fixture stubs authentication and API responses and emits a simulated speech
+result; it does not verify a live microphone, iOS Safari, or a physical phone.
 
 ## Chat records and keyboard geometry (16 October 2026; local candidate)
 
@@ -441,6 +692,12 @@ returns to the filtered list. Indexing Retry remains explicitly unavailable
 without a supported owned action. A historical interruption is not current
 system health. Preserve borderless tabs and phone-sheet geometry; local fixture
 inspection and live acceptance are separate.
+
+Completed research keeps its saved-report action when Workspace delivery is
+pending, unknown or failed. The detail states that the report is saved and
+labels the delivery state; **Open report** retries presentation through the
+existing Workspaces path. Workspace acknowledgement is not presented as proof that
+the owner has viewed the report.
 
 Merged-header Chromium fixtures are in `docs/ui/screenshots/p11-12/merged-*`
 at 390×844 and 1440×900, light and dark, captured with reduced motion.
@@ -708,8 +965,8 @@ statements below. Keep the agreed compact upper-right glass preview, contained
 local video, Front/Back and Live labels, existing window chrome, dock-to-tab
 motion and mobile-touch-only Switch. On phones the preview stays beside the
 foreground window; controls remain 44 px and the composer keeps its geometry.
-Close/Turn off stops capture. Ten-minute user-idle expiry restores explanation
-and Retry, hiding the inactive picture. Live means local playback, never a
+Close/Turn off stops capture. Active video has no user-idle expiry (#1317,
+26 October approval); failure recovery retains explanation and Retry. Live means local playback, never a
 claim that the model receives continuous video.
 
 The upload-only contract changes no layout or animation. Image/caption evidence
@@ -943,8 +1200,8 @@ non-colour cues described in the current shell guidance below.
   sections.
 - **Screen sharing (P7-05):** keep the browser-selected share/stop control and
   live sharing status in the conversation workflow, with a separate, explicit
-  Look at screen action for chat and voice. Keep the status and Stop action
-  visible while sharing; reuse the shared button, focus, and narrow-screen
+  Look at screen action for chat and voice. While sharing, a compact icon-only red
+  square Stop recording button sits beside Dictate (no separate status row; #1333); reuse the shared button, focus, and narrow-screen
   wrapping conventions. This is the minimal P7 integration; P8-04 owns moving
   the confirmed share control into the shared shell's top bar.
   Scratch-auth Chromium checks at 390 and 1280 px exercised Share, the visible
@@ -1237,6 +1494,13 @@ restore typing focus. The ready state says the microphone is off and offers a
 separate Enable microphone action. P8-10 implements the desktop shell/fullscreen
 transition, available-window carry-over and the selected end-control behavior;
 P8-11 implements phone view switching on the existing client controller.
+
+For a tool-backed turn, the first streamed sentence is separated into a labelled,
+transient Jarvis reply while work is pending. It stays in the transcript only for
+that live turn, is removed when the final reply arrives, and remains beside an
+honest failure message if the turn cannot finish. Direct replies use the existing
+stream without an extra segment. This uses the same message surface and spacing at
+phone and desktop widths; it is not a tool-activity label or a repeated status.
 
 ### Phone workspace (P8-11)
 
@@ -1604,7 +1868,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. The shell-owned feed remains mounted across page changes and supplies the P9-120 header attention popover.
 - **Current issue context:** keyboard focus inside a visible Factory card identifies that issue in the workspace snapshot. Other focus, a hidden/removed card or another page clears the current selector; a previously foreground task window must not override actual card focus.
 - **Settings:** a centred column of glass section cards with a Back button (to the previous page, or Jarvis when opened directly). Now and Backend are not Settings sections. Inputs are glass and the save bar floats as a compact pill at the bottom right.
-- **Status (P9-101, 14 October):** a read-only diagnostic page in the existing shell, with its own pulse rail icon and phone-menu entry. Use two glass lists, System checks and Recorded smoke check, rather than decorative metric cards. Each row pairs the reported status dot with text, check time and stale marker; failures explain why. PC connection/pause state stays visible, while safe provider details use working native disclosures. Refresh/Retry stays next to the single Status heading, disables while pending and never runs model canaries. Failed refresh retains explicitly previous evidence. Reuse the shared data-arrival transition; both reduced-motion settings remove the rise. Desktop dark/ordinary-motion and 320px light/touch/reduced-motion browser checks use synthetic API responses, not production acceptance.
+- **Status (P9-101, 14 October):** a read-only diagnostic page in the existing shell, with its own pulse rail icon and phone-menu entry. Use two glass lists, System checks and Recorded smoke check, rather than decorative metric cards. Each row pairs the reported status dot with text, status-check time and stale marker; failures explain why. Vault index separates check time from latest sync attempt, last successful sync and latest content-index time. Foundry catalogue evidence and runner `healthProbe:not_run` explain unknown/degraded results without upgrading them. PC connection/pause state stays visible, while safe provider details use working native disclosures. Refresh/Retry stays next to the single Status heading, disables while pending and never runs model canaries. Failed refresh retains explicitly previous evidence. Reuse the shared data-arrival transition; both reduced-motion settings remove the rise. Desktop dark/ordinary-motion and 320px light/touch/reduced-motion browser checks use synthetic API responses, not production acceptance.
 - **Sign-in (revised 7 October):** the room's own orb is the hero and stays clear. A dense glass slab sits low over the floor (where the chat bar lives) with the headline and short copy on the left, the Microsoft button on the right and the status beneath; it stacks on phones. The top bar floats as the same slab as when signed in. The page opens in the right theme from the first frame: a tiny blocking script (`public/theme-boot.js`) applies the theme last used on this device, or the OS theme when none is remembered, before anything paints.
 - **Toasts:** an identical message from two sources (for example an expired sign-in seen by two loaders) appears once.
 - **Task windows:** a task opens as a workspace window over the current page instead of a page. Task links in Kanban, chat, releases and usage, and the `/factory/tasks/:id` address, all open it; the address then lands on Kanban. The window shows a summary row (a state chip tinted by state that pulses while running, a project chip, a branch chip, the latest free disk) with the task controls and pull request action. Below it the request and a lit timeline run beside compact Details, Sandbox disk (gauges) and Usage cards. It collapses to one column in a narrow window (container query). Off the home page ordinary windows float centred at up to 1,180 px.
@@ -1612,8 +1876,9 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Chat everywhere:** the chat stays mounted on every page. Off the home page the chat bar and its conversation fly into a living orb at the foot of the rail. Pressing the orb pops the bar out bottom-centre over the current page; the orb or Escape tucks it back, and changing page parks it again. Returning home restores the normal position. Starting voice from another page returns home, because voice is the full room.
 - **Chat bar:** shorter (40 px orb) and narrower (740 px). The paperclip is gone: Look at screen and Look at camera moved into the ⋯ menu beside Language. One divider with room on both sides separates the orb from the message. Send is a small glass lens that warms to amber when there is a message, and its arrow lifts on hover. Hovering or focusing the orb wakes it: the amber core speeds up and brightens, the shell warms and a ripple breathes outwards.
 - **Enlarged chat (Dan, 10 October):** in desktop typing mode, the composer expands to the same left/right edges as the visible maximised conversation, on home and other pages. Restore, minimise and close return it to the normal dock width. Phone, voice and unrelated maximised windows keep their existing composer layout. `ConversationHistory.css` derives the width from the shared window state; no duplicate React state or new motion.
-- **Camera preview (P9-79, Dan, 11 October; local):** Dan's supplied reference supersedes the camera row in typing/voice. Activating capture opens a compact upper-right glass workspace window named Camera preview, with the existing window chrome and minimise-to-tab motion. It shows the actual local video without cropping, mirrored only for the front preview, with facing/Live labels over the picture and icon-plus-word Switch/Turn off controls below. On phones it stays a compact overlay beside the foreground window rather than replacing that window. Minimise keeps capture on; Close or Turn off stops it. Switching remains mobile-touch-only; unknown direction is explicit. Startup, device and playback failures have visible recovery. The composer and voice bar keep their original geometry. Every-turn capture is enabled locally against deployed #702/#704/#706, including optional handles for chat and EN/DA realtime image input; actual model image acceptance remains unverified. Typed limits show ordinary age-labelled text below the preview controls, and the existing toast stack makes it visible without undocking. Local Live describes the video, not freshness at the model. The obsolete manual Look at camera voice action is absent when conversation capture is enabled; watch mode remains independent. Ten minutes without a user turn stops capture and restores explanation/retry even from a docked tab. The inactive preview omits its empty picture so recovery stays visible on short phones. Synthetic Chromium checks 1440x1000 desktop normal motion and 320x700 touch phone reduced motion, including fitting limit copy and both voice languages. No physical-camera or deployed-model acceptance is claimed. No Look now button or new animation system.
+- **Camera preview (P9-79, Dan, 11 October; local; compact layout requested in #1265):** Dan's supplied reference supersedes the camera row in typing/voice. Activating capture opens a compact upper-right preview-only workspace surface named Camera preview; its accessible workspace heading and lifecycle remain, but the visible window heading, actions and outer frame are omitted. The preview itself carries the existing refracted glass rim. It shows the actual local video without cropping, mirrored only for the front preview, with facing/Live labels and camera-switch/close controls overlaid on the video. On phones it stays a compact overlay beside the foreground window rather than replacing that window. Workspace minimising still keeps capture on; Close stops it. Switching remains mobile-touch-only; unknown direction is explicit. Startup, device and playback failures have visible recovery. The composer and voice bar keep their original geometry. Every-turn capture is enabled locally against deployed #702/#704/#706, including optional handles for chat and EN/DA realtime image input; actual model image acceptance remains unverified. Typed limits show ordinary age-labelled text below the preview, and the existing toast stack makes it visible without undocking. Local Live describes the video, not freshness at the model. The obsolete manual Look at camera voice action is absent when conversation capture is enabled; camera delivery starts automatically with Enable video (#1317); screen watching remains independent. Silence does not stop active video; Close/Turn off, session teardown, permission loss, fatal errors and spending limits remain stop conditions. The inactive preview omits its empty picture so recovery stays visible on short phones. **Enable video** is the camera-on label; **Attach file or photo** leads the typing More menu. Synthetic Chromium checks 1440x1000 desktop normal motion and 320x700 touch phone reduced motion, including fitting limit copy and both voice languages. No physical-camera or deployed-model acceptance is claimed. No Look now button or new animation system.
 
+- **Camera preview sizing follow-up (#1283; 25 October 2026):** the video itself is the preview surface, sized from its loaded dimensions and fitted to available workspace bounds without a surrounding picture frame. Same-stream dimension changes update the fit. The phone overlay is larger but bounded; switch/close remain over the actual video, while status, observation notices and playback recovery stay visible within it. Feedback starts below the measured full status-label box, including wrapped unknown-direction text. Synthetic Chromium checked portrait/landscape switching, recovery, and status at desktop and 320×700 phone sizes; inspect screenshots and measurements in `docs/ui/screenshots/p9-1283/`. No physical-camera imagery was used.
 - **Voice visual-source safety (11 October; local):** while camera conversation is on, the existing Look at screen menu row is disabled with the explanation "Turn off the camera to inspect the shared screen in voice." It retains the shared menu's keyboard focus, disabled styling and accessible description. Independent watch actions and Stop sharing screen are unchanged. No new composer geometry, controls or animation.
 
 - **Camera experience acceptance (Dan, 12 October):** camera-window updates are
@@ -1629,8 +1894,9 @@ snapshot-versus-live disclaimers (Dan, 12 October). The backend owns that
 wording; the UI retains evidence/failure feedback and does not strip or rewrite
 assistant messages. Stale/unavailable observations remain explicit.
 The coordinator's latest 12 October update places live-feel wording in pending
-P9-87/#714, separate from #713's deployed upload-only input. Camera preview
-polish and the local upload-only opt-in remain held for Dan's review.
+P9-87/#714, separate from #713's deployed upload-only input. #1265 separately
+requests a compact preview and attachment-menu ordering without changing that
+camera input contract.
 
 - **Camera input evidence (11 October; local UI, deployed backend contract):** backend-reported image/caption input uses ordinary muted body text on Dan's matching chat bubble and the existing dismissible voice toast. It is not a new heading, badge or composer row; preview Live still means local playback only. Missing legacy evidence stays unlabelled, and invalid evidence has visible failure copy rather than an image claim. Voice ignores stale, duplicate and uncorrelated evidence, including after camera replacement/reconnect. Synthetic Chromium checks image-reported and caption-only desktop/320px touch/reduced-motion phone states in both voice languages; they do not prove model image access. The phone preview lets its picture shrink before controls/limit copy, with scrolling for constrained heights, so an open transcript cannot clip recovery text. #704/#706 are deployed with chat and EN/DA realtime image paths; hosted DA fallback remains caption-only, and actual model image acceptance is unverified. Final-shape synthetic 32-character handles also pass desktop/phone caption-only and recovery workflows; forwarding a handle never changes the evidence label by itself.
 
@@ -1650,7 +1916,7 @@ preview. Stale/settled voice items add no new notice or reply.
 The existing typed-phrase light sweep remains unchanged: it is Dan's accepted
 activity-feedback treatment, not new gradient heading text introduced by this
 camera correction. Reduced motion retains solid text without the sweep.
-- **Rail (P9-71, tone and labels P14-32):** the current area keeps the shared tinted tile, the stronger stroke and no glow or outline, but each rail icon now lights in its own tone (`--rail-tone-*`, one per icon, same lightness so the rail stays even; tokens defined for both themes and contrast-audited for the selected, hover and press fills). The tone only feeds the `--state-selected-*` roles on `.rail-link`; the selected state is still marked by the tile and stroke weight, not colour alone. Hovering or keyboard-focusing a rail control floats a flat name label to its right (`useRailTip`, `RailTip.tsx`): a portal on `document.body` so the rail's 3D tilt and glass never skew it, hoverable, dismissed by Escape, press or resize, never shown for touch, and hidden from assistive technology because it repeats the control's accessible name. It replaces the native `title` on Folio and the chat orb.
+- **Rail (P9-71, tone and labels P14-32):** the current area keeps the shared tinted tile, the stronger stroke and no glow or outline, but each rail icon now lights in its own tone (`--rail-tone-*`, one per icon, same lightness so the rail stays even; tokens defined for both themes and contrast-audited for the selected, hover and press fills). The tone only feeds the `--state-selected-*` roles on `.rail-link`; the selected state is still marked by the tile and stroke weight, not colour alone. Hovering or keyboard-focusing a rail control floats a flat name label to its right (`useRailTip`, `RailTip.tsx`): a portal on `document.body` so the rail's 3D tilt and glass never skew it, hoverable, dismissed by Escape, press or resize, never shown for touch, and hidden from assistive technology because it repeats the control's accessible name. it replaces the native `title` on Workspaces and the chat orb.
 - **Selection (P9-71, 10 October):** navigation, top-bar toggles, workspace tabs and segmented choices share the role-named `--state-selected-*` tokens in `apps/web/src/styles.css`, derived from the existing focus/text palette. Selected text gains weight and selected icons gain stroke weight or size; neither an outline nor colour alone marks selection. Hover deepens the tint and press deepens it again; focus keeps its separate visible ring. A closed toggle returns to its transparent resting surface. Presence keeps its mode label and tone dot when closed; opening its menu uses the shared cyan selection treatment. Text and indicators meet 4.5:1 and 3:1 respectively in light/dark, including hover and press.
 - **Presence:** a chip in the top bar shows the live mode (Present green, Away yellow, On the move blue; P9-102) and switches it from a small glass menu. The mode label sits beside every dot except in the phone top bar, which keeps the dot alone and names the mode in its accessible label. At 380px and narrower the phone top bar omits the chip, and Settings, Presence switches the mode (P14-16). Settings has a Presence section with three mode cards and one instruction per mode beside the base instruction in Personality. Without the presence service the chip is hidden and Settings says the modes are not available yet.
 - **Memory:** a Settings section to browse, search and filter (People, Work, Personal, General) what Jarvis knows, with sync status and counts. Choosing an entry shows it beside the list with its history, a Save correction action (vault notes link to the resulting commit) and Forget. Forget explains the outcome first: memories Jarvis keeps are forgotten at once; vault notes need approval in the conversation, and the page reports when approval is pending, refused while away, or unavailable.
@@ -1673,13 +1939,13 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **No page bounce:** while signed in the document never scrolls or rubber-bands; only inner lists, windows and the transcript scroll, and they contain their own overscroll.
 - **Loading (P9-118, revised 17 October; supersedes the 7–8 October orb-loading rule):** page loading shows immediate plain `Loading` with decorative dots appearing one at a time and deleting one at a time. All three dots retain their width; OS reduced motion and the app's reduced-motion setting show three static dots. Screen readers hear a separate, steady contextual status. Sign-in changes the disabled, busy button to `Redirecting` immediately; a per-tab redirect marker distinguishes returning `Signing you in` from first-visit `Loading`. No loading orb or rotating loading phrase remains. The living stage, voice/input orbs and chat/job working cores are unchanged. The chat window still exists before messages arrive, with its quiet Loading messages label and line placeholders inside its glass. Loaded, empty and first-load error/Retry states keep that frame; refreshes retain messages. Task details retain panel placeholders, and Kanban retains card placeholders on first load or a filter change; skeletons keep their existing 140 ms delay. Live refreshes and task-control completion preserve the board, scroll and selection. Local Chromium fixture evidence in `docs/ui/screenshots/p9-118/` covers 390×844 and 1440×900, light/dark, first visit, Redirecting, Signing you in, Settings Loading and both reduced-motion mechanisms. Animation playback and fixed widths were checked; live Microsoft sign-in, physical devices and hardware WebGL were not verified.
 - **Palette (7 October):** two accents only. Cyan for interaction and calm states (primary buttons, focus, selection, listening, running; done in a paler cyan) and amber for Jarvis working, speaking, attention and paused. Red is kept for errors. Presence is the one exception: its own green, yellow and blue (17 October, P9-102). The background glow uses the same two hues. The knowledge graph keeps four distinct folder colours so notes stay easy to tell apart.
-- **Jarvis navigates (P9-40, prepared 8 October):** when Jarvis is asked to switch pages it changes the route with the normal page transition; a named Settings section, or the card of a task it names, scrolls into view once its data has loaded and glows cyan once. Folio and Status are refused until those pages exist. Applied or refused is reported back to the broker. Wired to `navigate` workspace commands; live once the backend contract (#571) lands.
-- **Folio (P9-25, built 8 October):** a stacked-pages icon on the rail opens the Folio in the left sidebar slot (320 px, same glass hinge) over the current page; area navigation and the Folio share the slot, one at a time. Selecting another page closes the Folio, including the current page, Settings, the brand/home link, phone menu and Jarvis navigation; areas with multiple pages can replace it with their own navigation. Search (debounced) and text-only kind chips (Reports, Apps, Images, Graphs; one at a time, press again to clear) filter the list; Pinned, Today, This week and Earlier group it. A row shows the kind icon, title and time; hover or focus reveals the prompt summary and pin, rename and remove actions (always visible on touch). Clicking reopens through the backend, so the window arrives like any Jarvis window, and the row flashes cyan. Remove asks inline first. Loading uses row placeholders; empty, no-results (with Clear search) and error (with Retry) states are explained. `navigate { page: 'folio' }` opens the pane.
+- **Jarvis navigates (P9-40, prepared 8 October):** when Jarvis is asked to switch pages it changes the route with the normal page transition; a named Settings section, or the card of a task it names, scrolls into view once its data has loaded and glows cyan once. Workspaces and Status are refused until those pages exist. Applied or refused is reported back to the broker. Wired to `navigate` workspace commands; live once the backend contract (#571) lands.
+- **Workspaces (P9-25, built 8 October):** a stacked-pages icon on the rail opens Workspaces in the left sidebar slot (320 px, same glass hinge) over the current page; area navigation and Workspaces share the slot, one at a time. Selecting another page closes Workspaces, including the current page, Settings, the brand/home link, phone menu and Jarvis navigation; areas with multiple pages can replace it with their own navigation. Search (debounced) and text-only kind chips (Reports, Apps, Images, Graphs; one at a time, press again to clear) filter the list; Pinned, Today, This week and Earlier group it. A row shows the kind icon, title and time; hover or focus reveals the prompt summary and pin, rename and remove actions (always visible on touch). Clicking reopens through the backend, so the window arrives like any Jarvis window, and the row flashes cyan. Remove asks inline first. Loading uses row placeholders; empty, no-results (with Clear search) and error (with Retry) states are explained. `navigate { page: 'workspaces' }` is canonical; legacy `folio` remains accepted.
 - **Showing the work (P9-41, 8 October):** while Jarvis works, its live chat bubble types Jarvis's own description of the step ("Searching your vault for Ignite") instead of a canned phrase, and the top bar's activity label shows the same text. Repository reads and searches open a read-only **Code view** window: a wrapping monospace path breadcrumb (repo / folder / **file**), ref and language chips, an Open on GitHub link (only for a real owner/name repo), numbered lines, highlighted ranges tinted cyan with a bright line number, and query matches marked amber. Lines wrap at their allocated window width by default; the 44px “Wrap lines” checkbox restores original horizontal code layout inside the code body. Copy/readback text, line numbers, highlighted ranges and search marks remain unchanged. Each time Jarvis moves, the first highlighted line scrolls to the middle and the body fades in. Content is shown as text only; screen readers hear the highlighted ranges and that matches are marked.
 - **Workspace content width (25 October 2026; #1260):** generated prose, list/detail values, timeline labels, source notes, headers and errors wrap within their allocated window; detail and list metadata labels cannot force a wide column. Tables keep every column and value in a named, focusable local scroll region. Charts retain full x-axis labels and put genuinely wide plots in a named, focusable horizontal region, with all values still available in the table. Images fit the frame without changing aspect ratio. The host bounds sandboxed Jarvis reports and wraps their prose/media; any report table or plot needing horizontal exploration must provide its own labelled, keyboard-focusable region. This does not reflow arbitrary external documents. The report's scripts-only sandbox, CSP and validated bridge remain unchanged. The document minimum width can shrink below 280 CSS px at high zoom rather than forcing page-level horizontal scrolling.
 - **Notes refinements (Dan, 11 October; local):** place inventory freshness on the top header row immediately before the close icon, right-aligned opposite New note. On narrow phones it wraps within that row rather than clipping or covering the 44 px close control. The destination disclosure is one 44 px row: folder glyph, "Save in" and destination, then chevron. Long destinations ellipsise visually; the full path remains in the accessible name and tooltip. Remove the separate New folder action: every folder row, including Vault root, has a plus revealed on desktop hover or keyboard focus and always visible on touch. It expands that folder and inserts a focused child naming row there, with Enter/check to add and Escape/cross to cancel. The temporary name does not change the note destination until added; creation remains local until a note Save. Remove the new-draft instruction/path metadata row, retaining path metadata for existing notes.
 
-- **Phones (8 October, voice first):** no rail or side panels. A slim top bar holds an open-windows count, the presence chip (not at 380px and narrower; P14-16) and a menu button; the menu is a bottom glass sheet with the pages in the rail's order (Jarvis, Health and Proactive when enabled, Software Factory, Tasks, Notes, Usage, Status), then Settings, Folio and the context panel (Jarvis can also switch pages by voice). The chat bar is the dock at the bottom of every page; its orb starts hands-free voice. Home is the room with the transcript tucked away: swipe the handle up (or, once P9-45 lands, ask Jarvis) to bring it up as a sheet. One caption line above the dock says what Jarvis is doing. Windows Jarvis opens slide up as full-width sheets; the count opens a list of them. Pages scroll normally (the desktop scroll lock does not apply). Screen sharing is hidden where the browser cannot share the screen (all phone browsers); the camera offers a front/back switch on touch devices. Presence will switch to On the move automatically on phones once P9-44 lands.
+- **Phones (8 October, voice first):** no rail or side panels. A slim top bar holds an open-windows count, the presence chip (not at 380px and narrower; P14-16) and a menu button; the menu is a bottom glass sheet with the pages in the rail's order (Jarvis, Health and Proactive when enabled, Software Factory, Tasks, Notes, Usage, Status), then Settings, Workspaces and the context panel (Jarvis can also switch pages by voice). The chat bar is the dock at the bottom of every page; its orb starts hands-free voice. Home is the room with the transcript tucked away: swipe the handle up (or, once P9-45 lands, ask Jarvis) to bring it up as a sheet. One caption line above the dock says what Jarvis is doing. Windows Jarvis opens slide up as full-width sheets; the count opens a list of them. Pages scroll normally (the desktop scroll lock does not apply). Screen sharing is hidden where the browser cannot share the screen (all phone browsers); the camera offers a front/back switch on touch devices. Presence will switch to On the move automatically on phones once P9-44 lands.
 - **Chat bar life (8 October):** when idle, one thin (1.25 px) light runs an unhurried six-second lap of the bar's rim every 10 s, easing from slow to moderate, then rests; hover does nothing (Dan, 19 October) and focus keeps a slow thin (2 px) sweep (6 s per lap) with no solid ring. The placeholder is a rotating invitation in Jarvis's voice ("What shall we tackle?") that types in slowly (70 ms per letter), rests, gets two unhurried light sweeps (2.4 s each), and gives way to the next every 9 s; the native placeholder stays for assistive technology.
 - **Kanban space (8 October; strip 19 October):** the board strip pairs Create project and Create task as matched pills (an even two-up row under the refresh icon on phones); the header's summary pills stay on one scrolling line. Search and filters are one collapsible glass section showing how many filters are active when closed (open by default on desktop, closed on phones). Each column collapses from its title; on wide screens a collapsed column becomes a 52 px strip with its title running down it. Both are remembered on the device.
 - **Collapsible sections (8 October, standing rule):** settings-like pages are an even stack of glass cards that fold to their title (`CollapsibleSection`): the title row is the toggle with a chevron, a folded card shows a one-line summary of its current state (theme, model, presence), and each card remembers on the device whether it was open. Cards start folded. New settings, configuration or detail areas use this component rather than adding long always-open blocks, so pages stay short on a phone. When Jarvis navigates to a section it opens it first.
@@ -1699,11 +1965,11 @@ camera correction. Reduced motion retains solid text without the sweep.
 - **Side panels:** the grid column eases open and shut with the slab, the slab swings back to its hinge with a slight blur when it closes (not only when it opens), and its contents settle in just after the glass. Fixed widths during the move keep text from re-wrapping; dragging a panel edge has no easing.
 
 Evidence: local fixture captures from a stubbed sign-in harness (desktop 1480×1000 dark, phone 390×844), plus Dan's live review against the production backend in the local dev server. Hardware-GPU motion, light theme and physical phones still need Dan's check after deployment.
-## Folio — 7 October 2026 (proposed, [#519](https://github.com/DanAakesen/jarvis/issues/519))
+## Workspaces (formerly Folio) — 7 October 2026 (proposed, [#519](https://github.com/DanAakesen/jarvis/issues/519))
 
-The Folio is where everything Jarvis has pulled up lives afterwards. It replaces the idea of a "windows" or "research" page.
+Workspaces is where everything Jarvis has pulled up lives afterwards. It replaces the idea of a "windows" or "research" page.
 
-- **Entry:** a Folio icon on the left rail (stacked pages). It opens the left pane; the stage and any open windows stay in place.
+- **Entry:** a Workspaces icon on the left rail (stacked pages). It opens the left pane; the stage and any open windows stay in place.
 - **Pane:** a search field at the top, then kind filter chips (Reports, Apps, Images, Graphs). Pinned items come first, then Today, This week and Earlier. Each row shows a kind icon, the short title, and the time; hover shows the one-line prompt summary.
 - **Open:** a click reopens the item as a workspace window, or focuses it when already open. Rows offer pin, rename and delete (delete asks first).
 - **Jarvis:** "pull up the Ignite research again" reopens the best match and highlights it in the pane when the pane is open.
@@ -1714,13 +1980,14 @@ The Folio is where everything Jarvis has pulled up lives afterwards. It replaces
 Attachments reuse the composer glass. **Attach file or photo** is the first
 item after Language in the More menu; paste and drop work without it, and a
 drop shows a focus-coloured rim and "Drop files to attach them". Pending files are
-chips under the message row: thumbnail or file glyph, name, type · size, a
-progress bar while uploading, a note when Jarvis cannot read the file, error text
-and a 44px Remove button. Sent files appear as compact glass buttons on the
-message and open on demand; an expired file is disabled with an explanation. A
-publication confirmation adds the image and a warm warning surface stating
-that the repository is public. Text, not colour alone, conveys every state; no
-new animation is introduced.
+inside the composer above the text input. Photos use a compact 44px-high pill with
+a 30px preview and Remove control; uploading photos retain a thin progress bar.
+Other files show their name and type · size. Unreadable and failed uploads keep
+their explanatory text. Sent images show a compact preview in the message and open
+on demand; other sent files remain compact glass buttons. An expired file is
+disabled with an explanation. A publication confirmation adds the image and a
+warm warning surface stating that the repository is public. Text, not colour alone,
+conveys every state; no new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
@@ -2027,7 +2294,7 @@ panel and keeps the page the owner is on. The list is a labelled navigation land
 named for the area; the current page is a link marked with `aria-current="page"` and
 the shared selected-link styling, so it never rests on colour alone. A pick closes the
 panel and moves focus to the page content. A press outside the panel closes it too, and so
-does a press outside the Folio: that is the rule of the left sidebar slot, not of any one
+does a press outside Workspaces: that is the rule of the left sidebar slot, not of any one
 panel. The rail is exempt because its icons toggle the panels themselves, and a
 press that starts inside the panel (a resize drag, say) or is cancelled never closes it.
 While the area is still working out which

@@ -36,13 +36,23 @@ const config = { ...__JARVIS_CONFIG__, backendUrl: 'https://api.example.com' };
 const session = { id: '41', language: 'en' as const };
 const fileId = '0b0f4a7e-3c1d-4f6a-8b2e-1a2b3c4d5e6f';
 const reply = { id: '52', sessionId: '41', role: 'jarvis' as const, text: 'Done.', model: null, at: '2026-10-03T12:02:00.000Z' };
+const NativeURL = URL;
 
-function renderConversation() {
+function stubObjectUrl(url: string) {
+  class TestURL extends NativeURL {
+    static createObjectURL = vi.fn(() => url);
+    static revokeObjectURL = vi.fn();
+  }
+  vi.stubGlobal('URL', TestURL);
+  return TestURL;
+}
+
+function renderConversation(phone = false) {
   return render(
     <JarvisActivityProvider>
       <MemoryRouter>
         <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
-          <ConversationHistory client={{} as never} config={config} />
+          <ConversationHistory client={{} as never} config={config} phone={phone} />
         </VoiceWorkspaceContext.Provider>
       </MemoryRouter>
     </JarvisActivityProvider>,
@@ -50,6 +60,7 @@ function renderConversation() {
 }
 
 function pick(...files: File[]) {
+  if (!screen.queryByRole('menu')) fireEvent.click(screen.getByRole('button', { name: 'More options' }));
   fireEvent.change(screen.getByTestId('attachment-input'), { target: { files } });
 }
 
@@ -63,7 +74,7 @@ beforeEach(() => {
     id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready',
   }));
 });
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('composer attachments', () => {
   it('uploads a picked file, shows its chip and sends its id with the message', async () => {
@@ -78,7 +89,7 @@ describe('composer attachments', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
     expect(sendChatTurn.mock.calls[0]![3]).toBe('Look');
-    expect(sendChatTurn.mock.calls[0]!.at(-1)).toEqual([fileId]);
+    expect(sendChatTurn.mock.calls[0]![11]).toEqual([fileId]);
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Files to send' })).toBeNull());
   });
 
@@ -101,12 +112,96 @@ describe('composer attachments', () => {
     await waitFor(() => expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it.each([false, true])('keeps image pills inside the composer through upload and ready (phone=%s)', async (phone) => {
+    const previewUrl = 'blob:preview/holiday.jpg';
+    stubObjectUrl(previewUrl);
+    let finish!: () => void;
+    uploadAttachment.mockImplementationOnce((_c, _cfg, file: File, options: { onProgress: (n: number) => void }) =>
+      new Promise((resolve) => {
+        options.onProgress(0.4);
+        finish = () => resolve({ id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready' });
+      }));
+    renderConversation(phone);
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
+    const chips = await screen.findByRole('list', { name: 'Files to send' });
+    expect(chips.closest('form')?.id).toBe('conversation-composer');
+    expect(chips.closest('.conversation-input')).not.toBeNull();
+    const chip = chips.querySelector('.attachment-chip');
+    expect(chip?.classList.contains('attachment-chip--image')).toBe(true);
+    expect(await within(chips).findByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', previewUrl);
+    expect(within(chips).getByText('holiday.jpg')).toBeTruthy();
+    expect(within(chips).getByRole('progressbar', { name: 'Uploading holiday.jpg' })).toBeTruthy();
+    expect(within(chips).getByRole('button', { name: 'Remove holiday.jpg' })).toBeTruthy();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    expect(chips.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    finish();
+    await waitFor(() => expect(within(chips).queryByRole('progressbar')).toBeNull());
+    expect(chips.closest('form')?.id).toBe('conversation-composer');
+    expect(within(chips).getByText('holiday.jpg')).toBeTruthy();
+    expect(within(chips).queryByText(/Ready|image\/jpeg/u)).toBeNull();
+  });
+
+  it.each([false, true])('puts upload errors and selection problems above the composer while retaining removable pills inside (phone=%s)', async (phone) => {
+    stubObjectUrl('blob:preview/failed.png');
+    uploadAttachment.mockRejectedValueOnce(new Error('Synthetic upload failure'));
+    renderConversation(phone);
+    pick(new File(['image'], 'failed.png', { type: 'image/png' }));
+    const error = await screen.findByText('failed.png: Synthetic upload failure');
+    expect(error.closest('.composer-feedback')).not.toBeNull();
+    expect(error.closest('.conversation-input')).toBeNull();
+    const chips = screen.getByRole('list', { name: 'Files to send' });
+    expect(chips.closest('form')?.id).toBe('conversation-composer');
+    expect(within(chips).queryByRole('alert')).toBeNull();
+    fireEvent.click(within(chips).getByRole('button', { name: 'Remove failed.png' }));
+    expect(screen.queryByText('failed.png: Synthetic upload failure')).toBeNull();
+    pick(new File(['binary'], 'program.exe', { type: 'application/x-msdownload' }));
+    const problem = await screen.findByRole('alert');
+    expect(problem.closest('.composer-feedback')).not.toBeNull();
+    expect(problem.closest('.conversation-input')).toBeNull();
+  });
+
+  it('restores an image preview after an unsaved send fails', async () => {
+    const previewUrl = 'blob:preview/holiday.jpg';
+    const TestURL = stubObjectUrl(previewUrl);
+    const signedUrl = 'https://acct.blob.core.windows.net/x?sig=1';
+    loadAttachmentUrl.mockResolvedValue(signedUrl);
+    sendChatTurn.mockRejectedValueOnce(new Error('Could not send. Try again.'));
+    renderConversation();
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
+    expect(await screen.findByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', previewUrl);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByText('Could not send. Try again.');
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', signedUrl));
+    expect(TestURL.revokeObjectURL).toHaveBeenCalledWith(previewUrl);
+  });
+
+  it('falls back to the uploaded image when a local preview fails before upload completes', async () => {
+    const previewUrl = 'blob:preview/holiday.jpg';
+    const signedUrl = 'https://acct.blob.core.windows.net/x?sig=1';
+    stubObjectUrl(previewUrl);
+    loadAttachmentUrl.mockResolvedValue(signedUrl);
+    let finish!: () => void;
+    uploadAttachment.mockImplementationOnce((_c, _cfg, file: File) =>
+      new Promise((resolve) => {
+        finish = () => resolve({ id: fileId, name: file.name, contentType: file.type, size: file.size, status: 'ready' });
+      }));
+    renderConversation();
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    pick(new File(['image'], 'holiday.jpg', { type: 'image/jpeg' }));
+    fireEvent.error(await screen.findByRole('img', { name: 'Preview of holiday.jpg' }));
+    finish();
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Preview of holiday.jpg' })).toHaveProperty('src', signedUrl));
+    expect(loadAttachmentUrl).toHaveBeenCalledWith(expect.any(Function), config, fileId, expect.any(AbortSignal));
+  });
+
   it('turns a pasted screenshot into an attachment and keeps pasted text', async () => {
     renderConversation();
     const box = await screen.findByRole('textbox', { name: 'Message Jarvis' });
     const shot = new File([new Uint8Array(4)], 'image.png', { type: 'image/png' });
     fireEvent.paste(box, { clipboardData: { files: [shot], getData: () => '' } });
-    expect(await screen.findByText(/^screenshot-\d{8}-\d{6}\.png$/u)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /^Remove screenshot-\d{8}-\d{6}\.png$/u })).toBeTruthy();
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
     fireEvent.paste(box, { clipboardData: { files: [shot], getData: () => 'plain text' } });
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
@@ -159,11 +254,47 @@ describe('composer attachments', () => {
     expect(await screen.findByText(/Jarvis couldn’t read this file/u)).toBeTruthy();
   });
 
+  it.each([false, true])('keeps the native picker source open through cancel and closes after selection (phone=%s)', async (phone) => {
+    renderConversation(phone);
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(trigger);
+    const action = screen.getByRole('menuitem', { name: 'Attach file or photo' });
+    const input = screen.getByTestId('attachment-input');
+    const click = vi.spyOn(input, 'click');
+    action.focus();
+    fireEvent.click(action);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(action);
+    expect(action.parentElement?.contains(input)).toBe(true);
+    // Native chooser focus loss has no DOM relatedTarget; it must not dismiss the source.
+    fireEvent.blur(action, { relatedTarget: null });
+    fireEvent(input, new Event('cancel', { bubbles: true }));
+    expect(screen.getByTestId('attachment-input')).toBe(input);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(uploadAttachment).not.toHaveBeenCalled();
+    fireEvent.click(action);
+    expect(click).toHaveBeenCalledTimes(2);
+    fireEvent.change(input, { target: { files: [new File(['photo'], 'photo.png', { type: 'image/png' })] } });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+    await screen.findByText('photo.png');
+    expect(uploadAttachment).toHaveBeenCalledTimes(1);
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   it('offers the attach action in the More menu', async () => {
     renderConversation();
     await screen.findByRole('textbox', { name: 'Message Jarvis' });
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    expect(screen.getByRole('menuitem', { name: 'Attach file or photo' })).toBeTruthy();
+    const menu = screen.getByRole('menu');
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items.map(item => item.getAttribute('aria-label') ?? item.textContent)).toEqual([
+      'Language', 'Test agent runtime', 'Voice', 'Attach file or photo',
+    ]);
   });
 });
 
@@ -177,15 +308,25 @@ describe('conversation attachments', () => {
     nextCursor: null,
   });
 
-  it('shows sent attachments from history and opens one through its signed URL', async () => {
+  it('previews sent images from their signed URL and opens one on demand', async () => {
     loadConversationHistory.mockResolvedValue(history());
     loadAttachmentUrl.mockResolvedValue('https://acct.blob.core.windows.net/x?sig=1');
     const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
     vi.spyOn(window, 'open').mockReturnValue(tab as never);
     renderConversation();
+    expect(await screen.findByRole('img', { name: 'Preview of bug.png' })).toHaveProperty('src', 'https://acct.blob.core.windows.net/x?sig=1');
     fireEvent.click(await screen.findByRole('button', { name: 'Open bug.png' }));
     await waitFor(() => expect(tab.location.href).toBe('https://acct.blob.core.windows.net/x?sig=1'));
     expect(tab.opener).toBeNull();
+  });
+
+  it('replaces a failed sent-image preview with an accessible unavailable state', async () => {
+    loadConversationHistory.mockResolvedValue(history());
+    loadAttachmentUrl.mockResolvedValue('https://acct.blob.core.windows.net/x?sig=1');
+    renderConversation();
+    fireEvent.error(await screen.findByRole('img', { name: 'Preview of bug.png' }));
+    expect(await screen.findByRole('img', { name: 'Preview unavailable for bug.png' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Preview of bug.png' })).toBeNull();
   });
 
   it('shows an expired attachment and other open failures', async () => {
@@ -193,7 +334,6 @@ describe('conversation attachments', () => {
     vi.spyOn(window, 'open').mockReturnValue(null);
     loadAttachmentUrl.mockRejectedValueOnce(new AttachmentExpiredError());
     renderConversation();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open bug.png' }));
     expect((await screen.findByText(/Expired or removed/u))).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Open bug.png' }) as HTMLButtonElement).disabled).toBe(true);
   });

@@ -44,7 +44,8 @@ const failureEvents = new Set([
   'factory.board_webhook_update_failed', 'factory.issue_backfill_failed', 'factory.issue_create_failed',
   'factory.issue_executor_handoff_failed', 'factory.release_data_read_failed', 'factory.release_graph_read_failed',
   'factory.task_submission_claim_failed', 'factory.linked_task_create_failed', 'factory.task_submission_result_failed',
-  'factory.release_project_lookup_failed', 'folio.delete_failed', 'folio.open_failed', 'folio.search_failed',
+  'factory.release_project_lookup_failed', 'folio.delete_failed', 'folio.open_failed',
+  'folio.research_result_open_failed', 'folio.search_failed',
   'folio.update_failed', 'github.delivery_policy_evaluation_failed', 'github.installation_token_failed',
   'github.issue_progress_failed', 'github.issue_start_failed', 'github.repository_list_failed',
   'github.repository_management_failed', 'github.webhook_delivery_store_failed', 'github.webhook_mapping_failed',
@@ -111,6 +112,19 @@ const events = new Set([
 
 export function isRegisteredLogEvent(event: string): boolean {
   return events.has(event);
+}
+
+/** Historical logs are untrusted. Reuse the export allowlist, then omit free text and identifiers. */
+export function safeHistoricalLogFields(input: Record<string, unknown>): Record<string, unknown> {
+  const categories = new Set([
+    'kind', 'method', 'reason', 'phase', 'stage', 'lastStage', 'outcome', 'decision', 'status',
+    'language', 'scope', 'source', 'channel', 'closedBy', 'family', 'verdict', 'cachePath',
+    'sessionStartType', 'part', 'provider', 'intent', 'confidence', 'command', 'action',
+    'errorCode', 'rung', 'toolBudgetRung', 'probe', 'folder', 'fallbackReason',
+  ]);
+  return Object.fromEntries(Object.entries(safeFields(input)).filter(([key, value]) =>
+    typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
+    (typeof value === 'string' && categories.has(key))));
 }
 
 // Apply an allowlist before either stdout or Application Insights sees a record.

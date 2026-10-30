@@ -74,6 +74,59 @@ describe('GitHub Actions deployment runs', () => {
     await expect(client.latestDeployment(repository, 'main')).resolves.toBeNull();
   });
 
+  it.each([false, true])('reads the reported 100-run response size (content-length: %s)', async (withContentLength) => {
+    const workflowRuns = Array.from({ length: 100 }, (_, index) => run({
+      id: index + 1,
+      path: index === 99 ? '.github/workflows/deploy.yml' : '.github/workflows/ci.yml',
+      name: 'Synthetic workflow metadata '.repeat(400),
+    }));
+    const payload = { total_count: 100, workflow_runs: workflowRuns };
+    const reportedBytes = 1_215_280;
+    workflowRuns[0]!.name += 'x'.repeat(reportedBytes - Buffer.byteLength(JSON.stringify(payload)));
+    const bytes = new TextEncoder().encode(JSON.stringify(payload));
+    expect(bytes.byteLength).toBe(reportedBytes);
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let offset = 0; offset < bytes.byteLength; offset += 64 * 1024) {
+          controller.enqueue(bytes.slice(offset, offset + 64 * 1024));
+        }
+        controller.close();
+      },
+    }), { headers: withContentLength ? { 'content-length': String(bytes.byteLength) } : {} });
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response);
+    const client = createGitHubActionsRunClient({ issueForActions: vi.fn(async () => 'token') }, fetch);
+
+    await expect(client.latestDeployment(repository, 'main')).resolves.toMatchObject({
+      id: 100,
+      workflow: 'deploy.yml',
+      conclusion: 'success',
+    });
+  });
+
+  it.each([0, 1])('enforces the streamed response limit at 4 MiB + %i bytes', async (extraBytes) => {
+    const maxBytes = 4 * 1024 * 1024;
+    const body = JSON.stringify({ total_count: 1, workflow_runs: [run()] }).padEnd(maxBytes, ' ');
+    const cancel = vi.fn();
+    const response = new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(body));
+        if (extraBytes) controller.enqueue(new Uint8Array(extraBytes).fill(32));
+        else controller.close();
+      },
+      cancel,
+    }));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response);
+    const client = createGitHubActionsRunClient({ issueForActions: vi.fn(async () => 'token') }, fetch);
+
+    if (extraBytes) {
+      await expect(client.latestDeployment(repository, 'main')).rejects.toThrow('response is too large');
+      expect(cancel).toHaveBeenCalledOnce();
+    } else {
+      await expect(client.latestDeployment(repository, 'main')).resolves.toMatchObject({ id: 12 });
+      expect(cancel).not.toHaveBeenCalled();
+    }
+  });
+
   it('rejects invalid repositories, failed requests, malformed deploy runs, and oversized responses', async () => {
     const tokenIssuer = { issueForActions: vi.fn(async () => 'token') };
     const fetch = vi.fn<typeof globalThis.fetch>();
@@ -92,7 +145,7 @@ describe('GitHub Actions deployment runs', () => {
     await expect(client.latestDeployment(repository, 'main')).rejects.toThrow('deployment response is invalid');
 
     fetch.mockResolvedValueOnce(new Response('x', {
-      headers: { 'content-length': String(1024 * 1024 + 1) },
+      headers: { 'content-length': String(4 * 1024 * 1024 + 1) },
     }));
     await expect(client.latestDeployment(repository, 'main')).rejects.toThrow('response is too large');
   });

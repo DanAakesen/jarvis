@@ -1,4 +1,661 @@
+## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
+
+The owner requested repair after real Copilot test replies failed. A successful
+minimal canary does not qualify user context, claims, shared policy or tool rounds.
+The pinned OpenAI SDK 3.24.0 and its
+[function-call model](https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_function_tool_call.py)
+define function-call status as optional. Accept omission/null only after the
+parent response is explicitly completed; explicit unfinished/unknown statuses and
+the final-only no-tool boundary still fail before dispatch. This corrects a
+reproduced contract mismatch, not a proven attribution of the owner's failure.
+
+Known failures before inference and before any backend tool call may finish a
+claim as failed, while the source remains permanently consumed. Unknown inference,
+cancellation and possible tool effects retain the claim. Show fixed failure codes
+and actual blocked-state guidance; do not silently clear claims, resend messages,
+change model/settings or switch the production default.
+
+## 29 October 2026 — use the documented optional identity status (#1350)
+
+The [Foundry governance contract](https://learn.microsoft.com/en-us/azure/foundry/control-plane/govern-agent-infrastructure-entra-admin)
+defines effective agent `state` separately from optional Entra identity `status`.
+Provisioning may accept unset status only alongside enabled effective state and
+a valid principal UUID, retaining that principal across endpoint readback.
+Explicit disabled/unknown states remain blocked. This corrects a schema mismatch;
+it does not prove the exact field behind live `agent_identity_unverified`, enable
+an identity, grant access or authorize a replacement resource. Reconcile and reuse
+the existing exact single-version candidate before another handoff.
+
+## 29 October 2026 — first runtime comparison boundaries (#1350)
+
+The owner subsequently declined extra exclusion from search, recent context and
+rolling summaries. Jarvis is a personal side project not yet in use; do not add
+multi-user architecture or additional isolation features. This does not authorize
+deletion or a context reset. Runtime/source binding still prevents duplicate work
+and preserves the existing authentication boundary.
+
+The owner approved retaining the Python bridge temporarily to preserve voice
+fallback, starting with existing Jarvis tools with extra harness shell/web/subagent
+tools disabled, and keeping test conversations out of normal chat history. These
+extend the approved chat-menu selector and fresh labelled conversation; they do
+not authorize new identities, role grants, production default changes or removal
+of the old runtime. Actual target/model/region support and persistent access
+changes require specific evidence and applicable owner authorization.
+
+## 29 October 2026 — whole-Jarvis diagnostic scope supersedes backend-only (#1341)
+
+The owner confirmed all logs belonging to Jarvis: backend, hosted agents, coding
+runners, deployments and supporting services, excluding unrelated projects. Stop
+the Foundry Reader removal proposal; it was never approved or applied. Preserve
+that assignment. Earlier backend-only grant approval does not authorize broader
+persistent permissions. Keep the existing issue and disabled reader state.
+
+Map actual source stores/readers and ownership first. A shared workspace is not
+assumed entirely owned. Independent metadata preparation admits only exact known
+infrastructure IDs with ownership tags and records known table plan/resource-field
+metadata privately. Unknown sources and missing collection remain gaps. Propose
+one condition-restricted workspace Data Reader assignment only after the exact
+resource/table manifest and provider support are verified; reuse existing GitHub,
+SQL and Blob access. Exact grants and final qualification remain unapproved.
+Source adapters replace/expand one existing capability, with redaction, bounded
+reads and honest availability. No security, retention, collection or credential
+change is authorized merely by the scope confirmation. See [design](jarvis-logs.md).
+
+## 29 October 2026 — tests use the owner's selected role settings (#1350)
+
+The owner clarified that the visible chat setting is not none and explicitly
+requires tests to use the same settings. A closed UI selection is not a verified
+database readback. The candidate removes the smoke-only effort/token-budget
+overrides, preserves saved values and records effective request settings. It does
+not assert ordinary chat is broken from a forced-none test failure. Synthetic
+regressions pass; the owner approved publication with #1353. Review, qualification
+and live acceptance are pending. No screenshot or
+private configuration record is included. See [local report](smoke-settings-1350.md).
+
+## 29 October 2026 — preserve Terra settings while distinguishing its rejection (#1350)
+
+Deploy 40840605441 passed backend/agent/readiness and failed live conversation
+acceptance with model_bad_request_reasoning. Smoke forces none, but Microsoft's
+Terra announcement and OpenAI's model contract explicitly support that effort;
+the Azure reasoning guide lists Terra reasoning/Responses support. The documented
+contract and live result conflict without identifying the service's rejection
+code/subfield. Preserve saved settings and request construction, retain fixed
+reasoning distinctions, and separately classify the existing research runner
+boundary. Do not assume a shared root cause or use a parameter removal/effort
+fallback as a fix. All new diagnostic outputs are application-owned constants;
+provider text and worker events remain private. Live correction is unresolved.
+See [migration evidence and primary sources](main-chat-harness-migration.md).
+
+## 29 October 2026 — distinguish Foundry table errors from log permission evidence (#1341)
+
+The first actual Foundry probe returned 400 while querying `AppTraces`.
+[Cognitive Services supported logs](https://learn.microsoft.com/en-us/azure/azure-monitor/reference/supported-logs/microsoft-cognitiveservices-accounts-logs)
+use `AzureDiagnostics`. Use that fixed aggregate and request the
+[resource API's permission metadata](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/api/azure-resource-queries).
+Classify resource/data-source/deny-table metadata only in bounded backend memory;
+return fixed states separately from the HTTP verdict. A 400, empty response or
+absence of an explicit table denial does not prove isolation or clear existing
+grant concerns. No roles, access mode or activation changes are authorized here.
+
+Use the documented ARM [assignedTo filter](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-list-rest)
+for the verified backend service principal at workspace, verified Foundry and
+existing subscription scopes. It includes transitive group grants without new
+directory access. Paginate within the fixed existing budget, otherwise report an
+incomplete scope. Preserve raw conditions only in the private report. The real
+foreign-workspace requirement stays unchanged pending any explicit owner-approved
+qualification change. The separate migration task owns chat failure diagnosis.
+
+## 29 October 2026 — controlled main chat harness migration (#1350)
+
+Dan approved one migration issue with staged draft PRs: fix the baseline, build a
+temporarily switchable managed path, compare identical test scenarios, then cut
+over with evidence and authorization before retiring replaced runtime code.
+Preserve native voice, identity, tools/approvals, durable memory/artifacts and
+separate subscription-backed Factory workers. Dan subsequently approved Test
+agent runtime in the chat menu, Current/Copilot choice and a separate labelled
+conversation without switching midway. Provide manual test questions, with no
+new question-button feature implied. These are confirmed scope/design decisions;
+model/region, persistent access grants and parity thresholds remain open. The
+first candidate only retains fixed rejected-field diagnostics; it does not prove
+the live error fixed or authorize cutover. See
+[migration evidence and open decisions](main-chat-harness-migration.md).
+
+## 29 October 2026 — observe actual backend authorization before a log grant (#1341)
+
+The corrected main preflight passed but surfaced an existing resource-log grant
+requiring review and no foreign-workspace control. The ordinary deployment
+succeeded for backend/web/agent/readiness, while live model acceptance remained
+unhealthy. Preserve these distinct facts; no grant or activation is inferred.
+Prepare fixed aggregate reads as the verified backend identity through the
+existing deployment smoke route. Keep private target values inside the same job's
+preflight/parameter files and runtime configuration, and emit only fixed verdicts.
+Use bounded work, exact principal matching, no caller queries, no log text,
+nonblocking cancellation, explicit missing/partial/error states and one-process
+caching with timestamps. Empty negatives are not exclusion proof; a grant change
+needs fresh post-change observations and positive controls. No role mutation,
+new credential, route/auth allowance, UI or reader enablement is included.
+
+## 28 October 2026 — correct the backend-log preflight ARM role shape (#1341)
+
+The first main preflight (#40761349594) failed closed before Bicep because the
+role verifier read `properties.roleType`, the CLI model field. The raw ARM REST
+2022-04-01 schema uses `properties.type`. An ARM-shaped fixture reproduced the
+failure before correction. Read the documented ARM field while retaining exact
+built-in identity/actions/dataActions and empty exclusions. Reject custom-role
+and CLI-only shapes. Fifteen preflight tests, scoped Ruff and byte compilation
+pass; actual role permissions/inventory/enforcement still await the normal main
+rerun. No assignment, access-mode change, new credential or activation occurred.
+
+## 28 October 2026 — approved backend-only log grant; executable preflight first (#1341)
+
+The owner explicitly approved persistent access to Jarvis's backend log records
+and basic logging-workspace metadata, excluding other apps and all writes,
+deletion, new credentials and extra permissions. Use the documented built-in
+Log Analytics Data Reader with the restrictive workspace/table/app condition;
+this avoids custom-role creation and new operator privileges. No new sign-in is
+needed for the existing main-only OIDC route. The original custom-role plan below
+is historical, not a request for more owner approval.
+
+The first follow-up release supplies bounded metadata-only ARM reads in that
+normal path before any activation assignment: compare actual principal/runtime
+identity, workspace and schema, exact built-in actions, access mode and assignment
+inventory, and find a real negative workspace candidate if one is visible. Keep
+private IDs/GUIDs in runner-temporary storage and emit only fixed verdicts. Group
+membership and provider enforcement remain explicitly unverified at this stage;
+no assignment or feature enablement is inferred. Main-chat instructions and tool
+descriptions must reflect configured/unavailable log state and retained ingestion
+lag. Existing permission boundaries and the requirement for real backend-identity
+positive/negative proof before activation remain.
+
+## 28 October 2026 — Eight review fixes and mobile Settings replacement (#1343)
+
+Dan approved the eight reviewed fixes and explicitly approved issue/draft-PR
+publication. For Settings, he replaced the proposed unsaved-draft fix with a
+sticky mobile heading and Save at the top. Preserve desktop behavior and do not
+add Settings guards, autosave or draft persistence.
+
+Use persisted delivery identity, independent of active task state, to prevent
+old label replays from starting work again. Save issue conversation origin before
+publishing the worker label. Commit task-status messages and deduplication keys
+atomically; a failed transaction remains retryable. Surface a too-large worker
+prompt as a retained Now alert tied to the existing issue. Keep uncertain Gmail
+writes uncertain and approval cards explicit about changed values/units.
+
+For chat reload recovery, reuse tab-local storage, isolate backend/account scopes
+and restore queued messages for review before sending. These are unsent drafts,
+not approval to repeat a completed or uncertain server action. No optional audit
+feature, Azure log permission, paid worker, real email send or health write is
+included. Draft delivery remains subject to independent review and coordinator release.
+
+Review follow-up: use the same per-entry validator on write and read, matching
+the backend's 512 KiB UTF-8 partial-reply limit. Reject invalid entries separately
+so a bad warning cannot discard unrelated queued drafts. Under the existing
+snapshot bound, prioritize unsent messages and uncertainty warnings over partial
+context; report incomplete saving through the existing recovery feedback.
+
+## 28 October 2026 — prepare scoped backend-log chat reads (#1341)
+
+Dan approved starting read-only chat access to Jarvis's own backend logs,
+including retained history, with secrets filtered and other apps excluded. New
+Azure log-read permission still requires action-time owner approval. Use existing
+Log Analytics console history and the authenticated sensitive read-tool registry;
+no UI, arbitrary KQL, repair action or retention change. Reapply logging allowlists
+and omit free text/identifiers from historical output. Keep the implementation
+disabled until the deployed schema and Azure isolation are proven. Microsoft's
+current granular RBAC docs support the proposed restrictive table/row condition;
+that is documentation evidence, not proof of an effective deployed grant. The
+exact unapplied proposal and validation/rollback gates are in
+[backend-logs.md](backend-logs.md). No role/assignment/access-mode/credential change
+is authorized by this code preparation.
+
+## 27 October 2026 — Prepare Terra as the main-chat default (#1337)
+
+Dan requested GPT-6.1 Terra for main chat, both selectable and default, and
+explicitly approved the issue and draft PR. Prepare the existing Foundry
+GlobalStandard deployment path for `gpt-6.1-terra` / `2026-10-26`. On 28 October,
+resume with requested capacity 150 in the committed parameters, following the
+existing chat allocation and recorded 50K-TPM throttling evidence (#1232/L91).
+This is a throughput request for pay-per-token GlobalStandard, not a reserved
+PTU commitment or an observation of actual available quota. The normal main-only
+Deploy already authenticates through OIDC and can validate Azure acceptance;
+do not require a new owner sign-in just to prepare the request. No merge,
+deployment or paid inference is performed by this preparation.
+
+Prefer Terra only when it is in the deployed chat catalogue; retain Luna before
+provisioning or during ARM fallback. Preserve saved `roles.chat.model`, legacy
+`jarvis.model` and explicit sessions rather than silently migrating them. Rollout
+must observe the owner setting and apply the existing chat-only Settings update
+to fulfill the requested owner default. Danish `/voice/da` uses the realtime
+voice role when `options.connect` is configured; only the `connectDanish`
+hosted-agent fallback inherits chat settings. Approval interpretation and
+proactive summarization already consume chat settings. Other role defaults and
+subscription-backed coding/image tools stay unchanged.
+
+Terra's documented reasoning default is medium. Send explicit none only for
+Terra when the existing setting is none; preserve other model requests. Expose
+its intersection with the existing enum, without minimal or a broad max/ultra
+change. Microsoft's public Global Standard price table is verified through its
+indexed model catalog tag page and recorded in `infra/README.md`. Account rates,
+Azure context-tier billing rules, actual quota/capacity, live selection and paid
+acceptance remain unverified. Dan approved USD 20/month and declined a new
+spending guard, accepting existing alerts. Keep safeguards and alerts intact;
+no runtime price or budget implementation is added. Normal review/qualification
+and the existing authenticated deployment remain required; stop on an Azure
+allocation rejection rather than silently changing capacity, region or access.
+
+## 27 October 2026 — Compact screen-share Stop control (#1333)
+
+Replace the composer's screen-sharing status row with an icon-only red square
+Stop recording button in the empty grid cell beside Dictate. A visually hidden status keeps "Screen shared
+with Jarvis" announced; the button opts in to `data-preserve-typing-focus`. The
+earlier unpushed implementation was not recoverable, so this is new work. Capture
+and background-watch behavior are untouched.
+
+## 27 October 2026 — Preserve composer focus on later mouse-down (#1315)
+
+Owner iPhone metadata reports an uncancelled mouse-down after cancelled Send
+pointer-down, followed by blur/movement and a missed click; Plus/Dictate share the
+sequence. Guard only primary mouse-down on opted-in phone composer toolbar controls
+while textarea is focused. Preserve native click activation, menu focus and scroll.
+Browser sequence replay is distinguished from native Chromium and physical iOS.
+
+## 26 October 2026 — Local passive Send collector
+
+Owner approved content-free in-memory tap/focus/viewport diagnosis, not the
+speculative mouse fallback. Collect a bounded allowlist using passive listeners;
+add no storage or telemetry. Later owner approval permits an explicit phone Plus
+copy action and clipboard writing only, with safe feedback and no clipboard reads.
+
 # Decisions
+
+## 2026-10-26 — Preserve transcript fade with bubble frost (#1324)
+
+Use the lighter shared 16px blur on Plus, bubbles and header. Correct only shown
+mobile composer corners; desktop and hidden-state borders remain as before.
+A masked transcript and a backdrop-filtered window each block child backdrop
+sampling. Bubbles remain in scroll flow; move the window blur to its content's
+background pseudo-element and move the existing 64px fade to individual painted
+items. Track viewport-relative mask offsets on scroll, resize and content change.
+No popovers or list markup changes. Synthetic fade comparison and pixel evidence
+are in `docs/ui/screenshots/chat-bubble-frost/`. Physical Safari remains unverified.
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
+## 26 October 2026 — Defer phone outside-touch dismissal until tap release (local)
+
+The viewport hook blurred the composer on touch-down before a transcript pan
+could be recognized. Track the press until release; abandon it after movement,
+scroll or cancellation. Do not prevent native scrolling or button/link actions.
+The local Chromium comparison and limits are recorded in
+`ui/screenshots/mobile-chat-scroll/README.md`. No release authorization is implied.
+## 2026-10-26 — Show actual Health meal estimates (#1321)
+
+Use server-derived nutrition lists for estimates and proposal presentation, including
+protein, calories and fat with units. The lookup description's absolute committed-only
+reporting instruction conflicted with its estimate instruction; remove that conflict
+and reserve committed-only wording for claims of logging. No production trace proves
+which model decision caused the reported symptom. Generic completed tool chips do
+not expose nutrition, so successful lookup results also reach the saved conversation
+independently of the model's acknowledgment. Keep legacy HTTP compatibility while
+advertising Health; do not migrate storage or the separate Daily Assistant service.
+
+## Composer Plus readability (#1319; 26 October 2026)
+
+Follow the clarified bottom-up order: Attach nearest Plus, Voice above it, remaining actions, Language at the top. Keep DOM and visual ordering aligned rather than reversing CSS flow. Reuse the app waveform icon for Voice, with the microphone reserved for Dictate. Strengthen only composer menu blur, retaining the existing translucent fill. Manual native popovers let that blur sample the underlying chat instead of stopping at the composer backdrop root; preserve DOM ancestry, picker anchoring and shared menu behavior.
+
+## 26 October 2026 — Preserve phone composer focus on Send (#1315)
+
+Use a guarded pointer-down default prevention on the existing Send button only
+while the phone textarea is focused. The native click remains the sole submit
+path. Controlled Chromium reproduced blur, simulated keyboard expansion, dock
+movement and a missed click without the guard; with it, focus and geometry stay
+stable and one tap submits once. This evidence does not establish physical iOS
+behavior. See `docs/ui/screenshots/1315/README.md`.
+
+
+## Desktop composer parity (#1309; 26 October 2026)
+
+Apply the approved composer geometry and controls to desktop as requested,
+including Voice under Plus and Dictate beside Send. Keep the existing isolated
+workspace and dock stacking hierarchy: elevate the fixed outer stack, not its
+inner child. Do not extend the mobile Chat-only visibility rule to desktop.
+
+## Route-scoped phone composer (#1303; 26 October 2026)
+
+Use the `/` route plus closed Workspaces pane state: the full-width Workspaces
+browsing pane is a distinct user-facing screen even though it retains the URL. Hide the phone
+typing slot rather than unmounting its conversation/session owner, so drafts and
+ongoing turns survive navigation. Disable the chat viewport hook off Chat and
+prevent hidden-input focus. Desktop is unchanged. Voice sessions remain mounted; their composer controls
+are also visible only on Chat.
+Menu remains an overlay and does not hide its anchor composer.
+
+## Continuous draft dictation (#1305; 26 October 2026)
+
+Keep browser dictation toggled on across natural recognition endings and silence,
+streaming interim hypotheses into the draft without duplicating finalized text.
+Use a fresh recognizer per automatic restart to isolate result indexes and stale
+callbacks. Explicit Stop allows trailing results but prevents restart. Permission,
+audio/service and unexpected abort errors remain visible and terminal; no-speech
+alone is a normal pause. Preserve typed draft edits and keep realtime voice,
+composer geometry and colors unchanged. Synthetic verification is separate from
+physical iPhone speech-service acceptance.
+
+## 26 October 2026 — Preview controls (#1304)
+
+The owner requested existing app styling for preview controls and removal of Live/camera-direction badges. Reuse shared chrome glass tokens; preserve named switch/close actions and unframed movement. A reported changed preview after switching/typing motivates preserving valid geometry through stream replacement and updating it when playback resumes. The exact private-device lifecycle remains unverified.
+
+## Preserve the native attachment source (#1306; 26 October 2026)
+
+Source inspection confirmed that every More action closed the menu and focused
+its trigger before calling its handler. The attachment handler then clicked a
+clipped 1px input elsewhere in the form. Keep only the file-input action open,
+place its input beside the row, and close on selection after the existing file
+handler runs. This preserves native picker choices, cancel/retry, plus toggling,
+and unrelated actions without timers or a custom picker. Chromium verifies the
+DOM lifecycle and matching input/row bounds; exact iOS popover placement remains
+unverified on a physical iPhone. The private reference transfer failed and no
+private image is committed.
+
+## 26 October 2026 — Keep recovery within the no-Stop-button scope (#1311)
+
+The recovery draft initially interpreted preserving explicit cancellation as
+permission to add a visible Stop reply button. That was incorrect: Dan's P8-35
+choice on 5 October explicitly removed that control, and no later authorization
+was found. The parent confirmed removal before qualification. Keep the explicit
+cancellation endpoint and client mechanism, with owner-only authorization, while
+retaining steering and the existing visible controls. Browser-disconnect recovery
+is accepted for this scope; process-restart durability is not claimed.
+
+## 26 October 2026 — Preserve accepted chat execution across transport loss (#1311)
+
+Accepted: detach HTTP transport from the existing single execution, retain bounded
+SSE replay and discover active turns by original identity. Keep completed replies
+in SQL conversation history. Do not resubmit messages, retry meal writes, extend
+proposal expiry, or infer approval from reconnection. Explicit cancellation and
+shutdown retain the original abort path. This avoids introducing a queue or durable
+proposal executor for a browser-disconnect fix. Current deployment has one replica;
+restart and multi-replica continuation are outside this change.
+
+
+## Stable menu material and shared chrome (#1301; 26 October 2026)
+
+Voice-mode follow-up: the typing composer is hidden and its wrapper is
+intentionally transparent. Runtime QA found the visible replacement voice bar
+still used the old 90% fill/24px blur; it now shares the chrome-glass material.
+The header already retained the shared material in voice mode. Actual-room
+SwiftShader and synthetic voice-state evidence are in the #1301 QA folder.
+
+Measured in the actual App: mobile menu wrapper and sheet opacity both rose
+from partial opacity to 1 while fill alpha stayed constant. The phone cascade
+selected 24px blur over the intended 10px; the header retained 90% fill. The
+scene already covered the header and dock, so no scene/layout relocation is
+needed. Use translation-only menu entrance and shared dedicated chrome-glass
+tokens, replacing local overrides of inherited `--surface-translucent`.
+The owner's explicit follow-up includes the header and removes selected dock
+boxes; preserve ARIA state and visible keyboard focus, highlighting only icons.
+Private reference materialization failed; synthetic App pixels were inspected.
+
+
+## Startup focus is not keyboard evidence (#1299; 26 October 2026)
+
+Actual-App synthetic startup reproduced a focused composer and hidden navigation
+with unchanged 844px layout/visual viewports. Existing startup and restoration
+effects call focus programmatically. Require observed shrink or a measurable
+inset before hiding navigation; keep the earlier height across resize-before-focus.
+A fresh short viewport with no prior measurement is ambiguous, so keep navigation
+available. Preserve autofocus and existing controls; no physical iPhone browser
+mode is inferred from the screenshot. This corrects the focus-only #1295 choice.
+
+## Reserve phone typing space when geometry is inconclusive (#1295; 26 October 2026)
+
+The owner reports navigation still above the iPhone keyboard after #1294.
+Equal-height layout/visual viewports defeat the released gap-only detector;
+the previous synthetic fixture kept layout height fixed and missed that case.
+Use composer focus as a fallback, including already-focused mount, and restore
+navigation on focus departure or observed viewport expansion. Do not infer a
+particular iOS browser mode or claim physical acceptance from synthetic tests.
+
+## Preview movement and menu glass (#1296; 26 October 2026)
+
+Use pointer capture on the camera video for both touch and mouse movement,
+excluding overlay controls and scrollable feedback from gesture initiation.
+Keep movement local to the preview, without altering workspace or keyboard
+layout logic. Prevent an open plus trigger's pointer press from blurring its
+menu before click; then close and restore trigger focus. Scope the requested
+transparency to conversation/navigation/menu surfaces, preserving header and
+icon colors. These are synthetic-browser-verified choices, not physical-device
+acceptance. Private reference downloads failed and no private image is published.
+
+
+## Dictation stop lifecycle (#1293; 26 October 2026)
+
+An explicit stop is distinct from a failed start. Suppress only cancellation
+and no-speech errors during requested stop, retain final text until end, and
+ignore callbacks from retired recognizers. Keep genuine failures visible and
+leave the unsent draft intact. The owner device error code remains unobserved;
+controlled event-order tests cannot establish physical WebKit acceptance.
+
+The same correction implements the owner's explicit space requirements: full-width
+message row, second-row borderless icon controls, external errors, no keyboard
+clearance for covered navigation, six-item menu pages with three dots, clear
+backdrop and shared translucent chrome. The parent/coordinator inspected private
+references; this executor could not download them and makes no source-pixel claim.
+
+## Phone navigation and draft-only dictation (#1287; 25 October 2026)
+
+Use the approved dark phone composition with the compact composer above a
+bottom Chat/Health/Workspaces/Menu navigation. Workspaces opens the renamed
+saved-window pane, distinct from the Software Factory page. Highlight the current
+destination by color only; the page sheet uses horizontally swipeable pages and
+keyboard Previous/Next controls. Keep message times below bubbles and preserve existing
+attachment and visual-capture actions. Voice remains the existing realtime
+assistant session under the plus menu.
+
+Dictate is a separate browser `SpeechRecognition` action that appends finalized
+transcript text to the persisted unsent draft; it never submits or starts
+`BrowserVoiceClient`. This reuses a platform speech API rather than adding a new
+backend transcription route. Browser support and permission errors remain
+visible; audio processing follows the browser's speech-recognition
+implementation, which may use its provider. No new API or storage contract.
+
+## Resolve project references against the active registry (25 October 2026; #1263)
+
+- Resolve explicit project IDs and full repository names exactly; normalize
+  display names conservatively and match natural references only against current
+  active registered-project candidates. Never select the first plausible match.
+- Ask one short natural-language question before a write when the reference is
+  ambiguous or absent. A missing project in the active-only list does not prove
+  that it was archived; registry read failures remain distinct from project and
+  GitHub App permission failures.
+- Pin the selected project ID and repository and revalidate them before issue,
+  label, comment, task or generic GitHub App writes. Do not fall back from a named
+  non-self project, register/unarchive projects or change permissions to make a
+  request succeed.
+- Keep `create_issue` as the code-change path and reuse existing approval and
+  tool replay ownership. This change adds no confirmation, execution or replay
+  loop of its own.
+- For a one-project clarification, accept only an immediate clear affirmation
+  bound to the same verified session and unchanged issue request; ambiguity,
+  denial/uncertainty (including replies that also name a candidate), intervening
+  replies, changed targets and stale registrations fail closed. A clear named
+  selection remains valid when multiple candidates were listed.
+  The shared pending-action lifecycle owns clarification reply eligibility,
+  expiry, cancellation and one-time selection; selecting a project is not issue
+  approval.
+  Explicit raw-repository issue comments remain supported without registration.
+- **Verification:** synthetic resolver and canonical dispatch tests cover English
+  and Danish requests, ambiguity, no-write refusals, permission denial and project
+  archive/rename races at factory and GitHub App write boundaries. Provider,
+  production and physical voice acceptance remain unverified.
+
+## Base vault-index freshness on successful sync evidence (#1288; 25 October 2026)
+
+Use the vault module's existing synchronization outcome rather than the newest
+changed chunk to establish index freshness. This allows a successful no-change
+run to refresh evidence, keeps a failed latest attempt degraded, and retains
+incomplete embedding coverage as degraded. Report the latest attempt and last
+successful sync separately; label `latestIndexedAt` as content-index time only.
+The outcome is process-local, so restart or no verified sync reports unknown
+until a sync completes. Do not infer success from retained chunks or introduce
+new persistence or active model/runner probes. Status-page refresh reads the
+existing status endpoint; its check timestamp does not advance sync evidence.
+
+## 2026-10-25 — Share confirmation transitions, retain tool authorization (#1281)
+
+Use `core/pending-action.ts` for exact immutable proposals, later-owner
+reply/session eligibility, expiry, cancellation, one-time consumption and
+execution. Google, Factory/GitHub and browser owner interactions adapt to it.
+Keep SQL browser approval consumption and tool-specific permission, presence
+and revision checks; consolidating lifecycle logic must not broaden authority.
+Receipt acknowledgments and project clarification are not action approval.
+Browser-only proposals have no conversational source binding and cannot be
+approved by spoken/text agreement. Preserve #1278's opt-in food-estimate
+owner-interactions API and immediate persisted-reply guards, adapting them to
+the shared lifecycle rather than creating a second food approval path. Keep
+its call-site wiring, language handling and timing work in that PR.
+Project clarification (#1264) selects/revalidates a target and does not consume
+action approval. Acknowledgment delivery (#1259) does not require affirmative
+playback receipts; actual delivery failures and explicit cancellation remain
+dispatch stops. These are compatibility constraints, not new product policy.
+synthetic regressions verify the boundary; live voice/model/device acceptance
+and combined-head qualification are separate.
+
+## Bound deployment-status responses at 4 MiB (25 October 2026; #1267)
+
+The GitHub Actions deployment reader requests up to 100 workflow runs. Allow
+4 MiB instead of 1 MiB so the reported 1,215,280-byte response fits with headroom,
+while retaining a finite per-request memory bound. Enforce the cap on both the
+declared content length and actual streamed bytes; retain the 100-run validation
+and 10-second request timeout. Synthetic regression tests cover the reported
+size with and without a content-length header, acceptance at the cap, and
+rejection/cancellation above it. A lookup error is not a failed deployment.
+
+## Mobile browser food logging is not telephone-call logging (25 October 2026; #1290)
+
+Clarify food tool guidance and trusted runtime instructions, not permissions:
+mobile/desktop browser chat and browser voice are supported; actual telephone
+calls remain denied. Current runtime context overrides device wording and earlier
+refusals, without granting approval. Require the actual `log_estimate` tool call
+before inviting confirmation; a prose estimate or lookup creates no proposal.
+With no pending proposal, obtain a new confirmation after staging, never reuse
+historical affirmative text. Preserve the current shared one-time approval service
+on the merged #1282 `PendingAction` lifecycle.
+
+Review follow-up: the blocking tool cannot deliver its invitation after returning.
+Publish the exact persisted review through the existing authenticated Now feed
+and a session-bound, internal voice presentation event while it waits. Permit
+only that food invitation to speak during pending tool work; retain response,
+settings, speech and presence gating and discard obsolete queued presentations.
+This adds no second confirmation state or authority. #1259 acknowledgement
+delivery remains distinct from the estimate/invitation.
+
+Typed-chat review follow-up: an unopened Now popover is not a delivered chat
+invitation. Forward the same persisted proposal over the active conversation
+stream, bound to its session and source message, and render it in the existing
+live bubble before the tool returns. Use plain text and existing reply/steering
+controls; retain expiry, withdrawal and shared approval/duplicate guards.
+Synthetic HTTP and rendered-client checks verify delivery before a new reply.
+Scratch Chromium at 1440px and 390px verified the visible invitation and synthetic
+reply receipt without Now, overflow or browser errors; this is not live-provider
+or signed-in production acceptance.
+
+Synthetic HTTP and English/Danish WebSocket tests exercise discovery, staging,
+public review/invitation delivery, new natural replies and committed receipts
+with isolated in-memory storage. Voice fixtures forward synthetic transcript and
+audio frames to the browser socket before injecting the new owner reply.
+They do not establish live-provider, real-SQL or physical-device acceptance.
+The hosted tool catalogue has a 60-second TTL; no browser-cache cause was established.
+
+## Natural food-estimate confirmation reuses one-time browser approval (25 October 2026; #1277)
+
+Only pending `log_estimate` reviews accept the owner's next later reply in the
+same text/browser-voice session. Bind the exact summary, source message and
+confirmation server-side; use the existing bounded approval interpreter and
+one-time persisted consumption. Unrelated or conditional replies remove this
+conversational authority; Now remains the fallback. Multiple pending estimates
+in one session fail closed. Corrections, deletions and unrelated approvals are
+unchanged. Never restage from a yes or claim success before the original tool's
+committed receipt.
+
+Use the existing 240-second ingress ceiling for the browser stream and reuse the
+210-second food read budget for the backend Foundry reader, leaving hosting
+headroom. Keep food's 180-second operation and 120-second approval limits,
+and ordinary browser requests' 120-second deadline. Sanitize transport-read
+failures and direct the owner to check status before retrying. Synthetic checks
+do not establish live provider, microphone, device or deployment acceptance.
+## Compact camera preview and attachment menu order (#1265; 25 October 2026)
+
+Keep the existing Camera preview workspace identity and lifecycle, but make the
+live video the only visible window surface, use its existing refracted glass rim,
+and overlay the camera-switch and close controls. Keep its accessible heading,
+workspace commands and media teardown; retain touch-only switching and the
+established preview recovery behavior. Use **Enable video** consistently for the
+camera-on action. Put **Attach file or photo** first in the typing More menu,
+reusing the existing validated upload/picker flow. This does not change camera
+capture, permissions, or image-input behavior.
+## Generic text questions use an active screen share (#1266; 25 October 2026)
+
+Text submission and turn execution resolve generic English/Danish visual
+questions against the active screen share before requiring the camera. Keep
+camera-specific wording and active camera-conversation priority unchanged.
+Screen inspection still supplies bounded, untrusted context through the existing
+chat path; visual asks queue rather than steer without that context. Voice
+routing is unchanged. Local tests and synthetic Chromium checks at 390 and
+1280 px pass; live display capture and authenticated phone acceptance remain
+unverified.
+
+## Research completion is independent of Workspace delivery (25 October 2026; #1237)
+
+After a validated research artifact, its owner-scoped Folio entry, and the
+job's durable result reference are saved, the job is complete regardless of
+whether a Workspace tab is connected or acknowledges presentation. Persist
+delivery separately as pending, unknown, failed or delivered; only an applied
+Workspace acknowledgement permits delivered. That acknowledgement means the
+client applied the command, not that the owner viewed the report.
+
+Use the existing Folio and job records plus a single stable research view ID.
+The owner-only open-result route reuses the Folio reader and Workspace broker;
+reconnect/reload offers the existing artifact and never calls the provider
+again. Real artifact/Folio/job persistence failures remain failures. This is
+the approved delivery-boundary item only; the separate research-concurrency
+race is out of scope. Validation uses synthetic data; physical iPhone behavior
+remains a separate owner acceptance step.
+
+## Reuse the stream for a natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+- For a tool-backed request, Jarvis should give one short, truthful first-person
+  sentence in the captured conversation language, then continue the same turn and
+  deliver the actual result. Direct questions stay direct and do not incur an
+  additional model request or artificial delay.
+- Keep the acknowledgment an ordinary user-facing intent statement, not internal
+  reasoning. Do not claim a check or action has already succeeded, invent an ETA,
+  repeat it in the final answer/history, or narrate later tool calls.
+- Reuse the existing streamed text and add a typed boundary at the first tool
+  handoff. The same model-stream lifecycle serves hosted chat and hosted voice;
+  their adapters respectively emit a transient SSE segment and a separate
+  `ResponseOutputTextDone` item. The AgentServer transport send orders model
+  continuation but has no client/provider speech receipt, so it does not prove
+  the user heard the item before tool work.
+- Realtime voice uses the same bilingual intent policy through its provider
+  adapter. Tool work proceeds after the initial response's terminal event is
+  delivered, even if playback confirmation is missing or negative. Explicit
+  cancellation/barge-in, required approvals, authorization and genuine terminal
+  delivery failures remain authoritative. First tool-only responses and later
+  silent tool rounds do not require playback receipts. Browser receipts do not
+  prove physical-speaker output.
+- Fixtures cover streamed intent before tool work, final result afterward, direct
+  turns without a boundary, missing/negative playback receipts, cancellation,
+  stale receipts and silent rounds. No live latency or physical audio playback is
+  claimed. Owner acceptance remains separate; this task authorizes no merge or
+  deployment.
 
 ## Simplify proactive controls end to end (24 October 2026; P13-22 / #1252)
 
@@ -676,6 +1333,16 @@ provider session. The spoken-session acceptance in the runbook remains pending
 a separately authorized deployment.
 
 Refs DanAakesen/jarvis#1190.
+
+## Deadline notification details (27 October 2026; #1335)
+
+The owner approved correcting generic deadline notification lines to show task
+names and deadlines. Deterministic findings now use the bounded task name as
+their stored title; bundled alert lines include the existing Copenhagen due-time
+label. The ordinary finding upsert refreshes recurring generic records without
+a migration. Item identity, states, alert ledger and delivery policy are retained.
+Only stored titles and due times enter the encrypted payload; source bodies and
+private telemetry remain excluded. Physical iPhone appearance remains unverified.
 
 ## Push notifications carry bounded details (22 October 2026; P13-21 / #1194)
 
@@ -7285,6 +7952,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L134** | A decision was requested on a stale premise | #396 asked Dan to pick a Danish voice because PRODUCT.md, architecture.md and the provisioner all said Harper. The live code had used Jeppe since P5-08 (`DANISH_REALTIME_VOICE`), so the question was already answered and the fix I proposed (re-provision `jarvis-voice-mai`) would have changed only an unused fallback. Docs lagged the code by a week. | Before asking Dan to decide or filing a change, confirm the current value in the code that runs in production (and its tests), not in the docs; correct the docs in the same change |
 | **L135** | The new in-app board returned 502 on every read in production | #806 shipped the board columns and deployed green, but `GET /factory/board` failed with `factory.board_read_failed` on every call (117 in 15 minutes). The reader compared the number of blockers GitHub lists for an issue with the summary count `blocked_by`, which counts only open blockers while the list includes closed ones; #721, #723 and #732 each had a closed blocker beside an open one, so the whole board threw. The unit test passed because its fake dependency items had no `state` field, unlike real GitHub data, and the handler swallowed the cause so the log showed only the event name. The reader now keeps only open blockers and rejects entries without a state. A second defect appeared in the same first live call: GitHub returns `closed_at` without milliseconds and the shared contract requires them, so the web correctly rejected the 200 payload; the reader now normalises `closedAt` to ISO with milliseconds, with a test that runs the built board through `isFactoryBoard`. | Shape test fixtures from a recorded real response, and check a new read path against live data (compare the counts it assumes) before calling it done; after deploying a new endpoint, query its error event in the logs and call it once with real data |
 | **L136** | The Voice Live schema guard covered only core tools | #1153’s reconnecting voice was caused by Voice Live rejecting `session.update` with `invalid_function_parameters`: configured Daily health, nutrition and coach tools had root `oneOf` schemas, while the L121 guard inspected only `coreModule.tools`. The model-facing schemas now flatten typed root object alternatives, while the registered full schemas remain the server-side validation contract; the production-catalogue test checks all configured tools. | Guard every tool in the full production composition, including features enabled only when their stores are configured; keep schema simplification model-facing and preserve authoritative server validation |
+| **L137** | ARM REST and Azure CLI model shapes | The first backend-log preflight failed at `builtin_role_mismatch`: its `az rest` verifier and synthetic fixture both used CLI-model `properties.roleType`, while ARM returns `properties.type`. | Build wire-response fixtures from the exact REST version being called; do not substitute a CLI's normalized output. Keep fail-closed permission checks, and test both the documented positive shape and rejected normalized/custom-role shapes. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
@@ -8362,3 +9030,193 @@ production failure or prove live provider acceptance. A provider-incomplete
 response after tool execution remains a failure: no partial reply is synthesized
 from prior tool outputs, and the user-facing warning indicates that an action may
 have completed. Recovery of useful partial results is not implemented.
+
+## Workspaces naming and legacy compatibility (#1279; 25 October 2026)
+
+Use Workspaces for user-facing and canonical implementation names, including
+the `workspaces` navigation key, `workspacesOpen` snapshot field, `/workspaces`
+API, `workspaces_*` tools, and `dbo.workspace_items`/
+`result_workspace_item_id` storage. Preserve existing clients and integrations
+with legacy navigation/snapshot values, route/tool aliases, exported contract
+aliases, a `dbo.folio_items` synonym, and synchronized old/new job-result
+columns. Migration 0067 renames the table and backfills the new column without
+deleting saved items; its down migration restores the old identifiers. Writing
+NULL to only one result alias clears both aliases and delivery status; a mixed
+write with one NULL alias and a valid delivery status synchronizes both from the
+non-NULL identifier. Access controls and source-artifact retention do not change.
+The separate chat-time layout remains below message text on mobile widths up to
+700px and retains its desktop position.
+
+## 26 October 2026 — One camera feature (#1317)
+
+Dan confirmed Enable video and camera watching were always intended as one
+feature, and requested removal of the obsolete separation. Enable video now
+automatically delivers sampled JPEGs, while ongoing narration requires a typed
+or spoken standing request. Tool acknowledgement distinguishes saved instructions
+from received frames. Keep screen watching independent, retain budget/privacy
+controls and the ten-minute inactivity cutoff, and never claim raw video.
+The cutoff limits “until I tell you to stop”; changing it remains unapproved.
+Local synthetic verification does not establish physical-iPhone or live-model acceptance.
+
+## 26 October 2026, 14:21–14:22 UTC — Video continues until stopped (#1317)
+
+Dan explicitly approved removing the ten-minute no-message camera cutoff while
+retaining the spending limit. This supersedes the earlier ten-minute decisions
+and the initial #1317 cutoff-preservation decision above. He added: “Or til I
+close it of course. And make sure Jarvis can also start and stop that video”.
+Close and user-requested workspace camera commands control the same continuous
+sampled delivery. Startup still needs browser permission; session/sign-out,
+permission loss, fatal errors and budget exhaustion still stop it. No guarantee
+of background iOS capture or uninterrupted device access is made.
+
+## 29 October 2026 — iOS direction; design before implementation
+
+Owner-confirmed direction is limited to GitHub-based macOS builds, reuse of the
+existing Jarvis backend, and native SwiftUI/iOS features and controls. The next
+step is an agreed version 1 design/prototype; Dan may work locally on his PC.
+Scope, layouts, retained branding, prototype tools and build/authentication setup
+remain unconfirmed. No implementation or setup is authorized. The discussion,
+proposals and dated references are recorded in [iOS app](../iOS%20app.md).
+Migration and logging work continues independently.
+
+## 29 October 2026 — iOS usage context and design decisions
+
+The owner stated that the iPhone app will mostly be used while lifting weights,
+running on a treadmill and driving, with minimal hands-on time and the screen
+only glanced at, so the experience should be largely hands-free. Generative UI
+workspaces and Jarvis control of the app itself (opening, closing and arranging
+workspaces and navigating) are essential on iOS, as on the web. The owner also
+confirmed these design decisions: native iOS glass and controls rather than the
+web chrome; no bottom tab bar, with chat and voice switching from the composer;
+areas open from a right-edge swipe-only sidebar, chosen for the prototype and to
+be judged by use; an iOS take on the web composer, not final; the existing orb
+design carries over; the phone has no presence picker and always uses On the
+move; no paid design tools. GitHub Replica is ruled out because it does not run
+on the owner's Windows PC. The HTML concept board is local scratch and cannot
+establish native behaviour. Scope, sidebar contents, workspace presentation,
+assistive access to the sidebar, presence behaviour with workspaces and
+build/authentication setup remain unconfirmed. No implementation or setup is
+authorized. See [iOS app](../iOS%20app.md).
+
+## 29 October 2026 — iOS sidebar order, naming and removed control
+
+The owner removed the "Jump or ask" control from the iOS sidebar, asked for the
+area to be named simply Chat instead of Chat and voice and to be the first
+option from below, followed by Notes, Health, Software Factory, banking (later)
+and the rest, and asked for a code symbol as the Software Factory icon. The
+owner also asked that the sidebar not be dragged far from thumb reach, so rows
+and icons sit close to the right edge. The prototype lists the areas upward from
+the thumb end and still shows a row of pinned shortcuts, which is not decided.
+The final list of areas, the pinned shortcuts and assistive access to the
+swipe-only sidebar remain unconfirmed. No implementation or setup is authorized.
+See [iOS app](../iOS%20app.md).
+
+## 29 October 2026 — iOS version 1 answers
+
+The owner answered the version 1 checklist and accepted the recommendation on
+every row except two. The Face ID lock is now on by default, set up at the first
+sign-in, and approvals from the Lock Screen are allowed. Otherwise: hands-free
+means a session the owner starts, with no always-listening wake word, and it
+keeps running with the screen locked, ends itself after 10 minutes of silence
+and pauses for calls and Siri. Version 1 is iPhone only (an iPhone 16 Pro Max on
+iOS 27.2, with an Apple Watch), minimum iOS 26, TestFlight only, with English
+text and English and Danish voice. Sign-in stays Microsoft with 10 days idle.
+Only Apple crash reports are collected, and version 1 has no Health or location
+data and no offline mode. In the sidebar the pinned-shortcuts row is removed and
+the list sits low, nearest the thumb; a one-time hint teaches the edge swipe and
+VoiceOver gets an Open sidebar action. Workspaces open as a full-height sheet,
+one at a time. Version 1 is chat, voice, workspaces, app control and settings,
+with Notes and Health next and unbuilt areas shown as Coming later. TestFlight
+uploads run automatically after each merge to main, signing goes through an App
+Store Connect API key, the design docs are committed to the repository, and
+small backend endpoints for push and Live Activity tokens may follow. The bundle
+ID is com.danaakesen.jarvis, being registered. The owner answered No to starting
+the foundation phase, so no implementation or setup is authorized. The
+safeguards proposed for the Face ID lock and Lock Screen approvals, and whether
+the owner's account has the role the API key needs, are not confirmed. CarPlay,
+the Apple Watch and Music are future intent only.
+See [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS App ID registered
+
+At the owner's request, the App ID `com.danaakesen.jarvis` (named Jarvis,
+explicit) and the App Group `group.com.danaakesen.jarvis` were registered in the
+owner's signed-in Apple Developer session, and the group was attached to the App
+ID. The saved state was read back from the portal. Nothing else was changed or
+created on the account: no keys, certificates, agreements or app record.
+
+Ticked: Push Notifications (Broadcast left off), Time Sensitive Notifications,
+App Groups, HealthKit, Maps, Push to Talk and Side Button Access, plus MusicKit
+under App Services and In-App Purchase, which Apple locks on. The owner added
+HealthKit, Maps, Push to Talk and Side Button Access beyond the plan. Nothing in
+the current design uses Maps or Push to Talk, and version 1 has no Health data.
+A tick only permits a capability: the app's entitlements file decides what a
+build uses. Side Button Access is limited to Japan, on iOS 26.2 or later, and
+starts a voice assistant through an App Intent. Clinical Health Records stay
+off.
+
+Left off on purpose: Data Protection, because the complete level cannot be read
+on a locked phone, which hands-free voice and CarPlay both need. Camera,
+microphone, location, photos and Face ID need no portal tick, only a purpose
+string in the app's Info.plist and iOS's own Allow prompt. CarPlay is not a tick
+either: it is a capability request that Apple must approve, and requests need
+the Account Holder role.
+
+Still open: the owner's role (Account Holder or Admin), who files the CarPlay
+request, and the owner's go for the foundation phase, which is still No. No
+implementation or setup is authorized.
+See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS foundation phase go and Mac cost guard
+
+The owner gave the go for the iOS foundation phase, replacing the earlier No.
+Phase 1a, the project skeleton and checks, is the first work. Later phases still
+need their own go. The owner also set the build policy: build and test as much as
+possible locally, and ship as much as possible on every GitHub build.
+
+The cost guard follows from that. The owner's PC has no Swift toolchain and cloud
+agents run on Ubuntu, so a Mac run is the only compile check for the SwiftUI
+layer. Standard `macos-26` runners are free while the repository is public and
+the account is personal. Larger macOS runners are billed even for public
+repositories and are not available to a personal account, so xlarge labels are
+never used. The workflows are designed as if the minutes were billed: GitHub
+lists $0.062 per macOS minute for private repositories, roughly $0.60 to $0.90
+for a 10 to 15 minute run (estimate).
+
+Rules, set out in the build plan: logic stays in the pure-Swift `JarvisCore`
+package, tested on Linux on every push. The iOS CI has a Linux job and a Mac job
+that runs only after it passes, only for ready pull requests that touch
+`apps/ios/` or shared inputs, with per-pull-request cancellation, a 20 minute
+timeout, a SwiftPM cache, a simulator build without signing, and no simulator
+boot, UI tests or screenshots. Screenshots run only on manual dispatch. The
+TestFlight workflow builds, archives and uploads in one job on merge. Authors
+keep pull requests in draft until the Linux checks pass and batch related
+changes. The owner should set a GitHub Actions budget in Billing as a safety net.
+The dispatcher reviews Actions billing usage at the end of each iOS phase. A
+local Linux Swift toolchain for the owner is optional and needs the owner's go.
+See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS screen approval gate
+
+The owner said: "I want to make sure i greenlight every screen before its deployed."
+
+Every screen is its own issue and its own pull request. Design gate: the
+dispatcher shows the owner the concept frame for the screen, and no builder
+starts on that screen until the owner has approved it. Code gate: the owner
+approves the screen's pull request before it merges. A screen that has not been
+approved is never built, merged or shipped.
+
+Ship gate: the TestFlight upload workflow runs by manual dispatch only, started
+by the owner, so nothing reaches the owner's phone unapproved. The automatic
+push-to-main trigger is removed, and checklist row 19 (automatic uploads) is
+superseded. The monthly keep-alive no longer uploads: it is a reminder to the
+owner to run the manual upload, because TestFlight builds expire after 90 days.
+An automated keep-alive of the last approved build can be added later if the
+owner wants it. The other safeguards stay: the signing environment is limited to
+main, there is no `pull_request` trigger, the secrets live only in the
+environment, and build, archive and upload stay in one job, so a manual run is
+also one Mac run. Uploads only happen when the owner starts them, which also
+lowers Mac minutes.
+
+Phase 1a, the empty shell with no real screens (#1370), is unaffected. See
+[build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).

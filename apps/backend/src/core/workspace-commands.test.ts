@@ -64,6 +64,7 @@ describe('workspace command delivery', () => {
     });
     expect(workspaceCommandTool.description).toContain('current session, not saved defaults');
     expect(workspaceCommandTool.description).toContain('backend never requests browser permissions');
+    expect(workspaceCommandTool.description).toContain('applied confirms capture started, not frame delivery');
     expect(workspaceCommandTool.description).toContain('tell Dan to grant permission in the browser');
     expect(workspaceCommandTool.description).toContain('Target defaults to active');
   });
@@ -105,6 +106,35 @@ describe('workspace command delivery', () => {
     });
     expect(ack.statusCode).toBe(204);
     expect((await pending).json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    connection.close();
+  });
+
+  it.each(['chat', 'voice'] as const)('starts and stops unified video through acknowledged %s tool commands', async (channel) => {
+    const voiceProbe: BackendModule = { id: 'camera-voice-probe', tools: [], registerRoutes: async (instance) => {
+      instance.post('/test/camera-voice', async (request) => JSON.parse(await runModelToolCall(request, () =>
+        executeRealtimeToolCall({ type: 'response.function_call_arguments.done', name: 'workspace_command',
+          call_id: 'camera-call', arguments: JSON.stringify(request.body),
+        }, instance.jarvisTools, request, new AbortController().signal))));
+    } };
+    const { app, broker } = fixture(false, [voiceProbe]);
+    let delivered: WorkspaceCommand | undefined;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') delivered = data.command;
+      return true;
+    });
+    for (const value of ['front', 'off'] as const) {
+      delivered = undefined;
+      const command = { commandId: `video-${value}`, operation: 'session', action: 'camera', value };
+      let settled = false;
+      const pending = app.inject({ method: 'POST', url: channel === 'chat' ? '/tools/workspace_command' : '/test/camera-voice',
+        headers: channel === 'chat' ? agentHeaders : userHeaders, payload: command,
+      }).then((response) => { settled = true; return response; });
+      await vi.waitFor(() => expect(delivered).toEqual(command));
+      expect(settled).toBe(false);
+      await app.inject({ method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+        payload: { sessionId: connection.sessionId, applied: true } });
+      expect((await pending).json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    }
     connection.close();
   });
 
@@ -300,10 +330,41 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
     });
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
-    // Tabs opened before the rename only know the legacy page value, so Health is delivered as `daily`.
-    expect(delivered).toEqual([page === 'health' ? { ...command, page: 'daily' } : command]);
+    // Tabs opened before the rename only know legacy page values.
+    expect(delivered).toEqual([page === 'health'
+      ? { ...command, page: 'daily' }
+      : page === 'workspaces' ? { ...command, page: 'folio' } : command]);
     connection.close();
   });
+
+  it.each([
+    { client: 'legacy', advertisesWorkspaces: false, deliveredPage: 'folio' },
+    { client: 'current', advertisesWorkspaces: true, deliveredPage: 'workspaces' },
+  ])('adapts Workspaces navigation for $client clients', async ({ advertisesWorkspaces, deliveredPage }) => {
+    const { app, broker } = fixture();
+    const command = { commandId: `navigate-workspaces-${deliveredPage}`, operation: 'navigate', page: 'workspaces' };
+    let delivered: WorkspaceCommand | undefined;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered = data.command;
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true);
+      }
+      return true;
+    });
+    if (advertisesWorkspaces) broker.updateSnapshot(ownerId, connection.sessionId, {
+      windows: [], contextPanelOpen: false, view: { page: 'home', workspacesOpen: false, folioOpen: false },
+    });
+    try {
+      const response = await app.inject({
+        method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+      });
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true } });
+      expect(delivered).toEqual({ ...command, page: deliveredPage });
+    } finally {
+      connection.close();
+    }
+  });
+
   it.each(['daily', 'health'] as const)('refuses %s navigation before delivery when its data module is absent', async (page) => {
     const { app, broker } = fixture();
     const send = vi.fn(() => true);
@@ -398,7 +459,7 @@ describe('workspace command delivery', () => {
   it.each([
     { page: 'factory', taskId: '42', reason: 'Task no longer exists.' },
     { page: 'factory', issueNumber: 567, reason: 'Issue card was not found.' },
-    { page: 'folio', reason: 'Folio is not available yet.' },
+    { page: 'folio', reason: 'Workspaces is not available on this client.' },
     { page: 'status', reason: 'Status is not available yet.' },
   ])('reports UI navigation refusal with its reason: %j', async ({ reason, ...destination }) => {
     const { app, broker } = fixture();
@@ -967,7 +1028,7 @@ describe('workspace command delivery', () => {
       metric: 'step_count', display: 'chart',
     };
 
-    const creating = app.inject({ method: 'POST', url: '/tools/daily_show', headers: agentHeaders, payload: input });
+    const creating = app.inject({ method: 'POST', url: '/tools/health_show', headers: agentHeaders, payload: input });
     const update = await acknowledge(0, 'update', false, 'That view is not open.');
     const create = await acknowledge(1, 'create', true);
     expect(create.viewId).toBe(update.viewId);
@@ -981,7 +1042,7 @@ describe('workspace command delivery', () => {
     });
 
     const refreshing = app.inject({
-      method: 'POST', url: '/tools/daily_show',
+      method: 'POST', url: '/tools/health_show',
       headers: { ...agentHeaders, 'x-jarvis-message-id': '102', 'x-jarvis-voice-item-id': 'voice-102' },
       payload: input,
     });

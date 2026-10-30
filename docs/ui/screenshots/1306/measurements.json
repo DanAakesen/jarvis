@@ -1,0 +1,77 @@
+[
+  {
+    "viewport": [
+      390,
+      844
+    ],
+    "theme": "dark",
+    "motion": "no-preference",
+    "row": {
+      "x": 26,
+      "y": 452,
+      "width": 206,
+      "height": 44
+    },
+    "input": {
+      "x": 26,
+      "y": 452,
+      "width": 206,
+      "height": 44
+    },
+    "nativeFileChooserEvent": true,
+    "menuRetained": true,
+    "cancelSimulated": true,
+    "plusEscapeOutsideLanguage": true,
+    "errors": []
+  },
+  {
+    "viewport": [
+      320,
+      700
+    ],
+    "theme": "light",
+    "motion": "reduce",
+    "row": {
+      "x": 26,
+      "y": 308,
+      "width": 206,
+      "height": 44
+    },
+    "input": {
+      "x": 26,
+      "y": 308,
+      "width": 206,
+      "height": 44
+    },
+    "nativeFileChooserEvent": true,
+    "menuRetained": true,
+    "cancelSimulated": true,
+    "plusEscapeOutsideLanguage": true,
+    "errors": []
+  },
+  {
+    "viewport": [
+      1440,
+      1000
+    ],
+    "theme": "dark",
+    "motion": "no-preference",
+    "row": {
+      "x": 1034,
+      "y": 720,
+      "width": 206,
+      "height": 44
+    },
+    "input": {
+      "x": 1034,
+      "y": 720,
+      "width": 206,
+      "height": 44
+    },
+    "nativeFileChooserEvent": true,
+    "menuRetained": true,
+    "cancelSimulated": true,
+    "plusEscapeOutsideLanguage": true,
+    "errors": []
+  }
+]

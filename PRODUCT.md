@@ -1,4 +1,228 @@
+## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
+
+Read-only diagnostic access covers Jarvis's backend, hosted AI agents, coding
+runners, deployments and supporting services, excluding unrelated projects. This
+replaces the earlier backend-only scope. Retain the existing Foundry Reader role.
+New persistent grants require exact approval; the existing narrow approval is not
+expanded implicitly. One authenticated sensitive log capability must describe
+actual enabled sources, with bounded reads, redaction, untrusted-evidence handling,
+retained-history/ingestion-delay disclosure and honest source coverage. A read grant
+cannot create missing history. No duplicate legacy feature, repair action,
+arbitrary query/exec, credential, collection or retention change is implied.
+The current implementation remains disabled; [whole-scope design](docs/jarvis-logs.md)
+is preparation, not a claim of deployed coverage.
+
+## Runtime test failure recovery (#1350; 29 October 2026)
+
+The owner requested repair of failed Copilot test replies. Show meaningful,
+sanitized failure information instead of describing every failure as interruption.
+A history refresh must not imply that an uncertain managed turn is cleared or
+replayable. Preserve the existing return-to-normal action and explicit sending;
+no automatic resend, claim reset, new runtime controls or default change.
+
+## Approved main chat harness replacement (#1350; 29 October 2026)
+
+Replace the custom main chat loop through a controlled, switchable Foundry
+Copilot-harness migration after fixing the live baseline. Preserve native audio,
+Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate
+subscription-backed Factory workers. Automated comparisons use identical test
+scenarios. Dan can test Current or Copilot through Test agent runtime in the chat
+menu, opening a separate labelled conversation with no mid-conversation switch;
+normal chats stay unchanged. The local candidate implements this selector and
+session-scoped test view; Copilot stays unavailable until its live definition,
+settings, bindings and application policies are verified. The owner also approved
+retaining the Python bridge temporarily for voice fallback, using existing Jarvis
+tools only initially, and excluding test conversations from normal history. Cutover,
+rollback and retirement follow proven parity and required authorization. See
+[migration scope and open decisions](docs/main-chat-harness-migration.md).
+
+Jarvis is the owner's personal side project, not a multi-user product. The owner
+does not require extra pre-live exclusion of test transcripts from search, recent
+context or rolling summaries. Preserve existing authenticated owner checks and
+the approved separate UI history. No context wipe is included.
+
+## Backend log authorization qualification (#1341; 29 October 2026)
+
+Retained backend-log chat access remains disabled until Azure isolation is proven.
+The existing deployment smoke route may return bounded, fixed authorization
+observations from the verified backend identity. It exposes no log records,
+private Azure IDs, credentials, arbitrary query input, new model tool or UI.
+Empty negative queries and missing real controls never establish exclusion.
+This verification stage neither assigns roles nor enables the reader.
+Foundry resource verification uses the supported fixed log table and privately
+classifies permission metadata into fixed verdicts. It never exposes metadata
+identifiers or treats absent data, HTTP 400 or metadata as isolation proof.
+
+## Backend log awareness and approved activation (#1341; 28 October 2026)
+
+The owner has approved persistent read-only access to backend records and basic
+workspace metadata, excluding other applications. Activation remains off until
+live target, schema, effective-access and enforcement checks are complete.
+Main chat explicitly names `read_backend_logs` for self-diagnosis when configured;
+while disabled/unconfigured it must say log access is unavailable. The tool
+catalogue carries the same availability distinction. These are retained,
+backend-only diagnostics that can lag minutes; tool results establish current
+access and data availability. They are never advertised as an instantaneous
+stream or other-app log access. No new UI or log/retention changes.
+
+## Review fixes (#1343; 28 October 2026)
+
+The eight owner-approved fixes preserve one task per signed issue-label delivery,
+carry the verified conversation origin through issue creation and label pickup,
+and write task-status messages atomically with their delivery receipts. Retried
+writes cannot consume a receipt without the message. Oversized issue startup
+shows a retained Now alert naming the existing issue instead of implying work
+started or creating another issue.
+
+Gmail receipts distinguish waiting for approval, cancellation, completed writes
+and uncertain outcomes. Settings approvals name each proposed model, reasoning
+value and vision budget in USD per day.
+
+Chat warnings and unsent queued messages survive reload in this tab, scoped to
+the backend and signed-in account. Restored queued messages wait for the owner's
+explicit Send queued messages action. Missing browser storage is reported.
+Supported partial replies up to 512 KiB in UTF-8 survive recovery. Invalid
+warning entries do not discard valid queued messages; when recovery reaches its
+storage bound, unsent messages and uncertainty warnings take priority over
+partial reply context, and incomplete saving is reported.
+On mobile, Settings keeps its heading and explicit Save in a sticky top; desktop
+keeps its existing footer Save. No Settings navigation guard, autosave or draft
+persistence is added. Live/device and SQL integration acceptance remain separate
+from local synthetic checks; implementation does not activate other features.
+
+## Read-only backend log troubleshooting (#1341; P11-42; 28 October 2026)
+
+Owner-approved chat access covers only Jarvis's own retained backend runtime
+diagnostics, with secrets/free text excluded before model exposure. The reader
+uses the authenticated sensitive read-tool path, reports time windows, ingestion
+delay, partial/truncated/unavailable results, and treats logs only as untrusted
+evidence. No UI, repairs, arbitrary KQL, other-app access or retention change.
+Implementation is default off; the exact persistent Azure grant still requires
+owner approval and deployed isolation proof. See [the contract and activation
+plan](docs/backend-logs.md).
+
+## Compact screen Stop control (#1333; 27 October 2026)
+
+While a screen is shared, the composer shows one compact icon-only red square
+Stop recording button beside Dictate instead of a separate status row. It stops sharing only, keeps the
+draft and typing focus, and screen-share errors stay announced. Capture behavior
+is unchanged.
+
+## Mobile composer tap focus (#1315; 27 October 2026)
+
+While typing on a phone, primary mouse-down on Send, Plus or Dictate preserves
+textarea focus until native click performs the action. Keep the draft, one-send
+semantics, cancellation, menu keyboard focus and transcript scrolling intact.
+
+## Temporary Send diagnostic (local, 26 October 2026)
+
+Approved passive, bounded, content-free in-memory tracing supports investigation
+of the unresolved keyboard-open Send symptom. An explicitly pressed temporary phone Plus action copies the trace to clipboard;
+no clipboard read, automatic transmission or persistence. This is not a proven fix.
+
 # Product
+
+## Shared readability material (#1324; 26 October 2026)
+
+Use a moderately lighter shared blur on Plus, bubbles and header. Round both
+composer top-corner borders only on mobile with the chat window shown.
+
+## Chat bubble readability (#1324; 26 October 2026)
+
+Frost the background behind both speakers' chat bubbles like the Plus menu,
+retaining sharp text, translucency, existing layout and the desktop top-edge fade.
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
+## Mobile chat scrolling (26 October 2026; local)
+
+Scrolling the phone transcript while composing retains textarea focus and the
+unsent draft, allowing continued typing and one-tap Send. An intentional outside
+tap can still dismiss the keyboard. Physical iPhone acceptance remains unverified.
+## Health meal estimates (#1321; 26 October 2026)
+
+Jarvis advertises Health tools. Every meal estimate shows actual returned protein
+(g), calories (kcal), and fat (g) as a list, including lookup-only responses and
+pending proposals. Unknown values remain unknown; zero is shown only when returned.
+Estimates do not log food. Exact-proposal approval, expiry and deduplication remain
+required. The external Daily Assistant and internal data namespace are unchanged.
+
+## Composer Plus readability (#1319; 26 October 2026)
+
+The chat composer Plus menu must stay readable over chat text. From the trigger upward, place Attach file or photo, Voice, the other available actions, then Language. Voice uses a waveform distinct from the Dictate microphone. Preserve the native attachment chooser anchor and desktop parity.
+
+## Mobile Send focus (#1315; 26 October 2026)
+
+A phone Send tap while the message field is focused sends once without dismissing
+the keyboard, leaving the field ready for the next draft. Cancelled presses do
+not send. Existing upload, empty-draft, pending/steering and failure recovery
+semantics remain in place. Physical iPhone acceptance remains unverified.
+
+
+## Desktop composer parity (#1309; 26 October 2026)
+
+Desktop uses the approved full-width draft and second row of borderless Plus,
+Dictate and Send controls; Voice is under Plus. Attachment errors stay above the
+composer, and attachment pills stay inside. The composer follows the history
+window when resized, maximized or restored, with its popup above history.
+Desktop navigation remains unchanged; Chat-only composer visibility is mobile-only.
+
+## Camera preview follow-up (#1304; 26 October 2026)
+
+Show only the unframed video and overlaid switch/close controls, using the existing app glass material. Remove visible Live and camera-direction badges. Preserve movement, camera switching and closing; retain fitted geometry through stream replacement and refresh it on playback resume.
+
+## Native attachment chooser continuity (#1306; 26 October 2026)
+
+Opening Attach file or photo retains the underlying plus menu while the native
+chooser is open. Cancellation leaves the menu available; selecting files closes
+it and continues the existing upload flow. Preserve plus toggling and ordinary
+menu-action dismissal. No custom photo chooser is introduced.
+
+## Accepted chat recovery (#1311; 26 October 2026)
+
+Leaving the app or losing its HTTP stream does not cancel an accepted chat turn.
+Returning recovers the running reply and its exact pending food invitation; completed
+replies load from conversation history. Recovery never resubmits a meal or approves
+an estimate. Explicit cancellation still cancels the running turn; actions already committed
+remain committed. Existing exact-proposal approval, expiry, presence/source checks
+and food receipt deduplication remain authoritative.
+
+
+## Unified translucent chrome (#1301; 26 October 2026)
+
+Menu popups, composer, bottom navigation and header retain visible but partial
+translucency after opening settles. Dock selection highlights only the icon,
+without selected background/border effects; keyboard focus remains visible.
+This supersedes #1296's exclusion of the header. Existing icon colors and merged
+phone keyboard/startup behavior remain unchanged.
+
+
+## Camera/menu follow-up (#1296; 26 October 2026)
+
+The camera preview can be repositioned with touch and desktop pointers, with
+switch/close controls over the unframed video and subtle tinted blurred fills.
+Repeated composer plus presses alternate opening and closing its menu. The
+composer, bottom menu dock and menu popups are visibly more transparent while
+keeping text/icons readable. Composer icons remain borderless; chat remains
+undimmed behind the menu. Keyboard/navigation follow-up belongs to #1295.
+
+
+## Workspaces saved-item pane (#1279)
+
+The saved-item pane is **Workspaces** throughout the app and implementation.
+Canonical identifiers are `workspaces`/`workspacesOpen`, `/workspaces`,
+`workspaces_*`, `dbo.workspace_items` and `result_workspace_item_id`. Existing
+clients and records remain compatible through `folio` navigation/snapshot
+values, legacy API/tool routes, contract aliases, the SQL table synonym and the
+synchronized job-result column added by migration 0067. Workspace delivery
+remains a separate action.
 
 ## Conversational finding feedback (#1240)
 
@@ -25,6 +249,18 @@ has never occurred, at most once per Copenhagen day and reason, with no push
 notification. A recent transient failure stays quiet. Missing/unreadable status
 does not create a mirror finding. No new flag or change to default-off write-back is introduced.
 The mirror has reported live status since 20 October 2026.
+
+## System status evidence (#1288; 25 October 2026)
+
+System checks distinguish when a check ran from the evidence it evaluated.
+Vault-index freshness follows the latest verified successful synchronization,
+including no-change runs; the most recently changed content timestamp is labeled
+as such and does not establish corpus freshness. A failed sync remains degraded,
+incomplete embedding coverage remains visible, and no verified sync in the
+current backend process—including after restart—remains unknown. Show the latest
+attempt and last success separately. Foundry configuration or catalogue presence
+does not establish runtime health, and a configured runner remains unknown until
+probed. Refreshing Status does not trigger a model request or runner probe.
 
 ## Azure vault mirror safety boundary (19 October 2026; P14-27)
 
@@ -71,6 +307,32 @@ conversation visibility and existing reader/tail-following behaviour through
 focus, viewport pan/resize, keyboard dismissal and orientation changes.
 Native-phone acceptance remains separate from controlled browser evidence.
 
+## Mobile navigation and composer actions (#1287; 25 October 2026)
+
+On mobile, show the message composer only on the Chat screen (`/`), not on
+other pages or the open Workspaces screen (#1303). Desktop composer behavior
+is unchanged.
+
+On phones, keep message times below the chat bubbles. Use the compact composer
+with a plus menu for existing attachments, video, screen sharing and realtime
+Voice. Dictate is a separate action that adds recognized speech to the unsent
+draft; it never starts a Jarvis voice turn or sends the draft. Dictate stays
+active through pauses until Stop, displays interim speech as it arrives, and
+can be toggled repeatedly. Genuine recognition failures stop it visibly. Make unavailable
+browser dictation and microphone failures clear. On phones, give the draft a
+full-width row and place borderless icon actions below it, preserving accessible
+names. Show errors above the composer surface. Keyboard-covered navigation must
+not reserve space above the keyboard.
+
+Keep Chat, optional Health, Workspaces and Menu reachable in the bottom
+navigation. Workspaces opens the saved-window pane; Software Factory remains a
+separate menu destination. Show the current destination through its color only,
+without an active-page dot. When the menu has more entries than fit, allow
+horizontal swiping between six-entry menu pages and arrow-key navigation,
+with three dots instead of Close/Previous/Next controls. Keep the chat visible
+behind the menu and use shared subtle translucency for header, menu and composer.
+Preserve existing attachment pills and image previews.
+
 ## Header background work (17 October 2026; P11-12)
 
 The header's **Background work** control covers research, images, apps and
@@ -102,6 +364,14 @@ not be presented as a successfully empty list.
   the existing history retention for Status, Usage and audit.
 - Existing browser dismissals are sent to the server once. A failed transfer
   remains visible as an error, with those entries hidden locally until confirmed.
+- Research generation completes when the validated artifact and owner-scoped
+  Workspaces entry are saved. Workspace delivery is separate: pending, unknown or
+  failed delivery does not turn a saved result into a failed research job.
+  Background work keeps an **Open report** action for the saved result; opening
+  it after reconnect or reload reuses the same report and never reruns research.
+  `Delivered` requires a Workspace acknowledgement and does not claim that a
+  person has seen the report. Artifact or Workspaces persistence failures remain
+  research failures, and partial findings remain identified as partial.
 
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
@@ -260,10 +530,13 @@ relayed by the coordinator. This supersedes earlier camera-release holds below.
 The coordinator reports live chat `visual.path=image` on every tested turn;
 live voice image acceptance and physical-phone checks remain separate.
 
-Camera preview is a separate workspace window with local video, actual
-Front/Back status and mobile-touch-only switching. It docks without stopping
-capture; Close/Turn off, session end and ten minutes without a user turn stop
-the tracks. Idle recovery stays visible. Camera controls never share or cover
+Camera preview is a preview-only workspace surface sized to the local video's
+actual aspect ratio and the available workspace, with no surrounding frame around
+the video and overlaid camera-switch and close controls. Its accessible workspace
+identity and lifecycle remain. Front/Back status and mobile-touch-only switching remain. It docks without stopping
+capture; Close/Turn off, session end, permission loss, fatal failure or exhausted
+spending budget stop the tracks. Silence alone does not stop active video. Status, observation notices and playback recovery remain visible on
+the video without scrolling its controls away. Failure recovery stays visible. Camera controls never share or cover
 the composer. Camera-on chat and correlated EN/DA realtime turns upload a fresh
 frame using deployed #713 `mode: 'handle'`, then forward its single-use handle
 without requiring a caption. Legacy screen inspection stays caption-first.
@@ -302,7 +575,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 
 | Area | Requirement |
 | --- | --- |
-| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; productive tool investigations continue until final synthesis rather than stopping at an arbitrary round count, and only a completed reply is saved. Tool calls link to the source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
+| **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; productive tool investigations continue until final synthesis rather than stopping at an arbitrary round count, and only a completed reply is saved. Tool calls link to the source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data. Code changes use issue-first Factory handoff; project references resolve against active registrations, and ambiguity is clarified before a write. |
 | **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser in every presence mode. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Jarvis does not send external messages. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
 | **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
@@ -428,7 +701,7 @@ Jarvis creates new repositories from a name and description; the Add project dia
 
 P9-40 lets Dan ask Jarvis by voice or chat to switch the visible page: Jarvis
 home, the Software Factory Kanban board or a specific task/issue, Settings (including
-named sections), Usage, Notes, the knowledge graph, Folio or Status. “Kanban”, “board”,
+named sections), Usage, Notes, the knowledge graph, Workspaces or Status. “Kanban”, “board”,
 “factory” and “tasks” select the Factory board; “go home” and “back to Jarvis”
 select home. Navigation is reversible and needs no confirmation. The backend
 delivers it to all open signed-in tabs through the existing workspace broker
@@ -437,8 +710,8 @@ remain visible. The navigation contract and backend are built offline; shell
 routing, the usual page transition and live acceptance belong to the UI session.
 Factory task navigation opens the task window over the board and focuses its
 card; issue-number navigation focuses that issue's card. The UI refuses missing
-tasks/issues with a reason. Status is a read-only shell page. Folio is a
-pane: navigating to `folio` opens it over the current page.
+tasks/issues with a reason. Status is a read-only shell page. Workspaces is a pane; `workspaces` is the canonical navigation key and `folio`
+remains accepted for older clients.
 
 P9-43 supplies a short, content-free workspace reference on every voice and chat
 turn. “This/that” identifies the focused window or task/issue; “go back” uses the
@@ -459,7 +732,7 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 | Area | Setting | Default |
 | --- | --- | --- |
-| Jarvis | Model and reasoning effort | `gpt-5.6-luna`, reasoning `none` (chat and Danish voice); `gpt-realtime-2.1` (English voice) |
+| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat and hosted Danish fallback); voice role `gpt-realtime-2.1` (Danish and English Voice Live) |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
@@ -473,6 +746,18 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 | Global | Max parallel tasks; sleep switch | Set by Dan |
 | Backend global setting | Maximum automatic check-fix attempts (`global.max_check_attempts`) | 3 (0–10; 0 disables automatic repair) |
 | New projects | Owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | `DanAakesen`, private, `DanAakesen/templates`, Copilot, Deliver a PR, 1, `main` |
+
+GPT-6.1 Terra main-chat preparation (#1337) preserves saved model choices. Changing
+the code default does not replace Dan's saved `roles.chat.model` or legacy
+`jarvis.model`; rollout must inspect that effective setting and update only chat
+through Settings after deployment. Active session choices remain intact. Danish
+`/voice/da` uses the realtime voice role when `options.connect` is configured;
+only the `connectDanish` hosted-agent fallback inherits chat settings. Separate
+voice, vision, research, coding and image-generation defaults are unchanged.
+The template requests capacity 150 through the normal authenticated deployment
+path; actual allocation and live acceptance remain unverified. Dan accepts the
+existing budget alerts with USD 20/month authorized for Terra; no new spending
+guard or other role change is part of this work.
 
 English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
@@ -505,9 +790,10 @@ a fallback when Voice Live is not configured.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
-Camera access starts after Dan turns it on in More and grants browser permission. It opens a separate **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video, actual Front/Back label, Live status and Turn off; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it. The compact phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close or Turn off stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt.
+Camera access starts after Dan selects **Enable video** in More and grants browser permission. It opens a **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video at its actual aspect ratio, fitted to available workspace space without a surrounding frame, plus overlaid Switch/Close controls without visible Live or direction badges; Switch appears only on mobile touch input, not a narrow desktop window. Switch retains an accessible directional name when the browser reports facing direction. Observation notices and playback recovery stay over the video with retry reachable without scrolling the camera controls away. The larger phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt. **Attach file or photo** is first in the typing More menu and uses the existing upload flow. Pending photos appear as compact preview pills above the text input inside the composer; sent photos show their image preview in the message.
+With a screen share active and the camera off, generic visual questions in text chat such as **What do you see?** inspect the shared screen and send its context with the message. Camera-specific questions still require the camera; camera-conversation mode keeps its existing priority while the camera is on.
 
-Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames; enabling or switching alone does not upload. There is no Look now button and conversation capture does not require watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
+Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames. Issue #1317 supersedes the old turn-only behavior: enabling video also starts automatic sampled-frame delivery. There is no Look now button and there is no separate camera-watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
 
 On 12 October Dan rejected the slow snapshot-per-turn experience and requires
 a natural conversation about what is on camera, alongside faster general chat.
@@ -604,9 +890,9 @@ send an uncorrelated unavailable event that closes the relay. Activating the
 camera cancels any in-flight legacy screen inspection. Independent watch
 mode and Stop sharing screen remain available.
 
-Camera access stops when voice or the signed-in app session ends, when its owner unmounts, or after ten minutes without a user turn. Chat submission, speech start and completed voice turns reset that idle timer, not preview rendering or docking. Idle shutdown brings the preview's explanation and recovery into view; it must not interrupt an active conversation at a fixed elapsed time. Raw frames remain in memory only and never enter transcripts, logs or task events. Capture/connection failures and local-preview playback failures are visible with recovery, and a failed inspection never silently becomes a successful camera answer. This idle lifecycle is implemented locally; deployment and full every-turn acceptance remain pending.
+Camera access stops when Dan closes or turns off video, when voice or the signed-in app session ends, when its owner unmounts, when permission is lost, on fatal capture/delivery failure, or when the spending budget is exhausted. Dan approved removing the ten-minute no-message cutoff on 26 October 2026 at 14:21:24 UTC: active video and requested narration continue during silence. Browser/device restrictions still apply; background iPhone capture is not promised. Raw frames remain in memory only and never enter transcripts, logs or task events. Capture/connection failures and local-preview playback failures remain visible with recovery. Jarvis can start or stop the same video through acknowledged workspace commands when Dan asks; startup requires existing browser permission, otherwise instruct Dan to enable it himself.
 
-P7-38 adds continuous watching alongside that existing on-demand path. Dan controls screen and camera sharing independently; the client sends changed JPEGs to `POST /vision/watch` only while that source is on, at most every 2.5 seconds per source. Jarvis remains silent except for a visible screen error/problem, a match for an active `watch_for` instruction, or a direct answer to Dan's latest question. `stop_watching_for` clears instructions for one or both sources without changing sharing. Frames are never stored, and there is no automatic sensitive-content pause. Summaries and instructions stay in memory for the session; only useful comments enter chat/voice. The shared `global.vision_daily_budget_usd` defaults to USD 1 (0 disables watching); exhaustion refuses further watch frames and comments until the next UTC day. P9-21 adds the web side: once a source is shared, the More menu offers Watch/Stop watching for that source. Watching is a feature-owned loop (`apps/web/src/vision-watch.ts`) that never starts capture itself, skips unchanged frames, shows the shared daily budget used, and ends when the share ends, the conversation session changes, Dan stops it, the budget is spent or the backend refuses it.
+Issue #1317 unifies Enable video and camera watching. Permission-granted camera capture automatically sends fresh JPEG samples, including during silence or an unchanged scene, at a 2.6-second delay after each completed request. Typing mode creates a session when needed. There is no separate Watch the camera or Look at camera action. Camera delivery is confirmed only after backend acceptance; local preview alone is not confirmation. Jarvis stays quiet by default; a typed or spoken keep-describing request sets a standing continuous-description instruction, producing brief current observations without another user prompt. Stop describing clears that instruction; camera off, unmount, session transition, capture failure and exhausted budget cancel delivery. Busy voice narration is dropped rather than queued. Screen sharing/watching keeps its independent controls and unchanged-frame suppression. The shared vision budget and image authorization remain. There is no user-inactivity cutoff for active video; user-requested start/stop uses the same permission-checked workspace camera controls. Raw frames remain memory-only and there is no raw video streaming or recording.
 
 ### Status
 
@@ -626,7 +912,14 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Text and voice share the pending-action lifecycle: an exact proposal, a verified
+later owner decision bound to that action, expiry/cancellation and one-time
+execution. Tools retain their own permission checks. An acknowledgment that a
+request was received is not approval; identifying a project selects the target,
+not permission for an action on it. Browser-only proposals keep their
+authenticated browser approval boundary.
+
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains available. Only a current pending food estimate also accepts the owner's next natural reply in the same text/browser-voice session, without a separate button.
 
 P13-02 adds an optional web push opt-in, on in production since P13-03, for a
 visible alert that links to a durable owner-protected item. P13-21 includes
@@ -653,6 +946,17 @@ Data points and actions per page. The look is decided in [DESIGN.md](DESIGN.md).
 | Conversation opens at the latest messages with typing focus: a calm greeting when empty; visually distinct Dan/Jarvis messages across chat and voice sessions; channel, language and relative time on hover/focus (always visible on touch or reduced motion); thinking feedback until the first delta, then open-surface streaming text with a live caret; tool-call chips (tool, outcome, link to task), and voice minutes per sitting; retained failed-turn and interrupted-reply feedback; history refresh retains messages without duplicates; removable queued Dan bubbles and an accessible queue count | Type from the floating bottom-centred, auto-growing composer; while idle Send/Enter starts a turn and while Jarvis replies Send/Enter steers it, preserving any interrupted partial reply; Ctrl+Enter adds to the removable FIFO queue; send queued messages in order after success or error; keep Send, the More → Language menu and voice entry available during replies; capture language per message so changes apply to the next message; Shift+Enter adds a line; voice starts immediately while the chat reply continues into history; preserve unsaved and next drafts on failure |
 | Voice state: connecting, waiting for microphone, listening, thinking, tool work, speaking, muted and reconnecting; accessible status beneath the orb. History and composer hide during voice; exit restores the draft and typing focus | Start voice requests microphone permission and prepares audio; capture begins after permission and authenticated session readiness. End voice; interrupt by speaking; mute/unmute or exceptional microphone retry in More |
 | Header attention (P9-120): undismissed task-attention, credential-warning and alert items, plus every pending browser confirmation; background-work history stays reachable for every non-dismissed job, including interrupted jobs | Open a linked task, release or project; dismiss an item or finished job; approve or reject a browser confirmation |
+
+For tool-backed turns, Jarvis gives one brief, truthful first-person sentence in the
+conversation language before tool work. Chat shows it as a distinct interim segment.
+Hosted voice emits a separate initial text item before resuming the model stream;
+its transport does not acknowledge that a user heard it. Browser realtime voice
+waits for browser playback completion only when the initial turn response contains
+audio and tool calls; tool-only responses and later silent tool rounds need no
+playback receipt. A browser receipt is not proof of physical-speaker output. The
+final answer contains only the useful result, and a failed or partial turn retains
+an honest terminal outcome. Direct answers and greetings remain single, immediate
+replies without a preamble.
 
 #### Proactive page (P13-10; default off)
 
@@ -902,7 +1206,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
-| Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
+| Jarvis: model and reasoning (chat and hosted Danish fallback); voice-role model for Danish and English Voice Live | Change (applies to new sessions) |
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Identity and role: shared description (up to 2,000 characters), distinct from tone/style | Change; apply to active voice after provider acknowledgement, otherwise reconnect |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset; preserves the separate identity description |
@@ -1145,8 +1449,8 @@ Dan approved these after a gap audit. They are planned, not built.
 
 - **Touch chat resize (P9-117, implemented):** phones have a visible, keyboard-accessible grip inside the Conversation heading. Dragging it changes chat height within the existing resize limits without scrolling or covering the composer; completed changes persist on the device separately from desktop placement. The composer open/close handle and desktop edge/corner resizing remain unchanged. Physical iPhone and Safari acceptance belongs to Dan, not automated browser emulation.
 - **Model control per role.** Settings lists the models actually deployed on the Foundry account and lets Dan pick one per role: chat, vision, research, voice, transcription, embedding, Codex and Copilot, each with a reasoning effort the model supports. Dan can add or remove Foundry deployments from Settings with a confirmation, and Claude models are allowed as the chat model. Jarvis can read and change these settings by voice or chat; model and budget changes need confirmation. Voice tuning (turn detection, barge-in, reply length), research depth, memory and retrieval thresholds, and timeouts are also adjustable. ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#507](https://github.com/DanAakesen/jarvis/issues/507))
-- **Folio.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in the Folio. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). Jarvis can also rename, pin/unpin or remove one entry by id or unique query; ambiguous matches require Dan to choose. Removal requires Now approval naming the item while Dan is present and retains its source artifact and history. ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#633](https://github.com/DanAakesen/jarvis/issues/633))
-  Selecting another page closes the pane rather than leaving Folio selected, including selecting the current page again. This applies to desktop links, the phone menu and Jarvis navigation; an area with multiple pages can open its own navigation instead.
+- **Workspaces.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in Workspaces. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). Jarvis can also rename, pin/unpin or remove one entry by id or unique query; ambiguous matches require Dan to choose. Removal requires Now approval naming the item while Dan is present and retains its source artifact and history. ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#633](https://github.com/DanAakesen/jarvis/issues/633))
+  Selecting another page closes the pane rather than leaving Workspaces selected, including selecting the current page again. This applies to desktop links, the phone menu and Jarvis navigation; an area with multiple pages can open its own navigation instead.
 - **Routines.** Task recipes (saved PC/browser action sequences Jarvis can replay) are renamed Routines and can be edited and renamed. ([#529](https://github.com/DanAakesen/jarvis/issues/529))
 - **Connected features.** Persisted background jobs, the jobs chip, the knowledge graph page, wake-word events, renew-credential, a system status page including the PC bridge, watch mode for screen and camera sharing, phone-call status, complete cost coverage, and conversation search.
 - **Show work (P9-41).** In voice, selected tools publish a short, safe activity description and open their own window; typed chat opens nothing on its own (the chat answer carries the data, and Dan asks for a window with "show me", "open" or "put it on screen"). Successful vault reads/searches update one knowledge graph, repository tools update one bounded, redacted Code view per turn, task creation/steering/retry focus the Factory card, and calendar/mail tools show a readable agenda or their staged preview without bypassing confirmation. Code wraps at its allocated window width by default; an accessible “Wrap lines” choice restores original horizontal code layout without changing the source text, line numbers, highlights or search marks. `presentation.showWork` defaults on and is suppressed in `on_the_move`; presentation is best effort and never blocks or fails a tool. The backend contract is implemented; status-line rendering, Code rendering, graph highlighting, and focus animation belong to the UI session.
@@ -1155,7 +1459,7 @@ Dan approved these after a gap audit. They are planned, not built.
 
 ## GitHub backlog (8 October 2026, P10)
 
-Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
+Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis creates an issue with the problem and acceptance criteria; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Project references use the active registry; ambiguous or missing selections do not write, and a named non-self project never falls back to Jarvis's repository. Existing approval gates for attachments and public image publication remain. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 
 ## Proactive assistance (17 October 2026; P13)
 
@@ -1175,8 +1479,9 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
   and reminders about an hour before a todo is due. Hold a quiet-hour reminder
   until 07:00 and show it as due soon or overdue. Bundle at most one push per
   run and enforce daily caps. Pushes carry bounded todo or finding titles and
-  due times for durable, owner-protected items in an encrypted payload; they
-  never approve an action. Details never enter logs, metrics, errors or job
+  due times for durable, owner-protected items in an encrypted payload. They
+  identify deadline tasks by name and include due times in bundled alert lines;
+  they never approve an action. Details never enter logs, metrics, errors or job
   output, and the payload is not stored. A user-triggered test is not proactive
   delivery. Teams is not used.
 - Cap estimated spend at 100 DKK per Copenhagen month, warn at 80%, and label
@@ -1488,13 +1793,29 @@ that cannot be shown completely and gives a rename-safe recovery. Model proposal
 estimates; approval does not make them independently verified. Direct supported
 exact labels and actual saved favourites are routed back to the one-step tool.
 This initial reviewed path requires a present chat/voice session and a browser
-approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Confirmations always remain in the browser app even if presence changes. Rejected,
+approval within its displayed two-minute window. For estimates only, a natural affirmative
+such as "yes, log that" in the same session consumes that exact pending approval.
+Unrelated/conditional replies, ambiguous proposals, stale replies and other sessions
+cannot authorize it; unrelated replies end conversational approval for that proposal.
+Corrections and deletions still require Now. Confirmations remain in the browser
+app even if presence changes, and present mode is rechecked before writing. Rejected,
 cancelled, expired or stale reviews cannot mutate intake. Existing canonical
 storage, exact operation/revision replay, tombstones and commit refresh remain
 shared. No Health write, production activation or physical-phone acceptance is
 included; broader conversational and actual client/device gates remain.
 Both internal food tools refuse phone calls before generic approval; an approval
 cannot make their unsupported phone context valid.
+Browser chat and browser voice remain supported on mobile as well as desktop;
+using a phone's browser is not a telephone call. Stage `log_estimate` before
+inviting confirmation: prose estimates and reference lookups create no pending
+approval. Without a pending proposal, prepare a new review and obtain a new reply;
+historical agreement cannot authorize it. Only a committed tool receipt proves logging.
+While the tool waits, the authenticated Now feed exposes the exact review.
+Typed chat also streams that source-bound review into the active conversation,
+with a direct invitation to reply; opening the separate Now popover is not required.
+Present-mode browser voice also requests a tool-free spoken estimate and invitation
+from that same staged summary, even though the food tool is still pending.
+An initial spoken acknowledgement is not that invitation or proof of logging.
 
 Approved #1196 extends the same reviewed flow to food photos. Existing
 conversation attachments reach the existing image-capable model path; the model

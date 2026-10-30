@@ -1,12 +1,14 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState, type ComponentProps } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import { MobileMenu } from './MobileShell';
+import { MobileBottomNav, MobileMenu } from './MobileShell';
 
-function Harness({ onNavigate = () => {}, path = '/', ...flags }: {
+function Harness({ onNavigate = () => {}, onContext = () => {}, path = '/', ...flags }: {
   onNavigate?: () => void;
+  onContext?: () => void;
+  onComposer?: () => void;
   path?: string;
   dailyEnabled?: boolean;
   proactiveEnabled?: boolean;
@@ -15,21 +17,22 @@ function Harness({ onNavigate = () => {}, path = '/', ...flags }: {
   const [open, setOpen] = useState(false);
   return <MemoryRouter initialEntries={[path]}>
     <button onClick={() => setOpen(true)}>Open menu</button>
-    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onFolio={() => {}} onContext={() => {}} {...flags} />
+    <button type="button" aria-label="Composer action" onClick={flags.onComposer}>Composer action</button>
+    <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={onNavigate} onContext={onContext} {...flags} />
   </MemoryRouter>;
 }
 
-describe('mobile menu modal behavior', () => {
-  it('traps focus, preserves its working backdrop, and restores its trigger on Escape and backdrop', async () => {
+describe('mobile menu sheet behavior', () => {
+  it('keeps the composer reachable and returns focus on Escape and backdrop', async () => {
     const user = userEvent.setup();
     render(<Harness />);
     const trigger = screen.getByRole('button', { name: 'Open menu' });
     await user.click(trigger);
     const sheet = screen.getByRole('dialog', { name: 'Go to' }).parentElement!;
     expect(sheet.hasAttribute('inert')).toBe(false);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close menu' }));
+    expect(document.activeElement).toBe(screen.getByRole('link', { name: 'Software Factory' }));
     await user.tab({ shift: true });
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Context panel' }));
+    expect(document.activeElement).toBe(screen.getByRole('navigation', { name: 'Pages' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(sheet.hasAttribute('inert')).toBe(true);
@@ -42,9 +45,32 @@ describe('mobile menu modal behavior', () => {
     expect(document.activeElement).toBe(trigger);
     expect(screen.queryByRole('dialog')).toBeNull();
     await user.click(trigger);
-    await user.click(screen.getByRole('button', { name: 'Close menu' }));
+    await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it('dismisses when a composer control is used without stealing its focus or click', async () => {
+    const user = userEvent.setup();
+    const onComposer = vi.fn();
+    render(<Harness onComposer={onComposer} />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const composer = screen.getByRole('button', { name: 'Composer action' });
+    await user.click(composer);
+    expect(onComposer).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(composer);
+  });
+
+  it('preserves menu focus when its parent rerenders', async () => {
+    const user = userEvent.setup();
+    const view = render(<Harness />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const nextPage = screen.getByRole('link', { name: 'Notes' });
+    nextPage.focus();
+    expect(document.activeElement).toBe(nextPage);
+    view.rerender(<Harness />);
+    expect(document.activeElement).toBe(nextPage);
   });
 
   it('preserves page navigation and closes the sheet', async () => {
@@ -83,15 +109,18 @@ describe('mobile menu pages', () => {
     return within(screen.getByRole('navigation', { name: 'Pages' }));
   }
 
-  // The rail lists Conversation, then the areas with Proactive after the first one (`appAreas`); the menu adds Settings.
+  // Chat, Health and Workspaces stay in the bottom bar; this sheet lists secondary destinations.
   it.each([
-    { dailyEnabled: false, proactiveEnabled: false, pages: ['Jarvis', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: false, pages: ['Jarvis', 'Health', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: false, proactiveEnabled: true, pages: ['Jarvis', 'Software Factory', 'Proactive', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: true, pages: ['Jarvis', 'Health', 'Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-  ])('lists the pages in rail order (daily $dailyEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
+    { dailyEnabled: false, proactiveEnabled: false, pages: ['Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: false, pages: ['Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: false, proactiveEnabled: true, pages: ['Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { dailyEnabled: true, proactiveEnabled: true, pages: ['Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+  ])('lists secondary destinations (daily $dailyEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
     const navigation = await openPages(flags);
     expect(navigation.getAllByRole('link').map((link) => link.textContent)).toEqual(pages);
+    expect(within(navigation.getByLabelText('Menu page 1')).getAllByRole('link').map((link) => link.textContent))
+      .toEqual(pages.slice(0, 6));
+    expect(navigation.getByRole('button', { name: 'Context panel' })).not.toBeNull();
   });
 
   it('links Proactive to its area and keeps it current on an item page', async () => {
@@ -99,7 +128,7 @@ describe('mobile menu pages', () => {
     const proactive = navigation.getByRole('link', { name: 'Proactive' });
     expect(proactive.getAttribute('href')).toBe('/proactive');
     expect(proactive.getAttribute('aria-current')).toBe('page');
-    expect(navigation.getByRole('link', { name: 'Jarvis' }).hasAttribute('aria-current')).toBe(false);
+    expect(navigation.getByRole('link', { name: 'Software Factory' }).hasAttribute('aria-current')).toBe(false);
   });
 
   it('lists the published pages under their area only, marks the current one, and closes the sheet on a pick', async () => {
@@ -116,7 +145,7 @@ describe('mobile menu pages', () => {
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const navigation = within(screen.getByRole('navigation', { name: 'Pages' }));
     expect(navigation.getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Jarvis', 'Health', 'Overview', 'Nutrition', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
+      .toEqual(['Health', 'Overview', 'Nutrition', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
     expect(navigation.getByRole('link', { name: 'Health' }).getAttribute('aria-current')).toBe('location');
     expect(navigation.getByRole('link', { name: 'Nutrition' }).getAttribute('aria-current')).toBe('page');
     expect(navigation.getByRole('link', { name: 'Overview' }).hasAttribute('aria-current')).toBe(false);
@@ -129,6 +158,82 @@ describe('mobile menu pages', () => {
   it('shows no sub-pages when the open area publishes none', async () => {
     const navigation = await openPages({ dailyEnabled: true });
     expect(navigation.getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Jarvis', 'Health', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
+      .toEqual(['Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
+  });
+
+  it('reclaims the control row for six entries and keeps arrow-key paging', async () => {
+    await openPages({ proactiveEnabled: true });
+    const rail = screen.getByRole('navigation', { name: 'Pages' });
+    expect(rail.querySelector('.mobile-menu-page')?.children).toHaveLength(6);
+    expect(screen.queryByRole('button', { name: 'Close menu' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Next menu page' })).toBeNull();
+    expect(document.querySelectorAll('.mobile-menu-dots span')).toHaveLength(3);
+    Object.defineProperty(rail, 'clientWidth', { configurable: true, value: 300 });
+    Object.defineProperty(rail, 'scrollLeft', { configurable: true, writable: true, value: 300 });
+    fireEvent.scroll(rail);
+    expect(screen.getByRole('status').textContent).toContain('Page 2 of 2');
+    fireEvent.keyDown(rail, { key: 'ArrowLeft' });
+    expect(screen.getByRole('status').textContent).toContain('Page 1 of 2');
+  });
+
+  it('opens Context panel from the paged menu and closes the sheet', async () => {
+    const user = userEvent.setup();
+    const onContext = vi.fn();
+    render(<Harness onContext={onContext} />);
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.click(screen.getByRole('button', { name: 'Context panel' }));
+    expect(onContext).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('mobile bottom navigation', () => {
+  function BottomNavHarness({ path = '/', dailyEnabled = true }: { path?: string; dailyEnabled?: boolean }) {
+    const [open, setOpen] = useState(false);
+    const [workspacesOpen, setWorkspacesOpen] = useState(false);
+    return <MemoryRouter initialEntries={[path]}>
+      <MobileBottomNav menuOpen={open} dailyEnabled={dailyEnabled} workspacesOpen={workspacesOpen}
+        onToggleWorkspaces={() => setWorkspacesOpen((value) => !value)}
+        onOpenMenu={() => setOpen((value) => !value)} onNavigate={() => {}} />
+      <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={() => {}} onContext={() => {}} dailyEnabled={dailyEnabled} />
+      <div role="region" aria-label="Workspaces pane" hidden={!workspacesOpen} />
+    </MemoryRouter>;
+  }
+
+  it('opens the Workspaces pane and preserves Software Factory as a separate menu destination', async () => {
+    const user = userEvent.setup();
+    render(<BottomNavHarness path="/factory/kanban" />);
+    const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    const workspaces = within(navigation).getByRole('button', { name: 'Workspaces' });
+    expect(workspaces.getAttribute('aria-pressed')).toBe('false');
+    expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-current')).toBe('page');
+    expect(within(navigation).getByRole('link', { name: 'Chat' }).hasAttribute('aria-current')).toBe(false);
+    await user.click(workspaces);
+    expect(workspaces.getAttribute('aria-pressed')).toBe('true');
+    expect(within(navigation).getByRole('button', { name: 'Menu' }).hasAttribute('aria-current')).toBe(false);
+    expect(screen.getByRole('region', { name: 'Workspaces pane' })).not.toHaveProperty('hidden', true);
+    await user.click(within(navigation).getByRole('button', { name: 'Menu' }));
+    expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('dialog', { name: 'Go to' })).not.toBeNull();
+    expect(within(screen.getByRole('navigation', { name: 'Pages' })).getByRole('link', { name: 'Software Factory' }).getAttribute('href')).toBe('/factory/kanban');
+    expect(within(screen.getByRole('navigation', { name: 'Pages' })).getByRole('button', { name: 'Context panel' })).not.toBeNull();
+  });
+
+  it('omits Health when its destination is not enabled and highlights Menu on secondary pages', () => {
+    render(<BottomNavHarness path="/notes" dailyEnabled={false} />);
+    const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    expect(within(navigation).queryByRole('link', { name: 'Health' })).toBeNull();
+    expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('keeps bottom navigation controls reachable while the menu sheet is open', async () => {
+    const user = userEvent.setup();
+    render(<BottomNavHarness />);
+    const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    await user.click(within(navigation).getByRole('button', { name: 'Menu' }));
+    expect(screen.getByRole('dialog', { name: 'Go to' })).not.toBeNull();
+    await user.click(within(navigation).getByRole('button', { name: 'Workspaces' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('region', { name: 'Workspaces pane' })).not.toHaveProperty('hidden', true);
   });
 });

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ChatTurnError,
   createChatSession,
+  cancelChatTurn,
   loadImageArtifactUrl,
   loadConversationHistory,
   sendChatTurn,
@@ -182,6 +184,57 @@ describe('loadConversationHistory', () => {
         expect(fetch).not.toHaveBeenCalled();
       });
 
+      it('keeps streaming through preparation and the food review window within the existing ingress limit', async () => {
+        vi.useFakeTimers();
+        const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation(ms => {
+          const controller = new AbortController();
+          setTimeout(() => controller.abort(), ms);
+          return controller.signal;
+        });
+        try {
+          let stream!: ReadableStreamDefaultController<Uint8Array>;
+          let requestSignal!: AbortSignal;
+          const user = { id: '51', sessionId: '41', role: 'dan', text: 'Synthetic estimate', model: null,
+            at: '2026-10-25T12:00:00Z' };
+          const committed = { ...user, id: '52', role: 'jarvis', text: 'Logged.' };
+          const encoder = new TextEncoder();
+          const event = (name: string, value: unknown) => encoder.encode(`event: ${name}\ndata: ${JSON.stringify(value)}\n\n`);
+          vi.stubGlobal('fetch', vi.fn(async (_url, init: RequestInit) => {
+            requestSignal = init.signal!;
+            return new Response(new ReadableStream<Uint8Array>({ start(controller) {
+              stream = controller;
+              stream.enqueue(event('user', user));
+            } }));
+          }));
+          const result = sendChatTurn(createClient(), config, { id: '41', language: 'en' }, user.text, vi.fn(), vi.fn());
+          await vi.advanceTimersByTimeAsync(60_000); // Estimate preparation.
+          expect(requestSignal.aborted).toBe(false);
+          await vi.advanceTimersByTimeAsync(110_000); // Still inside the pending review window.
+          expect(requestSignal.aborted).toBe(false);
+          expect(timeout).toHaveBeenCalledWith(240_000);
+          stream.enqueue(event('done', committed));
+          stream.close();
+          expect(await result).toEqual(committed);
+          await vi.advanceTimersByTimeAsync(70_000);
+          expect(requestSignal.aborted).toBe(true);
+        } finally {
+          timeout.mockRestore();
+          vi.useRealTimers();
+        }
+      });
+
+      it('sanitizes stream-read failures and marks delivery uncertain without replaying the turn', async () => {
+        const fetch = vi.fn(async () => new Response(new ReadableStream({
+          start(controller) { controller.error(new Error('private transport diagnostics')); },
+        })));
+        vi.stubGlobal('fetch', fetch);
+        const uncertain = vi.fn();
+        await expect(sendChatTurn(createClient(), config, { id: '41', language: 'en' }, 'Synthetic estimate',
+          vi.fn(), vi.fn(), uncertain)).rejects.toThrow('A food entry or another action may already have completed');
+        expect(uncertain).toHaveBeenCalledOnce();
+        expect(fetch).toHaveBeenCalledOnce();
+      });
+
       it('creates a session and reads streamed user and assistant messages', async () => {
         const client = createClient();
         const userMessage = {
@@ -278,6 +331,76 @@ describe('loadConversationHistory', () => {
           controller.close();
         }
         await expect(turn).resolves.toEqual(assistantMessage);
+      });
+
+      it('delivers a distinct acknowledgment boundary before final text', async () => {
+        const userMessage = {
+          id: '61', sessionId: '41', role: 'dan', text: 'Compare my targets.', model: null,
+          at: '2026-10-12T06:17:18.000Z',
+        };
+        const assistantMessage = { ...userMessage, id: '62', role: 'jarvis', text: 'The targets match.' };
+        const acknowledgment = "I'll compare your saved targets.";
+        const fetch = vi.fn()
+          .mockResolvedValueOnce(new Response([
+            `event: user\ndata: ${JSON.stringify(userMessage)}\n\n`,
+            `event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+            `event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+            `event: delta\ndata: ${JSON.stringify({ text: assistantMessage.text })}\n\n`,
+            `event: done\ndata: ${JSON.stringify(assistantMessage)}\n\n`,
+          ].join(''), { headers: { 'Content-Type': 'text/event-stream' } }));
+        vi.stubGlobal('fetch', fetch);
+        const onAcknowledgment = vi.fn();
+        const onDelta = vi.fn();
+
+        await sendChatTurn(
+          createClient() as never, config, { id: '41', language: 'en' },
+          userMessage.text, vi.fn(), onDelta, undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, onAcknowledgment,
+        );
+
+        expect(onDelta.mock.calls).toEqual([[acknowledgment], [assistantMessage.text]]);
+        expect(onAcknowledgment).toHaveBeenCalledExactlyOnceWith(acknowledgment);
+        expect(fetch).toHaveBeenCalledOnce();
+      });
+
+      it('delivers the exact food invitation while the result is still pending, then clears it', async () => {
+        const user = { id: '61', sessionId: '41', role: 'dan', text: 'Estimate this portion.',
+          model: null, at: '2026-10-12T06:17:18.000Z' };
+        const assistant = { ...user, id: '62', role: 'jarvis', text: 'Committed.' };
+        const invitation = { id: 'a'.repeat(43), summary: 'Synthetic portion: 200 kcal. Estimated grams.',
+          expiresAt: new Date(Date.now() + 120_000).toISOString() };
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const body = new ReadableStream<Uint8Array>({ start(value) { controller = value; } });
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(body)));
+        const encoder = new TextEncoder();
+        const enqueue = (event: string, data: unknown) =>
+          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        const onInvitation = vi.fn();
+        let completed = false;
+        const turn = sendChatTurn(createClient() as never, config, { id: '41', language: 'en' },
+          user.text, vi.fn(), vi.fn(), undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, undefined, onInvitation).then(result => { completed = true; return result; });
+        enqueue('user', user);
+        enqueue('food_invitation', invitation);
+        await vi.waitFor(() => expect(onInvitation).toHaveBeenCalledExactlyOnceWith(invitation));
+        expect(completed).toBe(false);
+        enqueue('food_invitation', null);
+        enqueue('done', assistant);
+        controller.close();
+        expect(await turn).toEqual(assistant);
+        expect(onInvitation.mock.calls).toEqual([[invitation], [null]]);
+      });
+
+      it.each([
+        { id: 'invalid', summary: 'Estimate', expiresAt: '2026-10-12T06:19:18.000Z' },
+        { id: 'a'.repeat(43), summary: '', expiresAt: '2026-10-12T06:19:18.000Z' },
+        { id: 'a'.repeat(43), summary: 'Estimate', expiresAt: 'invalid' },
+      ])('rejects malformed food invitation data (%j)', async invitation => {
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(
+          `event: food_invitation\ndata: ${JSON.stringify(invitation)}\n\n`,
+        )));
+        await expect(sendChatTurn(createClient() as never, config, { id: '41', language: 'en' },
+          'Estimate', vi.fn(), vi.fn())).rejects.toThrow('invalid chat stream');
       });
 
       it('shows the backend refusal and does not retry a failed turn', async () => {
@@ -446,3 +569,124 @@ describe('chat steering API', () => {
     expect(onDelta.mock.calls).toEqual([['I was going to'], ['I’ll continue']]);
   });
 });
+
+
+describe('accepted turn recovery', () => {
+  it('addresses explicit cancellation to the original turn without submitting a message', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ cancelled: true }));
+    vi.stubGlobal('fetch', fetch);
+    await cancelChatTurn(createClient(), config, { sessionId: '41', messageId: '42', language: 'en' });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(String(fetch.mock.calls[0]![0])).toBe('https://api.example.com/conversation/sessions/41/turns/42/cancel');
+    expect(fetch.mock.calls[0]![1]).toMatchObject({ method: 'POST', body: '{}' });
+  });
+
+  it.each(['disconnect', 'foreground'])('reattaches by original identity after %s without another POST', async reason => {
+    vi.useFakeTimers();
+    try {
+      const user = { id: '42', sessionId: '41', role: 'dan', text: 'Synthetic estimate', model: null, at: '2026-10-26T12:00:00Z' };
+      const answer = { ...user, id: '43', role: 'jarvis', text: 'Estimate only; not saved.' };
+      const frame = (event: string, value: unknown) => `event: ${event}\ndata: ${JSON.stringify(value)}\n\n`;
+      const fetch = vi.fn()
+        .mockResolvedValueOnce(new Response(new ReadableStream({ start(controller) {
+          controller.enqueue(new TextEncoder().encode(frame('user', user) + frame('delta', { text: 'Partial' })));
+          if (reason === 'disconnect') controller.close();
+        } })))
+        .mockResolvedValueOnce(new Response(frame('user', user) + frame('delta', { text: answer.text }) + frame('done', answer)));
+      vi.stubGlobal('fetch', fetch);
+      const reset = vi.fn();
+      const result = sendChatTurn(async () => 'token', config, { id: '41', language: 'en' }, user.text,
+        vi.fn(), vi.fn(), undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, reset);
+      await vi.advanceTimersByTimeAsync(0);
+      if (reason === 'foreground') document.dispatchEvent(new Event('visibilitychange'));
+      await vi.runAllTimersAsync();
+      expect(await result).toEqual(answer);
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(String(fetch.mock.calls[1]![0])).toContain('/sessions/41/turns/42/events');
+      expect(fetch.mock.calls[1]![1].method).toBeUndefined();
+      expect(reset).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+ describe('safe typed chat failures', () => {
+  const session = { id: '41', language: 'en' as const };
+  const accepted = { id: '42', sessionId: '41', role: 'dan', text: 'Synthetic prompt', model: null, at: '2026-10-29T12:00:00Z' };
+  const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  const warning = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
+  const send = () => sendChatTurn(createClient(), config, session, 'Synthetic prompt', vi.fn(), vi.fn());
+
+  it.each([401, 403])('preserves the controlled preaccept HTTP %i authentication explanation', async status => {
+   const fetch = vi.fn(async () => new Response('private provider body', { status }));
+   vi.stubGlobal('fetch', fetch);
+   const error = await send().catch((value: unknown) => value);
+   expect(error).toBeInstanceOf(ChatTurnError);
+   expect(error).toMatchObject({ delivery: 'not_accepted', code: undefined });
+   expect((error as Error).message).toMatch(status === 401 ? /Microsoft sign-in/ : /isn't allowed/);
+   expect(String(error)).not.toContain('private'); expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a finite backend preaccept refusal without a resend', async () => {
+   const fetch = vi.fn(async () => Response.json({ error: 'The selected test runtime is unavailable. No other runtime was used.' }, { status: 503 }));
+   vi.stubGlobal('fetch', fetch);
+   await expect(send()).rejects.toMatchObject({ name: 'ChatTurnError', delivery: 'not_accepted', message: 'The selected test runtime is unavailable. No other runtime was used.' });
+   expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['managed_session_busy', 'managed_source_already_claimed', 'managed_turn_already_claimed',
+   'managed_target_mismatch', 'managed_unavailable', 'managed_policy_turn_failed'] as const)('makes %s a persistent session warning', async code => {
+   const fetch = vi.fn(async () => new Response(frame('user', accepted) + frame('error', { code, error: warning })));
+   vi.stubGlobal('fetch', fetch);
+   const error = await send().catch((value: unknown) => value);
+   expect(error).toBeInstanceOf(ChatTurnError);
+   expect(error).toMatchObject({ code, delivery: 'accepted', blocksSession: true });
+   expect((error as Error).message).toContain('Return to normal conversation'); expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['agent_auth_unavailable', 'agent_http_401', 'agent_http_403', 'agent_http_503',
+   'managed_tool_call_unfinished', 'managed_response_failed'] as const)(
+   'retains the safe %s cause and the accepted-action warning', async code => {
+    const fetch = vi.fn(async () => new Response(frame('user', accepted) + frame('error', { code, error: warning })));
+    vi.stubGlobal('fetch', fetch);
+    const error = await send().catch((value: unknown) => value);
+    expect(error).toMatchObject({ name: 'ChatTurnError', code, delivery: 'accepted', blocksSession: false });
+    expect((error as Error).message).toContain(warning); expect(fetch).toHaveBeenCalledTimes(1);
+   });
+
+  it('does not assume an error-only SSE stream was rejected before execution', async () => {
+   vi.stubGlobal('fetch', vi.fn(async () => new Response(frame('error', { code: 'agent_http_401', error: warning }))));
+   await expect(send()).rejects.toMatchObject({ name: 'ChatTurnError', code: 'agent_http_401', delivery: 'unknown' });
+  });
+
+  it.each(['http', 'stream'] as const)('drops arbitrary %s messages and unknown regex-shaped codes', async transport => {
+   const payload = { code: 'private_secret_token', error: 'private provider text https://private.invalid' };
+   vi.stubGlobal('fetch', vi.fn(async () => transport === 'http' ? Response.json(payload, { status: 500 })
+    : new Response(frame('user', accepted) + frame('error', payload))));
+   const error = await send().catch((value: unknown) => value);
+   expect(error).toBeInstanceOf(ChatTurnError); expect(error).toMatchObject({ code: undefined });
+   expect(String(error)).not.toMatch(/private|https:/); expect((error as Error).cause).toBeUndefined();
+  });
+ });
+
+ it('marks a settled managed setup failure for review without implying that any tool ran', async () => {
+  const user = { id: '42', sessionId: '41', role: 'dan', text: 'Synthetic prompt', model: null, at: '2026-10-29T12:00:00Z' };
+  const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(frame('user', user) + frame('error', {
+   code: 'managed_policy_setup_failed', error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+  }))));
+  const error = await sendChatTurn(createClient(), config, { id: '41', language: 'en' }, 'Synthetic prompt', vi.fn(), vi.fn()).catch((value: unknown) => value);
+  expect(error).toMatchObject({ name: 'ChatTurnError', code: 'managed_policy_setup_failed', delivery: 'accepted', blocksSession: false });
+  expect(String(error)).toContain('could not prepare'); expect(String(error)).not.toContain('action may still');
+ });
+
+ it.each(['managed_seed_input_invalid', 'managed_source_context_missing', 'managed_response_unfinished',
+  'managed_response_empty', 'managed_response_item_unsupported', 'managed_policy_catalogue_changed'] as const)(
+  'shows the fixed finite diagnostic %s without trusting provider text', async code => {
+   const user = { id: '42', sessionId: '41', role: 'dan', text: 'Synthetic prompt', model: null, at: '2026-10-29T12:00:00Z' };
+   const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+   vi.stubGlobal('fetch', vi.fn(async () => new Response(frame('user', user) + frame('error', { code, error: 'private-provider-body' }))));
+   const error = await sendChatTurn(createClient(), config, { id: '41', language: 'en' }, 'Synthetic prompt', vi.fn(), vi.fn()).catch((value: unknown) => value);
+   expect(error).toMatchObject({ name: 'ChatTurnError', code, delivery: 'accepted' });
+   expect(String(error)).toContain(`(${code})`); expect(String(error)).toContain('action may still have completed');
+   expect(String(error)).not.toContain('private-provider-body');
+  });

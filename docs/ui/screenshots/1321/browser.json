@@ -1,0 +1,26 @@
+[
+  {
+    "width": 390,
+    "theme": "dark",
+    "listItems": [
+      "Protein: 12.5 g",
+      "Calories: 300 kcal",
+      "Fat: 8 g",
+      "Carbohydrates: unknown (not zero) g"
+    ],
+    "keyboardApproval": "synthetic callback only",
+    "errors": []
+  },
+  {
+    "width": 1440,
+    "theme": "light",
+    "listItems": [
+      "Protein: 12.5 g",
+      "Calories: 300 kcal",
+      "Fat: 8 g",
+      "Carbohydrates: unknown (not zero) g"
+    ],
+    "keyboardApproval": "synthetic callback only",
+    "errors": []
+  }
+]

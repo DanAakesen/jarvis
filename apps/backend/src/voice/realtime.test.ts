@@ -62,9 +62,9 @@ describe('Voice Live model tool schemas', () => {
   const groupedTools = dailySourceTools({} as never, () => ({} as never), () => ({} as never));
 
   it.each([
-    ['daily_health_summary', ['get_health_summary', 'get_health_history']],
-    ['daily_nutrition_history', ['get_nutrition_history', 'analyze_nutrition', 'get_calorie_balance', 'set_meal_preference']],
-    ['daily_coach_status', ['get_coach_status', 'get_coach_profile', 'update_coach_profile', 'set_recovery_period']],
+    ['health_summary', ['get_health_summary', 'get_health_history']],
+    ['health_nutrition_history', ['get_nutrition_history', 'analyze_nutrition', 'get_calorie_balance', 'set_meal_preference']],
+    ['health_coach_status', ['get_coach_status', 'get_coach_profile', 'update_coach_profile', 'set_recovery_period']],
   ])('flattens %s and retains its operation-specific fields', (name, operations) => {
     const tool = groupedTools.find(({ name: toolName }) => toolName === name);
     expect(tool).toBeDefined();
@@ -478,6 +478,18 @@ describe('English realtime session', () => {
     expect(english).toContain('untrusted evidence');
     expect(danish).toContain(capabilityInstructions(defaultSettings.memory));
     expect(english).toContain(capabilityInstructions(defaultSettings.memory));
+  });
+
+  it('requests one first-person intent sentence before tools in both voice languages', () => {
+    const english = createEnglishSessionUpdate(registry).session.instructions;
+    const danish = createRealtimeSessionUpdate(registry, undefined, false, 'da').session.instructions;
+
+    expect(english).toContain('one brief, natural first-person sentence');
+    expect(english).toContain('without claiming success or giving an ETA');
+    expect(english).toContain('Answer direct questions without an unnecessary acknowledgment');
+    expect(danish).toContain('én kort, naturlig sætning i første person');
+    expect(danish).toContain('uden at påstå, at det allerede er lykkedes');
+    expect(danish).toContain('Besvar direkte spørgsmål uden en unødvendig');
   });
 
   it('explains installed-app, Chrome-only website and media controls in voice instructions', () => {

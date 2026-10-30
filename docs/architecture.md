@@ -1,4 +1,313 @@
+## Managed turn failure boundaries (#1350; 29 October 2026)
+
+The managed policy transport creates/binds its native conversation immediately
+before the first response request, after shared context preparation. It records
+whether inference was attempted across all rounds. An ordinary setup failure with
+no inference attempt and no backend tool call can terminate its claim as failed;
+the source remains consumed. Unknown inference or tool outcomes retain the active
+claim. Only fixed internal error codes cross hosted/backend SSE, and the test UI
+keeps a busy or uncertain managed conversation blocked rather than treating a
+history refresh as claim recovery. No persistence schema or retry policy changes.
+
+## Runtime test candidate (#1350; 29 October 2026)
+
+Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
+server-only native conversation reference to existing SQL sessions. The normal UI
+feed explicitly excludes test sessions; internal context/source reads retain
+global history. Explicit test-session history is scoped. A source
+message history lookup resolves the stored session and returns its runtime
+selection for the Python verifier. A caller runtime flag never selects the
+agent. The retained bridge uses the original client for normal, Current-test and
+voice traffic; only a verified stored Copilot selection may use an injected
+managed chat client. Unconfigured managed selections fail without fallback.
+
+The independent managed protocol adapter uses an agent-scoped HTTP Responses
+client and native conversation continuations, with existing backend function
+execution. Its definition validator requires the selected model/effort, immutable
+version, exact functions and disabled extra built-ins. It is not wired into
+production. Durable turn/source claims and an internal agent-authenticated binding
+client now cover provider creation and continuations; uncertain work stays active
+without automatic replay. `ManagedPolicyClient` reuses the existing application
+policies through a narrow provider transport seam. The lazy factory and pinned
+backend target reader are wired behind three optional target configuration values;
+no managed target has been activated by this preparation. SQL personal memory, blob artifacts, the
+Voice Live relay and subscription-backed Factory are unchanged.
+
+The UI keeps normal chat mounted and opens a new labelled test conversation from
+the chat menu. Default active-turn discovery excludes test sessions. Availability
+fails closed for unverified Copilot; it is not a substitute for live model access
+or authorization. See [adapter boundaries](managed-chat-adapter.md).
+
+The existing AAD-protected hosted Invocations endpoint also accepts two exact
+administrative operations. The manifest operation reads static Jarvis instructions
+and authoritative function schemas without user context, inference or function
+execution. The fixed text canary uses the actual bridge credential and an owned
+synthetic native conversation; it reads no history and executes no tools. Normal
+chat still requires delegated authorization and verified stored source messages.
+The default-off manual Deploy job uses these operations with existing OIDC and
+never assigns roles or changes the normal runtime default.
+
+## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
+
+The approved feature scope now includes Jarvis backend, agents, runners, deployment
+and supporting-service diagnostics, excluding unrelated projects. Preserve existing
+Foundry Reader; no new role or activation follows from the scope confirmation.
+Sources span shared Log Analytics/Application Insights, Foundry resource queries,
+existing SQL/Blob task/check evidence and repository-scoped GitHub Actions logs.
+Coverage, retention and current reader evidence are mapped in [the design](jarvis-logs.md).
+
+The existing private metadata preflight gains an ownership-planning catalogue from
+resource-group resources and workspace table metadata. Exact fixed infrastructure
+IDs and matching ownership tags are necessary; arbitrary tagged resources are
+excluded. Known tables expose only plan and presence of a resource-ID column.
+No source record, schema string or ID is added to public verdicts. The catalogue
+explicitly leaves workspace-wide ownership, routing, historical ownership and
+provider enforcement unverified. Metadata lists remain bounded and private; no
+runtime log adapter, capability duplication, new grant or ingestion change occurs.
+
+## Smoke request parity (#1350; 29 October 2026)
+
+The hosted-client candidate resolves smoke reasoning and output budget
+through the same values as normal chat. Model/effort observations use the existing
+span with a finite effort label; unrecognized labels are flagged without being
+copied or replaced. No session setting, provider endpoint, source authorization,
+tool catalogue or voice path changes. Review, qualification and live acceptance are
+pending; [local evidence](smoke-settings-1350.md) distinguishes test drift
+from any actual ordinary-chat failure.
+
+## Separate model and research rejection evidence (#1350; 29 October 2026)
+
+Hosted chat adds fixed distinctions for known reasoning rejection codes and
+reasoning-object versus effort subfields. The research smoke boundary separately
+classifies its existing settings/Foundry runner/result failures. Both finite
+allowlists survive the existing status and release sanitizers, without provider
+bodies, nested property names, operation text or runner events. Research keeps its
+fixed dry run, selected settings, timing and cleanup. No inference, role, stored
+setting, worker credential or production runtime path changes. See
+[actual release evidence and remaining uncertainty](main-chat-harness-migration.md).
+
+For `codex exec` non-zero exits, the runner first preserves usage-limit
+classification, then recognizes only fixed model-unavailable, authentication,
+outdated-CLI and network categories. It logs the category and exit code, never
+the process output; unrecognized or ambiguous output stays generic. The failed
+event carries only `codex_model_unsupported`, `codex_auth`,
+`codex_client_outdated` or `codex_network`. The research smoke maps these to
+`research_codex_model_unsupported`, `research_codex_auth`,
+`research_codex_client_outdated` and `research_codex_network`; the backend and
+release formatter allowlists stay in exact parity. Unknown runner reasons and
+event details remain excluded from smoke results and release evidence.
+
+## Foundry resource-query permission observations (#1341; 29 October 2026)
+
+The existing fixed Foundry resource query now counts `AzureDiagnostics` in the
+same 24-hour window and requests `include-permissions=true`. Bounded response
+metadata is validated and classified in memory; only a fixed `foundry_permissions`
+verdict leaves the backend. No resource/data-source identifiers, deny-table names,
+provider errors or aggregate counts are returned. HTTP query status stays
+independent of permission metadata. Empty results, missing/invalid metadata and
+400 responses cannot establish denied access. Request count, deadline, response
+cap, authentication, cache lifecycle and disabled reader remain unchanged.
+
+The existing ARM preflight validates the runtime Foundry target and collects
+paginated `assignedTo` results for the verified principal at workspace, Foundry
+and already-readable subscription scopes. This includes transitive group grants
+without Graph. Raw assignments/conditions stay in the existing private report;
+only fixed read/unavailable and grant-review labels are public. Incomplete scopes
+never establish a complete effective inventory. This stage changes no grant or
+workspace security mode and does not weaken the foreign-control qualification.
+
+## Main chat baseline diagnostics (#1350; 29 October 2026)
+
+Hosted chat maps known rejected top-level request fields from an OpenAI SDK
+BadRequestError to fixed failure codes. Backend smoke and release sanitization
+retain the same finite set without retaining provider text or nested schema names.
+Unknown fields retain the existing generic error. The live failure remains
+unresolved; invocation, request settings, native voice, persistence, tools and
+Factory boundaries are unchanged. The managed-harness path is planned, not wired
+or provisioned. See [migration notes](main-chat-harness-migration.md).
+
+## Backend log authorization observation path (#1341; 29 October 2026)
+
+The existing main-only preflight report remains mode 0600 in RUNNER_TEMP. A
+same-job consumer validates its target/shape, ownership, permissions and freshness
+and writes a private Bicep parameter file. Only the verified workspace, principal,
+app and an actual reported foreign workspace control configure read-only probes.
+Control discovery can fall back to workspace metadata already readable in the
+same subscription; no new access is requested and missing controls stay missing.
+No private report, parameter file or raw smoke response is uploaded. The parameter
+file is removed on deployment-script exit. Deployment fingerprints include the
+consumer; changed inputs requalify infrastructure and downstream components.
+
+The backend reuses its managed-identity credential and existing authenticated
+`GET /status/smoke`. A probe matches the token principal, executes at most five
+fixed aggregate queries concurrently under one eight-second total deadline and
+4 KiB per-response bound, and caches fixed observations once per process. It reads
+no message/stack/Log_s fields, follows no redirect, accepts no caller selector and
+retries nothing. The HTTP response has one optional fixed-schema observation
+object; the pipeline emits only allowlisted verdicts. Existing smoke entries,
+model checks, authentication boundaries and reader availability remain unchanged.
+A zero count, a partial response or a missing control is never isolation proof.
+A new permission change needs fresh post-change observations, not this cache.
+No role assignment, credential or activation is added by this increment.
+
+## Backend log activation boundary and awareness (#1341; 28 October 2026)
+
+Owner approval now covers the built-in Log Analytics Data Reader's query, data
+and basic workspace metadata reads, with the exact backend table/record condition
+at workspace scope. The first executable activation stage is
+`.github/scripts/backend_log_preflight.py`, called by the existing qualified,
+main-only infrastructure job before Bicep. It uses only bounded ARM GETs with the
+existing OIDC identity. It compares actual MI and attached runtime identity,
+resolves the workspace customer GUID, validates access mode/table schema/exact
+built-in permissions, and reads assignment inventories plus possible foreign
+workspace controls. It flags obvious legacy/resource/group-access concerns and
+never equates an inventory or candidate with effective membership/enforcement
+proof. Private values stay in a mode-0600 runner-temporary file; public output is
+value-free check names. There is no assignment, configuration enablement, token
+creation, new identity privilege or resource-context workaround in this stage.
+
+Main-agent settings combine the configured backend-log flag with actual tool
+composition. Capability instructions name the tool for retained backend-only
+self-diagnosis when configured, otherwise explicitly refuse availability claims.
+The descriptor also identifies disabled/unconfigured state and distinguishes
+configuration from successful live access. Existing sensitive audit handling,
+read metadata and returned failure/partial/freshness semantics remain intact.
+
+## Issue delivery and chat recovery (#1343; 28 October 2026)
+
+Migration 0068 adds a unique nullable issue delivery ID to tasks and an internal
+repository/issue-to-source-message association. The create_issue tool saves that
+verified source before adding Jarvis's worker label. Label pickup looks up the
+origin and creates a chat-sourced task. Existing completed delivery receipts
+short-circuit old webhook replay; new receipts commit after mapping succeeds.
+Task creation also binds the delivery ID transactionally, covering concurrent
+pickup and a crash between task creation and delivery-receipt persistence.
+
+Task-status delivery now inserts its message and task/state receipt in one SQL
+transaction. The event handler retries once after a failed transaction; the
+receipt also makes an uncertain post-commit retry safe. If both attempts fail,
+the failure stays logged and a later event replay can retry because no receipt
+was consumed. This is not a new outbound notification channel or scheduler.
+Oversized startup persists a deduplicated Now alert through the existing alert
+store. Gmail receipts and Settings approval summaries reuse existing execution
+and approval boundaries.
+
+Browser tab recovery uses sessionStorage scoped by backend/account for queued
+text/file references and terminal error context. A stored snapshot expires after
+24 hours without update. Writer and reader share per-entry validation, including
+the backend's 512 KiB UTF-8 partial-reply limit; invalid warning entries do not
+discard valid queued messages. The two-million-character snapshot bound remains.
+When partial contexts exceed it, saving keeps warnings and queued messages first;
+if necessary it falls back to the queue alone. Incomplete saves and storage write
+failures are visible through the existing recovery warning. Recovery never resubmits a server-accepted turn and
+restored queued requests require an explicit Send queued messages action. The
+Settings change only moves the explicit Save control at phone width.
+
+## Retained backend log reader (#1341; P11-42; 28 October 2026)
+
+`operations/backend-logs.ts` adds one sensitive read tool through production module
+composition and the existing authenticated dispatcher. It queries the existing
+Log Analytics workspace using the backend identity, a fixed console table and
+exact backend-app predicate, rechecks all result sources and applies the logging
+allowlists plus stricter historical-field projection. Time/rows/bytes/concurrency
+and the complete identity/query/body lifetime are bounded. No raw messages or
+provider error bodies reach the model or tool-call audit. Shared instructions
+keep log evidence separate from authority. No deployment/grant/retention changes
+are included; configuration defaults off. [Backend logs](backend-logs.md) records
+the query contract, proposed conditional role and unverified live boundaries.
+
 # Architecture
+
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
+## Health estimate presentation (#1321; 26 October 2026)
+
+Health tools use `health_*` names in discovery, dispatch and model prompts;
+`health_history` and `health_summary` replace `daily_health_history/summary`.
+The `daily` module, storage, `/daily` APIs, MCP connector and external Daily service
+remain unchanged. Legacy `/tools/daily_*` HTTP routes share the canonical handlers
+and are omitted from discovery. Old retained tool chips display Health.
+
+Food lookup results include a server-built nutrition list. The exported standalone
+lookup handler (not currently in production composition) validates the current
+owner message and active session before publishing that presentation, just as the
+food-review lookup path does. The generic tool
+confirmation uses that presentation instead of an acknowledgment. A scoped internal
+`food_estimate_result` event carries only server-derived nutrition to the matching
+conversation/source; chat appends it to the saved reply and browser voice appends it
+to the saved assistant transcript. The exact staged proposal refreshes these values
+after server re-resolution. This presentation event grants no approval and performs
+no write. Existing food-invitation, approval, expiry, fingerprints and receipt replay
+remain authoritative. `ReviewSummary` renders literal text and bullet runs safely in
+chat, voice history and Now. Spoken output remains model-generated from explicit
+nutrition instructions; synthetic tests are not live speech acceptance.
+
+
+## Accepted chat transport recovery (#1311; 26 October 2026)
+
+The backend owns accepted chat execution independently of response streams.
+`RecoverableChat` drains the existing agent generator once, retaining at most 1 MiB
+of SSE frames. Authenticated active-turn discovery and session/message-specific
+read-only replay attach to that same execution. POST cancellation aborts the
+original controller; transport closure does not. Shutdown and a 15-minute deadline
+still abort execution. At most 20 recent turns are retained; completed buffers
+expire after ten minutes (or earlier when the oldest completed buffer is evicted
+to admit another turn), and completed replies remain in existing SQL history.
+
+The browser reattaches by the original session/message IDs after stream loss,
+discovers active work on mount/foreground/online, and refreshes history on return.
+Replay resets transient text and merges saved messages by ID. Expired invitations
+are not displayed. Approval execution remains in the original owner-interaction
+and food receipt lifecycle; replay neither creates a message nor calls a tool.
+
+In-flight execution and replay are process-local, matching the current single
+backend replica. A restart/deployment interrupts in-flight work and clears pending
+approvals; it never restarts an action. A missing replay returns an explicit
+status-check error. This is browser-disconnect recovery, not restart-safe jobs or
+multi-replica routing. Completed SQL history remains recoverable after restart.
+
+
+## Natural first reply before tool work (25 October 2026; P9-124 / #1258)
+
+The existing agent stream carries an `AcknowledgmentBoundary` after its streamed
+first-person intent text and immediately before the first tool handoff. Direct
+answers do not emit the boundary; continuation after steering suppresses another
+acknowledgment. This reuses the active model request and normal stream rather than
+adding a planning request or display delay.
+
+Hosted chat relays the boundary as a distinct SSE event. The backend checks that
+it matches the streamed prefix, forwards it to the live conversation UI, and
+persists only the final answer. The UI does not replay the transient segment from
+history. Hosted voice sends the acknowledgment `ResponseOutputTextDone` item
+through the AgentServer session before resuming the same model stream. That is an
+ordered transport send, not a provider/client receipt or proof that speech was
+played; this transport exposes no playback-completion contract.
+
+Realtime voice uses the same English and Danish acknowledgment intent guidance
+with a transport-specific adapter. A tool call waits for a matching successful
+(`response.status: completed`) terminal event to be accepted by the browser
+transport, but not for confirmation that initial acknowledgment audio played.
+The provider emits `response.done` for completed, cancelled, failed and
+incomplete outcomes, so terminal delivery alone cannot release a queued tool.
+Missing or negative playback receipts do not block a received request;
+cancellation, barge-in, required approvals, authorization and failed or
+non-successful terminal delivery/status still prevent tool execution. First
+tool-only responses and later silent tool rounds also need no playback receipt.
+Browser playback completion is not proof of physical-speaker output.
+
+Synthetic fixtures verify the ordering `streamed intent → boundary → tool work →
+final result`, continued tool execution after missing or negative initial playback
+receipts, rejection of non-completed terminal statuses, cancellation, later
+silent tool rounds, and direct turns without a boundary. No live model latency or
+physical-device playback was measured.
 
 ## Vault mirror status consumption (19 October 2026; P14-29)
 
@@ -192,8 +501,12 @@ flowchart TD
   N --> Q[Refuse and ask Dan one short natural question. The action stays pending]
 ```
 
-**Provenance** is deterministic and lives in `google/pending-actions.ts` and the
-Factory and GitHub App confirm tools. The message must be the owner's verified
+**Lifecycle and provenance** live in `core/pending-action.ts`. Google, Factory,
+GitHub App and browser owner-interaction adapters use its immutable proposal,
+expiry, cancellation, one-time consumption and execution gate. Adapters retain
+lookup indexes, result receipts, durable browser decisions and tool-specific
+permission checks; they do not implement their own reply eligibility rules.
+The message must be the owner's verified
 current message (voice: the transcribed turn the relay sets on that call only;
 chat: the `x-jarvis-message-id` header equal to the newest stored Dan message,
 with the agent identity), strictly later than the staging message by numeric id
@@ -231,6 +544,61 @@ interpreter, so a plain reply still works and everything else is asked about.
 After the interpreter awaits, the action is re-checked synchronously (same
 pending object, not expired, call not aborted) and consumed before execution, so
 concurrent confirmations execute once.
+
+Browser confirmations (including food review) use the same lifecycle while
+retaining the authenticated browser decision and SQL one-time consumption.
+An unbound browser proposal cannot be approved by a conversational reply.
+Browser decisions racing cancellation or expiry cannot start execution.
+Acknowledgment of receipt is not action approval, and identifying a project
+does not approve a subsequent action on it.
+
+The owner-interactions API preserves #1278's opt-in
+`BrowserConfirmationDelivery.foodEstimate` binding,
+`OwnerInteractionOptions.conversationStore` and `resolveFoodEstimateReply`.
+The adapter verifies the next persisted reply before and after shared
+interpretation; ambiguous, superseded or unrelated replies lose conversational
+authority while the browser card remains available. Decisions still resolve
+the same durable browser confirmation and consume it once. Food call-site
+wiring, phrase interpretation, stream deadlines and persisted-reply SQL tests
+are retained from the merged #1278 (`d0d679f`), unchanged by reconciliation.
+
+Food invitation delivery (#1290) reuses this same `PendingAction`. After persisting
+and registering a food confirmation, the owner-interaction callback publishes its
+exact browser view and session binding through an internal `food_estimate_pending`
+Now event. The public Now stream sends only its usual invalidation; authenticated
+`GET /now` supplies the review. The matching voice relay queues presentation only,
+rechecks that the confirmation still exists, then requests a tool-free spoken
+estimate/invitation even while the food tool blocks. User speech, active responses,
+settings updates, presence and disconnect gates still apply. Cancelled/expired
+queued invitations are discarded. The initial tool dispatch still waits for the
+successful terminal response delivery from #1259; acknowledgement is not invitation
+delivery. Natural replies and committed receipts retain the shared lifecycle,
+persisted immediate-reply checks and one-time SQL consumption.
+
+Typed chat multiplexes that same internal invitation event into the open turn's
+SSE stream while the model iterator waits for the blocking tool. Both session
+and source message must match the active round. A refresh withdrawing the
+confirmation emits a null presentation; subscriptions end with the round.
+The browser validates the bounded `food_invitation` payload, shows the exact
+summary as plain text in the active conversation and invites a natural reply.
+It reveals/follows the conversation without opening Now, and removes the live
+presentation on withdrawal, expiry or turn completion. This transient view is
+not a persisted assistant answer, a new confirmation store or write authority.
+
+Integration checkpoint (25 October): #1264 at `fa3de91` adds
+`PendingProjectClarification`, `rememberProjectClarification`,
+`resolveCreateIssueProject` and typed `ProjectClarification`. Its candidate
+IDs/repos, request fingerprint, immediate-reply verification and target
+revalidation remain target-selection logic, separate from the shared action
+confirmation in `stageIssueCreation`. Its use of `isLaterDanReply` must be
+retained for clarification when resolving the overlapping Factory file;
+action confirmations use `PendingAction` instead. #1259 at `f229ec7` waits for
+actual terminal response delivery, not an audible playback receipt. Missing
+or negative playback receipts do not block dispatch; explicit cancellation
+and failed response delivery still do. This PR does not modify those relay
+or timing paths. Combined-head qualification is still required after the
+remaining related branches integrate. The current-main merge includes food;
+project clarification and acknowledgment branch-only changes are not imported.
 
 Routing no longer matches approval phrases. In chat, any turn with a calendar
 referent in the last two messages makes the agent call
@@ -403,6 +771,55 @@ including the desktop-to-phone transition. The unchanged viewport hook and
 canonical CSS own both phone halves; desktop resumes its existing fit/anchor
 path when the media policy changes back. Phone Move/resize controls are absent.
 No new geometry state, persistence format, API or voice behaviour is introduced.
+
+## Mobile navigation, dictation and composer (25 October 2026; #1287)
+
+`App` renders the phone-only bottom navigation from the existing route state.
+Chat and enabled Health navigate directly; Workspaces opens the existing Folio
+saved-window pane; Menu retains Software Factory and the other page routes in a
+horizontal scroll-snap sheet. `ConversationHistory` keeps existing attachment
+and capture actions in the plus menu and calls the existing VoiceControls start
+callback from the Voice entry.
+
+Draft-only Dictate uses the browser's `SpeechRecognition` API (with its WebKit
+alias where available), not `BrowserVoiceClient.onUserTurn`: realtime voice
+transcripts are assistant turns and must not be repurposed as drafts. Continuous
+recognition streams interim/final result snapshots into the existing draft,
+replacing hypotheses rather than appending duplicates. Normal end and no-speech
+events start a fresh recognizer while the toggle remains on; an explicit stop
+retains ownership until end for trailing results, then stays off. Each new
+recognizer starts from the current draft. Typed edits take precedence over
+previously displayed segments; later segments still append. Text is saved
+through the existing draft effect and never submitted automatically. Recognition is
+requested only after the owner's Dictate click, follows the selected chat
+language, and reports unsupported browsers and microphone errors. Transcription
+is handled by the browser speech-recognition implementation and may be
+provider-backed; Jarvis does not send dictation audio through its realtime voice
+backend. No API, database or persisted-draft contract changes.
+
+The #1293 lifecycle correction retains recognition ownership until `end` after
+an explicit stop, allowing final transcript delivery. Requested-stop `aborted`
+and `no-speech` events do not become startup failures; genuine permission and
+service failures remain visible. Results/errors/end from retired recognizers
+cannot mutate the draft or a later session. Teardown retires ownership before
+calling abort, including synchronous abort callbacks.
+
+A measured composer stack includes external feedback and the inner composer
+surface, so transcript and page bounds account for errors/attachments. Phone
+VisualViewport geometry marks a keyboard inset above 120px (excluding toolbar
+insets and pinch zoom), hides covered bottom navigation, and removes its dock
+clearance. #1295 tracks focused-composer viewport changes when both layout and
+visual viewports shrink together, cumulative expansion/shrink for dismissal/reopen
+without blur, and a next-frame focusout recheck. #1299 retains the earlier observed
+height across resize-before-focus but no longer treats initial focus as keyboard
+evidence. Startup autofocus can occur without a keyboard; a fresh already-short
+viewport without inset or earlier height history leaves navigation available.
+
+#1303 passes route-and-Workspaces-state-derived composer visibility from Shell through JarvisPage.
+ConversationHistory remains mounted and hides its typing slot off Chat on phones;
+it suppresses hidden-input autofocus and remeasures the visible dock. The phone
+chat viewport hook is enabled only on Chat with Workspaces closed. Other pages reserve navigation space
+only; desktop stays unchanged and voice composer controls are also Chat-only.
 
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
@@ -769,7 +1186,7 @@ Actual-App fixtures observed applied acknowledgements before the Status
 heading/selected rail entry existed. The surrounding `flushSync` and the
 navigation function's return alone did not guarantee route commit. The new
 owner observes the shell commit rather than polling DOM or awaiting health
-reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+reads. Existing Factory issue resolution, Notes draft guard, Workspaces pane,
 session/pin handlers and persistent Now session remain separate.
 
 ## Phone typing viewport ownership (14 October 2026; local)
@@ -863,7 +1280,7 @@ owner/session/turn-bound and expire after sixty seconds. Legacy `inspect()`
 remains caption-first and validates its description. Existing deadlines,
 cancellation, explicit limit errors and voice single-response correlation remain.
 Camera preview owns no upload loop and uses the existing workspace lifecycle;
-user turns, not rendering/docking, reset the ten-minute idle timer.
+active video continues during silence until explicit stop or an existing session, permission, fatal-error or budget stop condition.
 Coordinator-reported live chat image input is accepted by Dan; live voice image
 delivery and physical-device acceptance are not inferred from synthetic checks.
 
@@ -1120,8 +1537,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   visible text and selection through a new bounded `readback` message of the
   existing sandbox bridge, accepted only from the report's own frame and
   cleared when its document is replaced. The Settings section Dan is reading
-  (never credentials), Graph and Notes pages, and the open Folio pane join the
-  snapshot as `page-settings`, `page-knowledge`, `page-notes` and `folio-pane`
+  (never credentials), Graph and Notes pages, and the open Workspaces pane join the
+  snapshot as `page-settings`, `page-knowledge`, `page-notes` and `workspaces-pane`
   windows. Content is at most 8 KiB and selection 2 KiB per window; old
   snapshots still validate.
   On signed-in routes, the shell keeps one command/feed stream mounted in a
@@ -1160,13 +1577,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   deliver Factory navigation with the returned/existing task ID. Google tools
   present bounded plain-text results or staged summaries, omitting confirmation
   codes and preserving the existing confirmation gate. Automatic views are
-  transient, not persisted in Folio. Backend tests exercise delivery, lifecycle,
+  transient, not persisted in Workspaces. Backend tests exercise delivery, lifecycle,
   cancellation, suppression, refusal, and failure isolation; UI rendering and
   live acceptance remain the UI session's responsibility.
 - P9-40 extends that same registered tool and broker with `navigate`; no new
   event channel, route or persistence is added. `packages/contracts` exports
   `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,
-  `notes`, `knowledge` (kept; opens the graph), `folio`, `status`) and `workspaceSettingsSections`
+  `notes`, `knowledge` (kept; opens the graph), `workspaces`, `folio`, `status`) and `workspaceSettingsSections`
   (`appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`,
   `coding`, `projects`, `routines`, `credentials`, `backend`). The command requires
   `commandId`, `operation: 'navigate'` and `page`; `section` is settings-only,
@@ -1181,7 +1598,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   acknowledges application; refusal, timeout and cancellation retain existing
   broker semantics. Send is not an applied acknowledgement. The UI reports a
   reason when a page/section is unknown, a task/issue is not found, or Status
-  is not yet implemented. Folio navigation opens a pane over the current page.
+  is not yet implemented. New clients navigate with `workspaces`; `folio`
+  remains accepted, and clients without the `workspacesOpen` snapshot field
+  receive the legacy value.
   The backend rejects unknown contract keys before
   delivery and does not resolve task/issue existence on the UI's behalf.
   The UI session owns shell routing, settings-section
@@ -1297,7 +1716,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   connected kinds and the default recipient, never device labels. The UI half
   shipped first; routing is tested offline, with live multi-device acceptance pending.
   P9-43 adds optional `view` metadata for page, Settings section, Factory
-  task/issue, focused window, Folio pane and previous destination. Shared guards
+  task/issue, focused window, Workspaces pane and previous destination. Shared guards
   and the owner route validate it while accepting older snapshots. The existing
   agent-loaded `/factory/context` includes `workspaceContext` on every turn;
   the hosted client retains this field in its reference JSON. The voice relay
@@ -1487,6 +1906,34 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   `gpt-6-astra` and `gpt-6.1-sol` (Bicep). `gpt-6-astra` has capacity 150 (rate limit
   150K tokens per minute, Global Standard bills per token) since 23 October, because the
   live acceptance run sends over 50K input tokens a minute to the Chat model (#1232).
+  #1337 prepares `gpt-6.1-terra` version `2026-10-26` in the same Sweden Central
+  account with GlobalStandard and `terraChatCapacity: 150` in committed parameters,
+  matching the existing chat throughput allocation. This requests capacity; it
+  does not assert live quota or buy reserved PTUs. The existing serial deployment chain
+  inserts Terra after Sol. The chat code default becomes Terra when ARM lists
+  it; until then, and during ARM fallback, the existing Luna default remains.
+  The fallback catalogue does not claim Terra is deployed. Saved chat/legacy
+  settings take precedence, and no migration writes them. The existing Responses
+  adapter sends explicit `reasoning.effort: none` for Terra because omission
+  defaults to medium. Other models keep their request behavior. Terra exposes
+  the supported intersection of the existing reasoning enum, without `minimal`
+  or a shared-enum expansion. The deployment also appears in Research through
+  the existing capability filter; its role default is unchanged. Microsoft's
+  public Global Standard list rates are documented in `infra/README.md`.
+  Account-specific rates and Azure context-tier billing rules remain unverified;
+  no Terra rate is added to runtime usage or vision pricing tables.
+  Offline PR CI checks template validity; the existing main-only Deploy/OIDC
+  path validates Azure acceptance without requiring a new owner login. A quota
+  rejection remains a visible failure, with no automatic allocation/region/SKU
+  changes. After a successful release, inspect and update only the saved owner
+  chat model. Danish `/voice/da`
+  uses the realtime voice role when `options.connect` is configured. Only the
+  `connectDanish` hosted-agent fallback inherits chat settings. New separate
+  role/session overrides are not introduced.
+  Existing approval interpretation and proactive summarization also consume chat
+  settings, while the inactive semantic-mail adapter refuses a model without
+  verified cost rates.
+  Their shared-setting/cost implications must be reviewed before rollout.
   Factory task starts prefer per-task model/reasoning overrides to the
   corresponding role settings, then pass the effective choices to the runner.
   Codex applies both through ACP config options; Copilot receives its model and
@@ -1858,15 +2305,22 @@ digest in tab session storage, not the request text. Rollback refuses to erase
 submission evidence while records exist. Existing tasks and manual backfill
 are untouched.
 
-P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
-first stages a draft and the next creates it only after a later stored Dan
-message, from the same session, clearly approves it. The shared approval
-interpreter decides what that message means (see "Natural approval of staged
-actions" at the top); a question, condition or hesitation is not approval. The Dan-only
-`POST /factory/issues` route uses the same draft validation and creation service
-for the board. It reads all issue-title pages in the selected active repository,
-allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
-immediately before creation. New issues receive `P11` and `enhancement` labels;
+P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools.
+Issue creation is direct when the request has no gated attachments; attachment
+descriptions and public image publication stage for the existing later-message,
+same-session approval flow. The shared approval interpreter decides what that
+message means (see "Natural approval of staged actions" at the top); a question,
+condition or hesitation is not approval. The Dan-only `POST /factory/issues`
+route uses the same draft validation and creation service for the board. Project
+selectors resolve against a fresh active-project list: exact IDs, case-insensitive
+full repository names, normalized unique display names, or natural references
+supported by registered candidate data. Ambiguous or missing targets refuse
+before a write; registry read failures stay distinct from GitHub App permission
+failures. The selected project ID and repository are revalidated before issue,
+label, comment, task or generic GitHub App writes, and explicit non-self projects
+never fall back to Jarvis's repository. The service reads all issue-title pages in the selected
+active repository, allocates the lowest free `P11-NN` code (two digits minimum),
+then rechecks it immediately before creation. New issues receive `P11` and `enhancement` labels;
 titles explicitly marked `[Bug]`, `Bug:`, or `Regression:` receive `bug`.
 The default Jarvis executor creates the issue and then applies the `Jarvis`
 worker label so GitHub emits the `issues.labeled` event that P10-02 consumes.
@@ -2414,6 +2868,11 @@ generations for heartbeat/finish fencing. Startup marks leftover running rows
 interrupted. Migration 0056 adds the `proactive` background-job kind; rollback
 refuses to discard rows of that kind.
 
+Deadline findings store the source task name as their title, capped at 200
+UTF-16 units. Existing generic titles refresh through the normal owner/key
+upsert when the task is observed again, before the alert hook reads details.
+This needs no migration or delivery-history reset.
+
 The engine owns a self-rescheduling, unreferenced 30-second scheduler. Startup
 reconciles runs once and evaluates the latest Copenhagen slot immediately;
 handled slot keys stay in memory, so idle ticks perform no SQL work. Claims
@@ -2583,7 +3042,9 @@ Reminder details come from rows already in memory; alert details come from
 stored-item reads that do not mark items loaded or seen. Missing or failed
 detail reads still send the count headline. Up to three entries and an overflow
 line fit within the 240-code-point body limit; titles are capped at 60 and each
-line at 80. Sanitization strips controls, collapses whitespace and truncates on
+line at 80. Bundled alert lines include each available Copenhagen due time
+before the title, keeping the time visible when long titles are truncated.
+Sanitization strips controls, collapses whitespace and truncates on
 code-point boundaries with an ellipsis. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
 TTL/high urgency; user tests retain the original five-minute/normal headers.
 System sends are rejected inside quiet hours at the sender boundary. The worker
@@ -2986,8 +3447,9 @@ arguments before retrying; workspace commands still use the existing broker and
 `packages/contracts` schemas.
 P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
 registry. They use only repository-scoped GitHub App installation tokens, default
-to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
-repositories only when they match an active project. File paths, encodings and
+to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs,
+full repository names, unique display names or candidate-supported natural
+references only when they match an active project. File paths, encodings and
 response sizes are validated and bounded; overview responses are cached by commit
 SHA. Repository files and issue text are explicitly framed as untrusted input.
 P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
@@ -3063,7 +3525,14 @@ are offered. Recovery still uses each existing tool's validation/approval.
 The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
 entries compare configuration and the cached ARM catalogue, without claiming a
 successful model invocation. Vault status aggregates note/chunk counts, latest
-`indexed_at`, and embedding coverage without reading note text. GitHub App
+`indexed_at`, and embedding coverage without reading note text. Index freshness
+uses the vault module's process-local synchronization outcome: a completed
+no-change sync refreshes freshness, while a failed attempt remains degraded and
+retains the distinct last successful time. `latestIndexedAt` describes only the
+latest changed chunk and is not a freshness signal. Without a verified sync in
+the current process, including after restart, the index remains unknown even if
+chunk rows exist. The status check timestamp is independent of those evidence
+times; no sync outcome is persisted and no migration is added. GitHub App
 permissions come from the repository's installation metadata; Google uses a
 bounded Calendar list read. PC bridge state is live in process and reports
 connection, pause and wake-word state. Its current protocol does not provide
@@ -4904,21 +5373,27 @@ conversation. The browser checks extension, size (images 10 MB, others 20 MB) an
 count (five) before uploading, then sends each file as its own authenticated
 `POST /conversation/attachments` multipart request using XMLHttpRequest for
 upload progress. The backend repeats every check and remains authoritative.
-Chips show name, type, size, progress, a "Jarvis couldn't read this file" note
-when extraction failed, and per-file errors; removal aborts an upload or deletes
-the private file. Send stays disabled while an upload runs; failed uploads are
-never sent. Sending passes `attachmentIds` on the existing turn request. Messages
-with files queue instead of steering, because steering carries text only; if the
-turn is not saved the files return to the composer. Uploads older than 23 hours
-are not sent (the backend expires unsent files at 24 hours).
+Pending files are rendered inside the composer above the text input. Images use a
+compact preview pill; the local object URL supplies the pre-send thumbnail and is
+revoked when removed, sent or unmounted. A restored image without a local preview
+uses the existing authenticated URL request. Other files retain their name, type,
+size and upload state. Unreadable-file notes and per-file errors remain visible;
+removal aborts an upload or deletes the private file. Send stays disabled while an
+upload runs; failed uploads are never sent. Sending passes `attachmentIds` on the
+existing turn request. Messages with files queue instead of steering, because
+steering carries text only; if the turn is not saved the files return to the
+composer. Uploads older than 23 hours are not sent (the backend expires unsent
+files at 24 hours).
 
-History and live messages list their files; opening one requests
-`GET /conversation/attachments/:id/url` on demand and opens the signed Azure Blob
-URL in a new tab (or a link if the browser blocks the tab). A 404 shows an
-"expired or removed" state. When Jarvis's reply contains the P9-67 confirmation
-phrase `confirm <code> publish <filename>` and the earlier message carries that
-image, the reply also shows the image and a "This repository is public" note
-before Dan approves. If the preview cannot load, the note says not to approve.
+History and live messages render sent image previews in the message; they request
+`GET /conversation/attachments/:id/url` through the existing authenticated helper
+and display the returned short-lived signed Blob URL. Clicking an image still
+opens it on demand in a new tab (or a link if the browser blocks the tab). Other
+files keep the existing on-demand open flow. A 404 shows an "expired or removed"
+state. When Jarvis's reply contains the P9-67 confirmation phrase
+`confirm <code> publish <filename>` and the earlier message carries that image,
+the reply also shows the image and a "This repository is public" note before Dan
+approves. If the preview cannot load, the note says not to approve.
 No backend, contract, migration or infrastructure change. Offline Vitest and
 Chromium checks (stubbed auth/API) cover the flow; live backend, Blob and
 provider acceptance remain unverified.
@@ -5086,12 +5561,26 @@ defaults to 305 seconds and can be tuned up to 320 seconds, the configured long
 tool read timeout. The overall job remains bounded at 15 minutes.
 
 The report is persisted in owner-scoped SQL metadata in
-`dbo.workspace_html_artifacts` (migrations 0026/0027), then the same workspace
-window is updated to renderer `html-app` with the artifact ID. Reads and pin
-changes are Dan-authorized; report bytes remain within the 512 KiB contract.
-The background job has bounded concurrency, shutdown cancellation and visible
-terminal failures; voice announces a short findings summary or fixed failure
-update without invoking tools again.
+`dbo.workspace_html_artifacts` (migrations 0026/0027), then its Workspaces entry and
+job reference are saved. Migration 0066 adds that reference and an independent
+Workspace delivery state (`pending`, `unknown`, `failed` or `delivered`) to the
+completed job. The artifact uses the research job UUID, so the progress and
+report share one stable `research-<compact UUID>` view ID. The job becomes
+`done` after artifact, Workspaces and job metadata persist, before Workspace delivery
+is attempted. Only an applied-command acknowledgement marks delivery `delivered`;
+it does not prove the owner saw the report. Missing Workspace stays `pending`,
+ambiguous acknowledgement stays `unknown`, and an explicit refusal is `failed`.
+None changes successful research to a failed job.
+
+The owner-only `POST /jobs/:jobId/open-result` route resolves the stored Workspaces
+entry, validates and reads its artifact under the owner identity, and opens it
+through the existing Workspace broker using the same stable view ID. Reconnect,
+reload, a closed progress window and a lost acknowledgement can therefore offer
+or reopen the saved report without invoking the research provider or creating a
+second result window. Reads and pin changes remain Dan-authorized; report bytes
+remain within the 512 KiB contract. The background job retains bounded
+concurrency, shutdown cancellation and visible generation/persistence failures;
+voice announces the saved findings summary independently of presentation.
 
 The web `html-app` renderer (`HtmlAppView`, 8 October) reads the artifact from
 owner-only `GET /factory/workspace-artifacts/html/:id`, validates it with
@@ -5113,7 +5602,7 @@ accepts these updates only from its parent; `srcdoc` remains stable so interacti
 report state is retained. The scripts-only sandbox, CSP and artifact API remain
 unchanged.
 
-### Folio (P9-25)
+### Workspaces (legacy API namespace: Folio)
 
 P9-53 adds sensitive agent-only `read_html_view` and `update_html_view` tools.
 Reads accept exactly one artifact ID or window ID and an optional positive
@@ -5125,7 +5614,7 @@ One SQL transaction locks the owned artifact, archives its previous content in
 `workspace_html_artifact_versions`, increments `version_number`, and replaces
 HTML plus any supplied title/sources. Omitted metadata is retained in SQL,
 including during concurrent revisions. No versions are pruned by this path.
-Artifact identity, creation time, Folio records and pin state remain unchanged.
+Artifact identity, creation time, Workspaces records and pin state remain unchanged.
 Historical reads join the current artifact to enforce ownership.
 
 After commit, an acknowledged workspace `update` targets the original cached
@@ -5141,7 +5630,7 @@ Cleanup aborts obsolete loads; an active-load guard also ignores responses from
 transports that complete after cancellation. A failed revision uses the existing
 error/retry state instead of presenting old HTML as refreshed. The React key
 remains the artifact ID, preserving renderer height and workspace window identity,
-geometry, Folio and pins. No contract, sandbox, CSP, bridge or styling changes.
+geometry, Workspaces and pins. No contract, sandbox, CSP, bridge or styling changes.
 Focused tests and Chromium desktop/phone light/dark fixtures verify refresh and
 recovery offline; production acceptance remains pending. Broker acknowledgement
 still confirms that the UI applied the view update, not that the iframe finished
@@ -5156,28 +5645,39 @@ artifacts do not retain their originating job, so they are indexed as
 `html_app`. Graph snapshots are recorded from now on; older transient graph
 views cannot be recovered.
 
-Owner-only `GET /folio?q=&kind=&before=` returns at most 100 items, pinned
+The implementation is named `WorkspaceItemsStore`, `WorkspaceItem`, and
+`createWorkspacesModule`; contract consumers use the `Workspace*` symbols.
+Legacy exported `Folio*` contract symbols remain aliases for source compatibility.
+New clients use `/workspaces`, `workspaces_search`, `workspaces_open`,
+`workspaces_manage`, `workspaces` navigation and the `workspacesOpen` snapshot
+field. `/folio`, `folio_*`, `folio` navigation and `folioOpen` remain accepted
+for existing clients. Migration `0067_workspaces_identifiers.sql` renames
+`dbo.folio_items` to `dbo.workspace_items` and introduces
+`result_workspace_item_id`; a legacy SQL synonym and trigger keep old table and
+column reads/writes working, with no saved-item deletion.
+
+Owner-only `GET /workspaces?q=&kind=&before=` returns at most 100 items, pinned
 first and then newest, matching the item title, prompt summary, or historical
-HTML version title. `POST /folio/:id/open` validates source ownership and
+HTML version title. `POST /workspaces/:id/open` validates source ownership and
 recreates or updates the saved view through the workspace command broker,
-then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
-`DELETE /folio/:id` removes only its Folio index entry; the original artifact
-and its history remain available. The shared sensitive tools `folio_search`
-and `folio_open` provide the same owner-scoped search and broker-backed reopen
+then focuses it. `PATCH /workspaces/:id` pins or renames an item. Confirmed
+`DELETE /workspaces/:id` removes only its Workspaces index entry; the original artifact
+and its history remain available. The sensitive tools `workspaces_search`
+and `workspaces_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
-P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
+P9-56 adds sensitive `workspaces_manage` with a plain root object schema: exactly one
 `id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
-for rename. It shares unique-query resolution with `folio_open` and reuses
-`FolioStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
+for rename. It shares unique-query resolution with `workspaces_open` and reuses
+`WorkspaceItemsStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
 titles. Reversible changes need no approval. Deletion fails closed if presence
 or Now approval is unavailable, refuses away/on-the-move states, and uses the
 existing `runConfirmed('delete', ...)` flow naming the title and id. Duplicate
 pending deletions are refused; after approval, presence and the title are
-rechecked before removing the Folio index entry. Source artifacts/history are
-retained and no deleted entry is returned by Folio search. Outputs mark titles
+rechecked before removing the Workspaces index entry. Source artifacts/history are
+retained and no deleted entry is returned by Workspaces search. Outputs mark titles
 as untrusted; arguments and results are redacted from the tool audit. No
-migration, GitHub App permission, dependency or web change is needed.
-The Folio rail and pane are a separate UI task.
+migration changes artifact retention, GitHub App permissions, or access control.
+The Workspaces rail and pane are implemented in `apps/web/src/Workspaces.tsx`.
 
 ### Sandbox credentials
 
@@ -5358,7 +5858,7 @@ flowchart LR
   to the existing builder rather than investigating logs or reproducing bugs.
 - Commits are not stored; the release view fetches them from GitHub on demand.
 - Authenticated `GET /factory/projects/:id/releases` returns the active project's bounded persisted release, PR, workflow-run, and deployment records together with an on-demand graph. Refresh fetches the graph again; a GitHub graph failure leaves the persisted records available with `graph: null`. `GET /factory/releases/:id` resolves an existing release activity link to its project.
-- The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/1 MiB with a 10-second request deadline. No matching run returns `null`; provider failures are sanitized and the token is never returned.
+- The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/4 MiB with a 10-second request deadline; the byte cap applies to both declared content length and streamed bytes. No matching run returns `null`; provider failures are sanitized and the token is never returned. A lookup failure does not establish deployment failure.
 - The graph reader uses a repository-scoped installation token with `contents:read`, at most 20 branches and 30 commits per branch, and a 25-second overall deadline; it does not persist GitHub commit data. The UI exposes keyboard-focusable, 44-pixel commit links and keeps a wide graph in its own horizontal scroll region.
 - Copy-ready managed-project examples live in [`templates/github-actions/`](../templates/github-actions/), with Azure OIDC setup and customization steps in [github-actions-templates.md](github-actions-templates.md). PR checks have read-only permissions; the release build and tests precede an artifact upload, and only the `main`-gated deploy job receives `id-token: write`. Azure federation and deployment in an adopting project remain unverified.
 
@@ -5425,7 +5925,7 @@ context ceiling is claimed.
 | Runtime activity (P8-16, P9-18) | Shared contracts define the `mode`, `now`, `voice-wake`, `job`, `jarvis-activity`, `workspace-ready`, `workspace-command`, and `workspace-cancel` payloads on owner-authenticated `/now/events`. The typed backend SSE helper emits those frames; `sseHeaders` carries Fastify/CORS headers across the hijacked stream. The voice orb, top bar and workspace consume the same stream. | Contract guards and authenticated SSE tests cover event payloads and framing. Existing activity transitions, cancellation/disconnect behavior and payload privacy remain unchanged; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
-| Visual inspection (P7-05/P7-08/P9-81) | Explicit screen requests and every chat/voice turn while camera is on use the same bounded JPEG `/screen/frames` service. Camera off sends nothing. The per-turn contract above defines bounded question echo, receipt-time `capturedAt`, turn correlation and typed 429 errors. Preserve active-session checks, JPEG/1 MiB bound, 3-second interval, daily frame cap (default 300, range 1–300), usage reservation and 5,000-character description cap. Camera-enabled voice waits for the matching result/unavailable outcome before one model reply; completed reflexes bypass the wait. Migration 0040 retains bounded source/time/question/description provenance in `messages.metadata`; cached context is labelled by the original question and capture time, never presented as a fresh answer. Legacy context remains supported; P7-19 display labels stay transient. No image bytes enter storage, logs, transcripts or task events; questions are never logged. Watch mode is unchanged. | Offline regressions cover route/model/history and voice wait/correlation boundaries. UI per-turn capture, physical camera/voice and live model acceptance remain separate. Screen and camera share `screen_frames` usage and estimated DKK. Voice/session end and teardown stop media; camera also stops after five minutes. |
+| Visual inspection (P7-05/P7-08/P9-81) | Explicit screen requests, generic text visual questions while screen sharing, and every chat/voice turn while camera is on use the same bounded JPEG `/screen/frames` service. Camera off sends no camera frames; active screen sharing remains usable. Text submission and turn execution use the same screen-aware classification; camera-specific wording and camera-conversation priority are preserved. The per-turn contract above defines bounded question echo, receipt-time `capturedAt`, turn correlation and typed 429 errors. Preserve active-session checks, JPEG/1 MiB bound, 3-second interval, daily frame cap (default 300, range 1–300), usage reservation and 5,000-character description cap. Camera-enabled voice waits for the matching result/unavailable outcome before one model reply; completed reflexes bypass the wait. Migration 0040 retains bounded source/time/question/description provenance in `messages.metadata`; cached context is labelled by the original question and capture time, never presented as a fresh answer. Legacy context remains supported; P7-19 display labels stay transient. No image bytes enter storage, logs, transcripts or task events; questions are never logged. Watch mode is unchanged. | Offline regressions cover route/model/history and voice wait/correlation boundaries. UI per-turn capture, physical camera/voice and live model acceptance remain separate. Screen and camera share `screen_frames` usage and estimated DKK. Voice/session end and teardown stop media; camera also stops after five minutes. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish live path: `da-DK-JeppeNeural` (native male, `DANISH_REALTIME_VOICE`); the provisioned hosted-agent fallback still uses `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |
@@ -5641,12 +6141,11 @@ or activation flag is changed here. Deployment does not prove model image
 acceptance or settle the disputed camera cadence. Handle-only history metadata
 also needs confirmation before the stricter local history decoder is changed.
 
-The camera idle lifecycle is already local: `recordActivity` resets a
-ten-minute timer on accepted chat submission and current-client speech/final
-voice turns. Start arms it; switch restarts it; dock/render/watch-frame work
-does not keep it alive. Stop/unmount cancels it and stops tracks. Idle expiry
-restores even a docked preview with visible explanation and recovery; its
-inactive picture is hidden to avoid clipping phone controls.
+The camera has no user-inactivity timer after Dan's 26 October approval (#1317).
+`recordActivity` and its former chat/voice reset callbacks are removed. Stop and
+unmount still cancel requests and stop tracks. Spending limits, permission loss,
+fatal errors and session/sign-out teardown remain authoritative; browser/device
+restrictions may interrupt capture, especially in background on phones.
 
 P9-79's legacy `vision-request.ts` recogniser includes explicit questions such as
 "can you see anything?" and "kan du se noget?". Every-turn camera capture now
@@ -5690,13 +6189,15 @@ Production calling is dormant: P6-22 decided not to provision Teams in Dan's per
 
 P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; camera adds no provider key or Azure resource. Vision uses the dedicated `VISION_MODEL_DEPLOYMENT` (`gpt-6-luna`), not `jarvis.model`, through `/models/chat/completions` with image detail `auto`, `max_completion_tokens: 500`, and `reasoning_effort: none`. Estimated rates are 0.6579 DKK per million input tokens and 3.2893 per million output tokens, converted at 6.5785 DKK/USD. The signed-in browser never receives a provider credential. These are estimates, not billed usage; live deployment pricing and useful-comment acceptance remain to verify.
 
-### Continuous vision watching (P7-38)
+### Continuous vision watching (P7-38; unified camera #1317)
 
-Dan-only `POST /vision/watch` accepts `{ sessionId, source: 'screen' | 'camera', frame }` and returns `{ summary, speak: string | null, budget: { usedUsd, limitUsd } }`. It reuses the existing JPEG/1 MiB validation, abort handling, and `image.fill(0)` cleanup. Dan's separate web work owns independent sharing toggles, meaningful-change detection, and a maximum of one frame every 2.5 seconds per source; the backend never polls a source or pauses for sensitive content.
+Dan-only `POST /vision/watch` accepts `{ sessionId, source: 'screen' | 'camera', frame, feedId? }` and returns `{ summary, speak, budget }`. The camera hook starts automatically when capture and an active session are available, awaits each response and then delays 2.6 seconds; screen watching remains explicitly toggled and skips duplicate frames. Camera confirmation requires an accepted response. In typing mode, a response reporting delivered speech refreshes persisted conversation history; quiet frames do not reload it. Existing ID-based merging, draft/focus and reader scroll-follow behavior are retained. Typed mode creates its conversation session on camera enable; voice owns delivery only for its active session. Each loop has an abort controller and generation UUID. Authenticated `DELETE /vision/watch` with session/source/feedId invalidates only the matching generation, clears instructions and prevents late narration. Cleanup is best effort on disconnect; feed-status evidence expires after 15 seconds without arrivals. Frame requests have a 35-second client timeout. Existing JPEG validation, budgets and in-memory byte cleanup remain.
 
-`VisionWatchService` holds the last summary and up to 20 watch instructions per session/source in memory. The authenticated `watch_for { source?, what }` (300 characters) and `stop_watching_for { source? }` tools resolve the stored Dan message to its session; their audits redact arguments/results. The prompt includes the source summary, instructions, latest Dan text, and recent comments as bounded context. It requires strict `{ summary, noteworthy, speak }` JSON, treats image text as untrusted, and permits comments only for screen errors/problems, instruction matches, or direct question answers. Malformed results fail visibly but still record incurred model usage.
+`watch_for` records instructions and optional `continuousDescription`; its result separates instructionsSaved from cameraFeed/screenFeed receiving or unconfirmed. The shared chat/voice capability prompt maps keep-describing requests to this flag. The vision prompt allows routine and unchanged-scene descriptions only when explicitly requested. Per-source instruction revisions suppress obsolete in-flight commentary after stop. Busy voice narration is dropped, while ordinary alerts retain chat fallback. No raw video, stored frames, new provider or credentials. Camera video no longer stops solely because user messages stop. User-requested start/stop reuses acknowledged workspace show/session camera commands with existing permission checks.
 
-The service suppresses repeated normalized comments for two minutes across both sources; the prompt also suppresses paraphrases of a recent issue. Concurrent deliveries share an in-memory dedupe guard. An active voice relay registers its synchronous announcer callback; a free relay sends `response.create` with verbatim instructions and no tools. If Dan is speaking or the relay is otherwise busy/disconnected, the service posts a Jarvis message to the same session instead. Summaries are never persisted or logged. Successful conversation end invokes the injected session-end callback across module boundaries; that callback, voice teardown and backend shutdown clear in-memory watch state.
+`VisionWatchService` holds the last summary and up to 20 watch instructions per session/source in memory. The authenticated `watch_for { source?, what }` (300 characters) and `stop_watching_for { source? }` tools resolve the stored Dan message to its session; their audits redact arguments/results. The prompt includes the source summary, instructions, latest Dan text, and recent comments as bounded context. It requires strict `{ summary, noteworthy, speak }` JSON, treats image text as untrusted, and permits comments for screen errors/problems, instruction matches, direct question answers or explicitly requested continuous narration. Malformed results fail visibly but still record incurred model usage.
+
+Outside explicit continuous narration, the service suppresses repeated normalized comments for two minutes across both sources; the prompt also suppresses paraphrases of a recent issue. Concurrent deliveries share an in-memory dedupe guard. An active voice relay registers its synchronous announcer callback; a free relay sends `response.create` with verbatim instructions and no tools. Ordinary alerts fall back to a Jarvis chat message if speech is unavailable; continuous narration is dropped while a registered voice relay is busy. Summaries are never persisted or logged. Successful conversation end invokes the injected session-end callback across module boundaries; that callback, voice teardown and backend shutdown clear in-memory watch state.
 
 Watch frames replace the 300-frame cap with `global.vision_daily_budget_usd` (default 1, range 0–100; 0 disables watching). The existing `screen_frames` usage store sums today's `cost_dkk` across all sessions and both sources, including on-demand inspections. Watch reservations are excluded from the existing on-demand three-second throttle and 300-frame count. SQL reservations use the existing UTC-day application lock, per-session/source 2500 ms throttling, and a conservative 0.1 DKK pending-cost hold reconciled to known token cost. This is an allowance for the bounded prompt/model, not a tokenizer-proven upper bound. Failed/unknown-cost calls retain the hold until the UTC day ends; insufficient remaining budget refuses before another model call. The budget response includes outstanding holds, so it can decrease after concurrent calls reconcile. No migration or dependency is added. `vision.watch` logs only source, noteworthy, spoke, latencyMs, and cost (DKK); the logger allowlist excludes frames, summaries, comments and instructions. Offline tests verify the contract; live Azure SQL concurrency, actual billing and Dan's UI integration remain unverified.
 
@@ -6435,11 +6936,26 @@ staging and in the action callback. Existing Now owner-authenticated approval,
 persisted one-time consumption supplies authority. Food cards have an explicit
 120-second lifetime shared by SQL, visible expiry and the service timer;
 default confirmations for all other callers remain five minutes.
+For `log_estimate` only, private pending metadata binds the exact confirmation to
+the source message and session. The authenticated chat steering route and persisted
+browser-voice end-of-turn path interpret the next later owner reply against that
+summary, then resolve the same persisted one-time approval. No new food tool or
+model-supplied authority is added. Wrong-session, stale, ambiguous and superseded
+replies fail closed. Persisted session replies must contain exactly the approving
+message after the source, both before and after interpretation; a correction or
+cancellation during preparation cannot be skipped. An unrelated reply removes conversational authority, leaving
+Now controls available. A handled chat reply is consumed without aborting or
+replaying the active tool round. Voice uses the original tool result as its receipt.
 Per-tool pending target keys prevent duplicate concurrent cards; cancellation
 bounds the entire food operation to 180 seconds from execution entry.
 No global proposal manager, detached writer or new table is added.
 The hosted agent gives only this tool a 210-second response-read deadline,
 below the externally ingressed Container App's 240-second HTTP limit.
+The browser chat stream uses the existing 240-second ingress ceiling; the backend
+Foundry invocation reader reuses the 210-second food read budget below that ceiling,
+rather than cutting off approval at 120 seconds.
+Nonstreaming browser requests remain bounded at 120 seconds; stream-read failures
+show a stable uncertain-delivery recovery instead of raw transport diagnostics.
 Configured research/ordinary deadlines and connection/write/pool limits remain
 unchanged. Generated input uses one number/null nutrient type, not a coercible
 numeric-first union; strict domain validation still follows HTTP validation.
@@ -6457,6 +6973,15 @@ Both internal food tools declare `denyOnPhone`. The existing phone dispatcher
 checks this after active-session validation and before generic confirmation or
 execution; denial wins over the public-phone flag. Other tools retain their
 existing public/approval behaviour. Food's own session checks remain in place.
+Model-facing food descriptions distinguish mobile/desktop browser chat and
+browser voice from telephone calls. Hosted completion instructions identify the
+runtime channel using the server's phone-session context, including image turns;
+browser realtime session instructions identify browser voice in full and compact
+modes. Device wording and historical refusals do not determine channel or permission.
+Guidance requires `log_estimate` staging before asking for confirmation; lookup
+and prose alone are not proposals. This repair leaves the existing approval
+service and persisted one-time consumption unchanged for compatibility with
+the shared lifecycle work in #1281/#1282.
 
 An additive fifth `createDailyModules` argument independently composes sensitive
 `daily_saved_food` from the same canonical nutrition factory. Existing fourth
@@ -7361,3 +7886,12 @@ coverage disclosures keep detailed provenance available on demand, and
 Nutrition chart series use human-readable names and units. These are web-only
 changes: contracts, backend authorization and the original Daily write path
 remain unchanged.
+
+Review follow-up: receiving status expires 15 seconds after the last accepted
+frame and clears on request failure, with delayed/retrying feedback while the
+bounded loop recovers. Camera startup and typed turns share one pending session
+creation. A matching feed stop aborts pending plain-text comment writes through
+the existing SQL cancellation helper and rechecks state after awaits. A database
+write already committed before cancellation remains transcript history; stop
+does not delete historical messages. Old feed-generation DELETEs cannot stop a
+replacement feed. No database schema change.

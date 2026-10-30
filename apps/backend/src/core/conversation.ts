@@ -1,5 +1,7 @@
+import { chatAgentFailureReasons, chatAgentInvocationReasons } from '../system-status.js';
+import { presentNutritionList } from './food-presentation.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { RecoverableChat } from './recoverable-chat.js';
 import { registerSseShutdown } from './sse.js';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationSearchPage } from '@jarvis/contracts';
@@ -13,9 +15,12 @@ import type {
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
+  ChatAgentError,
+  ChatAgentInvocationError,
   CHAT_AGENT_DIAGNOSTIC_PHASES,
   CHAT_AGENT_PHASES,
   createFoundryAgentSessionId,
+  type ConversationAgentChunk,
   type AgentPhaseTimings,
   type ConversationVisualResult,
 } from './chat-agent.js';
@@ -42,6 +47,9 @@ import { normalizeVisualContext, visualContextSchema, persistedVisualContextSche
   persistedVisualContext, type VisualContext } from './visual-context.js';
 import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
+import { approvalDeciderFor } from './approval-interpreter.js';
+import { readRuntimeTests } from './runtime-test-availability.js';
+import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -203,6 +211,7 @@ const steeringMessagesSchema = {
 
 interface ActiveChatTurn {
   readonly sessionId: string;
+  readonly runtimeTest?: 'current' | 'copilot';
   rootMessageId: string;
   phase: 'model' | 'tools' | 'finishing';
   consumedThrough: string;
@@ -223,6 +232,7 @@ const sessionSchema = {
     language: { type: 'string', enum: ['da', 'en'] },
     startedAt: { type: 'string', format: 'date-time' },
     endedAt: { type: ['string', 'null'], format: 'date-time' },
+    runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
   },
   required: ['id', 'channel', 'language', 'startedAt', 'endedAt'],
   additionalProperties: false,
@@ -286,6 +296,7 @@ const historySchema = {
       },
     },
     nextCursor: { type: ['string', 'null'] },
+    runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
   },
   required: ['messages', 'nextCursor'],
   additionalProperties: false,
@@ -384,7 +395,45 @@ return {
   id: 'conversation',
   tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
   registerRoutes: async (app) => {
+    registerManagedRuntimeRoutes(app);
+    const runtimeTests = () => readRuntimeTests({
+      storageAvailable: app.conversationStore !== null,
+      currentAvailable: app.conversationAgent !== null,
+      readVerified: app.managedRuntime ? app.conversationRuntimeTests : null,
+    });
     const activeTurns = new Map<string, ActiveChatTurn>();
+    const recoverableTurns = new Map<string, RecoverableChat>();
+    app.addHook('onClose', async () => {
+      for (const turn of recoverableTurns.values()) turn.controller.abort();
+    });
+    app.get('/conversation/turns/active', async () => ({
+      turns: [...activeTurns.values()].filter(active => active.runtimeTest === undefined).flatMap(active => {
+        const turn = recoverableTurns.get(active.rootMessageId);
+        return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId, language: turn.language }] : [];
+      }),
+    }));
+    app.get<{ Params: { sessionId: string; messageId: string } }>(
+      '/conversation/sessions/:sessionId/turns/:messageId/events', {
+        schema: { params: { type: 'object', properties: { sessionId: idSchema, messageId: idSchema },
+          required: ['sessionId', 'messageId'], additionalProperties: false } },
+      }, async (request, reply) => {
+        const turn = recoverableTurns.get(request.params.messageId);
+        if (!turn || turn.sessionId !== request.params.sessionId) {
+          return reply.code(404).send({ error: 'This reply cannot be reattached. Check saved conversation and action status before trying again.' });
+        }
+        return reply.header('Content-Type', 'text/event-stream; charset=utf-8')
+          .header('Cache-Control', 'no-cache, no-transform').header('X-Accel-Buffering', 'no').send(turn.stream());
+      });
+    app.post<{ Params: { sessionId: string; messageId: string } }>(
+      '/conversation/sessions/:sessionId/turns/:messageId/cancel', {
+        schema: { params: { type: 'object', properties: { sessionId: idSchema, messageId: idSchema },
+          required: ['sessionId', 'messageId'], additionalProperties: false } },
+      }, async (request, reply) => {
+        const turn = recoverableTurns.get(request.params.messageId);
+        if (!turn || turn.sessionId !== request.params.sessionId) return reply.code(404).send({ error: 'Chat turn not found' });
+        turn.controller.abort();
+        return { cancelled: true };
+      });
     app.post('/conversation/attachments', {
       bodyLimit: MAX_ATTACHMENT_REQUEST_BYTES,
       schema: {
@@ -598,6 +647,9 @@ return {
       const session = await store.getSession(sessionId);
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
+      if (session.runtimeTest && !(await runtimeTests())[session.runtimeTest].available) {
+        return reply.code(503).send({ error: 'The selected test runtime is unavailable. No other runtime was used.' });
+      }
       let attachmentContext: ConversationAttachmentContext[] = [];
       if (attachmentIds.length > 0) {
         const principal = request.principal;
@@ -611,6 +663,11 @@ return {
       }
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
+      if (recoverableTurns.size >= 20) {
+        const oldestCompleted = [...recoverableTurns.entries()].find(([, turn]) => turn.finished);
+        if (oldestCompleted) recoverableTurns.delete(oldestCompleted[0]);
+      }
+      if (recoverableTurns.size >= 20) return reply.code(429).send({ error: 'Too many recent replies. Try again shortly.' });
       if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
       const agentSessionId = createFoundryAgentSessionId(request.principal!.objectId, sessionId);
       const visualTurnKey = visualContext?.turnId ?? visualContext?.frameId;
@@ -618,6 +675,7 @@ return {
         : `screen:chat:${createHash('sha256').update(`${sessionId}:${visualTurnKey}`).digest('hex')}`;
       const activeTurn: ActiveChatTurn = {
         sessionId,
+        ...(session.runtimeTest ? { runtimeTest: session.runtimeTest } : {}),
         rootMessageId: '',
         phase: 'model',
         consumedThrough: '',
@@ -680,7 +738,11 @@ return {
         }
       }
 
-      const controller = new AbortController();
+      const recovery = new RecoverableChat(sessionId, userMessage.id, session.language);
+      recoverableTurns.set(userMessage.id, recovery);
+      const controller = recovery.controller;
+      const deadline = setTimeout(() => controller.abort(), 15 * 60_000);
+      deadline.unref();
       const activityId = randomUUID();
       let activityFinished = false;
       const publishActivity = (type: 'thinking' | 'interrupted' | 'failed' | 'ended') => {
@@ -688,15 +750,10 @@ return {
         app.jarvisActivityHub.publish({ type, activityId, source: 'chat' });
         if (type !== 'thinking') activityFinished = true;
       };
-      const abortOnClose = () => {
-        if (!reply.raw.writableFinished) controller.abort();
-      };
-      request.raw.once('aborted', abortOnClose);
-      reply.raw.once('close', abortOnClose);
       reply.header('Content-Type', 'text/event-stream; charset=utf-8')
         .header('Cache-Control', 'no-cache, no-transform')
         .header('X-Accel-Buffering', 'no');
-      const stream = Readable.from((async function* () {
+      const source = (async function* () {
         yield streamEvent('user', userMessage);
         publishActivity('thinking');
         try {
@@ -726,8 +783,30 @@ return {
             const signal = AbortSignal.any([controller.signal, roundController.signal]);
             const agentStartedAt = performance.now();
             let firstByteLogged = false;
-            let agentIterator: AsyncIterator<string> | undefined;
+            let agentIterator: AsyncIterator<ConversationAgentChunk> | undefined;
             let interrupted = false;
+            let acknowledgmentSent = false;
+            let invitationId: string | undefined;
+            let foodResult: string | undefined;
+            const invitations: string[] = [];
+            let wakeInvitation = () => {};
+            let invitationReady = new Promise<void>(resolve => { wakeInvitation = resolve; });
+            const unsubscribeInvitation = app.nowEventHub.subscribe(event => {
+              if (event.type === 'food_estimate_result' && event.sessionId === sessionId && event.sourceMessageId === turnMessageId) {
+                foodResult = event.summary;
+              }
+              if (event.type === 'food_estimate_pending' && event.sessionId === sessionId &&
+                  event.sourceMessageId === turnMessageId) {
+                invitationId = event.confirmation.id;
+                invitations.push(streamEvent('food_invitation', event.confirmation));
+                wakeInvitation();
+              } else if (event.type === 'refresh' && invitationId &&
+                  !app.ownerInteractions?.pendingBrowserConfirmations().some(({ id }) => id === invitationId)) {
+                invitationId = undefined;
+                invitations.push(streamEvent('food_invitation', null));
+                wakeInvitation();
+              }
+            });
             try {
               agentIterator = agent.stream({
                 messageId: turnMessageId,
@@ -763,9 +842,26 @@ return {
               }, authorization, signal)[Symbol.asyncIterator]();
               let next = agentIterator.next();
               while (true) {
-                const chunk = await next;
+                const result = await Promise.race([
+                  next.then(chunk => ({ chunk })),
+                  invitationReady.then(() => null),
+                ]);
+                while (invitations.length) yield invitations.shift()!;
+                invitationReady = new Promise<void>(resolve => { wakeInvitation = resolve; });
+                if (result === null) continue;
+                const { chunk } = result;
                 if (chunk.done) break;
                 const delta = chunk.value;
+                if (typeof delta !== 'string') {
+                  if (acknowledgmentSent || !partial.startsWith(delta.text)) {
+                    throw new Error('Chat acknowledgment did not match the streamed reply');
+                  }
+                  acknowledgmentSent = true;
+                  partial = partial.slice(delta.text.length);
+                  yield streamEvent('acknowledgment', { text: delta.text });
+                  next = agentIterator.next();
+                  continue;
+                }
                 if (!firstByteLogged) {
                   firstByteLogged = true;
                   logChatLatency(request, 'agent_first_byte', agentStartedAt);
@@ -784,6 +880,7 @@ return {
               if (!roundController.signal.aborted) throw error;
               interrupted = true;
             } finally {
+              unsubscribeInvitation();
               await agentIterator?.return?.();
             }
 
@@ -818,6 +915,11 @@ return {
 
             if (interrupted) {
               throw new Error('Chat turn was interrupted without a steering message');
+            }
+            if (foodResult) {
+              const presented = presentNutritionList(partial, foodResult);
+              if (presented.startsWith(partial)) yield streamEvent('delta', { text: presented.slice(partial.length) });
+              partial = presented;
             }
             if (!partial.trim()) throw new Error('Chat response was empty');
             if (!isSteering && visualContext) {
@@ -861,17 +963,23 @@ return {
               } : {}) });
             break;
           }
+          if (controller.signal.aborted) yield streamEvent('error', { error: 'Reply stopped. Check conversation and action status before trying again.' });
         } catch (error) {
           if (controller.signal.aborted) {
             publishActivity('interrupted');
+            yield streamEvent('error', { error: 'Reply stopped. An action may already have completed; check its status before trying again.' });
           } else {
             request.log.warn(
               { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown' },
               'conversation.reply_failed',
             );
             publishActivity('failed');
+            const code = error instanceof ChatAgentError && error.code !== undefined && chatAgentFailureReasons.has(error.code)
+              ? error.code : error instanceof ChatAgentInvocationError && chatAgentInvocationReasons.has(error.reason)
+                ? error.reason : undefined;
             yield streamEvent('error', {
               error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
+              ...(code === undefined ? {} : { code }),
             });
           }
         } finally {
@@ -882,15 +990,20 @@ return {
           activeTurn.roundController = null;
           if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
-          request.raw.removeListener('aborted', abortOnClose);
-          reply.raw.removeListener('close', abortOnClose);
         }
-      })());
-      const unregisterShutdown = registerSseShutdown(app, reply.raw, () => {
-        controller.abort();
-        stream.unpipe(reply.raw);
-        stream.destroy();
+      })();
+      const stop = () => controller.abort();
+      app.shutdownConnections.add(stop);
+      void recovery.run(source).catch(error => {
+        request.log.warn({ failure: error instanceof Error ? error.name : 'unknown' }, 'conversation.reply_failed');
+      }).finally(() => {
+        clearTimeout(deadline);
+        app.shutdownConnections.delete(stop);
+        const expiry = setTimeout(() => recoverableTurns.delete(userMessage.id), 10 * 60_000);
+        expiry.unref();
       });
+      const stream = recovery.stream();
+      const unregisterShutdown = registerSseShutdown(app, reply.raw, () => controller.abort());
       stream.once('close', unregisterShutdown);
       return reply.send(stream);
     });
@@ -931,6 +1044,16 @@ return {
         language: request.body.language,
       });
       if (!message) return reply.code(404).send({ error: 'Active chat session not found' });
+      const foodReplyHandled = await app.ownerInteractions?.resolveFoodEstimateReply?.(
+        message, approvalDeciderFor(request), AbortSignal.timeout(10_000),
+      );
+      if (activeTurns.get(sessionId) !== activeTurn || BigInt(message.id) <= BigInt(activeTurn.consumedThrough)) {
+        return reply.code(202).send({ ...message, language: request.body.language });
+      }
+      if (foodReplyHandled) {
+        activeTurn.consumedThrough = message.id;
+        return reply.code(202).send({ ...message, language: request.body.language });
+      }
       if (activeTurn.phase === 'model') activeTurn.roundController?.abort();
       return reply.code(202).send({ ...message, language: request.body.language });
     });
@@ -1004,13 +1127,19 @@ return {
       return { messages };
     });
 
-    app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage } }>('/conversation/sessions', {
+    app.get('/conversation/runtime-tests', async (_request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      return runtimeTests();
+    });
+
+    app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage; runtimeTest?: 'current' | 'copilot' } }>('/conversation/sessions', {
       schema: {
         body: {
           type: 'object',
           properties: {
             channel: { type: 'string', enum: ['chat', 'voice'] },
             language: { type: 'string', enum: ['da', 'en'] },
+            runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
           },
           required: ['channel', 'language'],
           additionalProperties: false,
@@ -1019,7 +1148,20 @@ return {
       },
     }, async (request, reply) => {
       if (!app.conversationStore) return reply.code(503).send({ error: 'Conversation storage unavailable' });
-      const session = await app.conversationStore.createSession(request.body);
+      const { runtimeTest } = request.body;
+      if (runtimeTest && request.body.channel !== 'chat') {
+        return reply.code(400).send({ error: 'Runtime tests require a new chat conversation.' });
+      }
+      if (runtimeTest && !(await runtimeTests())[runtimeTest].available) {
+        return reply.code(503).send({ error: 'The selected test runtime is unavailable. No other runtime was used.' });
+      }
+      const session = await app.conversationStore.createSession({
+        ...request.body,
+        ...(runtimeTest ? { ownerObjectId: request.principal!.objectId } : {}),
+      });
+      if (runtimeTest && session.runtimeTest !== runtimeTest) {
+        return reply.code(503).send({ error: 'Test conversation storage is unavailable.' });
+      }
       return reply.code(201).send(session);
     });
 
@@ -1088,13 +1230,15 @@ return {
       return reply.code(201).send(message);
     });
 
-    app.get<{ Querystring: { before?: string; limit?: number } }>('/conversation/history', {
+    app.get<{ Querystring: { before?: string; limit?: number; sessionId?: string; sourceMessageId?: string } }>('/conversation/history', {
       schema: {
         querystring: {
           type: 'object',
           properties: {
             before: idSchema,
             limit: { type: 'integer', minimum: 1, maximum: 100 },
+            sessionId: idSchema,
+            sourceMessageId: idSchema,
           },
           additionalProperties: false,
         },
@@ -1102,9 +1246,28 @@ return {
       },
     }, async (request, reply) => {
       if (!app.conversationStore) return reply.code(503).send({ error: 'Conversation storage unavailable' });
-      const { before, limit = 50 } = request.query;
+      const { before, limit = 50, sessionId, sourceMessageId } = request.query;
       if (before !== undefined && !validId(before)) return reply.code(400).send({ error: 'Invalid history cursor' });
-      return app.conversationStore.getHistory({ limit, ...(before === undefined ? {} : { before }) });
+      if (sessionId && sourceMessageId) return reply.code(400).send({ error: 'Use one history scope.' });
+      if (sessionId && !validId(sessionId) || sourceMessageId && !validId(sourceMessageId)) {
+        return reply.code(400).send({ error: 'Invalid history scope.' });
+      }
+      const resolvedSessionId = sourceMessageId
+        ? await app.conversationStore.getMessageSessionId?.(sourceMessageId)
+        : sessionId;
+      if ((sourceMessageId || sessionId) && !resolvedSessionId) {
+        return reply.code(404).send({ error: 'Conversation source not found.' });
+      }
+      const session = resolvedSessionId ? await app.conversationStore.getSession(resolvedSessionId) : null;
+      if (resolvedSessionId && !session) return reply.code(404).send({ error: 'Conversation source not found.' });
+      // The stored source selects the test scope. A request flag never chooses its runtime.
+      const page = await app.conversationStore.getHistory({
+        limit,
+        ...(before === undefined ? {} : { before }),
+        ...(sessionId || session?.runtimeTest ? { sessionId: resolvedSessionId! } : {}),
+        ...(!sourceMessageId && !sessionId ? { excludeRuntimeTests: true } : {}),
+      });
+      return { ...page, ...(sourceMessageId && session?.runtimeTest ? { runtimeTest: session.runtimeTest } : {}) };
     });
 
     app.get<{

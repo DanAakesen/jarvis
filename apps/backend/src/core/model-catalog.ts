@@ -119,6 +119,9 @@ function inferCapabilities(model: string, raw: unknown): ModelCapability[] {
 }
 
 function inferredEfforts(model: string, raw: unknown): ReasoningEffort[] {
+  // Terra does not support minimal. Expose its intersection with the existing
+  // shared enum; adding max to other providers is a separate change.
+  if (model.toLowerCase() === 'gpt-6.1-terra') return ['none', 'low', 'medium', 'high', 'xhigh'];
   if (isObject(raw)) {
     const declared = raw.reasoningEfforts ?? raw.reasoning_effort ?? raw.reasoningEffort;
     const values = Array.isArray(declared)
@@ -264,7 +267,7 @@ export function createArmModelCatalogueReader({
 }
 
 export const defaultRoleModels: Readonly<Record<ModelRole, string>> = Object.freeze({
-  chat: 'gpt-5.6-luna',
+  chat: 'gpt-6.1-terra',
   vision: 'gpt-6-luna',
   research: 'gpt-5.6-luna',
   voice: 'gpt-realtime-2.1',

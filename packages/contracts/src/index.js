@@ -296,25 +296,26 @@ export const htmlArtifactSchema = Object.freeze(object({
   createdAt: dateTime,
   pinned: { type: 'boolean' },
 }));
-export const folioKinds = Object.freeze(['research', 'html_app', 'image', 'knowledge_graph']);
-const folioIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
-export const folioItemSchema = Object.freeze(object({
-  id: { type: 'string', pattern: folioIdPattern },
+export const workspaceItemKinds = Object.freeze(['research', 'html_app', 'image', 'knowledge_graph']);
+const workspaceItemIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
+const workspaceItemIdRegex = new RegExp(workspaceItemIdPattern, 'u');
+export const workspaceItemSchema = Object.freeze(object({
+  id: { type: 'string', pattern: workspaceItemIdPattern },
   title: string(200, 1),
-  kind: { enum: folioKinds },
+  kind: { enum: workspaceItemKinds },
   createdAt: dateTime,
   promptSummary: string(500, 1),
   pinned: { type: 'boolean' },
 }));
-export const folioSearchSchema = Object.freeze(object({
+export const workspaceItemsSearchSchema = Object.freeze(object({
   q: string(120, 1),
-  kind: { enum: folioKinds },
+  kind: { enum: workspaceItemKinds },
   before: dateTime,
 }, []));
-export const folioSearchResponseSchema = Object.freeze(object({
-  items: array(folioItemSchema, 100),
+export const workspaceItemsSearchResponseSchema = Object.freeze(object({
+  items: array(workspaceItemSchema, 100),
 }));
-export const folioPatchSchema = Object.freeze({
+export const workspaceItemPatchSchema = Object.freeze({
   type: 'object',
   properties: {
     title: { ...string(200, 1), pattern: '\\S' },
@@ -324,17 +325,17 @@ export const folioPatchSchema = Object.freeze({
   minProperties: 1,
   additionalProperties: false,
 });
-export const folioDeleteSchema = Object.freeze(object({
+export const workspaceItemDeleteSchema = Object.freeze(object({
   confirm: { const: true },
 }));
-export const folioSearchToolSchema = Object.freeze(object({
+export const workspaceItemsSearchToolSchema = Object.freeze(object({
   q: { ...string(120, 1), pattern: '\\S' },
-  kind: { enum: folioKinds },
+  kind: { enum: workspaceItemKinds },
 }, []));
-export const folioOpenToolSchema = Object.freeze({
+export const workspaceItemOpenToolSchema = Object.freeze({
   type: 'object',
   properties: {
-    id: { type: 'string', pattern: folioIdPattern },
+    id: { type: 'string', pattern: workspaceItemIdPattern },
     query: { ...string(120, 1), pattern: '\\S' },
   },
   required: [],
@@ -342,11 +343,20 @@ export const folioOpenToolSchema = Object.freeze({
   maxProperties: 1,
   additionalProperties: false,
 });
-export const folioManageToolSchema = Object.freeze(object({
-  ...folioOpenToolSchema.properties,
+export const workspacesManageToolSchema = Object.freeze(object({
+  ...workspaceItemOpenToolSchema.properties,
   action: { type: 'string', enum: ['rename', 'pin', 'unpin', 'delete'] },
-  title: folioPatchSchema.properties.title,
+  title: workspaceItemPatchSchema.properties.title,
 }, ['action']));
+export const folioKinds = workspaceItemKinds;
+export const folioItemSchema = workspaceItemSchema;
+export const folioSearchSchema = workspaceItemsSearchSchema;
+export const folioSearchResponseSchema = workspaceItemsSearchResponseSchema;
+export const folioPatchSchema = workspaceItemPatchSchema;
+export const folioDeleteSchema = workspaceItemDeleteSchema;
+export const folioSearchToolSchema = workspaceItemsSearchToolSchema;
+export const folioOpenToolSchema = workspaceItemOpenToolSchema;
+export const folioManageToolSchema = workspacesManageToolSchema;
 const htmlArtifactFrameSchemaValue = object({
   widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
   heightPx: { type: 'integer', minimum: 1, maximum: 8192 },
@@ -456,7 +466,7 @@ export const workspaceViewIdSchema = {
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
 export const workspaceNavigationPages = Object.freeze([
-  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily', 'health',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'workspaces', 'folio', 'status', 'daily', 'health',
 ]);
 export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
@@ -473,6 +483,7 @@ const workspaceLocationProperties = {
 };
 export const workspaceViewSchema = Object.freeze(object({
   ...workspaceLocationProperties,
+  workspacesOpen: { type: 'boolean' },
   folioOpen: { type: 'boolean' },
   focusedViewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
   previous: object(workspaceLocationProperties, ['page']),
@@ -488,7 +499,8 @@ function isWorkspaceLocation(value, extraKeys = []) {
 }
 
 export function isWorkspaceView(value) {
-  return isWorkspaceLocation(value, ['folioOpen', 'focusedViewId', 'previous']) &&
+  return isWorkspaceLocation(value, ['workspacesOpen', 'folioOpen', 'focusedViewId', 'previous']) &&
+    (value.workspacesOpen === undefined || typeof value.workspacesOpen === 'boolean') &&
     (value.folioOpen === undefined || typeof value.folioOpen === 'boolean') &&
     (value.focusedViewId === undefined || typeof value.focusedViewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value.focusedViewId)) &&
     (value.previous === undefined || isWorkspaceLocation(value.previous));
@@ -872,14 +884,15 @@ function validIsoDateTime(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
-export function isFolioItem(value) {
+export function isWorkspaceItem(value) {
   return isObject(value) && Object.keys(value).length === 6 &&
     /^[a-z_]+:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value.id) &&
-    folioKinds.includes(value.kind) && value.id.startsWith(`${value.kind}:`) &&
+    workspaceItemKinds.includes(value.kind) && value.id.startsWith(`${value.kind}:`) &&
     boundedString(value.title, 200, 1) && value.title === value.title.trim() &&
     validIsoDateTime(value.createdAt) && boundedString(value.promptSummary, 500, 1) &&
     value.promptSummary === value.promptSummary.trim() && typeof value.pinned === 'boolean';
 }
+export const isFolioItem = isWorkspaceItem;
 
 export function isHtmlArtifact(value) {
   if (!isObject(value) || Object.keys(value).some((key) =>
@@ -1632,7 +1645,8 @@ function isTimestamp(value) {
 
 export function isBackgroundJob(value) {
   if (!isObject(value)) return false;
-  const allowed = ['jobId', 'kind', 'title', 'status', 'step', 'steps', 'detail', 'viewId', 'startedAt', 'updatedAt'];
+  const allowed = ['jobId', 'kind', 'title', 'status', 'step', 'steps', 'detail', 'viewId',
+    'resultId', 'resultDelivery', 'startedAt', 'updatedAt'];
   if (Object.keys(value).some((key) => !allowed.includes(key))) return false;
   return typeof value.jobId === 'string' && jobIdPattern.test(value.jobId) &&
     backgroundJobKinds.includes(value.kind) && boundedText(value.title, 80) &&
@@ -1641,6 +1655,10 @@ export function isBackgroundJob(value) {
     Number.isSafeInteger(value.step) && value.step >= 0 && value.step <= value.steps &&
     (value.detail === undefined || boundedText(value.detail, 120)) &&
     (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
+    (value.resultId === undefined && value.resultDelivery === undefined ||
+      value.kind === 'research' && value.status === 'done' &&
+      typeof value.resultId === 'string' && workspaceItemIdRegex.test(value.resultId) &&
+      value.resultDelivery !== undefined && ['pending', 'unknown', 'failed', 'delivered'].includes(value.resultDelivery)) &&
     isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
 }
 

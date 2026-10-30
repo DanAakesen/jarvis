@@ -1,3 +1,9 @@
+> Tool branding update (#1321): Jarvis now advertises `health_*` equivalents of
+> the `daily_*` tool names below (`health_history` / `health_summary` for the
+> former `daily_health_*` pair). Internal storage/API and external MCP names are
+> unchanged; legacy HTTP tool routes remain available. Estimates return a
+> server-derived nutrition list and are never logged without exact approval.
+
 # Inactive nutrition services (P12-07)
 
 Construct `NutritionStore.forRequest` only after existing Jarvis authentication. It resolves the existing server owner; no input selects an email/owner. This library does not register routes/tools, supply provider credentials or activate production writes. P12-09's optional compositions integrate the existing sensitive-tool dispatcher and trusted confirmation/evidence context. They must never deserialize `IntakeAuthority` from model/client arguments.

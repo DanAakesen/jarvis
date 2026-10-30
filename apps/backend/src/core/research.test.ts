@@ -3,8 +3,11 @@ import type { InvocationAccepted, InvocationSnapshot } from '../foundry/client.j
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
-import { isBackgroundJob, isHtmlArtifact, isHtmlArtifactFrame, type BackgroundJob, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
+import { isBackgroundJob, isHtmlArtifact, isHtmlArtifactFrame, type BackgroundJob, type WorkspaceItem, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
+import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
+import type { WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
 import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWindowTitle } from './research.js';
+import { createWorkspacesModule } from './workspaces.js';
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WebResearchClient } from './web-research.js';
@@ -17,6 +20,7 @@ const agentHeaders = {
   authorization: ['Bearer', 'header.agent.signature'].join(' '),
   'x-jarvis-message-id': '101',
 };
+const ownerHeaders = { authorization: ['Bearer', 'owner.e30.sig'].join(' ') };
 const frame: HtmlArtifactFrame = {
   widthPx: 390,
   heightPx: 844,
@@ -107,10 +111,11 @@ function fixture(
   const broker = new WorkspaceCommandBroker();
   const commands: WorkspaceCommand[] = [];
   const artifacts: HtmlArtifact[] = [];
+  const workspaceItems = new Map<string, WorkspaceItem>();
   const artifactStore = {
-    create: vi.fn(async (owner: string, title: string, html: string, sources: HtmlArtifact['sources']) => {
+    create: vi.fn(async (owner: string, title: string, html: string, sources: HtmlArtifact['sources'], _signal: AbortSignal, artifactId?: string) => {
       const artifact: HtmlArtifact = {
-        id: randomUUID(),
+        id: artifactId ?? randomUUID(),
         kind: 'html',
         title,
         html,
@@ -123,39 +128,76 @@ function fixture(
       return artifact;
     }),
   };
+  const workspaceItemsStore = {
+    record: vi.fn(async (_owner: string, value: Omit<WorkspaceItem, 'pinned'>) => {
+      const item: WorkspaceItem = { ...value, pinned: false };
+      workspaceItems.set(item.id, item);
+      return item;
+    }),
+    get: vi.fn(async (_owner: string, id: string) => {
+      const item = workspaceItems.get(id);
+      if (!item) throw new Error('Workspace item was not found');
+      return { item, sourceId: id.slice('research:'.length) };
+    }),
+    search: vi.fn(async () => [...workspaceItems.values()]),
+  } as unknown as WorkspaceItemsStore;
+  const htmlArtifacts = {
+    read: vi.fn(async (id: string) => artifacts.find((artifact) => artifact.id === id)),
+  } as unknown as WorkspaceHtmlArtifactStore;
   const researchModule = createHtmlResearchModule(
     () => runner.client,
     'gpt-5.5',
     artifactStore,
     { ...(invocationTimeoutMs === undefined ? {} : { invocationTimeoutMs }), pollIntervalMs: 1 },
+    workspaceItemsStore,
   );
   const module: BackendModule = researchModule;
   const app = buildApp(config, undefined, {
-    modules: [coreModule, module],
-    auth: async () => ({
-      kind: 'jarvis-agent',
-      objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef',
-      tenantId: config.auth.tenantId,
-    }),
+    modules: [coreModule, module, createWorkspacesModule(workspaceItemsStore, htmlArtifacts)],
+    auth: async (token) => token === 'owner.e30.sig'
+      ? { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' }
+      : {
+        kind: 'jarvis-agent',
+        objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef',
+        tenantId: config.auth.tenantId,
+      },
     toolCallStore: { record: async () => {} },
     workspaceCommands: broker,
     ...(settingsStore ? { settingsStore } : {}),
   });
   apps.push(app);
-  const connection = broker.connect(ownerId, (event, data) => {
+  let disconnectOnHtml = false;
+  let connection!: ReturnType<typeof broker.connect>;
+  const connect = () => broker.connect(ownerId, (event, data) => {
     if (event === 'workspace-command') {
       const command = (data as { command: WorkspaceCommand }).command;
       commands.push(command);
+      if (disconnectOnHtml && command.view.renderer === 'html-app') {
+        connection.close();
+        return true;
+      }
       broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
     }
     return true;
   });
+  connection = connect();
   broker.updateSnapshot(ownerId, connection.sessionId, {
     windows: [],
     contextPanelOpen: false,
     frame,
   });
-  return { app, broker, commands, artifacts, artifactStore, runner: runner.client };
+  return {
+    app, broker, commands, artifacts, artifactStore, workspaceItems, workspaceItemsStore, connection,
+    disconnectOnHtml: () => { disconnectOnHtml = true; },
+    reconnect: () => {
+      connection = connect();
+      broker.updateSnapshot(ownerId, connection.sessionId, {
+        windows: [], contextPanelOpen: false, frame,
+      });
+      return connection;
+    },
+    runner: runner.client,
+  };
 }
 
 async function startResearch(
@@ -268,6 +310,110 @@ describe('background interactive research', () => {
     expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
     expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
     expect((await app.backgroundJobs.list())[0]).toMatchObject({ status: 'done' });
+  });
+
+  it('keeps a saved result complete without a connected workspace and reopens it after reload without research', async () => {
+    const searchGate = deferred();
+    const reportGate = deferred();
+    const runner = makeRunner(reportHtml(), searchGate.promise, reportGate.promise);
+    const { app, broker, commands, artifacts, workspaceItems, connection, reconnect } = fixture(runner);
+    const started = await startResearch(app);
+    const jobId = started.json().result.jobId as string;
+
+    connection.close();
+    searchGate.resolve();
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(3));
+    reportGate.resolve();
+    await vi.waitFor(async () => {
+      expect(await app.backgroundJobs.list()).toEqual([
+        expect.objectContaining({
+          jobId, status: 'done', resultId: `research:${jobId}`, resultDelivery: 'pending',
+        }),
+      ]);
+    });
+
+    expect(artifacts).toHaveLength(1);
+    expect(workspaceItems.size).toBe(1);
+    expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
+
+    const reopenedConnection = reconnect();
+    const reopened = await app.inject({
+      method: 'POST',
+      url: `/jobs/${jobId}/open-result`,
+      headers: ownerHeaders,
+    });
+    expect(reopened.statusCode).toBe(200);
+    expect(reopened.json()).toEqual({ opened: true });
+    expect((await app.backgroundJobs.list())[0]).toMatchObject({ status: 'done', resultDelivery: 'delivered' });
+    expect(commands.filter((command) => 'view' in command && command.view.renderer === 'html-app')
+      .map(({ operation }) => operation)).toEqual(['create']);
+
+    broker.updateSnapshot(ownerId, reopenedConnection.sessionId, {
+      windows: [{
+        viewId: `research-${jobId.replaceAll('-', '')}`, title: 'Research report', state: 'open',
+      }],
+      contextPanelOpen: false,
+      frame,
+    });
+    const repeated = await app.inject({
+      method: 'POST',
+      url: `/jobs/${jobId}/open-result`,
+      headers: ownerHeaders,
+    });
+    expect(repeated.statusCode).toBe(200);
+    expect(commands.filter((command) => 'view' in command && command.view.renderer === 'html-app')
+      .map(({ operation }) => operation)).toEqual(['create', 'update']);
+    expect(artifacts).toHaveLength(1);
+    expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
+  });
+
+  it('records an ambiguous report acknowledgement without failing the saved research job', async () => {
+    const searchGate = deferred();
+    const reportGate = deferred();
+    const runner = makeRunner(reportHtml(), searchGate.promise, reportGate.promise);
+    const { app, artifacts, disconnectOnHtml } = fixture(runner);
+    const started = await startResearch(app);
+    const jobId = started.json().result.jobId as string;
+
+    searchGate.resolve();
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(3));
+    disconnectOnHtml();
+    reportGate.resolve();
+    await vi.waitFor(async () => {
+      expect(await app.backgroundJobs.list()).toEqual([
+        expect.objectContaining({ jobId, status: 'done', resultDelivery: 'unknown' }),
+      ]);
+    });
+
+    expect(artifacts).toHaveLength(1);
+    expect((await app.backgroundJobs.list())[0]).toHaveProperty('resultId', `research:${jobId}`);
+    expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(['artifact', 'workspace items'] as const)('keeps a true %s persistence failure marked failed', async (failure) => {
+    const runner = makeRunner();
+    const fixtureData = fixture(runner);
+    const completion = vi.fn();
+    fixtureData.app.addHook('preHandler', (request, _reply, done) => {
+      request.announceResearchCompletion = completion;
+      done();
+    });
+    if (failure === 'artifact') {
+      fixtureData.artifactStore.create.mockRejectedValueOnce(new Error('Synthetic artifact persistence failure.'));
+    } else {
+      vi.mocked(fixtureData.workspaceItemsStore.record).mockRejectedValueOnce(new Error('Synthetic Workspaces persistence failure.'));
+    }
+
+    const response = await startResearch(fixtureData.app);
+    const jobId = response.json().result.jobId as string;
+    await vi.waitFor(async () => {
+      expect((await fixtureData.app.backgroundJobs.list()).find((job) => job.jobId === jobId))
+        .toMatchObject({ status: 'failed' });
+    });
+
+    expect(completion).toHaveBeenCalledWith({ status: 'failed' });
+    expect((await fixtureData.app.backgroundJobs.details(jobId))?.details.job.resultId).toBeUndefined();
+    expect(fixtureData.artifacts).toHaveLength(failure === 'workspace items' ? 1 : 0);
   });
 
   it('marks the finished report partial only when searches failed', async () => {

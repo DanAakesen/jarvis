@@ -5,13 +5,27 @@ import { createConversationStore } from './conversation-store.js';
 function fixture(queryResult = { recordset: [], recordsets: [], rowsAffected: [] as number[] }) {
   const query = vi.fn(async () => queryResult);
   const input = vi.fn();
-  const request = { input, query };
+  const cancel = vi.fn();
+  const request = { input, query, cancel };
   input.mockReturnValue(request);
   const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
-  return { store: createConversationStore(pool), pool, input, query };
+  return { store: createConversationStore(pool), pool, input, query, cancel };
 }
 
 describe('SQL conversation store', () => {
+  it('cancels a pending camera comment write and does not report completion after abort', async () => {
+    const { store, query, cancel } = fixture();
+    let finish!: (value: { recordset: never[]; recordsets: never[]; rowsAffected: number[] }) => void;
+    query.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const controller = new AbortController();
+    const pending = store.addMessage({ sessionId: '41', role: 'jarvis', text: 'A camera observation.', model: null, signal: controller.signal });
+    const rejected = expect(pending).rejects.toThrow();
+    controller.abort();
+    expect(cancel).toHaveBeenCalledOnce();
+    finish({ recordset: [], recordsets: [], rowsAffected: [] });
+    await rejected;
+  });
+
   it('reads only bounded recent user chat text, newest first, without other conversation fields', async () => {
     const { store, input, query } = fixture({
       recordset: [{ text: 'Latest question' }, { text: 'Earlier question' }],
@@ -148,7 +162,7 @@ describe('SQL conversation store', () => {
       id: '41', channel: 'chat', language: 'en', startedAt, endedAt,
     });
     expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, 41n);
-    expect(query.mock.calls[0]?.[0]).toContain('FROM dbo.jarvis_sessions WHERE id = @sessionId');
+    expect(query.mock.calls[0]?.[0]).toContain('WHERE s.id = @sessionId');
   });
 
   it('stores a message only while its session remains active', async () => {
@@ -384,5 +398,42 @@ describe('SQL conversation store', () => {
     expect(query.mock.calls[0]?.[0]).toContain("INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, source_event_id, at)");
     expect(query.mock.calls[0]?.[0]).toContain('DATEDIFF_BIG(MILLISECOND, started_at, ended_at)');
     expect(query.mock.calls[0]?.[0]).toContain("WHERE channel = N'voice'");
+  });
+});
+
+
+describe('runtime test session integration contract', () => {
+  it('preserves normal create SQL without runtime metadata', async () => {
+    const { store, query } = fixture({ recordset: [{ id: '42', channel: 'chat', language: 'en', started_at: new Date(), ended_at: null }], recordsets: [], rowsAffected: [] });
+    const session = await store.createSession({ channel: 'chat', language: 'en' });
+    expect(session.runtimeTest).toBeUndefined();
+    expect(query.mock.calls[0]?.[0]).not.toContain('session_runtime_tests');
+  });
+  it('rejects unknown runtime or nonchat/missing owner before persistence', async () => {
+    const { store, query } = fixture();
+    await expect(store.createSession({ channel: 'chat', language: 'en', runtimeTest: 'unknown' as 'copilot' })).rejects.toThrow();
+    await expect(store.createSession({ channel: 'voice', language: 'en', runtimeTest: 'copilot', ownerObjectId: '11111111-2222-3333-4444-555555555555' })).rejects.toThrow();
+    await expect(store.createSession({ channel: 'chat', language: 'en', runtimeTest: 'copilot' })).rejects.toThrow();
+    expect(query).not.toHaveBeenCalled();
+  });
+  it('returns selection without exposing native reference', async () => {
+    const { store } = fixture({ recordset: [{ id: '42', channel: 'chat', language: 'en', started_at: new Date(), ended_at: null, runtime_test: 'copilot', native_conversation_id: 'private' }], recordsets: [], rowsAffected: [] });
+    const session = await store.getSession('42');
+    expect(session?.runtimeTest).toBe('copilot');
+    expect(session).not.toHaveProperty('nativeConversationId');
+  });
+  it('excludes tests only when the UI feed requests it and scopes explicit session history', async () => {
+    const { store, input, query } = fixture();
+    await store.getHistory({ limit: 10 });
+    expect(input).toHaveBeenCalledWith('excludeRuntimeTests', sql.Bit, false);
+    expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, null);
+    expect(query.mock.calls[0]?.[0]).toContain('@excludeRuntimeTests = 0 OR NOT EXISTS');
+    expect(query.mock.calls[0]?.[0]).toContain('r.jarvis_session_id = s.id');
+    await store.getHistory({ limit: 10, excludeRuntimeTests: true });
+    expect(input).toHaveBeenCalledWith('excludeRuntimeTests', sql.Bit, true);
+    await store.getHistory({ limit: 10, sessionId: '42' });
+    expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, 42n);
+    expect(query.mock.calls[2]?.[0]).toContain('@sessionId IS NOT NULL AND s.id = @sessionId');
+    await expect(store.getHistory({ limit: 10, sessionId: 'invalid' })).rejects.toThrow();
   });
 });

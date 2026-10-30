@@ -227,7 +227,7 @@ describe('bounded grouped history continuation', () => {
         { operation: 'get_health_history', owner },
         { operation: 'get_health_history', limit: 101 },
         { operation: 'get_health_history', continuation: { source: 'health' } },
-      ]) expect((await app.inject({ method: 'POST', url: '/daily_health_summary', payload })).statusCode).toBe(400);
+      ]) expect((await app.inject({ method: 'POST', url: '/health_summary', payload })).statusCode).toBe(400);
     } finally { await app.close(); }
   });
 

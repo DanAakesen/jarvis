@@ -91,16 +91,16 @@ function firstRead(f: Fixture) {
   return { query: call[0] as Record<string, unknown>, request: call[1], signal: call[2] };
 }
 
-describe('daily_show descriptor', () => {
+describe('health_show descriptor', () => {
   it('is private, phone-denied, small-bodied and plain about what it does', () => {
     const { tool } = fixture();
-    expect(tool.name).toBe('daily_show');
+    expect(tool.name).toBe('health_show');
     expect(tool.name).toMatch(/^[A-Za-z0-9_-]{1,64}$/u);
     expect(tool.sensitive).toBe(true);
     expect(tool.denyOnPhone).toBe(true);
     expect(tool.bodyLimit).toBeLessThanOrEqual(4096);
     expect(tool.description.length).toBeLessThanOrEqual(4000);
-    expect(tool.description).toContain('daily_query');
+    expect(tool.description).toContain('health_query');
     expect(tool.description).toMatch(/one per-day nutrient/iu);
     expect(tool.description).toMatch(/Danish or English/iu);
     expect(tool.description).toMatch(/not exact trigger phrases/iu);
@@ -132,7 +132,7 @@ describe('daily_show descriptor', () => {
   });
 });
 
-describe('daily_show access', () => {
+describe('health_show access', () => {
   it('denies a signed-in user who is not the owner before anything is read or drawn', async () => {
     const f = fixture();
     const other = { ...f.request, principal: { objectId: stranger } } as unknown as FastifyRequest;
@@ -154,14 +154,14 @@ describe('daily_show access', () => {
     f.isConnected.mockReturnValue(false);
     const error = await rejection(run(f, sleepWeek));
     expect(error).toBeInstanceOf(ToolRefusal);
-    expect((error as ToolRefusal).message).toContain('daily_query');
+    expect((error as ToolRefusal).message).toContain('health_query');
     expect(f.isConnected).toHaveBeenCalledWith(owner);
     expect(f.query).not.toHaveBeenCalled();
     expect(f.execute).not.toHaveBeenCalled();
   });
 });
 
-describe('daily_show input', () => {
+describe('health_show input', () => {
   // Every free-text value carries "canary" so a refusal that echoed it back would be caught.
   const refusals: [string, unknown][] = [
     ['a body that is not an object', 'daily.sleep'],
@@ -264,7 +264,7 @@ describe('daily_show input', () => {
   });
 });
 
-describe('daily_show publishing', () => {
+describe('health_show publishing', () => {
   const identities: [string, Record<string, unknown>][] = [
     ['the signed-in owner', {}],
     ['the agent acting for the owner', { principal: undefined, agentPrincipal: { kind: 'jarvis-agent' } }],
@@ -475,7 +475,7 @@ describe('daily_show publishing', () => {
   });
 });
 
-describe('daily_show cancellation', () => {
+describe('health_show cancellation', () => {
   const cancelled = () => new DOMException('The turn was cancelled.', 'AbortError');
 
   it('passes a caller abort through untouched and draws nothing', async () => {

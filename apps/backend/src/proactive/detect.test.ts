@@ -39,6 +39,7 @@ describe('bounded finding copy', () => {
       expect(finding.body).toContain(iso(hour));
       expect(finding.body).not.toMatch(/[\uD800-\uDFFF]/u);
     }
+    expect(findings[0]?.title).toBe(`${'😀Å report '.repeat(18)}…`);
     expect(findings[0]?.body).toBe(language === 'da'
       ? `Opgaven "${longText.slice(0, 299)}…" har frist ${iso(hour)}.`
       : `The task "${longText.slice(0, 299)}…" is due at ${iso(hour)}.`);
@@ -56,6 +57,13 @@ describe('bounded finding copy', () => {
     expect(finding.body).toContain(`"${'a'.repeat(limit - 2)}…"`);
     expect(finding.body).not.toMatch(/[\uD800-\uDFFF]/u);
     expect(finding.body.length).toBeLessThanOrEqual(500);
+  });
+
+  it('does not split a surrogate pair at the 200-unit task-title boundary', () => {
+    const text = `${'a'.repeat(198)}😀${'z'.repeat(100)}`;
+    const finding = detectFindings([todo(hour, { text })], now, 'en')[0]!;
+    expect(finding.title).toBe(`${'a'.repeat(198)}…`);
+    expect(finding.title).not.toMatch(/\p{Cs}/u);
   });
 
   it('preserves source text exactly at its snippet limit and uses full text for identity', () => {
@@ -85,7 +93,7 @@ describe('deterministic deadlines', () => {
     [0, 'time_critical'], [24 * hour, 'time_critical'],
   ] as const)('classifies due offset %s with urgency %s', (offset, urgency) => {
     expect(detectFindings([todo(offset)], now, 'en')).toEqual([{
-      title: offset < 0 ? 'Overdue task' : 'Task deadline approaching',
+      title: 'Send report',
       body: `The task "Send report" ${offset < 0 ? 'was' : 'is'} due at ${iso(offset)}.`,
       category: 'deadline', urgency, dueAt: iso(offset),
       evidence: ['todos:1'], dedupeKey: deterministicDedupeKey('deadline', 'Send report', iso(offset)),
@@ -144,11 +152,11 @@ describe('deterministic deadlines', () => {
 
   it('uses fixed Danish deadline templates with original source text', () => {
     expect(detectFindings([todo(hour, { text: 'Send årsrapport' })], now, 'da')[0]).toMatchObject({
-      title: 'Opgavefrist nærmer sig',
+      title: 'Send årsrapport',
       body: `Opgaven "Send årsrapport" har frist ${iso(hour)}.`,
     });
     expect(detectFindings([todo(-hour)], now, 'da')[0]).toMatchObject({
-      title: 'Overskredet opgavefrist',
+      title: 'Send report',
       body: `Opgaven "Send report" havde frist ${iso(-hour)}.`,
     });
   });

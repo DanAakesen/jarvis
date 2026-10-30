@@ -1,37 +1,37 @@
-.workspace-window.workspace-window-camera-preview { gap: var(--space-2); padding: var(--space-2); }
-.workspace-window-camera-preview .workspace-window-heading { margin: 0; padding-inline: var(--space-2) var(--space-1); }
-.workspace-window-camera-preview .workspace-window-heading h3 { font-size: var(--type-subsection); }
-.workspace-window-camera-preview .workspace-view-content { display: flex; overflow-y: auto; }
+.workspace-window.workspace-window-camera-preview { gap: 0; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.workspace-window.workspace-window-camera-preview:focus-within { box-shadow: none; }
+.workspace-window-camera-preview .workspace-view-content { display: flex; min-height: 0; overflow: visible; padding: 0; }
 .camera-preview { position: relative; display: flex; flex: 1; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 0; }
-.camera-preview-picture { position: relative; display: grid; flex: 1; min-height: 80px; overflow: hidden; place-items: center; border-radius: var(--radius-panel); background: var(--surface); }
+.camera-preview-picture { cursor: grab; user-select: none; position: relative; display: grid; flex: 0 0 auto; width: min(100%, 640px); aspect-ratio: 4 / 3; max-width: 100%; max-height: 100%; overflow: hidden; place-items: center; align-self: center; }
 .camera-preview[data-inactive="true"] .camera-preview-picture { display: none; }
 .camera-preview-picture video { display: block; width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 .camera-preview-picture[data-facing="user"] video { transform: scaleX(-1); }
-.camera-preview-picture > p { position: absolute; max-width: 100%; margin: 0; padding: var(--space-3); text-align: center; }
-.camera-preview-live { position: absolute; top: 8px; right: 8px; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--surface); color: var(--text); font-size: var(--type-caption); }
-.camera-preview-live::before { width: 7px; height: 7px; border-radius: 50%; background: var(--focus); content: ""; }
-.camera-preview .camera-status { flex-shrink: 0; padding: 0 var(--space-2) var(--space-1); }
+.camera-preview-picture > p { position: absolute; z-index: 1; max-width: 100%; margin: 0; padding: var(--space-3); text-align: center; }
+.camera-preview-picture > .camera-status { position: absolute; inset: 0; display: block; padding: 0; pointer-events: none; }
+.camera-preview > .camera-status { flex-shrink: 0; padding: 0 var(--space-2) var(--space-1); }
 .camera-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-1) var(--space-2); min-width: 0; color: var(--text); font-size: var(--type-caption); }
 .camera-status > span { overflow-wrap: anywhere; }
-.camera-status-label { display: inline-flex; align-items: center; gap: var(--space-2); }
 .camera-status-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .camera-status svg { flex: 0 0 auto; width: 18px; height: 18px; }
-.camera-preview .camera-status-label { position: absolute; top: 8px; left: 8px; max-width: calc(100% - 84px); padding: var(--space-1) var(--space-2); border-radius: var(--radius-control); background: var(--surface); }
-.camera-preview .camera-status-actions { flex: 1; justify-content: space-between; }
-.camera-preview .camera-status-control { display: inline-flex; align-items: center; width: auto; min-width: 44px; min-height: 44px; gap: var(--space-2); padding-inline: var(--space-2); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.camera-preview-picture .camera-status-actions { position: absolute; top: 4px; right: 4px; gap: var(--space-1); pointer-events: auto; }
+.camera-preview-picture .camera-status-control { display: grid; width: 44px; min-width: 44px; height: 44px; min-height: 44px; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); background: var(--chrome-glass-surface); backdrop-filter: blur(var(--chrome-glass-blur)); -webkit-backdrop-filter: blur(var(--chrome-glass-blur)); color: var(--text); cursor: pointer; }
 .camera-preview .camera-status-control:hover { background: var(--glass-hover); }
-.camera-preview .camera-status-control:only-child { margin-left: auto; }
 .camera-preview .camera-status-control:disabled { cursor: not-allowed; color: var(--disabled-text); }
-.camera-preview-error { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding: 0 var(--space-2); }
-.camera-preview-notice { flex-shrink: 0; margin: 0; padding: 0 var(--space-2) var(--space-1); font-size: var(--type-caption); line-height: var(--line-prose); overflow-wrap: anywhere; }
+.camera-preview-feedback { position: absolute; z-index: 2; top: 56px; right: 8px; bottom: 8px; left: 8px; display: grid; gap: var(--space-1); overflow: auto; padding: var(--space-2); border-radius: var(--radius-control); background: color-mix(in srgb, var(--surface) 92%, transparent); }
+.camera-preview-error { display: grid; justify-items: start; gap: var(--space-2); min-width: 0; font-size: var(--type-caption); line-height: var(--line-tight); }
+.camera-preview-error > span { min-width: 0; overflow-wrap: anywhere; }
+.camera-preview-error > button { justify-self: start; white-space: nowrap; overflow-wrap: normal; }
+.camera-preview-notice { margin: 0; font-size: var(--type-caption); line-height: var(--line-prose); overflow-wrap: anywhere; }
 .camera-preview .camera-status-control:active:not(:disabled) { background: var(--glass-pressed); transform: translateY(1px); }
 .camera-preview .camera-status-control:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .workspace[data-phone="true"] .workspace-canvas { position: relative; }
-.workspace[data-phone="true"] .camera-preview-picture { min-height: 40px; }
 .workspace[data-phone="true"] .workspace-window.workspace-window-camera-preview.workspace-window-camera-preview:not([hidden], .workspace-window-minimized) {
-  position: absolute; z-index: var(--z-window-front); inset: 8px 0 auto auto; width: min(300px, 100%); height: min(280px, 48%); min-height: 180px; flex: none;
+  position: absolute; z-index: var(--z-window-front); inset: 8px 0 auto auto; width: min(320px, 88vw); height: min(360px, 48vh); min-height: 0; flex: none;
 }
 @media (max-height: 500px) and (pointer: coarse) {
-  .workspace[data-phone="true"] .workspace-window.workspace-window-camera-preview.workspace-window-camera-preview:not([hidden], .workspace-window-minimized) { width: min(260px, 48%); height: 100%; min-height: 0; top: 0; }
-  .camera-preview-picture { min-height: 40px; }
+  .workspace[data-phone="true"] .workspace-window.workspace-window-camera-preview.workspace-window-camera-preview:not([hidden], .workspace-window-minimized) { width: min(320px, 72vw); height: min(300px, 58vh); top: 0; }
 }
+
+.camera-preview-picture > video, .camera-preview-picture > p { touch-action: none; }
+.camera-preview-picture:active { cursor: grabbing; }
+.camera-preview-picture .camera-preview-feedback { touch-action: pan-y; cursor: auto; user-select: text; }

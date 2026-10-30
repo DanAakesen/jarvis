@@ -123,14 +123,17 @@ function shown(value: unknown, missing = 'not set'): string {
   if (value === null || value === undefined) return missing;
   return typeof value === 'string' ? JSON.stringify(value) : JSON.stringify(value) ?? String(value);
 }
-function nutritionSummary(input: MealInput): string {
+export function shownNutrient(value: number | null): string {
+  return value === null ? 'unknown (not zero)' : String(Math.round(value));
+}
+export function nutritionSummary(input: { energyKcal: number | null; proteinGrams: number | null; carbohydratesGrams: number | null; fatGrams: number | null; fiberGrams: number | null }): string {
   return [
-    `energy ${shown(input.energyKcal, 'unknown (not zero)')} kcal`,
-    `protein ${shown(input.proteinGrams, 'unknown (not zero)')} g`,
-    `carbohydrates ${shown(input.carbohydratesGrams, 'unknown (not zero)')} g`,
-    `fat ${shown(input.fatGrams, 'unknown (not zero)')} g`,
-    `fiber ${shown(input.fiberGrams, 'unknown (not zero)')} g`,
-  ].join('; ');
+    `Protein: ${shownNutrient(input.proteinGrams)} g`,
+    `Calories: ${shownNutrient(input.energyKcal)} kcal`,
+    `Fat: ${shownNutrient(input.fatGrams)} g`,
+    `Carbohydrates: ${shownNutrient(input.carbohydratesGrams)} g`,
+    `Fiber: ${shownNutrient(input.fiberGrams)} g`,
+  ].map(line => `- ${line}`).join('\n');
 }
 function referenceSummary(input: MealInput): string {
   const reference = display(input).nutrientReference;
@@ -179,7 +182,7 @@ function snapshot(input: MealInput): string[] {
     `Capture: ${shown(input.captureMethod)}; confidence: ${shown(input.confidence)}`,
     `Components (${components.length}):`,
     ...components.map((component, index) => `${index + 1}. ${componentSummary(component)}`),
-    `Nutrition: ${nutritionSummary(input)}`,
+    `Nutrition:\n${nutritionSummary(input)}`,
     `Source: ${shown(input.provenance.source)}${reference ? `; ${reference}` : ''}`,
     `Independently verified: ${shown(input.provenance.independentlyVerified)}`,
     `Uncertainty: ${uncertaintySummary(input)}`,
@@ -198,8 +201,8 @@ function correctionDetails(before: MealInput, after: MealInput): string[] {
   ] as const;
   const changedNutrients = nutrients.filter(([, key]) => before[key] !== after[key]);
   const nutritionChanges = nutrients.map(([name, key, unit]) => before[key] === after[key]
-    ? `${name} ${shown(after[key], 'unknown (not zero)')} ${unit} (unchanged)`
-    : `${name} ${shown(before[key], 'unknown (not zero)')} → ${shown(after[key], 'unknown (not zero)')} ${unit}`);
+    ? `${name} ${shownNutrient(after[key])} ${unit} (unchanged)`
+    : `${name} ${shownNutrient(before[key])} → ${shownNutrient(after[key])} ${unit}`);
   const beforeUncertainty = uncertaintySummary(before);
   const afterUncertainty = uncertaintySummary(after);
   const lines = [
@@ -214,8 +217,8 @@ function correctionDetails(before: MealInput, after: MealInput): string[] {
       ? `Components before (${before.components.length}):\n${beforeShown.components.map((component, index) => `${index + 1}. ${componentSummary(component)}`).join('\n')}\nComponents after (${after.components.length}):\n${afterShown.components.map((component, index) => `${index + 1}. ${componentSummary(component)}`).join('\n')}`
       : `Portion: ${after.components.length} components unchanged`,
     ...(changedNutrients.length
-      ? [`Nutrition: ${nutritionChanges.join('; ')}`]
-      : [`Nutrition unchanged: ${nutritionSummary(after)}`]),
+      ? [`Nutrition:\n${nutritionChanges.map(line => `- ${line}`).join('\n')}`]
+      : [`Nutrition unchanged:\n${nutritionSummary(after)}`]),
     `Source: ${shown(before.provenance.source)} → ${shown(after.provenance.source)}${referenceSummary(after) ? `; ${referenceSummary(after)}` : ''}`,
     `Independently verified: ${shown(after.provenance.independentlyVerified)}`,
     `Uncertainty: ${beforeUncertainty === afterUncertainty ? afterUncertainty : `${beforeUncertainty} → ${afterUncertainty}`}`,

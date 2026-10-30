@@ -1,0 +1,57 @@
+{
+  "production_handlers_intact": true,
+  "native_touch": true,
+  "simulated_keyboard_geometry": true,
+  "send_pointerdown": [
+    {
+      "ms": 2941,
+      "event": "pointerdown",
+      "phase": "capture",
+      "target": "send",
+      "inComposer": true,
+      "pathInComposer": true,
+      "focused": "composer",
+      "prevented": false,
+      "disabled": false,
+      "pointer": "touch",
+      "viewport": [
+        390,
+        480,
+        0,
+        100
+      ],
+      "button": [
+        329,
+        419,
+        44,
+        44
+      ]
+    },
+    {
+      "ms": 2942,
+      "event": "pointerdown",
+      "phase": "settled",
+      "target": "send",
+      "inComposer": true,
+      "pathInComposer": true,
+      "focused": "composer",
+      "prevented": false,
+      "disabled": false,
+      "pointer": "touch",
+      "viewport": [
+        390,
+        480,
+        0,
+        100
+      ],
+      "button": [
+        329,
+        419,
+        44,
+        44
+      ]
+    }
+  ],
+  "expected_settled_prevented": true,
+  "assertion_passed": false
+}

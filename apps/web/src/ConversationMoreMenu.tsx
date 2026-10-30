@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { VoiceLanguage } from './voice-client';
 import { voiceLanguages } from './voice-language';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
@@ -10,11 +10,13 @@ export type MoreMenuAction = {
   icon: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
+  /** Native file input kept beside its action while the system chooser is open. */
+  fileInput?: ReactNode;
   /** Explains why an action is unavailable; announced with the disabled item and shown as its tooltip. */
   description?: string;
 };
 
-function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'check' }) {
+function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'check' | 'plus' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'more':
@@ -27,6 +29,8 @@ function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'c
       return <svg {...common}><path d="m9 6 6 6-6 6" /></svg>;
     case 'check':
       return <svg {...common}><path d="m5 12.5 4.5 4.5L19 7" /></svg>;
+    case 'plus':
+      return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
   }
 }
 
@@ -44,30 +48,38 @@ function focusItem(container: HTMLElement | null, move: 'first' | 'last' | 'next
 }
 
 /**
- * Shared three-dot conversation menu. When the caller passes language state, Language is the first row
- * and opens a Danish/English flyout bound to it; callers may add further actions below it. The same
- * menu, with an attachment trigger and no Language row, serves the composer's attachment actions.
+ * Shared three-dot conversation menu. Leading actions precede the optional Language row; remaining
+ * actions follow it. Language opens a Danish/English flyout bound to the caller's state.
  */
 export function ConversationMoreMenu({
   language,
   onLanguageChange,
+  leadingActions = [],
   actions = [],
   align = 'start',
   className,
   label = 'More options',
   icon = 'more',
   languageNote,
+  topLayer = false,
+  onTestRuntime,
 }: {
   language?: VoiceLanguage;
   onLanguageChange?: (language: VoiceLanguage) => void;
+  leadingActions?: MoreMenuAction[];
   actions?: MoreMenuAction[];
   align?: 'start' | 'end';
   className?: string;
   label?: string;
-  icon?: 'more' | 'attach';
+  icon?: 'more' | 'attach' | 'plus';
   /** Explains how a language choice applies, shown inside the Language flyout. */
   languageNote?: string;
+  /** Escape the composer backdrop root while retaining native picker and focus ancestry. */
+  topLayer?: boolean;
+  /** Opt in only when the caller supplies a working runtime test flow. */
+  onTestRuntime?: () => void;
 }) {
+  const renderInTopLayer = topLayer && typeof HTMLElement.prototype.showPopover === 'function';
   const id = useId();
   const menuId = `${id}-menu`;
   const languageMenuId = `${id}-language`;
@@ -82,6 +94,34 @@ export function ConversationMoreMenu({
   const [open, setOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const pendingFocus = useRef<'first' | 'last' | 'checked' | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open || !renderInTopLayer || !menu.current?.showPopover) return;
+    const sheet = menu.current;
+    const flyout = languageMenu.current;
+    // A nested backdrop-filter cannot sample chat outside the composer's backdrop root.
+    // Manual popovers escape that root without moving the attachment input in the DOM.
+    sheet.showPopover();
+    if (languageOpen) flyout?.showPopover();
+    let frame = 0;
+    const position = () => {
+      const anchor = trigger.current?.getBoundingClientRect();
+      if (!anchor) return;
+      sheet.style.left = `${align === 'end' ? anchor.right - sheet.offsetWidth : anchor.left}px`;
+      sheet.style.bottom = `${window.innerHeight - anchor.top + 10}px`;
+      if (languageOpen && flyout) {
+        const row = languageItem.current?.getBoundingClientRect();
+        if (row) {
+          const phone = window.innerWidth <= 700;
+          flyout.style.left = `${phone ? row.left - 6 : align === 'end' ? row.left - flyout.offsetWidth - 12 : row.right + 12}px`;
+          flyout.style.top = `${phone ? row.top - flyout.offsetHeight - 12 : row.top - 6}px`;
+        }
+      }
+      frame = requestAnimationFrame(position);
+    };
+    position();
+    return () => cancelAnimationFrame(frame);
+  }, [align, languageOpen, open, renderInTopLayer]);
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
@@ -185,6 +225,40 @@ export function ConversationMoreMenu({
     event.stopPropagation();
   };
 
+  const renderActions = (menuActions: MoreMenuAction[]) => menuActions.map((action) => {
+    const descriptionId = action.description ? `${id}-${action.id}-description` : undefined;
+    const button = (
+      <button
+        className="more-menu-item"
+        type="button"
+        role="menuitem"
+        tabIndex={-1}
+        aria-disabled={action.disabled || undefined}
+        aria-describedby={descriptionId}
+        title={action.description}
+        onClick={() => {
+          if (action.disabled) return;
+          if (!action.fileInput) close(true);
+          action.onSelect();
+        }}
+      >
+        {action.icon}
+        <span className="more-menu-label">{action.label}</span>
+      </button>
+    );
+    return (
+      <Fragment key={action.id}>
+        {action.fileInput ? (
+          <div role="none" className="more-menu-file" onChange={() => close(true)}>
+            {button}
+            {action.fileInput}
+          </div>
+        ) : button}
+        {descriptionId && <span id={descriptionId} className="visually-hidden">{action.description}</span>}
+      </Fragment>
+    );
+  });
+
   return (
     <div
       ref={root}
@@ -204,14 +278,18 @@ export function ConversationMoreMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        onClick={() => (open ? close(false) : openMenu('first'))}
+        // Keep the focused menu item from blurring before a second trigger press
+        // reaches click (notably on touch browsers that do not focus buttons).
+        onPointerDown={(event) => { if (open) event.preventDefault(); }}
+        onClick={() => (open ? close(true) : openMenu('first'))}
         onKeyDown={onTriggerKeyDown}
       >
         <MenuIcon name={icon} />
       </button>
       {open && (
-        <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" role="menu" aria-label={label}
+        <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu" aria-label={label}
           onKeyDown={(event) => onMenuKeyDown(event, false)}>
+          {renderActions(leadingActions)}
           {language !== undefined && onLanguageChange && <div role="none" className="more-menu-language">
             <button
               ref={languageItem}
@@ -229,7 +307,7 @@ export function ConversationMoreMenu({
               <MenuIcon name="chevron" />
             </button>
             {languageOpen && (
-              <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" role="menu"
+              <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu"
                 aria-label="Language" aria-describedby={languageNote ? languageNoteId : undefined}
                 onKeyDown={(event) => onMenuKeyDown(event, true)}>
                 {voiceLanguages.map((option) => (
@@ -253,31 +331,8 @@ export function ConversationMoreMenu({
               </div>
             )}
           </div>}
-          {actions.map((action) => {
-            const descriptionId = action.description ? `${id}-${action.id}-description` : undefined;
-            return (
-              <Fragment key={action.id}>
-                <button
-                  className="more-menu-item"
-                  type="button"
-                  role="menuitem"
-                  tabIndex={-1}
-                  aria-disabled={action.disabled || undefined}
-                  aria-describedby={descriptionId}
-                  title={action.description}
-                  onClick={() => {
-                    if (action.disabled) return;
-                    close(true);
-                    action.onSelect();
-                  }}
-                >
-                  {action.icon}
-                  <span className="more-menu-label">{action.label}</span>
-                </button>
-                {descriptionId && <span id={descriptionId} className="visually-hidden">{action.description}</span>}
-              </Fragment>
-            );
-          })}
+          {onTestRuntime && renderActions([{ id: 'test-runtime', label: 'Test agent runtime', icon: <MenuIcon name="plus" />, onSelect: onTestRuntime }])}
+          {renderActions(actions)}
         </div>
       )}
     </div>

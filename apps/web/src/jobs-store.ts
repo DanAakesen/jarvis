@@ -378,6 +378,25 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
     }
   }, [backendUrl, getAccessToken]);
 
+  const openResult = useCallback(async (jobId: string): Promise<string> => {
+    if (!backendUrl) return 'Saved reports are unavailable.';
+    const signal = AbortSignal.timeout(35_000);
+    try {
+      const response = await authorizedJobsRequest(
+        backendUrl,
+        `/jobs/${encodeURIComponent(jobId)}/open-result`,
+        await awaitWithSignal(getAccessToken, signal),
+        'POST',
+        signal,
+      );
+      if (response.ok) return '';
+      if (response.status === 404) return 'The saved report is no longer available in Workspaces.';
+      return 'Jarvis could not confirm opening the saved report. Try again.';
+    } catch {
+      return 'Jarvis could not confirm opening the saved report. Try again.';
+    }
+  }, [backendUrl, getAccessToken]);
+
   const available = scope === requestScope;
   return {
     jobs: available ? current.jobs.filter((job) => !job.dismissed) : [],
@@ -387,6 +406,7 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
     error: available ? [current.error, storageError, dismissalError].filter(Boolean).join(' ') : '',
     refresh,
     cancel,
+    openResult,
     dismiss,
     dismissMany,
     dismissing: available && mutation !== null,

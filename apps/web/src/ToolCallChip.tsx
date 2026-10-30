@@ -20,14 +20,14 @@ const outcomeLabel: Record<ToolState, string> = { running: 'Running', ok: 'Done'
 
 /** Turns `create_task` into “Create task”; unknown shapes are shown as reported. */
 function toolLabel(tool: string) {
-  const words = tool.replace(/[_-]+/gu, ' ').trim();
+  const words = tool.replace(/^daily_health_/u, 'health_').replace(/^daily_/u, 'health_').replace(/[_-]+/gu, ' ').trim();
   return words ? words[0]!.toUpperCase() + words.slice(1) : tool;
 }
 
 /** One tool call as a compact glass chip: the working core, the tool's name and, unless it simply succeeded, its outcome. */
 export function ToolCallChip({ tool, state }: { tool: string; state: ToolState }) {
   return (
-    <span className="tool-chip" data-state={state} title={`${tool} · ${outcomeLabel[state].toLowerCase()}`}>
+    <span className="tool-chip" data-state={state} title={`${/^(?:daily_|health_)/u.test(tool) ? toolLabel(tool) : tool} · ${outcomeLabel[state].toLowerCase()}`}>
       {state === 'running' ? <WorkingCore /> : <ToolOutcomeMark state={state} />}
       <span className="tool-chip-name">{toolLabel(tool)}</span>
       {state !== 'ok' && <span className="tool-chip-outcome">{outcomeLabel[state]}</span>}

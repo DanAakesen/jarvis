@@ -56,10 +56,10 @@ async function executeThroughVoiceCapability(tool: ReturnType<typeof dailyFoodTo
     type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_DISCOVERY_TOOL,
     call_id: 'food-discovery', arguments: '{}',
   }, registry, request, signal(), discovered, undefined, false));
-  expect(discovery).toMatchObject({ outcome: 'ok', result: { capabilities: [expect.objectContaining({ name: 'daily_food' })] } });
+  expect(discovery).toMatchObject({ outcome: 'ok', result: { capabilities: [expect.objectContaining({ name: 'health_food' })] } });
   return executeRealtimeCapabilityCall({
     type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_EXECUTION_TOOL,
-    call_id: 'food-execution', arguments: JSON.stringify({ capability: 'daily_food', arguments: input }),
+    call_id: 'food-execution', arguments: JSON.stringify({ capability: 'health_food', arguments: input }),
   }, registry, request, signal(), discovered, undefined, false);
 }
 
@@ -71,7 +71,7 @@ describe('inactive internal food tool', () => {
     const f = fixture();
     f.request.jarvisConversationMessage = { ...source, text };
     const output = JSON.parse(await executeThroughVoiceCapability(f.tool, f.request, input));
-    expect(output).toMatchObject({ tool: 'daily_food', outcome: 'ok', result: { status: 'committed' } });
+    expect(output).toMatchObject({ tool: 'health_food', outcome: 'ok', result: { status: 'committed' } });
     expect(f.store.log).toHaveBeenCalledOnce();
     expect(f.store.log.mock.calls[0]![0].captureMethod).toBe('voice');
     expect(f.store.log.mock.calls[0]![1]).toMatchObject({ proposalRequired: false });

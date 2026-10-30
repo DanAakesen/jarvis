@@ -15,10 +15,14 @@ export function JarvisPage({
   camera,
   screenShare,
   docked = false,
+  phone = false,
+  composerVisible = true,
   onDismiss,
 }: {
   /** Off the home page the chat bar is tucked into the rail and cannot be reached until it pops out. */
   docked?: boolean;
+  phone?: boolean;
+  composerVisible?: boolean;
   /** Escape tucks a popped-out chat bar back into the rail. */
   onDismiss?: () => void;
   client: PublicClientApplication;
@@ -50,12 +54,14 @@ export function JarvisPage({
         <ConversationToast notification={{ id: 0, message: themeError, error: true }} onDismiss={dismissThemeError}
           action={{ label: 'Retry', onSelect: retryTheme }} />
       )}
-      <ConversationHistory
+      <ConversationHistory key={JSON.stringify([config.backendUrl, client.getActiveAccount?.()?.homeAccountId ?? 'owner'])}
         client={client}
         getAccessToken={getAccessToken}
         config={config}
         screenShare={screenShare}
         camera={camera}
+        phone={phone}
+        composerVisible={composerVisible}
       />
     </div>
   );

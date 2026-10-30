@@ -1,5 +1,10 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createFoundryScreenVisionModel } from './foundry-model.js';
+
+const roleProfile = JSON.parse(readFileSync(new URL(
+  '../../../../agents/jarvis/tests/fixtures/runtime_role_settings.json', import.meta.url,
+), 'utf8')) as { roles: { vision: { model: string; reasoningEffort: 'high' } } };
 
 describe('Foundry screen vision model', () => {
   it('uses trusted question guidance and keeps the trimmed question as untrusted user data', async () => {
@@ -73,12 +78,15 @@ describe('Foundry screen vision model', () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
       expect(request).toMatchObject({
-        model: 'gpt-6-luna', max_completion_tokens: 500, reasoning_effort: 'high',
+        model: roleProfile.roles.vision.model, max_completion_tokens: 500,
+        reasoning_effort: roleProfile.roles.vision.reasoningEffort,
         response_format: { type: 'json_object' },
       });
       expect(request.messages[0].role).toBe('system');
       expect(request.messages[0].content).toContain('untrusted');
       expect(request.messages[0].content).toContain('Stay silent');
+      expect(request.messages[0].content).toContain('When continuousDescription is true');
+      expect(request.messages[0].content).toContain('Otherwise routine changes are not noteworthy');
       expect(request.messages[0].content).not.toContain('ignored-on-demand-question');
       expect(request.messages).toHaveLength(2);
       expect(JSON.parse(request.messages[1].content[0].text)).toMatchObject({
@@ -93,8 +101,8 @@ describe('Foundry screen vision model', () => {
     });
     const model = createFoundryScreenVisionModel('https://test.services.ai.azure.com/api/projects/jarvis', async () => 'identity-token', fetcher);
     await model.describe({
-      image: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), model: 'gpt-6-luna',
-      reasoningEffort: 'high', signal: new AbortController().signal,
+      image: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), model: roleProfile.roles.vision.model,
+      reasoningEffort: roleProfile.roles.vision.reasoningEffort, signal: new AbortController().signal,
       question: 'ignored-on-demand-question',
       watch: { source: 'camera', previousSummary: 'Sitting upright.', instructions: ['Tell me if my posture slips'],
         latestQuestion: null, recentComments: [] },

@@ -1241,11 +1241,57 @@ def _codex_usage_limit_error(output: bytes) -> bool:
     ))
 
 
+def _classify_codex_failure(output: bytes) -> str | None:
+    text = output.decode("utf-8", errors="replace").casefold()
+    # Match only these stable phrases: model availability ("model is not supported",
+    # "model is not available for your account", "model is not served for your account");
+    # auth ("authentication failed", "login expired", "unauthorized"); outdated CLI
+    # ("this version of codex is no longer supported", "please update codex",
+    # "upgrade the codex cli"); network ("failed to connect", "connection refused",
+    # "connection reset", "could not resolve host", "dns lookup failed",
+    # "network is unreachable"). Unknown or ambiguous output stays generic.
+    patterns = (
+        ("codex_model_unsupported", (
+            "model is not supported",
+            "model is not available for your account",
+            "model is not served for your account",
+        )),
+        ("codex_auth", ("authentication failed", "login expired", "unauthorized")),
+        ("codex_client_outdated", (
+            "this version of codex is no longer supported",
+            "please update codex",
+            "upgrade the codex cli",
+        )),
+        ("codex_network", (
+            "failed to connect",
+            "connection refused",
+            "connection reset",
+            "could not resolve host",
+            "dns lookup failed",
+            "network is unreachable",
+        )),
+    )
+    matches = [
+        category for category, phrases in patterns
+        if any(phrase in text for phrase in phrases)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 async def _run_codex_tool(state: TaskState, tool: str, query: str) -> None:
     state.status = "running"
     credentials: dict[str, str] = {}
     process: asyncio.subprocess.Process | None = None
     auth_path: Path | None = None
+    failure_reason: str | None = None
+    failure_logged = False
+
+    def log_failure(category: str) -> None:
+        nonlocal failure_logged
+        if process is not None and not failure_logged:
+            LOGGER.warning("Codex tool failed category=%s exit_code=%s", category, process.returncode)
+            failure_logged = True
+
     try:
         if tool not in CODEX_TOOL_NAMES:
             raise ValueError("Codex tool is not supported")
@@ -1275,7 +1321,9 @@ async def _run_codex_tool(state: TaskState, tool: str, query: str) -> None:
             stdout, stderr = await _communicate_codex_tool(process, timeout)
             if process.returncode != 0:
                 if _codex_usage_limit_error(stdout + b"\n" + stderr):
+                    failure_reason = "codex_usage_limit"
                     raise CodexUsageLimitReached("Codex usage limit reached")
+                failure_reason = _classify_codex_failure(stdout + b"\n" + stderr)
                 raise RuntimeError("Codex HTML report generation failed" if report else "Codex web research failed")
             result_path = workspace / "result.json"
             if not result_path.is_file() or result_path.stat().st_size > MAX_CODEX_TOOL_RESULT_BYTES:
@@ -1291,21 +1339,28 @@ async def _run_codex_tool(state: TaskState, tool: str, query: str) -> None:
         state.event("cancelled")
         raise
     except CodexUsageLimitReached:
+        log_failure("codex_usage_limit")
         state.status = "failed"
         state.error = "Codex usage limit reached"
         state.event("failed", error=state.error, reason="codex_usage_limit")
     except asyncio.TimeoutError:
+        log_failure("timeout")
         state.status = "failed"
         state.error = "Codex web research timed out"
         state.event("failed", error=state.error, reason="timeout")
     except CodexToolOutputTooLarge:
+        log_failure("output_limit")
         state.status = "failed"
         state.error = "Codex web research output exceeded the size limit"
         state.event("failed", error=state.error, reason="output_limit")
     except Exception as exc:
+        log_failure(failure_reason or "codex_failure")
         state.status = "failed"
         state.error = str(exc) if isinstance(exc, ValueError) else "Codex web research failed"
-        state.event("failed", error=state.error)
+        if failure_reason:
+            state.event("failed", error=state.error, reason=failure_reason)
+        else:
+            state.event("failed", error=state.error)
     finally:
         if process is not None and process.returncode is None:
             process.kill()

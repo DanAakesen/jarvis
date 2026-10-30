@@ -86,11 +86,19 @@ export interface ConversationVisualResult {
 }
 
 export interface ConversationAgent {
-  stream(input: ConversationAgentInput, authorization: string, signal: AbortSignal): AsyncIterable<string>;
+  stream(input: ConversationAgentInput, authorization: string, signal: AbortSignal): AsyncIterable<ConversationAgentChunk>;
 }
 
+export interface ConversationAgentAcknowledgment {
+  readonly type: 'acknowledgment';
+  readonly text: string;
+}
+
+export type ConversationAgentChunk = string | ConversationAgentAcknowledgment;
+
 const maxStreamBytes = 1024 * 1024;
-const requestTimeoutMs = 120_000;
+// Reuse the food tool's read budget below the 240-second hosting ingress ceiling.
+const requestTimeoutMs = 210_000;
 const maxDiagnosticDurationMs = 600_000;
 export const FOUNDRY_AGENT_SCOPE = 'https://ai.azure.com/.default';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -184,7 +192,10 @@ function invocationFailure(
   return new ChatAgentInvocationError(message, reason, { cause: error });
 }
 
-function deltaFromEvent(event: { event: string; data: string }, headers: Headers): string | undefined {
+function chunkFromEvent(
+  event: { event: string; data: string },
+  headers: Headers,
+): ConversationAgentChunk | undefined {
   if (event.event === 'error') {
     let retryAfterMs: number | undefined;
     const retryAfter = headers.get('retry-after');
@@ -201,7 +212,7 @@ function deltaFromEvent(event: { event: string; data: string }, headers: Headers
     } catch { /* Invalid error metadata is ignored. */ }
     throw new ChatAgentError(errorCode(event.data), retryAfterMs);
   }
-  if (event.event !== 'delta') return undefined;
+  if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
   let payload: unknown;
   try {
     payload = JSON.parse(event.data);
@@ -209,10 +220,13 @@ function deltaFromEvent(event: { event: string; data: string }, headers: Headers
     throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
   }
   if (typeof payload !== 'object' || payload === null || !('text' in payload) ||
-      typeof payload.text !== 'string' || payload.text.length === 0) {
+      typeof payload.text !== 'string' || payload.text.length === 0 ||
+      (event.event === 'acknowledgment' && Array.from(payload.text).length > 500)) {
     throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
   }
-  return payload.text;
+  return event.event === 'acknowledgment'
+    ? { type: 'acknowledgment', text: payload.text }
+    : payload.text;
 }
 
 export function createFoundryInvocationsEndpoint(
@@ -426,10 +440,10 @@ export function createFoundryInvocationConversationAgent(
           for (const event of parsed.events) {
             finish(event);
             if (completed) break;
-            const delta = deltaFromEvent(event, response.headers);
-            if (delta !== undefined) {
+            const chunk = chunkFromEvent(event, response.headers);
+            if (chunk !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
-              yield delta;
+              yield chunk;
             }
           }
           buffer = parsed.pending;
@@ -440,10 +454,10 @@ export function createFoundryInvocationConversationAgent(
           for (const event of finalEvents) {
             finish(event);
             if (completed) break;
-            const delta = deltaFromEvent(event, response.headers);
-            if (delta !== undefined) {
+            const chunk = chunkFromEvent(event, response.headers);
+            if (chunk !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
-              yield delta;
+              yield chunk;
             }
           }
         }

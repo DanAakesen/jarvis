@@ -32,6 +32,21 @@ export interface ToolCallStore {
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'health_food' || tool === 'health_food_review' || tool === 'health_food_lookup') {
+      const presentation = (result as { presentation?: unknown } | null)?.presentation;
+      if (typeof presentation === 'string' && presentation.length <= 2000) return presentation;
+    }
+    if (tool.startsWith('mail_')) {
+      const action = result as { status?: unknown; summary?: unknown; detail?: unknown } | null;
+      if (action?.status === 'awaiting_confirmation') {
+        return 'Awaiting your approval; no Gmail change has been made.';
+      }
+      if (action?.status === 'unverified' || action?.status === 'partial') {
+        return typeof action.detail === 'string' && action.detail.length <= 1_000
+          ? action.detail : 'The Gmail outcome is unverified. Check Gmail before trying again.';
+      }
+      if (action?.status === 'cancelled') return 'Cancelled. No Gmail change was made.';
+    }
     if (tool === 'calendar_confirm_change') {
       const change = result as { status?: unknown; detail?: unknown; items?: unknown } | null;
       if (change?.status === 'completed') {
@@ -56,7 +71,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
       return confirmation;
     }
     if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential' ||
-      tool === 'daily_feed' || tool === 'proactive_preferences' || tool === 'proactive_item_feedback') && typeof confirmation === 'string' &&
+      tool === 'health_feed' || tool === 'proactive_preferences' || tool === 'proactive_item_feedback') && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&
         !Array.from(confirmation).some((character) => {
           const code = character.charCodeAt(0);
@@ -71,7 +86,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
     return `Not done: ${tool} was refused.${typeof reason === 'string' ? ` ${reason}` : ''}`;
   }
   const failure = (result as { failure?: unknown; error?: unknown } | null)?.failure ??
-    (tool === 'image_generation' ? (result as { error?: unknown } | null)?.error : undefined);
+    (tool === 'image_generation' || tool.startsWith('mail_') ? (result as { error?: unknown } | null)?.error : undefined);
   if (typeof failure === 'string') return `Not done: ${tool} failed. ${failure}`;
   return `Not done: ${tool} failed.`;
 }

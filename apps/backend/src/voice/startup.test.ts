@@ -370,8 +370,8 @@ describe('voice startup without network', () => {
 });
 
 const catalogue = () => [
-  probeTool('set_presence_mode', 500), probeTool('set_away_mode', 500), probeTool('daily_show', 6_000),
-  probeTool('daily_query', 1_000), probeTool('daily_food', 2_000), probeTool('daily_food_review', 3_000),
+  probeTool('set_presence_mode', 500), probeTool('set_away_mode', 500), probeTool('health_show', 6_000),
+  probeTool('health_query', 1_000), probeTool('health_food', 2_000), probeTool('health_food_review', 3_000),
   probeTool('proactive_recent_items', 1_000), probeTool('proactive_preferences', 1_200),
   probeTool('github_write', 3_000),
   probeTool('workspace_command', 12_000), probeTool('tiny_tool', 100),
@@ -416,9 +416,12 @@ describe('Voice Live capability-preserving fallback', () => {
     let page = 0;
     do {
       const callId = `discover_${page++}`;
+      const responseId = `discover_response_${page}`;
+      active.event('response.created', { response: { id: responseId } });
       active.event('response.function_call_arguments.done', {
         name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: callId, arguments: JSON.stringify({ offset }),
       });
+      active.event('response.done', { response: { id: responseId, status: 'completed' } });
       await vi.advanceTimersByTimeAsync(0);
       const output = JSON.parse(toolOutput(callId) as string) as {
         outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
@@ -436,7 +439,7 @@ describe('Voice Live capability-preserving fallback', () => {
     const foodExecute = vi.fn(async () => ({ status: 'committed' }));
     const proactiveExecute = vi.fn(async () => ({ status: 'available' }));
     const f = await fixture({}, 'en', [
-      probeTool('daily_food', 100, foodExecute),
+      probeTool('health_food', 100, foodExecute),
       probeTool('proactive_recent_items', 100, proactiveExecute),
       probeTool('vault_search'),
       probeTool('calendar_get_pending_change'),
@@ -448,8 +451,9 @@ describe('Voice Live capability-preserving fallback', () => {
       .find((message) => message.item?.call_id === callId)?.item.output;
     expect(names(active)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
 
+    active.event('response.created', { response: { id: 'full_catalogue_response' } });
     active.event('response.function_call_arguments.done', {
-      name: 'daily_food',
+      name: 'health_food',
       call_id: 'food',
       arguments: JSON.stringify({ note: 'synthetic exact meal' }),
     });
@@ -461,9 +465,10 @@ describe('Voice Live capability-preserving fallback', () => {
     active.event('response.function_call_arguments.done', {
       name: 'unregistered_tool', call_id: 'unadvertised', arguments: '{"note":"synthetic exact meal"}',
     });
+    active.event('response.done', { response: { id: 'full_catalogue_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
 
-    expect(JSON.parse(toolOutput('food') as string)).toMatchObject({ tool: 'daily_food', outcome: 'ok' });
+    expect(JSON.parse(toolOutput('food') as string)).toMatchObject({ tool: 'health_food', outcome: 'ok' });
     expect(JSON.parse(toolOutput('proactive') as string)).toMatchObject({
       tool: 'proactive_recent_items', outcome: 'ok',
     });
@@ -474,7 +479,7 @@ describe('Voice Live capability-preserving fallback', () => {
 
   it('preserves discovery, execution, and reconnect behavior after the compact fallback is selected', async () => {
     const execute = vi.fn(async () => ({ status: 'available' }));
-    const f = await fixture({}, 'en', [probeTool('daily_food', 100, execute)]);
+    const f = await fixture({}, 'en', [probeTool('health_food', 100, execute)]);
     f.upstream.open();
     f.upstream.event('error', { error: { code: 'private_code' } });
     await vi.advanceTimersByTimeAsync(0);
@@ -483,19 +488,23 @@ describe('Voice Live capability-preserving fallback', () => {
     fallback.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2', remembered: false })]);
 
+    fallback.event('response.created', { response: { id: 'food_discovery_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'food_discovery', arguments: '{}',
     });
+    fallback.event('response.done', { response: { id: 'food_discovery_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
+    fallback.event('response.created', { response: { id: 'food_execution_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_EXECUTION_TOOL,
       call_id: 'food_call',
-      arguments: JSON.stringify({ capability: 'daily_food', arguments: { note: 'synthetic' } }),
+      arguments: JSON.stringify({ capability: 'health_food', arguments: { note: 'synthetic' } }),
     });
+    fallback.event('response.done', { response: { id: 'food_execution_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     expect(JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'food_call')!.item.output))
-      .toMatchObject({ tool: 'daily_food', outcome: 'ok' });
+      .toMatchObject({ tool: 'health_food', outcome: 'ok' });
     expect(execute).toHaveBeenCalledOnce();
 
     f.browser.close(1000, 'Reconnect');
@@ -523,14 +532,16 @@ describe('Voice Live capability-preserving fallback', () => {
     expect(names(fallback)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
     expect(frameOf(fallback).session.tools).not.toEqual(initialDefinitions);
     fallback.event('session.updated');
+    fallback.event('response.created', { response: { id: 'discover_fallback_response' } });
     fallback.event('response.function_call_arguments.done', {
       name: VOICE_CAPABILITY_DISCOVERY_TOOL, call_id: 'discover_fallback', arguments: '{}',
     });
+    fallback.event('response.done', { response: { id: 'discover_fallback_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     const output = JSON.parse(fallback.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === 'discover_fallback')!.item.output);
     expect(output.result.capabilities.map(({ name }: { name: string }) => name))
-      .toEqual(expect.arrayContaining(['daily_food', 'proactive_recent_items']));
+      .toEqual(expect.arrayContaining(['health_food', 'proactive_recent_items']));
     expect(f.selected().at(-1)).toEqual(expect.objectContaining({ rung: 'R2' }));
     expect(f.browser.close).not.toHaveBeenCalled();
   });
@@ -740,7 +751,7 @@ describe('Voice Live capability-preserving fallback', () => {
   it('rejects direct calls on the compact fallback without executing canonical tools', async () => {
     const execute = vi.fn(async () => ({}));
     const f = await fixture({}, 'en', [
-      probeTool('daily_show', 100), probeTool('proactive_recent_items', 100, execute), probeTool('allowed_tool', 100),
+      probeTool('health_show', 100), probeTool('proactive_recent_items', 100, execute), probeTool('allowed_tool', 100),
     ]);
     f.upstream.open();
     f.upstream.event('error', { error: { code: 'schema_constraint' } });
@@ -748,12 +759,20 @@ describe('Voice Live capability-preserving fallback', () => {
     const ready = f.sockets[1]!;
     ready.event('session.updated');
     expect(f.selected()).toEqual([expect.objectContaining({ rung: 'R2' })]);
+    ready.event('response.created', { response: { id: 'outside_subset_response' } });
     ready.event('response.function_call_arguments.done', { name: 'proactive_recent_items', call_id: 'call_1', arguments: '{}' });
     ready.event('response.function_call_arguments.done', { name: 'allowed_tool', call_id: 'call_2', arguments: '{}' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(execute).not.toHaveBeenCalled();
+    expect(ready.sent.map((data) => JSON.parse(data))
+      .filter((message) => message.item?.type === 'function_call_output')).toEqual([]);
+
+    ready.event('response.done', { response: { id: 'outside_subset_response', status: 'completed' } });
     await vi.advanceTimersByTimeAsync(0);
     const outputs = ready.sent.map((data) => JSON.parse(data))
       .filter((message) => message.item?.type === 'function_call_output')
       .map((message) => ({ call: message.item.call_id, ...JSON.parse(message.item.output) }));
+    expect(f.browser.sent.map((data) => JSON.parse(data).type)).toContain('response.done');
     expect(outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({ call: 'call_1', outcome: 'refused' }),
       expect.objectContaining({ call: 'call_2', outcome: 'refused' }),
@@ -770,7 +789,7 @@ describe('Voice Live capability-preserving fallback', () => {
     const budget = f.records.filter((record) => String(record.msg).startsWith('voice.tool_budget'));
     expect(budget.length).toBeGreaterThanOrEqual(3);
     const text = JSON.stringify(budget);
-    for (const secret of ['private', 'startup_probe', 'daily_show', 'github_write', 'I am Jarvis', 'Dan']) {
+    for (const secret of ['private', 'startup_probe', 'health_show', 'github_write', 'I am Jarvis', 'Dan']) {
       expect(text).not.toContain(secret);
     }
     for (const record of budget) {

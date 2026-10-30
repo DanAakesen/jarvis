@@ -70,13 +70,20 @@ describe('shared overlay contract', () => {
     expect(styles).toContain('.workspace-shell-area, .workspace-feedback-host, .browser-presence-error');
   });
 
-  it('shares the backdrop and disables sheet transitions for either reduced-motion preference', () => {
-    for (const selector of ['.modal-backdrop', '.mobile-menu-backdrop', '.context-panel-modal-backdrop']) {
+  it('keeps mobile chat visible and disables sheet transitions for either reduced-motion preference', () => {
+    for (const selector of ['.modal-backdrop', '.context-panel-modal-backdrop']) {
       expect(declarations(styles, selector).get('background')).toBe('var(--overlay)');
       expect(declarations(styles, selector).get('backdrop-filter')).toBe('blur(6px)');
     }
+    expect(declarations(styles, '.mobile-menu-backdrop').get('background')).toBe('transparent');
+    expect(declarations(styles, '.mobile-menu-backdrop').get('backdrop-filter')).toBe('none');
     expect(styles).toContain('display var(--motion-state) allow-discrete');
-    expect(styles).toContain('.mobile-menu[hidden], .context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }');
+    expect(declarations(styles, '.mobile-menu[hidden]').get('display')).toBe('none');
+    expect(declarations(styles, '.mobile-menu').has('opacity')).toBe(false);
+    expect(styles).toContain('.context-panel-modal-backdrop[hidden] { opacity: 0; pointer-events: none; }');
+    const entrance = styles.match(/@keyframes mobile-menu-enter\s*\{\s*from\s*\{([^}]*)\}/)?.[1];
+    expect(entrance).toContain('translate:');
+    expect(entrance).not.toContain('opacity');
     for (const preference of ['@media (prefers-reduced-motion: reduce)', ':root[data-motion="reduced"]']) {
       expect(styles.slice(styles.lastIndexOf(preference))).toContain('.context-panel-modal-backdrop');
       expect(styles.slice(styles.lastIndexOf(preference))).toContain('animation: none; transition: none;');

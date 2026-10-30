@@ -1,4 +1,652 @@
+## Managed conversation failure repair (#1350; 29 October 2026)
+
+Use the production lazy wrapper with stateful synthetic claims in
+`agents/jarvis/tests/test_managed_runtime_lifecycle.py`. A known setup failure may
+finish its source as failed only before any inference attempt and with no backend
+tool call; cancellation, unknown inference and possible actions retain the claim.
+Do not reset an existing uncertain claim or replay a consumed source. Preserve
+exact finite managed codes through hosted error SSE, backend SSE and the test UI.
+Run hosted pytest/Ruff, backend conversation/status checks and lint/build, and
+web stream/test-conversation checks and lint/build. Fixtures cannot establish the
+first live failure cause; no live logs or owner request replay is available here.
+
+Also run the complete `.github/scripts/tests` unittest suite: the release smoke
+formatter must retain exactly the backend's fixed hosted-origin codes. Preserve
+the exact-parity assertion and redaction of unknown managed-looking codes.
+The correction passes all 203 script tests and 185 scoped hosted/wrapper tests.
+Local script tests require PowerShell; temporary PowerShell 7.5.4 with writable
+XDG cache/config/data directories satisfies that existing dependency. The two
+smoke files retain the same five pre-existing Ruff findings as the prior head.
+
+## Managed canary diagnostics (#1350; 29 October 2026)
+
+Manual Deploy 40884299864 passed provisioning/configuration/readiness but failed
+the canary assertion. Its exact reason was discarded; retained artifacts contain
+normal acceptance, release plan and receipt only. Preserve private responses;
+emit only existing allowlisted reason/stage, bounded HTTP status and model/effort
+constants. The known fallback stage is `managed_text_canary`; runtime code is
+unchanged. Run handoff/provisioning/deploy-plan tests, Ruff, compilation and shell syntax.
+No new grants, fallback, reset, resource or retry belongs in this correction.
+The availability guard checks metadata, not canary success; do not claim that
+selectability proves working inference. No live availability request was made.
+
+## Managed identity readback failure (#1350; 29 October 2026)
+
+Manual Deploy 40877005757 failed at `agent_identity_unverified` after an active
+comparison version was verified; backend activation and canary did not run.
+Microsoft documents identity status as optional. Preserve enabled effective
+state, UUID principal, exact existing version/definition and post-pin principal
+checks while accepting unset status. Keep explicit disabled/unknown states
+blocked. No actual missing permission or exact failed field is proven. Do not
+create another resource/version or add grants. Run provisioning/handoff tests,
+scoped Ruff/compilation and exact-head CI before reviewed release and handoff.
+
+## Runtime comparison preparation (#1350; 29 October 2026)
+
+Use the existing pinned dependencies; the protocol adapter adds no production
+package. Hosted checks cover managed protocol/definition, source routing and
+retained voice. Backend checks cover runtime session/store/migration and routes;
+web checks cover selector/client/scoped conversation/menu/Modal and unchanged
+normal chat. The repeatable synthetic browser check is
+`scripts/check-runtime-test-browser.mjs`; its output is under
+`docs/ui/screenshots/runtime-test-1350/`. These are offline checks, not live parity.
+SQL integration requires the existing isolated database harness; no live migration
+was applied in this preparation. Do not enable the managed option from local
+configuration alone. See [remaining gates](managed-chat-adapter.md).
+
+The comparison handoff is an explicit main-only manual Deploy dispatch with
+`provision_managed_chat=true`, after exact-head qualification. Normal pushes do
+not create the comparison agent. See [provisioning steps](managed-chat-provisioning.md).
+No new Azure login or credentials are needed. A real permission rejection must be
+reported by operation/current identity/scope before proposing a missing grant.
+The fixed manifest operation exports only static instructions/current schemas;
+it does not read personal context or invoke a tool. The canary has the same
+210-second invocation ceiling as the existing chat bridge and never executes
+functions. SQL qualification remains blocked locally by a Forbidden image pull;
+do not substitute a different image. Database CI subsequently applied the committed
+migrations and passed all four new runtime integration cases. After the three
+stale schema-inventory assertions were corrected, CI 40864485219 passed Database
+and Web. Backend failed only two lifecycle fixture teardown hooks: Node 22.23.3
+left an unrequested fetch replacement socket after abort. The fixture now closes
+its connections during teardown, with all lifecycle assertions unchanged; all
+four cases pass locally on that exact Node version. Full CI requalification is
+still pending.
+
+## Whole-Jarvis log preparation (#1341; 29 October 2026)
+
+Owner-confirmed whole-system scope replaces backend-only: retain Foundry Reader,
+exclude unrelated projects, preserve redaction/bounds and keep the reader disabled
+until expanded access is specifically approved and proven. Do not remove the role
+or apply the earlier backend-only grant as though it authorized whole-system reads.
+See [inventory/design/grant proposal](jarvis-logs.md). Issue #1341 remains canonical.
+After the initial denial, the owner specifically approved its scope update and
+inventory/design PR publication, test disclosures, readiness and integration after
+checks. The one authorized issue-update retry succeeded. Parent owns readiness
+and merge. Keep new grants and reader activation outside that publication step.
+
+Local metadata preparation reads only existing-authorized ARM resource/table lists.
+Exact canonical ID plus ownership tag is required; table plan/_ResourceId metadata
+is not proof of routed data or enforcement. Keep the catalogue private, fixed
+public labels, and all negative/unavailable states honest. Runtime source adapters,
+capability replacement, grant execution and live qualification are still pending.
+Run Python backend-log and pipeline tests, scoped Ruff/byte compilation and diff
+checks. No actual log data, credentials or private identifiers enter GitHub.
+
+## Smoke/normal settings parity (#1350; 29 October 2026)
+
+The owner explicitly requires the same role settings in tests. Use the selected
+model, reasoning and configured output budget; keep unsupported settings visible
+rather than substituting another value. Run hosted tests/Ruff/compileall and
+research-smoke/foundry-model tests plus backend lint. Local results: 1,025 hosted
+and 56 backend tests passed. These do not prove the server's stored settings,
+provider acceptance or ordinary-chat failure. Saved settings stay unchanged;
+the owner approved publication with #1353, followed by normal checks/review. See
+[local report](smoke-settings-1350.md).
+
+## Reasoning and research smoke checks (#1350; 29 October 2026)
+
+The real Deploy 40840605441 reports model_bad_request_reasoning in all required
+chat scenarios; it does not prove none unsupported. Microsoft's Terra announcement
+and OpenAI's model contract explicitly support none. Keep settings and model
+requests intact until actual rejection detail identifies a correction. Run hosted
+pytest/Ruff/compileall, backend research-smoke/web-research/system-status/chat-agent/
+chat-canary/status tests plus lint/build, and Python test_smoke_reasons.py. Fixtures
+must cover unknown/malformed provider metadata, independent runner HTTP/auth/
+timeout/quota/result cases, cleanup, retained/HTTP reports and raw-detail redaction.
+No real worker or subscription/API operation belongs in those tests. Preserve
+current main's #1352 log-probe changes and separate authorization boundaries.
+
+Local follow-up: 1,019 hosted tests, hosted Ruff/compileall, 349 focused backend
+tests, full backend 6,902 passed/one skipped, backend lint/build and 13 sanitizer
+tests pass. Node 24/npm 11 local evidence does not replace pinned Node 22/npm 10
+qualification. No live correction or new provider operation is claimed.
+
+## Foundry resource-log diagnosis (#1341; 29 October 2026)
+
+Deploy #40836577365 is terminal: rollout/readiness passed and live acceptance
+failed. Backend identity matched; console/other-app/other-table returned 403,
+Foundry returned 400, and the real foreign control is absent. The reader is off.
+This scoped follow-up uses fixed `AzureDiagnostics` aggregates and
+`Prefer: include-permissions=true` only for the existing Foundry resource query.
+It classifies bounded permission metadata privately and emits only fixed states,
+separate from query status. None is an activation or isolation eligibility flag.
+
+The metadata-only preflight verifies the Foundry ID from existing backend
+configuration and reads `assignedTo` inventories at workspace, Foundry and
+subscription scope using API 2022-04-01. ARM includes transitive group assignments;
+no directory credential or permission is needed. Consume every page within the
+existing budget or mark the scope unavailable/incomplete. Preserve all conditions
+only in the existing private report. Do not change roles, workspace mode, reader
+availability or the documented real-foreign-control requirement. Run focused
+probe/reader/status/auth/config tests, backend lint/build and Python log/script
+checks. All fixtures stay synthetic. Parent owns review/merge and live results;
+the separate migration task owns chat BadRequest investigation.
+
+## Main chat baseline checks (#1350; 29 October 2026)
+
+Use the engineering skill. Run hosted-agent pytest/Ruff/compileall, backend
+system-status and chat-agent/canary checks, and Python test_smoke_reasons.py.
+Fixtures must contain synthetic SDK errors and prove raw messages, codes, nested
+property names and URLs never reach the failure stream/log or retained smoke
+artifact. No live request, login, grant, worker or model switch is part of local
+validation. The new failure codes diagnose a rejected field, not its root cause.
+Preserve #1341/#1349 log observations and their separate authorization gates.
+See [migration notes and manual test questions](main-chat-harness-migration.md).
+
+## Backend-log authorization observations (#1341; 29 October 2026)
+
+Deploy #40828872899 is terminal: metadata/infrastructure/backend/web/agent/readiness
+passed, live acceptance failed. Logs remain disabled. The preflight's resource
+log-grant warning and missing foreign workspace control are unresolved.
+The next reviewed stage adds fixed aggregate observations to the existing smoke
+route using the actual backend credential; no new endpoint/auth allowance/grant.
+Private preflight data is consumed in that same infrastructure job, never uploaded.
+`backend_log_probe_parameters.py` validates freshness/ownership/shape; its private
+Bicep parameter file is deleted on script exit. `backend_log_probe_verdicts.py`
+emits only fixed values from the optional smoke object. Do not treat its
+`authorization_observations` stage or empty/allowed negative queries as proof.
+Missing foreign controls stay `not_configured`; no fake workspace is substituted.
+After an empty resource-group inventory, metadata discovery may list workspaces
+already visible to the same deploy identity in the existing subscription. A failed
+read remains unavailable; do not request new permission to make the inventory work.
+The probe caches once per process; grant changes require a fresh backend process
+and post-change proof before enabling the separate reader flag.
+Run focused authorization/reader/status/auth/config tests, Python backend-log and
+deployment-script tests, backend lint/build, Ruff/byte compilation and offline
+Bicep compilation. All fixtures must be synthetic. Preserve the existing approved
+scope, actual negative controls, grant readback and no-private-ID publication.
+Do not retry the denied PR-body metadata writes.
+
+## Backend log preflight ARM wire contract (#1341; 28 October 2026)
+
+29 October: reconcile #1348 with main `10d6d170` without altering #1345 runtime,
+migration, UI or artifact blobs. Retain both documentation prefixes and requalify
+the resulting head through normal synchronize CI. Readiness/merge are owner
+approved; the parent integrates. No Azure grant or activation is applied here.
+
+Deploy #40761349594 failed closed before Bicep at `builtin_role_mismatch`.
+The `az rest` role-definition response uses `properties.type`, not the CLI
+model's `roleType`. Keep the exact built-in permission allowlist and reject
+custom/CLI-only shapes. Run `PYTHONPATH=.github/scripts python -m unittest
+discover -s .github/scripts/tests -p test_backend_log_preflight.py`, scoped Ruff
+and byte compilation. Fifteen synthetic tests pass for the correction; no live
+rerun, grant or enablement is claimed. Existing Azure scope approval persists.
+
+## Current-main reconciliation for #1345 (28 October 2026)
+
+Main `61d19366` adds #1346 log preflight/guidance; merge it into review-fix
+head `2f039761` while preserving both scopes. Only PLAN, PRODUCT, agent-context,
+architecture and decisions prepend conflicts overlap; retain both sets of text.
+Non-overlapping implementation/test/workflow/artifact blobs are verified unchanged
+from their respective parent; only documentation is combined/annotated.
+Run combined synthetic log/settings/capability and factory/Gmail regressions,
+the 14 Python preflight fixtures, backend lint/build and exact-head hosted CI.
+No live preflight/Azure access or PR-body metadata retry belongs to this task.
+Local combined results: 388 backend and 14 Python preflight tests, backend
+lint/build passed. Exact-head hosted qualification is still required.
+
+## Owner-approved log activation preflight and awareness (#1341; 28 October 2026)
+
+Owner approval for persistent backend-only log reads plus basic workspace metadata
+is received; do not ask again for this scope or a new Azure sign-in. Existing
+qualified main-only OIDC is the execution route. This follow-up first installs a
+fixed read-only metadata preflight before infrastructure deployment, with no role
+assignment or reader enablement. Preserve the no-private-identifier publication
+boundary and never upload `backend-log-preflight.private.json`.
+
+Run Python `test_backend_log_preflight.py`, pipeline/deploy tests, Ruff and byte
+compilation; backend settings/capability/registry/production-module/log-reader
+suites plus lint/build. Fixtures are synthetic. No local test establishes live
+Azure grants, group membership, supported conditional access or negative data
+isolation. After review and normal release, inspect only content-free preflight
+verdicts and continue the approved assignment/probe/activation work. Stop if live
+identity/schema differs, broader access is unresolved or foreign workspace proof
+is unavailable; never widen permissions or switch modes as a workaround.
+
+## Eight review fixes: validation (#1343; 28 October 2026)
+
+Scope: issue-label replay, issue conversation origin, atomic completion receipts,
+honest Gmail receipts/uncertainty, chat warning/queue reload recovery, sticky
+mobile Settings Save, visible oversized-start failure, explicit Settings approvals.
+The owner expressly replaced Settings draft preservation: do not add guards,
+autosave or draft persistence. Azure logs #1341/#1342 and optional audit ideas
+remain separate.
+
+Use synthetic fixtures only. Run full backend/web tests, contracts and backend/web
+lint/build. Migration 0068 and transaction/concurrency regressions additionally
+require the normal isolated SQL Server CI job; local unit mocks are not proof of
+SQL behavior. Chromium screenshots live under `docs/ui/screenshots/fix-eight-1343/`;
+390/320px and a focused short viewport are simulated, not physical iPhone acceptance.
+No Azure access, real workers, mail sends, notifications or health writes are part
+of these checks. Local verification results are recorded in
+[PR #1345](https://github.com/DanAakesen/jarvis/pull/1345) and the
+[validation report](review-fixes-1343.md).
+
+Local results: full web 2,447, contracts 174, final ConversationHistory 126 and
+backend/web lint/build passed. Backend aggregate: 6,776 passed, two failed, one
+skipped; the stale Settings approval assertion was corrected and both affected
+suites passed a 16-test rerun with original timeouts. Preserve that aggregate
+failure distinction. The coordinator subsequently marked the PR ready. Hosted
+SQL run 40756774334 had 281 passes and two test-setup failures, corrected by
+including the issue-delivery index in its catalog query and unwinding newer
+migrations again before the second Workspaces rollback. Preserve every index,
+round-trip and latest-only assertion. New-head hosted qualification is required.
+
+CI 40757610202 passed on `5cf8da23`: SQL 283, backend 6,778/one skipped, web
+2,448 and contracts 174. The next recovery hardening fixes the confirmed bot
+finding at discussion_r4405317215. Run conversation-recovery and
+ConversationHistory tests, web lint/build and new-head hosted CI. Boundaries cover
+100,000/100,001 ASCII characters, exact 512 KiB ASCII and multibyte replies,
+invalid warning isolation and snapshot-budget compaction that retains queued
+messages and uncertainty warnings. No PR-body metadata retry is authorized.
+
+## Backend log reader checks (#1341; P11-42; 28 October 2026)
+
+Follow-up review found that rejected Content-Length cleanup could await a
+transport cancellation forever and retain the single-query gate. Cleanup is now
+nonblocking, consistent with the streamed-body path. Two synthetic regressions
+use invalid/oversized lengths and never-resolving cancellation, then prove another
+query enters the provider. All 44 reader tests and backend lint/build pass.
+The original head's qualification is superseded;
+normal exact-head hosted checks are required for this correction. No permission
+or activation change is included.
+
+Use the engineering skill. Run backend `operations/backend-logs.test.ts`, signed
+`auth/auth.test.ts`, registry, production-module, config, logging/source and shared
+capability-budget suites, then backend tests/lint/build and normal hosted checks.
+All records must be synthetic. Configuration stays off; no new log role,
+assignment, access-mode, retention, ingestion or credential change is part of this
+PR. [Backend logs](backend-logs.md) contains the exact conditional-grant proposal
+and action-time owner approval/live isolation gates. Do not infer Azure proof
+from local fixtures or widen workspace access when a query fails.
+
+Local results: seven focused suites/262 tests, final reader/instruction rerun/59,
+backend lint/build and hosted agent 930 tests/Ruff/byte compilation pass. The full
+backend aggregate has 6,760 passed, one failed, one skipped: workspace session
+language `en` acknowledgement timed out and passes its isolated single-worker
+rerun under original limits. No timeout/check was weakened. Repository script
+checks: 141 passed, three cannot launch missing `pwsh`. Node 24.19.0/npm 11.9.0
+were available locally; normal hosted Node 22 qualification is pending while the
+PR remains draft. Frozen dependency installation used public versions with the
+same integrity pins after a configured mirror 403; lockfile bytes are restored.
+
+## Terra main-chat preparation checks (#1337; 27 October 2026)
+
+Run backend model-catalog, settings, model-tools, settings-tools and
+agent-contract tests, backend lint/build, hosted-agent tests/Ruff/byte compilation,
+and Bicep v0.44.1 offline build/lint. Terra has a required `terraChatCapacity`
+parameter, now supplied as 150 in committed `main.parameters.json`, matching the
+established chat allocation. PR CI remains offline; the normal main-only
+Deploy/OIDC path validates live Azure acceptance. No new sign-in is needed to
+prepare this request, and available quota is not claimed. Stop/report any Azure
+quota/capacity rejection without silently changing allocations or access.
+After the normal release, inspect and
+update only the saved chat model through Settings. Do not interpret the code
+default as the owner's active model. No Azure login, paid inference or live
+settings mutation belongs in this preparation.
+
+Local results on Node 24.19.0/npm 11.9.0: focused backend 219 passed, full backend
+300 files/6,718 passed/one skipped; hosted agent 930 passed plus Ruff/byte
+compilation. Backend ESLint/TypeScript and standalone Bicep v0.44.1 build/lint
+pass. Compiled baseline comparison changes only the new Terra resource/required
+parameter and the following decision deployment's ordering dependency. Repository
+script checks: 141 passed; three cannot launch missing `pwsh`. The public npm
+mirror substitution used the same integrity-pinned tarballs and restored the
+lockfile byte-for-byte. Draft #1338 is not hosted qualification; independent
+review, Node 22 CI, Azure acceptance and saved owner selection remain
+pending. No live/cost verification is implied by the synthetic tests.
+Microsoft's public Global Standard list rates are now sourced in `infra/README.md`;
+account rates, Azure context-tier billing rules and actual quota/capacity remain
+unverified. Dan approved USD 20/month, accepted existing alerts and declined a
+new spending guard. No new runtime price/budget implementation or login handoff
+is required. Keep review/qualification and main-only deployment controls intact.
+28 October continuation: the updated saved-default regression asserts the stored
+model key, owner Settings readback and new agent Settings readback while retaining
+reasoning/other settings. All five focused suites pass 220 tests, plus backend
+lint/build and updated Bicep v0.44.1 build/lint. Existing runtime/agent code stays
+unchanged; full backend/hosted-agent results above are retained prior evidence.
+
+## Deadline notification checks (#1335; 27 October 2026)
+
+Run backend `proactive/detect.test.ts`, `proactive/deadline-notifications.test.ts`,
+`proactive/alerts.test.ts`, `proactive/push-delivery.test.ts` and
+`push/webpush.test.ts` (124 tests passed locally). Pipeline fixtures cover single
+and bundled Danish/English alerts, existing generic records, distinct deadlines
+with identical task names, actual Web Push encryption and private-text exclusion.
+Also run workspace tests, lint/build and the existing repository/Python checks.
+
+This executor uses Node 24.19.0/npm 11.9.0 and Python 3.12.14. The frozen npm
+install encountered mirror HTTP 403; installing the same integrity-pinned public
+npm tarballs with temporary resolved-URL substitution succeeded. The committed
+lockfile was restored byte-for-byte. Workspace lint/build and Python component
+checks pass. Full web (2,441) and contracts (174) tests pass. Initial backend:
+6,701 passed, 10 failed, one skipped; vault mirror: 232 passed, five failed.
+All 15 failures pass targeted single-worker reruns (15 backend matching cases,
+five vault cases), with original timeout limits. The aggregate run itself failed;
+retain that distinction. Python components pass 374 runner and 929 agent tests.
+Three repository script checks need missing `pwsh`; the other 141 pass. Hosted
+qualification and physical iPhone appearance remain unverified.
+
+## Compact screen Stop checks (#1333; 27 October 2026)
+
+Run ConversationHistory (compact screen-share Stop control), screen-context and
+VoiceControls suites, then full web, lint and build. The Stop button carries
+`data-preserve-typing-focus`; it relies on the mobile focus guard from #1331 for
+the phone mouse-down behavior. No physical-device check is implied.
+
+## Mobile composer focus checks (#1315; 27 October 2026)
+
+Run ConversationHistory, ConversationMoreMenu, phone-chat-viewport and
+send-diagnostic suites, full web, lint/build. Owner-sequence replay and native
+Chromium checks/limits are in `docs/ui/screenshots/composer-control-focus/README.md`.
+Form toolbar buttons may opt in with `data-preserve-typing-focus`; no global touch
+suppression. Keep diagnostic privacy and independent screen-share UI scope.
+
+## Passive Send diagnostic checks (local)
+
+Run send-diagnostic, ConversationHistory and phone-chat-viewport tests plus web
+lint/build. Data allowlist, memory bound, lifecycle and explicit copy retrieval
+are documented in `docs/ui/screenshots/send-diagnostic/README.md`. No publication.
+
+## Unified camera delivery checks (#1317; 26 October 2026)
+
+## Whole-number meal estimate lists (#1327; 26 October 2026)
+
+Display kcal and all nutrient grams rounded to whole numbers in one canonical
+meal-estimate list. Retain protein, calories, fat, carbohydrates and fiber; keep
+unknown distinct from zero. Calculations, stored values, approval fingerprints
+and idempotency retain full precision. Chat and voice consolidate existing
+nutrition bullets using server presentation; acknowledgment-only replies still
+receive the complete list. Validate with synthetic fractional nutrition fixtures.
+
+
+The 14:21–14:22 UTC approval supersedes older idle-expiry checks below: active
+video must survive silence beyond ten minutes, while preview Close, workspace
+start/stop, teardown, permission loss, fatal errors and budgets remain enforced.
+
+Run `npm test`, `npm run lint`, `npm run build` and
+`bash .github/scripts/python-ci.sh agents/jarvis`. Focused coverage is in
+web `vision-watch.test.tsx`, `camera-capture.test.tsx`, backend `vision/` and
+`core/capability-instructions.test.ts`. Actual-App synthetic browser checks
+cover repeated silent frames and camera stop at 320/390px touch and 1440px desktop;
+see `docs/ui/screenshots/1317/README.md`. No physical-iPhone acceptance claimed.
+
 # Agent context
+
+## Bubble frost checks (#1324; 26 October 2026)
+
+Run web tests, lint/build and aggregate repository checks. Actual-App synthetic
+browser reproduction and limitations are in `docs/ui/screenshots/chat-bubble-frost/`.
+Check actual scene blur, translucency, item-mask fade versus baseline, lists,
+scrolling, header and Plus menu across desktop/mobile and both themes. Run
+`fixtures/performance-corners.py` for observer replacement, long-history scrolling
+and repeated mobile history-toggle corner checks; desktop borders stay unchanged.
+Keep backdrop-filter and masks off bubble ancestors; preserve the visible fade
+through the item masks. No real data or private screenshots belong in fixtures.
+
+
+## Mobile chat scroll verification (26 October 2026; local)
+
+Run the phone viewport and ConversationHistory tests, web lint and web build.
+`docs/ui/screenshots/mobile-chat-scroll/README.md` records the actual-component
+Chromium swipe comparison, continued typing and one-tap Send. Keyboard geometry
+is simulated; physical Safari remains unverified. No camera/menu changes.
+## Health meal estimate checks (#1321; 26 October 2026)
+
+Run backend daily, conversation, owner-interaction, realtime/relay/startup, registry,
+parity and production-module suites; web ReviewSummary, ConversationHistory,
+AttentionPopover and ToolCallChip suites; hosted-agent model-client/tool tests;
+backend/web build and lint. Use synthetic food only. Browser component fixtures and
+limits are in `docs/ui/screenshots/1321/README.md`. Hold integration pending parent camera/release coordination; #1320 is included via main `1c1029a3`.
+
+## Composer Plus checks (#1319; 26 October 2026)
+
+Run contracts/web lint, tests and build plus the selected shared Python checks.
+The actual-App dense-text browser fixture and reproduction are in
+`docs/ui/screenshots/1319/README.md`. Check dark/light mobile/desktop, popup
+readability, top-to-bottom keyboard order, repeated Plus toggle, Language,
+native attachment chooser anchoring/cancellation and the separate Dictate icon.
+Physical iPhone acceptance remains separate. Integrated main #1316; the revised
+queue places this fix before camera #1318. Do not import its unmerged changes.
+
+## Mobile Send focus checks (#1315; 26 October 2026)
+
+Run the ConversationHistory and phone-chat-viewport suites for focused coverage;
+full web tests, web lint and web build also pass locally. The actual-component
+Chromium touch reproduction, event traces, screenshot and instructions are in
+`docs/ui/screenshots/1315/README.md`. It controls keyboard viewport geometry and
+intercepts every external request with synthetic responses. Physical iPhone
+keyboard behavior remains unverified; the combined baseline is 6ec8af1e and
+final hosted qualification/merge remain parent-owned.
+
+
+## Desktop composer checks (#1309; 26 October 2026)
+
+Run contracts/web lint, tests and build. Actual-App synthetic Chromium coverage
+and reproduction are in `docs/ui/screenshots/1309/README.md`. It checks desktop
+window geometry, popup hit targets, dictation controls, attachment/error rows and
+phone regression. Preserve the continuous dictation lifecycle from #1305 and the
+attachment submenu from #1308 when integrating; #1303 visibility stays phone-only.
+
+## Continuous dictation checks (#1305; 26 October 2026)
+
+Run `npm test --workspace @jarvis/web`, web lint and web build. Focused regression
+coverage is in `ConversationHistory.test.tsx`; the actual-App simulated speech
+browser check and reproduction steps are in `docs/ui/screenshots/1305/README.md`.
+Check interim replacements, final replay, pause/end and no-speech restart,
+explicit stop, repeated toggles, draft editing, stale callbacks and fatal errors.
+These checks do not establish physical iPhone or real speech-provider acceptance.
+
+## Accepted chat recovery checks (#1311; 26 October 2026)
+
+After integration onto `5dd52b07`, local aggregate lint/build, 9,487 JavaScript
+tests (one existing conditional skip) and 929 Python tests passed. Hosted Node 22
+exposed four fixture teardown timeouts after successful disconnect assertions;
+the same failure reproduced locally on Node 22. The HTTP fixture now closes its
+owned connections in `preClose`, after assertions, without changing production
+shutdown or increasing timeouts. All 221 focused backend tests passed on Node 22
+with that correction. Hosted SQL database contracts passed; final pinned CI is
+tracked on PR #1314.
+
+Review correction: retain Dan's P8-35 no-Stop-button choice. The explicit
+cancellation endpoint/client mechanism remains; no new visible cancellation control
+is introduced. Added signed-token coverage in `src/auth/auth.test.ts` verifies
+401 for missing credentials and 403 for non-owner, hosted-agent, runner and deploy
+principals on discovery, replay and cancellation. Owner positive controls prove
+route registration. Conversation tests reject mismatched-session replay/cancel
+without aborting the original turn, and assert unchanged original message/turn IDs.
+The follow-up passed 221 selected backend tests and 252 selected web tests;
+Chromium rechecked reload, navigation, absence of Stop and explicit cancellation
+through the client API at 390×844 and 1440×900. This is author review evidence,
+not an independent reviewer trace or hosted exact-head CI.
+
+Run focused backend `src/core/recoverable-chat.test.ts`, `src/core/conversation.test.ts`,
+`src/core/owner-interactions.test.ts`, `src/daily/tools/food-review.test.ts` and
+`src/daily/tools/food.test.ts`; web `src/conversation-history.test.ts` and
+`src/ConversationHistory.test.tsx`. Aggregate checks are `npm test`, `npm run lint`,
+`npm run build`, plus `bash .github/scripts/python-ci.sh agents/jarvis`.
+Use synthetic meals only. Replay is process-local under the existing single replica;
+completed replies use SQL history. Restart interrupts pending work and must never
+resubmit it. Keep deployment/restart limitations distinct from disconnect tests.
+
+Synthetic coverage includes disconnect while the model is running, while an exact
+food proposal is pending, and after an approved action commits but before its
+final response is emitted. Replaying that result twice asserts one agent execution
+and one action write. Expiry and explicit cancellation assert zero writes; existing
+food-tool tests cover source/proposal fingerprints, presence and committed receipts.
+The Chromium App fixture at 390×844 and 1440×900 recovered the exact proposal on
+reload and retained execution through ordinary navigation without adding a Stop
+control or another turn POST. Explicit cancellation is tested through its API. No screenshots or private meal data were published.
+
+The SQL nutrition integration command was attempted but refused to collect because
+no isolated loopback SQL Server is configured. Do not interpret synthetic action
+counters as real SQL transaction/concurrency or live-provider/device evidence.
+This executor uses Node 24.19.0/npm 11.9.0; pinned Node 22/npm 10 qualification stays
+with CI. Locked npm package installation needed temporary public npm tarball URLs
+for configured-feed 403s; the tracked lockfile, versions and integrity hashes are
+unchanged. PR #1314 is ready and rebased onto main `5dd52b07` after desktop
+#1313. Additive documentation and test-setup conflicts preserved both workstreams.
+Runtime/CSS comparison retains the merged desktop, composer, dictation, preview
+and attachment changes. Exact-head local and hosted qualification follows the
+rebase; parent owns merge and deployment.
+
+
+## Settled shell glass checks (#1301; 26 October 2026)
+
+Use `npm test --workspace @jarvis/web`, web lint and web build, plus the actual-App
+browser fixture in `docs/ui/screenshots/1301/fixtures/browser.py`. Reproduction
+commands and limits are in that folder's README. It measures per-frame fill,
+blur and opacity, waits after three menu opens and deferred settings, and
+checks scene-color transmission under header/composer/dock/popup pixels.
+Only synthetic App data and the existing WebGL fallback are used. No private
+reference image or real device/media acceptance is included. Keep existing
+phone viewport and startup-autofocus tests intact.
+
+
+## Camera/menu verification (#1296; 26 October 2026)
+
+Run `npm test --workspace @jarvis/web`, `npm run lint --workspace @jarvis/web`
+and `npm run build --workspace @jarvis/web`. The reproducible full-App fixture,
+Chromium browser assertions, synthetic screenshots and exact setup commands are
+in `docs/ui/screenshots/1296/README.md`. It supplies synthetic sign-in, HTTP
+responses and a canvas camera stream; WebGL is disabled to exercise the actual
+app's fallback without software-renderer contention. No private pixels, real
+camera, microphone or external provider is exercised. This executor uses
+Node 24.19.0/npm 11.9.0, not the pinned CI Node 22/npm 10.
+
+
+## Mobile browser food confirmation checks (#1290; 25 October 2026)
+
+Use the existing natural-food checks below, plus backend
+`src/core/phone-approval.test.ts`, `src/voice/startup.test.ts` and
+`src/daily/tools/food.test.ts`. The food-review HTTP fixture starts at
+discovery/lookup, stages through the tool route and reads the exact invitation
+from the still-open conversation SSE stream before steering `Log it`; fresh and earlier-refusal
+histories use isolated synthetic records. Relay tests start from an estimate
+request and actual tool execution in both direct and compact discovery modes
+for English/Danish. They require invitation transcript/audio frames on the browser
+socket before sending a new owner reply, then require the committed result
+transcript. They also cover deferral during user speech, expiry before delivery,
+and interrupted invitation responses retaining the tool-result continuation.
+The internal invitation event carries the existing confirmation's presentation,
+not a second approval lifecycle. #1259 acknowledgement is not invitation evidence.
+Typed-chat client/parser tests in `conversation-history.test.ts` and
+`ConversationHistory.test.tsx` require visible inline review/invitation before
+`Log it`, then the final receipt, plus withdrawal and invalid-payload handling.
+`core/conversation.test.ts` also checks source/session isolation and subscription
+cleanup. Chromium inspection at 1440px/390px used the real conversation
+component/client with synthetic streaming responses and scratch-only providers,
+not the hosted signed-in App, real provider, SQL or a physical device.
+Full local qualification uses `npm run lint`, `npm test`, `npm run build`, and
+the isolated SQL command below when its loopback fixture is available.
+Hosted-agent qualification:
+`bash .github/scripts/python-ci.sh agents/jarvis`.
+These are mocked-provider/in-memory tests, not live-provider, SQL persistence,
+microphone or physical-device acceptance. Do not write production meals.
+
+## System status freshness checks (#1288; 25 October 2026)
+
+Focused synthetic checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/system-status.test.ts src/vault/vault.test.ts
+npm test --workspace @jarvis/web -- src/status/StatusPage.test.tsx
+npm run lint --workspace @jarvis/backend
+npm run lint --workspace @jarvis/web
+npm run build --workspace @jarvis/backend
+npm run build --workspace @jarvis/web
+```
+
+The backend cases cover no-change syncs with old chunk times, incomplete
+coverage, failed and stale attempts, and unknown evidence after restart. Status
+page fixtures cover Foundry/runner explanations, vault evidence times and
+ordinary refresh. These checks do not run live model/runner probes or access
+private vault data.
+
+## Shared confirmation lifecycle checks (#1281; 25 October 2026)
+
+Focused offline checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/pending-action.test.ts src/core/owner-interactions.test.ts src/google src/daily/tools/food-review.test.ts src/daily/tools/saved-food.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts
+npm test --workspace @jarvis/backend -- src/factory/pending-action-tools.test.ts src/factory/tools.test.ts src/factory/github-approval.test.ts src/factory/github-app-tools.test.ts src/factory/pull-request-tools.test.ts src/factory/repository-tools.test.ts
+```
+
+These use synthetic stores/providers, not live account mutations or physical
+voice acceptance. `core/pending-action.ts` owns confirmation transitions;
+adapters keep permission checks, routing indexes and result receipts.
+Food API compatibility tests exercise opt-in `foodEstimate` delivery and
+`resolveFoodEstimateReply` with synthetic persisted replies and injected
+decisions. The reconciled tree includes #1278's merged call-site, phrase and
+streaming changes and retains its real SQL fixture below. The focused combined
+checks do not establish live-device acceptance or qualify branch-only #1264
+target clarification. The reconciled tree also includes #1259's reviewed
+acknowledgment and response-delivery changes.
+
+## Natural food confirmation checks (#1277; 25 October 2026)
+
+Use synthetic food records only. Focused checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/owner-interactions.test.ts src/core/approval-interpreter.test.ts src/daily/tools/food-review.test.ts src/core/conversation.test.ts src/core/chat-agent.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts
+npm test --workspace @jarvis/web -- src/conversation-history.test.ts
+```
+
+Text steering and persisted English/Danish browser-voice transcripts resolve
+only the current session's pending estimate; Now remains available. Stream
+readers use the existing hosting budgets (browser 240 seconds, backend 210 seconds
+below ingress), not a new food lifetime.
+Local HTTP/WebSocket fixtures are not live microphone, provider or device evidence.
+
+The SQL nutrition review fixture uses `createConversationStore(pool)` for both
+the tool request and owner-interaction service, with persisted source/reply
+messages. Its nutrition clock follows the source timestamp. Keep the real SQL
+approval/replay assertions for both browser-button and natural estimate replies:
+
+```sh
+npm run test:database --workspace @jarvis/backend -- src/database/nutrition.integration.test.ts
+```
+
+This command requires the isolated loopback SQL Server configuration used by
+Database CI; never point it at production.
+
+## Research result recovery (#1237; 25 October 2026)
+
+Focused offline checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/core/research.test.ts src/core/jobs.test.ts src/core/workspaces.test.ts src/database/background-job-store.test.ts src/database/html-artifact-store.test.ts
+npm test --workspace @jarvis/contracts -- src/index.test.js
+npm test --workspace @jarvis/web -- --run src/JobsChip.test.tsx
+```
+
+The additive `0066_research_result_recovery.sql` change is covered by the
+backend's disposable SQL Server integration workflow:
+`npm run test:database --workspace @jarvis/backend`. A local offline test does
+not validate SQL Server execution. Use only synthetic reports and owner IDs.
+Workspace delivery is separate from research completion; `delivered` means the
+client acknowledged applying its command, not that a person viewed it. A
+physical iPhone/tab reconnect remains owner acceptance, not CI evidence.
 
 ## Per-finding feedback checks (#1240)
 
@@ -5485,3 +6133,25 @@ Focused checks:
 `npm test --workspace @jarvis/backend -- --run src/proactive/tools.test.ts src/production-modules.test.ts src/database/proactive-store.test.ts src/proactive/store.test.ts src/core/capability-instructions.test.ts src/tool-parity.test.ts src/voice/realtime.test.ts src/core/settings.test.ts`,
 `npm run build --workspace @jarvis/backend`, and
 `npm run lint --workspace @jarvis/backend`.
+
+
+## Mobile corrections validation (#1293; 26 October 2026)
+
+The full frozen install in this executor failed on configured-feed HTTP 403 for
+`pkce-challenge@5.0.1`. The existing web/contracts workspaces install successfully
+with `npm ci --ignore-scripts --workspace @jarvis/web --workspace @jarvis/contracts
+--cache /tmp/jarvis-npm-cache-1293`; no registry, lockfile or package versions change.
+This permits normal web Vitest/lint/build and local Vite browser fixtures.
+Local Node 24.19.0/npm 11.9.0 is not pinned CI Node 22/npm 10. Full-App synthetic
+Chromium capture instructions and explicit limits are in
+`docs/ui/screenshots/mobile-corrections-1293/README.md`.
+Aggregate CI skips drafts; `pipeline_evidence.py` also rejects a dispatched PR
+that remains draft. The parent owns readiness and normal exact-head qualification.
+
+## Preview follow-up validation (#1304; 26 October 2026)
+
+`docs/ui/screenshots/1304/README.md` records actual-App synthetic camera QA,
+continuous frame/aspect-change assertions and commands. Controls use existing
+chrome glass tokens. Stream replacement retains valid preview geometry and
+playback resume refreshes it. No private source image or physical iPhone
+acceptance is included. Composer visibility (#1303) remains separately owned.

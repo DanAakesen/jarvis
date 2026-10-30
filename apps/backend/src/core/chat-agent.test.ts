@@ -38,6 +38,23 @@ function streamedResponse(chunks: string[], headers: HeadersInit = { 'content-ty
 }
 
 describe('Foundry Invocations chat agent', () => {
+  it('uses the existing ingress budget for streams and still propagates caller cancellation', async () => {
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const controller = new AbortController();
+    let requestSignal!: AbortSignal;
+    const { agent } = createAgent(vi.fn(async (_url, options) => {
+      requestSignal = options!.signal!;
+      return streamedResponse(['event: done\ndata: {}\n\n']);
+    }));
+    for await (const chunk of agent.stream(input, delegatedAuthorization, controller.signal)) {
+      expect(chunk).toBeUndefined();
+    }
+    expect(timeout).toHaveBeenCalledWith(210_000);
+    expect(requestSignal.aborted).toBe(false);
+    controller.abort();
+    expect(requestSignal.aborted).toBe(true);
+  });
+
   it.each(['45', new Date(Date.now() + 45_000).toUTCString(), 'private-invalid'])(
     'reads a valid Retry-After response hint without copying the header: %s', async (retryAfter) => {
       const { agent } = createAgent(vi.fn(async () => streamedResponse([
@@ -85,6 +102,27 @@ describe('Foundry Invocations chat agent', () => {
     expect(onVisualResult).toHaveBeenCalledWith({ visualPath: 'caption', visualReason: 'image_rejected',
       description: 'A real red mug.', captionMs: 25 });
     expect(JSON.parse(fetcher.mock.calls[0]![1]!.body as string).visualContext).toEqual(visualContext);
+  });
+
+  it('preserves the acknowledgment boundary after its streamed text', async () => {
+    const acknowledgment = "I'll compare your saved targets.";
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      `event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+      `event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+      'event: delta\ndata: {"text":"The targets match."}\n\n',
+      'event: done\ndata: {}\n\n',
+    ])));
+    const chunks = [];
+
+    for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toEqual([
+      acknowledgment,
+      { type: 'acknowledgment', text: acknowledgment },
+      'The targets match.',
+    ]);
   });
 
   it.each([

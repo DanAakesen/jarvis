@@ -322,6 +322,10 @@ describe('committed SQL manifest', () => {
       '0063_proactive_suggestion_preferences.sql',
       '0064_owner_sessions.sql',
       '0065_owner_reminder_schedules.sql',
+      '0066_research_result_recovery.sql',
+      '0067_workspaces_identifiers.sql',
+      '0068_issue_delivery_origin.sql',
+      '0069_runtime_test_sessions.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -401,7 +405,7 @@ describe('committed SQL manifest', () => {
       sql: expect.stringContaining('DROP COLUMN embedding_model'),
     });
   });
-  it('indexes workspace HTML artifacts and images in Folio with reversible storage', async () => {
+  it('indexes workspace HTML artifacts and images in Workspaces with reversible storage', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0035_folio.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.folio_items');
     expect(migration?.sql).toContain("N'html_app'");
@@ -410,6 +414,21 @@ describe('committed SQL manifest', () => {
     await expect(readDownMigration('0035_folio.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP TABLE dbo.folio_items'),
     });
+  });
+  it('renames Workspaces storage without dropping data and keeps legacy SQL aliases synchronized', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0067_workspaces_identifiers.sql');
+    expect(migration?.sql).toContain("sp_rename N'dbo.folio_items', N'workspace_items'");
+    expect(migration?.sql).toContain('CREATE SYNONYM dbo.folio_items FOR dbo.workspace_items');
+    expect(migration?.sql).toContain('result_workspace_item_id');
+    expect(migration?.sql).toContain('TR_background_jobs_workspace_result_compat');
+    expect(migration?.sql).toContain('SET result_workspace_item_id = result_folio_id');
+    expect(migration?.sql).toContain("EXEC(N'UPDATE dbo.background_jobs");
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.background_jobs");
+    expect(migration?.sql).not.toMatch(/\b(?:DELETE|TRUNCATE)\b/iu);
+    const down = await readDownMigration('0067_workspaces_identifiers.sql');
+    expect(down.sql).toContain('DROP SYNONYM dbo.folio_items');
+    expect(down.sql).toContain("sp_rename N'dbo.workspace_items', N'folio_items'");
+    expect(down.sql).not.toMatch(/\b(?:DELETE|TRUNCATE)\b/iu);
   });
   it('stores retry inputs and one retry claim per research job', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0034_research_job_retry.sql');

@@ -214,8 +214,18 @@ current_message_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
 current_chat_session_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_chat_session_id", default=None
 )
+# Set only after the stored source message is verified against backend history.
+current_chat_runtime_test: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "jarvis_chat_runtime_test", default=None
+)
+current_chat_input_start: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "jarvis_chat_input_start", default=None
+)
 current_chat_turn_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "jarvis_chat_turn_id", default=None
+)
+current_chat_acknowledgment_enabled: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "jarvis_chat_acknowledgment_enabled", default=True
 )
 current_steering_fetcher: contextvars.ContextVar[
     Callable[[], Awaitable[Sequence[tuple[str, str, str]]]] | None
@@ -872,11 +882,11 @@ class BackendToolClient:
                 return _error(name, "This phone session is invalid; nothing was done.")
             headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
-            if name == "daily_feed":
+            if name == "health_feed":
                 read_timeout = DAILY_FEED_TIMEOUT_SECONDS
             elif name in {
-                "daily_food_review", "daily_saved_food", "daily_nutrition_targets",
-                "daily_nutrition_history", "daily_coach_status",
+                "health_food_review", "health_saved_food", "health_nutrition_targets",
+                "health_nutrition_history", "health_coach_status",
             }:
                 read_timeout = FOOD_REVIEW_TIMEOUT_SECONDS
             elif name == "web_research":
