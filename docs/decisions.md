@@ -35,6 +35,17 @@ interval and within its 15-minute window; inject the clock for deterministic
 tests. The Linux-testable core owns the chat client and multipart encoding;
 Apple transport implementations remain in the app target.
 
+## 30 October 2026 — keep approvals and workspace control in JarvisCore (P15-05 / #1390)
+
+Reuse `GET /now`, the confirmation decision route and the authenticated
+`/now/events` plus workspace registration/acknowledgement routes already used
+by the web app. Never retry a confirmation decision; treat 404 as no longer
+available. Workspace acknowledgements are single-send and use the server event's
+expiry to bound the request timeout. Reconnect with a capped, injectable backoff,
+clear the old session ID, and do not assume event replay or re-register state.
+Keep this issue headless: no push, notifications, screen, backend route or
+Apple-only dependency.
+
 ## 30 October 2026 — keep iOS networking in the pure-Swift core (P15-03 / #1388)
 
 `JarvisCore` owns the HTTP client and platform replacement seams for transport,

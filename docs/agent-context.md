@@ -6193,6 +6193,17 @@ consumer cancellation stops the stream. Reattach retries transient failures
 every two seconds for at most 15 minutes using an injectable clock. No backend
 route, Apple framework or third-party dependency is added.
 
+P15-05 adds `JarvisApprovalsClient` and `JarvisWorkspaceClient` on those same
+authenticated HTTP and SSE seams. Approvals decode only the pending-confirmation
+fields from `GET /now`; each approve/reject `POST` is sent once, and 404 means
+the confirmation is no longer available. Workspace events retain unknown
+event names, keep only the current server-issued session ID, and reconnect with
+a capped injectable backoff without replaying snapshots or commands. Snapshot
+registration is flat beside `sessionId`; command acknowledgements validate
+reason length locally and constrain the request timeout to the event expiry.
+No screen, push, notification code, backend route, Apple framework or
+third-party dependency is added.
+
 ### Synthetic fixture scenarios (P15-08)
 
 `FixtureTransport` in `JarvisCore` replays HTTP responses and SSE chunks without
