@@ -1,3 +1,11 @@
+## 30 October 2026 — localize the iOS Notes area from app preference (#1420)
+
+Use the app-owned `jarvis.appLanguage` preference for Notes, Tasks, List, Graph,
+editor/sheet copy, accessibility strings and date formatting. Danish is the default;
+the Notes screen does not infer its language from the device locale or the separate
+backend voice preference. Keep both language catalogs in JarvisCore so Linux tests
+can validate coverage and date formatting without adding an Apple-only test target.
+
 ## 30 October 2026 — stabilize the GitHub chat acceptance read (#1415)
 
 Judge `chat_github_read` by a successful `github_read` / `issue_get` receipt for

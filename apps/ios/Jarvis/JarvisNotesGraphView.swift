@@ -102,7 +102,7 @@ struct JarvisNotesGraphView: View {
                     .onEnded { _ in startingScale = scale }
             )
             .accessibilityLabel(copy.graph)
-            .accessibilityHint(copy.danish ? "Træk for at flytte, knib for at zoome" : "Drag to pan and pinch to zoom")
+            .accessibilityHint(copy.graphPanZoomHint)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)

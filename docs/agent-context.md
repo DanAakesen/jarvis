@@ -6317,18 +6317,20 @@ This job does not sign, use secrets, or upload to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
-SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
-and other enabled destinations plus Settings are title-only pages with native
-back navigation. Banking remains disabled and labeled Later. The fixed-behind
-sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
-its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
+SwiftUI binds them to a native `NavigationStack`. Chat and other unbuilt
+destinations remain title-only pages; Settings exposes the persisted Danish/
+English app-language preference (Danish by default). Banking remains disabled
+and labeled Later. The fixed-behind sidebar opens through a right-side drag or
+the localized VoiceOver action; its shared styling and gesture tokens are in
+`JarvisSidebar.swift`. Run
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
 validation.
 
 P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
-reuses the contracts in section 11 of `docs/ios/integration-contract.md`, including
-read-only `GET /settings` for `voice.defaultLanguage`; keep the web/backend
-source files there authoritative and do not add iOS routes.
+reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
+The app-owned language preference selects the complete Notes localization catalog
+and date locale; do not derive it from `GET /settings` or voice language. Keep the
+web/backend source files there authoritative and do not add iOS routes.
 Synthetic note/task/graph fixture scenarios and Linux tests live in
 `JarvisCoreTests`. The SwiftUI area provides Notes, Tasks, List and Graph tabs,
 creation sheets, conditional note saves and conflict recovery. It depends on an

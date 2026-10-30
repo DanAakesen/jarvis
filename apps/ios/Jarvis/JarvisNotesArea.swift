@@ -20,76 +20,85 @@ private enum JarvisNotesSearchScope: String, CaseIterable, Identifiable {
 }
 
 struct JarvisNotesCopy {
-    let danish: Bool
+    let language: JarvisAppLanguage
 
-    init(language: JarvisNotesLanguage? = nil) {
-        danish = language.map { $0 == .da }
-            ?? (Locale.autoupdatingCurrent.language.languageCode?.identifier == "da")
+    init(language: JarvisAppLanguage = .default) {
+        self.language = language
     }
 
-    var title: String { danish ? "Noter" : "Notes" }
-    var refresh: String { danish ? "Opdater" : "Refresh" }
-    var search: String { danish ? "Søg" : "Search" }
-    var all: String { danish ? "Alle" : "All" }
-    var notes: String { danish ? "Noter" : "Notes" }
-    var tasks: String { danish ? "Opgaver" : "Tasks" }
-    var list: String { danish ? "Liste" : "List" }
-    var graph: String { danish ? "Graf" : "Graph" }
-    var newNote: String { danish ? "Ny note" : "New note" }
-    var newTask: String { danish ? "Ny opgave" : "New task" }
-    var retry: String { danish ? "Prøv igen" : "Try again" }
-    var loading: String { danish ? "Indlæser" : "Loading" }
-    var emptyNotes: String { danish ? "Ingen noter" : "No notes" }
-    var emptyTasks: String { danish ? "Ingen opgaver" : "No tasks" }
-    var emptyList: String { danish ? "Vaulten er tom" : "The vault is empty" }
-    var emptyGraph: String { danish ? "Ingen noter at vise" : "No notes to show" }
-    var noResults: String { danish ? "Ingen resultater" : "No results" }
-    var offline: String { danish ? "Offline. Ingen cachede noter." : "Offline. No cached notes are available." }
-    var unavailable: String { danish ? "Noter kunne ikke indlæses." : "Notes could not be loaded." }
-    var signIn: String { danish ? "Login er ikke tilgængeligt i denne appversion." : "Sign-in is unavailable in this app version." }
-    var notOwner: String { danish ? "Kun ejeren har adgang til noter." : "Notes are available to the owner only." }
-    var save: String { danish ? "Gem" : "Save" }
-    var saved: String { danish ? "Gemt" : "Saved" }
-    var saving: String { danish ? "Gemmer" : "Saving" }
-    var unsaved: String { danish ? "Ikke gemt" : "Unsaved" }
-    var conflict: String { danish ? "Konflikt" : "Conflict" }
-    var reload: String { danish ? "Genindlæs seneste" : "Reload latest" }
-    var titleField: String { danish ? "Titel" : "Title" }
-    var folderField: String { danish ? "Mappe" : "Folder" }
-    var contentField: String { danish ? "Tekst" : "Text" }
-    var dueDate: String { danish ? "Dato" : "Due date" }
-    var dueTime: String { danish ? "Tid" : "Due time" }
-    var scope: String { danish ? "Område" : "Scope" }
-    var personal: String { danish ? "Privat" : "Personal" }
-    var work: String { danish ? "Arbejde" : "Work" }
-    var overdue: String { danish ? "Forfaldne" : "Overdue" }
-    var today: String { danish ? "I dag" : "Today" }
-    var upcoming: String { danish ? "Kommende" : "Upcoming" }
-    var noDate: String { danish ? "Uden dato" : "No date" }
-    var priorityHigh: String { danish ? "Høj" : "High" }
-    var priorityMedium: String { danish ? "Mellem" : "Medium" }
-    var priorityNormal: String { danish ? "Normal" : "Normal" }
-    var complete: String { danish ? "Udfør" : "Complete" }
-    var completed: String { danish ? "Udført" : "Completed" }
-    var showGraphList: String { danish ? "Vis graf som liste" : "Show graph as list" }
-    var showGraph: String { danish ? "Vis graf" : "Show graph" }
-    var resetGraph: String { danish ? "Nulstil grafvisning" : "Reset graph view" }
-    var vaultRoot: String { danish ? "Vaultens rod" : "Vault root" }
-    var loadMore: String { danish ? "Indlæs flere" : "Load more" }
-    var createHint: String { danish ? "Opret en note eller opgave" : "Create a note or task" }
-    var discardTitle: String { danish ? "Kassér ændringer?" : "Discard changes?" }
-    var discard: String { danish ? "Kassér" : "Discard" }
-    var cancel: String { danish ? "Annuller" : "Cancel" }
-    var keepDraft: String { danish ? "Behold kladde" : "Keep draft" }
-    var latestVersion: String { danish ? "Seneste version" : "Latest version" }
-    var savedNeedsRefresh: String { danish ? "Gemt · genindlæs for at fortsætte" : "Saved · reload to continue" }
-    var unknownWrite: String { danish ? "Resultatet er ukendt. Opdater før du prøver igen." : "The result is unknown. Refresh before trying again." }
-    var taskChanged: String { danish ? "Opgaven er ændret. Listen opdateres." : "The task changed. Refreshing the list." }
-    var noteMissing: String { danish ? "Noten findes ikke længere." : "The note no longer exists." }
-    var create: String { danish ? "Opret" : "Create" }
-    var dueTimeEnabled: String { danish ? "Tilføj tidspunkt" : "Add time" }
-    var dueDateEnabled: String { danish ? "Tilføj dato" : "Add date" }
-    var openNote: String { danish ? "Åbn note" : "Open note" }
+    var title: String { text(.title) }
+    var refresh: String { text(.refresh) }
+    var search: String { text(.search) }
+    var all: String { text(.all) }
+    var notes: String { text(.notes) }
+    var tasks: String { text(.tasks) }
+    var list: String { text(.list) }
+    var graph: String { text(.graph) }
+    var newNote: String { text(.newNote) }
+    var newTask: String { text(.newTask) }
+    var retry: String { text(.retry) }
+    var loading: String { text(.loading) }
+    var emptyNotes: String { text(.emptyNotes) }
+    var emptyTasks: String { text(.emptyTasks) }
+    var emptyList: String { text(.emptyList) }
+    var emptyGraph: String { text(.emptyGraph) }
+    var noResults: String { text(.noResults) }
+    var offline: String { text(.offline) }
+    var unavailable: String { text(.unavailable) }
+    var signIn: String { text(.signIn) }
+    var notOwner: String { text(.notOwner) }
+    var save: String { text(.save) }
+    var saved: String { text(.saved) }
+    var saving: String { text(.saving) }
+    var unsaved: String { text(.unsaved) }
+    var conflict: String { text(.conflict) }
+    var reload: String { text(.reload) }
+    var titleField: String { text(.titleField) }
+    var folderField: String { text(.folderField) }
+    var contentField: String { text(.contentField) }
+    var dueDate: String { text(.dueDate) }
+    var dueTime: String { text(.dueTime) }
+    var scope: String { text(.scope) }
+    var personal: String { text(.personal) }
+    var work: String { text(.work) }
+    var overdue: String { text(.overdue) }
+    var today: String { text(.today) }
+    var upcoming: String { text(.upcoming) }
+    var noDate: String { text(.noDate) }
+    var priorityHigh: String { text(.priorityHigh) }
+    var priorityMedium: String { text(.priorityMedium) }
+    var priorityNormal: String { text(.priorityNormal) }
+    var complete: String { text(.complete) }
+    var completed: String { text(.completed) }
+    var showGraphList: String { text(.showGraphList) }
+    var showGraph: String { text(.showGraph) }
+    var resetGraph: String { text(.resetGraph) }
+    var vaultRoot: String { text(.vaultRoot) }
+    var loadMore: String { text(.loadMore) }
+    var createHint: String { text(.createHint) }
+    var discardTitle: String { text(.discardTitle) }
+    var discard: String { text(.discard) }
+    var cancel: String { text(.cancel) }
+    var keepDraft: String { text(.keepDraft) }
+    var latestVersion: String { text(.latestVersion) }
+    var savedNeedsRefresh: String { text(.savedNeedsRefresh) }
+    var unknownWrite: String { text(.unknownWrite) }
+    var taskChanged: String { text(.taskChanged) }
+    var noteMissing: String { text(.noteMissing) }
+    var create: String { text(.create) }
+    var dueTimeEnabled: String { text(.dueTimeEnabled) }
+    var dueDateEnabled: String { text(.dueDateEnabled) }
+    var openNote: String { text(.openNote) }
+    var back: String { text(.back) }
+    var ok: String { text(.ok) }
+    var clearSearch: String { text(.clearSearch) }
+    var expanded: String { text(.expanded) }
+    var collapsed: String { text(.collapsed) }
+    var graphPanZoomHint: String { text(.graphPanZoomHint) }
+
+    private func text(_ key: JarvisNotesLocalizationKey) -> String {
+        JarvisNotesLocalization.string(key, language: language)
+    }
 
     fileprivate func title(for tab: JarvisNotesTab) -> String {
         switch tab {
@@ -112,6 +121,7 @@ struct JarvisNotesCopy {
 
 struct JarvisNotesArea: View {
     let client: JarvisNotesClient?
+    let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
 
     @State private var selectedTab: JarvisNotesTab = .notes
@@ -130,8 +140,6 @@ struct JarvisNotesArea: View {
     @State private var directoryLoading = Set<String>()
     @State private var taskList: VaultTaskList?
     @State private var graph: KnowledgeGraph?
-    @State private var languagePreference: JarvisNotesLanguage?
-    @State private var attemptedLanguageLoad = false
     @State private var graphSearch: KnowledgeGraphSearch?
     @State private var taskSearch: VaultTaskList?
     @State private var loading = false
@@ -151,7 +159,7 @@ struct JarvisNotesArea: View {
     @State private var pendingTaskIDs = Set<String>()
     @State private var noticePresented = false
 
-    private var copy: JarvisNotesCopy { JarvisNotesCopy(language: languagePreference) }
+    private var copy: JarvisNotesCopy { JarvisNotesCopy(language: language) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -164,6 +172,7 @@ struct JarvisNotesArea: View {
             }
         }
         .background(Color(uiColor: .systemBackground))
+        .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                 if selectedTab == .notes { folderFilters }
@@ -184,6 +193,7 @@ struct JarvisNotesArea: View {
             if let client {
                 JarvisNewNoteSheet(
                     client: client,
+                    copy: copy,
                     initialFolder: newNoteFolder,
                     onCreated: { path in
                         newNotePresented = false
@@ -199,6 +209,7 @@ struct JarvisNotesArea: View {
             if let client {
                 JarvisNewTaskSheet(
                     client: client,
+                    copy: copy,
                     onCreated: {
                         newTaskPresented = false
                         refreshVersion += 1
@@ -212,13 +223,14 @@ struct JarvisNotesArea: View {
             if let editor {
                 JarvisNoteEditorView(
                     client: client,
+                    copy: copy,
                     note: editor,
                     onSaved: { refreshed in editor = refreshed },
                     onClose: { editorPresented = false }
                 )
             }
             .alert(copy.title, isPresented: $noticePresented) {
-                Button("OK", role: .cancel) { notice = nil }
+                Button(copy.ok, role: .cancel) { notice = nil }
             } message: {
                 Text(notice ?? "")
             }
@@ -264,7 +276,6 @@ struct JarvisNotesArea: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(openingNotePaths.contains(node.path))
                 .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                 .accessibilityLabel(copy.title(for: tab))
             }
@@ -495,7 +506,7 @@ struct JarvisNotesArea: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(copy.danish ? "Ryd søgning" : "Clear search")
+                    .accessibilityLabel(copy.clearSearch)
                 }
             }
             .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing)
@@ -523,7 +534,7 @@ struct JarvisNotesArea: View {
                     .background(.regularMaterial, in: Circle())
                     .contentShape(Circle())
             }
-            .accessibilityLabel(copy.danish ? "Opret" : "Create")
+            .accessibilityLabel(copy.create)
             .accessibilityHint(
                 client == nil ? copy.unavailable : signInUnavailable ? copy.signIn : copy.createHint
             )
@@ -608,7 +619,7 @@ struct JarvisNotesArea: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityValue(isExpanded ? (copy.danish ? "Åben" : "Expanded") : (copy.danish ? "Lukket" : "Collapsed"))
+        .accessibilityValue(isExpanded ? copy.expanded : copy.collapsed)
     }
 
     private func noteRow(_ note: VaultNoteSummary) -> some View {
@@ -627,7 +638,7 @@ struct JarvisNotesArea: View {
                 Text(note.title)
                     .foregroundStyle(.primary)
                 Spacer()
-                Text(note.updatedAt.formattedNotesDate(danish: copy.danish))
+                Text(JarvisNotesLocalization.formattedUpdatedDate(note.updatedAt, language: copy.language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -707,9 +718,11 @@ struct JarvisNotesArea: View {
                 HStack(spacing: JarvisDesignTokens.notesMetadataSpacing) {
                     Text(task.scope == .work ? copy.work : copy.personal)
                     if let due = task.dueDate {
-                        Text(due == today ? copy.today : due)
+                        Text(due == today ? copy.today : JarvisNotesLocalization.formattedDueDate(due, language: copy.language))
                     }
-                    if let time = task.dueTime { Text(time) }
+                    if let time = task.dueTime {
+                        Text(JarvisNotesLocalization.formattedDueTime(time, language: copy.language))
+                    }
                     Text(priorityText(task.priority))
                 }
                 .font(.caption)
@@ -821,11 +834,6 @@ struct JarvisNotesArea: View {
         signInUnavailable = false
         defer { loading = false }
         do {
-            if !attemptedLanguageLoad {
-                attemptedLanguageLoad = true
-                languagePreference = try? await client.languagePreference()
-                guard !Task.isCancelled else { return }
-            }
             switch selectedTab {
             case .notes, .list:
                 if force || tree == nil {
@@ -1040,21 +1048,5 @@ struct JarvisNotesArea: View {
     private func authorizationUnavailable(_ error: Error) -> Bool {
         guard let error = error as? JarvisClientError else { return false }
         return error == .signInRequired || error == .notOwner
-    }
-}
-
-private extension String {
-    func formattedNotesDate(danish: Bool) -> String {
-        let fractionalFormatter = ISO8601DateFormatter()
-        fractionalFormatter.formatOptions.insert(.withFractionalSeconds)
-        let date = fractionalFormatter.date(from: self) ?? ISO8601DateFormatter().date(from: self)
-        guard let date else { return "" }
-        return date.formatted(
-            .dateTime
-                .year(.twoDigits)
-                .month(.abbreviated)
-                .day()
-                .locale(Locale(identifier: danish ? "da_DK" : "en_GB"))
-        )
     }
 }

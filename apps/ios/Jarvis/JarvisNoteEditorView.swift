@@ -9,6 +9,7 @@ private enum JarvisNoteEditorAlert: Equatable {
 
 struct JarvisNoteEditorView: View {
     let client: JarvisNotesClient?
+    let copy: JarvisNotesCopy
     let onSaved: (VaultNote) -> Void
     let onClose: () -> Void
 
@@ -20,15 +21,15 @@ struct JarvisNoteEditorView: View {
     @State private var needsReload = false
     @State private var activeAlert: JarvisNoteEditorAlert?
 
-    private let copy = JarvisNotesCopy()
-
     init(
         client: JarvisNotesClient?,
+        copy: JarvisNotesCopy,
         note: VaultNote,
         onSaved: @escaping (VaultNote) -> Void,
         onClose: @escaping () -> Void
     ) {
         self.client = client
+        self.copy = copy
         self.onSaved = onSaved
         self.onClose = onClose
         _note = State(initialValue: note)
@@ -98,7 +99,7 @@ struct JarvisNoteEditorView: View {
                 } label: {
                     Image(systemName: "chevron.left")
                 }
-                .accessibilityLabel(copy.danish ? "Tilbage" : "Back")
+                .accessibilityLabel(copy.back)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -125,13 +126,13 @@ struct JarvisNoteEditorView: View {
                     onClose()
                 }
             } else {
-                Button("OK", role: .cancel) { activeAlert = nil }
+                Button(copy.ok, role: .cancel) { activeAlert = nil }
             }
         } message: {
             if case let .info(message) = activeAlert {
                 Text(message)
             } else {
-                Text("")
+                Text(verbatim: "")
             }
         }
     }

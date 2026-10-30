@@ -3,16 +3,51 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisNotesClientTests: XCTestCase {
-    func testReadsTheSharedLanguageSetting() async throws {
-        let transport = try notesFixture("notes-language")
-        let notes = JarvisNotesClient(client: try makeClient(transport))
+    func testNotesLocalizationIsCompleteAndUsesBoardDanish() {
+        XCTAssertEqual(JarvisAppLanguage.default, .da)
+        for key in JarvisNotesLocalizationKey.allCases {
+            XCTAssertNotEqual(
+                JarvisNotesLocalization.string(key, language: .da),
+                key.rawValue
+            )
+            XCTAssertNotEqual(
+                JarvisNotesLocalization.string(key, language: .en),
+                key.rawValue
+            )
+        }
 
-        let preference = try await notes.languagePreference()
-        XCTAssertEqual(preference, .en)
-        let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.map(\.method), [.get])
-        XCTAssertEqual(requests.map(\.path), ["/api/settings"])
-        await assertConsumed(transport)
+        XCTAssertEqual(JarvisNotesLocalization.string(.title, language: .da), "Noter")
+        XCTAssertEqual(JarvisNotesLocalization.string(.tasks, language: .da), "Opgaver")
+        XCTAssertEqual(JarvisNotesLocalization.string(.search, language: .da), "Søg")
+        XCTAssertEqual(JarvisNotesLocalization.string(.newNote, language: .da), "Ny note")
+        XCTAssertEqual(JarvisNotesLocalization.string(.newTask, language: .da), "Ny opgave")
+        XCTAssertEqual(JarvisNotesLocalization.string(.overdue, language: .da), "Forfaldne")
+        XCTAssertEqual(JarvisNotesLocalization.string(.upcoming, language: .da), "Kommende")
+        XCTAssertEqual(JarvisNotesLocalization.string(.noDate, language: .da), "Uden dato")
+        XCTAssertEqual(JarvisNotesLocalization.string(.personal, language: .da), "Privat")
+        XCTAssertEqual(JarvisNotesLocalization.string(.work, language: .da), "Arbejde")
+        XCTAssertEqual(JarvisNotesLocalization.string(.reload, language: .da), "Genindlæs seneste")
+        XCTAssertEqual(JarvisNotesLocalization.string(.keepDraft, language: .da), "Behold min")
+    }
+
+    func testNotesDatesFollowTheSelectedAppLanguage() {
+        let updatedAt = "2026-10-30T12:00:00.000Z"
+        let dueDate = "2026-10-30"
+        let dueTime = "10:00"
+
+        XCTAssertNotEqual(
+            JarvisNotesLocalization.formattedUpdatedDate(updatedAt, language: .da),
+            JarvisNotesLocalization.formattedUpdatedDate(updatedAt, language: .en)
+        )
+        XCTAssertNotEqual(
+            JarvisNotesLocalization.formattedDueDate(dueDate, language: .da),
+            JarvisNotesLocalization.formattedDueDate(dueDate, language: .en)
+        )
+        XCTAssertNotEqual(
+            JarvisNotesLocalization.formattedDueTime(dueTime, language: .da),
+            JarvisNotesLocalization.formattedDueTime(dueTime, language: .en)
+        )
+        XCTAssertEqual(JarvisNotesLocalization.formattedDueDate("invalid", language: .da), "invalid")
     }
 
     func testNotesTreeListReadCreateAndConflictUseSharedRoutes() async throws {

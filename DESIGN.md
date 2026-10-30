@@ -2783,9 +2783,9 @@ SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
-stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
-unbuilt areas and Settings use title-only placeholders until their screen
-issues are implemented. Reduced Motion removes settling animation.
+stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and other
+unbuilt areas use title-only placeholders; Settings now hosts the app-language
+preference. Reduced Motion removes settling animation.
 
 ## Native iOS Notes area (P15-12; 30 October 2026)
 
@@ -2805,5 +2805,6 @@ four tabs and creation of notes, folders and tasks. The implementation follows
 the four-tab issue and omits standalone New folder because the shared backend
 has no folder-create route; notes saved beneath a nested path create the folder.
 No note delete/rename/move, task delete, task-create priority, or offline cache
-is represented. Interface language comes from the existing read-only
-`voice.defaultLanguage` setting.
+is represented. Danish and English strings come from the JarvisCore localization
+catalog; the app-owned Settings preference defaults to Danish and controls date
+formatting as well as visible and accessibility copy.

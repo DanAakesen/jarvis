@@ -4,6 +4,7 @@ import SwiftUI
 
 struct JarvisNewNoteSheet: View {
     let client: JarvisNotesClient
+    let copy: JarvisNotesCopy
     let initialFolder: String
     let onCreated: (String) async -> Void
 
@@ -15,8 +16,6 @@ struct JarvisNewNoteSheet: View {
     @State private var errorMessage: String?
     @State private var outcomeUnknown = false
     @State private var authorizationUnavailable = false
-
-    private let copy = JarvisNotesCopy()
 
     var body: some View {
         NavigationStack {
@@ -95,6 +94,7 @@ struct JarvisNewNoteSheet: View {
 
 struct JarvisNewTaskSheet: View {
     let client: JarvisNotesClient
+    let copy: JarvisNotesCopy
     let onCreated: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -108,8 +108,6 @@ struct JarvisNewTaskSheet: View {
     @State private var errorMessage: String?
     @State private var outcomeUnknown = false
     @State private var authorizationUnavailable = false
-
-    private let copy = JarvisNotesCopy()
 
     var body: some View {
         NavigationStack {

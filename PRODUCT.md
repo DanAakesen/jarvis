@@ -1092,8 +1092,9 @@ the vault tree; Graph pans and zooms the knowledge graph and offers a list
 alternative. A persistent bottom search supports All, Notes and Tasks scopes.
 Creating and editing notes use the shared vault routes; editing saves only with
 the version returned by the note read. Tasks can be completed, and new tasks
-include title, scope and optional date/time. Interface copy follows the shared
-`voice.defaultLanguage` setting (`da` or `en`).
+include title, scope and optional date/time. All interface and accessibility copy
+is localized in Danish and English from the app-owned Settings preference,
+defaulting to Danish; it is independent of voice language and device locale.
 
 This iOS navigation is an approved native presentation of the existing web
 capabilities, not a new backend surface. Notes are path-sorted rather than

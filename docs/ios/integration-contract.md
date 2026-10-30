@@ -107,10 +107,10 @@ The approve and decline route itself needs no change.
 ## 11. Notes area (P15-12)
 
 The Notes area uses the existing owner-authenticated vault routes. No iOS-specific route or payload is needed.
+Its Danish/English interface language is an app-owned local preference (`jarvis.appLanguage`), defaulting to Danish; the voice setting is not used for Notes UI copy.
 
 | Screen action | Existing route and contract |
 |---|---|
-| Read the Notes interface language | `GET /settings` returns the settings object; use only `settings.voice.defaultLanguage` (`"da"` or `"en"`). Do not write settings from this area. |
 | Load the vault folders | `GET /notes/tree` returns `directories`, `rootNoteCount`, `truncated` and `updatedAt`. |
 | List notes or load one folder in the tree | `GET /notes?limit=50&offset=N`, optionally with `directory=PATH`, `folder=NAME` or `query=TEXT`. Results are sorted by path, not recency. |
 | Open a note in the editor | `GET /notes/note?path=PATH` returns `path`, Markdown `content`, the current `sha` and a GitHub URL. |
@@ -129,4 +129,4 @@ The web Notes and Tasks views call these routes directly; their assistant tools 
 
 There is no note delete, rename or move route; no folder create or rename route; no task delete route; no task priority on create; and no offline cache. Do not expose those operations or simulate them locally. A new folder is not independently created: a directory only appears when it contains a note. Search and editor writes must not claim offline persistence. No additional backend work is authorized by P15-12.
 
-Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx` (the read-only `voice.defaultLanguage` setting), `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (`GET /settings`).
+Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx`, `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (the separate voice-language setting).

@@ -2,13 +2,26 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-#Preview("Notes fixture") {
+#Preview("Noter · Dansk") {
     NavigationStack {
         JarvisNotesArea(
             client: JarvisNotesPreview.makeClient(),
+            language: .da,
             onRetryConfiguration: {}
         )
     }
+    .environment(\.locale, JarvisAppLanguage.da.locale)
+}
+
+#Preview("Notes · English") {
+    NavigationStack {
+        JarvisNotesArea(
+            client: JarvisNotesPreview.makeClient(),
+            language: .en,
+            onRetryConfiguration: {}
+        )
+    }
+    .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 
 private enum JarvisNotesPreview {
@@ -18,14 +31,6 @@ private enum JarvisNotesPreview {
             {
               "version": 1,
               "interactions": [
-                {
-                  "method": "GET",
-                  "path": "/api/settings",
-                  "response": {
-                    "statusCode": 200,
-                    "body": {"settings": {"voice": {"defaultLanguage": "en"}}}
-                  }
-                },
                 {
                   "method": "GET",
                   "path": "/api/notes/tree",

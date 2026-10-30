@@ -57,6 +57,7 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
 }
 
 struct JarvisSidebar: View {
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @FocusState private var focusedDestination: JarvisDestination?
     @FocusState private var settingsFocused: Bool
     @State private var hoveredDestination: JarvisDestination?
@@ -66,6 +67,10 @@ struct JarvisSidebar: View {
     let safeAreaInsets: EdgeInsets
     let onNavigate: (JarvisDestination) -> Void
     let onClose: () -> Void
+
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -84,7 +89,7 @@ struct JarvisSidebar: View {
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
                 .foregroundStyle(settingsFocused || settingsHovered ? Color.accentColor : Color.primary)
-                .accessibilityLabel("Settings")
+                .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
             }
@@ -111,9 +116,10 @@ struct JarvisSidebar: View {
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(Color(uiColor: .systemBackground))
         .accessibilityHidden(!isOpen)
-        .accessibilityAction(named: Text("Close sidebar")) {
+        .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()
         }
+        .environment(\.locale, language.locale)
     }
 
     private func sidebarRow(_ destination: JarvisDestination) -> some View {
@@ -128,11 +134,11 @@ struct JarvisSidebar: View {
                 Image(systemName: destination.symbolName)
                     .font(.system(size: JarvisDesignTokens.sidebarIconSize))
                     .frame(width: JarvisDesignTokens.sidebarIconColumnWidth)
-                Text(destination.title)
+                Text(destination.localizedTitle(language: language))
                     .font(.body.weight(isHighlighted ? .semibold : .regular))
                 Spacer(minLength: 0)
                 if !destination.isNavigable {
-                    Text("Later")
+                    Text(JarvisNotesLocalization.string(.later, language: language))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
