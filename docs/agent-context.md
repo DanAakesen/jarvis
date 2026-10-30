@@ -6283,6 +6283,16 @@ its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
 validation.
 
+P15-07 adds pure-Swift Codable models and path-specific validation for all
+contracted generated-view renderers, actions, and stored HTML artifacts. It does
+not render views or add routes. The parity test reads
+`packages/contracts/src/index.js`, so keep the full repository checkout when
+running `swift test`; it checks renderer/action names and the shared limits.
+Pass the web validator's optional trusted Blob host or registered tool names
+through `GeneratedViewDecodingContext` on `JSONDecoder.userInfo` when available.
+The Swift source status also accepts `running`, matching the runtime guard even
+though the TypeScript declaration and JSON schema omit it.
+
 ## iOS Phase 1b: owner-started TestFlight upload
 
 `.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only
