@@ -42,6 +42,16 @@ Owner decision, 30 October 2026: the owner approves every screen before it is de
 
 Phase 1a has no real screens (only an empty shell), so the gate does not apply to it.
 
+## Native iOS standards
+
+Owner decision, 30 October 2026: everything built for the iPhone follows the iOS standard way as much as possible and does not hardcode values each time something is built. The concept board cannot show this, but it applies when the app is built. The concept board is a visual reference only, not a source of literal values.
+
+1. System first. Use native components and styles: standard SwiftUI controls, `NavigationStack`, sheets with detents, Liquid Glass materials and the system glass button styles, SF Symbols, Dynamic Type, system colours and semantic tokens, and the system pickers and permission flows (for example the ReplayKit broadcast picker and AVFoundation capture). Light and dark appearance, reduced motion and reduced transparency then work automatically.
+2. Scrolling is the system behaviour: native `ScrollView` and `List`, system momentum and rubber-band bounce, overlay indicators, the iOS 26 scroll edge effects under glass bars, interactive keyboard dismissal, and scroll position and pull to refresh through system APIs. No custom scroll implementations and no fake scrollbars. The scrolling on the concept board is only an approximation.
+3. One shared layer for anything custom: a design-token and reusable-component layer is the single place for colours, spacing, radii, typography, glass modifiers, button styles and icons. No per-screen hardcoded values and no one-off styling.
+4. A custom component needs a stated reason why no system component fits. The reason goes in the screen issue and the pull request.
+5. Every screen issue and pull request is checked against this section as part of its acceptance.
+
 ## Cost guard
 
 Owner decision, 30 October 2026: build and test as much as possible off the Mac, and ship as much as possible on every GitHub build. Make every paid Mac run count. A Mac run is the only compile check for the SwiftUI layer, because the owner's PC has no Swift toolchain (WSL is not installed) and cloud agents run on Ubuntu.
