@@ -27,10 +27,42 @@ trap 'rm -f "$budget_parameters"; if [[ -n "${RUNNER_TEMP:-}" ]]; then rm -f "$R
 jq -n --argjson emails "$budget_emails" \
   '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
+backend_apps=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
+  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256']}" \
+  --output json --only-show-errors)
+if ! jq -e 'type == "array" and length <= 1 and all(.[]; type == "object")' <<<"$backend_apps" >/dev/null; then
+  echo "::error::Unable to identify one existing backend configuration."
+  exit 1
+fi
 if [[ -z "$image" ]]; then
-  image=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
-    --query "[?starts_with(name, 'ca-jarvis-backend-')].properties.template.containers[0].image | [0]" \
-    --output tsv --only-show-errors)
+  image=$(jq -r '.[0].image // ""' <<<"$backend_apps")
+fi
+copilot_env=$(jq -c '.[0].copilot // []' <<<"$backend_apps")
+if ! copilot_values=$(jq -cer '
+  if type != "array" or any(.[]; type != "object" or
+      (.name != "FOUNDRY_COPILOT_AGENT_NAME" and
+       .name != "FOUNDRY_COPILOT_AGENT_VERSION" and
+       .name != "FOUNDRY_COPILOT_DEFINITION_SHA256") or
+      (.value | type != "string")) or
+      (map(.name) | unique | length) != length then error
+  else reduce .[] as $item ({}; .[$item.name] = $item.value)
+  end
+' <<<"$copilot_env"); then
+  echo "::error::Existing Copilot target configuration is invalid."
+  exit 1
+fi
+copilot_agent_name=$(jq -r '.FOUNDRY_COPILOT_AGENT_NAME // ""' <<<"$copilot_values")
+copilot_agent_version=$(jq -r '.FOUNDRY_COPILOT_AGENT_VERSION // ""' <<<"$copilot_values")
+copilot_definition_sha256=$(jq -r '.FOUNDRY_COPILOT_DEFINITION_SHA256 // ""' <<<"$copilot_values")
+copilot_value_count=$(jq 'length' <<<"$copilot_env")
+if (( copilot_value_count != 0 )); then
+  if [[ ! "$copilot_agent_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ||
+        "$copilot_agent_name" == jarvis ||
+        ! "$copilot_agent_version" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ||
+        ! "$copilot_definition_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+    echo "::error::Existing Copilot target configuration is invalid."
+    exit 1
+  fi
 fi
 
 parameters=(backendIdentityResourceId="$identity" sqlAdminGroupObjectId="$sql_group")
@@ -75,6 +107,11 @@ if [[ -n "$image" ]]; then
   parameters+=(backendImage="$image")
 else
   echo "::notice title=Deploy::No backend image exists yet; this Bicep pass skips the backend app."
+fi
+if [[ -n "$copilot_agent_name" ]]; then
+  parameters+=(foundryCopilotAgentName="$copilot_agent_name"
+    foundryCopilotAgentVersion="$copilot_agent_version"
+    foundryCopilotDefinitionSha256="$copilot_definition_sha256")
 fi
 
 vault_mirror_enabled="$vault_mirror_requested"

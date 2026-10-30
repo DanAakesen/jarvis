@@ -193,6 +193,15 @@ first candidate only retains fixed rejected-field diagnostics; it does not prove
 the live error fixed or authorize cutover. See
 [migration evidence and open decisions](main-chat-harness-migration.md).
 
+## 30 October 2026 — preserve the optional Copilot target in infrastructure deploys (#1350)
+
+The explicit comparison provisioning flow remains the only way to create or pin
+the separate managed agent. Ordinary Bicep deploys may carry forward only the
+existing backend's complete, validated agent name/version/definition fingerprint;
+partial or malformed tuples fail before deployment. An absent tuple stays absent.
+This prevents infrastructure updates from silently removing a selected comparison
+target without adding credentials/grants or changing the production runtime default.
+
 ## 29 October 2026 — observe actual backend authorization before a log grant (#1341)
 
 The corrected main preflight passed but surfaced an existing resource-log grant

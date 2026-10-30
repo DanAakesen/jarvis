@@ -203,13 +203,15 @@ This is a comparison configuration handoff, not full release acceptance. The
 normal live conversation/research acceptance job and release receipt remain
 independent; this canary cannot turn their failures into accepted releases.
 
-A future Bicep infrastructure deployment can remove these three ad hoc backend
-values. Preserve or reapply the exact reviewed activation tuple after such a
-deployment before another comparison, or persist it through reviewed optional
-Bicep parameters. Provisioning another version or changing the fingerprint is not
-a substitute for preserving the existing tuple. Runtime parity and uncertain-turn
-recovery still need their own qualification. No live workflow dispatch occurred
-while preparing this change.
+Ordinary Bicep deployment now reads only these three existing backend values and
+passes a complete, validated tuple through optional Bicep parameters. Missing
+configuration remains absent; partial or invalid configuration stops before the
+infrastructure deployment rather than silently dropping the target. This keeps
+the target optional and does not change the production runtime default. The
+provisioning handoff remains the only path that creates or pins the separate
+comparison agent. Provisioning another version or changing the fingerprint is
+not a substitute for preserving the existing tuple. Runtime parity and
+uncertain-turn recovery still need their own qualification.
 
 ## Offline checks
 

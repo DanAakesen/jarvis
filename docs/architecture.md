@@ -37,7 +37,11 @@ client now cover provider creation and continuations; uncertain work stays activ
 without automatic replay. `ManagedPolicyClient` reuses the existing application
 policies through a narrow provider transport seam. The lazy factory and pinned
 backend target reader are wired behind three optional target configuration values;
-no managed target has been activated by this preparation. SQL personal memory, blob artifacts, the
+the explicit provisioning handoff supplies those values, and ordinary Bicep
+deployments preserve a complete validated tuple from the existing backend
+configuration. Missing configuration remains absent; partial or invalid target
+metadata blocks the infrastructure apply. This persistence does not change the
+production runtime default. SQL personal memory, blob artifacts, the
 Voice Live relay and subscription-backed Factory are unchanged.
 
 The UI keeps normal chat mounted and opens a new labelled test conversation from
