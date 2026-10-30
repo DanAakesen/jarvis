@@ -1,6 +1,6 @@
 # iOS app build plan
 
-Status: preparation only. The owner answered the checklist on 29 October 2026 but has not given the go for the foundation phase, so nothing in this file is authorised work. It is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
+Status: the foundation phase is authorised. The owner answered the checklist on 29 October 2026 and gave the go for the foundation phase on 30 October 2026. Phase 1a is the first work and no implementation has landed yet. Later phases still need their own go. This file is the shortest path from nothing to a Jarvis build on the owner's iPhone, plus a list of what is still unproven.
 
 Related documents: `iOS app.md` (confirmed decisions), `docs/ios/integration-contract.md` (backend endpoints the app talks to) and `docs/ios/design/` (the concept board and the surfaces gallery).
 
@@ -10,14 +10,14 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 
 | Choice | Pick | Basis |
 | --- | --- | --- |
-| Build machine | GitHub-hosted `macos-26` with a pinned Xcode 26.x (26.6 is the image default, with older 26.x versions installed beside it). Free for public repositories, but only while this repository stays public. At most 5 concurrent macOS jobs. | Checked: runner names, the 5-job limit, free use on public repositories, the Xcode versions on the image (version 20261013.0424.1) and the 28 April 2026 SDK requirement (uploads need Xcode 26 or later). Gotcha 2 covers the Xcode 27 image. |
+| Build machine | GitHub-hosted `macos-26` with a pinned Xcode 26.x (26.6 is the image default, with older 26.x versions installed beside it). Free for public repositories, but only while this repository stays public. At most 5 concurrent macOS jobs. Never use xlarge labels (see Cost guard). | Checked: runner names, the 5-job limit, free use on public repositories, the Xcode versions on the image (version 20261013.0424.1) and the 28 April 2026 SDK requirement (uploads need Xcode 26 or later). Gotcha 2 covers the Xcode 27 image. |
 | Project file | XcodeGen (`project.yml`). Do not hand-write the project file. Avoid Tuist: its agent flow needs an interactive browser login. | Checked: XcodeGen is not archived, its last push was on 13 October 2026 and its latest release is 2.46.0. Not re-read: the Tuist login claim, and XcodeGen's support for Xcode 26 and Swift 6. |
 | Signing and upload | `xcodebuild` with a Team App Store Connect API key (an Individual key cannot use the provisioning endpoints) and automatic signing, straight to TestFlight. No Fastlane, no certificates in the repository, no Mac. | Checked: the flags, in a mirror of the `xcodebuild` manual page (all three `-authenticationKey` flags are needed together), and Apple's rules for Team and Individual keys. Proven end to end in phase 1. The role is Unproven 1. |
 | Build number | The GitHub run number. Every upload needs a higher number. | My call |
 | Export compliance | `ITSAppUsesNonExemptEncryption` set to NO in the app's Info.plist: standard HTTPS only. It is the owner's declaration to Apple. | Checked: Apple says to set NO when the app, including the libraries it links, uses no encryption or only exempt forms, and that encryption built into the operating system, such as HTTPS through `URLSession`, is typically exempt. The same page says exempt encryption might still call for a year-end self-classification report to the US government. Whether that applies is the owner's call and is not researched here. |
 | Code split | A pure-Swift `JarvisCore` package with no Apple-framework imports, and a thin SwiftUI app layer. | Checked: Linux limit. My call: design. |
 | Test data | A fixture transport that replays recorded sample conversations. | My call |
-| Screenshots | Best effort on every pull request, never a gate. | Not re-read |
+| Screenshots | Best effort and never a gate. Run only on manual dispatch, not on pull requests (see Cost guard). | Not re-read. My call: the trigger, changed on 30 October 2026. |
 | Swift mode | Swift 6 compiler in Swift 5 language mode. | My call |
 | Minimum iOS | 26 (native Liquid Glass). | Checkbox in the checklist |
 | Devices | iPhone 16 Pro Max on iOS 27.2, plus an Apple Watch. The phone has the Action Button and the Dynamic Island. Builds stay on Xcode 26.x although the phone runs a newer iOS: an app built with an older SDK runs on a newer system, Apple has announced no iOS 27 SDK requirement for uploads, and the Xcode 27 image still has open problems (Gotcha 2). | Owner answer. Checked: no iOS 27 SDK upload requirement is announced as of 29 October 2026. Not re-read: older SDK on a newer iOS. |
@@ -28,9 +28,26 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 | App icon | The orb, drawn and shown to the owner before the first upload. | My call |
 | Keep-alive | A monthly scheduled upload, because TestFlight builds become unavailable 90 days after upload. | Checked: Apple's TestFlight page |
 
+## Cost guard
+
+Owner decision, 30 October 2026: build and test as much as possible off the Mac, and ship as much as possible on every GitHub build. Make every paid Mac run count. A Mac run is the only compile check for the SwiftUI layer, because the owner's PC has no Swift toolchain (WSL is not installed) and cloud agents run on Ubuntu.
+
+Why: standard `macos-26` runners are free today because the repository is public and the account is personal. Larger macOS runners are billed even for public repositories and are not available to a personal account, so never use `xcode-27-xlarge` or any other xlarge label. Design as if the minutes were billed. GitHub lists $0.062 per macOS minute for private repositories (docs: Actions runner pricing), so a 10 to 15 minute run would cost roughly $0.60 to $0.90 (estimate). Billing starts the moment the repository goes private.
+
+Rules:
+
+1. Keep logic in the pure-Swift `JarvisCore` package, which builds and tests on cheap Linux on every push. Cloud agents get the toolchain through `copilot-setup-steps`. The SwiftUI layer stays thin.
+2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the plist and the entitlements) and a Mac job that needs the Linux job to pass first.
+3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds for the simulator with `CODE_SIGNING_ALLOWED=NO`. It does not boot a simulator, run UI tests or take screenshots. Screenshots run only on manual dispatch.
+4. The TestFlight workflow builds, archives and uploads in one job on merge, so the merge run is also the ship run, with no separate compile run beforehand. The monthly keep-alive reuses it.
+5. Authors keep pull requests in draft until the Linux checks pass and the change is final, and batch related changes. The expectation is one Mac run per pull request.
+6. Owner safety net: set a GitHub Actions budget in Billing, so usage stops at the limit if the repository ever becomes private.
+7. The dispatcher reviews Actions billing usage at the end of each iOS phase.
+8. A local Linux Swift toolchain for the owner is optional and needs the owner's go.
+
 ## Phase 1 is two pull requests
 
-Not started. The owner has not given the go for the foundation phase (checklist row 23), so these are planned steps, not work in progress.
+Authorised on 30 October 2026 (checklist row 23 is now Yes). Phase 1a is the first work. Phase 1b waits for the owner's setup steps.
 
 **1a. Skeleton and checks.** Needs only the bundle ID. No Apple account steps and no secrets.
 
@@ -43,7 +60,7 @@ Both pull requests add workflow files, so the owner merges them.
 - `apps/ios/project.yml`: one iPhone-only app target, deployment target 26.0, the bundle ID `com.danaakesen.jarvis`, a local dependency on `Packages/JarvisCore`.
 - `apps/ios/Packages/JarvisCore`: a SwiftPM package that builds on Linux, with one passing test. It later holds protocols for the HTTP transport, the SSE stream, the WebSocket, audio input and output, and the token store. Apple implementations live in the app target; fakes live in the tests.
 - `apps/ios/Jarvis`: a SwiftUI app showing a blank glass screen, with the orb as app icon and `ITSAppUsesNonExemptEncryption` set to NO.
-- `.github/workflows/ios-ci.yml` and the repository wiring below.
+- `.github/workflows/ios-ci.yml` (a Linux job and a gated Mac job, as set out in the Cost guard) and the repository wiring below.
 
 ### How a new CI component is wired in this repository
 
@@ -66,12 +83,13 @@ Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are
 
 ### `ios-ci.yml`
 
-- `on: workflow_call`, `runs-on: macos-26`, a timeout.
+- `on: workflow_call` and `workflow_dispatch`, with two jobs and a timeout on each.
+- Linux job (`ubuntu-latest`): `swift build` and `swift test` for `JarvisCore`, plus sanity checks of `project.yml`, the plist and the entitlements.
+- Mac job: `needs` the Linux job, `runs-on: macos-26`, `timeout-minutes: 20`, `concurrency` with cancel-in-progress per pull request and a SwiftPM cache.
 - Pin the Xcode version with `xcode-select` after listing what the image provides.
 - Install XcodeGen at a pinned release, run `xcodegen generate`.
-- Run the `JarvisCore` tests with `swift test`.
-- Build the app for the iOS Simulator with code signing switched off.
-- Best-effort screenshot, three attempts, `continue-on-error: true`, uploaded as an artifact. Fallback: test attachments kept with `lifetime = .keepAlways`, read through `xcresulttool`.
+- Build the app for the iOS Simulator with `CODE_SIGNING_ALLOWED=NO`. Do not boot a simulator, run UI tests or take screenshots in this job.
+- Best-effort screenshot, only on manual dispatch: three attempts, `continue-on-error: true`, uploaded as an artifact. Fallback: test attachments kept with `lifetime = .keepAlways`, read through `xcresulttool`.
 - No secrets, and no reference to the signing environment.
 
 ### 1b: `ios-testflight.yml`
@@ -81,6 +99,7 @@ A separate workflow, not called from `ci.yml`.
 - Triggers: push to main touching `apps/ios/`, a monthly schedule, and manual dispatch. Never `pull_request` or `pull_request_target`, so fork pull requests can never reach the secrets.
 - A GitHub Environment named `ios-testflight`, limited to the main branch. Three secrets: `APP_STORE_CONNECT_KEY_P8` (the key file contents), `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID`. One plain variable, `APPLE_TEAM_ID`. The owner sets them with `gh secret set` and `gh variable set`, never in chat. Names are proposals.
 - `concurrency` group `ios-testflight` with `cancel-in-progress: false`.
+- One job builds, archives and uploads, so the merge run is also the ship run and no separate compile run comes first. The monthly keep-alive reuses this workflow.
 - Steps: write the key to a temporary file with mode 600 and delete it in a final step that always runs. Generate the project. `xcodebuild archive` with automatic signing, `-allowProvisioningUpdates`, the three `-authenticationKey...` flags, and the build number from the run number. `xcodebuild -exportArchive` with an export-options file that selects automatic signing, the team and the upload destination. Fallback if direct upload misbehaves: export the app file and upload it with `xcrun altool --upload-app` using the same key.
 - Never print the key, the key ID or the issuer ID.
 

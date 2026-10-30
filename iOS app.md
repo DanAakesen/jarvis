@@ -1,10 +1,10 @@
 # iOS app
 
-## Status: version 1 answers recorded; implementation not authorized
+## Status: foundation phase authorised; Phase 1a is the first work
 
-**Three directions are confirmed:** a GitHub-based macOS build approach, reuse of Jarvis's existing backend, and native SwiftUI with native iOS features and controls. The owner has since stated the usage context and essential capabilities, confirmed the design decisions and, on 29 October 2026, answered the version 1 checklist. These are recorded below, and anything not recorded there is a proposal or still open. No implementation or setup is authorized: the owner answered No to starting the foundation phase.
+**Three directions are confirmed:** a GitHub-based macOS build approach, reuse of Jarvis's existing backend, and native SwiftUI with native iOS features and controls. The owner has since stated the usage context and essential capabilities, confirmed the design decisions and, on 29 October 2026, answered the version 1 checklist. These are recorded below, and anything not recorded there is a proposal or still open. On 30 October 2026 the owner gave the go for the foundation phase, so implementation is authorized under the build plan, starting with Phase 1a. Later phases still need their own go.
 
-**Next step: the owner's go for the foundation phase.** The design reference is the concept board and the system-surfaces gallery in `docs/ios/design/`. The backend contract is [docs/ios/integration-contract.md](docs/ios/integration-contract.md) and the proposed phased plan is [docs/ios/build-plan.md](docs/ios/build-plan.md). The device (an iPhone 16 Pro Max) and the bundle ID are chosen, and the App ID and its App Group were registered on 30 October 2026 (capabilities in the build plan). The build, signing and upload route still has to be proven; cloud execution is not assumed.
+**Next step: Phase 1a, the project skeleton and checks.** The design reference is the concept board and the system-surfaces gallery in `docs/ios/design/`. The backend contract is [docs/ios/integration-contract.md](docs/ios/integration-contract.md) and the proposed phased plan is [docs/ios/build-plan.md](docs/ios/build-plan.md). The device (an iPhone 16 Pro Max) and the bundle ID are chosen, and the App ID and its App Group were registered on 30 October 2026 (capabilities in the build plan). The build, signing and upload route still has to be proven; cloud execution is not assumed.
 
 Jarvis is Dan's single-owner personal AI side project, not a multi-user commercial product. Keep the solution small and avoid overengineering.
 
@@ -44,7 +44,7 @@ The owner confirmed these on 29 October 2026 while reviewing the concept board. 
 
 ## Version 1 answers (29 October 2026)
 
-The owner answered a 23-row version 1 checklist on 29 October 2026. Each row carried a recommendation and a Yes accepts it. These answers settle version 1 only. They do not authorize implementation or setup: the owner answered No to starting the foundation phase, so nothing is built until the owner gives the go.
+The owner answered a 23-row version 1 checklist on 29 October 2026. Each row carried a recommendation and a Yes accepts it. These answers settle version 1 only. They do not authorize implementation or setup: the owner answered No to starting the foundation phase, so nothing is built until the owner gives the go. The owner gave that go on 30 October 2026 (see Build and process).
 
 **Hands-free**
 
@@ -83,11 +83,10 @@ The owner answered a 23-row version 1 checklist on 29 October 2026. Each row car
 - Signing is automatic through an App Store Connect API key, with no certificates and no Mac. Proving this end to end is part of the foundation phase.
 - The design docs are committed to the repository with sample content only.
 - Small backend endpoints may be added later for push and Live Activity tokens.
-- **Foundation phase: not started.** The owner answered No, so preparation stops at documents until the owner gives the go.
+- **Foundation phase: authorized on 30 October 2026.** Phase 1a, the skeleton and checks, is the first work. The owner earlier answered No on 29 October 2026; the go replaces that answer.
+- **Cost guard (30 October 2026).** Build and test as much as possible off the Mac, and make every paid Mac run count. Logic lives in the pure-Swift `JarvisCore` package, tested on Linux on every push. The Mac check runs only for ready pull requests that touch `apps/ios/` or shared inputs, and never uses xlarge runners. The TestFlight workflow builds and uploads in one job on merge. The rules are in the build plan.
 
-The technical defaults in the build plan (build machine, project generator, export compliance, code split, test data, screenshots, Swift language mode, app icon and keep-alive upload) stand because the owner raised no objection. They are defaults, not owner-confirmed decisions.
-
-## Later surfaces (owner intent, not version 1)
+The technical defaults in the build plan (build machine, project generator, export compliance, code split, test data, screenshots, Swift language mode, app icon and keep-alive upload) stand because the owner raised no objection. The technical defaults in the build plan (build machine, project generator, export compliance, code split, test data, screenshots, Swift language mode, app icon and keep-alive upload) stand because the owner raised no objection. They are defaults, not owner-confirmed decisions. The cost guard is an owner decision. surfaces (owner intent, not version 1)
 
 The owner wants to use Jarvis in CarPlay and on the Apple Watch in time, and music may become relevant. None of this is version 1 and nothing is authorized. The research is in the build plan:
 
@@ -114,7 +113,7 @@ Browser screenshots at mobile dimensions are evidence of the web app, not valida
 
 Dan already owns an Apple Developer account and does not own a Mac. Expo was rejected. The preferred GitHub route would use standard GitHub Actions macOS runners to build and sign SwiftUI, with distribution through TestFlight, without Dan owning a Mac. The owner accepted automatic TestFlight uploads and API-key signing on 29 October 2026 (see the version 1 answers); the workflow configuration and signing still have to be proven. That the account is the paid Developer Program, with the owner as Account Holder or Admin (needed to enable App ID capabilities and to create the API key), is still inferred and not confirmed. Observed on 30 October 2026: the portal accepted the App ID registration and its capability changes, which fits that role but does not say which one it is.
 
-Pricing notes checked **2026-10-29**: standard GitHub-hosted runner compute is free for this public repository. Private-repository usage has plan-dependent included compute; the published paid macOS reference is **USD $0.062/minute**. Storage allowances and charges are separate. No costs or workflow configuration have been approved, and the build triggers are agreed in principle only. See [Actions billing and usage](https://docs.github.com/en/actions/concepts/billing-and-usage) and [runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing).
+Pricing notes checked **2026-10-29**: standard GitHub-hosted runner compute is free for this public repository. Private-repository usage has plan-dependent included compute; the published paid macOS reference is **USD $0.062/minute**. Storage allowances and charges are separate. No costs or workflow configuration have been approved beyond the cost guard in the build plan (30 October 2026), and the build triggers follow it. See [Actions billing and usage](https://docs.github.com/en/actions/concepts/billing-and-usage) and [runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing).
 
 Native UI changes require a build. CI screenshots/video and an invitation-only TestFlight beta are possible preview routes; there is no instant browser preview of the actual native app. [TestFlight builds expire after 90 days](https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/).
 
