@@ -2108,7 +2108,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Active phase:** P15, iOS Phase 1a. The blank SwiftUI shell, JarvisCore package/test, CI wiring and documentation are implemented locally; Linux Swift and offline workflow-script checks pass. Next: review the draft, then let the owner merge after the selected ready-PR Mac build passes. No later screen is authorized without the owner's approval.
+- **Active phase:** P15, iOS Phase 1b. The Phase 1a shell and CI are merged; this change adds the manual-only TestFlight workflow and offline checks. Next: owner review/merge, configure the `ios-testflight` environment, then the owner starts and reviews the first live run. The first archive/export/upload remains unproven; no later screen is authorized without the owner's approval.
 - **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
 
 - **Terra main chat (#1337):** request capacity 150 through the existing main-only
@@ -3381,6 +3381,7 @@ Every screen needs the owner's approval before it is built or shipped.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
+| P15-02 | [#1387](https://github.com/DanAakesen/jarvis/issues/1387) | Manual TestFlight upload workflow (Phase 1b) | Standalone `workflow_dispatch` workflow, main-only signing environment, one pinned-Xcode/XcodeGen `macos-26` archive/upload job, secure temporary key cleanup, no CI call or production deployment selection, offline workflow tests, owner setup/dispatch instructions and updated documents. First archive/export/upload remains unproven until the owner runs it after merging. | P15-01 | In progress |
 
 ## Factory canonical-status parity (16 October 2026)
 
