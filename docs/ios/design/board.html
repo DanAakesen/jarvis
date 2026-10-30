@@ -165,7 +165,7 @@ button { font: inherit; color: inherit; }
 .seg input:disabled { cursor: not-allowed; }
 .seg span { display: grid; place-items: center; min-height: 26px; padding: 0 9px; border-radius: 8px; color: var(--board-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .seg input:disabled + span { opacity: .45; }
-.seg input:checked + span { background: var(--board-text); color: var(--board-bg); }
+.seg input:checked + span { background: none; color: var(--board-text); font-weight: 800; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; }
 .seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
 @media (pointer: coarse) { .seg span { min-height: 44px; } }
 @media (hover: hover) { .seg input:not(:checked):not(:disabled):hover + span { background: color-mix(in srgb, var(--board-text) 9%, transparent); } }
@@ -329,7 +329,7 @@ html:not([data-tags="on"]) .phone :is(.sample, .ptag, .sheet-foot) { display: no
   transition: transform .38s cubic-bezier(.32, .72, 0, 1);
 }
 /* Chat: the message list runs under the glass (Now bar and composer). Its bottom padding equals the Now bar plus composer height, so the last message rests just above the bar and everything else passes visibly under the glass. No fade or panel sits behind the dock. */
-.phone[data-scr="chat"] .edge-b { display: none; }
+.phone[data-scr="chat"] .edge-b, .phone[data-scr="notes"] .edge-b { display: none; }
 #log { bottom: 0; padding-bottom: calc(var(--log-end, 190px) + 12px); transition: padding-bottom .38s cubic-bezier(.32, .72, 0, 1); }
 /* The dock only groups the Now bar and the composer: no fill, blur, border or shadow, and it passes pointer events through to the list. */
 .dock { position: absolute; left: 0; right: 0; bottom: 0; height: 0; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
@@ -1253,9 +1253,26 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .phone { --f-people: var(--orb-thinking); --f-work: var(--accent); --f-personal: rgb(45 179 93); --f-general: var(--text-muted); --n-row: color-mix(in srgb, var(--highlight-solid) 70%, var(--page)); --n-ease: cubic-bezier(.32, .72, 0, 1); }
 :root[data-theme="dark"] .phone { --f-personal: rgb(61 220 132); --n-row: color-mix(in srgb, var(--highlight-solid) 8%, var(--page)); }
 #view-notes [hidden], .ned [hidden], .nsh [hidden] { display: none !important; }
-.attn.nplus { right: 12px; }
-.attn.nfilter { right: auto; left: 12px; width: auto; min-width: 44px; padding: 0 10px 0 14px; gap: 2px; border-radius: 22px; font: 600 15px/1 var(--font-body); }
-.attn.nfilter .ic { width: 16px; height: 16px; stroke-width: 2.2; }
+.nbar { position: absolute; z-index: 6; left: 16px; right: 16px; bottom: var(--dock-bottom); display: flex; flex-direction: column; gap: 8px; pointer-events: none; transform: translateY(var(--lift)); transition: transform .38s var(--n-ease); }
+.nbar > * { pointer-events: auto; }
+.nbar-row { display: flex; align-items: center; gap: 8px; }
+.nbar .nsearch { flex: 1; min-width: 0; }
+.nbar .search { height: 50px; margin: 0; }
+.nbar .nseg { margin: 0; }
+#view-notes #notes-scroll { padding-top: var(--safe-top); }
+#t-notes { display: flex; align-items: center; box-sizing: border-box; height: var(--nav-h); padding: 0 72px 0 20px; margin-bottom: var(--nhead-gap); }
+#view-notes { --nhead-gap: 12px; }
+.phone[data-scr="notes"] .nav-title { display: none; }
+.nbar .nsearch .ntxt { padding: 0 2px 0 12px; }
+.nbar .nplus { flex: none; width: 50px; height: 50px; border: 0; padding: 0; color: var(--text); cursor: pointer; }
+.nbar .nplus .ic { width: 22px; height: 22px; stroke-width: 2; }
+.nbar .nplus:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nbar .nplus:disabled { opacity: .45; cursor: default; }
+.attn.nreset { background: var(--g-fill); --frost-blur: 14px; }
+.attn.nreset:active:not(:disabled) { background: var(--g-fill); transform: scale(.93); }
+.attn.nreset:disabled { opacity: .45; cursor: default; }
+.attn.nreset.spin .ic { animation: gspin .7s var(--n-ease); }
+@media (prefers-reduced-motion: reduce) { .nbar { transition: none; } .attn.nreset.spin .ic { animation: none; } }
 .nsearch { display: flex; align-items: center; }
 .nsearch .search { flex: 1; min-width: 0; }
 .ntxt { min-height: 44px; padding: 0 14px; border: 0; background: none; color: var(--accent); font: 400 17px/1.2 var(--font-body); cursor: pointer; transition: opacity .15s ease; }
@@ -1265,25 +1282,26 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .nbtn:active:not(:disabled) { transform: scale(.96); }
 .nbtn:disabled { opacity: .45; cursor: default; }
 .nbtn.tint { color: var(--accent-text); }
-.nseg { --i: 0; position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); height: 40px; margin: 8px 16px 6px; padding: 3px; border-radius: 999px; --frost-blur: 16px; }
+.nseg { --i: 0; position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); height: 40px; margin: 0 16px 12px; padding: 3px; border-radius: 999px; --frost-blur: 16px; }
 .nseg > button { position: relative; z-index: 1; min-width: 0; padding: 0 6px; border: 0; border-radius: 999px; background: none; color: var(--text-muted); font: 600 14px/1 var(--font-body); cursor: pointer; transition: color .2s ease, opacity .15s ease; }
 .nseg > button:active { opacity: .6; }
-.nseg > button[aria-selected="true"] { color: var(--text); }
-.nseg-thumb { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / var(--n)); border-radius: 999px; background: color-mix(in srgb, var(--text) 13%, transparent); box-shadow: 0 1px 4px rgb(0 0 0 / 14%); transform: translateX(calc(var(--i) * 100%)); transition: transform .35s var(--n-ease); }
+.nseg > button[aria-selected="true"] { color: var(--accent); font-weight: 700; background: none; box-shadow: none; }
+.nseg-thumb { display: none; }
+.nseg > button:focus-visible, .nchip:focus-visible, .ng-pill:focus-visible, .nsh-pill:focus-visible { outline: none; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px; text-decoration-color: var(--focus); }
 .nseg.mini { height: 32px; margin: 0 0 12px; width: 190px; }
 .nseg.mini > button { font-size: 13px; }
-.nseg > button:focus-visible, .nbtn:focus-visible, .ntxt:focus-visible, .nrow:focus-visible, .nfh:focus-visible, .nchip:focus-visible, .ntk-box:focus-visible, .nmenu button:focus-visible, .nsh-pill:focus-visible, .ned-back:focus-visible, .ned-save:focus-visible, .ng-pill:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nbtn:focus-visible, .ntxt:focus-visible, .nrow:focus-visible, .nfh:focus-visible, .ntk-box:focus-visible, .nmenu button:focus-visible, .ned-back:focus-visible, .ned-save:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .nbanner { display: flex; align-items: center; gap: 10px; margin: 8px 16px; padding: 10px 14px; border-radius: 20px; background: color-mix(in srgb, var(--warn) 16%, transparent); font-size: 15px; }
 .nbanner[data-tone="error"] { background: color-mix(in srgb, var(--danger) 16%, transparent); }
 .nbanner .ic { width: 20px; height: 20px; color: var(--warn); }
 .nbanner[data-tone="error"] .ic { color: var(--danger); }
 .nbanner span { flex: 1; min-width: 0; }
 .nbanner .ntxt { min-height: 32px; padding: 0 4px; }
-.npane { padding-bottom: 24px; }
-.nchips { display: flex; gap: 8px; margin: 10px 0 2px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+.npane { padding-bottom: 110px; }
+.nchips { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 0; padding: 0; overflow-x: auto; scrollbar-width: none; }
 .nchips::-webkit-scrollbar { display: none; }
-.nchip { flex: none; min-height: 34px; padding: 0 14px; border: 0; border-radius: 17px; background: var(--fill-group); color: var(--text); font: 500 15px/1 var(--font-body); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
-.nchip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+.nchip { flex: none; min-height: 36px; padding: 0 14px; border: 0; border-radius: 18px; color: var(--text); font: 500 15px/1 var(--font-body); cursor: pointer; transition: background-color .2s ease, color .2s ease; }
+.nchip[aria-pressed="true"] { background: none; color: var(--accent); font-weight: 700; }
 .nfh { display: flex; align-items: center; gap: 8px; width: calc(100% - 40px); min-height: 44px; margin: 14px 20px 2px; padding: 0; border: 0; background: none; color: var(--text); font: 700 20px/1.25 var(--font-body); text-align: left; cursor: pointer; }
 .nfh .ic { width: 16px; height: 16px; stroke-width: 2.4; color: var(--text-muted); transition: transform .25s var(--n-ease); }
 .nfh[aria-expanded="false"] .ic { transform: rotate(-90deg); }
@@ -1320,18 +1338,41 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .nsec-od { color: var(--danger); }
 .nsw + .nsw .nsw-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--sep); }
 .ntoast[hidden], .nscrim[hidden], .nmenu[hidden], .nsh[hidden] { display: none; }
-.phone[data-gm] .navbar .nav-title { opacity: 1; }
-.phone[data-gm] #notes-scroll .large-title, .phone[data-gm] #notes-scroll .nsearch { display: none; }
+.phone[data-gm] #notes-scroll .nsearch { display: none; }
 .ngraph::before { content: ""; position: absolute; z-index: 1; top: 0; left: 0; right: 0; height: 232px; background: linear-gradient(to bottom, var(--page) 58%, transparent); pointer-events: none; }
-.ng-tools, .ng-sel, .ng-pills { z-index: 2; }
+.ng-sel, .ng-pills { z-index: 2; }
 .ng-pill .ic { width: 16px; height: 16px; }
-.ng-tog { display: flex; justify-content: flex-end; margin: 10px 16px 0; }
+.ntr { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 16px 0 calc(16px + var(--lv, 0) * 22px); border: 0; background: none; color: var(--text); font: 600 17px/1.25 var(--font-body); text-align: left; cursor: pointer; transition: background-color .15s ease; -webkit-touch-callout: none; user-select: none; }
+.ntr:active, .ntr.cur { background: none; }
+.ntr.cur b, .ntr:active b { color: var(--accent); }
+.ntr .ic:first-child, .ntr b, .ntr small { transition: color .15s ease, transform .2s var(--n-ease); }
+.nrow:active, .nrow:focus-visible { background: none; }
+.nrow:active .note-title, .nrow:active .nk { color: var(--accent); }
+.ntk-main:active b { color: var(--accent); }
+.nrow:focus-visible, .nfh:focus-visible, .ntr:focus-visible, .ntk-main:focus-visible { outline: none; }
+.nrow:focus-visible .note-title, .ntr:focus-visible b, .nfh:focus-visible, .ntk-main:focus-visible b { color: var(--accent); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.nfh:active { color: var(--accent); }
+.ntr, .nrow, .nfh, .ntk-main { -webkit-tap-highlight-color: transparent; }
+.ntr .ic { flex: none; }
+.ntr { transition: none; }
+.ntr .ic:first-child { display: block; flex: none; width: 14px; min-width: 14px; height: 14px; opacity: 1; visibility: visible; stroke-width: 2.6; color: var(--text-muted); transition: transform .2s var(--n-ease); }
+.ntr[aria-expanded="true"] .ic:first-child { transform: rotate(90deg); }
+.ntr .ic:nth-child(2) { width: 22px; height: 22px; color: var(--accent); }
+.ntr b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ntr small { color: var(--text-muted); font: 400 15px/1 var(--font-body); }
+.nrow.ntr-n { padding-left: calc(40px + var(--lv, 0) * 22px); }
+.ntr-e { padding: 13px 16px 13px calc(40px + var(--lv, 0) * 22px); color: var(--text-muted); font-size: 15px; }
+.npane { margin: 0; padding-top: 0; }
+.npane > :first-child { margin-top: 0; }
+#np-notes { padding-bottom: 160px; }
+.npane .nfh, .npane .sec { display: flex; align-items: center; min-height: 44px; margin: 14px 20px 2px; }
+.npane > :first-child.nfh, .npane > :first-child.sec { margin-top: 0; }
 .nf .nseg { margin: 0 0 0 auto; width: 200px; }
 .nsh { color-scheme: light; }
 :root[data-theme="dark"] .nsh { color-scheme: dark; }
 .nf > input[type="date"], .nf > input[type="time"] { text-align: right; min-height: 36px; font-size: 17px; }
 .nsec-n { margin-left: 6px; color: var(--text-muted); font-weight: 400; font-size: 17px; }
-.nskel { display: grid; gap: 10px; margin: 18px 16px; }
+.nskel { display: grid; gap: 10px; margin: 0 16px 18px; }
 .nskel i { height: 58px; border-radius: 20px; background: linear-gradient(100deg, var(--fill-group) 30%, color-mix(in srgb, var(--text) 12%, transparent) 50%, var(--fill-group) 70%) 0 0 / 220% 100%; animation: nshim 1.4s linear infinite; }
 @keyframes nshim { to { background-position: -220% 0; } }
 .nstate { display: grid; justify-items: center; gap: 12px; padding: 56px 32px; text-align: center; }
@@ -1344,16 +1385,15 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .ng-cv:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
 .ng-load { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .ng-load .ic { width: 32px; height: 32px; animation: gspin .9s linear infinite; color: var(--text-muted); }
-.ng-tools { position: absolute; right: 16px; bottom: 96px; display: flex; flex-direction: column; gap: 10px; }
-.ng-sel { position: absolute; left: 16px; right: 76px; bottom: 96px; display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 8px 8px 18px; border-radius: 30px; --frost-blur: 22px; }
+.ng-sel { position: absolute; left: 16px; right: 16px; bottom: 150px;  display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 8px 8px 18px; border-radius: 30px; --frost-blur: 22px; }
 .ng-st { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .ng-st b { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ng-st small { color: var(--text-muted); font-size: 13px; }
-.ng-pills { position: absolute; left: 0; right: 0; bottom: 40px; display: flex; gap: 8px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
+.ng-pills { position: absolute; left: 0; right: 0; bottom: 94px; display: flex; gap: 8px; padding: 0 16px; overflow-x: auto; scrollbar-width: none; }
 .ng-pills::-webkit-scrollbar { display: none; }
 .ng-pill { flex: none; display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border: 0; border-radius: 18px; color: var(--text); font: 500 14px/1 var(--font-body); cursor: pointer; --frost-blur: 14px; }
 .ng-pill i { width: 9px; height: 9px; border-radius: 50%; background: var(--fc, var(--f-general)); }
-.ng-pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+.ng-pill[aria-pressed="true"] { background: none; color: var(--accent); font-weight: 700; }
 .phone[data-scr="notes"][data-ngraph] .ngraph { display: block; }
 #notes-scroll[data-mode="graph"] { overflow: hidden; pointer-events: none; z-index: 3; }
 #notes-scroll[data-mode="graph"] > * { pointer-events: auto; }
@@ -1390,8 +1430,8 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .nscrim { position: absolute; inset: 0; z-index: 29; background: rgb(0 0 0 / 30%); opacity: 0; transition: opacity .3s ease; }
 .nscrim.on { opacity: 1; }
 .nsh { position: absolute; z-index: 30; left: 8px; right: 8px; bottom: 8px; height: var(--nh, 520px); max-height: calc(100% - var(--safe-top) - 8px); display: flex; flex-direction: column; padding: 8px 18px 18px; border-radius: 44px; background: var(--g-fill-bar); --frost-blur: 26px; visibility: hidden; transform: translate3d(0, calc(100% + 16px), 0); transition: transform .45s var(--n-ease), height .35s var(--n-ease), visibility 0s .45s; overflow: hidden; }
-.nsh.open { visibility: visible; transform: none; transition-delay: 0s; }
-.nsh[data-d="m"] { --nh: 520px; }
+.nsh.open { visibility: visible; transform: translate3d(0, var(--lift), 0); transition-delay: 0s; }
+.nsh[data-d="m"] { height: auto; max-height: min(520px, calc(100% - var(--safe-top) - 8px)); }
 .nsh[data-d="s"] { --nh: 300px; }
 .nsh[data-d="l"] { --nh: calc(100% - var(--safe-top) - 8px); }
 .nsh > :not(.grab) { position: relative; z-index: 1; }
@@ -1406,11 +1446,11 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .nf > input::placeholder, .nf > textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .nf:has(input:focus-visible, textarea:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: 22px; }
 .nf.ta { align-items: stretch; }
-.nf.ta > textarea { min-height: 150px; resize: none; font: 15px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.nf.ta > textarea { min-height: 110px; resize: none; font: 15px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .nsh-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .nsh-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); font: 500 16px/1 var(--font-body); cursor: pointer; transition: background-color .2s ease; }
 .nsh-pill .ic { width: 18px; height: 18px; color: var(--accent); }
-.nsh-pill[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 74%, transparent); color: var(--accent-text); }
+.nsh-pill[aria-pressed="true"] { background: none; color: var(--accent); font-weight: 700; }
 .nsh-pill[aria-pressed="true"] .ic { color: inherit; }
 .nsh-lab { margin: 4px 4px -4px; color: var(--text-muted); font-size: 13px; font-weight: 600; }
 .nsh-acts { display: grid; gap: 10px; }
@@ -1430,7 +1470,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .ntoast { position: absolute; z-index: 35; left: 16px; right: 16px; bottom: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 6px 4px 20px; border-radius: 26px; background: var(--g-fill-bar); --frost-blur: 24px; font-size: 15px; font-weight: 500; }
 .ntoast > * { position: relative; z-index: 1; }
 @media (prefers-reduced-motion: reduce) {
-  .nseg-thumb, .nsw-row, .ned, .nsh, .nscrim, .nfh .ic { transition: none; }
+  .nseg-thumb, .nsw-row, .ned, .nsh, .nscrim, .nfh .ic, .ntr .ic { transition: none !important; }
   .nskel i, .ng-load .ic { animation: none; }
 }
 </style>
@@ -1499,6 +1539,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4.5h6V7"/><path d="m6 7 1 13h10l1-13"/><path d="M10 11v5M14 11v5"/></symbol>
     <symbol id="i-rows" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
     <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
   </defs>
 </svg>
@@ -1642,6 +1683,14 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
           <option value="notes:default">Notes: List</option>
           <option value="tasks:default">Notes: Tasks</option>
           <option value="graph:default">Notes: Graph</option>
+          <option value="list:default">List: Tree</option>
+          <option value="list:emptyfolder">List: Empty folder</option>
+          <option value="list:loading">List: Loading</option>
+          <option value="list:error">List: Error</option>
+          <option value="list:search">List: Search</option>
+          <option value="list:offline">List: Offline</option>
+          <option value="list:newnote">List: New note</option>
+          <option value="list:newfolder">List: New folder</option>
           <option value="notes:search">Notes: Search</option>
           <option value="notes:noresults">Notes: No results</option>
           <option value="notes:empty">Notes: Empty</option>
@@ -1760,10 +1809,6 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
             <div class="ngraph" id="ngraph" hidden>
               <canvas class="ng-cv" id="ng-cv" role="img" tabindex="0"></canvas>
               <div class="ng-load" id="ng-load" role="status" hidden><svg class="ic" aria-hidden="true"><use href="#i-spin"/></svg></div>
-              <div class="ng-tools">
-                <button class="g-btn glass" id="ng-list" type="button"><svg class="ic" aria-hidden="true"><use href="#i-rows"/></svg></button>
-                <button class="g-btn glass" id="ng-reset" type="button"><svg class="ic" aria-hidden="true"><use href="#i-retry"/></svg></button>
-              </div>
               <div class="ng-sel glass" id="ng-sel" data-flat hidden>
                 <span class="ng-st"><b id="ng-sel-t"></b><small id="ng-sel-m"></small></span>
                 <button class="nbtn tint" id="ng-open" type="button"></button>
@@ -1772,6 +1817,30 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
             </div>
             <div class="scroller" id="notes-scroll" data-large="true" data-mode="notes">
               <h2 class="large-title" id="t-notes">Notes</h2>
+              <div class="nseg glass"               id="nseg" data-flat role="tablist" style="--n:4">
+                <span class="nseg-thumb" aria-hidden="true"></span>
+                <button type="button" role="tab" data-v="notes"></button>
+                <button type="button" role="tab" data-v="tasks"></button>
+                              <button type="button" role="tab" data-v="list"></button>
+                              <button type="button" role="tab" data-v="graph"></button>
+              </div>
+              <div class="nbanner" id="nbanner" role="status" hidden><svg class="ic" aria-hidden="true"><use href="#i-offline"/></svg><span id="nbanner-t"></span><button class="ntxt" id="nbanner-b" type="button" hidden></button></div>
+              <div class="npane" id="np-notes" role="tabpanel"></div>
+              <div class="npane" id="np-tasks" role="tabpanel"></div>
+              <div class="npane" id="np-list" role="tabpanel"></div>
+              <div class="npane" id="np-search" role="tabpanel"></div>
+              <div class="nskel" id="nskel" role="status" hidden><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="nstate" id="nstate" hidden><svg class="ic" aria-hidden="true"><use id="nstate-ic" href="#i-notes"/></svg><p id="nstate-t"></p><button class="nbtn glass" id="nstate-b" type="button" hidden></button></div>
+            </div>
+            <div class="nbar" id="nbar">
+              <div class="nseg glass" id="nscope" data-flat role="tablist" style="--n:3" hidden>
+                <span class="nseg-thumb" aria-hidden="true"></span>
+                <button type="button" role="tab" data-v="all"></button>
+                <button type="button" role="tab" data-v="notes"></button>
+                <button type="button" role="tab" data-v="tasks"></button>
+              </div>
+              <div class="nchips" id="nchips" role="group" hidden></div>
+              <div class="nbar-row">
               <div class="nsearch">
                 <div class="search glass" role="search">
                   <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
@@ -1780,27 +1849,10 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
                 </div>
                 <button class="ntxt" id="n-cancel" type="button" hidden></button>
               </div>
-              <div class="nseg glass" id="nseg" data-flat role="tablist" style="--n:3">
-                <span class="nseg-thumb" aria-hidden="true"></span>
-                <button type="button" role="tab" data-v="notes"></button>
-                <button type="button" role="tab" data-v="tasks"></button>
-                <button type="button" role="tab" data-v="graph"></button>
-              </div>
-              <div class="nseg glass" id="nscope" data-flat role="tablist" style="--n:3" hidden>
-                <span class="nseg-thumb" aria-hidden="true"></span>
-                <button type="button" role="tab" data-v="all"></button>
-                <button type="button" role="tab" data-v="notes"></button>
-                <button type="button" role="tab" data-v="tasks"></button>
-              </div>
-              <div class="nbanner" id="nbanner" role="status" hidden><svg class="ic" aria-hidden="true"><use href="#i-offline"/></svg><span id="nbanner-t"></span><button class="ntxt" id="nbanner-b" type="button" hidden></button></div>
-              <div class="npane" id="np-notes" role="tabpanel"></div>
-              <div class="npane" id="np-tasks" role="tabpanel"></div>
-              <div class="npane" id="np-glist" role="tabpanel"></div>
-              <div class="npane" id="np-search" role="tabpanel"></div>
-              <div class="nskel" id="nskel" role="status" hidden><i></i><i></i><i></i><i></i><i></i><i></i></div>
-              <div class="nstate" id="nstate" hidden><svg class="ic" aria-hidden="true"><use id="nstate-ic" href="#i-notes"/></svg><p id="nstate-t"></p><button class="nbtn glass" id="nstate-b" type="button" hidden></button></div>
-            </div>
-          </section>
+              <button class="g-btn glass nplus" id="nplus" type="button" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                            </div>
+                          </div>
+                        </section>
 
           <section class="view" id="view-area" aria-labelledby="t-area" hidden>
             <div class="scroller" id="area-scroll" data-large="true">
@@ -1815,8 +1867,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 
         <header class="navbar" id="navbar">
           <p class="nav-title" id="nav-title">Chat</p>
-          <button class="attn nfilter" id="nfilter" type="button" aria-haspopup="menu" aria-expanded="false" hidden><span id="nfilter-t"></span><svg class="ic" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
-          <button class="attn nplus" id="nplus" type="button" aria-haspopup="menu" aria-expanded="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+          <button class="attn g-btn glass nreset" id="ng-reset" type="button" hidden><svg class="ic" aria-hidden="true"><use href="#i-retry"/></svg></button>
           <button class="attn" id="attn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="apv" aria-label="Pending confirmations, 1"><svg class="ic" aria-hidden="true"><use href="#i-bell"/></svg><span class="attn-n" id="attn-n" aria-hidden="true">1</span></button>
         </header>
         <div class="apv-scrim" id="apv-scrim" hidden></div>
@@ -3151,8 +3202,9 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (kbdCb.checked) { setKeyboard(true); draft.focus({ preventScroll: true }); } else { setKeyboard(false); draft.blur(); }
   });
   phone.addEventListener('pointerdown', e => {
-    if (state.kbd && !e.target.closest('.composer, .nowbar, .kb, .sidebar, .attach')) { draft.blur(); setKeyboard(false); }
+    if (state.kbd && !e.target.closest('.composer, .nowbar, .kb, .sidebar, .attach, .nbar')) { draft.blur(); setKeyboard(false); }
   });
+  window.jvKeyboard = on => { if (!on || state.screen === 'notes') setKeyboard(!!on); };
   draft.addEventListener('focus', () => setKeyboard(true));
   draft.dataset.ph = draft.placeholder;
   draft.addEventListener('blur', () => { if (!kb.contains(document.activeElement)) setKeyboard(false); });
@@ -5015,8 +5067,8 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   const ned = $('#ned'), nsh = $('#nsh'), nscrim = $('#nscrim'), menu = $('#nmenu'), tbar = $('#ntoast');
   const reduce = matchMedia('(prefers-reduced-motion: reduce)');
   const T = {
-    da: { title: 'Noter', notes: 'Noter', tasks: 'Opgaver', graph: 'Graf', all: 'Alle', search: 'Søg', cancel: 'Annuller', clear: 'Ryd', newNote: 'Ny note', newTask: 'Ny opgave', editTask: 'Opgave', add: 'Ny', overdue: 'Forfaldne', today: 'I dag', upcoming: 'Kommende', nodate: 'Uden dato', personal: 'Privat', work: 'Arbejde', emptyNotes: 'Ingen noter', emptyTasks: 'Ingen opgaver', emptyGraph: 'Ingen noter at vise', err: 'Kunne ikke hentes', retry: 'Prøv igen', offline: 'Offline. Viser en kopi', noRes: 'Ingen resultater', saved: 'Gemt', unsaved: 'Ikke gemt', saving: 'Gemmer…', conflict: 'Konflikt', save: 'Gem', back: 'Noter', edit: 'Rediger', preview: 'Vis', connected: 'Forbundet', done: 'Udført', del: 'Slet', deleted: 'Slettet', completed: 'Udført', undo: 'Fortryd', titleF: 'Titel', folder: 'Mappe', body: 'Tekst', text: 'Opgave', date: 'Dato', time: 'Tid', priority: 'Prioritet', pn: 'Normal', pm: 'Mellem', ph: 'Høj', scope: 'Område', changed: 'Ændret andetsteds', reload: 'Hent igen', compare: 'Sammenlign', keep: 'Behold min', yours: 'Din', latest: 'Seneste', discardT: 'Ikke gemt', discard: 'Kassér ændringer', keepEd: 'Fortsæt redigering', vroot: 'Rod', newFolder: 'Ny mappe', folderName: 'Mappenavn', open: 'Åbn', list: 'Liste', graphV: 'Graf', reset: 'Nulstil visning', filter: 'Filter', untitled: 'Uden titel', links: n => n + ' links', gl: (n, l) => 'Notegraf, ' + n + ' noter, ' + l + ' links', created: 'Oprettet' },
-    en: { title: 'Notes', notes: 'Notes', tasks: 'Tasks', graph: 'Graph', all: 'All', search: 'Search', cancel: 'Cancel', clear: 'Clear', newNote: 'New note', newTask: 'New task', editTask: 'Task', add: 'New', overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', nodate: 'No date', personal: 'Personal', work: 'Work', emptyNotes: 'No notes', emptyTasks: 'No tasks', emptyGraph: 'No notes to show', err: 'Could not load', retry: 'Try again', offline: 'Offline. Showing a copy', noRes: 'No results', saved: 'Saved', unsaved: 'Unsaved', saving: 'Saving…', conflict: 'Conflict', save: 'Save', back: 'Notes', edit: 'Edit', preview: 'Preview', connected: 'Connected', done: 'Done', del: 'Delete', deleted: 'Deleted', completed: 'Completed', undo: 'Undo', titleF: 'Title', folder: 'Folder', body: 'Text', text: 'Task', date: 'Date', time: 'Time', priority: 'Priority', pn: 'Normal', pm: 'Medium', ph: 'High', scope: 'Scope', changed: 'Changed elsewhere', reload: 'Reload', compare: 'Compare', keep: 'Keep mine', yours: 'Yours', latest: 'Latest', discardT: 'Unsaved changes', discard: 'Discard changes', keepEd: 'Keep editing', vroot: 'Vault root', newFolder: 'New folder', folderName: 'Folder name', open: 'Open', list: 'List', graphV: 'Graph', reset: 'Reset view', filter: 'Filter', untitled: 'Untitled', links: n => n + (n === 1 ? ' link' : ' links'), gl: (n, l) => 'Note graph, ' + n + ' notes, ' + l + ' links', created: 'Created' }
+    da: { title: 'Noter', notes: 'Noter', tasks: 'Opgaver', graph: 'Graf', all: 'Alle', search: 'Søg', cancel: 'Annuller', clear: 'Ryd', newNote: 'Ny note', newTask: 'Ny opgave', editTask: 'Opgave', add: 'Ny', overdue: 'Forfaldne', today: 'I dag', upcoming: 'Kommende', nodate: 'Uden dato', personal: 'Privat', work: 'Arbejde', emptyNotes: 'Ingen noter', emptyTasks: 'Ingen opgaver', emptyGraph: 'Ingen noter at vise', err: 'Kunne ikke hentes', retry: 'Prøv igen', offline: 'Offline. Viser en kopi', noRes: 'Ingen resultater', saved: 'Gemt', unsaved: 'Ikke gemt', saving: 'Gemmer…', conflict: 'Konflikt', save: 'Gem', back: 'Noter', edit: 'Rediger', preview: 'Vis', connected: 'Forbundet', done: 'Udført', del: 'Slet', deleted: 'Slettet', completed: 'Udført', undo: 'Fortryd', titleF: 'Titel', folder: 'Mappe', body: 'Tekst', text: 'Opgave', date: 'Dato', time: 'Tid', priority: 'Prioritet', pn: 'Normal', pm: 'Mellem', ph: 'Høj', scope: 'Område', changed: 'Ændret andetsteds', reload: 'Hent igen', compare: 'Sammenlign', keep: 'Behold min', yours: 'Din', latest: 'Seneste', discardT: 'Ikke gemt', discard: 'Kassér ændringer', keepEd: 'Fortsæt redigering', vroot: 'Rod', newFolder: 'Ny mappe', folderName: 'Mappenavn', open: 'Åbn', list: 'Liste', graphV: 'Graf', reset: 'Nulstil visning', filter: 'Filter', untitled: 'Uden titel', links: n => n + ' links', gl: (n, l) => 'Notegraf, ' + n + ' noter, ' + l + ' links', created: 'Oprettet', parent: 'Overordnet', create: 'Opret', rename: 'Omdøb', hereNote: 'Ny note her', hereFolder: 'Ny mappe her', emptyFolder: 'Tom mappe' },
+    en: { title: 'Notes', notes: 'Notes', tasks: 'Tasks', graph: 'Graph', all: 'All', search: 'Search', cancel: 'Cancel', clear: 'Clear', newNote: 'New note', newTask: 'New task', editTask: 'Task', add: 'New', overdue: 'Overdue', today: 'Today', upcoming: 'Upcoming', nodate: 'No date', personal: 'Personal', work: 'Work', emptyNotes: 'No notes', emptyTasks: 'No tasks', emptyGraph: 'No notes to show', err: 'Could not load', retry: 'Try again', offline: 'Offline. Showing a copy', noRes: 'No results', saved: 'Saved', unsaved: 'Unsaved', saving: 'Saving…', conflict: 'Conflict', save: 'Save', back: 'Notes', edit: 'Edit', preview: 'Preview', connected: 'Connected', done: 'Done', del: 'Delete', deleted: 'Deleted', completed: 'Completed', undo: 'Undo', titleF: 'Title', folder: 'Folder', body: 'Text', text: 'Task', date: 'Date', time: 'Time', priority: 'Priority', pn: 'Normal', pm: 'Medium', ph: 'High', scope: 'Scope', changed: 'Changed elsewhere', reload: 'Reload', compare: 'Compare', keep: 'Keep mine', yours: 'Yours', latest: 'Latest', discardT: 'Unsaved changes', discard: 'Discard changes', keepEd: 'Keep editing', vroot: 'Vault root', newFolder: 'New folder', folderName: 'Folder name', open: 'Open', list: 'List', graphV: 'Graph', reset: 'Reset view', filter: 'Filter', untitled: 'Untitled', links: n => n + (n === 1 ? ' link' : ' links'), gl: (n, l) => 'Note graph, ' + n + ' notes, ' + l + ' links', created: 'Created', parent: 'Parent', create: 'Create', rename: 'Rename', hereNote: 'New note here', hereFolder: 'New folder here', emptyFolder: 'Empty folder' }
   };
   const t = k => T[lang][k];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -5053,6 +5105,17 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   const LK = [[6, 0], [6, 1], [6, 7], [6, 10], [7, 8], [7, 25], [7, 9], [8, 11], [8, 24], [8, 0], [9, 12], [10, 13], [11, 8], [12, 1], [13, 6], [14, 18], [14, 19], [15, 16], [15, 3], [16, 20], [17, 18], [18, 19], [19, 2], [20, 7], [21, 22], [22, 24], [23, 21], [25, 20], [4, 12], [5, 9], [3, 2], [0, 1]];
   const SIM = [[7, 11], [14, 15], [18, 17], [22, 24], [20, 25], [16, 23]];
   const NOTES = RAW.map((r, i) => ({ id: i, folder: r[0], title: r[1], snip: r[2], mod: new Date(NOW - r[3] * 6e4), mine: false }));
+  const top = p => p.split('/')[0];
+  const parentOf = p => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+  const dirName = p => p.slice(p.lastIndexOf('/') + 1);
+  const DIRS = ['General', 'People', 'Personal', 'Personal/Travel', 'Work', 'Work/Acme'];
+  const SUBDIR = { 6: 'Work/Acme', 10: 'Work/Acme', 15: 'Personal/Travel', 20: '' };
+  NOTES.forEach(n => { n.dir = n.id in SUBDIR ? SUBDIR[n.id] : n.folder; });
+  const addDir = p => {
+    p.split('/').reduce((a, s) => { const q = a ? a + '/' + s : s; if (!DIRS.includes(q)) DIRS.push(q); return q; }, '');
+    DIRS.sort((a, b) => a.localeCompare(b));
+  };
+  const inDir = (n, p) => n.dir === p || n.dir.startsWith(p + '/');
   const nbr = id => LK.filter(p => p[0] === id || p[1] === id).map(p => (p[0] === id ? p[1] : p[0]));
   const deg = id => nbr(id).length;
   NOTES.forEach(n => {
@@ -5071,7 +5134,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   ].map(x => Object.assign({ done: false }, x));
   let seq = 100;
 
-  const S = { tab: 'notes', st: 'default', q: '', searching: false, scope: 'all', folder: '', tscope: 'all', glist: false, coll: {}, sel: null };
+  const S = { tab: 'notes', st: 'default', q: '', searching: false, scope: 'all', folder: '', tscope: 'all', cur: '', lcoll: {}, coll: {}, sel: null };
   const onNotes = () => phone.dataset.scr === 'notes';
   const offline = () => S.st === 'offline';
   const hl = (s, q) => {
@@ -5100,7 +5163,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     const w = menu.offsetWidth, h = menu.offsetHeight;
     const left = ar.right - pr.left > pr.width / 2 ? (ar.right - pr.left) / sk - w : (ar.left - pr.left) / sk;
     let top = (ar.bottom - pr.top) / sk + 8;
-    if (top + h > phone.offsetHeight - 24) top = (ar.top - pr.top) / sk - h - 8;
+    if (anchor.closest('.nbar') || top + h > phone.offsetHeight - 24) top = (ar.top - pr.top) / sk - h - 8;
     menu.style.left = Math.max(8, Math.min(left, phone.offsetWidth - w - 8)) + 'px';
     menu.style.top = Math.max(8, top) + 'px';
     menu.querySelector('button').focus();
@@ -5144,8 +5207,6 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     $$('#nscope [data-v]').forEach(b => { b.textContent = t(b.dataset.v); });
     $$('#ned-mode [data-v]').forEach(b => { b.textContent = t(b.dataset.v === 'edit' ? 'edit' : 'preview'); });
     $('#nplus').setAttribute('aria-label', t('add'));
-    $('#nfilter').setAttribute('aria-label', t('filter'));
-    $('#ng-list').setAttribute('aria-label', t('list')); $('#ng-list').title = t('list');
     $('#ng-reset').setAttribute('aria-label', t('reset')); $('#ng-reset').title = t('reset');
     $('#ng-open').textContent = t('open');
     $('#ned-back-t').textContent = t('back');
@@ -5161,7 +5222,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   const sortedNotes = list => list.slice().sort((a, b) => b.mod - a.mod);
   const noteRow = (n, q) => '<li><button class="nrow note" type="button" data-id="' + n.id + '"><span class="note-title">' + hl(n.title, q) + '</span><span class="note-meta"><time>' + fmtMod(n.mod) + '</time><span>' + hl(n.snip, q) + '</span></span></button></li>';
   function notesPane() {
-    let h = '<div class="nchips" role="group" aria-label="' + esc(t('folder')) + '"><button class="nchip" type="button" data-f="" aria-pressed="' + !S.folder + '">' + esc(t('all')) + '</button>' + FOLD.map(f => '<button class="nchip" type="button" data-f="' + f + '" aria-pressed="' + (S.folder === f) + '">' + f + '</button>').join('') + '</div>';
+    let h = '';
     FOLD.forEach(f => {
       if (S.folder && S.folder !== f) return;
       const items = sortedNotes(NOTES.filter(n => n.folder === f)), open = !S.coll[f];
@@ -5203,7 +5264,19 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (r.ts.length) h += '<h3 class="nmatch-h">' + esc(t('tasks')) + ' · ' + r.ts.length + '</h3><ul class="group">' + r.ts.map(x => taskRow(x, r.q)).join('') + '</ul>';
     return h;
   }
-  const gListPane = () => '<div class="ng-tog"><button class="nbtn glass" type="button" data-act="graph">' + ic('i-graph') + esc(t('graphV')) + '</button></div><ul class="group" style="margin-top:12px">' + NOTES.slice().sort((a, b) => deg(b.id) - deg(a.id) || a.title.localeCompare(b.title)).map(n => '<li><button class="nrow note" type="button" data-id="' + n.id + '"><span class="note-title">' + esc(n.title) + '</span><span class="note-meta"><span>' + esc(t('links')(deg(n.id))) + ' · ' + n.folder + '</span></span></button></li>').join('') + '</ul>';
+  function treeRows(p, lv) {
+    let h = '';
+    DIRS.filter(d => parentOf(d) === p).forEach(d => {
+      const open = !S.lcoll[d], sel = S.cur === d;
+      h += '<li><button class="ntr' + (sel ? ' cur' : '') + '" type="button" data-d="' + esc(d) + '" aria-expanded="' + open + '" aria-haspopup="menu"' + (sel ? ' aria-current="true"' : '') + ' style="--lv:' + lv + '">' + ic('i-chevron') + ic('i-folder') + '<b>' + esc(dirName(d)) + '</b><small>' + NOTES.filter(n => inDir(n, d)).length + '</small></button></li>';
+      if (open) h += treeRows(d, lv + 1);
+    });
+    const ns = NOTES.filter(n => n.dir === p).sort((a, b) => a.title.localeCompare(b.title));
+    ns.forEach(n => { h += '<li><button class="nrow note ntr-n" type="button" data-id="' + n.id + '" style="--lv:' + lv + '"><span class="note-title">' + esc(n.title) + '</span><span class="note-meta"><time>' + fmtMod(n.mod) + '</time><span>' + esc(n.snip) + '</span></span></button></li>'; });
+    if (!ns.length && p && !DIRS.some(d => parentOf(d) === p)) h += '<li class="ntr-e" style="--lv:' + lv + '">' + esc(t('emptyFolder')) + '</li>';
+    return h;
+  }
+  const listPane = () => '<h3 class="sec">' + esc(t('vroot')) + '<span class="nsec-n">' + NOTES.length + '</span></h3><ul class="group" id="ntree">' + treeRows('', 0) + '</ul>';
 
   function showState(icon, text, btn, act) {
     const box = $('#nstate'), b = $('#nstate-b');
@@ -5215,7 +5288,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   }
   function render() {
     const q = S.q.trim(), sr = S.searching;
-    const mode = sr ? 'search' : S.tab === 'graph' ? (S.glist ? 'glist' : 'graph') : S.tab;
+    const mode = sr ? 'search' : S.tab;
     S.mode = mode;
     const st = S.st, blocked = st === 'loading' || st === 'error';
     const empty = st === 'empty' && !sr;
@@ -5227,21 +5300,23 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     $('#ng-load').hidden = st !== 'loading';
     $('#nseg').hidden = sr; $('#nscope').hidden = !sr;
     $('#n-cancel').hidden = !sr; $('#note-clear').hidden = q === '';
-    setSeg($('#nseg'), ['notes', 'tasks', 'graph'].indexOf(S.tab));
+    setSeg($('#nseg'), ['notes', 'tasks', 'list', 'graph'].indexOf(S.tab));
     setSeg($('#nscope'), ['all', 'notes', 'tasks'].indexOf(S.scope));
-    const nf = $('#nfilter');
-    nf.hidden = !(onNotes() && S.tab === 'tasks' && !sr);
-    $('#nfilter-t').textContent = S.tscope === 'all' ? t('all') : t(S.tscope);
     const np = $('#nplus');
-    np.disabled = offline(); np.hidden = !onNotes();
+    np.disabled = offline(); np.hidden = sr;
+    const rb = $('#ng-reset'); rb.hidden = !onNotes(); rb.disabled = offline();
     const bn = $('#nbanner');
     bn.hidden = !offline(); bn.dataset.tone = 'warn'; $('#nbanner-t').textContent = t('offline');
-    ['notes', 'tasks', 'glist', 'search'].forEach(m => { const p = $('#np-' + m); p.hidden = true; p.innerHTML = ''; });
+    const chips = $('#nchips');
+    chips.hidden = !(mode === 'notes' && !blocked && !empty);
+    chips.innerHTML = chips.hidden ? '' : '<button class="nchip glass" data-flat type="button" data-f="" aria-pressed="' + !S.folder + '">' + esc(t('all')) + '</button>' + FOLD.map(f => '<button class="nchip glass" data-flat type="button" data-f="' + f + '" aria-pressed="' + (S.folder === f) + '">' + f + '</button>').join('');
+    chips.setAttribute('aria-label', t('folder'));
+    ['notes', 'tasks', 'list', 'search'].forEach(m => { const p = $('#np-' + m); p.hidden = true; p.innerHTML = ''; });
     $('#nskel').hidden = !(st === 'loading' && mode !== 'graph');
     $('#nstate').hidden = true;
     if (st === 'error') showState('i-offline', t('err'), t('retry'), 'retry');
     else if (empty) {
-      if (mode === 'notes') showState('i-notes', t('emptyNotes'), t('newNote'), 'newnote');
+      if (mode === 'notes' || mode === 'list') showState('i-notes', t('emptyNotes'), t('newNote'), 'newnote');
       else if (mode === 'tasks') showState('i-checklist', t('emptyTasks'), t('newTask'), 'newtask');
       else showState('i-graph', t('emptyGraph'));
     } else if (mode === 'search' && st !== 'loading') {
@@ -5252,20 +5327,20 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     else if (mode === 'tasks' && !blocked) {
       const p = $('#np-tasks'); p.innerHTML = tasksPane(); p.hidden = false;
       if (!openTasks().length) showState('i-checklist', t('emptyTasks'), t('newTask'), 'newtask');
-    } else if (mode === 'glist' && !blocked) { const p = $('#np-glist'); p.innerHTML = gListPane(); p.hidden = false; }
+    } else if (mode === 'list' && !blocked) { const p = $('#np-list'); p.innerHTML = listPane(); p.hidden = false; }
     if (showGraph) graphShow();
     if (window.jvEdges) window.jvEdges();
   }
 
   function setTab(tab, focus) {
-    S.tab = tab; S.glist = false; S.sel = null;
+    S.tab = tab; S.sel = null; scroller.scrollTop = 0;
     render();
     if (focus) { const b = $('#nseg [data-v="' + tab + '"]'); if (b) b.focus(); }
   }
   $('#nseg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) setTab(b.dataset.v); });
   $('#nseg').addEventListener('keydown', e => {
-    const order = ['notes', 'tasks', 'graph'], i = order.indexOf(S.tab);
-    if (e.key === 'ArrowRight') { e.preventDefault(); setTab(order[Math.min(i + 1, 2)], true); }
+    const order = ['notes', 'tasks', 'list', 'graph'], i = order.indexOf(S.tab);
+    if (e.key === 'ArrowRight') { e.preventDefault(); setTab(order[Math.min(i + 1, 3)], true); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); setTab(order[Math.max(i - 1, 0)], true); }
   });
   $('#nscope').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) { S.scope = b.dataset.v; render(); } });
@@ -5275,10 +5350,12 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (j !== i) { e.preventDefault(); S.scope = order[j]; render(); $('#nscope [data-v="' + order[j] + '"]').focus(); }
   });
   const sIn = $('#note-search');
-  sIn.addEventListener('focus', () => { if (!S.searching) { S.searching = true; render(); } });
+  const kbd = on => { if (window.jvKeyboard) window.jvKeyboard(on); };
+  sIn.addEventListener('focus', () => { if (!S.searching) { S.searching = true; render(); } kbd(true); });
+  sIn.addEventListener('pointerdown', () => kbd(true));
   sIn.addEventListener('input', () => { S.q = sIn.value; render(); });
   $('#note-clear').addEventListener('click', () => { sIn.value = ''; S.q = ''; render(); sIn.focus(); });
-  function endSearch() { S.searching = false; S.q = ''; sIn.value = ''; sIn.blur(); render(); }
+  function endSearch() { S.searching = false; S.q = ''; sIn.value = ''; sIn.blur(); kbd(false); render(); }
   $('#n-cancel').addEventListener('click', endSearch);
   sIn.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endSearch(); } });
 
@@ -5314,11 +5391,11 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (row) { openNote(+row.dataset.id, row); return; }
     const fh = e.target.closest('.nfh');
     if (fh) { S.coll[fh.dataset.fold] = !S.coll[fh.dataset.fold]; render(); const nb = $('.nfh[data-fold="' + fh.dataset.fold + '"]'); if (nb) nb.focus(); return; }
+    const tr = e.target.closest('.ntr');
+    if (tr) { const d = tr.dataset.d; S.cur = d; S.lcoll[d] = !S.lcoll[d]; render(); const nb = $('.ntr[data-d="' + d + '"]'); if (nb) nb.focus({ preventScroll: true }); return; }
     const ch = e.target.closest('.nchip');
     if (ch) { S.folder = ch.dataset.f; render(); const nb = $('.nchip[data-f="' + ch.dataset.f + '"]'); if (nb) nb.focus(); return; }
     const sb = e.target.closest('#nstate-b');
-    const tg = e.target.closest('.ng-tog button');
-    if (tg) { S.glist = false; render(); return; }
     if (sb) {
       if (sb.dataset.act === 'retry') { S.st = 'default'; render(); } else if (sb.dataset.act === 'newnote') openSheet('note', { from: sb }); else if (sb.dataset.act === 'newtask') openSheet('task', { from: sb });
     }
@@ -5328,6 +5405,25 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     const li = e.target.closest && e.target.closest('.nsw');
     if (li && !e.target.closest('input')) { e.preventDefault(); removeTask(+li.dataset.id); }
   });
+  /* Folder actions: long-press, right-click or Shift+F10 */
+  function folderMenu(btn) {
+    const d = btn.dataset.d;
+    openMenu(btn, [
+      { icon: 'i-notes', label: t('hereNote'), act: () => openSheet('note', { from: btn, dir: d }) },
+      { icon: 'i-folder-plus', label: t('hereFolder'), act: () => openSheet('folder', { from: btn, parent: d }) },
+      { icon: 'i-pencil', label: t('rename'), act: () => openSheet('folder', { from: btn, rename: d }) }
+    ]);
+  }
+  let lp = null;
+  const lpStop = () => { if (lp) { clearTimeout(lp.t); lp = null; } };
+  view.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.ntr');
+    if (!b || e.button) return;
+    lp = { x: e.clientX, y: e.clientY, t: setTimeout(() => { lp = null; noClick = Date.now() + 600; folderMenu(b); }, 520) };
+  });
+  view.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) lpStop(); });
+  view.addEventListener('pointerup', lpStop); view.addEventListener('pointercancel', lpStop);
+  view.addEventListener('contextmenu', e => { const b = e.target.closest('.ntr'); if (b) { e.preventDefault(); lpStop(); if (menu.hidden) folderMenu(b); } });
   /* Swipe: right reveals Done, left reveals Delete; a long pull commits */
   let sw = null;
   const SWF = 150, SWA = 96;
@@ -5417,7 +5513,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (!ns.length || !G.w) return;
     let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
     ns.forEach(n => { x0 = Math.min(x0, n.x); x1 = Math.max(x1, n.x); y0 = Math.min(y0, n.y); y1 = Math.max(y1, n.y); });
-    const top = 190, bot = 200, aw = G.w - 40, ah = G.h - top - bot;
+    const top = 190, bot = 250, aw = G.w - 40, ah = G.h - top - bot;
     G.k = Math.max(.5, Math.min(2.4, aw / Math.max(x1 - x0, 1), ah / Math.max(y1 - y0, 1)));
     G.tx = G.w / 2 - (x0 + x1) / 2 * G.k; G.ty = top + ah / 2 - (y0 + y1) / 2 * G.k;
     G.fitted = true;
@@ -5547,8 +5643,12 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     else if (e.key === 'Escape' && S.sel != null) { e.stopPropagation(); S.sel = null; selUI(); redraw(); }
   });
   $('#ng-open').addEventListener('click', () => { if (S.sel != null) openNote(S.sel, $('#ng-open')); });
-  $('#ng-reset').addEventListener('click', () => { S.sel = null; fit(); selUI(); redraw(); });
-  $('#ng-list').addEventListener('click', () => { S.glist = true; S.sel = null; render(); const b = $('.ng-tog button'); if (b) b.focus({ preventScroll: true }); });
+  $('#ng-reset').addEventListener('click', e => {
+    const b = e.currentTarget;
+    b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin');
+    setTimeout(() => b.classList.remove('spin'), 750);
+    if (S.mode === 'graph') { S.sel = null; fit(); selUI(); redraw(); } else render();
+  });
   $('#ng-pills').addEventListener('click', e => {
     const b = e.target.closest('.ng-pill');
     if (!b) return;
@@ -5595,7 +5695,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (!n) return;
     ed.id = id; ed.dirty = false; ed.saving = false;
     $('#ned-title').textContent = n.title;
-    $('#ned-meta').textContent = n.folder + ' / ' + n.title + '.md · ' + fmtMod(n.mod);
+    $('#ned-meta').textContent = (n.dir ? n.dir + ' / ' : '') + n.title + '.md · ' + fmtMod(n.mod);
     taEl.value = n.body;
     const nb = nbr(id);
     $('#ned-conn-h').hidden = !nb.length;
@@ -5651,20 +5751,26 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     let v = false;
     if (sh.kind === 'note') v = !!$('#nf-title').value.trim() && !offline() && (sh.folder !== '@new' || !!$('#nf-fname').value.trim());
     else if (sh.kind === 'task') v = !!$('#nf-text').value.trim() && !offline();
+    else if (sh.kind === 'folder') { const nm = $('#nf-fname').value.trim(); v = !!nm && !nm.includes('/') && !offline(); }
     $('#nsh-ok').disabled = !v;
   };
   function folderPill() {
     const f = sh.folder;
-    return '<i style="width:9px;height:9px;border-radius:50%;background:' + (f === '@new' ? FC.General : (FC[f] || FC.General)) + '"></i>' + esc(f === '@new' ? t('newFolder') : f) + ic('i-chev-down');
+    return '<i style="width:9px;height:9px;border-radius:50%;background:' + (f === '@new' ? FC.General : (FC[top(f)] || FC.General)) + '"></i>' + esc(f === '@new' ? t('newFolder') : f || t('vroot')) + ic('i-chev-down');
   }
+  const parentPill = () => ic('i-folder') + esc(sh.parent || t('vroot')) + ic('i-chev-down');
   function openSheet(kind, o) {
     o = o || {};
     if (sheetOpen) return;
-    sh = { kind, o, from: o.from || document.activeElement, folder: S.folder || 'General', draft: null };
-    const body = $('#nsh-body'), ok = $('#nsh-ok');
-    ok.style.visibility = kind === 'note' || kind === 'task' ? '' : 'hidden'; ok.tabIndex = kind === 'note' || kind === 'task' ? 0 : -1;
-    nsh.dataset.d = kind === 'note' ? 'l' : kind === 'discard' ? 's' : 'm';
-    if (kind === 'note') {
+    sh = { kind, o, from: o.from || document.activeElement, folder: o.dir != null ? o.dir : S.tab === 'list' ? S.cur : (S.folder || 'General'), parent: o.rename != null ? parentOf(o.rename) : o.parent != null ? o.parent : S.tab === 'list' ? S.cur : '', draft: null };
+    const body = $('#nsh-body'), ok = $('#nsh-ok'), form = kind === 'note' || kind === 'task' || kind === 'folder';
+    ok.style.visibility = form ? '' : 'hidden'; ok.tabIndex = form ? 0 : -1;
+    ok.setAttribute('aria-label', t(kind === 'folder' ? (o.rename != null ? 'rename' : 'create') : 'save'));
+    nsh.dataset.d = kind === 'discard' ? 's' : 'm';
+    if (kind === 'folder') {
+      $('#nsh-title').textContent = o.rename != null ? t('rename') : t('newFolder');
+      body.innerHTML = '<ul class="group">' + row(t('folderName'), '<input id="nf-fname" type="text" maxlength="60" autocomplete="off" value="' + esc(o.rename != null ? dirName(o.rename) : '') + '">') + (o.rename != null ? '' : row(t('parent'), '<button type="button" class="nsh-pill" id="nf-parent" aria-haspopup="menu" aria-expanded="false" style="margin-left:auto">' + parentPill() + '</button>')) + '</ul>';
+    } else if (kind === 'note') {
       $('#nsh-title').textContent = t('newNote');
       body.innerHTML = '<ul class="group">' + row(t('titleF'), '<input id="nf-title" type="text" maxlength="120" autocomplete="off" placeholder="' + esc(t('titleF')) + '">') + row(t('folder'), '<button type="button" class="nsh-pill" id="nf-folder" aria-haspopup="menu" aria-expanded="false" style="margin-left:auto">' + folderPill() + '</button>') + row(t('folderName'), '<input id="nf-fname" type="text" maxlength="60" autocomplete="off">').replace('class="nf"', 'class="nf" id="nf-fname-row" hidden') + '</ul><ul class="group">' + row('', '<textarea id="nf-body" placeholder="' + esc(t('body')) + '" spellcheck="false"></textarea>', 'ta') + '</ul>';
     } else if (kind === 'task') {
@@ -5684,18 +5790,21 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
       $('#nsh-title').textContent = t('discardT');
       body.innerHTML = '<div class="nsh-acts"><button class="nbtn glass danger" type="button" data-flat data-c="discard">' + esc(t('discard')) + '</button><button class="nbtn glass" type="button" data-flat data-c="keepEd">' + esc(t('keepEd')) + '</button></div>';
     }
-    $('#nsh-ok').disabled = kind === 'note' || kind === 'task';
+    $('#nsh-ok').disabled = form;
     sheetOpen = true; syncInert();
     nscrim.hidden = false; void nscrim.offsetWidth; nscrim.classList.add('on');
     nsh.classList.add('open');
     okState();
-    const f = $('#nf-title') || $('#nf-text') || $('#nsh-x');
+    const f = $('#nf-title') || $('#nf-text') || $('#nf-fname') || $('#nsh-x');
     f.focus({ preventScroll: true });
+    if (f !== $('#nsh-x')) { sh.kb = true; kbd(true); }
   }
   function closeSheet(silent) {
     if (!sheetOpen) return;
     const from = sh && sh.from;
     nsh.classList.remove('open'); nscrim.classList.remove('on'); nsh.style.transform = ''; nsh.style.transition = '';
+    if (sh && sh.kb) kbd(false);
+    nsh.dataset.d = 'm';
     sheetOpen = false; sh = null; syncInert();
     setTimeout(() => { if (!sheetOpen) nscrim.hidden = true; }, 320);
     if (!silent) restore(from);
@@ -5704,12 +5813,28 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (!sh || $('#nsh-ok').disabled) return;
     if (sh.kind === 'note') {
       let f = sh.folder;
-      if (f === '@new') { f = $('#nf-fname').value.trim(); if (!FOLD.includes(f)) { FOLD.push(f); FC[f] = FC.General; } }
+      if (f === '@new') f = $('#nf-fname').value.trim().replace(/^\/+|\/+$/g, '');
+      if (f) addDir(f);
+      const tp = f ? top(f) : 'General';
+      if (!FOLD.includes(tp)) { FOLD.push(tp); FC[tp] = FC.General; }
       const ti = $('#nf-title').value.trim(), b = $('#nf-body').value;
-      const n = { id: seq++, folder: f, title: ti, snip: (b.split('\n').find(l => l.trim()) || '').slice(0, 80), mod: NOW, mine: true, body: b || '# ' + ti + '\n' };
+      const n = { id: seq++, folder: tp, dir: f, title: ti, snip: (b.split('\n').find(l => l.trim()) || '').slice(0, 80), mod: NOW, mine: true, body: b || '# ' + ti + '\n' };
       NOTES.push(n); ensureNodes();
-      closeSheet(true); S.tab = 'notes'; S.folder = ''; S.searching = false; render();
+      closeSheet(true); if (S.tab !== 'list') S.tab = 'notes'; S.folder = ''; S.searching = false; render();
       openNote(n.id, null);
+    } else if (sh.kind === 'folder') {
+      const nm = $('#nf-fname').value.trim(), old = sh.o.rename;
+      if (old != null) {
+        const np = (parentOf(old) ? parentOf(old) + '/' : '') + nm, mv = p => (p === old || p.startsWith(old + '/') ? np + p.slice(old.length) : p);
+        for (let i = 0; i < DIRS.length; i++) DIRS[i] = mv(DIRS[i]);
+        NOTES.forEach(n => { n.dir = mv(n.dir); if (n.dir) n.folder = top(n.dir); });
+        if (!old.includes('/') && old !== np) { FOLD[FOLD.indexOf(old)] = np; FC[np] = FC[old]; ANCH[np] = ANCH[old]; }
+        S.cur = mv(S.cur); DIRS.sort((a, b) => a.localeCompare(b));
+      } else {
+        const np = (sh.parent ? sh.parent + '/' : '') + nm;
+        addDir(np); S.cur = np; if (sh.parent) delete S.lcoll[sh.parent];
+      }
+      closeSheet(); render();
     } else if (sh.kind === 'task') {
       const txt = $('#nf-text').value.trim(), dv = $('#nf-date').value, tv = dv ? $('#nf-time').value : '';
       let due = null;
@@ -5731,7 +5856,12 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     if (sg) { const seg = sg.closest('.nseg'); if (seg.id === 'nf-scope') { sh.draft.scope = sg.dataset.v; setSeg(seg, sg.dataset.v === 'work' ? 0 : 1); } else { sh.draft.pri = sg.dataset.v; setSeg(seg, ['normal', 'medium', 'high'].indexOf(sg.dataset.v)); } return; }
     if (e.target.closest('#nf-folder')) {
       const btn = $('#nf-folder');
-      openMenu(btn, FOLD.map(f => ({ label: f, radio: true, checked: sh.folder === f, act: () => { sh.folder = f; btn.innerHTML = folderPill(); $('#nf-fname-row').hidden = true; okState(); } })).concat([{ label: t('newFolder'), icon: 'i-folder-plus', act: () => { sh.folder = '@new'; btn.innerHTML = folderPill(); $('#nf-fname-row').hidden = false; $('#nf-fname').focus(); okState(); } }]));
+      openMenu(btn, [''].concat(DIRS).map(f => ({ label: f || t('vroot'), radio: true, checked: sh.folder === f, act: () => { sh.folder = f; btn.innerHTML = folderPill(); $('#nf-fname-row').hidden = true; okState(); } })).concat([{ label: t('newFolder'), icon: 'i-folder-plus', act: () => { sh.folder = '@new'; btn.innerHTML = folderPill(); $('#nf-fname-row').hidden = false; $('#nf-fname').focus(); okState(); } }]));
+      return;
+    }
+    if (e.target.closest('#nf-parent')) {
+      const btn = $('#nf-parent');
+      openMenu(btn, [''].concat(DIRS).map(p => ({ label: p || t('vroot'), radio: true, checked: sh.parent === p, act: () => { sh.parent = p; btn.innerHTML = parentPill(); okState(); } })));
       return;
     }
     if (e.target.closest('#nf-del')) { const id = sh.o.id; closeSheet(true); removeTask(id); return; }
@@ -5746,21 +5876,16 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   });
   let sd0 = null;
   nsh.addEventListener('pointerdown', e => { if (e.target.closest('.grab, .nsh-hd') && !e.target.closest('button')) { sd0 = { y: e.clientY, id: e.pointerId, dy: 0 }; try { nsh.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } });
-  nsh.addEventListener('pointermove', e => { if (sd0 && e.pointerId === sd0.id) { sd0.dy = Math.max(0, (e.clientY - sd0.y) / scaleK()); nsh.style.transition = 'none'; nsh.style.transform = 'translate3d(0,' + sd0.dy + 'px,0)'; } });
-  const sdEnd = e => { if (sd0 && e.pointerId === sd0.id) { const d = sd0.dy; sd0 = null; nsh.style.transition = ''; if (d > 90) closeSheet(); else nsh.style.transform = ''; } };
+  nsh.addEventListener('pointermove', e => { if (sd0 && e.pointerId === sd0.id) { sd0.dy = (e.clientY - sd0.y) / scaleK(); nsh.style.transition = 'none'; nsh.style.transform = 'translate3d(0,calc(var(--lift) + ' + Math.max(0, sd0.dy) + 'px),0)'; } });
+  const sdEnd = e => { if (sd0 && e.pointerId === sd0.id) { const d = sd0.dy; sd0 = null; nsh.style.transition = ''; nsh.style.transform = ''; if (d < -50 && nsh.dataset.d === 'm') nsh.dataset.d = 'l'; else if (d > 90 && nsh.dataset.d === 'l' && sh && sh.kind !== 'discard') nsh.dataset.d = 'm'; else if (d > 90) closeSheet(); } };
   nsh.addEventListener('pointerup', sdEnd); nsh.addEventListener('pointercancel', sdEnd);
 
   /* Menus */
-  $('#nplus').setAttribute('aria-haspopup', 'menu'); $('#nfilter').setAttribute('aria-haspopup', 'menu');
+  $('#nplus').setAttribute('aria-haspopup', 'menu');
   $('#nplus').addEventListener('click', () => {
     const b = $('#nplus');
     if (!menu.hidden && menuAnchor === b) { closeMenu(); return; }
-    openMenu(b, [{ icon: 'i-notes', label: t('newNote'), act: () => openSheet('note', { from: b }) }, { icon: 'i-checklist', label: t('newTask'), act: () => openSheet('task', { from: b }) }]);
-  });
-  $('#nfilter').addEventListener('click', () => {
-    const b = $('#nfilter');
-    if (!menu.hidden && menuAnchor === b) { closeMenu(); return; }
-    openMenu(b, ['all', 'personal', 'work'].map(v => ({ label: t(v), radio: true, checked: S.tscope === v, act: () => { S.tscope = v; render(); } })));
+    openMenu(b, [{ icon: 'i-notes', label: t('newNote'), act: () => openSheet('note', { from: b }) }].concat(S.tab === 'list' ? [{ icon: 'i-folder-plus', label: t('newFolder'), act: () => openSheet('folder', { from: b }) }] : [], [{ icon: 'i-checklist', label: t('newTask'), act: () => openSheet('task', { from: b }) }]));
   });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape' || !onNotes()) return;
@@ -5772,13 +5897,17 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   /* Board wiring */
   function apply(tab, state, scope) {
     closeMenu(); if (sheetOpen) closeSheet(true); if (editorOpen) closeEditor(true);
-    Object.assign(S, { tab: tab || 'notes', st: 'default', q: '', searching: false, scope: scope || 'all', glist: false, sel: null });
+    Object.assign(S, { tab: tab || 'notes', st: 'default', q: '', searching: false,     scope: scope || 'all', cur: '', sel: null });
     sIn.value = '';
+        if (state === 'emptyfolder') { addDir('General/Drafts'); S.cur = 'General/Drafts'; S.lcoll = {}; }
+        if (state === 'newfolder') S.cur = 'Work';
     if (state === 'search' || state === 'noresults') { S.searching = true; S.q = state === 'search' ? 'acme' : 'zzz'; sIn.value = S.q; }
     else if (['empty', 'loading', 'error', 'offline', 'conflict'].includes(state)) S.st = state;
+    kbd(S.searching);
     render();
     if (state === 'editor' || state === 'conflict') { openNote(6, null); if (state === 'conflict') openSheet('conflict', { from: $('#ned-back') }); }
     else if (state === 'newnote') openSheet('note');
+    else if (state === 'newfolder') openSheet('folder');
     else if (state === 'newtask') openSheet('task');
   }
   function go(tab, state, scope) {
@@ -5790,15 +5919,14 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   document.addEventListener('jv:lang', e => { lang = e.detail === 'en' ? 'en' : 'da'; applyLang(); if (onNotes()) { render(); if (ed) edStatus(); } });
   function onScreen() {
     const on = onNotes();
-    $('#nplus').hidden = !on;
     if (on) { applyLang(); render(); return; }
-    closeMenu(); if (sheetOpen) closeSheet(true); if (editorOpen) closeEditor(true);
-    $('#nfilter').hidden = true; phone.removeAttribute('data-gm');
+    kbd(false); closeMenu(); if (sheetOpen) closeSheet(true); if (editorOpen) closeEditor(true);
+    $('#ng-reset').hidden = true; phone.removeAttribute('data-gm');
   }
   new MutationObserver(onScreen).observe(phone, { attributes: true, attributeFilter: ['data-scr'] });
   applyLang();
   if (params.get('screen') === 'notes') {
-    const tab = ['notes', 'tasks', 'graph'].includes(params.get('tab')) ? params.get('tab') : 'notes', state = params.get('state') || 'default';
+    const tab = ['notes', 'tasks', 'list', 'graph'].includes(params.get('tab')) ? params.get('tab') : 'notes', state = params.get('state') || 'default';
     apply(tab, state, ['notes', 'tasks'].includes(params.get('scope')) ? params.get('scope') : '');
     if (sel) sel.value = tab + ':' + state;
   } else render();
