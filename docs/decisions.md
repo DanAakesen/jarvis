@@ -9238,3 +9238,17 @@ aggregate workflow selects the Mac simulator build only for ready pull requests
 whose changes select iOS; manual dispatch does not start a Mac job. The Mac
 build is unsigned and does not boot a simulator or run UI tests. Phase 1b
 signing, upload, credentials, and all later screens remain out of scope.
+
+## 30 October 2026 — P15-13 iOS navigation shell
+
+The approved sidebar concept is implemented as a native SwiftUI shell. A custom
+fixed-behind sidebar is necessary for the specified right-side drag reveal,
+screen translation, dimming and blur; native `NavigationStack` owns page pushes
+and back behavior. Pure-Swift destination and navigation state stay in
+`JarvisCore` for Linux tests and future chat or voice navigation commands.
+
+The shell opens to a Chat placeholder. Chat, Voice, enabled unbuilt areas and
+Settings render title-only placeholders; Banking remains disabled and marked
+Later. The sidebar uses system colors, typography, scrolling and SF Symbols,
+with shared tokens for custom geometry and motion. No backend changes are part
+of this decision.

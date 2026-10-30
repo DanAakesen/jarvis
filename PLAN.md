@@ -2108,8 +2108,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Active phase:** P15, iOS Phase 1a. The blank SwiftUI shell, JarvisCore package/test, CI wiring and documentation are implemented locally; Linux Swift and offline workflow-script checks pass. Next: review the draft, then let the owner merge after the selected ready-PR Mac build passes. No later screen is authorized without the owner's approval.
-- **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
+- **Active phase:** P15, iOS Phase 1a. P15-13 now adds the navigation shell and placeholders; its pure-Swift state and tests pass on Linux. Next: review the draft, then let the owner merge after the selected ready-PR Mac build passes. No later screen is authorized without the owner's approval.
+- **P15-13 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
 
 - **Terra main chat (#1337):** request capacity 150 through the existing main-only
   deployment path, then apply the controlled saved-owner default update. #1338
@@ -3385,6 +3385,7 @@ no per-screen hardcoded values, and a stated reason for each custom component.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
+| P15-13 | [#1399](https://github.com/DanAakesen/jarvis/issues/1399) | iOS sidebar navigation shell and placeholder pages | Native `NavigationStack` shell with the approved fixed-behind sidebar, right-side drag/VoiceOver opening, dismiss by tap or reverse drag, agreed row order, disabled Banking/Later, and title-only placeholders; pure-Swift navigation tests pass on Linux; `ios-ci.yml` passes. | P15-01 (#1370) | In progress |
 
 ## Factory canonical-status parity (16 October 2026)
 

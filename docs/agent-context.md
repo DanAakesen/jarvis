@@ -6169,3 +6169,13 @@ the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac build uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`; it does not boot a simulator or run UI tests.
+
+P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
+and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
+SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
+and other enabled destinations plus Settings are title-only pages with native
+back navigation. Banking remains disabled and labeled Later. The fixed-behind
+sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
+its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
+`swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
+validation.

@@ -2767,3 +2767,22 @@ second surface. Skeleton loaders fill the message's width through the
 `.state-message-skeleton` wrapper. The `image` placeholder keeps its 320px cap,
 and the `cards` placeholder shows four columns, two at 900px and narrower and
 one at 700px and narrower.
+
+## Native iOS navigation shell (P15-13; 30 October 2026)
+
+The approved `docs/ios/design/board.html?sidebar=open` frame informs the
+composition, not literal values. The iPhone shell keeps a plain system
+background sidebar fixed behind the screen; a right-side drag tracks the
+screen's leftward movement, dimming and blur, and a tap or reverse drag closes
+it. The sidebar header places Jarvis left and an icon-only Settings control
+right. Areas are ordered bottom-to-top from Proactive through Chat; Banking is
+disabled and labeled Later. Selection, keyboard focus, pointer hover and press
+change row text/icon styling only, without a row surface or border.
+
+SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
+system scrolling remain the default. The fixed-behind reveal is custom because
+the system navigation containers do not provide this interaction. Its geometry
+and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
+stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
+unbuilt areas and Settings use title-only placeholders until their screen
+issues are implemented. Reduced Motion removes settling animation.
