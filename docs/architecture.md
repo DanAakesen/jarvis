@@ -1892,20 +1892,21 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   when the session starts. Updates apply to the next turn or session. Vision
   role options are limited to models with known cost rates; Voice Live choices
   are `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and input transcription
-  uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot retain
-  their provider `default` option until their provider model catalogues are
-  available. Embedding defaults to `text-embedding-3-small`; Bicep deploys both
-  supported embedding deployments. Requests explicitly ask for 1,536 dimensions,
-  including when `text-embedding-3-large` is selected. ARM/live Azure selection
-  remains unverified.
-  uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot expose
+  uses the Voice Live-supported `mai-transcribe` model. Embedding defaults to
+  `text-embedding-3-small`; Bicep deploys both supported embedding deployments.
+  Requests explicitly ask for 1,536 dimensions, including when
+  `text-embedding-3-large` is selected. ARM/live Azure selection remains unverified.
+  Codex and Copilot expose
   provider-specific model and reasoning allowlists through the same settings
   options. The Codex list mirrors Codex's own catalogue (`gpt-6.1-sol`,
   `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`);
-  Chat and Research options are the live Foundry deployments, now including
-  `gpt-6-astra` and `gpt-6.1-sol` (Bicep). `gpt-6-astra` has capacity 150 (rate limit
-  150K tokens per minute, Global Standard bills per token) since 23 October, because the
-  live acceptance run sends over 50K input tokens a minute to the Chat model (#1232).
+  Research shares this Codex model and reasoning allowlist because its runner
+  executes through Codex. Foundry deployments are not offered for Research just
+  because they support chat or Responses. Chat options remain the live Foundry
+  deployments, including `gpt-6-astra` and `gpt-6.1-sol` (Bicep).
+  `gpt-6-astra` has capacity 150 (rate limit 150K tokens per minute, Global
+  Standard bills per token) since 23 October, because the live acceptance run
+  sends over 50K input tokens a minute to the Chat model (#1232).
   #1337 prepares `gpt-6.1-terra` version `2026-10-26` in the same Sweden Central
   account with GlobalStandard and `terraChatCapacity: 150` in committed parameters,
   matching the existing chat throughput allocation. This requests capacity; it
@@ -1917,8 +1918,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   adapter sends explicit `reasoning.effort: none` for Terra because omission
   defaults to medium. Other models keep their request behavior. Terra exposes
   the supported intersection of the existing reasoning enum, without `minimal`
-  or a shared-enum expansion. The deployment also appears in Research through
-  the existing capability filter; its role default is unchanged. Microsoft's
+  or a shared-enum expansion. Terra is not a Research option: the Codex allowlist
+  governs that role even when Foundry deploys the model. Unsupported saved role
+  models keep their persisted value, resolve to a supported effective fallback,
+  and produce an owner-visible Settings warning; unsupported updates are rejected
+  server-side with the allowed models in the reason. No settings migration is
+  needed. Microsoft's
   public Global Standard list rates are documented in `infra/README.md`.
   Account-specific rates and Azure context-tier billing rules remain unverified;
   no Terra rate is added to runtime usage or vision pricing tables.

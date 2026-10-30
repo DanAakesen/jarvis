@@ -231,6 +231,20 @@ describe('SettingsPage', () => {
     expect(danishVoice).toHaveProperty('value', 'Jeppe (Danish)');
   });
 
+  it('shows the server reason when a settings patch is rejected', async () => {
+    const user = userEvent.setup();
+    const reason = 'Unsupported research model for the Codex runtime. Valid models: default, gpt-6.1-sol.';
+    fetchMock.mockResolvedValueOnce(response(settingsResponse()))
+      .mockResolvedValueOnce(response({ error: reason }, 400));
+    renderSettingsPage();
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Tone' }), 'direct');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    const rejection = await screen.findByText(reason);
+    expect(rejection.getAttribute('role')).toBe('alert');
+  });
+
   it('loads, saves changed settings, and explains which work is deferred', async () => {
     const user = userEvent.setup();
     fetchMock
