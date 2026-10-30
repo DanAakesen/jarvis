@@ -9196,6 +9196,31 @@ The dispatcher reviews Actions billing usage at the end of each iOS phase. A
 local Linux Swift toolchain for the owner is optional and needs the owner's go.
 See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
 
+## 30 October 2026 — iOS screen approval gate
+
+The owner said: "I want to make sure i greenlight every screen before its deployed."
+
+Every screen is its own issue and its own pull request. Design gate: the
+dispatcher shows the owner the concept frame for the screen, and no builder
+starts on that screen until the owner has approved it. Code gate: the owner
+approves the screen's pull request before it merges. A screen that has not been
+approved is never built, merged or shipped.
+
+Ship gate: the TestFlight upload workflow runs by manual dispatch only, started
+by the owner, so nothing reaches the owner's phone unapproved. The automatic
+push-to-main trigger is removed, and checklist row 19 (automatic uploads) is
+superseded. The monthly keep-alive no longer uploads: it is a reminder to the
+owner to run the manual upload, because TestFlight builds expire after 90 days.
+An automated keep-alive of the last approved build can be added later if the
+owner wants it. The other safeguards stay: the signing environment is limited to
+main, there is no `pull_request` trigger, the secrets live only in the
+environment, and build, archive and upload stay in one job, so a manual run is
+also one Mac run. Uploads only happen when the owner starts them, which also
+lowers Mac minutes.
+
+Phase 1a, the empty shell with no real screens (#1370), is unaffected. See
+[build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
 ## 30 October 2026 — iOS Phase 1a implementation boundary
 
 Phase 1a adds only the iPhone app target and its blank native glass root view.
