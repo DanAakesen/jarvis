@@ -1,0 +1,92 @@
+name: iOS CI
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: JarvisCore build and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
+        with:
+          swift-version: "6.2"
+      - name: Build and test JarvisCore
+        working-directory: apps/ios/Packages/JarvisCore
+        run: |
+          swift build
+          swift test
+      - name: Check iOS project and platform metadata
+        run: |
+          ruby -ryaml -e '
+            project = YAML.safe_load_file("apps/ios/project.yml")
+            abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
+            abort "exactly one application target is required" unless project["targets"].keys == ["Jarvis"] && project.dig("targets", "Jarvis", "type") == "application"
+            abort "unexpected deployment target" unless project.dig("targets", "Jarvis", "deploymentTarget") == "26.0"
+            abort "unexpected bundle identifier" unless project.dig("targets", "Jarvis", "settings", "base", "PRODUCT_BUNDLE_IDENTIFIER") == "com.danaakesen.jarvis"
+            abort "iPhone-only device family is required" unless project.dig("targets", "Jarvis", "settings", "base", "TARGETED_DEVICE_FAMILY") == "1"
+            abort "Swift 5 language mode is required" unless project.dig("targets", "Jarvis", "settings", "base", "SWIFT_VERSION") == "5.0"
+            abort "local JarvisCore dependency is required" unless project.dig("packages", "JarvisCore", "path") == "Packages/JarvisCore"
+          '
+          python3 - <<'PY'
+          import json
+          import plistlib
+          from pathlib import Path
+
+          icon = json.loads(Path("apps/ios/Jarvis/Assets.xcassets/AppIcon.appiconset/Contents.json").read_text())
+          assert icon["images"][0]["filename"] == "JarvisAppIcon.png"
+          assert Path("apps/ios/Jarvis/Assets.xcassets/AppIcon.appiconset/JarvisAppIcon.png").is_file()
+          info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
+          assert info["ITSAppUsesNonExemptEncryption"] is False
+          entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
+          assert entitlements == {}
+          PY
+
+  macos:
+    name: iOS Simulator build
+    needs: linux
+    if: needs.linux.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: macos-26
+    timeout-minutes: 20
+    concurrency:
+      group: ios-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select pinned Xcode 26.6
+        run: |
+          ls -1 /Applications
+          sudo xcode-select --switch /Applications/Xcode_26.6.app
+          xcodebuild -version
+      - name: Install pinned XcodeGen 2.46.0
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip \
+            --output "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" \
+            | shasum --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/xcodegen/bin/xcodegen" --version
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData/SourcePackages
+          key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift') }}
+      - name: Generate project and build for Simulator
+        working-directory: apps/ios
+        run: |
+          xcodegen generate
+          xcodebuild \
+            -project Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
