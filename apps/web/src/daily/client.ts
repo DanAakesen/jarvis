@@ -122,7 +122,7 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
           Number.isSafeInteger(item.reps) && Number(item.reps) >= 1 && Number(item.reps) <= 1000 &&
           Number.isSafeInteger(item.sets) && Number(item.sets) >= 1 && Number(item.sets) <= 100 &&
           time(item.performedAt) && item.deletedAt === null && time(item.updatedAt) &&
-          Number.isSafeInteger(item.revision) && Number(item.revision) > 0))) return false;
+          Number.isSafeInteger(item.revision) && Number(item.revision) > 0)) return false;
   }
   if (query.source === dailyQuerySources.metrics && query.metric !== undefined &&
       items.some(item => item.metric_name !== query.metric)) return false;

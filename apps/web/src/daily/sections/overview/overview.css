@@ -1,1 +1,11 @@
 .daily-overview-embedded { height: auto; min-height: 0; overflow: visible; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
+.daily-last-lifts { display: grid; gap: var(--space-3); min-width: 0; margin-top: var(--space-5); }
+.daily-last-lifts h2 { margin: 0; }
+.daily-last-lifts ul { display: grid; gap: 0; padding: 0; margin: 0; list-style: none; }
+.daily-last-lifts li { display: grid; gap: var(--space-1); min-width: 0; padding-block: var(--space-3); border-bottom: 1px solid var(--rule); }
+.daily-last-lifts li strong { overflow-wrap: anywhere; }
+.daily-last-lifts li span, .daily-last-lifts li time { color: var(--text-muted); font-size: var(--type-small); }
+.daily-last-lifts > .secondary-button { justify-self: start; }
+@media (min-width: 800px) {
+  .daily-last-lifts li { grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
+}
