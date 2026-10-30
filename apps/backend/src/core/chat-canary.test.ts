@@ -73,6 +73,43 @@ describe('post-deploy chat acceptance suite', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
+  it.each(['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'])(
+    'retains only sanitized provider diagnostics for %s without replacing its fixed reason',
+    async (reason) => {
+      const error = new ChatAgentError(reason, undefined, {
+        httpStatus: 400,
+        code: 'invalid_request',
+        param: 'reasoning.effort',
+        exceptionType: 'BadRequestError',
+        message: 'private provider text',
+      });
+      // Re-sanitize even if another caller adds untrusted fields after construction.
+      Object.assign(error.providerCause!, { token: 'never-retain', param: 'unsafe\n' });
+      const suite = await probes(passingAgent((input) => {
+        if (input.text === prompts[0] || input.text === prompts[1]) throw error;
+        return undefined;
+      }));
+      const providerCause = { httpStatus: 400, code: 'invalid_request', exceptionType: 'BadRequestError' };
+      await expect(suite.chat_identity!()).resolves.toEqual({ status: 'degraded', reason, providerCause });
+      await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason, providerCause });
+      await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+      expect(JSON.stringify(await suite.chat_capabilities!())).not.toMatch(/private|message|token|unsafe/u);
+    },
+  );
+
+  it.each(['context_unavailable', 'managed_provider_failure', 'private_provider_code'])(
+    'drops provider diagnostics for unrelated failure %s',
+    async (reason) => {
+      const error = new ChatAgentError(reason);
+      Object.assign(error, { providerCause: { httpStatus: 500, code: 'server_error' } });
+      const suite = await probes(passingAgent((input) => {
+        if (input.text === prompts[1]) throw error;
+        return undefined;
+      }));
+      expect(await suite.chat_capabilities!()).not.toHaveProperty('providerCause');
+    },
+  );
+
   it('spaces every hosted call, including approval, and caps active calls at three', async () => {
     const base = passingAgent();
     const starts: number[] = [];

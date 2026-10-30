@@ -62,6 +62,12 @@ class StatefulFixture(Fixture):
             return httpx.Response(204)
         if path.endswith("/responses"):
             self.provider_attempts += 1
+            if self.mode == "bad_request":
+                self.requests.append(request)
+                return httpx.Response(400, json={"error": {
+                    "message": "PRIVATE_PROVIDER_DETAIL",
+                    "code": "unsupported_parameter", "param": "instructions",
+                }})
             if self.mode == "timeout" or (
                 self.mode in {"tool_then_timeout", "action_then_timeout"}
                 and self.provider_attempts > 1
@@ -198,3 +204,19 @@ async def test_uncertain_inference_keeps_session_blocked_and_never_repeats_provi
                for request in fixture.backend.requests) == (
         1 if mode == "action_then_timeout" else 0
     )
+
+
+@pytest.mark.asyncio
+async def test_provider_rejection_retains_safe_cause_without_releasing_uncertain_claim():
+    fixture = StatefulFixture("bad_request")
+    async with fixture.runtime() as (runtime, _):
+        with pytest.raises(ManagedChatError) as caught:
+            await fixture.turn(runtime, "42")
+    assert caught.value.code == "managed_policy_turn_failed"
+    assert caught.value.provider_cause == {
+        "httpStatus": 400, "code": "unsupported_parameter", "param": "instructions",
+        "exceptionType": "BadRequestError",
+    }
+    assert str(caught.value) == "managed_policy_turn_failed"
+    assert fixture.active == "42"
+    assert fixture.provider_attempts == 1
