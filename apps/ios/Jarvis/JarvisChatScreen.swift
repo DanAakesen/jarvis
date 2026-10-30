@@ -67,7 +67,7 @@ struct JarvisChatScreen: View {
         }
     }
 
-    var body: some View {
+    private var layout: some View {
         VStack(spacing: 0) {
             if model.fixtureMode {
                 Label("Fixture data", systemImage: "testtube.2")
@@ -117,6 +117,10 @@ struct JarvisChatScreen: View {
                 .presentationDragIndicator(.visible)
                 .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
         }
+    }
+
+    private var attachmentPickers: some View {
+        layout
         .confirmationDialog("Add attachment", isPresented: $attachmentDialog, titleVisibility: .visible) {
             Button("Choose files") { fileImporterPresented = true }
             Button("Photo library") { photosPickerPresented = true }
@@ -160,6 +164,10 @@ struct JarvisChatScreen: View {
             )
             .ignoresSafeArea()
         }
+    }
+
+    var body: some View {
+        attachmentPickers
         .onChange(of: composerMode) { _, mode in
             guard mode == .voice else { return }
             composerMode = .chat
