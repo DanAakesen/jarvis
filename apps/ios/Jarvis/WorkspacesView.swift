@@ -5,6 +5,7 @@ struct WorkspacesView: View {
     @ObservedObject var runtime: WorkspaceRuntime
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var loadState: LoadState = .loading
+    @State private var signInRequired = false
     @State private var items: [SavedWorkspaceItem] = []
     @State private var query = ""
     @State private var selectedKind: SavedWorkspaceKind?
@@ -15,6 +16,7 @@ struct WorkspacesView: View {
     @State private var hasMore = false
     @State private var notice: String?
     @State private var openedItemID: String?
+    @State private var openedFeedbackTask: Task<Void, Never>?
     @State private var renameTarget: SavedWorkspaceItem?
     @State private var renameTitle = ""
     @State private var removeTarget: SavedWorkspaceItem?
@@ -247,9 +249,11 @@ struct WorkspacesView: View {
             VStack(spacing: JarvisDesignTokens.contentSpacing) {
                 Label(errorTitle, systemImage: "exclamationmark.triangle")
                     .font(.headline)
-                Button("Retry", action: refresh)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.accentColor)
+                if runtime.workspacesClient != nil && !signInRequired {
+                    Button("Retry", action: refresh)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                }
             }
             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
         }
@@ -349,7 +353,8 @@ struct WorkspacesView: View {
     }
 
     private var errorTitle: String {
-        guard runtime.workspacesClient != nil else { return "Sign in to load Workspaces" }
+        if signInRequired { return "Sign in to load Workspaces" }
+        guard runtime.workspacesClient != nil else { return "Workspaces need app configuration" }
         if case .stale = loadState { return "Workspaces are unavailable" }
         return "Workspaces could not be loaded"
     }
@@ -365,6 +370,7 @@ struct WorkspacesView: View {
             return
         }
         loadState = .loading
+        signInRequired = false
         notice = nil
         do {
             let page = try await client.search(query: normalizedQuery(query), kind: selectedKind)
@@ -377,6 +383,7 @@ struct WorkspacesView: View {
             return
         } catch {
             guard !Task.isCancelled else { return }
+            signInRequired = (error as? JarvisClientError) == .signInRequired
             loadState = items.isEmpty ? .error : .stale
             notice = items.isEmpty ? nil : "Workspaces are offline. Showing saved results."
         }
@@ -407,12 +414,16 @@ struct WorkspacesView: View {
         defer { setBusy(item.id, false) }
         do {
             _ = try await client.open(item)
-            openedItemID = item.id
+            showOpenedFeedback(for: item.id)
             notice = nil
         } catch {
-            notice = error is WorkspacesClientError
-                ? "This workspace is no longer available."
-                : "This workspace could not be opened."
+            if let workspaceError = error as? WorkspacesClientError,
+               workspaceError == .itemNotFound {
+                items.removeAll { $0.id == item.id }
+                notice = "This workspace is no longer available."
+            } else {
+                notice = "This workspace could not be opened."
+            }
         }
     }
 
@@ -425,7 +436,13 @@ struct WorkspacesView: View {
             replace(updated)
             notice = nil
         } catch {
-            notice = "The pin change could not be saved."
+            if let workspaceError = error as? WorkspacesClientError,
+               workspaceError == .itemNotFound {
+                items.removeAll { $0.id == item.id }
+                notice = "This workspace is no longer available."
+            } else {
+                notice = "The pin change could not be saved."
+            }
         }
     }
 
@@ -441,7 +458,13 @@ struct WorkspacesView: View {
             replace(updated)
             notice = nil
         } catch {
-            notice = "The title could not be saved."
+            if let workspaceError = error as? WorkspacesClientError,
+               workspaceError == .itemNotFound {
+                items.removeAll { $0.id == item.id }
+                notice = "This workspace is no longer available."
+            } else {
+                notice = "The title could not be saved."
+            }
         }
     }
 
@@ -455,10 +478,19 @@ struct WorkspacesView: View {
         do {
             try await client.remove(item)
             items.removeAll { $0.id == item.id }
-            if openedItemID == item.id { openedItemID = nil }
+            if openedItemID == item.id {
+                openedFeedbackTask?.cancel()
+                openedItemID = nil
+            }
             notice = "Removed from Workspaces."
         } catch {
-            notice = "This workspace could not be removed."
+            if let workspaceError = error as? WorkspacesClientError,
+               workspaceError == .itemNotFound {
+                items.removeAll { $0.id == item.id }
+                notice = "This workspace is no longer available."
+            } else {
+                notice = "This workspace could not be removed."
+            }
         }
     }
 
@@ -468,6 +500,18 @@ struct WorkspacesView: View {
 
     private func setBusy(_ id: String, _ busy: Bool) {
         if busy { busyItems.insert(id) } else { busyItems.remove(id) }
+    }
+
+    private func showOpenedFeedback(for id: String) {
+        openedFeedbackTask?.cancel()
+        openedItemID = id
+        openedFeedbackTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(JarvisDesignTokens.openedFeedbackMilliseconds))
+                guard !Task.isCancelled, openedItemID == id else { return }
+                openedItemID = nil
+            } catch {}
+        }
     }
 
     private func normalizedQuery(_ value: String) -> String {

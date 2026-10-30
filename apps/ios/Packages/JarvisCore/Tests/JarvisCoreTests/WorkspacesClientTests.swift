@@ -43,6 +43,34 @@ final class WorkspacesClientTests: XCTestCase {
         XCTAssertEqual(remaining, 0)
     }
 
+    func testMissingItemsAreReportedForMutationAndDelete() async throws {
+        let item = try makeItem()
+        let transport = try makeTransport("""
+        {"version":1,"interactions":[
+          {"method":"PATCH","path":"/api/workspaces/\(item.id)","requestBody":{"pinned":true},"response":{"statusCode":404}},
+          {"method":"DELETE","path":"/api/workspaces/\(item.id)","requestBody":{"confirm":true},"response":{"statusCode":404}}
+        ]}
+        """)
+        let client = makeClient(transport: transport)
+
+        do {
+            _ = try await client.setPinned(item, pinned: true)
+            XCTFail("Expected a missing workspace to be reported")
+        } catch {
+            XCTAssertEqual(error as? WorkspacesClientError, .itemNotFound)
+        }
+
+        do {
+            try await client.remove(item)
+            XCTFail("Expected a missing workspace to be reported")
+        } catch {
+            XCTAssertEqual(error as? WorkspacesClientError, .itemNotFound)
+        }
+
+        let remaining = await transport.remainingInteractions()
+        XCTAssertEqual(remaining, 0)
+    }
+
     func testGroupingPutsPinnedFirstAndUsesLocalCalendarDays() throws {
         let now = try XCTUnwrap(SavedWorkspaceItem.date(from: "2026-10-30T12:00:00.000Z"))
         var calendar = Calendar(identifier: .gregorian)

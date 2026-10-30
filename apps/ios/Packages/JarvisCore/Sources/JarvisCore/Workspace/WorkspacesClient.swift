@@ -238,7 +238,7 @@ public final class JarvisWorkspacesClient: Sendable {
                 idempotent: false
             )
         } catch let error as JarvisClientError {
-            if case .httpStatus(404) = error { return }
+            if case .httpStatus(404) = error { throw WorkspacesClientError.itemNotFound }
             throw error
         }
         guard let result = try? JSONDecoder().decode(WorkspaceItemDeleteResponse.self, from: response.body),

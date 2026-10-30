@@ -72,8 +72,7 @@ struct ContentView: View {
                     item: Binding(
                         get: { workspaceRuntime.presentedView },
                         set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
-                    ),
-                    onDismiss: workspaceRuntime.userDismissedView
+                    )
                 ) { presented in
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }

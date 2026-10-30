@@ -1,4 +1,5 @@
 import JarvisCore
+import Charts
 import SwiftUI
 
 struct GeneratedWorkspaceSheet: View {
@@ -16,6 +17,7 @@ struct GeneratedWorkspaceSheet: View {
                         view: presented.view,
                         runtime: runtime,
                         webAppURL: runtime.webAppURL,
+                        previewImage: nil,
                         onAction: perform
                     )
                     if let actionNotice {
@@ -75,6 +77,7 @@ private struct GeneratedViewContent: View {
     let view: GeneratedView
     let runtime: WorkspaceRuntime
     let webAppURL: URL?
+    let previewImage: Image?
     let onAction: (GeneratedViewAction) -> Void
 
     var body: some View {
@@ -112,7 +115,7 @@ private struct GeneratedViewContent: View {
         case .status(let envelope):
             StatusRenderer(data: envelope.data)
         case .image(let envelope):
-            ImageRenderer(data: envelope.data)
+            ImageRenderer(data: envelope.data, previewImage: previewImage)
         case .htmlApp(let envelope):
             UnsupportedRenderer(title: envelope.title, kind: "HTML app", webAppURL: webAppURL)
         case .knowledgeGraph(let envelope):
@@ -164,7 +167,7 @@ private struct ListRenderer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
-            ForEach(Array(data.items.enumerated()), id: \.offset) { _, item in
+            ForEach(Array(data.items.enumerated()), id: \.offset) { index, item in
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
                     Text(item.title)
                         .font(.title3.weight(.semibold))
@@ -181,7 +184,7 @@ private struct ListRenderer: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
-                if item != data.items.last {
+                if index < data.items.count - 1 {
                     Rectangle()
                         .fill(Color(uiColor: .separator))
                         .frame(height: 0.5)
@@ -244,7 +247,7 @@ private struct TimelineRenderer: View {
             ForEach(Array(data.events.enumerated()), id: \.offset) { _, event in
                 HStack(alignment: .top, spacing: JarvisDesignTokens.rowSpacing) {
                     Image(systemName: "circle.fill")
-                        .font(.system(size: JarvisDesignTokens.chartMarkerSize))
+                        .font(.system(size: JarvisDesignTokens.timelineMarkerSize))
                         .foregroundStyle(Color.accentColor)
                         .padding(.top, JarvisDesignTokens.timelineMarkerTopInset)
                         .accessibilityHidden(true)
@@ -273,81 +276,231 @@ private struct TimelineRenderer: View {
 private struct ChartRenderer: View {
     let data: GeneratedChartData
 
-    private let colors: [Color] = [.accentColor, .blue, .green, .orange, .purple]
-
     var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
-            Canvas { context, size in
-                let values = data.series.flatMap(\.points).map(\.y)
-                guard let minimum = values.min(), let maximum = values.max() else { return }
-                let span = max(maximum - minimum, 1)
-                let count = max(data.series.map(\.points.count).max() ?? 0, 1)
-                let step = size.width / CGFloat(max(count, 1))
-
-                for (seriesIndex, series) in data.series.enumerated() {
-                    let color = colors[seriesIndex % colors.count]
-                    let points = series.points.enumerated().map { index, point in
-                        CGPoint(
-                            x: count == 1 ? size.width / 2 : CGFloat(index) * size.width / CGFloat(count - 1),
-                            y: size.height - CGFloat((point.y - minimum) / span) * size.height
-                        )
-                    }
-                    guard !points.isEmpty else { continue }
-                    if data.kind == .bar {
-                        let width = max(step / CGFloat(data.series.count + 1), JarvisDesignTokens.chartMinimumBarWidth)
-                        for (index, point) in points.enumerated() {
-                            let rect = CGRect(
-                                x: CGFloat(index) * step + CGFloat(seriesIndex) * width,
-                                y: point.y,
-                                width: width,
-                                height: max(size.height - point.y, JarvisDesignTokens.chartMinimumBarHeight)
+        Group {
+            if chartPoints.isEmpty {
+                Label("No chart data", systemImage: "chart.xyaxis.line")
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
+                    GeometryReader { geometry in
+                        let width = max(
+                            geometry.size.width,
+                            min(
+                                CGFloat(chartPoints.count) * JarvisDesignTokens.chartMinimumPointSpacing,
+                                JarvisDesignTokens.chartMaximumWidth
                             )
-                            context.fill(Path(roundedRect: rect, cornerRadius: JarvisDesignTokens.compactSpacing / 2), with: .color(color))
+                        )
+                        ScrollView(.horizontal) {
+                            Chart(chartPoints) { point in
+                                if data.kind == .bar {
+                                    BarMark(
+                                        x: .value("X", point.x),
+                                        yStart: .value("Baseline", 0),
+                                        yEnd: .value("Y", point.y)
+                                    )
+                                    .position(by: .value("Series", point.series))
+                                    .foregroundStyle(by: .value("Series", point.series))
+                                } else if data.kind == .area {
+                                    AreaMark(
+                                        x: .value("X", point.x),
+                                        yStart: .value("Baseline", 0),
+                                        yEnd: .value("Y", point.y)
+                                    )
+                                    .foregroundStyle(by: .value("Series", point.series))
+                                    .opacity(JarvisDesignTokens.chartAreaOpacity)
+                                    LineMark(x: .value("X", point.x), y: .value("Y", point.y))
+                                        .foregroundStyle(by: .value("Series", point.series))
+                                } else {
+                                    LineMark(x: .value("X", point.x), y: .value("Y", point.y))
+                                        .foregroundStyle(by: .value("Series", point.series))
+                                }
+                            }
+                            .chartForegroundStyleScale(
+                                domain: data.series.map(\.name),
+                                range: data.series.indices.map { JarvisDesignTokens.chartSeriesColors[$0 % JarvisDesignTokens.chartSeriesColors.count] }
+                            )
+                            .chartXScale(domain: xDomain)
+                            .chartYScale(domain: yDomain)
+                            .chartXAxis {
+                                AxisMarks(values: xAxisValues) { value in
+                                    AxisValueLabel {
+                                        if let number = value.as(Double.self) {
+                                            Text(xLabel(number))
+                                        }
+                                    }
+                                }
+                            }
+                            .chartYAxis {
+                                AxisMarks(position: .leading, values: yAxisValues) { value in
+                                    AxisGridLine()
+                                    AxisTick()
+                                    AxisValueLabel {
+                                        if let number = value.as(Double.self) {
+                                            Text(formatNumber(number))
+                                        }
+                                    }
+                                }
+                            }
+                            .chartLegend(position: .bottom, alignment: .leading)
+                            .frame(width: width, height: JarvisDesignTokens.chartHeight)
+                            .accessibilityLabel(chartSummary)
                         }
-                    } else {
-                        var path = Path()
-                        path.move(to: points[0])
-                        for point in points.dropFirst() { path.addLine(to: point) }
-                        if data.kind == .area {
-                            var area = path
-                            area.addLine(to: CGPoint(x: points.last!.x, y: size.height))
-                            area.addLine(to: CGPoint(x: points[0].x, y: size.height))
-                            area.closeSubpath()
-                            context.fill(area, with: .color(color.opacity(JarvisDesignTokens.chartAreaOpacity)))
-                        }
-                        context.stroke(path, with: .color(color), lineWidth: JarvisDesignTokens.chartLineWidth)
                     }
-                }
-            }
-            .frame(height: JarvisDesignTokens.chartHeight)
-            .accessibilityLabel(chartSummary)
+                    .frame(height: JarvisDesignTokens.chartHeight)
 
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
-                ForEach(Array(data.series.enumerated()), id: \.offset) { index, series in
-                    Label(series.name, systemImage: "line.3.horizontal")
-                        .labelStyle(ChartLegendLabelStyle(color: colors[index % colors.count]))
+                    DisclosureGroup("Show values") {
+                        VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
+                            ForEach(Array(data.series.enumerated()), id: \.offset) { _, series in
+                                VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
+                                    Text(series.name)
+                                        .font(.subheadline.weight(.semibold))
+                                    ForEach(Array(series.points.enumerated()), id: \.offset) { _, point in
+                                        Text("\(label(point.x)) · \(formatNumber(point.y))")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, JarvisDesignTokens.compactSpacing)
+                    }
                 }
             }
         }
+    }
+
+    private var chartPoints: [WorkspaceChartDataPoint] {
+        let allPoints = data.series.flatMap(\.points)
+        let categorical = data.kind == .bar || allPoints.contains { if case .string = $0.x { true } else { false } }
+        let categories = categoryLabels
+        let points = data.series.enumerated().flatMap { seriesIndex, series in
+            series.points.enumerated().map { pointIndex, point in
+                let position: Double
+                switch point.x {
+                case .number(let value):
+                    position = categorical
+                        ? Double(categories.firstIndex(of: label(point.x)) ?? 0)
+                        : value
+                case .string:
+                    position = Double(categories.firstIndex(of: label(point.x)) ?? 0)
+                }
+                return WorkspaceChartDataPoint(
+                    id: "\(seriesIndex)-\(pointIndex)",
+                    seriesIndex: seriesIndex,
+                    pointIndex: pointIndex,
+                    series: series.name,
+                    x: position,
+                    y: point.y
+                )
+            }
+        }
+        return points.sorted {
+            if $0.seriesIndex != $1.seriesIndex { return $0.seriesIndex < $1.seriesIndex }
+            return categorical ? $0.pointIndex < $1.pointIndex : $0.x < $1.x
+        }
+    }
+
+    private var categoryLabels: [String] {
+        var labels: [String] = []
+        for point in data.series.flatMap(\.points) {
+            let value = label(point.x)
+            if !labels.contains(value) { labels.append(value) }
+        }
+        return labels
+    }
+
+    private var xDomain: ClosedRange<Double> {
+        if data.kind == .bar || data.series.flatMap(\.points).contains(where: {
+            if case .string = $0.x { true } else { false }
+        }) {
+            let count = Double(max(categoryLabels.count, 1))
+            return -0.5...(count - 0.5)
+        }
+        let values = chartPoints.map(\.x)
+        guard let minimum = values.min(), let maximum = values.max() else { return 0...1 }
+        return minimum == maximum ? (minimum - 0.5)...(maximum + 0.5) : minimum...maximum
+    }
+
+    private var yDomain: ClosedRange<Double> {
+        let values = chartPoints.map(\.y)
+        guard var minimum = values.min(), var maximum = values.max() else { return 0...1 }
+        if data.kind != .line {
+            minimum = min(minimum, 0)
+            maximum = max(maximum, 0)
+        }
+        if minimum == maximum {
+            minimum -= 0.5
+            maximum += 0.5
+        }
+        return minimum...maximum
+    }
+
+    private var xAxisValues: [Double] {
+        if data.kind == .bar || data.series.flatMap(\.points).contains(where: {
+            if case .string = $0.x { true } else { false }
+        }) {
+            let count = categoryLabels.count
+            let stride = max(1, Int(ceil(Double(count) / 6)))
+            var values = categoryLabels.indices.filter { $0 % stride == 0 }.map(Double.init)
+            if count > 0, values.last != Double(count - 1) { values.append(Double(count - 1)) }
+            return values
+        }
+        let range = xDomain
+        return (0...4).map { range.lowerBound + (range.upperBound - range.lowerBound) * Double($0) / 4 }
+    }
+
+    private var yAxisValues: [Double] {
+        let range = yDomain
+        let rawStep = (range.upperBound - range.lowerBound) / 4
+        let magnitude = pow(10, floor(log10(rawStep)))
+        let normalized = rawStep / magnitude
+        let step = (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude
+        let first = floor(range.lowerBound / step) * step
+        return (0..<7).map { first + Double($0) * step }
+            .filter { $0 >= range.lowerBound - step / 2 && $0 <= range.upperBound + step / 2 }
     }
 
     private var chartSummary: String {
-        "\(data.kind.rawValue.capitalized) chart. " + data.series.map(\.name).joined(separator: ", ")
+        "\(data.kind.rawValue.capitalized) chart. " + data.series.map { series in
+            guard let minimum = series.points.map(\.y).min(),
+                  let maximum = series.points.map(\.y).max() else {
+                return "\(series.name), no values"
+            }
+            return "\(series.name), \(series.points.count) points, from \(formatNumber(minimum)) to \(formatNumber(maximum))"
+        }.joined(separator: ". ")
+    }
+
+    private func xLabel(_ value: Double) -> String {
+        if data.kind == .bar || data.series.flatMap(\.points).contains(where: {
+            if case .string = $0.x { true } else { false }
+        }) {
+            let index = Int(value.rounded())
+            guard categoryLabels.indices.contains(index) else { return "" }
+            return categoryLabels[index]
+        }
+        return formatNumber(value)
+    }
+
+    private func label(_ coordinate: GeneratedChartPoint.Coordinate) -> String {
+        switch coordinate {
+        case .number(let value): formatNumber(value)
+        case .string(let value): value
+        }
+    }
+
+    private func formatNumber(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...2)))
     }
 }
 
-private struct ChartLegendLabelStyle: LabelStyle {
-    let color: Color
-
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: JarvisDesignTokens.chartLegendSpacing) {
-            Circle()
-                .fill(color)
-                .frame(width: JarvisDesignTokens.chartMarkerSize, height: JarvisDesignTokens.chartMarkerSize)
-                .accessibilityHidden(true)
-            configuration.title
-        }
-    }
+private struct WorkspaceChartDataPoint: Identifiable {
+    let id: String
+    let seriesIndex: Int
+    let pointIndex: Int
+    let series: String
+    let x: Double
+    let y: Double
 }
 
 private struct TaskCardRenderer: View {
@@ -414,11 +567,19 @@ private struct StatusRenderer: View {
 
 private struct ImageRenderer: View {
     let data: GeneratedImageData
+    let previewImage: Image?
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
             ForEach(Array(data.images.enumerated()), id: \.offset) { _, image in
-                if let url = URL(string: image.url) {
+                if let previewImage {
+                    previewImage
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
+                        .accessibilityLabel(image.alt)
+                } else if let url = URL(string: image.url) {
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let loaded):
@@ -501,7 +662,7 @@ private struct GeneratedActionControl: View {
     private var title: String? {
         switch action {
         case .openRoute(let route):
-            route == "/usage" ? "Open Usage" : route == "/settings" ? "Open Settings" : nil
+            route == "/usage" ? "Open Usage" : route == "/settings" ? "Open Settings" : "Route unavailable: \(route)"
         case .openLink(_, let label):
             label
         case .callTool(let tool):
@@ -512,7 +673,8 @@ private struct GeneratedActionControl: View {
             case .restore: "Restore view"
             case .close: "Close view"
             case .minimise: "Minimise view"
-            case .move, .resize: nil
+            case .move: "Move view"
+            case .resize: "Resize view"
             }
         }
     }
@@ -583,6 +745,7 @@ private func display(_ value: JSONValue) -> String {
     }
 }
 
+#if DEBUG
 private enum GeneratedWorkspacePreviewSamples {
     private static let payloads = [
         """
@@ -595,7 +758,7 @@ private enum GeneratedWorkspacePreviewSamples {
         {"version":1,"title":"Synthetic detail","renderer":"detail","source":{"id":"fixture","status":"complete"},"data":{"fields":[{"label":"Owner","value":"Synthetic"},{"label":"State","value":"Ready"}]}}
         """,
         """
-        {"version":1,"title":"Synthetic text","renderer":"text","source":{"id":"fixture","status":"complete"},"data":{"format":"markdown","content":"**Synthetic** generated content."},"actions":[{"type":"open-route","route":"/usage"},{"type":"open-link","url":"https://example.invalid","label":"Open source"},{"type":"call-tool","tool":"read_fixture"},{"type":"window","operation":"close","windowId":"preview"}]}
+        {"version":1,"title":"Synthetic text","renderer":"text","source":{"id":"fixture","status":"complete"},"data":{"format":"markdown","content":"**Synthetic** generated content."}}
         """,
         """
         {"version":1,"title":"Synthetic timeline","renderer":"timeline","source":{"id":"fixture","status":"complete"},"data":{"events":[{"at":"Today","title":"Created","description":"Synthetic event"},{"at":"Earlier","title":"Updated"}]}}
@@ -639,7 +802,7 @@ private enum GeneratedWorkspacePreviewSamples {
 }
 
 private struct GeneratedWorkspacePreviewGallery: View {
-    @StateObject private var runtime = WorkspaceRuntime(client: nil, webAppURL: URL(string: "https://example.invalid"))
+    @StateObject private var runtime = WorkspaceRuntime(client: nil, webAppURL: nil)
 
     var body: some View {
         NavigationStack {
@@ -649,7 +812,8 @@ private struct GeneratedWorkspacePreviewGallery: View {
                         GeneratedViewContent(
                             view: view,
                             runtime: runtime,
-                            webAppURL: runtime.webAppURL,
+                            webAppURL: nil,
+                            previewImage: Image(systemName: "photo"),
                             onAction: { _ in }
                         )
                         .padding(JarvisDesignTokens.contentInset)
@@ -669,3 +833,4 @@ private struct GeneratedWorkspacePreviewGallery: View {
 #Preview("Generated workspace renderers") {
     GeneratedWorkspacePreviewGallery()
 }
+#endif

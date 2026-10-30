@@ -2786,3 +2786,25 @@ and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
 stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
 unbuilt areas and Settings use title-only placeholders until their screen
 issues are implemented. Reduced Motion removes settling animation.
+
+## Native iOS Workspaces (P15-14; 30 October 2026)
+
+Use the system navigation bar with an inline Workspaces title and refresh action,
+then a text-and-icon kind filter, search field and native grouped list. Preserve
+the web order of Pinned, Today, This week and Earlier; native menus and swipe
+actions expose pin, rename and remove. Opening a supported item presents one
+large native sheet. Shared geometry and chart values live in
+`JarvisDesignTokens` in `apps/ios/Jarvis/JarvisSidebar.swift`; SwiftUI system
+typography, colors, symbols, controls and scrolling remain the default.
+Renderer subviews adapt the heterogeneous generated-view payloads to their native
+components. Charts use Apple's Charts framework for numeric/categorical axes,
+grouped bars, area baselines and its accessible values instead of a custom plot.
+
+The requested `?screen=workspaces&state=...` frame is not present in the checked-in
+`docs/ios/design/board.html`; its controls still expose Chat and other surfaces,
+so no pixel match is claimed. The native screen keeps search above the results
+instead of assuming the missing frame's placement. It has no create/plus action
+because neither the web Workspaces pane nor the existing backend contract has a
+create route. `html-app`, `knowledge-graph` and `code` remain plain unsupported
+cards; their optional link opens only a validated configured HTTPS web-app root,
+not a guessed item deep link. HTML, JavaScript and CSS are never executed.

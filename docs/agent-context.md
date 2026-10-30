@@ -6343,6 +6343,25 @@ through `GeneratedViewDecodingContext` on `JSONDecoder.userInfo` when available.
 The Swift source status also accepts `running`, matching the runtime guard even
 though the TypeScript declaration and JSON schema omit it.
 
+P15-14 adds the native Workspaces list and generated-view sheet in the app target.
+Its `JarvisWorkspacesClient` uses only the existing list/open/patch/delete routes;
+`WorkspaceRuntime` registers a phone snapshot, applies supported commands from
+the existing `/now/events` stream and promptly acknowledges refused or applied
+outcomes. Native generated-view previews cover each contracted renderer and
+unknown-version fallback with synthetic data; Core fixture tests cover the
+existing routes and command acknowledgement. Run `swift build` and `swift test`
+from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
+require the existing Mac compile check; no simulator boot or UI-test job was
+added.
+
+The list renders table, list, detail, text, timeline, chart, task-card, status
+and image views. HTML-app, knowledge-graph and code remain unsupported cards,
+and supplied HTML is not executed. `JARVIS_WEB_APP_URL` is optional and accepts
+only an HTTPS origin; it does not identify a workspace item. The app currently
+requires an existing Keychain session and configured `JARVIS_API_BASE_URL`;
+native sign-in is not implemented. Active-client choice and command replay after
+reconnect remain unverified.
+
 ## iOS Phase 1b: owner-started TestFlight upload
 
 `.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only

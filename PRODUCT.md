@@ -224,6 +224,17 @@ values, legacy API/tool routes, contract aliases, the SQL table synonym and the
 synchronized job-result column added by migration 0067. Workspace delivery
 remains a separate action.
 
+## iPhone Workspaces (P15-14)
+
+The native Workspaces screen reuses the existing saved-item routes and workspace
+command stream. It provides search, kind filters, Pinned/Today/This week/Earlier
+groups, refresh, open, pin, rename and remove, and presents one generated view at
+a time in a native full-height sheet. Table, list, detail, text, timeline, chart,
+task-card, status and image views render natively. HTML apps, knowledge graphs,
+code views and unknown renderers remain non-executable unsupported cards until
+their native presentation is decided. No create action or new backend route is
+introduced.
+
 ## Conversational finding feedback (#1240)
 
 The owner can mark one proactive finding seen, dismiss it, snooze it, or rate it

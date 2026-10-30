@@ -1423,6 +1423,27 @@ web TypeScript/schema declaration omits source status `running`, while
 `isGeneratedView` accepts it; the Swift source model follows the runtime guard
 pending a contract decision.
 
+### iOS Workspaces screen and app control (P15-14)
+
+The SwiftUI Workspaces screen uses `JarvisWorkspacesClient` for the existing
+`GET /workspaces`, `PATCH`/`DELETE /workspaces/:id` and
+`POST /workspaces/:id/open` routes. `WorkspaceRuntime` consumes the existing
+`/now/events` stream, registers phone snapshots and applies supported
+navigate/present/focus/dismiss commands before acknowledging them within the
+event deadline. Unsupported commands are acknowledged as refused with a short
+reason; there is no iOS-specific backend path.
+
+Native renderers cover table, list, detail, text, timeline, chart, task-card,
+status and image; the chart renderer uses the iOS Charts framework with no
+third-party dependency. The undecided HTML-app, knowledge-graph and code types
+and unknown versions render as unsupported cards; supplied HTML is never executed.
+The optional `JARVIS_WEB_APP_URL` is restricted to an HTTPS origin and only
+opens the web-app root because the contract has no item deep link. The app uses
+an existing Keychain session when configured; native sign-in remains a separate
+unimplemented flow. The backend's active-client choice and post-reconnect command
+replay remain unverified, so opening from Workspaces does not assume the command
+targets the phone.
+
 ### iOS fixture replay (P15-08)
 
 `FixtureTransport` implements the core HTTP and streaming transport seam without

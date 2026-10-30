@@ -130,7 +130,11 @@ final class WorkspaceRuntime: ObservableObject {
         case .focus, .restore:
             guard let view = knownViews[action.windowId] else { return false }
             presentedView = PresentedWorkspaceView(viewId: action.windowId, view: view)
-        case .close, .minimise:
+        case .close:
+            guard knownViews[action.windowId] != nil else { return false }
+            knownViews.removeValue(forKey: action.windowId)
+            if presentedView?.viewId == action.windowId { presentedView = nil }
+        case .minimise:
             guard knownViews[action.windowId] != nil else { return false }
             if presentedView?.viewId == action.windowId { presentedView = nil }
         case .move, .resize:
