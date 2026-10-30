@@ -199,6 +199,7 @@ final class JarvisWorkspaceClientTests: XCTestCase {
         let events = [
             ("workspace-ready", ["sessionId": sessionId] as [String: Any]),
             ("now", [:] as [String: Any]),
+            ("refresh", [:] as [String: Any]),
             ("status", ["kind": "approval_pending"] as [String: Any]),
             ("workspace-command", [
                 "command": ["commandId": "fixture_command", "operation": "show", "viewId": "fixture_view"],
@@ -224,6 +225,7 @@ final class JarvisWorkspaceClientTests: XCTestCase {
 
         XCTAssertEqual(received, [
             .workspaceReady(sessionId: sessionId),
+            .pendingConfirmationsChanged,
             .pendingConfirmationsChanged,
             .pendingConfirmationsChanged,
             .workspaceCommand(
@@ -295,7 +297,7 @@ final class JarvisWorkspaceClientTests: XCTestCase {
                 )),
                 .stream(sseResponse("workspace-ready", ["sessionId": second], staysOpen: true)),
             ],
-            responses: []
+            responses: [HTTPResponse(statusCode: 204)]
         )
         let workspace = makeWorkspaceClient(
             transport: transport,
@@ -306,7 +308,10 @@ final class JarvisWorkspaceClientTests: XCTestCase {
             var received: [WorkspaceEvent] = []
             for try await event in workspace.events() {
                 received.append(event)
-                if received.count == 2 { return received }
+                if received.count == 2 {
+                    try await workspace.register(WorkspaceSnapshot(windows: [], contextPanelOpen: false))
+                    return received
+                }
             }
             return received
         }
@@ -317,7 +322,11 @@ final class JarvisWorkspaceClientTests: XCTestCase {
             .workspaceReady(sessionId: second),
         ])
         let requests = await transport.recordedRequests()
-        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests.count, 3)
+        XCTAssertEqual(requests[2].url.path, "/api/now/workspace/state")
+        let registrationBody = try XCTUnwrap(requests[2].body)
+        let registration = try XCTUnwrap(JSONSerialization.jsonObject(with: registrationBody) as? [String: Any])
+        XCTAssertEqual(registration["sessionId"] as? String, second)
     }
 
     private func makeWorkspaceClient(
