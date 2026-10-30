@@ -9361,6 +9361,23 @@ environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
 
+## 30 October 2026 — P15-09 Apple adapter boundary
+
+Keep Apple framework implementations in the iOS app target. The URLSession
+adapter implements the existing HTTP and streaming seam without adding
+backend-specific headers or routes; the app composition reads
+`JARVIS_API_BASE_URL` from build configuration and receives its access-token
+provider as a dependency so MSAL remains separate.
+
+Store the session credential as a generic-password Keychain item with
+`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. This allows access after
+the device's first unlock for later background use while preventing migration
+to another device; synchronizable is explicitly disabled. Never log token
+values. The checked-out `JarvisCore` has no WebSocket seam, so defer its Apple
+adapter until #1391 lands rather than inventing or changing the contract.
+The existing Mac job compiles these app-target adapters but does not run
+simulator tests.
+
 ## 30 October 2026 — ready-PR iOS screenshot artifact
 
 Extend the existing ready-PR-only `macos-26` simulator job rather than adding a

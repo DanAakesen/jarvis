@@ -6193,6 +6193,18 @@ consumer cancellation stops the stream. Reattach retries transient failures
 every two seconds for at most 15 minutes using an injectable clock. No backend
 route, Apple framework or third-party dependency is added.
 
+P15-09 implements the `HTTPTransport` seam in the app target with
+`URLSessionTransport`; request method, URL, headers and body are passed through,
+each request receives its configured timeout, and stream cancellation stops
+the URLSession task. `KeychainTokenStore` stores the token as a generic password
+with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and synchronization
+disabled. `JarvisComposition` reads `JARVIS_API_BASE_URL` from the Info.plist
+build setting and accepts the access-token provider as an input; it adds no
+production host or sign-in implementation. There is no WebSocket seam in
+`JarvisCore` yet, so the app does not define a WebSocket adapter until #1391
+lands. App-target adapters are compile-checked by the Mac job only; CI does not
+boot a simulator or run adapter tests.
+
 P15-05 adds `JarvisApprovalsClient` and `JarvisWorkspaceClient` on those same
 authenticated HTTP and SSE seams. Approvals decode only the pending-confirmation
 fields from `GET /now`; each approve/reject `POST` is sent once, and 404 means
