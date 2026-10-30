@@ -1,3 +1,20 @@
+## 30 October 2026 — build the approved native iPhone Voice screen (P15-11 / #1401)
+
+Use the approved Voice concept as a visual reference, not a source of literal
+values. Keep protocol/session logic in pure Swift `JarvisCore`, and implement
+audio, camera, screen capture and SwiftUI in thin Apple targets. Read the existing
+`voice.default_language` through `GET /settings`, use the same voice socket and
+vision routes as web, and add no iOS-specific backend path. The ReplayKit
+extension passes bounded screen JPEGs through the registered App Group. Keep the
+session active when the screen is minimized; do not make Face ID locking change
+voice lifecycle. Background audio, Bluetooth, route changes, call interruption
+handling, microphone recovery after device lock, microphone recovery after a
+phone call, CarPlay, Live Activity and Action Button remain unverified and are
+separate follow-ups requiring a real phone. Linux protocol/contract tests do not
+establish Apple target compilation or device acceptance. The current shell has no
+native sign-in UI, so the screen fails closed when the owner-session token is not
+already present; do not expand this screen into an unapproved auth implementation.
+
 ## 30 October 2026 — stabilize the GitHub chat acceptance read (#1415)
 
 Judge `chat_github_read` by a successful `github_read` / `issue_get` receipt for
@@ -9365,6 +9382,32 @@ Settings render title-only placeholders; Banking remains disabled and marked
 Later. The sidebar uses system colors, typography, scrolling and SF Symbols,
 with shared tokens for custom geometry and motion. No backend changes are part
 of this decision.
+
+## 30 October 2026 — P15-10 native Chat screen
+
+The owner approved the Chat concept for implementation in this screen issue.
+Use the board for composition only. Keep chat/SSE, history, attachment, Now
+feed and confirmation behavior on the existing authenticated web routes; keep
+time grouping and Now-feed decoding in the Linux-testable `JarvisCore`.
+`JarvisDesignSystem.swift` is the shared source for native screen geometry and
+glass-related tokens.
+
+Message bubbles are custom because native SwiftUI has no conversation-specific
+sender alignment with the approved glass treatment. The inline Now bar is
+custom to combine live state and a pending confirmation's Approve/Decline
+actions; the activity sheet is custom to present the existing feed categories
+and decisions. Use native scrolling, sheets, file/photo pickers, system glass
+button styles and SF Symbols elsewhere.
+
+The web attachment limits are authoritative: up to five files, documents up
+to 20 MB and images up to 10 MB. Camera/photos stay local until the existing
+upload route is called on send. The app fixture is synthetic and only selected
+by previews and the screenshot launch argument. It supports one sample text
+turn; fixture-mode attachment uploads and feed writes are disabled rather than
+returning fake success. Native Entra sign-in is not implemented here, so the app
+provider fails closed without an existing Keychain session. ReplayKit sharing
+remains disabled until a Broadcast Upload Extension and Stop lifecycle are
+implemented; no backend change is authorized or needed.
 ## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
 
 The TestFlight workflow is separate from aggregate CI and uses only
