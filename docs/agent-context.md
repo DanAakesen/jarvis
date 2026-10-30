@@ -6307,23 +6307,42 @@ the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
-and captures the main screen in light and dark appearance plus the open sidebar in
-light appearance. The sidebar screenshot uses the `--screenshot-sidebar-open`
-launch argument to initialize the real navigation shell in its open state. It
-uploads those PNGs as a 14-day workflow artifact and posts or updates one pull request comment with
-the artifact link. GitHub comments cannot display files directly from workflow
-artifacts, so the images are not inline previews; open the artifact to view them.
-This job does not sign, use secrets, or upload to TestFlight.
+and captures the Chat screen in light and dark appearance plus the open sidebar
+in light appearance. Chat captures use `--screenshot-chat-fixture` to select
+clearly marked synthetic data without a backend; the sidebar capture also uses
+`--screenshot-sidebar-open` to initialize the real navigation shell in its open
+state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
+one pull request comment with the artifact link. GitHub comments cannot display
+files directly from workflow artifacts, so the images are not inline previews;
+open the artifact to view them. This job does not sign, use secrets, or upload
+to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
-SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
-and other enabled destinations plus Settings are title-only pages with native
-back navigation. Banking remains disabled and labeled Later. The fixed-behind
+SwiftUI binds them to a native `NavigationStack`. Chat is the root screen, and
+other enabled destinations plus Settings are title-only pages with native back
+navigation. Banking remains disabled and labeled Later. The fixed-behind
 sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
-its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
-`swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
-validation.
+its shared styling and gesture tokens are in `JarvisSidebar.swift`.
+
+P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
+screen state and calls the existing chat, Now-feed, approvals and workspace
+clients. The Now bar and Needs you sheet use existing `/now` snapshot, activity
+dismissal, confirmation and event routes. Final history supplies persisted tool
+outcomes; reattachment prefers the active turn for the latest displayed session,
+then falls back to the first server-ordered turn; the active-turn lookup repeats
+when the Now stream reconnects. `ChatHistoryPagingState` preserves the oldest
+loaded cursor across refreshes of the latest page. The web
+limits are five attachments, up to 20 MB for documents and
+10 MB for images. Local camera/photo data is uploaded only on send. Synthetic
+fixtures are selected only in previews and screenshot mode. The app has no
+native Entra sign-in provider, so its unavailable provider fails closed without
+an existing Keychain session. ReplayKit remains disabled until its Broadcast
+Upload Extension and Stop lifecycle exist. Fixture mode supports one sample
+text turn; attachment uploads and feed writes are disabled rather than faked.
+There is no backend route specific to iOS. Run `swift build` and `swift test` from
+`apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
+SwiftUI compile check.
 
 P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
 `WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English

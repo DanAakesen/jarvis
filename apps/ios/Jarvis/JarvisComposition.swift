@@ -5,6 +5,14 @@ enum JarvisCompositionError: Error {
     case missingBaseURL
 }
 
+struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {
+    func currentToken(for request: HTTPRequest) async throws -> String {
+        throw JarvisClientError.signInRequired
+    }
+
+    func requestSignIn() async {}
+}
+
 enum JarvisComposition {
     static func makeClient(
         accessTokenProvider: any AccessTokenProvider,

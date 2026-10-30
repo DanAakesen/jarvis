@@ -8,12 +8,32 @@ struct ContentView: View {
     @State private var animationTargetProgress: CGFloat = 0
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?
+    private let chatClient: JarvisClient?
+    private let startupError: String?
+    private let fixtureMode: Bool
 
     init() {
         let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
+        let fixtureMode = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture")
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
+        }
+        self.fixtureMode = fixtureMode
+        if fixtureMode {
+            let client = try? JarvisFixtureScenario.makeClient()
+            chatClient = client
+            startupError = client == nil ? "Fixture preview is unavailable." : nil
+        } else {
+            do {
+                chatClient = try JarvisComposition.makeClient(
+                    accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+                )
+                startupError = nil
+            } catch {
+                chatClient = nil
+                startupError = "Chat isn't configured."
+            }
         }
         _navigation = State(initialValue: initialNavigation)
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
@@ -47,9 +67,23 @@ struct ContentView: View {
                         set: { navigation.setPath($0) }
                     )
                 ) {
-                    JarvisPlaceholderView(destination: .chat)
+                    JarvisChatScreen(
+                        client: chatClient,
+                        fixtureMode: fixtureMode,
+                        startupError: startupError,
+                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                    )
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            JarvisPlaceholderView(destination: destination)
+                            if destination == .chat {
+                                JarvisChatScreen(
+                                    client: chatClient,
+                                    fixtureMode: fixtureMode,
+                                    startupError: startupError,
+                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                                )
+                            } else {
+                                JarvisPlaceholderView(destination: destination)
+                            }
                         }
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
