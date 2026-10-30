@@ -20,6 +20,23 @@
 	<false/>
 	<key>JARVIS_API_BASE_URL</key>
 	<string>$(JARVIS_API_BASE_URL)</string>
+	<key>JARVIS_ENTRA_CLIENT_ID</key>
+	<string>$(JARVIS_ENTRA_CLIENT_ID)</string>
+	<key>JARVIS_ENTRA_AUTHORITY_URL</key>
+	<string>$(JARVIS_ENTRA_AUTHORITY_URL)</string>
+	<key>JARVIS_ENTRA_API_SCOPE</key>
+	<string>$(JARVIS_ENTRA_API_SCOPE)</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock Jarvis with Face ID.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>msauth.$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

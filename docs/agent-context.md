@@ -6316,9 +6316,25 @@ SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
 and other enabled destinations plus Settings are title-only pages with native
 back navigation. Banking remains disabled and labeled Later. The fixed-behind
 sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
-its shared styling and gesture tokens are in `JarvisSidebar.swift`. Run
+its shared styling and gesture tokens are in `JarvisDesignTokens.swift`. Run
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
 validation.
+
+P15-16 adds `JarvisGatePolicy` to pure-Swift `JarvisCore`; its Linux tests cover
+cold start, the 60-second background threshold, missing/expired sessions, denied
+accounts and locked/unlocked routing. The app target uses MSAL 2.17.0 for the
+tenant-specific `access_as_user` scope, `JarvisClient` for the existing
+`POST /auth/session` route, and `KeychainTokenStore` for the opaque session token.
+Set `JARVIS_ENTRA_CLIENT_ID`, `JARVIS_ENTRA_AUTHORITY_URL`,
+`JARVIS_ENTRA_API_SCOPE` and `JARVIS_API_BASE_URL` as app build settings; do not
+commit their values. The owner-started TestFlight workflow reads the same values
+from the protected `ios-testflight` environment. The app covers its content while
+inactive, locks on cold start and after 60 seconds in the background, and uses
+LocalAuthentication with the system passcode fallback. Face ID failure, account
+denial, sign-in failure and network failure remain distinct states. Interface
+copy follows the preferred iOS language, Danish or English. No backend route is
+added. The app target needs the Mac build for type-checking; device auth and
+MSAL redirect acceptance remain unverified here.
 
 P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
 `WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English
@@ -6344,7 +6360,9 @@ though the TypeScript declaration and JSON schema omit it.
 on manual dispatch. The single `macos-26` job uses the `ios-testflight`
 environment; the owner must restrict that environment to the `main` branch and
 configure `APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`,
-`APP_STORE_CONNECT_ISSUER_ID`, and `APPLE_TEAM_ID` there before dispatching.
+`APP_STORE_CONNECT_ISSUER_ID`, `APPLE_TEAM_ID`, `JARVIS_API_BASE_URL`,
+`JARVIS_ENTRA_CLIENT_ID`, `JARVIS_ENTRA_AUTHORITY_URL`, and
+`JARVIS_ENTRA_API_SCOPE` there before dispatching.
 The workflow refuses non-main refs, captures `xcodebuild` output rather than
 logging signing identifiers, writes the key with mode 600, and deletes it in
 an always-run cleanup step.

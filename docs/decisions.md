@@ -72,6 +72,20 @@ provider for sign-in; there is no refresh flow. Retries are bounded and limited
 to idempotent requests after transient failures, so tool and session mutations
 are sent at most once.
 
+## 30 October 2026 — iOS Sign-in and Lock gate (P15-16 / #1417)
+
+Build the owner-approved Sign-in and Face ID Lock frames as native SwiftUI; the
+board is a visual reference, not a source of literal values. `JarvisGatePolicy`
+in `JarvisCore` owns the cold-start and 60-second background lock decision and
+routes missing/expired sessions and denied accounts. The app uses MSAL 2.17.0
+for tenant-specific delegated `access_as_user`, `JarvisClient` for the existing
+owner-session route, and the device-only Keychain store for its opaque session
+token. Use `LocalAuthentication` for Face ID and the system passcode fallback.
+Keep app content blurred and inaccessible while locked, with an opaque privacy
+cover while inactive. Put auth configuration in protected build configuration,
+not repository files. No backend route or TestFlight upload is added. Linux
+tests pass; the Mac app-target build and physical-device auth remain unverified.
+
 ## 30 October 2026 — bounded managed-policy causes (#1373)
 
 Keep existing closed failure reasons and add optional `providerCause` rather than

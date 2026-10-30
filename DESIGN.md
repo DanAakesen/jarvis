@@ -2782,7 +2782,22 @@ change row text/icon styling only, without a row surface or border.
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
-and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
+and motion values live in `apps/ios/Jarvis/JarvisDesignTokens.swift`; destination and
 stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
 unbuilt areas and Settings use title-only placeholders until their screen
 issues are implemented. Reduced Motion removes settling animation.
+
+## Native iOS sign-in and lock (P15-16; 30 October 2026)
+
+The approved Sign-in and Lock frames in `docs/ios/design/board.html` guide the
+composition only. A shared Jarvis orb sits above one native prominent action;
+short failure text stays beside the action. The existing orb identity needs a
+custom SwiftUI graphic because a system control cannot express the Jarvis orb.
+Orb colors, scale, spacing and motion are shared in `JarvisDesignTokens.swift`.
+
+The app uses Danish when the preferred iOS language is Danish and English
+otherwise. Idle orb breathing stops with Reduce Motion; signing-in uses a
+stronger, faster pulse. The app shell is blurred and inaccessible behind the
+gate, and an opaque privacy cover hides it while inactive. Face ID uses the
+system LocalAuthentication prompt; the passcode fallback is also system UI,
+not a custom keypad. No helper text or lock-interval control is shown.

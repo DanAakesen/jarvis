@@ -128,6 +128,24 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(request.headers["Authorization"], authorization("entra.fixture.token"))
     }
 
+    func testTypedAccessTokenProviderNetworkFailureRemainsOffline() async throws {
+        let provider = FakeAccessTokenProvider(
+            token: "entra.fixture.token",
+            failure: .networkFailure
+        )
+        let client = try makeClient(transport: FakeHTTPTransport([]), provider: provider)
+
+        do {
+            _ = try await client.createOwnerSession()
+            XCTFail("Expected network failure")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .networkFailure)
+        }
+
+        let signInRequests = await provider.signInRequests()
+        XCTAssertEqual(signInRequests, 0)
+    }
+
     func testRevokesCreatedSessionWhenTokenCannotBeStored() async throws {
         let transport = FakeHTTPTransport([
             .response(jsonResponse(status: 201, body: sessionJSON)),
@@ -503,14 +521,17 @@ private enum FakeTokenStoreError: Error {
 
 private actor FakeAccessTokenProvider: AccessTokenProvider {
     private let token: String
+    private let failure: JarvisClientError?
     private var signInsRequested = 0
 
-    init(token: String) {
+    init(token: String, failure: JarvisClientError? = nil) {
         self.token = token
+        self.failure = failure
     }
 
     func currentToken(for request: HTTPRequest) async throws -> String {
-        token
+        if let failure { throw failure }
+        return token
     }
 
     func requestSignIn() async {
