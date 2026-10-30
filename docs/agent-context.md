@@ -6181,8 +6181,15 @@ The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
 builds/tests the core and validates project, plist and entitlement metadata;
 the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
-starting a Mac build. The Mac build uses Xcode 26.6 and
-`CODE_SIGNING_ALLOWED=NO`; it does not boot a simulator or run UI tests.
+starting a Mac build. The Mac job uses Xcode 26.6 and
+`CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
+and captures the main screen in light and dark appearance. It uploads those PNGs
+as a 14-day workflow artifact and posts or updates one pull request comment with
+the artifact link. GitHub comments cannot display files directly from workflow
+artifacts, so the images are not inline previews; open the artifact to view them.
+The sidebar-open capture is deferred until the sidebar shell (#1399) provides a
+launch-argument-driven state. This job does not sign, use secrets, or upload to
+TestFlight.
 
 ## iOS Phase 1b: owner-started TestFlight upload
 

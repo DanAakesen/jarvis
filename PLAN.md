@@ -2121,7 +2121,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Active phase:** P15, iOS Phase 1b. The Phase 1a shell and CI are merged; this change adds the manual-only TestFlight workflow and offline checks. Next: owner review/merge, configure the `ios-testflight` environment, then the owner starts and reviews the first live run. The first archive/export/upload remains unproven; no later screen is authorized without the owner's approval.
+- **Active phase:** P15, iOS Phase 1b. The Phase 1a shell and CI are merged; P15-02 adds the manual-only TestFlight workflow, and P15-15 adds ready-PR simulator screenshots. Next: owner review/merge, then verify the hosted screenshot artifact and the separately owner-started first TestFlight run. The first archive/export/upload remains unproven; sidebar-open captures wait for #1399, and no later screen is authorized without the owner's approval.
 - **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
 
 - **Terra main chat (#1337):** request capacity 150 through the existing main-only
@@ -3399,6 +3399,7 @@ no per-screen hardcoded values, and a stated reason for each custom component.
 | --- | --- | --- | --- | --- | --- |
 | P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
 | P15-02 | [#1387](https://github.com/DanAakesen/jarvis/issues/1387) | Manual TestFlight upload workflow (Phase 1b) | Standalone `workflow_dispatch` workflow, main-only signing environment, one pinned-Xcode/XcodeGen `macos-26` archive/upload job, secure temporary key cleanup, no CI call or production deployment selection, offline workflow tests, owner setup/dispatch instructions and updated documents. First archive/export/upload remains unproven until the owner runs it after merging. | P15-01 | In progress |
+| P15-15 | [#1403](https://github.com/DanAakesen/jarvis/issues/1403) | iOS simulator screenshots in CI | Ready PRs selecting iOS boot an iPhone simulator, capture light/dark main-screen PNGs, retain a 14-day artifact, and post/update one PR comment linking it; preserve unsigned builds, ready-PR cost guard and cancellation. Sidebar capture waits for #1399; hosted artifact and comment remain unverified until a qualifying PR run. | P15-01 | In progress |
 
 ## Factory canonical-status parity (16 October 2026)
 
