@@ -227,7 +227,7 @@ public final class JarvisChatClient: Sendable {
                     guard receivedDone else { throw JarvisChatClientError.streamEnded }
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.finish(throwing: Self.mappedStreamError(error))
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -331,6 +331,21 @@ public final class JarvisChatClient: Sendable {
         default:
             return false
         }
+    }
+
+    private static func mappedStreamError(_ error: any Error) -> any Error {
+        if error is CancellationError { return CancellationError() }
+        if let error = error as? JarvisChatClientError { return error }
+        if let error = error as? JarvisClientError { return error }
+        if let failure = error as? HTTPTransportFailure {
+            switch failure {
+            case .network:
+                return JarvisClientError.networkFailure
+            case .timedOut:
+                return JarvisClientError.timedOut
+            }
+        }
+        return JarvisClientError.networkFailure
     }
 
     private static func validID(_ value: String) -> Bool {

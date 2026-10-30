@@ -13,7 +13,6 @@ public enum JarvisClientError: Error, Equatable, Sendable {
     case tokenStoreFailure
     case responseEncodingFailure
     case responseDecodingFailure
-    case responseTooLarge
 }
 
 public struct RetryPolicy: Sendable {

@@ -68,6 +68,24 @@ final class JarvisChatClientTests: XCTestCase {
         }
     }
 
+    func testStreamBodyMapsTransportFailuresToTypedClientErrors() async throws {
+        let body = AsyncThrowingStream<Data, any Error> {
+            $0.finish(throwing: HTTPTransportFailure.network)
+        }
+        let transport = FakeChatTransport([
+            .stream(HTTPStreamResponse(statusCode: 200, body: body)),
+        ])
+        let chat = makeChatClient(transport: transport)
+        let events = try await chat.sendTurn(sessionId: "12", text: "Hi")
+
+        do {
+            _ = try await collect(events)
+            XCTFail("Expected network error")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .networkFailure)
+        }
+    }
+
     func testRejectsInvalidTurnInputWithoutSending() async throws {
         let transport = FakeChatTransport([])
         let chat = makeChatClient(transport: transport)

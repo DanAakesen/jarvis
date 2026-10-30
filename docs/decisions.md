@@ -1,3 +1,14 @@
+## 30 October 2026 — keep chat streaming in JarvisCore (P15-04 / #1389)
+
+Reuse the web application's conversation routes and event payloads; do not add
+an iOS-specific backend path. Keep SSE parsing byte-oriented, preserve unknown
+event names, and expose server error events as typed failures. A default
+streaming adapter keeps existing `HTTPTransport` fakes source-compatible. Retry
+reattachment only for transient failures, at the web client's two-second
+interval and within its 15-minute window; inject the clock for deterministic
+tests. The Linux-testable core owns the chat client and multipart encoding;
+Apple transport implementations remain in the app target.
+
 ## 30 October 2026 — keep iOS networking in the pure-Swift core (P15-03 / #1388)
 
 `JarvisCore` owns the HTTP client and platform replacement seams for transport,
