@@ -3378,6 +3378,10 @@ rename waits for all of them. The rows above keep their original working titles.
 Preparation is done and the owner authorised the foundation phase on 30 October 2026.
 Every screen needs the owner's approval before it is built or shipped.
 
+Acceptance for every P15 screen issue includes the native iOS standards in `docs/ios/build-plan.md`:
+system components, styles and scrolling first, a shared token and component layer for anything custom,
+no per-screen hardcoded values, and a stated reason for each custom component.
+
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | In progress |
