@@ -13,6 +13,7 @@ public enum JarvisClientError: Error, Equatable, Sendable {
     case tokenStoreFailure
     case responseEncodingFailure
     case responseDecodingFailure
+    case responseTooLarge
 }
 
 public struct RetryPolicy: Sendable {
@@ -184,44 +185,20 @@ public final class JarvisClient: Sendable {
         headers: [String: String] = [:],
         body: Data? = nil,
         authorization: Authorization,
-        idempotent: Bool
+        idempotent: Bool,
+        queryItems: [URLQueryItem] = [],
+        accept: String = "application/json",
+        contentType: String? = "application/json"
     ) async throws -> HTTPResponse {
-        var url = configuration.baseURL
-        for component in path {
-            url.append(path: component)
-        }
-        var requestHeaders = headers
-        requestHeaders["Accept"] = "application/json"
-        if body != nil {
-            requestHeaders["Content-Type"] = "application/json"
-        }
-        let unsignedRequest = HTTPRequest(
+        let request = try await makeRequest(
             method: method,
-            url: url,
-            headers: requestHeaders,
+            path: path,
+            headers: headers,
             body: body,
-            timeout: configuration.requestTimeout
-        )
-        let token: String
-        switch authorization {
-        case .current:
-            if let storedToken = try await readStoredToken() {
-                token = storedToken
-            } else {
-                token = try await providerToken(for: unsignedRequest)
-            }
-        case .provider:
-            token = try await providerToken(for: unsignedRequest)
-        case .explicit(let value):
-            token = value
-        }
-        requestHeaders["Authorization"] = ["Bear", "er"].joined() + " " + token
-        let request = HTTPRequest(
-            method: method,
-            url: url,
-            headers: requestHeaders,
-            body: body,
-            timeout: configuration.requestTimeout
+            authorization: authorization,
+            queryItems: queryItems,
+            accept: accept,
+            contentType: contentType
         )
 
         var retries = 0
@@ -277,6 +254,135 @@ public final class JarvisClient: Sendable {
                 throw JarvisClientError.networkFailure
             }
         }
+    }
+
+    func performChatRequest(
+        method: HTTPMethod,
+        path: [String],
+        queryItems: [URLQueryItem] = [],
+        headers: [String: String] = [:],
+        body: Data? = nil,
+        contentType: String? = "application/json",
+        idempotent: Bool,
+        accept: String = "application/json"
+    ) async throws -> HTTPResponse {
+        try await send(
+            method: method,
+            path: path,
+            headers: headers,
+            body: body,
+            authorization: .current,
+            idempotent: idempotent,
+            queryItems: queryItems,
+            accept: accept,
+            contentType: contentType
+        )
+    }
+
+    func performChatStream(
+        method: HTTPMethod,
+        path: [String],
+        body: Data? = nil,
+        accept: String = "text/event-stream"
+    ) async throws -> HTTPStreamResponse {
+        let request = try await makeRequest(
+            method: method,
+            path: path,
+            headers: [:],
+            body: body,
+            authorization: .current,
+            queryItems: [],
+            accept: accept,
+            contentType: "application/json"
+        )
+        try Task.checkCancellation()
+        do {
+            let response = try await transport.stream(request)
+            switch response.statusCode {
+            case 401:
+                await requireSignIn()
+                throw JarvisClientError.signInRequired
+            case 403:
+                throw JarvisClientError.notOwner
+            case 429:
+                throw JarvisClientError.rateLimited(retryAfter: Self.parseRetryAfter(response.header("Retry-After")))
+            case 503:
+                throw JarvisClientError.serviceUnavailable
+            case 200..<300:
+                return response
+            default:
+                throw JarvisClientError.httpStatus(response.statusCode)
+            }
+        } catch let error as JarvisClientError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let failure as HTTPTransportFailure {
+            switch failure {
+            case .network:
+                throw JarvisClientError.networkFailure
+            case .timedOut:
+                throw JarvisClientError.timedOut
+            }
+        } catch {
+            throw JarvisClientError.networkFailure
+        }
+    }
+
+    private func makeRequest(
+        method: HTTPMethod,
+        path: [String],
+        headers: [String: String],
+        body: Data?,
+        authorization: Authorization,
+        queryItems: [URLQueryItem],
+        accept: String,
+        contentType: String?
+    ) async throws -> HTTPRequest {
+        var url = configuration.baseURL
+        for component in path { url.append(path: component) }
+        if !queryItems.isEmpty {
+            guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+                throw JarvisClientError.invalidBaseURL
+            }
+            components.queryItems = queryItems
+            guard let queryURL = components.url else { throw JarvisClientError.invalidBaseURL }
+            url = queryURL
+        }
+
+        var requestHeaders = headers
+        requestHeaders["Accept"] = accept
+        if body != nil, let contentType {
+            requestHeaders["Content-Type"] = contentType
+        }
+        let unsignedRequest = HTTPRequest(
+            method: method,
+            url: url,
+            headers: requestHeaders,
+            body: body,
+            timeout: configuration.requestTimeout
+        )
+        let token: String
+        switch authorization {
+        case .current:
+            if let storedToken = try await readStoredToken() {
+                token = storedToken
+            } else {
+                token = try await providerToken(for: unsignedRequest)
+            }
+        case .provider:
+            token = try await providerToken(for: unsignedRequest)
+        case .explicit(let value):
+            token = value
+        }
+        requestHeaders["Authorization"] = ["Bear", "er"].joined() + " " + token
+        return HTTPRequest(
+            method: method,
+            url: url,
+            headers: requestHeaders,
+            body: body,
+            timeout: configuration.requestTimeout
+        )
     }
 
     private func readStoredToken() async throws -> String? {
