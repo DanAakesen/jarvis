@@ -9166,3 +9166,32 @@ Still open: the owner's role (Account Holder or Admin), who files the CarPlay
 request, and the owner's go for the foundation phase, which is still No. No
 implementation or setup is authorized.
 See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
+
+## 30 October 2026 — iOS foundation phase go and Mac cost guard
+
+The owner gave the go for the iOS foundation phase, replacing the earlier No.
+Phase 1a, the project skeleton and checks, is the first work. Later phases still
+need their own go. The owner also set the build policy: build and test as much as
+possible locally, and ship as much as possible on every GitHub build.
+
+The cost guard follows from that. The owner's PC has no Swift toolchain and cloud
+agents run on Ubuntu, so a Mac run is the only compile check for the SwiftUI
+layer. Standard `macos-26` runners are free while the repository is public and
+the account is personal. Larger macOS runners are billed even for public
+repositories and are not available to a personal account, so xlarge labels are
+never used. The workflows are designed as if the minutes were billed: GitHub
+lists $0.062 per macOS minute for private repositories, roughly $0.60 to $0.90
+for a 10 to 15 minute run (estimate).
+
+Rules, set out in the build plan: logic stays in the pure-Swift `JarvisCore`
+package, tested on Linux on every push. The iOS CI has a Linux job and a Mac job
+that runs only after it passes, only for ready pull requests that touch
+`apps/ios/` or shared inputs, with per-pull-request cancellation, a 20 minute
+timeout, a SwiftPM cache, a simulator build without signing, and no simulator
+boot, UI tests or screenshots. Screenshots run only on manual dispatch. The
+TestFlight workflow builds, archives and uploads in one job on merge. Authors
+keep pull requests in draft until the Linux checks pass and batch related
+changes. The owner should set a GitHub Actions budget in Billing as a safety net.
+The dispatcher reviews Actions billing usage at the end of each iOS phase. A
+local Linux Swift toolchain for the owner is optional and needs the owner's go.
+See [build plan](ios/build-plan.md) and [iOS app](../iOS%20app.md).
