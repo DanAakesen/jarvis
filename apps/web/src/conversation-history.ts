@@ -172,13 +172,39 @@ const blockedSessionCodes: ReadonlySet<string> = new Set(['managed_session_busy'
   'managed_turn_already_claimed', 'managed_target_mismatch', 'managed_unavailable', 'managed_policy_turn_failed']);
 
 /** Only client-controlled messages and finite server codes reach the test-conversation error view. */
+export interface ManagedProviderCause {
+  readonly httpStatus?: number;
+  readonly code?: string;
+  readonly param?: string;
+  readonly exceptionType?: string;
+}
+
+function managedProviderCause(value: unknown): ManagedProviderCause | undefined {
+  if (!isRecord(value)) return undefined;
+  const cause: { httpStatus?: number; code?: string; param?: string; exceptionType?: string } = {};
+  if (typeof value.httpStatus === 'number' && Number.isInteger(value.httpStatus) &&
+      value.httpStatus >= 100 && value.httpStatus <= 599) cause.httpStatus = value.httpStatus;
+  for (const key of ['code', 'param'] as const) {
+    const field = value[key];
+    if (typeof field === 'string' && /^[a-z0-9_.]{1,48}$/u.test(field) && !field.includes('\n')) cause[key] = field;
+  }
+  if (typeof value.exceptionType === 'string' &&
+      /^[A-Za-z_][A-Za-z0-9_]{0,47}$/u.test(value.exceptionType) &&
+      !value.exceptionType.includes('\n')) cause.exceptionType = value.exceptionType;
+  return Object.keys(cause).length ? cause : undefined;
+}
+
 export class ChatTurnError extends Error {
   readonly blocksSession: boolean;
+  readonly providerCause: ManagedProviderCause | undefined;
   constructor(message: string, readonly code: ChatTurnFailureCode | undefined = undefined,
-    readonly delivery: 'not_accepted' | 'accepted' | 'unknown' = 'unknown') {
+    readonly delivery: 'not_accepted' | 'accepted' | 'unknown' = 'unknown', providerCause?: unknown) {
     super(code ? `${message} (${code})` : message);
     this.name = 'ChatTurnError';
     this.blocksSession = code !== undefined && blockedSessionCodes.has(code);
+    this.providerCause = code !== undefined &&
+      ['managed_policy_turn_failed', 'managed_policy_setup_failed', 'managed_response_failed'].includes(code)
+      ? managedProviderCause(providerCause) : undefined;
   }
 }
 function chatFailureCode(value: unknown): ChatTurnFailureCode | undefined {
@@ -407,7 +433,8 @@ export async function sendChatTurn(
       const fallback = 'I could not finish the reply. A task action may still have completed; check its status before trying again.';
       const warning = stableChatMessage(isRecord(payload) ? payload.error : undefined, fallback);
       const message = code ? `${chatFailureMessage(code)}${blockedSessionCodes.has(code) || code === 'managed_policy_setup_failed' ? '' : ` ${warning}`}` : warning;
-      throw new ChatTurnError(message, code, acceptedId ? 'accepted' : 'unknown');
+      throw new ChatTurnError(message, code, acceptedId ? 'accepted' : 'unknown',
+        isRecord(payload) ? payload.providerCause : undefined);
     }
     if (event.event === 'user') {
       if (!isChatMessage(payload, 'dan', session.id)) throw new Error('Jarvis returned an invalid chat stream.');

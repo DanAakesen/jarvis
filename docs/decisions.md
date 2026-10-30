@@ -1,3 +1,28 @@
+## 30 October 2026 — keep iOS networking in the pure-Swift core (P15-03 / #1388)
+
+`JarvisCore` owns the HTTP client and platform replacement seams for transport,
+token storage and access-token acquisition. It reuses the backend's owner-session
+and tools routes without adding a backend path or dependency. Session tokens are
+stored only through `TokenStore`; the Apple Keychain and Entra/MSAL adapters stay
+in the app target. A 401 clears the stored token and asks the access-token
+provider for sign-in; there is no refresh flow. Retries are bounded and limited
+to idempotent requests after transient failures, so tool and session mutations
+are sent at most once.
+
+## 30 October 2026 — bounded managed-policy causes (#1373)
+
+Keep existing closed failure reasons and add optional `providerCause` rather than
+encoding provider text into the reason. Allow only HTTP status integers 100–599,
+provider code/parameter matching `[a-z0-9_.]{1,48}`, and bounded exception-class
+identifiers. Revalidate at each stream, logging, status and browser boundary;
+discard unknown fields and never copy messages. This preserves current consumers
+and claim safety while making a future provider rejection diagnosable.
+
+Do not treat the synthetic 400 fixture as a live diagnosis. The original rejected
+parameter and successful real Copilot turn remain unverified. Leave the request
+shape and conservative blocking policy unchanged until evidence supports a
+correction; non-blocking definitive 4xx recovery remains an owner decision.
+
 ## 29 October 2026 — preserve managed failure and claim outcomes (#1350)
 
 The owner requested repair after real Copilot test replies failed. A successful
@@ -7479,6 +7504,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-30 | Dan approved the Chat, Voice, and sidebar concept frames on the board as the reference for the first iOS screen builds. Notes, Workspaces, Settings, and the other areas are placeholder pages in version 1 of the build. | The approved frames guide the first builds as a visual reference only; the native iOS standards row still governs how they are built. The board is `docs/ios/design/board.html`. Each screen still needs its own issue and the owner's approvals before it merges or ships. | Confirmed by Dan |
 | 2026-10-30 | The iPhone app follows the native iOS standards and does not hardcode values per screen. It uses system components and styles first: standard SwiftUI controls, `NavigationStack`, sheets with detents, Liquid Glass materials and system glass button styles, SF Symbols, Dynamic Type, system colours and semantic tokens, and system pickers and permission flows such as the ReplayKit broadcast picker and AVFoundation capture. Scrolling uses the system behaviour: native `ScrollView` and `List`, momentum and rubber-band bounce, overlay indicators, iOS 26 scroll edge effects under glass bars, interactive keyboard dismissal, and system scroll position and pull to refresh, with no custom scroll implementations or fake scrollbars. Anything custom goes through one shared design-token and component layer (colours, spacing, radii, typography, glass modifiers, button styles, icons), with no per-screen hardcoded values or one-off styling. Each custom component needs a stated reason why no system one fits. The concept board is a visual reference only, not a source of literal values, and its scrolling is only an approximation. | Dan: it is key that everything built follows the iOS standard way as much as possible and does not hardcode values each time something is built; the same goes for scrolling. System components give appearance, accessibility, reduced motion, and reduced transparency behavior for free, and a shared layer keeps custom work consistent. See `docs/ios/build-plan.md` (Native iOS standards). | Confirmed by Dan |
 | 2026-10-30 | Jarvis is one unified backend and middle layer with several frontends: the web app and the iPhone app now, CarPlay and Watch later. The iPhone app reuses the methods the web app already uses against the backend (same routes, streams, tools, and artifacts); there are no iOS-specific backend paths. An iPhone screen that needs something the web app does not already use is raised as an explicit decision before the backend changes. Anything an iPhone design needs that the backend does not already provide is flagged to Dan, who decides whether that backend build starts then. | One backend keeps behavior, permissions, and tests in one place, and keeps every frontend consistent. Backend work for a single frontend starts only on the owner's decision. See `docs/ios/build-plan.md` and `iOS app.md`. | Confirmed by Dan |
 | 2026-10-17 | P10-10 (#909): Jarvis never sends Teams messages, cards, notifications, replies, or audio-card notes from any code path or configuration. Remove the bot, sender, card/audio implementation, runtime wiring, and Teams-specific configuration. Away does not change confirmation routing: staged-action and phone approvals wait in the same authenticated browser app as Present; phone call/media code remains. Task status stays in the app and active browser voice updates remain. | The former away confirmation, general notification, voice-note, Teams bot reply, and away task-status paths all reached the removed sender. Browser approvals and Now-only notification delivery continue through `OwnerInteractionService`; existing conversation/confirmation database tables and stored rows are retained without a migration. Regression coverage checks Away approvals, task PR-opened/Done/NeedsAttention/Cancelled events, ignored Teams environment variables, and phone configuration independent of Teams messaging. | Implemented offline; live deployment behavior remains unverified |
@@ -9237,7 +9263,8 @@ the pure-Swift package and checks project/plist/entitlement metadata. The
 aggregate workflow selects the Mac simulator build only for ready pull requests
 whose changes select iOS; manual dispatch does not start a Mac job. The Mac
 build is unsigned and does not boot a simulator or run UI tests. Phase 1b
-signing, upload, credentials, and all later screens remain out of scope.
+signing, upload and credentials were outside the Phase 1a implementation; later
+screens remain out of scope for that foundation change.
 
 ## 30 October 2026 — P15-13 iOS navigation shell
 
@@ -9252,3 +9279,21 @@ Settings render title-only placeholders; Banking remains disabled and marked
 Later. The sidebar uses system colors, typography, scrolling and SF Symbols,
 with shared tokens for custom geometry and motion. No backend changes are part
 of this decision.
+## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
+
+The TestFlight workflow is separate from aggregate CI and uses only
+`workflow_dispatch`. Its single `macos-26` job uses the `ios-testflight`
+environment, requires the `main` ref, and builds, archives and uploads in one
+run with Xcode 26.6 and XcodeGen 2.46.0. App Store Connect credentials are
+environment secrets; the team is an environment variable supplied to the
+export options at runtime. The key is mode 600 and removed by an always-run
+cleanup step. Xcode output is captured so identifiers and team values are not
+written to logs. Direct upload is the default; `xcrun altool --upload-app` is
+only a documented fallback if the first real run establishes direct upload
+fails.
+
+The first archive/export/upload is unproven, including the key role needed for
+provisioning and Xcode 26's export-options behavior. The owner configures the
+environment and starts the first run after merge, then checks the signing
+authorization, archive, export/upload result, rising build number, and
+TestFlight availability. No run is started by this change.

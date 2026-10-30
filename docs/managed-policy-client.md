@@ -66,6 +66,30 @@ the native stream enforces a final-text-only boundary: any function item, includ
 a new action with different arguments, fails before dispatch. Text-only synthesis
 can complete. No extra provider suppression parameter is sent.
 
+### Safe policy failure diagnostics (#1373)
+
+`managed_policy_turn_failed` remains the closed reason for an unknown inference
+outcome; `managed_policy_setup_failed` still describes failure before inference
+and tools. Both can carry `providerCause`: integer `httpStatus` (100–599),
+provider `code` and `param` matching `[a-z0-9_.]{1,48}`, and a bounded identifier
+`exceptionType` as fallback. Invalid metadata is omitted. Exception messages,
+response bodies, headers and request values never enter this object.
+
+The hosted error event, backend `conversation.reply_failed` log, backend chat
+error event, browser `ChatTurnError` and retained system smoke entries preserve
+these fields through independent allow-lists. Smoke HTTP responses retain them
+only alongside an eligible failed check's closed reason; degraded entries keep
+the existing HTTP reason-omission behavior. The browser error retains structured
+metadata, not provider message text. No retry, claim release or default-runtime
+change follows from a 4xx; that recovery policy remains an owner decision.
+
+The original rejected parameter is still unverified. A synthetic 400 reporting
+`unsupported_parameter` / `instructions` tests diagnostic propagation only; it is
+not evidence that Foundry rejected that parameter. Do not remove instructions or
+flatten input speculatively: doing so can lose shared policy, tool receipts or
+source boundaries. Use a newly captured safe cause before correcting the native
+request, then qualify a real Copilot test-chat turn.
+
 The verifier must fetch the actual immutable prompt-agent version, validate the
 normal-chat schemas, disabled built-ins, identity definition/model/effort and
 endpoint selector, and reject drift. New dynamic catalogue/schema changes require

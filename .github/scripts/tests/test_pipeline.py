@@ -5,6 +5,7 @@ import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import shlex
 import subprocess
 import tempfile
@@ -50,6 +51,18 @@ def previous():
 
 def smoke():
     return {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
+
+
+def load_workflow(path):
+    source = subprocess.run(
+        ["ruby", "-ryaml", "-rjson", "-e",
+         "data = YAML.safe_load_file(ARGV.fetch(0), aliases: true); "
+         "data['on'] = data.delete(true) if data.key?(true); "
+         "puts JSON.generate(data)",
+         str(path)],
+        check=True, capture_output=True, text=True,
+    )
+    return json.loads(source.stdout)
 
 
 class ImpactTests(unittest.TestCase):
@@ -624,6 +637,72 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
         self.assertNotIn("simctl boot", source)
+
+    def test_testflight_workflow_is_manual_guarded_and_isolated(self):
+        workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
+        workflow = load_workflow(workflow_path)
+        self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
+        self.assertEqual(workflow["permissions"], {"contents": "read"})
+        self.assertEqual(workflow["concurrency"], {
+            "group": "ios-testflight", "cancel-in-progress": False,
+        })
+        self.assertEqual(len(workflow["jobs"]), 1)
+        job = next(iter(workflow["jobs"].values()))
+        self.assertEqual(job["environment"], "ios-testflight")
+        self.assertEqual(job["runs-on"], "macos-26")
+        self.assertEqual(job["timeout-minutes"], 30)
+        self.assertTrue(all(
+            "xlarge" not in label.lower()
+            for label in ([job["runs-on"]] if isinstance(job["runs-on"], str) else job["runs-on"])
+        ))
+
+        action_steps = [step["uses"] for step in job["steps"] if "uses" in step]
+        self.assertTrue(action_steps)
+        for action in action_steps:
+            with self.subTest(action=action):
+                self.assertRegex(action, r"^[^@]+@[0-9a-f]{40}$")
+        raw_workflow = workflow_path.read_text()
+        for line in raw_workflow.splitlines():
+            if "uses:" in line:
+                self.assertRegex(line, r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v\S+")
+        guard = next(step for step in job["steps"] if step.get("name") == "Require main branch")
+        self.assertEqual(guard["if"], "github.ref != 'refs/heads/main'")
+        self.assertIn("exit 1", guard["run"])
+        preflight = next(step for step in job["steps"] if step.get("name") == "Check signing configuration")
+        self.assertTrue({
+            "APP_STORE_CONNECT_KEY_P8", "APP_STORE_CONNECT_KEY_ID",
+            "APP_STORE_CONNECT_ISSUER_ID", "APPLE_TEAM_ID",
+        } <= set(preflight["env"]))
+
+        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
+        self.assertNotIn(
+            "./.github/workflows/ios-testflight.yml",
+            {job.get("uses") for job in ci["jobs"].values()},
+        )
+        self.assertEqual(deploy_parts(".github/workflows/ios-testflight.yml"), set())
+        options = plistlib.loads((ROOT / "apps/ios/ExportOptions.plist").read_bytes())
+        self.assertEqual(options["destination"], "upload")
+        self.assertEqual(options["method"], "app-store-connect")
+        self.assertEqual(options["signingStyle"], "automatic")
+        self.assertEqual(options["teamID"], "__APPLE_TEAM_ID__")
+
+        key_step = next(step for step in job["steps"] if step.get("name") == "Write App Store Connect key")
+        self.assertIn("umask 077", key_step["run"])
+        self.assertIn("chmod 600", key_step["run"])
+        cleanup = next(step for step in job["steps"] if step.get("name") == "Delete App Store Connect key")
+        self.assertEqual(cleanup["if"], "always()")
+        self.assertIn("rm -f", cleanup["run"])
+        for name in ("Archive with automatic signing", "Export and upload to TestFlight"):
+            step = next(step for step in job["steps"] if step.get("name") == name)
+            self.assertIn("2>&1", step["run"])
+            self.assertRegex(
+                step["run"],
+                r">\s+\"\$RUNNER_TEMP/(?:archive|export)\.log\"",
+            )
+            self.assertNotRegex(
+                step["run"],
+                r"(?m)^\s*echo\s+.*(?:APP_STORE_CONNECT|APPLE_TEAM_ID)",
+            )
 
     def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
         source = (ROOT / ".github/workflows/ci.yml").read_text()

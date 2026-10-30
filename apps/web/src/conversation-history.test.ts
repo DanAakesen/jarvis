@@ -643,6 +643,30 @@ describe('accepted turn recovery', () => {
    expect((error as Error).message).toContain('Return to normal conversation'); expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('retains only sanitized managed provider cause fields from the stream', async () => {
+   vi.stubGlobal('fetch', vi.fn(async () => new Response(frame('user', accepted) + frame('error', {
+    code: 'managed_policy_turn_failed', error: warning, providerCause: {
+     httpStatus: 400, code: 'unsupported_parameter', param: 'instructions', exceptionType: 'BadRequestError',
+     message: 'PRIVATE',
+    },
+   }))));
+   const error = await send().catch((value: unknown) => value) as ChatTurnError;
+   expect(error.providerCause).toEqual({
+    httpStatus: 400, code: 'unsupported_parameter', param: 'instructions', exceptionType: 'BadRequestError',
+   });
+   expect(JSON.stringify(error)).not.toContain('PRIVATE');
+   expect(error.blocksSession).toBe(true);
+  });
+
+  it.each(['PRIVATE', 'input\n', 'input[0]', 'a'.repeat(49)])('drops unsafe managed provider metadata %j', async value => {
+   vi.stubGlobal('fetch', vi.fn(async () => new Response(frame('error', {
+    code: 'managed_policy_turn_failed', providerCause: {
+     httpStatus: 400, code: value, param: value, exceptionType: 'BadRequestError', message: 'PRIVATE',
+    },
+   }))));
+   await expect(send()).rejects.toMatchObject({ providerCause: { httpStatus: 400, exceptionType: 'BadRequestError' } });
+  });
+
   it.each(['agent_auth_unavailable', 'agent_http_401', 'agent_http_403', 'agent_http_503',
    'managed_tool_call_unfinished', 'managed_response_failed'] as const)(
    'retains the safe %s cause and the accepted-action warning', async code => {
