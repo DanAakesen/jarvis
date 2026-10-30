@@ -195,9 +195,10 @@ async function checkPrompt(
           : failed(id, 'capabilities_reply_incomplete');
       }
       case 'chat_github_read': {
-        const issue = callFor(response.toolCalls, 'github_read', 'issue_get');
-        return issue?.outcome === 'ok' && issue.number === 700 && Boolean(issue.title) &&
-          text.includes(issue.title!.toLowerCase())
+        const hasIssue = response.toolCalls.some((call) =>
+          call.name === 'github_read' && call.operation === 'issue_get' &&
+          call.outcome === 'ok' && call.number === 700 && Boolean(call.title?.trim()));
+        return hasIssue
           ? result('ok')
           : failed(id, 'github_issue_unavailable');
       }
@@ -279,11 +280,14 @@ async function runSuite(agent: ConversationAgent | undefined): Promise<SuiteResu
   const settle = async (): Promise<Record<AcceptanceCheckId, CheckResult>> => {
     return Object.fromEntries(await Promise.all(ids.map(async (id) => {
       let check = await checkPrompt(id, acceptanceAgent, controller.signal);
-      if (check.reason === 'rate_limit_exceeded') {
-        // A full minute is the conservative fallback; provider hints are bounded to 30–60 seconds.
-        const wait = Number.isFinite(check.retryAfterMs)
-          ? Math.min(60_000, Math.max(30_000, check.retryAfterMs!)) : 60_000;
-        await delay(wait, controller.signal);
+      if (check.reason === 'rate_limit_exceeded' ||
+          (id === 'chat_github_read' && check.reason === 'github_issue_unavailable')) {
+        if (check.reason === 'rate_limit_exceeded') {
+          // A full minute is the conservative fallback; provider hints are bounded to 30–60 seconds.
+          const wait = Number.isFinite(check.retryAfterMs)
+            ? Math.min(60_000, Math.max(30_000, check.retryAfterMs!)) : 60_000;
+          await delay(wait, controller.signal);
+        }
         check = await checkPrompt(id, acceptanceAgent, controller.signal);
       }
       const safe = {

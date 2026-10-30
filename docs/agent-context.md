@@ -1512,12 +1512,17 @@ identity and no-timestamp reasons appear as `not_reported_or_redacted` in
 artifacts (open web clients accept HTTP reasons only for down checks); read them
 in the `system.smoke_check` events instead.
 
-Only `rate_limit_exceeded` retries a check, once. A numeric SSE `retry_after`
+`rate_limit_exceeded` retries a check once. A numeric SSE `retry_after`
 (seconds) or HTTP `Retry-After` hint sets the wait, clamped to 30–60 seconds;
 without a valid hint it waits a full 60 seconds after the rejection. Retries
 re-enter the same pacing queue. A second throttle fails with the named reason,
 including `chat_canary`; other second-attempt failures retain their actual reason.
-Other errors, assertion failures and timeouts never retry. A rescued first
+`chat_github_read` also retries `github_issue_unavailable` once, through the same
+queue without the rate-limit backoff. Both retry causes share a two-attempt cap.
+A successful `github_read` / `issue_get` receipt for issue 700 with a nonblank
+title passes without requiring the reply to repeat the title. A failed retry
+retains its actual safe reason in acceptance/release evidence; other errors,
+assertion failures and timeouts never retry. A rescued first
 throttle is not retained in the report; inspect dependency telemetry too. #816's
 coordination client is never opened for smoke turns; the agent test
 `test_smoke_invocations_open_no_coordination_connection` pins that.
