@@ -21,7 +21,7 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 | Swift mode | Swift 6 compiler in Swift 5 language mode. | My call |
 | Minimum iOS | 26 (native Liquid Glass). | Checkbox in the checklist |
 | Devices | iPhone 16 Pro Max on iOS 27.2, plus an Apple Watch. The phone has the Action Button and the Dynamic Island. Builds stay on Xcode 26.x although the phone runs a newer iOS: an app built with an older SDK runs on a newer system, Apple has announced no iOS 27 SDK requirement for uploads, and the Xcode 27 image still has open problems (Gotcha 2). | Owner answer. Checked: no iOS 27 SDK upload requirement is announced as of 29 October 2026. Not re-read: older SDK on a newer iOS. |
-| Bundle ID | `com.danaakesen.jarvis`, being registered by the owner. The Home Screen name can differ from the store name. | Owner answer |
+| Bundle ID | `com.danaakesen.jarvis`, registered on 30 October 2026 as an explicit App ID named Jarvis. The Home Screen name can differ from the store name. | Owner answer. Observed: read back from the portal. |
 | Face ID lock | On by default and offered at the first sign-in. A Settings switch turns it off. It gates the screen, not the token, and never interrupts a running voice session. | Owner answer for on by default. My call: the details. |
 | Lock Screen approvals | Allowed. Yes or no only, with device authentication before the action and text that names what is approved. Backend work: integration contract, sections 7 and 8. | Owner answer for allowed. My call: the safeguards. |
 | Keychain class | AfterFirstUnlock, this device only, for the session token. Classes that need an unlocked phone cannot be read by a notification action or in CarPlay. | Checked for CarPlay: the CarPlay developer guide. My call: the choice. |
@@ -86,20 +86,25 @@ A separate workflow, not called from `ci.yml`.
 
 ## Apple Developer portal: App ID setup (owner)
 
-Enabling capabilities needs the Account Holder or Admin role, and changing an App ID invalidates its provisioning profiles, so they must be regenerated afterwards (Checked: Apple's capabilities pages). The owner is registering the App ID now. This is where each item lives.
+Enabling capabilities needs the Account Holder or Admin role, and changing an App ID invalidates its provisioning profiles, so they must be regenerated afterwards (Checked: Apple's capabilities pages). The App ID and its App Group were registered on 30 October 2026 at the owner's request, in the owner's signed-in portal session, and the saved state was read back from the portal. Apple warned on save that adding or removing a capability invalidates provisioning profiles that include the App ID. None existed yet. This is where each item lives.
 
-| Where | Item | Why | When |
+| Where | Item | Why | State |
 | --- | --- | --- | --- |
-| Capabilities | Push Notifications (leave the sub-option empty) | Alerts, silent updates and Live Activity updates. | Now |
-| Capabilities | Time Sensitive Notifications | Lets a decision request break through a Focus mode. | Now |
-| Capabilities | App Groups, then create `group.com.danaakesen.jarvis` and attach it | Shares state between the app, its widgets and its Live Activities. | Now |
-| App Services | MusicKit | Lets Jarvis start Apple Music. | Now, it costs nothing |
-| Separate request | CarPlay, category Voice-based conversational | Voice in the car. Apple must approve it, and it then shows as a managed capability. | When CarPlay work starts |
-| Later App IDs | The Watch app and the widgets extension each get their own App ID | Each target has its own bundle ID. | When those targets exist |
+| Capabilities | Push Notifications (Broadcast left off) | Alerts, silent updates and Live Activity updates. | Done |
+| Capabilities | Time Sensitive Notifications | Lets a decision request break through a Focus mode. | Done |
+| Capabilities | App Groups, with `group.com.danaakesen.jarvis` created and attached | Shares state between the app, its widgets and its Live Activities. | Done |
+| App Services | MusicKit | Lets Jarvis start Apple Music. | Done, it costs nothing |
+| Capabilities | HealthKit (Clinical Health Records left off) | The owner's pick, ahead of need. Version 1 has no Health data. | Done |
+| Capabilities | Side Button Access | The owner's pick. Lets a voice assistant start from the side button through an App Intent. Apple limits it to Japan, on iOS 26.2 or later. | Done |
+| Capabilities | Maps | The owner's pick. Nothing in the current design uses it. | Done |
+| Capabilities | Push to Talk | The owner's pick. The contract describes an open microphone with no push to talk, so nothing in the current design uses it. | Done |
+| Capabilities | In-App Purchase | Apple's default, locked on. Unused. | Done |
+| Separate request | CarPlay, category Voice-based conversational | Voice in the car. Apple must approve it, and it then shows as a managed capability. | Later: when CarPlay work starts |
+| Later App IDs | The Watch app and the widgets extension each get their own App ID | Each target has its own bundle ID. | Later: when those targets exist |
 
-Everything else in the portal list is not needed. HealthKit joins when Watch workouts arrive, because version 1 has no Health data.
+Nothing else on the portal list is needed. Data Protection stays off: if it is ever used, the level must not be complete, because CarPlay and a locked phone cannot read such files (see the CarPlay notes). A tick only permits a capability, and the app's entitlements file decides what a build uses. Camera, microphone, location, photos and Face ID need no portal tick: each needs a purpose string in the app's `Info.plist`, and iOS shows its own Allow prompt.
 
-Basis: Checked for the role, the profile rule, MusicKit being an App Services tick, and Time Sensitive being a plain tick (Apple lists the capabilities that need extra steps, and it is not among them). Checked in a mirror of the `xcodebuild` manual page: with `-allowProvisioningUpdates` it creates and updates app IDs, profiles and certificates for automatically signed targets, so the Watch and widget App IDs may register themselves (Unproven 2). Not re-read: the exact name of the Push sub-option.
+Basis: Checked for the role, the profile rule, MusicKit being an App Services tick, and Time Sensitive being a plain tick (Apple lists the capabilities that need extra steps, and it is not among them). Checked in a mirror of the `xcodebuild` manual page: with `-allowProvisioningUpdates` it creates and updates app IDs, profiles and certificates for automatically signed targets, so the Watch and widget App IDs may register themselves (Unproven 2). Observed on 30 October 2026, read back from the portal after saving: the ticked capabilities above, MusicKit on, the group attached, the Push sub-option being Broadcast (left off), and Apple's profile-invalidation warning on save. Checked in Apple's documentation, read the same day: the Side Button Access limits, and the rule that camera, microphone, location, photos and Face ID need an `Info.plist` purpose string and no portal tick.
 
 ## Later: CarPlay, Watch and Music (owner intent, not version 1)
 
@@ -110,6 +115,7 @@ CarPlay
 - The fit is the voice-based conversational category. Voice is the main way in, answers show no text or imagery, an audio session is held open only while voice is active, and the voice control screen is shown whenever voice is on. Recording is allowed only together with that screen. The template stack is at most 3 deep. The app must never tell the person to pick up the iPhone.
 - The entitlement key is `com.apple.developer.carplay-voice-based-conversation` and it needs iOS 26.4 or later. The minimum iOS is 26, so the CarPlay code sits behind an availability check, or the minimum rises when this work starts. The owner's phone runs a newer iOS.
 - Apple approves the category on request: the owner asks at developer.apple.com/contact/carplay and agrees to the addendum. After approval it shows as a managed capability: enable it on the App ID, save, regenerate the provisioning profile and add the entitlement to the app. Apple says Xcode 15 and later supports automatic signing for managed capabilities, with CarPlay as an example, and that some need a manual entitlements edit (Checked). Whether `xcodebuild` with the API key does the same in CI is untested: try automatic signing on the first CarPlay build and fall back to a manually signed profile if it fails.
+- The portal's Capability Requests list already shows "CarPlay Voice Based Conversation" with no status (Observed, 30 October 2026). Apple says capability requests need the Account Holder role (Checked), so the Account Holder files the request when CarPlay work starts. Whether this list and the contact form named above are one route is unconfirmed.
 - An app has one CarPlay category (EV charging with fueling is the only allowed pair). Jarvis cannot also be the audio app.
 - CarPlay shows no notifications for conversational apps.
 - CarPlay is used with the phone locked. Keychain items that need an unlocked phone are unreadable, and the complete and complete-unless-open file protection classes must not be used. That is why the token class above is AfterFirstUnlock.

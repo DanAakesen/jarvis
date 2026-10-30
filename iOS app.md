@@ -4,7 +4,7 @@
 
 **Three directions are confirmed:** a GitHub-based macOS build approach, reuse of Jarvis's existing backend, and native SwiftUI with native iOS features and controls. The owner has since stated the usage context and essential capabilities, confirmed the design decisions and, on 29 October 2026, answered the version 1 checklist. These are recorded below, and anything not recorded there is a proposal or still open. No implementation or setup is authorized: the owner answered No to starting the foundation phase.
 
-**Next step: the owner's go for the foundation phase.** The design reference is the concept board and the system-surfaces gallery in `docs/ios/design/`. The backend contract is [docs/ios/integration-contract.md](docs/ios/integration-contract.md) and the proposed phased plan is [docs/ios/build-plan.md](docs/ios/build-plan.md). The device (an iPhone 16 Pro Max) and the bundle ID are chosen, and the owner is registering the App ID. The build, signing and upload route still has to be proven; cloud execution is not assumed.
+**Next step: the owner's go for the foundation phase.** The design reference is the concept board and the system-surfaces gallery in `docs/ios/design/`. The backend contract is [docs/ios/integration-contract.md](docs/ios/integration-contract.md) and the proposed phased plan is [docs/ios/build-plan.md](docs/ios/build-plan.md). The device (an iPhone 16 Pro Max) and the bundle ID are chosen, and the App ID and its App Group were registered on 30 October 2026 (capabilities in the build plan). The build, signing and upload route still has to be proven; cloud execution is not assumed.
 
 Jarvis is Dan's single-owner personal AI side project, not a multi-user commercial product. Keep the solution small and avoid overengineering.
 
@@ -56,7 +56,7 @@ The owner answered a 23-row version 1 checklist on 29 October 2026. Each row car
 **Device and distribution**
 
 - iPhone 16 Pro Max on iOS 27.2, with an Apple Watch. Version 1 is iPhone only: no iPad, Watch app or Mac. The minimum iOS version is 26, for the native Liquid Glass.
-- The bundle ID is `com.danaakesen.jarvis`, which the owner is registering.
+- The bundle ID `com.danaakesen.jarvis` and the App Group `group.com.danaakesen.jarvis` are registered (30 October 2026), with the capabilities listed in [docs/ios/build-plan.md](docs/ios/build-plan.md).
 - TestFlight only, for the owner alone: no App Store release and no App Store review.
 - App text is in English. Voice switches between English and Danish, as on the web.
 
@@ -112,7 +112,7 @@ Browser screenshots at mobile dimensions are evidence of the web app, not valida
 
 ## Build and preview approach discussed
 
-Dan already owns an Apple Developer account and does not own a Mac. Expo was rejected. The preferred GitHub route would use standard GitHub Actions macOS runners to build and sign SwiftUI, with distribution through TestFlight, without Dan owning a Mac. The owner accepted automatic TestFlight uploads and API-key signing on 29 October 2026 (see the version 1 answers); the workflow configuration and signing still have to be proven. That the account is the paid Developer Program, with the owner as Account Holder or Admin (needed to enable App ID capabilities and to create the API key), is inferred from the owner registering an App ID and is not confirmed.
+Dan already owns an Apple Developer account and does not own a Mac. Expo was rejected. The preferred GitHub route would use standard GitHub Actions macOS runners to build and sign SwiftUI, with distribution through TestFlight, without Dan owning a Mac. The owner accepted automatic TestFlight uploads and API-key signing on 29 October 2026 (see the version 1 answers); the workflow configuration and signing still have to be proven. That the account is the paid Developer Program, with the owner as Account Holder or Admin (needed to enable App ID capabilities and to create the API key), is still inferred and not confirmed. Observed on 30 October 2026: the portal accepted the App ID registration and its capability changes, which fits that role but does not say which one it is.
 
 Pricing notes checked **2026-10-29**: standard GitHub-hosted runner compute is free for this public repository. Private-repository usage has plan-dependent included compute; the published paid macOS reference is **USD $0.062/minute**. Storage allowances and charges are separate. No costs or workflow configuration have been approved, and the build triggers are agreed in principle only. See [Actions billing and usage](https://docs.github.com/en/actions/concepts/billing-and-usage) and [runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing).
 
