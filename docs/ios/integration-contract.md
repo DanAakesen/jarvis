@@ -138,6 +138,11 @@ Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps
 
 The Factory area reuses the authenticated web/backend routes. It adds no iOS-specific route or backend behavior. Project administration (other than the existing completion-policy control in task creation), Git graph visualization, backfill, and sandbox routes remain out of scope.
 
+The iPhone selects one project at a time. Board, Needs Dan, and Releases are
+scoped to that selected project; Needs Dan does not aggregate across projects,
+and the app does not issue a fan-out of board requests to simulate an all-project
+view.
+
 | Screen action | Existing route and contract |
 |---|---|
 | Load active projects | `GET /factory/projects` returns project records with `id`, `name`, `repo`, `default_branch`, `default_agent`, `policy`, and other existing project fields. |

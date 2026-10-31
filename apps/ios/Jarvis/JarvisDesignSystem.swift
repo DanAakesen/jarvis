@@ -120,7 +120,14 @@ enum JarvisDesignTokens {
     static let factoryIconSize: CGFloat = 18
     static let factoryRowSpacing: CGFloat = 8
     static let factoryPlusDiameter: CGFloat = 48
-    static let factorySheetCornerRadius: CGFloat = 28
+    static let factoryStateIconSize: CGFloat = 28
+    static let factorySkeletonRowCount = 4
+    static let factorySkeletonCornerRadius: CGFloat = 5
+    static let factorySkeletonTitleHeight: CGFloat = 17
+    static let factorySkeletonSecondaryWidth: CGFloat = 132
+    static let factorySkeletonSecondaryHeight: CGFloat = 12
+    static let factoryMultilineMinimumLines = 4
+    static let factoryMultilineMaximumLines = 10
     static let factoryAccent = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 1, green: 180.0 / 255, blue: 92.0 / 255, alpha: 1)

@@ -6246,6 +6246,26 @@ and cursor-paginated history, a pending confirmation followed by approval, and
 listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
 routes through the authenticated HTTP client; no app-specific backend is used.
 
+### Software Factory UI fixture and screenshots (P15-19)
+
+`JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
+previews and simulator screenshots through `FixtureTransport`; its project,
+board, task, release, event, usage and commit values are synthetic. CI selects
+the screen with `--screenshot-factory-fixture`,
+`--screenshot-factory-state=<state>` and
+`--screenshot-factory-language=da|en`. Supported states are board, needs,
+releases, detail, release, steer, newtask, empty, loading, error, offline,
+stale, reconnecting and search. Capture all those states in light/dark and both
+languages through the existing `ios-ci.yml` simulator boot; do not add a Mac
+job, simulator boot or UI-test target.
+
+The app's Factory project menu selects one project at a time. Needs Dan is
+limited to that project's board; do not add a cross-project query or fan-out.
+The owner's approved Factory concept is not present in the current checked-in
+`docs/ios/design/board.html`, so do not claim a visual pixel/frame comparison
+against that local copy. Keep the documented difference visible for owner
+review.
+
 To add a scenario:
 
 1. Check the existing backend/web route and payload source cited in

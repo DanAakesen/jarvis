@@ -145,6 +145,20 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          for appearance in light dark; do
+            xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            for language in da en; do
+              for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
+                xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-factory-fixture \
+                  "--screenshot-factory-state=$state" \
+                  "--screenshot-factory-language=$language"
+                sleep 2
+                xcrun simctl io "$DEVICE_ID" screenshot \
+                  "$SCREENSHOT_DIR/factory-${state}-${appearance}-${language}.png"
+              done
+            done
+          done
       - name: Upload iOS screenshots
         id: screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -167,7 +181,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark and sidebar-open screenshots]($ARTIFACT_URL)
+          [Download the light, dark, sidebar, and Factory screenshots]($ARTIFACT_URL)
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF

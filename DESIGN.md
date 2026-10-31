@@ -2857,6 +2857,43 @@ is represented. Danish and English strings come from the JarvisCore localization
 catalog; the app-owned Settings preference defaults to Danish and controls date
 formatting as well as visible and accessibility copy.
 
+## Native iOS Software Factory (P15-19; 31 October 2026)
+
+The approved Factory screen uses the existing Notes chrome: a Software Factory
+title and refresh control, a text-only Board / Needs Dan / Releases switcher,
+and a fixed glass search field plus round create button. The project menu and
+board filter sit above the grouped content. Board groups follow In progress,
+In review, Ready, Backlog and Done, with Done collapsed initially; Needs Dan
+shows only the selected project's Needs Dan / NeedsAttention work. Releases open
+a native detail list for status, commit, workflow runs, deployments, linked
+tasks and the existing compact commit records.
+
+Use native SwiftUI `ScrollView`, `DisclosureGroup`, `List`, `Picker`, `Form`,
+`NavigationStack`, sheets and confirmation dialogs. Data-specific task rows
+combine issue, agent/state, PR/check and blocker facts because no single system
+row represents that linked record; timeline and usage rows likewise compose
+native labels and text. SwiftUI has no built-in skeleton, so loading uses
+redacted system shapes. The shared fixed search/create dock uses `safeAreaInset`
+and system glass material. Geometry and the dynamic orange/cyan semantic colors
+live in `JarvisDesignTokens`; no per-screen color values or decorative orb are
+added.
+
+Orange is a small primary action/accent, with the approved dark/light foreground
+pair; cyan remains the shared secondary token and is not hardcoded into a
+Factory element. Selection and task/check state always include text and an icon,
+not color alone. Danish/English copy and date formatting come from `JarvisCore`,
+with the app language defaulting to Danish. System type sizes, appearance,
+VoiceOver labels, and native scrolling remain intact.
+
+Board and Needs Dan intentionally use one selected project per request. There is
+no all-project aggregation. Existing APIs own project placement and live
+invalidation; task details use the resumable task event stream. No APNs,
+project administration, git graph, backfill, or sandbox UI is represented.
+The checked-in `docs/ios/design/board.html` does not currently contain a Factory
+frame, so visual comparison against the newly approved Factory concept is
+pending; the pull request records this difference and supplies fixture-based
+light/dark screenshots for review.
+
 ## Native iOS sign-in and lock (P15-16; 30 October 2026)
 
 The approved Sign-in and Lock frames in `docs/ios/design/board.html` guide the

@@ -19,7 +19,7 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 | Export compliance | `ITSAppUsesNonExemptEncryption` set to NO in the app's Info.plist: standard HTTPS only. It is the owner's declaration to Apple. | Checked: Apple says to set NO when the app, including the libraries it links, uses no encryption or only exempt forms, and that encryption built into the operating system, such as HTTPS through `URLSession`, is typically exempt. The same page says exempt encryption might still call for a year-end self-classification report to the US government. Whether that applies is the owner's call and is not researched here. |
 | Code split | A pure-Swift `JarvisCore` package with no Apple-framework imports, and a thin SwiftUI app layer. | Checked: Linux limit. My call: design. |
 | Test data | A fixture transport that replays recorded sample conversations. | My call |
-| Screenshots | Best effort and never a gate. Run only on manual dispatch, not on pull requests (see Cost guard). | Not re-read. My call: the trigger, changed on 30 October 2026. |
+| Screenshots | The existing ready-PR iOS screenshot hook captures synthetic UI states in its single simulator boot and attaches a 14-day artifact for owner review. Issue-approved states may extend that hook without another job or boot. | Existing `ios-ci.yml` behavior; P15-19 adds the Factory states. |
 | Swift mode | Swift 6 compiler in Swift 5 language mode. | My call |
 | Minimum iOS | 26 (native Liquid Glass). | Checkbox in the checklist |
 | Devices | iPhone 16 Pro Max on iOS 27.2, plus an Apple Watch. The phone has the Action Button and the Dynamic Island. Builds stay on Xcode 26.x although the phone runs a newer iOS: an app built with an older SDK runs on a newer system, Apple has announced no iOS 27 SDK requirement for uploads, and the Xcode 27 image still has open problems (Gotcha 2). | Owner answer. Checked: no iOS 27 SDK upload requirement is announced as of 29 October 2026. Not re-read: older SDK on a newer iOS. |
@@ -61,8 +61,8 @@ Why: standard `macos-26` runners are free today because the repository is public
 Rules:
 
 1. Keep logic in the pure-Swift `JarvisCore` package, which builds and tests on cheap Linux on every push. Cloud agents get the toolchain through `copilot-setup-steps`. The SwiftUI layer stays thin.
-2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the app/extension plists and their entitlements) and a Mac job that needs the Linux job to pass first. P15-11's ReplayKit extension and App Group are covered by those metadata checks; it adds no Mac job or simulator work.
-3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds for the simulator with `CODE_SIGNING_ALLOWED=NO`. It does not boot a simulator, run UI tests or take screenshots. Screenshots run only on manual dispatch.
+2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the app/extension plists and their entitlements) and one Mac job that needs Linux to pass first. P15-11's ReplayKit extension and App Group are covered by those metadata checks; screen work adds no Mac job.
+3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds for the simulator with `CODE_SIGNING_ALLOWED=NO`, then the existing screenshot hook boots one iPhone simulator once and captures the Chat/sidebar and approved Factory states from synthetic fixtures. It runs no UI tests and adds no simulator boot or job.
 4. The TestFlight workflow builds, archives and uploads in one job, started by the owner by manual dispatch, so the ship run is also the only compile run for that upload. Uploads happen only when the owner starts them, which also lowers Mac minutes.
 5. Authors keep pull requests in draft until the Linux checks pass and the change is final, and batch related changes. The expectation is one Mac run per pull request.
 6. Owner safety net: set a GitHub Actions budget in Billing, so usage stops at the limit if the repository ever becomes private.
@@ -113,8 +113,8 @@ Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are
 - Pin the Xcode version with `xcode-select` after listing what the image provides.
 - Install XcodeGen at a pinned release, run `xcodegen generate`.
 - Build the app for the iOS Simulator with `CODE_SIGNING_ALLOWED=NO`. Do not boot a simulator, run UI tests or take screenshots in this job.
-- Best-effort screenshot, only on manual dispatch: three attempts, `continue-on-error: true`, uploaded as an artifact. Fallback: test attachments kept with `lifetime = .keepAlways`, read through `xcresulttool`.
-- No secrets, and no reference to the signing environment.
+- Existing ready-PR screenshot hook: one simulator boot within the existing Mac job, synthetic app fixtures, a 14-day artifact, and a single PR comment updated with the download link. P15-19 captures each Factory segment, task/release detail, key state, language and appearance in that same boot.
+- No signing secrets or reference to the signing environment.
 
 ### 1b: `ios-testflight.yml`
 

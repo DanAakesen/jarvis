@@ -11,6 +11,9 @@
 "factory.all" = "Alle";
 "factory.search" = "Søg opgave eller #";
 "factory.searchAccessibility" = "Søg efter opgavetitel eller nummer";
+"factory.searchReleases" = "Søg i udgivelser";
+"factory.searchReleasesAccessibility" = "Søg i udgivelser efter version eller commit";
+"factory.clearSearch" = "Ryd søgning";
 "factory.cached" = "Cachet";
 "factory.reconnecting" = "Genopretter forbindelsen";
 "factory.offline" = "Offline";
@@ -30,6 +33,9 @@
 "factory.ready" = "Klar";
 "factory.backlog" = "Efterslæb";
 "factory.done" = "Færdig";
+"factory.running" = "Kører";
+"factory.open" = "Åben";
+"factory.closed" = "Lukket";
 "factory.pauseRequested" = "Pause afventer";
 "factory.paused" = "Sat på pause";
 "factory.needsAttention" = "Kræver opmærksomhed";
@@ -77,6 +83,11 @@
 "factory.branch" = "Gren";
 "factory.pullRequest" = "Pull request";
 "factory.checks" = "Kontroller";
+"factory.prDraft" = "Kladde";
+"factory.checksPending" = "Kontroller afventer";
+"factory.checksNone" = "Ingen kontroller";
+"factory.checksPassed" = "Kontroller bestået";
+"factory.checksFailed" = "Kontroller fejlede";
 "factory.created" = "Oprettet";
 "factory.started" = "Startet";
 "factory.attempts" = "Forsøg";
@@ -117,5 +128,14 @@
 "factory.outputTokens" = "Outputtokens";
 "factory.turns" = "Ture";
 "factory.premiumRequests" = "Premiumanmodninger";
+"factory.loadMore" = "Indlæs flere";
+"factory.eventPayload" = "Hændelsesdata";
+"factory.eventPayloadTruncated" = "Hændelsesdata utilgængelige";
+"factory.voice" = "Stemme";
+"factory.noDisk" = "Ingen diskdata";
+"factory.freeDisk" = "Ledig";
+"factory.usedDisk" = "Brugt";
+"factory.totalDisk" = "I alt";
+"factory.historyTruncated" = "Commit-historikken er ufuldstændig";
 "factory.sandbox" = "Sandbox";
 "factory.jarvisModel" = "Jarvis-model";

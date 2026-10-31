@@ -226,7 +226,7 @@ public final class JarvisFactoryClient: Sendable {
     }
 
     public func listenForBoardUpdates(
-        _ receive: (FactoryBoardUpdate) -> Void
+        _ receive: (FactoryBoardUpdate) async -> Void
     ) async throws {
         let response = try await client.performChatStream(
             method: .get,
@@ -245,7 +245,7 @@ public final class JarvisFactoryClient: Sendable {
                 guard isValidFactoryID(update.projectId), update.version >= 1 else {
                     throw JarvisFactoryClientError.invalidResponse
                 }
-                receive(update)
+                await receive(update)
             }
         }
         for event in parser.finish() where event.name == "board" {
@@ -256,14 +256,14 @@ public final class JarvisFactoryClient: Sendable {
             guard isValidFactoryID(update.projectId), update.version >= 1 else {
                 throw JarvisFactoryClientError.invalidResponse
             }
-            receive(update)
+            await receive(update)
         }
     }
 
     public func listenForTaskEvents(
         taskId: String,
         after eventId: String? = nil,
-        receive: (FactoryTaskEvent) -> Void
+        receive: (FactoryTaskEvent) async -> Void
     ) async throws {
         guard isValidFactoryID(taskId),
               eventId.map({ $0.range(of: #"^(?:0|[1-9][0-9]{0,18})$"#, options: .regularExpression) != nil && Int64($0) != nil }) ?? true else {
@@ -289,7 +289,7 @@ public final class JarvisFactoryClient: Sendable {
                 guard taskEvent.taskId == taskId, taskEvent.id == id else {
                     throw JarvisFactoryClientError.invalidResponse
                 }
-                receive(taskEvent)
+                await receive(taskEvent)
             }
         }
         for event in parser.finish() where event.name == "task" {
@@ -302,7 +302,7 @@ public final class JarvisFactoryClient: Sendable {
             guard taskEvent.taskId == taskId, taskEvent.id == id else {
                 throw JarvisFactoryClientError.invalidResponse
             }
-            receive(taskEvent)
+            await receive(taskEvent)
         }
     }
 

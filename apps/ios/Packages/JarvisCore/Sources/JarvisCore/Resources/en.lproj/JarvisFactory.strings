@@ -11,6 +11,9 @@
 "factory.all" = "All";
 "factory.search" = "Search task or #";
 "factory.searchAccessibility" = "Search by task title or number";
+"factory.searchReleases" = "Search releases";
+"factory.searchReleasesAccessibility" = "Search releases by version or commit";
+"factory.clearSearch" = "Clear search";
 "factory.cached" = "Cached";
 "factory.reconnecting" = "Reconnecting";
 "factory.offline" = "Offline";
@@ -30,6 +33,9 @@
 "factory.ready" = "Ready";
 "factory.backlog" = "Backlog";
 "factory.done" = "Done";
+"factory.running" = "Running";
+"factory.open" = "Open";
+"factory.closed" = "Closed";
 "factory.pauseRequested" = "Pause requested";
 "factory.paused" = "Paused";
 "factory.needsAttention" = "Needs attention";
@@ -77,6 +83,11 @@
 "factory.branch" = "Branch";
 "factory.pullRequest" = "Pull request";
 "factory.checks" = "Checks";
+"factory.prDraft" = "Draft";
+"factory.checksPending" = "Checks pending";
+"factory.checksNone" = "No checks";
+"factory.checksPassed" = "Checks passed";
+"factory.checksFailed" = "Checks failed";
 "factory.created" = "Created";
 "factory.started" = "Started";
 "factory.attempts" = "Attempts";
@@ -117,5 +128,14 @@
 "factory.outputTokens" = "Output tokens";
 "factory.turns" = "Turns";
 "factory.premiumRequests" = "Premium requests";
+"factory.loadMore" = "Load more";
+"factory.eventPayload" = "Event data";
+"factory.eventPayloadTruncated" = "Event data unavailable";
+"factory.voice" = "Voice";
+"factory.noDisk" = "No disk readings";
+"factory.freeDisk" = "Free";
+"factory.usedDisk" = "Used";
+"factory.totalDisk" = "Total";
+"factory.historyTruncated" = "Commit history is incomplete";
 "factory.sandbox" = "Sandbox";
 "factory.jarvisModel" = "Jarvis model";
