@@ -9635,3 +9635,11 @@ registration/open does not establish that the phone was selected. The native
 screen also requires a configured API base URL and existing Keychain session;
 sign-in is not added here. Native compile and device/visual verification remain
 for the existing Mac check and owner review.
+
+## 31 October 2026 — iOS app icon
+
+The owner approved a new app icon: a dark glass sphere with a blue rim and an
+orange filament core on a black background, with no rings or orbit ellipses
+around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
+RGB PNG in the app icon set. The artwork came from an owner-supplied image.
+Home Screen appearance on a device is not yet verified.
