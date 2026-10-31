@@ -90,6 +90,27 @@ describe('phone chat viewport', () => {
     expect(screen.getByTestId('shell').dataset.keyboardOpen).toBe('false');
   });
 
+  it('distinguishes a tapped keyboard from autofocus when iOS keeps the screen height unchanged', () => {
+    const visible = viewport();
+    visible.height = 480;
+    vi.stubGlobal('innerHeight', 480);
+    vi.stubGlobal('screen', { height: 844 });
+    const layoutHeight = vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    render(<Chat autoFocus />);
+    const shell = screen.getByTestId('shell');
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    expect(shell.dataset.keyboardOpen).toBe('false');
+
+    fireEvent.pointerDown(input, { pointerType: 'touch', isPrimary: true });
+    expect(shell.dataset.keyboardOpen).toBe('true');
+
+    visible.height = 844;
+    vi.stubGlobal('innerHeight', 844);
+    layoutHeight.mockReturnValue(844);
+    act(() => { visible.dispatchEvent(new Event('resize')); });
+    expect(shell.dataset.keyboardOpen).toBe('false');
+  });
+
   it('still detects a measurable keyboard inset on initial mount', () => {
     const visible = viewport();
     visible.height = 480;
