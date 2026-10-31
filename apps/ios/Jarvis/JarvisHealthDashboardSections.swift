@@ -544,10 +544,10 @@ struct JarvisHealthBodySection: View {
             return "\(formatNumber(latest, language: language)) \(trend.unit ?? "")"
         }
         switch read.state {
-        case .loading: copy.text(.loading)
-        case .notServed, .failed: copy.text(.unavailable)
-        case .offline: copy.text(.offline)
-        case .available, .empty: copy.text(.notRecorded)
+        case .loading: return copy.text(.loading)
+        case .notServed, .failed: return copy.text(.unavailable)
+        case .offline: return copy.text(.offline)
+        case .available, .empty: return copy.text(.notRecorded)
         }
     }
 }
