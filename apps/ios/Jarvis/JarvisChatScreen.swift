@@ -83,6 +83,7 @@ struct JarvisChatScreen: View {
                 } label: {
                     Image(systemName: "bell")
                         .symbolVariant(model.needsYouCount > 0 ? .fill : .none)
+                        .foregroundStyle(.primary)
                         .overlay(alignment: .topTrailing) {
                             if model.needsYouCount > 0 {
                                 Text(model.needsYouCount > 99 ? "99+" : "\(model.needsYouCount)")
@@ -95,6 +96,7 @@ struct JarvisChatScreen: View {
                         }
                         .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                 }
+                .buttonStyle(JarvisQuietToolbarIconButtonStyle())
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
             }
         }

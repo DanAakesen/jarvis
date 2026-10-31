@@ -80,6 +80,8 @@ enum JarvisDesignTokens {
     static let chatUserBubbleRadius: CGFloat = 24
     static let chatUserBubbleBorderOpacity: Double = 0.34
     static let chatUserBubbleBorderWidth: CGFloat = 1
+    static let toolbarQuietActionFillOpacity: Double = 0.08
+    static let toolbarQuietActionPressedOpacity: Double = 0.16
     static let chatComposerRadius: CGFloat = 24
     static let chatComposerSpacing: CGFloat = 10
     static let chatComposerIconSize: CGFloat = 20
@@ -249,6 +251,20 @@ enum JarvisDesignTokens {
         Color(uiColor: UIColor { traits in
             traits.userInterfaceStyle == .dark ? dark : light
         })
+    }
+}
+
+struct JarvisQuietToolbarIconButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(
+                Color.primary.opacity(
+                    configuration.isPressed
+                        ? JarvisDesignTokens.toolbarQuietActionPressedOpacity
+                        : JarvisDesignTokens.toolbarQuietActionFillOpacity
+                ),
+                in: Circle()
+            )
     }
 }
 
