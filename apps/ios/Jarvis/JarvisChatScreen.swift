@@ -183,7 +183,7 @@ struct JarvisChatScreen: View {
                 Text(error)
             } actions: {
                 Button("Retry") { Task { await model.retryHistory() } }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.glass)
                     .disabled(model.fixtureMode)
                     .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
             }
@@ -302,6 +302,10 @@ struct JarvisChatScreen: View {
 
     private func messageBubble(text: String, role: ConversationRole, interrupted: Bool) -> some View {
         let isUser = role == .dan
+        let userBubbleShape = RoundedRectangle(
+            cornerRadius: JarvisDesignTokens.chatUserBubbleRadius,
+            style: .continuous
+        )
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             Text(text)
                 .font(.body)
@@ -321,14 +325,22 @@ struct JarvisChatScreen: View {
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
                     .background {
                         if reduceTransparency {
-                            RoundedRectangle(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
+                            userBubbleShape
                                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
                         }
                     }
                     .glassEffect(
                         .regular.tint(JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
-                        in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
+                        in: userBubbleShape
                     )
+                    .overlay {
+                        userBubbleShape.strokeBorder(
+                            JarvisDesignTokens.primaryAccent.opacity(
+                                JarvisDesignTokens.chatUserBubbleBorderOpacity
+                            ),
+                            lineWidth: JarvisDesignTokens.chatUserBubbleBorderWidth
+                        )
+                    }
             } else {
                 content
                     .padding(.vertical, JarvisDesignTokens.chatGlassInset)

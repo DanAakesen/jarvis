@@ -434,12 +434,12 @@ private struct VoiceOrbView: View {
     private var activity: JarvisOrbActivity {
         if isMuted { return .muted }
         switch state {
-        case .listening: .listening
-        case .ready: .thinking
-        case .speaking: .speaking
-        case .reconnecting: .reconnecting
-        case .failed, .ended: .offline
-        case .idle, .connecting: .calm
+        case .listening: return .listening
+        case .ready: return .thinking
+        case .speaking: return .speaking
+        case .reconnecting: return .reconnecting
+        case .failed, .ended: return .offline
+        case .idle, .connecting: return .calm
         }
     }
 

@@ -77,6 +77,9 @@ enum JarvisDesignTokens {
     static let chatMessageSpacing: CGFloat = 8
     static let chatMessageMaximumWidth: CGFloat = 360
     static let chatBubbleRadius: CGFloat = 22
+    static let chatUserBubbleRadius: CGFloat = 24
+    static let chatUserBubbleBorderOpacity: Double = 0.34
+    static let chatUserBubbleBorderWidth: CGFloat = 1
     static let chatComposerRadius: CGFloat = 24
     static let chatComposerSpacing: CGFloat = 10
     static let chatComposerIconSize: CGFloat = 20
