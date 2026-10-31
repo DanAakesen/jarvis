@@ -1477,6 +1477,16 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .hhd h3 { margin: 0; font-size: 20px; line-height: 25px; font-weight: 700; }
 .hhd .ntxt { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0; font-size: 15px; }
 .hhd .ntxt .ic { width: 14px; height: 14px; stroke-width: 2.4; }
+.fch { display: flex; align-items: center; gap: 10px; width: calc(100% - 40px); min-height: 52px; margin: 14px 20px 2px; padding: 4px 0; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.fch > .ic { flex: none; width: 16px; height: 16px; stroke-width: 2.4; color: var(--text-muted); transition: transform .25s var(--n-ease, ease); }
+.fch[aria-expanded="false"] > .ic { transform: rotate(-90deg); }
+.fch .fct { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.fch h3 { margin: 0; font-size: 20px; line-height: 25px; font-weight: 700; }
+.fch .fcd { color: var(--text-muted); font-size: 13px; line-height: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fch .fcn { flex: none; min-width: 26px; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 9%, transparent); color: var(--text); font-size: 15px; font-weight: 600; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.fch:active { color: var(--accent); }
+.fch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .fch > .ic { transition: none; } }
 #hpane > :first-child { margin-top: 0; }
 .hcard { margin: 6px 16px 0; padding: 16px; border-radius: 26px; background: var(--fill-group); }
 .hrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 16px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
@@ -6202,7 +6212,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     factory: { title: () => L('Software Factory', 'Softwarefabrik'), tabs: () => [['board', L('Board', 'Tavle')], ['needs', L('Needs Dan', 'Kræver Dan')], ['releases', L('Releases', 'Udgivelser')]] },
     settings: { title: () => L('Settings', 'Indstillinger'), tabs: () => [['general', L('General', 'Generelt')], ['models', L('Models', 'Modeller')], ['health', L('Health', 'Sundhed')], ['account', L('Account', 'Konto')]] }
   };
-  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, doneOpen: false, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
+  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, shut: { done: true }, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
   const tab = () => S.tabs[S.area];
   const offline = () => S.st === 'offline';
   const NOW = new Date(2026, 9, 30, 9, 41);
@@ -6411,6 +6421,14 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       '<div class="nsw-row"><button class="hmain" type="button" data-open>' + ic(sx[1], sx[2]) + '<span class="hl"><b>' + esc(ftitle(x)) + '</b><small>' + sub + '</small></span></button>' + (x.pr ? '<span class="hv' + (x.ck === 'fail' ? ' bad' : '') + '">' + ic('i-pr') + x.pr + '</span>' : '') + '</div></li>';
   };
   const projTasks = () => (S.st === 'empty' ? [] : FT.filter(x => x.p === S.proj));
+  const tally = (list, key) => { const m = new Map(); list.forEach(x => m.set(key(x), (m.get(key(x)) || 0) + 1)); return [...m]; };
+  const colDetail = items => {
+    const live = items.filter(x => x.st !== 'idle' && x.st !== 'done');
+    const parts = live.length
+      ? tally(live, x => (x.st === 'attn' ? L('waiting on you', 'venter på dig') : P(STX[x.st][0]).toLowerCase())).map(([k, n]) => n + ' ' + k).concat(items.length > live.length ? [(items.length - live.length) + ' ' + L('waiting', 'venter')] : [])
+      : tally(items, x => x.ag).map(([k, n]) => n + ' ' + k);
+    return parts.join(' · ');
+  };
   function boardPane(needsOnly) {
     const list = projTasks();
     let h = '';
@@ -6419,8 +6437,8 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       const items = needsOnly ? list.filter(x => x.needs) : list.filter(x => x.col === c[0]);
       if (!items.length && c[0] !== 'done') return;
       if (!items.length) return;
-      const isDone = c[0] === 'done', open = !isDone || S.doneOpen;
-      h += hd(P(c[1]) + ' · ' + items.length, isDone ? '<button class="ntxt" type="button" data-done aria-expanded="' + open + '">' + esc(open ? L('Hide', 'Skjul') : L('Show', 'Vis')) + '</button>' : '');
+      const open = !S.shut[c[0]];
+      h += '<button class="fch" type="button" data-col="' + c[0] + '" aria-expanded="' + open + '" aria-label="' + esc(P(c[1]) + ', ' + items.length + '. ' + colDetail(items) + '. ' + (open ? L('Collapse', 'Skjul') : L('Expand', 'Vis'))) + '">' + ic('i-chev-down') + '<span class="fct"><h3>' + esc(P(c[1])) + '</h3><span class="fcd">' + esc(colDetail(items)) + '</span></span><span class="fcn">' + items.length + '</span></button>';
       if (open) h += '<ul class="group">' + items.map(taskRow).join('') + '</ul>';
     });
     return h;
@@ -6875,7 +6893,8 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if ((b = t.closest('[data-sug]'))) { prefill('hf', b.dataset.sug); return; }
     if (t.closest('#hf-save')) { doSave(); return; }
     if (t.closest('#hf-retry')) { S.st = 'default'; doSave(); return; }
-    if (t.closest('[data-done]')) { S.doneOpen = !S.doneOpen; render(); refocus('[data-done]'); return; }
+    const colB = t.closest('[data-col]');
+    if (colB) { const k = colB.dataset.col; S.shut[k] = !S.shut[k]; render(); refocus('[data-col="' + k + '"]'); return; }
     if ((b = t.closest('[data-sw]'))) { if (offline()) return; const k = b.dataset.sw; SV[k] = !SV[k]; commit('[data-sw="' + k + '"]'); return; }
     if ((b = t.closest('[data-pick]'))) {
       if (offline()) return;
@@ -6965,7 +6984,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   function apply(area, tb, state) {
     closeMenu(); if (shOpen) closeSheet(true); if (detOpen) closeDetail(true);
     curArea = area;
-    Object.assign(S, { area, st: 'default', q: '', searching: false, save: '', doneOpen: false, f: { name: '', kg: '', reps: '', sets: '' } });
+    Object.assign(S, { area, st: 'default', q: '', searching: false, save: '', shut: { done: true }, f: { name: '', kg: '', reps: '', sets: '' } });
     S.tabs[area] = tb; sIn.value = '';
     if (state === 'search') { S.searching = true; S.q = area === 'health' ? L('bench', 'bænk') : area === 'factory' ? L('reconnect', 'genforbindelse') : 'model'; sIn.value = S.q; }
     else if (['empty', 'loading', 'error', 'offline', 'stale', 'forbidden', 'saving', 'savefail'].includes(state)) S.st = state;
@@ -7002,7 +7021,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       const a = phone.dataset.hub || S.area;
       if (a !== curArea) {
         curArea = a; closeMenu(); if (shOpen) closeSheet(true); if (detOpen) closeDetail(true);
-        Object.assign(S, { area: a, st: 'default', q: '', searching: false, save: '', doneOpen: false }); sIn.value = '';
+        Object.assign(S, { area: a, st: 'default', q: '', searching: false, save: '', shut: { done: true } }); sIn.value = '';
       }
       $('#ng-reset').hidden = false; applyLang(); render();
       return;
