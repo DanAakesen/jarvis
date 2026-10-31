@@ -421,13 +421,6 @@ struct JarvisHealthSessionsSection: View {
         HStack(spacing: JarvisDesignTokens.healthRowSpacing) {
             Image(systemName: sessionSymbol(row["workout_type"]?.stringValue))
                 .foregroundStyle(JarvisDesignTokens.healthAccent)
-                .annotation(position: .top) {
-                    if point.isPartial {
-                        Text("≤")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
                 .frame(width: JarvisDesignTokens.healthControlHeight)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
@@ -586,6 +579,13 @@ struct JarvisHealthNutritionSection: View {
                             y: .value(copy.text(.proteinChart), point.value)
                         )
                         .foregroundStyle(JarvisDesignTokens.healthAccent)
+                        .annotation(position: .top) {
+                            if point.isPartial {
+                                Text("≤")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
                     if let target = targets?.targets.proteinGrams {
                         RuleMark(y: .value(copy.text(.target), target))

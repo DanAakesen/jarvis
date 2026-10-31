@@ -562,7 +562,7 @@ struct JarvisHealthArea: View {
         )
         guard !Task.isCancelled else { return }
         next.sync = await read(
-            .sync, limit: nil,
+            .sync, period: nil, limit: nil,
             capabilities: next.capabilities, previous: previous?.sync, client: client
         )
         guard !Task.isCancelled else { return }
