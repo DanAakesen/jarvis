@@ -61,7 +61,7 @@ struct JarvisSidebar: View {
             GeometryReader { scrollGeometry in
                 ScrollView {
                     VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
-                        ForEach(Array(JarvisDestination.sidebarItems.reversed())) { destination in
+                        ForEach(JarvisDestination.sidebarItems) { destination in
                             sidebarRow(destination)
                         }
                     }

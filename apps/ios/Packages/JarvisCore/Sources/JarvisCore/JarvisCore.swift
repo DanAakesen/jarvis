@@ -14,7 +14,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     case settings
 
     public static let sidebarItems: [JarvisDestination] = [
-        .proactive, .status, .usage, .banking, .softwareFactory, .health, .workspaces, .notes, .chat,
+        .proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .chat,
     ]
 
     public var id: String { rawValue }

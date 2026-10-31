@@ -7,10 +7,10 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(String(describing: JarvisCore.self), "JarvisCore")
     }
 
-    func testSidebarItemsAreOrderedFromLowestToHighest() {
+    func testSidebarItemsMatchTheApprovedBoardOrder() {
         XCTAssertEqual(
             JarvisDestination.sidebarItems,
-            [.proactive, .status, .usage, .banking, .softwareFactory, .health, .workspaces, .notes, .chat]
+            [.proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .chat]
         )
     }
 
