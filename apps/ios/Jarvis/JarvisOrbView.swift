@@ -35,47 +35,52 @@ struct JarvisOrbView: View {
                     .fill(
                         RadialGradient(
                             colors: [
-                                JarvisDesignTokens.orbAccent.opacity(JarvisDesignTokens.orbHaloStrongOpacity),
-                                JarvisDesignTokens.orbAccent.opacity(JarvisDesignTokens.orbHaloSoftOpacity),
-                                .clear,
+                                JarvisDesignTokens.orbGlassHighlight,
+                                JarvisDesignTokens.orbGlass,
+                                JarvisDesignTokens.orbGlassShadow,
                             ],
-                            center: UnitPoint(
-                                x: JarvisDesignTokens.orbHaloCenterX,
-                                y: JarvisDesignTokens.orbHaloCenterY
-                            ),
-                            startRadius: JarvisDesignTokens.orbGradientStartRadius,
-                            endRadius: size * JarvisDesignTokens.orbHaloRadiusScale
+                            center: JarvisDesignTokens.orbGlassCenter,
+                            startRadius: size * JarvisDesignTokens.orbGlassStartRadiusScale,
+                            endRadius: size * JarvisDesignTokens.orbGlassEndRadiusScale
                         )
                     )
-                Circle()
-                    .strokeBorder(
-                        JarvisDesignTokens.orbAccent.opacity(JarvisDesignTokens.orbRingOpacity),
-                        lineWidth: size * JarvisDesignTokens.orbRingWidthScale
-                    )
-                    .padding(size * JarvisDesignTokens.orbRingInsetScale)
+                    .overlay {
+                        Circle()
+                            .strokeBorder(
+                                JarvisDesignTokens.orbGlassEdge,
+                                lineWidth: size * JarvisDesignTokens.orbGlassEdgeWidthScale
+                            )
+                    }
                     .shadow(
-                        color: JarvisDesignTokens.orbAccent.opacity(JarvisDesignTokens.orbRingGlowOpacity),
-                        radius: size * JarvisDesignTokens.orbRingGlowRadiusScale
+                        color: JarvisDesignTokens.orbGlassShadowColor,
+                        radius: size * JarvisDesignTokens.orbGlassShadowRadiusScale
                     )
                 Circle()
                     .fill(
                         RadialGradient(
                             colors: [
                                 JarvisDesignTokens.orbCore,
-                                JarvisDesignTokens.orbAccent.opacity(JarvisDesignTokens.orbCoreAccentOpacity),
-                                Color(uiColor: .systemBackground).opacity(JarvisDesignTokens.orbCoreBaseOpacity),
+                                JarvisDesignTokens.orbCore.opacity(JarvisDesignTokens.orbCoreEdgeOpacity),
+                                .clear,
                             ],
-                            center: UnitPoint(
-                                x: JarvisDesignTokens.orbCoreCenterX,
-                                y: JarvisDesignTokens.orbCoreCenterY
-                            ),
+                            center: JarvisDesignTokens.orbCoreCenter,
                             startRadius: 0,
-                            endRadius: size * JarvisDesignTokens.orbHaloRadiusScale
+                            endRadius: size * JarvisDesignTokens.orbCoreGlowRadiusScale
                         )
                     )
-                    .padding(size * JarvisDesignTokens.orbCoreInsetScale)
+                    .frame(
+                        width: size * JarvisDesignTokens.orbCoreGlowSizeScale,
+                        height: size * JarvisDesignTokens.orbCoreGlowSizeScale
+                    )
                 Circle()
-                    .fill(JarvisDesignTokens.orbCore)
+                    .fill(
+                        RadialGradient(
+                            colors: [JarvisDesignTokens.orbCoreHighlight, JarvisDesignTokens.orbCore],
+                            center: JarvisDesignTokens.orbCoreHighlightCenter,
+                            startRadius: 0,
+                            endRadius: size * JarvisDesignTokens.orbCenterSizeScale
+                        )
+                    )
                     .frame(
                         width: size * JarvisDesignTokens.orbCenterSizeScale,
                         height: size * JarvisDesignTokens.orbCenterSizeScale

@@ -4,6 +4,7 @@ import SwiftUI
 struct WorkspacesView: View {
     @ObservedObject var runtime: WorkspaceRuntime
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @State private var loadState: LoadState = .loading
     @State private var signInRequired = false
     @State private var items: [SavedWorkspaceItem] = []
@@ -21,11 +22,14 @@ struct WorkspacesView: View {
     @State private var renameTitle = ""
     @State private var removeTarget: SavedWorkspaceItem?
 
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             connectionStatus
             kindFilters
-            searchField
             if let notice {
                 Text(notice)
                     .font(.subheadline)
@@ -38,8 +42,8 @@ struct WorkspacesView: View {
             results
         }
         .background(Color(uiColor: .systemBackground))
-        .navigationTitle("Workspaces")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(text(.title))
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(action: refresh) {
@@ -50,8 +54,14 @@ struct WorkspacesView: View {
                     }
                 }
                 .disabled(loadState == .loading)
-                .accessibilityLabel("Refresh Workspaces")
+                .accessibilityLabel(text(.refreshAccessibility))
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            searchField
+                .padding(.top, JarvisDesignTokens.contentSpacing / 2)
+                .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
+                .background(.regularMaterial)
         }
         .task(id: "\(query)|\(selectedKind?.rawValue ?? "")|\(reloadID)") {
             do {
@@ -68,70 +78,76 @@ struct WorkspacesView: View {
             }
         }
         .alert(
-            "Rename",
+            text(.rename),
             isPresented: Binding(
                 get: { renameTarget != nil },
                 set: { if !$0 { renameTarget = nil } }
             )
         ) {
-            TextField("Title", text: $renameTitle)
+            TextField(text(.titleField), text: $renameTitle)
                 .textInputAutocapitalization(.sentences)
-            Button("Save") { Task { await rename() } }
+            Button(text(.save)) { Task { await rename() } }
                 .disabled(renameTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            Button("Cancel", role: .cancel) { renameTarget = nil }
+            Button(text(.cancel), role: .cancel) { renameTarget = nil }
         }
         .confirmationDialog(
-            removeTarget.map { "Remove “\($0.title)”?" } ?? "Remove workspace?",
+            removeTarget.map { formatted(.removeQuestion, $0.title) } ?? text(.removeFallbackQuestion),
             isPresented: Binding(
                 get: { removeTarget != nil },
                 set: { if !$0 { removeTarget = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Remove", role: .destructive) { Task { await remove() } }
-            Button("Cancel", role: .cancel) { removeTarget = nil }
+            Button(text(.remove), role: .destructive) { Task { await remove() } }
+            Button(text(.cancel), role: .cancel) { removeTarget = nil }
         } message: {
-            Text("The saved item is removed. Its source artifact is retained.")
+            Text(text(.removeMessage))
         }
+        .environment(\.locale, language.locale)
     }
 
     private var connectionStatus: some View {
-        Label(runtime.connectionStatus.title, systemImage: runtime.connectionStatus.symbolName)
+        Label(runtime.connectionStatus.title(language: language), systemImage: runtime.connectionStatus.symbolName)
             .font(.footnote)
             .foregroundStyle(runtime.connectionStatus == .connected ? Color.secondary : Color.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, JarvisDesignTokens.contentInset)
             .padding(.top, JarvisDesignTokens.contentSpacing)
-            .accessibilityLabel("Workspace connection: \(runtime.connectionStatus.title)")
+            .accessibilityLabel(formatted(.connectionLabel, runtime.connectionStatus.title(language: language)))
     }
 
     private var kindFilters: some View {
         ScrollView(.horizontal) {
             HStack(spacing: JarvisDesignTokens.rowSpacing) {
+                kindFilterButton(title: text(.allKinds), kind: nil)
                 ForEach(SavedWorkspaceKind.allCases, id: \.self) { kind in
-                    let selected = selectedKind == kind
-                    Button {
-                        withAnimation(reduceMotion ? nil : .snappy(duration: JarvisDesignTokens.filterAnimationDuration)) {
-                            selectedKind = selected ? nil : kind
-                        }
-                    } label: {
-                        HStack(spacing: JarvisDesignTokens.iconLabelSpacing) {
-                            if selected { Image(systemName: "checkmark") }
-                            Text(kind.label)
-                        }
-                        .font(.subheadline.weight(selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? Color.accentColor : Color.primary)
-                        .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    kindFilterButton(title: kindLabel(kind), kind: kind)
                 }
             }
             .padding(.horizontal, JarvisDesignTokens.contentInset)
         }
         .scrollIndicators(.hidden)
-        .accessibilityLabel("Filter Workspaces by kind")
+        .accessibilityLabel(text(.filterByKind))
+    }
+
+    private func kindFilterButton(title: String, kind: SavedWorkspaceKind?) -> some View {
+        let selected = selectedKind == kind
+        return Button {
+            withAnimation(reduceMotion ? nil : .snappy(duration: JarvisDesignTokens.filterAnimationDuration)) {
+                selectedKind = selected ? nil : kind
+            }
+        } label: {
+            HStack(spacing: JarvisDesignTokens.iconLabelSpacing) {
+                if selected { Image(systemName: "checkmark") }
+                Text(title)
+            }
+            .font(.subheadline.weight(selected ? .semibold : .regular))
+            .foregroundStyle(selected ? Color.accentColor : Color.primary)
+            .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var searchField: some View {
@@ -139,11 +155,11 @@ struct WorkspacesView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
-            TextField("Search Workspaces", text: $query)
+            TextField(text(.search), text: $query)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
-                .accessibilityLabel("Search Workspaces")
+                .accessibilityLabel(text(.search))
             if !query.isEmpty {
                 Button {
                     query = ""
@@ -154,13 +170,13 @@ struct WorkspacesView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Clear search")
+                .accessibilityLabel(text(.clearSearch))
             }
         }
         .padding(.leading, JarvisDesignTokens.contentInset)
         .padding(.trailing, query.isEmpty ? JarvisDesignTokens.contentInset : 4)
         .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
+        .background(.ultraThinMaterial, in: Capsule())
         .padding(.horizontal, JarvisDesignTokens.contentInset)
         .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
     }
@@ -169,7 +185,7 @@ struct WorkspacesView: View {
         List {
             if loadState == .loading && items.isEmpty {
                 Section {
-                    ProgressView("Loading Workspaces")
+                    ProgressView(text(.loading))
                         .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         .listRowSeparator(.hidden)
                 }
@@ -181,7 +197,7 @@ struct WorkspacesView: View {
             } else {
                 if loadState == .stale {
                     Section {
-                        Label("Offline. Showing saved results.", systemImage: "wifi.slash")
+                        Label(text(.offlineSaved), systemImage: "wifi.slash")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
@@ -194,7 +210,7 @@ struct WorkspacesView: View {
                             workspaceRow(item)
                         }
                     } header: {
-                        Text(group.title)
+                        Text(groupTitle(group.title))
                             .font(.headline)
                             .foregroundStyle(.primary)
                             .textCase(nil)
@@ -207,7 +223,7 @@ struct WorkspacesView: View {
                         } label: {
                             HStack {
                                 Spacer()
-                                Text("Show older")
+                                Text(text(.showOlder))
                                 Spacer()
                             }
                             .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
@@ -227,13 +243,13 @@ struct WorkspacesView: View {
     private var statePanel: some View {
         switch loadState {
         case .loading:
-            ProgressView("Loading Workspaces")
+            ProgressView(text(.loading))
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
         case .ready where !normalizedQuery(query).isEmpty || selectedKind != nil:
             VStack(spacing: JarvisDesignTokens.contentSpacing) {
-                Label("No matching workspaces", systemImage: "magnifyingglass")
+                Label(text(.noMatching), systemImage: "magnifyingglass")
                     .font(.headline)
-                Button("Clear filters") {
+                Button(text(.clearFilters)) {
                     query = ""
                     selectedKind = nil
                 }
@@ -242,7 +258,7 @@ struct WorkspacesView: View {
             }
             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
         case .ready:
-            Label("No saved items", systemImage: "square.stack.3d.up")
+            Label(text(.noSavedItems), systemImage: "square.stack.3d.up")
                 .font(.headline)
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
         case .error, .stale:
@@ -250,7 +266,7 @@ struct WorkspacesView: View {
                 Label(errorTitle, systemImage: "exclamationmark.triangle")
                     .font(.headline)
                 if runtime.workspacesClient != nil && !signInRequired {
-                    Button("Retry", action: refresh)
+                    Button(text(.retry), action: refresh)
                         .buttonStyle(.plain)
                         .foregroundStyle(Color.accentColor)
                 }
@@ -279,7 +295,7 @@ struct WorkspacesView: View {
                                 .lineLimit(2)
                             Spacer(minLength: 4)
                             if openedItemID == item.id {
-                                Label("Opened", systemImage: "checkmark")
+                                Label(text(.opened), systemImage: "checkmark")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -288,7 +304,7 @@ struct WorkspacesView: View {
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
-                        Text(item.kind.label)
+                        Text(kindLabel(item.kind))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         if !item.promptSummary.isEmpty {
@@ -306,18 +322,18 @@ struct WorkspacesView: View {
             }
             .buttonStyle(.plain)
             .disabled(busyItems.contains(item.id))
-            .accessibilityLabel("Open \(item.title), \(item.kind.label), \(formatWhen(item.createdAt))")
+            .accessibilityLabel(formatted(.openItem, item.title, kindLabel(item.kind), formatWhen(item.createdAt)))
             .accessibilityHint(item.promptSummary.isEmpty ? "" : item.promptSummary)
 
             Menu {
-                Button(item.pinned ? "Unpin" : "Pin", systemImage: item.pinned ? "pin.slash" : "pin") {
+                Button(text(item.pinned ? .unpin : .pin), systemImage: item.pinned ? "pin.slash" : "pin") {
                     Task { await setPinned(item, pinned: !item.pinned) }
                 }
-                Button("Rename", systemImage: "pencil") {
+                Button(text(.rename), systemImage: "pencil") {
                     renameTarget = item
                     renameTitle = item.title
                 }
-                Button("Remove", systemImage: "trash", role: .destructive) {
+                Button(text(.remove), systemImage: "trash", role: .destructive) {
                     removeTarget = item
                 }
             } label: {
@@ -327,7 +343,7 @@ struct WorkspacesView: View {
                     .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel("Actions for \(item.title)")
+            .accessibilityLabel(formatted(.actionsFor, item.title))
             .disabled(busyItems.contains(item.id))
         }
         .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
@@ -338,14 +354,14 @@ struct WorkspacesView: View {
             trailing: JarvisDesignTokens.contentInset / 2
         ))
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button(item.pinned ? "Unpin" : "Pin", systemImage: item.pinned ? "pin.slash" : "pin") {
+            Button(text(item.pinned ? .unpin : .pin), systemImage: item.pinned ? "pin.slash" : "pin") {
                 Task { await setPinned(item, pinned: !item.pinned) }
             }
             .tint(.accentColor)
             .disabled(busyItems.contains(item.id))
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button("Remove", systemImage: "trash", role: .destructive) {
+            Button(text(.remove), systemImage: "trash", role: .destructive) {
                 removeTarget = item
             }
             .disabled(busyItems.contains(item.id))
@@ -353,10 +369,10 @@ struct WorkspacesView: View {
     }
 
     private var errorTitle: String {
-        if signInRequired { return "Sign in to load Workspaces" }
-        guard runtime.workspacesClient != nil else { return "Workspaces need app configuration" }
-        if case .stale = loadState { return "Workspaces are unavailable" }
-        return "Workspaces could not be loaded"
+        if signInRequired { return text(.signInRequired) }
+        guard runtime.workspacesClient != nil else { return text(.configurationRequired) }
+        if case .stale = loadState { return text(.unavailable) }
+        return text(.loadFailed)
     }
 
     private func refresh() {
@@ -385,7 +401,7 @@ struct WorkspacesView: View {
             guard !Task.isCancelled else { return }
             signInRequired = (error as? JarvisClientError) == .signInRequired
             loadState = items.isEmpty ? .error : .stale
-            notice = items.isEmpty ? nil : "Workspaces are offline. Showing saved results."
+            notice = items.isEmpty ? nil : text(.offlineNotice)
         }
     }
 
@@ -404,7 +420,7 @@ struct WorkspacesView: View {
             hasMore = page.count >= JarvisWorkspacesClient.pageSize
             notice = nil
         } catch {
-            notice = "Older workspaces could not be loaded."
+            notice = text(.olderLoadFailed)
         }
     }
 
@@ -420,9 +436,9 @@ struct WorkspacesView: View {
             if let workspaceError = error as? WorkspacesClientError,
                workspaceError == .itemNotFound {
                 items.removeAll { $0.id == item.id }
-                notice = "This workspace is no longer available."
+                notice = text(.itemUnavailable)
             } else {
-                notice = "This workspace could not be opened."
+                notice = text(.openFailed)
             }
         }
     }
@@ -439,9 +455,9 @@ struct WorkspacesView: View {
             if let workspaceError = error as? WorkspacesClientError,
                workspaceError == .itemNotFound {
                 items.removeAll { $0.id == item.id }
-                notice = "This workspace is no longer available."
+                notice = text(.itemUnavailable)
             } else {
-                notice = "The pin change could not be saved."
+                notice = text(.pinFailed)
             }
         }
     }
@@ -461,9 +477,9 @@ struct WorkspacesView: View {
             if let workspaceError = error as? WorkspacesClientError,
                workspaceError == .itemNotFound {
                 items.removeAll { $0.id == item.id }
-                notice = "This workspace is no longer available."
+                notice = text(.itemUnavailable)
             } else {
-                notice = "The title could not be saved."
+                notice = text(.titleSaveFailed)
             }
         }
     }
@@ -482,14 +498,14 @@ struct WorkspacesView: View {
                 openedFeedbackTask?.cancel()
                 openedItemID = nil
             }
-            notice = "Removed from Workspaces."
+            notice = text(.removed)
         } catch {
             if let workspaceError = error as? WorkspacesClientError,
                workspaceError == .itemNotFound {
                 items.removeAll { $0.id == item.id }
-                notice = "This workspace is no longer available."
+                notice = text(.itemUnavailable)
             } else {
-                notice = "This workspace could not be removed."
+                notice = text(.removeFailed)
             }
         }
     }
@@ -535,8 +551,38 @@ struct WorkspacesView: View {
     private func formatWhen(_ value: String) -> String {
         let date = date(from: value)
         return Calendar.current.isDateInToday(date)
-            ? date.formatted(date: .omitted, time: .shortened)
-            : date.formatted(date: .abbreviated, time: .omitted)
+            ? date.formatted(.dateTime.hour().minute().locale(language.locale))
+            : date.formatted(.dateTime.month(.abbreviated).day().locale(language.locale))
+    }
+
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
+
+    private func formatted(_ key: JarvisWorkspaceLocalizationKey, _ arguments: CVarArg...) -> String {
+        JarvisWorkspaceLocalization.formatted(key, language: language, arguments: arguments)
+    }
+
+    private func groupTitle(_ title: String) -> String {
+        let key: JarvisWorkspaceLocalizationKey
+        switch title {
+        case "Pinned": key = .groupPinned
+        case "Today": key = .groupToday
+        case "This week": key = .groupWeek
+        default: key = .groupEarlier
+        }
+        return text(key)
+    }
+
+    private func kindLabel(_ kind: SavedWorkspaceKind) -> String {
+        let key: JarvisWorkspaceLocalizationKey
+        switch kind {
+        case .research: key = .kindReports
+        case .htmlApp: key = .kindApps
+        case .image: key = .kindImages
+        case .knowledgeGraph: key = .kindGraphs
+        }
+        return text(key)
     }
 
     private func symbol(for kind: SavedWorkspaceKind) -> String {
@@ -556,7 +602,7 @@ private enum LoadState: Equatable {
     case stale
 }
 
-#Preview("Workspaces unavailable") {
+#Preview {
     NavigationStack {
         WorkspacesView(runtime: WorkspaceRuntime(client: nil, webAppURL: nil))
     }

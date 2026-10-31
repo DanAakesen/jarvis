@@ -9,15 +9,17 @@ enum WorkspaceConnectionStatus: Equatable {
     case offline
     case stale
 
-    var title: String {
+    func title(language: JarvisAppLanguage) -> String {
+        let key: JarvisWorkspaceLocalizationKey
         switch self {
-        case .unavailable: "Not connected"
-        case .connecting: "Connecting"
-        case .connected: "Connected"
-        case .reconnecting: "Reconnecting"
-        case .offline: "Offline"
-        case .stale: "Connection needs refresh"
+        case .unavailable: key = .notConnected
+        case .connecting: key = .connecting
+        case .connected: key = .connected
+        case .reconnecting: key = .reconnecting
+        case .offline: key = .offline
+        case .stale: key = .refreshConnection
         }
+        return JarvisWorkspaceLocalization.string(key, language: language)
     }
 
     var symbolName: String {
@@ -49,6 +51,12 @@ final class WorkspaceRuntime: ObservableObject {
     private var knownViews: [String: GeneratedView] = [:]
     private var trustedBlobHost: String?
 
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(
+            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+        ) ?? .default
+    }
+
     init(client: JarvisClient?, webAppURL: URL?) {
         workspacesClient = client.map(JarvisWorkspacesClient.init(client:))
         workspaceClient = client.map(JarvisWorkspaceClient.init(client:))
@@ -73,7 +81,7 @@ final class WorkspaceRuntime: ObservableObject {
                     await handle(command, expiresAtMilliseconds: expiresAtMilliseconds, trustedBlobHost: host)
                 case .connectionInterrupted:
                     connectionStatus = .reconnecting
-                case .pendingConfirmationsChanged, .workspaceCancel, .unknown:
+                case .pendingConfirmationsChanged, .activityChanged, .workspaceCancel, .unknown:
                     break
                 }
             }
@@ -179,7 +187,11 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     private func apply(_ command: WorkspaceCommand, trustedBlobHost: String?) -> WorkspaceCommandResult {
-        switch WorkspaceCommandInterpreter.interpret(command, trustedBlobHost: trustedBlobHost) {
+        switch WorkspaceCommandInterpreter.interpret(
+            command,
+            trustedBlobHost: trustedBlobHost,
+            language: language
+        ) {
         case .refused(let reason):
             return .refused(reason: reason)
         case .error(let reason):
@@ -188,7 +200,7 @@ final class WorkspaceRuntime: ObservableObject {
             switch intent {
             case .navigate(let page):
                 guard let destination = Self.destination(for: page) else {
-                    return .refused(reason: "This destination is not available on iPhone.")
+                    return .refused(reason: JarvisWorkspaceLocalization.string(.destinationUnavailable, language: language))
                 }
                 requestedDestination = destination
             case .present(let viewId, let view):
@@ -196,12 +208,12 @@ final class WorkspaceRuntime: ObservableObject {
                 presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
             case .focus(let viewId):
                 guard let view = knownViews[viewId] else {
-                    return .refused(reason: "The workspace view is not available on iPhone.")
+                    return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
                 }
                 presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
             case .dismiss(let viewId):
                 guard knownViews[viewId] != nil else {
-                    return .refused(reason: "The workspace view is not available on iPhone.")
+                    return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
                 }
                 if presentedView?.viewId == viewId { presentedView = nil }
             }

@@ -6409,6 +6409,12 @@ from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
 require the existing Mac compile check; no simulator boot or UI-test job was
 added.
 
+The screen follows the checked-in Workspaces frame's fixed-bottom search. Its
+app and VoiceOver strings use `JarvisWorkspaceLocalization` resources in Danish
+and English, selected by the persisted `JarvisAppLanguage` preference (Danish
+default). The shared native gate orb uses dark glass and an orange center with
+no orbit/meridian ellipses; the Workspaces frame itself has no orb.
+
 The list renders table, list, detail, text, timeline, chart, task-card, status
 and image views. HTML-app, knowledge-graph and code remain unsupported cards,
 and supplied HTML is not executed. `JARVIS_WEB_APP_URL` is optional and accepts

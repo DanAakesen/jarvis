@@ -1545,6 +1545,11 @@ unimplemented flow. The backend's active-client choice and post-reconnect comman
 replay remain unverified, so opening from Workspaces does not assume the command
 targets the phone.
 
+Workspaces labels, status, action and accessibility copy are read from the
+JarvisCore `JarvisWorkspaces` Danish/English string tables using the shared
+persisted `JarvisAppLanguage` preference. The approved reference keeps search
+fixed at the bottom; no create route or orb is added to the screen.
+
 ### iOS fixture replay (P15-08)
 
 `FixtureTransport` implements the core HTTP and streaming transport seam without

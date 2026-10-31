@@ -266,7 +266,8 @@ a time in a native full-height sheet. Table, list, detail, text, timeline, chart
 task-card, status and image views render natively. HTML apps, knowledge graphs,
 code views and unknown renderers remain non-executable unsupported cards until
 their native presentation is decided. No create action or new backend route is
-introduced.
+introduced. All native Workspaces UI and accessibility copy follows the persisted
+Danish/English app-language preference, defaulting to Danish.
 
 ## Conversational finding feedback (#1240)
 

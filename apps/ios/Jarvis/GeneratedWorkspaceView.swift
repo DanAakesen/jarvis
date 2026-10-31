@@ -5,9 +5,14 @@ import SwiftUI
 struct GeneratedWorkspaceSheet: View {
     let presented: PresentedWorkspaceView
     let runtime: WorkspaceRuntime
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var actionNotice: String?
+
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
 
     var body: some View {
         NavigationStack {
@@ -17,6 +22,7 @@ struct GeneratedWorkspaceSheet: View {
                         view: presented.view,
                         runtime: runtime,
                         webAppURL: runtime.webAppURL,
+                        language: language,
                         previewImage: nil,
                         onAction: perform
                     )
@@ -31,45 +37,50 @@ struct GeneratedWorkspaceSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(Color(uiColor: .systemBackground))
-            .navigationTitle(presented.view.workspaceTitle)
+            .navigationTitle(presented.view.workspaceTitle(language: language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Close", systemImage: "xmark") { dismiss() }
+                    Button(text(.close), systemImage: "xmark") { dismiss() }
                         .labelStyle(.iconOnly)
-                        .accessibilityLabel("Close workspace")
+                        .accessibilityLabel(text(.closeAccessibility))
                 }
             }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationBackground(.regularMaterial)
+        .environment(\.locale, language.locale)
     }
 
     private func perform(_ action: GeneratedViewAction) {
         switch action {
         case .openRoute(let route):
             if !runtime.openRoute(route) {
-                actionNotice = "This destination is not available on iPhone."
+                actionNotice = text(.destinationUnavailable)
             }
         case .openLink(let url, _):
             guard let url = URL(string: url) else {
-                actionNotice = "This link is invalid."
+                actionNotice = text(.invalidLink)
                 return
             }
             switch openURL(url) {
             case .handled, .systemAction:
                 actionNotice = nil
             case .discarded:
-                actionNotice = "This link couldn't be opened."
+                actionNotice = text(.linkOpenFailed)
             }
         case .callTool:
-            actionNotice = "Tool actions are not available on iPhone."
+            actionNotice = text(.toolUnavailable)
         case .window(let windowAction):
             if !runtime.perform(windowAction) {
-                actionNotice = "This window action is not available on iPhone."
+                actionNotice = text(.windowActionUnavailable)
             }
         }
+    }
+
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
     }
 }
 
@@ -77,6 +88,7 @@ private struct GeneratedViewContent: View {
     let view: GeneratedView
     let runtime: WorkspaceRuntime
     let webAppURL: URL?
+    let language: JarvisAppLanguage
     let previewImage: Image?
     let onAction: (GeneratedViewAction) -> Void
 
@@ -87,7 +99,12 @@ private struct GeneratedViewContent: View {
             if !actions.isEmpty {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
                     ForEach(Array(actions.enumerated()), id: \.offset) { _, action in
-                        GeneratedActionControl(action: action, runtime: runtime, onAction: onAction)
+                        GeneratedActionControl(
+                            action: action,
+                            runtime: runtime,
+                            language: language,
+                            onAction: onAction
+                        )
                     }
                 }
             }
@@ -99,9 +116,9 @@ private struct GeneratedViewContent: View {
     private var renderer: some View {
         switch view {
         case .table(let envelope):
-            TableRenderer(data: envelope.data)
+            TableRenderer(data: envelope.data, language: language)
         case .list(let envelope):
-            ListRenderer(data: envelope.data, runtime: runtime, onAction: onAction)
+            ListRenderer(data: envelope.data, runtime: runtime, language: language, onAction: onAction)
         case .detail(let envelope):
             DetailRenderer(data: envelope.data)
         case .text(let envelope):
@@ -109,29 +126,44 @@ private struct GeneratedViewContent: View {
         case .timeline(let envelope):
             TimelineRenderer(data: envelope.data)
         case .chart(let envelope):
-            ChartRenderer(data: envelope.data)
+            ChartRenderer(data: envelope.data, language: language)
         case .taskCard(let envelope):
             TaskCardRenderer(data: envelope.data)
         case .status(let envelope):
-            StatusRenderer(data: envelope.data)
+            StatusRenderer(data: envelope.data, language: language)
         case .image(let envelope):
-            ImageRenderer(data: envelope.data, previewImage: previewImage)
+            ImageRenderer(data: envelope.data, previewImage: previewImage, language: language)
         case .htmlApp(let envelope):
-            UnsupportedRenderer(title: envelope.title, kind: "HTML app", webAppURL: webAppURL)
+            UnsupportedRenderer(title: envelope.title, kind: text(.htmlApp), webAppURL: webAppURL, language: language)
         case .knowledgeGraph(let envelope):
-            UnsupportedRenderer(title: envelope.title, kind: "Knowledge graph", webAppURL: webAppURL)
+            UnsupportedRenderer(title: envelope.title, kind: text(.knowledgeGraph), webAppURL: webAppURL, language: language)
         case .code(let envelope):
-            UnsupportedRenderer(title: envelope.title, kind: "Code view", webAppURL: webAppURL)
+            UnsupportedRenderer(title: envelope.title, kind: text(.codeView), webAppURL: webAppURL, language: language)
         case .unsupportedVersion:
-            UnsupportedRenderer(title: "Generated view", kind: "Unsupported version", webAppURL: nil)
+            UnsupportedRenderer(
+                title: text(.generatedView),
+                kind: text(.unsupportedVersion),
+                webAppURL: nil,
+                language: language
+            )
         case .unknown:
-            UnsupportedRenderer(title: "Generated view", kind: "Unsupported view", webAppURL: nil)
+            UnsupportedRenderer(
+                title: text(.generatedView),
+                kind: text(.unsupportedView),
+                webAppURL: nil,
+                language: language
+            )
         }
+    }
+
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
     }
 }
 
 private struct TableRenderer: View {
     let data: GeneratedTableData
+    let language: JarvisAppLanguage
 
     var body: some View {
         ScrollView(.horizontal) {
@@ -146,7 +178,7 @@ private struct TableRenderer: View {
                 ForEach(Array(data.rows.enumerated()), id: \.offset) { _, row in
                     GridRow {
                         ForEach(Array(row.enumerated()), id: \.offset) { _, value in
-                            Text(display(value))
+                            Text(display(value, language: language))
                                 .font(.body)
                                 .foregroundStyle(.primary)
                         }
@@ -156,13 +188,20 @@ private struct TableRenderer: View {
             .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
         }
         .scrollIndicators(.hidden)
-        .accessibilityLabel("Table with \(data.columns.count) columns and \(data.rows.count) rows")
+        .accessibilityLabel(
+            JarvisWorkspaceLocalization.formatted(
+                .tableSize,
+                language: language,
+                arguments: [data.columns.count, data.rows.count]
+            )
+        )
     }
 }
 
 private struct ListRenderer: View {
     let data: GeneratedListData
     let runtime: WorkspaceRuntime
+    let language: JarvisAppLanguage
     let onAction: (GeneratedViewAction) -> Void
 
     var body: some View {
@@ -179,7 +218,12 @@ private struct ListRenderer: View {
                         LabelValueList(fields: details)
                     }
                     if let action = item.action {
-                        GeneratedActionControl(action: action, runtime: runtime, onAction: onAction)
+                        GeneratedActionControl(
+                            action: action,
+                            runtime: runtime,
+                            language: language,
+                            onAction: onAction
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -275,11 +319,12 @@ private struct TimelineRenderer: View {
 
 private struct ChartRenderer: View {
     let data: GeneratedChartData
+    let language: JarvisAppLanguage
 
     var body: some View {
         Group {
             if chartPoints.isEmpty {
-                Label("No chart data", systemImage: "chart.xyaxis.line")
+                Label(text(.noChartData), systemImage: "chart.xyaxis.line")
                     .foregroundStyle(.secondary)
             } else {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
@@ -295,25 +340,25 @@ private struct ChartRenderer: View {
                             Chart(chartPoints) { point in
                                 if data.kind == .bar {
                                     BarMark(
-                                        x: .value("X", point.x),
-                                        yStart: .value("Baseline", 0),
-                                        yEnd: .value("Y", point.y)
+                                        x: .value(text(.xAxis), point.x),
+                                        yStart: .value(text(.baseline), 0),
+                                        yEnd: .value(text(.yAxis), point.y)
                                     )
-                                    .position(by: .value("Series", point.series))
-                                    .foregroundStyle(by: .value("Series", point.series))
+                                    .position(by: .value(text(.series), point.series))
+                                    .foregroundStyle(by: .value(text(.series), point.series))
                                 } else if data.kind == .area {
                                     AreaMark(
-                                        x: .value("X", point.x),
-                                        yStart: .value("Baseline", 0),
-                                        yEnd: .value("Y", point.y)
+                                        x: .value(text(.xAxis), point.x),
+                                        yStart: .value(text(.baseline), 0),
+                                        yEnd: .value(text(.yAxis), point.y)
                                     )
-                                    .foregroundStyle(by: .value("Series", point.series))
+                                    .foregroundStyle(by: .value(text(.series), point.series))
                                     .opacity(JarvisDesignTokens.chartAreaOpacity)
-                                    LineMark(x: .value("X", point.x), y: .value("Y", point.y))
-                                        .foregroundStyle(by: .value("Series", point.series))
+                                    LineMark(x: .value(text(.xAxis), point.x), y: .value(text(.yAxis), point.y))
+                                        .foregroundStyle(by: .value(text(.series), point.series))
                                 } else {
-                                    LineMark(x: .value("X", point.x), y: .value("Y", point.y))
-                                        .foregroundStyle(by: .value("Series", point.series))
+                                    LineMark(x: .value(text(.xAxis), point.x), y: .value(text(.yAxis), point.y))
+                                        .foregroundStyle(by: .value(text(.series), point.series))
                                 }
                             }
                             .chartForegroundStyleScale(
@@ -349,7 +394,7 @@ private struct ChartRenderer: View {
                     }
                     .frame(height: JarvisDesignTokens.chartHeight)
 
-                    DisclosureGroup("Show values") {
+                    DisclosureGroup(text(.showValues)) {
                         VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
                             ForEach(Array(data.series.enumerated()), id: \.offset) { _, series in
                                 VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
@@ -462,13 +507,20 @@ private struct ChartRenderer: View {
     }
 
     private var chartSummary: String {
-        "\(data.kind.rawValue.capitalized) chart. " + data.series.map { series in
+        let kind: JarvisWorkspaceLocalizationKey
+        switch data.kind {
+        case .line: kind = .chartLine
+        case .bar: kind = .chartBar
+        case .area: kind = .chartArea
+        }
+        let summary = data.series.map { series in
             guard let minimum = series.points.map(\.y).min(),
                   let maximum = series.points.map(\.y).max() else {
-                return "\(series.name), no values"
+                return formatted(.chartNoValues, series.name)
             }
-            return "\(series.name), \(series.points.count) points, from \(formatNumber(minimum)) to \(formatNumber(maximum))"
+            return formatted(.chartRange, series.name, formatNumber(minimum), formatNumber(maximum))
         }.joined(separator: ". ")
+        return formatted(.chartSummary, text(kind), summary)
     }
 
     private func xLabel(_ value: Double) -> String {
@@ -490,7 +542,15 @@ private struct ChartRenderer: View {
     }
 
     private func formatNumber(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...2)))
+        value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale))
+    }
+
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
+
+    private func formatted(_ key: JarvisWorkspaceLocalizationKey, _ arguments: CVarArg...) -> String {
+        JarvisWorkspaceLocalization.formatted(key, language: language, arguments: arguments)
     }
 }
 
@@ -524,6 +584,7 @@ private struct TaskCardRenderer: View {
 
 private struct StatusRenderer: View {
     let data: GeneratedStatusData
+    let language: JarvisAppLanguage
 
     var body: some View {
         HStack(alignment: .top, spacing: JarvisDesignTokens.rowSpacing) {
@@ -539,11 +600,22 @@ private struct StatusRenderer: View {
                         .font(.body)
                         .foregroundStyle(.secondary)
                 }
-                Text(data.state.rawValue.capitalized)
+                Text(statusTitle)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(color(for: data.state))
             }
         }
+    }
+
+    private var statusTitle: String {
+        let key: JarvisWorkspaceLocalizationKey
+        switch data.state {
+        case .ok: key = .statusOK
+        case .warning: key = .statusWarning
+        case .error: key = .statusError
+        case .unknown: key = .statusUnknown
+        }
+        return JarvisWorkspaceLocalization.string(key, language: language)
     }
 
     private func symbol(for state: GeneratedStatusData.State) -> String {
@@ -568,6 +640,7 @@ private struct StatusRenderer: View {
 private struct ImageRenderer: View {
     let data: GeneratedImageData
     let previewImage: Image?
+    let language: JarvisAppLanguage
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
@@ -587,14 +660,14 @@ private struct ImageRenderer: View {
                                 .resizable()
                                 .scaledToFit()
                         case .failure:
-                            Label("Image unavailable", systemImage: "photo")
+                            Label(text(.imageUnavailable), systemImage: "photo")
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         case .empty:
-                            ProgressView("Loading image")
+                            ProgressView(text(.loadingImage))
                                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         @unknown default:
-                            Label("Image unavailable", systemImage: "photo")
+                            Label(text(.imageUnavailable), systemImage: "photo")
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         }
@@ -605,12 +678,17 @@ private struct ImageRenderer: View {
             }
         }
     }
+
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
 }
 
 private struct UnsupportedRenderer: View {
     let title: String
     let kind: String
     let webAppURL: URL?
+    let language: JarvisAppLanguage
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.contentSpacing) {
@@ -618,32 +696,41 @@ private struct UnsupportedRenderer: View {
                 .font(.title2.weight(.semibold))
             Label(kind, systemImage: "rectangle.slash")
                 .font(.subheadline)
-            Text("This view isn't available natively.")
+            Text(text(.nativeUnavailable))
                 .font(.body)
                 .foregroundStyle(.secondary)
             if let webAppURL {
-                Link("Open web app", destination: webAppURL)
+                Link(text(.openWebApp), destination: webAppURL)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
                     .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
             } else {
-                Text("Web app link not configured")
+                Text(text(.webAppNotConfigured))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("Open in web app unavailable. Web app URL is not configured.")
+                    .accessibilityLabel(text(.webAppUnavailable))
             }
         }
         .padding(JarvisDesignTokens.contentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(title), \(kind), unsupported on iPhone")
+        .accessibilityLabel(formatted(.unsupportedOnPhone, title, kind))
+    }
+
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
+
+    private func formatted(_ key: JarvisWorkspaceLocalizationKey, _ arguments: CVarArg...) -> String {
+        JarvisWorkspaceLocalization.formatted(key, language: language, arguments: arguments)
     }
 }
 
 private struct GeneratedActionControl: View {
     let action: GeneratedViewAction
     let runtime: WorkspaceRuntime
+    let language: JarvisAppLanguage
     let onAction: (GeneratedViewAction) -> Void
 
     var body: some View {
@@ -652,29 +739,33 @@ private struct GeneratedActionControl: View {
                 .buttonStyle(.bordered)
                 .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
         } else {
-            Label(title ?? "Action unavailable", systemImage: "xmark.circle")
+            Label(title ?? text(.actionUnavailable), systemImage: "xmark.circle")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .accessibilityLabel("\(title ?? "Action") unavailable on iPhone")
+                .accessibilityLabel(formatted(.actionUnavailableOnPhone, title ?? text(.actionUnavailable)))
         }
     }
 
     private var title: String? {
         switch action {
         case .openRoute(let route):
-            route == "/usage" ? "Open Usage" : route == "/settings" ? "Open Settings" : "Route unavailable: \(route)"
+            route == "/usage"
+                ? text(.openUsage)
+                : route == "/settings"
+                    ? text(.openSettings)
+                    : formatted(.routeUnavailable, route)
         case .openLink(_, let label):
             label
         case .callTool(let tool):
-            "Tool unavailable: \(tool)"
+            formatted(.toolUnavailableLabel, tool)
         case .window(let windowAction):
             switch windowAction.operation {
-            case .focus: "Focus view"
-            case .restore: "Restore view"
-            case .close: "Close view"
-            case .minimise: "Minimise view"
-            case .move: "Move view"
-            case .resize: "Resize view"
+            case .focus: text(.focusView)
+            case .restore: text(.restoreView)
+            case .close: text(.closeView)
+            case .minimise: text(.minimiseView)
+            case .move: text(.moveView)
+            case .resize: text(.resizeView)
             }
         }
     }
@@ -695,10 +786,17 @@ private struct GeneratedActionControl: View {
         }
     }
 
+    private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
+
+    private func formatted(_ key: JarvisWorkspaceLocalizationKey, _ arguments: CVarArg...) -> String {
+        JarvisWorkspaceLocalization.formatted(key, language: language, arguments: arguments)
+    }
 }
 
 private extension GeneratedView {
-    var workspaceTitle: String {
+    func workspaceTitle(language: JarvisAppLanguage) -> String {
         switch self {
         case .table(let value): value.title
         case .list(let value): value.title
@@ -712,7 +810,8 @@ private extension GeneratedView {
         case .htmlApp(let value): value.title
         case .knowledgeGraph(let value): value.title
         case .code(let value): value.title
-        case .unsupportedVersion, .unknown: "Generated view"
+        case .unsupportedVersion, .unknown:
+            JarvisWorkspaceLocalization.string(.generatedView, language: language)
         }
     }
 
@@ -735,13 +834,14 @@ private extension GeneratedView {
     }
 }
 
-private func display(_ value: JSONValue) -> String {
+private func display(_ value: JSONValue, language: JarvisAppLanguage) -> String {
     switch value {
     case .string(let value): value
-    case .number(let value): value.formatted(.number.precision(.fractionLength(0...2)))
-    case .bool(let value): value ? "Yes" : "No"
+    case .number(let value): value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale))
+    case .bool(let value):
+        JarvisWorkspaceLocalization.string(value ? .yes : .no, language: language)
     case .null: "—"
-    case .array, .object: "Value"
+    case .array, .object: JarvisWorkspaceLocalization.string(.value, language: language)
     }
 }
 
@@ -803,6 +903,11 @@ private enum GeneratedWorkspacePreviewSamples {
 
 private struct GeneratedWorkspacePreviewGallery: View {
     @StateObject private var runtime = WorkspaceRuntime(client: nil, webAppURL: nil)
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
+
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
 
     var body: some View {
         NavigationStack {
@@ -813,6 +918,7 @@ private struct GeneratedWorkspacePreviewGallery: View {
                             view: view,
                             runtime: runtime,
                             webAppURL: nil,
+                            language: language,
                             previewImage: Image(systemName: "photo"),
                             onAction: { _ in }
                         )
@@ -825,8 +931,9 @@ private struct GeneratedWorkspacePreviewGallery: View {
                 }
                 .padding(JarvisDesignTokens.contentInset)
             }
-            .navigationTitle("Synthetic views")
+            .navigationTitle(JarvisWorkspaceLocalization.string(.generatedView, language: language))
         }
+        .environment(\.locale, language.locale)
     }
 }
 

@@ -21,18 +21,19 @@ public enum WorkspaceCommandInterpreter {
 
     public static func interpret(
         _ command: WorkspaceCommand,
-        trustedBlobHost: String? = nil
+        trustedBlobHost: String? = nil,
+        language: JarvisAppLanguage = .en
     ) -> WorkspaceCommandInterpretation {
         switch command.operation {
         case "navigate":
             guard case .string(let page)? = command.fields["page"], navigationPages.contains(page) else {
-                return .refused(reason: "This destination is not available on iPhone.")
+                return .refused(reason: JarvisWorkspaceLocalization.string(.unsupportedDestination, language: language))
             }
             return .supported(.navigate(page: page))
         case "create", "update":
             guard case .string(let viewId)? = command.fields["viewId"], validViewID(viewId),
                   let value = command.fields["view"] else {
-                return .refused(reason: "The workspace view is incomplete.")
+                return .refused(reason: JarvisWorkspaceLocalization.string(.incompleteView, language: language))
             }
             let decoder = JSONDecoder()
             if let trustedBlobHost {
@@ -42,22 +43,22 @@ public enum WorkspaceCommandInterpreter {
                 let view = try decoder.decode(GeneratedView.self, from: JSONEncoder().encode(value))
                 return .supported(.present(viewId: viewId, view: view))
             } catch {
-                return .error(reason: "The workspace view could not be validated.")
+                return .error(reason: JarvisWorkspaceLocalization.string(.validationFailed, language: language))
             }
         case "show", "focus", "restore":
             guard case .string(let viewId)? = command.fields["viewId"], validViewID(viewId) else {
-                return .refused(reason: "The workspace view is not available on iPhone.")
+                return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
             }
             return .supported(.focus(viewId: viewId))
         case "close", "minimise":
             guard case .string(let viewId)? = command.fields["viewId"], validViewID(viewId) else {
-                return .refused(reason: "The workspace view is not available on iPhone.")
+                return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
             }
             return .supported(.dismiss(viewId: viewId))
         case "move", "resize":
-            return .refused(reason: "Window positioning is not supported on iPhone.")
+            return .refused(reason: JarvisWorkspaceLocalization.string(.positioningUnsupported, language: language))
         default:
-            return .refused(reason: "This workspace operation is not supported on iPhone.")
+            return .refused(reason: JarvisWorkspaceLocalization.string(.operationUnsupported, language: language))
         }
     }
 

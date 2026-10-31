@@ -2886,9 +2886,15 @@ components. Charts use Apple's Charts framework for numeric/categorical axes,
 grouped bars, area baselines and accessible values instead of a custom plot.
 
 The approved reference is `docs/ios/design/workspaces.html`; its generated
-sample data is illustrative. The native screen keeps search above results and
-has no create/plus action because neither the web Workspaces pane nor the shared
-backend contract has a create route. `html-app`, `knowledge-graph` and `code`
-remain unsupported cards; their optional link opens only a validated configured
-HTTPS web-app root, not a guessed item deep link. Supplied HTML, JavaScript and
-CSS are never executed.
+sample data is illustrative. The native screen pins search to the bottom, as in
+the reference, and has no create/plus action because neither the web Workspaces
+pane nor the shared backend contract has a create route. All Workspaces UI and
+accessibility copy follows the persisted app-language preference (Danish by
+default, with English). `html-app`, `knowledge-graph` and `code` remain
+unsupported cards; their optional link opens only a validated configured HTTPS
+web-app root, not a guessed item deep link. Supplied HTML, JavaScript and CSS are
+never executed.
+
+The shared native sign-in orb uses a dark glass sphere and orange center without
+orbit or meridian ellipses. The approved Workspaces frame contains no orb, so the
+screen does not add one.

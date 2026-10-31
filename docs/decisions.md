@@ -9503,7 +9503,7 @@ initializes the actual navigation state and rendered drawer, not a mock view. Th
 offline workflow tests pass, but hosted simulator, artifact and comment behavior
 remain unverified until a ready iOS pull request runs.
 
-## 30 October 2026 — P15-14 native Workspaces
+## 30 October 2026 — P15-14 native Workspaces (updated 31 October 2026)
 
 The owner-approved Workspaces concept is implemented with SwiftUI system
 navigation, controls and scrolling, shared Jarvis UI tokens, grouped saved items
@@ -9515,13 +9515,15 @@ refusal rather than a false success.
 Generated renderer subviews adapt contract payloads to native components; charts
 use Apple's Charts framework rather than a custom plot or third-party package.
 
-The checked-in design board does not contain the requested
-`?screen=workspaces&state=...` frame. The implementation therefore follows the
-existing web Workspaces groups and native shell, keeps search above the results,
-and omits a create/plus control because the shared contract has no create route.
-These are listed as design differences, not a claim of pixel approval. HTML-app,
-knowledge-graph and code remain unsupported, non-executable cards. A configured
-HTTPS web-app root may be opened, but no item deep link is guessed.
+The checked-in standalone reference is `docs/ios/design/workspaces.html`; the
+native list pins search to the bottom as shown and omits a create/plus control
+because the shared contract has no create route. The screen does not add an orb
+that is absent from the reference. All Workspaces UI/accessibility strings use
+the persisted Danish/English app preference, defaulting to Danish. The shared
+native gate orb uses a dark glass sphere with an orange center and no orbit or
+meridian ellipses. HTML-app, knowledge-graph and code remain unsupported,
+non-executable cards. A configured HTTPS web-app root may be opened, but no item
+deep link is guessed.
 
 Still open in the integration contract: active-client choice, command replay
 after reconnect, desktop-only commands and version negotiation. Successful
