@@ -2783,6 +2783,91 @@ SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
-stack state live in the pure-Swift `JarvisCore` package. Chat, Voice, the
-unbuilt areas and Settings use title-only placeholders until their screen
-issues are implemented. Reduced Motion removes settling animation.
+stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes are native screens;
+the unbuilt areas use title-only placeholders, and Settings hosts the app-language preference.
+Reduced Motion removes settling animation.
+
+## Native iOS Voice screen (P15-11; 30 October 2026)
+
+The approved `docs/ios/design/board.html?voice=idle` frame informs the
+composition, not literal values. Voice has no top bar: one orb and one short
+status line occupy the central field, with mute, add, captions and end controls
+anchored at the bottom. A downward swipe minimizes to a persistent voice bar.
+During screen sharing, a full-width status bar with Stop stays above the controls;
+the camera tile remains draggable in the thumb zone.
+
+Use system glass buttons, SF Symbols, semantic colours, type styles, permission
+prompts, sheets and the ReplayKit picker. The custom orb and camera tile are
+needed for the approved voice-focused layout and live camera preview; their
+dimensions, state colours and motion values come from the shared iOS token layer.
+The minimized bar preserves voice access outside the screen, and the share bar
+keeps Stop visible while broadcasting.
+Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
+control labels. The board remains a visual reference only; the rendered app and
+physical-device behavior require separate verification.
+
+## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
+
+The approved `docs/ios/design/board.html?screen=chat` frames guide composition,
+not literal data or dimensions. Keep Chat as the shell root: the transcript
+scrolls above a pinned composer, the compact Now bar sits immediately above it,
+and the navigation bar's bell opens Needs you. User and Jarvis messages use
+opposite alignment, a 24-hour timestamp at each sender/minute group, and
+translucent system glass. The activity sheet reuses the web feed's activity
+categories and shows away mode separately from its persisted activity items.
+
+Use SwiftUI's native `ScrollView`, text field, file and photo pickers, sheets,
+system button styles, SF Symbols and semantic type/color. `JarvisDesignTokens`
+in `JarvisDesignSystem.swift` is the shared source for custom geometry and
+motion, including existing sidebar values. Message bubbles are custom because
+the system has no conversation bubble with distinct sender alignment and a
+shared glass surface; the inline Now bar is custom because it combines live
+status and the pending confirmation's two actions in the composer stack; the
+activity sheet is custom because it groups the existing feed categories and
+confirmation decisions. Reduced Motion removes the message-arrival animation;
+system glass materials and opaque system-color fallbacks preserve readability
+when transparency is reduced.
+
+The composer Chat/Voice switch navigates to the native Voice screen. In Chat,
+Share screen stays visibly disabled with an accessibility explanation; screen
+sharing belongs to the Voice screen's broadcast flow.
+Synthetic preview and screenshot mode allows one fixture text turn; attachment
+uploads and activity writes are disabled with accessibility explanations, never
+simulated as successful backend actions.
+
+## Native iOS Notes area (P15-12; 30 October 2026)
+
+The approved iPhone area has four text-only segments (Notes, Tasks, List and
+Graph), with content aligned beneath one title/refresh row. The bottom search
+and plus action stay fixed above the keyboard; Notes adds folder filters directly
+above them. Native SwiftUI Lists, DisclosureGroups, sheets, navigation, system
+materials, semantic colors and SF Symbols provide the interaction and appearance.
+Selection tints labels and icons, never row surfaces. The graph uses a native
+Canvas renderer with pan/zoom and an accessible list alternative.
+
+Custom geometry lives in `JarvisDesignTokens` in
+`apps/ios/Jarvis/JarvisDesignSystem.swift`; cross-platform tree and deterministic
+graph-position logic lives in `JarvisCore`. The checked-in concept board still
+shows three tabs and two plus-menu actions, while this approved issue requires
+four tabs and creation of notes, folders and tasks. The implementation follows
+the four-tab issue and omits standalone New folder because the shared backend
+has no folder-create route; notes saved beneath a nested path create the folder.
+No note delete/rename/move, task delete, task-create priority, or offline cache
+is represented. Danish and English strings come from the JarvisCore localization
+catalog; the app-owned Settings preference defaults to Danish and controls date
+formatting as well as visible and accessibility copy.
+
+## Native iOS sign-in and lock (P15-16; 30 October 2026)
+
+The approved Sign-in and Lock frames in `docs/ios/design/board.html` guide the
+composition only. A shared Jarvis orb sits above one native prominent action;
+short failure text stays beside the action. The existing orb identity needs a
+custom SwiftUI graphic because a system control cannot express the Jarvis orb.
+Orb colors, scale, spacing and motion are shared in `JarvisDesignSystem.swift`.
+
+The gate follows the app-owned Danish/English preference through the JarvisCore
+localization catalog. Idle orb breathing stops with Reduce Motion; signing-in uses a
+stronger, faster pulse. The app shell is blurred and inaccessible behind the
+gate, and an opaque privacy cover, shown in a window above any open sheet, hides it while inactive. Face ID uses the
+system LocalAuthentication prompt; the passcode fallback is also system UI,
+not a custom keypad. No helper text or lock-interval control is shown.

@@ -185,6 +185,7 @@ public final class JarvisClient: Sendable {
         body: Data? = nil,
         authorization: Authorization,
         idempotent: Bool,
+        additionalSuccessStatuses: Set<Int> = [],
         queryItems: [URLQueryItem] = [],
         accept: String = "application/json",
         contentType: String? = "application/json",
@@ -231,6 +232,8 @@ public final class JarvisClient: Sendable {
                     throw JarvisClientError.serviceUnavailable
                 case 200..<300:
                     return response
+                case let status where additionalSuccessStatuses.contains(status):
+                    return response
                 default:
                     throw JarvisClientError.httpStatus(response.statusCode)
                 }
@@ -265,6 +268,7 @@ public final class JarvisClient: Sendable {
         body: Data? = nil,
         contentType: String? = "application/json",
         idempotent: Bool,
+        additionalSuccessStatuses: Set<Int> = [],
         accept: String = "application/json",
         timeout: Duration? = nil
     ) async throws -> HTTPResponse {
@@ -275,6 +279,7 @@ public final class JarvisClient: Sendable {
             body: body,
             authorization: .current,
             idempotent: idempotent,
+            additionalSuccessStatuses: additionalSuccessStatuses,
             queryItems: queryItems,
             accept: accept,
             contentType: contentType,
@@ -410,6 +415,8 @@ public final class JarvisClient: Sendable {
             return try await accessTokenProvider.currentToken(for: request)
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as JarvisClientError {
+            throw error
         } catch {
             await accessTokenProvider.requestSignIn()
             throw JarvisClientError.signInRequired

@@ -3,12 +3,16 @@ import PackageDescription
 
 let package = Package(
     name: "JarvisCore",
+    defaultLocalization: "da",
     platforms: [.iOS(.v26)],
     products: [
         .library(name: "JarvisCore", targets: ["JarvisCore"]),
     ],
     targets: [
-        .target(name: "JarvisCore"),
+        .target(
+            name: "JarvisCore",
+            resources: [.process("Resources")]
+        ),
         .testTarget(
             name: "JarvisCoreTests",
             dependencies: ["JarvisCore"],

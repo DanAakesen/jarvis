@@ -29,8 +29,20 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          JARVIS_API_BASE_URL: ${{ secrets.JARVIS_API_BASE_URL }}
+          JARVIS_ENTRA_CLIENT_ID: ${{ secrets.JARVIS_ENTRA_CLIENT_ID }}
+          JARVIS_ENTRA_AUTHORITY_URL: ${{ secrets.JARVIS_ENTRA_AUTHORITY_URL }}
+          JARVIS_ENTRA_API_SCOPE: ${{ secrets.JARVIS_ENTRA_API_SCOPE }}
         run: |
-          for name in APP_STORE_CONNECT_KEY_P8 APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APPLE_TEAM_ID; do
+          for name in \
+            APP_STORE_CONNECT_KEY_P8 \
+            APP_STORE_CONNECT_KEY_ID \
+            APP_STORE_CONNECT_ISSUER_ID \
+            APPLE_TEAM_ID \
+            JARVIS_API_BASE_URL \
+            JARVIS_ENTRA_CLIENT_ID \
+            JARVIS_ENTRA_AUTHORITY_URL \
+            JARVIS_ENTRA_API_SCOPE; do
             if [[ -z "${!name}" ]]; then
               echo "::error::Missing required environment value: $name"
               exit 1
@@ -65,6 +77,10 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          JARVIS_API_BASE_URL: ${{ secrets.JARVIS_API_BASE_URL }}
+          JARVIS_ENTRA_CLIENT_ID: ${{ secrets.JARVIS_ENTRA_CLIENT_ID }}
+          JARVIS_ENTRA_AUTHORITY_URL: ${{ secrets.JARVIS_ENTRA_AUTHORITY_URL }}
+          JARVIS_ENTRA_API_SCOPE: ${{ secrets.JARVIS_ENTRA_API_SCOPE }}
         run: |
           if ! xcodebuild \
             -project apps/ios/Jarvis.xcodeproj \
@@ -78,6 +94,10 @@ jobs:
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            JARVIS_API_BASE_URL="$JARVIS_API_BASE_URL" \
+            JARVIS_ENTRA_CLIENT_ID="$JARVIS_ENTRA_CLIENT_ID" \
+            JARVIS_ENTRA_AUTHORITY_URL="$JARVIS_ENTRA_AUTHORITY_URL" \
+            JARVIS_ENTRA_API_SCOPE="$JARVIS_ENTRA_API_SCOPE" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1; then
             echo "::error::Archive failed; detailed output was withheld to protect signing identifiers."
             exit 1

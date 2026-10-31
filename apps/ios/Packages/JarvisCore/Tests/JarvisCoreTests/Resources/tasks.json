@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/vault/tasks",
+      "query": {"state": "open"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "items": [
+            {
+              "id": "1111111111111111111111111111111111111111111111111111111111111111",
+              "text": "Synthetic overdue",
+              "done": false,
+              "dueDate": "2026-10-29",
+              "dueTime": "09:00",
+              "dueAt": null,
+              "priority": "high",
+              "path": "Work/Inbox_tasks.md",
+              "line": 2,
+              "heading": "Work",
+              "version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            {
+              "id": "2222222222222222222222222222222222222222222222222222222222222222",
+              "text": "Synthetic today",
+              "done": false,
+              "dueDate": "2026-10-30",
+              "dueTime": "10:00",
+              "dueAt": null,
+              "priority": "medium",
+              "path": "Work/Inbox_tasks.md",
+              "line": 3,
+              "heading": "Work",
+              "version": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            {
+              "id": "3333333333333333333333333333333333333333333333333333333333333333",
+              "text": "Synthetic upcoming",
+              "done": false,
+              "dueDate": "2026-11-02",
+              "dueTime": null,
+              "dueAt": null,
+              "priority": "normal",
+              "path": "Personal/Inbox_tasks.md",
+              "line": 4,
+              "heading": "Personal",
+              "version": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+            },
+            {
+              "id": "4444444444444444444444444444444444444444444444444444444444444444",
+              "text": "Synthetic no date",
+              "done": false,
+              "dueDate": null,
+              "dueTime": null,
+              "dueAt": null,
+              "priority": "normal",
+              "path": "Personal/Inbox_tasks.md",
+              "line": 5,
+              "heading": "Personal",
+              "version": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            }
+          ],
+          "readAt": "2026-10-30T09:00:00.000Z",
+          "today": "2026-10-30",
+          "total": 4,
+          "truncated": false
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/vault/tasks",
+      "requestBody": {
+        "path": "Work/Inbox_tasks.md",
+        "line": 2,
+        "text": "Synthetic overdue",
+        "version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "done": true
+      },
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "id": "1111111111111111111111111111111111111111111111111111111111111111",
+          "path": "Work/Inbox_tasks.md",
+          "line": 2,
+          "done": true,
+          "version": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/vault/tasks",
+      "requestBody": {
+        "text": "Synthetic new task",
+        "scope": "personal",
+        "due": "2026-10-31",
+        "time": "10:00"
+      },
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "id": "5555555555555555555555555555555555555555555555555555555555555555",
+          "path": "Personal/Inbox_tasks.md",
+          "line": 6,
+          "done": false,
+          "version": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/vault/tasks",
+      "requestBody": {"text": "Synthetic uncertain task", "scope": "work"},
+      "response": {"statusCode": 503, "body": {"error": "Synthetic unknown write outcome"}}
+    }
+  ]
+}

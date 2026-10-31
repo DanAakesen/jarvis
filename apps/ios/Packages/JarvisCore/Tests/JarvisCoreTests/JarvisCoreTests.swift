@@ -128,6 +128,24 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(request.headers["Authorization"], authorization("entra.fixture.token"))
     }
 
+    func testTypedAccessTokenProviderNetworkFailureRemainsOffline() async throws {
+        let provider = FakeAccessTokenProvider(
+            token: "entra.fixture.token",
+            failure: .networkFailure
+        )
+        let client = try makeClient(transport: FakeHTTPTransport([]), provider: provider)
+
+        do {
+            _ = try await client.createOwnerSession()
+            XCTFail("Expected network failure")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .networkFailure)
+        }
+
+        let signInRequests = await provider.signInRequests()
+        XCTAssertEqual(signInRequests, 0)
+    }
+
     func testRevokesCreatedSessionWhenTokenCannotBeStored() async throws {
         let transport = FakeHTTPTransport([
             .response(jsonResponse(status: 201, body: sessionJSON)),
@@ -205,6 +223,121 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(requests[1].headers["x-jarvis-message-id"], "42")
         XCTAssertEqual(requests[1].url.path, "/api/tools/read_fixture")
         XCTAssertEqual(requests[1].method, .post)
+    }
+
+    func testReadsVoiceLanguageFromExistingSettingsRoute() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 200, body: [
+                "settings": ["voice": ["defaultLanguage": "en"]],
+                "options": ["ignored": true],
+            ])),
+            .response(jsonResponse(status: 200, body: [
+                "settings": ["voice": [:]],
+                "options": ["ignored": true],
+            ])),
+        ])
+        let client = try makeClient(
+            transport: transport,
+            tokenStore: FakeTokenStore(token: "session.fixture.token")
+        )
+
+        let configuredLanguage = try await client.voiceDefaultLanguage()
+        let fallbackLanguage = try await client.voiceDefaultLanguage()
+        XCTAssertEqual(configuredLanguage, .en)
+        XCTAssertEqual(fallbackLanguage, .da)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.url.path), ["/api/settings", "/api/settings"])
+        XCTAssertEqual(requests.map(\.method), [.get, .get])
+        XCTAssertEqual(requests.map { $0.headers["Authorization"] }, [
+            authorization("session.fixture.token"),
+            authorization("session.fixture.token"),
+        ])
+    }
+
+    func testUploadsVoiceFrameThroughExistingScreenVisionRoute() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 200, body: [
+                "frameId": "frame_fixture",
+                "capturedAt": "2026-10-30T00:00:00.000Z",
+                "question": "What is shown?",
+                "turnId": "item_fixture",
+            ])),
+        ])
+        let client = try makeClient(
+            transport: transport,
+            tokenStore: FakeTokenStore(token: "session.fixture.token")
+        )
+
+        let frame = try await client.uploadVoiceFrame(
+            sessionId: "41",
+            jpeg: Data([0xff, 0xd8, 0x00, 0xff, 0xd9]),
+            question: "What is shown?",
+            turnId: "item_fixture"
+        )
+
+        XCTAssertEqual(frame.frameId, "frame_fixture")
+        XCTAssertEqual(frame.turnId, "item_fixture")
+        let requests = await transport.recordedRequests()
+        let request = try XCTUnwrap(requests.first)
+        XCTAssertEqual(request.method, .post)
+        XCTAssertEqual(request.url.path, "/api/screen/frames")
+        XCTAssertEqual(request.headers["Authorization"], authorization("session.fixture.token"))
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(request.body)) as? [String: String]
+        )
+        XCTAssertEqual(body["sessionId"], "41")
+        XCTAssertEqual(body["frame"], "/9gA/9k=")
+        XCTAssertEqual(body["question"], "What is shown?")
+        XCTAssertEqual(body["turnId"], "item_fixture")
+        XCTAssertEqual(body["mode"], "handle")
+    }
+
+    func testInspectsSharedVoiceFrameThroughExistingScreenVisionRoute() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 200, body: [
+                "description": "A chart with three bars.",
+                "capturedAt": "2026-10-30T00:00:00.000Z",
+            ])),
+        ])
+        let client = try makeClient(
+            transport: transport,
+            tokenStore: FakeTokenStore(token: "session.fixture.token")
+        )
+
+        let inspection = try await client.inspectVoiceScreenFrame(
+            sessionId: "41",
+            jpeg: Data([0xff, 0xd8, 0x00, 0xff, 0xd9])
+        )
+
+        XCTAssertEqual(inspection.description, "A chart with three bars.")
+        let requests = await transport.recordedRequests()
+        let request = try XCTUnwrap(requests.first)
+        XCTAssertEqual(request.method, .post)
+        XCTAssertEqual(request.url.path, "/api/screen/frames")
+        XCTAssertEqual(request.headers["Authorization"], authorization("session.fixture.token"))
+        let body = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(request.body)) as? [String: String]
+        )
+        XCTAssertEqual(body, ["sessionId": "41", "frame": "/9gA/9k="])
+    }
+
+    func testRejectsInvalidVoiceFrameBeforeSending() async throws {
+        let transport = FakeHTTPTransport([])
+        let client = try makeClient(transport: transport)
+
+        do {
+            _ = try await client.uploadVoiceFrame(
+                sessionId: "0",
+                jpeg: Data([0xff, 0xd8, 0xff, 0xd9]),
+                question: "What is shown?",
+                turnId: "item_fixture"
+            )
+            XCTFail("Expected invalid-request error")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .invalidRequest)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
     }
 
     func testMapsAuthenticationAndAuthorizationFailures() async throws {
@@ -503,14 +636,17 @@ private enum FakeTokenStoreError: Error {
 
 private actor FakeAccessTokenProvider: AccessTokenProvider {
     private let token: String
+    private let failure: JarvisClientError?
     private var signInsRequested = 0
 
-    init(token: String) {
+    init(token: String, failure: JarvisClientError? = nil) {
         self.token = token
+        self.failure = failure
     }
 
     func currentToken(for request: HTTPRequest) async throws -> String {
-        token
+        if let failure { throw failure }
+        return token
     }
 
     func requestSignIn() async {
