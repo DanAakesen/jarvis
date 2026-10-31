@@ -30,6 +30,11 @@
 	<string>$(JARVIS_ENTRA_AUTHORITY_URL)</string>
 	<key>JARVIS_ENTRA_API_SCOPE</key>
 	<string>$(JARVIS_ENTRA_API_SCOPE)</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>msauthv2</string>
+		<string>msauthv3</string>
+	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock Jarvis with Face ID.</string>
 	<key>CFBundleURLTypes</key>
