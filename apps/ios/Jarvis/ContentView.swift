@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var factoryClient: JarvisFactoryClient?
     private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
     private let factoryFixtureMode: Bool
+    private let healthScreenshotState: String?
+    private let healthScreenshotLanguage: JarvisAppLanguage?
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -32,9 +34,17 @@ struct ContentView: View {
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
         let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
+        let healthFixtureMode = arguments.contains("--screenshot-health-fixture")
+        let healthState = healthFixtureMode ? arguments.first(where: {
+            $0.hasPrefix("--screenshot-health-state=")
+        })?.components(separatedBy: "=").last : nil
+        let healthLanguage = healthFixtureMode ? arguments.first(where: {
+            $0.hasPrefix("--screenshot-health-language=")
+        })?.components(separatedBy: "=").last.flatMap(JarvisAppLanguage.init(rawValue:)) : nil
         let fixtureMode = settingsPreview
             || arguments.contains("--screenshot-chat-fixture")
             || factoryFixtureMode
+            || healthFixtureMode
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
@@ -45,6 +55,9 @@ struct ContentView: View {
         if factoryScreenshot != nil {
             initialNavigation.navigate(to: .softwareFactory)
         }
+        if healthFixtureMode { initialNavigation.navigate(to: .health) }
+        healthScreenshotState = healthState
+        healthScreenshotLanguage = healthLanguage
         self.fixtureMode = fixtureMode
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
@@ -84,7 +97,9 @@ struct ContentView: View {
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _notesClient = State(initialValue: Self.makeNotesClient())
-        _healthClient = State(initialValue: Self.makeHealthClient())
+        _healthClient = State(initialValue: healthFixtureMode
+            ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
+            : Self.makeHealthClient())
         _factoryClient = State(initialValue: Self.makeFactoryClient(
             previewState: factoryScreenshot?.state,
             fixtureMode: factoryFixtureMode
@@ -147,9 +162,11 @@ struct ContentView: View {
                             } else if destination == .health {
                                 JarvisHealthArea(
                                     client: healthClient,
-                                    language: language,
+                                    language: healthScreenshotLanguage ?? language,
                                     observeRefreshEvents: !fixtureMode,
-                                    onRetryConfiguration: { healthClient = Self.makeHealthClient() }
+                                    onRetryConfiguration: { healthClient = Self.makeHealthClient() },
+                                    workoutInitiallySelected: healthScreenshotState != nil,
+                                    presentNewLiftAfterLoading: healthScreenshotState == "newlift"
                                 )
                             } else if destination == .softwareFactory {
                                 JarvisFactoryArea(

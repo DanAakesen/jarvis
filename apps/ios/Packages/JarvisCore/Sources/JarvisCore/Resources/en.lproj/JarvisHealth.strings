@@ -59,3 +59,17 @@
 "health.partial" = "Showing some results";
 "health.hourShort" = "h";
 "health.minuteShort" = "min";
+"health.newLift" = "New lift";
+"health.exercises" = "Exercises";
+"health.history" = "History";
+"health.pastExercises" = "Past exercises";
+"health.noLifts" = "No lifts logged";
+"health.name" = "Name";
+"health.liftWeight" = "Weight (kg)";
+"health.reps" = "Reps";
+"health.sets" = "Sets";
+"health.save" = "Save";
+"health.saving" = "Saving…";
+"health.saveFailed" = "Could not save. Try again with the same values.";
+"health.cancel" = "Cancel";
+"health.loadMore" = "Load more";

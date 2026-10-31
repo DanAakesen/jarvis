@@ -10,6 +10,7 @@ public enum JarvisHealthSource: String, CaseIterable, Codable, Sendable {
     case nutritionDays = "daily.nutrition.days"
     case meals = "daily.nutrition.meals"
     case sync = "daily.sync"
+    case lifts = "daily.health.lifts"
 }
 
 public struct JarvisHealthCapabilities: Decodable, Equatable, Sendable {
@@ -27,6 +28,7 @@ public struct JarvisHealthQuery: Encodable, Sendable {
     public let workoutId: String?
     public let limit: Int?
     public let cursor: JSONValue?
+    public let lastPerExercise: Bool?
 
     public init(
         source: JarvisHealthSource,
@@ -34,14 +36,16 @@ public struct JarvisHealthQuery: Encodable, Sendable {
         metric: String? = nil,
         workoutId: String? = nil,
         limit: Int? = nil,
-        cursor: JSONValue? = nil
+        cursor: JSONValue? = nil,
+        lastPerExercise: Bool? = nil
     ) throws {
-        let periodlessSource = source == .sync || source == .workout || source == .heartRate
+        let periodlessSource = source == .sync || source == .workout || source == .heartRate || source == .lifts
         guard (period == nil) == periodlessSource,
               source == .metrics || source == .heartRate || metric == nil,
               (source == .workout || source == .heartRate) || workoutId == nil,
               (source == .workout || source == .heartRate) == (workoutId != nil),
-              limit.map({ (1...500).contains($0) }) ?? true else {
+              source == .lifts || lastPerExercise == nil,
+              limit.map({ (1...(source == .lifts ? 100 : 500)).contains($0) }) ?? true else {
             throw JarvisClientError.invalidRequest
         }
         self.source = source
@@ -51,6 +55,7 @@ public struct JarvisHealthQuery: Encodable, Sendable {
         self.workoutId = workoutId
         self.limit = limit
         self.cursor = cursor
+        self.lastPerExercise = lastPerExercise
     }
 
     func page(after cursor: JSONValue?) throws -> JarvisHealthQuery {
@@ -60,7 +65,8 @@ public struct JarvisHealthQuery: Encodable, Sendable {
             metric: metric,
             workoutId: workoutId,
             limit: limit,
-            cursor: cursor
+            cursor: cursor,
+            lastPerExercise: lastPerExercise
         )
     }
 }
@@ -118,12 +124,12 @@ public final class JarvisHealthClient: Sendable {
             method: .get,
             path: ["daily", "capabilities"],
             idempotent: true,
-            accept: "application/json;version=5"
+            accept: "application/json;version=6"
         )
         guard response.statusCode == 200,
               response.body.count <= Self.responseLimit,
               let value = try? JSONDecoder().decode(CapabilityEnvelope.self, from: response.body),
-              value.module == "daily", (1...5).contains(value.version),
+              value.module == "daily", (1...6).contains(value.version),
               !value.sources.isEmpty, value.sources.count <= 64,
               Set(value.sources).count == value.sources.count else {
             throw JarvisHealthClientError.invalidResponse
@@ -149,6 +155,28 @@ public final class JarvisHealthClient: Sendable {
         )
         guard response.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
         return try decode(response.body)
+    }
+
+    public func createLift(_ draft: JarvisLiftDraft) async throws {
+        guard draft.isValid else { throw JarvisClientError.invalidRequest }
+        let response = try await client.performAuthenticatedRequest(
+            method: .post,
+            path: ["daily", "lifts"],
+            body: try JSONEncoder().encode(draft),
+            idempotent: false
+        )
+        guard response.statusCode == 200 || response.statusCode == 201 else {
+            throw JarvisHealthClientError.invalidResponse
+        }
+        let result: LiftEnvelope = try decode(response.body)
+        guard UUID(uuidString: result.entry.id) != nil else {
+            throw JarvisHealthClientError.invalidResponse
+        }
+    }
+
+    private struct LiftEnvelope: Decodable {
+        let entry: Entry
+        struct Entry: Decodable { let id: String }
     }
 
     public func query(_ query: JarvisHealthQuery) async throws -> JarvisHealthQueryResult {

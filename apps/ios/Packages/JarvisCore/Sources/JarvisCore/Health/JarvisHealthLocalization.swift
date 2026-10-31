@@ -62,6 +62,20 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case partial = "health.partial"
     case hourShort = "health.hourShort"
     case minuteShort = "health.minuteShort"
+    case newLift = "health.newLift"
+    case exercises = "health.exercises"
+    case history = "health.history"
+    case pastExercises = "health.pastExercises"
+    case noLifts = "health.noLifts"
+    case name = "health.name"
+    case liftWeight = "health.liftWeight"
+    case reps = "health.reps"
+    case sets = "health.sets"
+    case save = "health.save"
+    case saving = "health.saving"
+    case saveFailed = "health.saveFailed"
+    case cancel = "health.cancel"
+    case loadMore = "health.loadMore"
 }
 
 public enum JarvisHealthLocalization {

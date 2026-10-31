@@ -38,6 +38,20 @@ board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
 
+## 31 October 2026 — Health logging only in the plus sheet (P15-39 / #1480)
+
+The owner's issue supersedes the dashboard-only P15-18 limitation: enable
+Track workout as Exercises and History only, with the empty state and no inline
+form, Save button or save-status line. Plus opens New lift with chips that
+prefill actual last exercise values. Move the native segmented pill to the
+bottom bar above search and plus, with Danish/English copy.
+
+Reuse version-6 capabilities, the periodless shared lift query and existing
+POST route. Keep failed submissions unchanged for same-key explicit retry.
+Update the approved board and extend the existing one-boot simulator capture
+job, not a new Mac job. Local Linux and board checks cannot establish native
+rendering or owner acceptance; simulator screenshots remain pending CI.
+
 ## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
 
 The owner approved the Health concept on 31 October. Build the Dashboard first

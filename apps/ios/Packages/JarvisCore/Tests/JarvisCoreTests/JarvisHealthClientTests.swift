@@ -129,7 +129,7 @@ final class JarvisHealthClientTests: XCTestCase {
                     "statusCode": 200,
                     "body": {
                       "module": "daily",
-                      "version": 5,
+                      "version": 6,
                       "sources": ["daily.health.metrics"]
                     }
                   }
@@ -194,14 +194,14 @@ final class JarvisHealthClientTests: XCTestCase {
         let query = try JarvisHealthQuery(source: .metrics, period: period, metric: "step_count", limit: 1)
         let result = try await health.queryAll(query)
 
-        XCTAssertEqual(capabilities.version, 5)
+        XCTAssertEqual(capabilities.version, 6)
         XCTAssertTrue(capabilities.availableSources.contains(JarvisHealthSource.metrics.rawValue))
         XCTAssertEqual(result.items.count, 2)
         XCTAssertFalse(result.coverage.hasMore)
         let acceptHeaders = await transport.acceptHeaders()
         let requests = await fixture.recordedRequests()
         let remainingInteractions = await fixture.remainingInteractions()
-        XCTAssertEqual(acceptHeaders.first, "application/json;version=5")
+        XCTAssertEqual(acceptHeaders.first, "application/json;version=6")
         XCTAssertTrue(acceptHeaders.dropFirst().allSatisfy { $0 == "application/json" })
         XCTAssertEqual(
             requests.map(\.path),
@@ -210,11 +210,123 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertEqual(remainingInteractions, 0)
     }
 
-    private func makeClient(_ transport: any HTTPTransport) throws -> JarvisClient {
+    func testLiftQueriesArePeriodlessAndPreserveLatestExercisePaging() throws {
+        let query = try JarvisHealthQuery(source: .lifts, limit: 100, lastPerExercise: true)
+        let cursor: JSONValue = .object(["exerciseKey": .string("squat")])
+        let page = try query.page(after: cursor)
+        let body = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(page))
+        XCTAssertEqual(body, .object([
+            "source": .string("daily.health.lifts"), "limit": .number(100),
+            "lastPerExercise": .bool(true), "cursor": cursor,
+        ]))
+        XCTAssertThrowsError(try JarvisHealthQuery(source: .lifts, limit: 101))
+        XCTAssertThrowsError(try JarvisHealthQuery(source: .sync, lastPerExercise: true))
+        XCTAssertThrowsError(try JarvisHealthQuery(
+            source: .lifts, period: JarvisHealthPeriod.make(.today)
+        ))
+    }
+
+    func testLiftDraftUsesBackendValidationBounds() {
+        func valid(_ name: String = "Squat", _ kg: Double = 80, _ reps: Int = 5, _ sets: Int = 3) -> Bool {
+            JarvisLiftDraft(
+                idempotencyKey: UUID(), exerciseName: name, weightKg: kg, reps: reps, sets: sets
+            ).isValid
+        }
+        XCTAssertTrue(valid())
+        XCTAssertTrue(valid(" Squat ", 0, 1000, 100))
+        XCTAssertTrue(valid("Squat", 1000))
+        XCTAssertFalse(valid(" "))
+        XCTAssertFalse(valid(String(repeating: "a", count: 81)))
+        XCTAssertFalse(valid("Squat\u{7f}"))
+        XCTAssertFalse(valid("Squat", .nan))
+        XCTAssertFalse(valid("Squat", -1))
+        XCTAssertFalse(valid("Squat", 80.123))
+        XCTAssertFalse(valid("Squat", 80, 0))
+        XCTAssertFalse(valid("Squat", 80, 5, 101))
+    }
+
+    func testLatestExercisesUseTheSharedLiftSourceAndReturnedCursor() async throws {
+        let cursor: [String: Any] = ["exerciseKey": "squat", "id": "synthetic-lift-1"]
+        let interactions: [[String: Any]] = [0, 1].map { page in
+            var request: [String: Any] = [
+                "source": "daily.health.lifts", "limit": 1, "lastPerExercise": true,
+            ]
+            if page == 1 { request["cursor"] = cursor }
+            return [
+                "method": "POST", "path": "/api/daily/query", "requestBody": request,
+                "response": ["statusCode": 200, "body": [
+                    "source": "daily.health.lifts", "status": page == 0 ? "partial" : "available",
+                    "items": [["exerciseName": page == 0 ? "Squat" : "Bench press", "weightKg": 80]],
+                    "coverage": [
+                        "returned": 1, "hasMore": page == 0,
+                        "next": page == 0 ? cursor as Any : NSNull(),
+                    ],
+                ]],
+            ]
+        }
+        let fixture = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: [
+            "version": 1, "interactions": interactions,
+        ]))
+        let health = JarvisHealthClient(client: try makeClient(fixture))
+        let result = try await health.queryAll(JarvisHealthQuery(
+            source: .lifts, limit: 1, lastPerExercise: true
+        ))
+        XCTAssertEqual(result.items.count, 2)
+        XCTAssertFalse(result.coverage.hasMore)
+        let remaining = await fixture.remainingInteractions()
+        XCTAssertEqual(remaining, 0)
+    }
+
+    func testLiftSaveRetryReusesTheSameSubmissionAndAuthenticatedRoute() async throws {
+        let id = UUID(uuidString: "00000000-0000-4000-8000-000000000039")!
+        let body: [String: Any] = [
+            "idempotencyKey": id.uuidString, "exerciseName": "Squat",
+            "weightKg": 80, "reps": 5, "sets": 3,
+        ]
+        let interactions: [[String: Any]] = [503, 201, 200].map { status in
+            [
+                "method": "POST", "path": "/api/daily/lifts", "requestBody": body,
+                "response": [
+                    "statusCode": status,
+                    "body": ["entry": ["id": id.uuidString], "replayed": status == 200],
+                ],
+            ]
+        }
+        let fixture = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: [
+            "version": 1, "interactions": interactions,
+        ]))
+        let transport = HealthHeaderRecordingTransport(fixture: fixture)
+        let health = JarvisHealthClient(client: try makeClient(transport, maximumRetries: 1))
+        let draft = JarvisLiftDraft(
+            idempotencyKey: id, exerciseName: " Squat ", weightKg: 80, reps: 5, sets: 3
+        )
+        do {
+            try await health.createLift(JarvisLiftDraft(
+                idempotencyKey: id, exerciseName: "", weightKg: 80, reps: 5, sets: 3
+            ))
+            XCTFail("Invalid drafts must not reach the transport")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .invalidRequest)
+        }
+        do {
+            try await health.createLift(draft)
+            XCTFail("A failed write must not be reported as saved")
+        } catch {}
+        let afterFailure = await fixture.remainingInteractions()
+        XCTAssertEqual(afterFailure, 2, "Writes must not retry automatically")
+        try await health.createLift(draft)
+        try await health.createLift(draft)
+        let remaining = await fixture.remainingInteractions()
+        XCTAssertEqual(remaining, 0)
+        let authorized = await transport.allRequestsAuthorized()
+        XCTAssertTrue(authorized)
+    }
+
+    private func makeClient(_ transport: any HTTPTransport, maximumRetries: Int = 0) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!,
-                retryPolicy: RetryPolicy(maximumRetries: 0)
+                retryPolicy: RetryPolicy(maximumRetries: maximumRetries)
             ),
             transport: transport,
             tokenStore: HealthFixtureTokenStore(),
@@ -226,12 +338,14 @@ final class JarvisHealthClientTests: XCTestCase {
 private actor HealthHeaderRecordingTransport: HTTPTransport {
     private let fixture: FixtureTransport
     private var accepted: [String] = []
+    private var authorized = true
 
     init(fixture: FixtureTransport) {
         self.fixture = fixture
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        authorized = authorized && request.headers["Authorization"] != nil
         if let accept = request.headers["Accept"] { accepted.append(accept) }
         return try await fixture.send(request)
     }
@@ -242,6 +356,7 @@ private actor HealthHeaderRecordingTransport: HTTPTransport {
     }
 
     func acceptHeaders() -> [String] { accepted }
+    func allRequestsAuthorized() -> Bool { authorized }
 }
 
 private actor HealthFixtureTokenStore: TokenStore {
