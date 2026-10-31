@@ -3445,6 +3445,11 @@ appearances with interactive board renders in `comparisons.html`. Main was
 refreshed and already contained in this branch. Next: ready-PR Mac compile,
 simulator captures/board comparison, green CI and owner visual acceptance;
 Linux cannot produce native screenshots and the draft PR currently skips CI.
+Local `swift build`, all 168 Core tests, all 50 pipeline tests and Swift syntax
+parsing pass. Secret scanning is clean; CodeQL reports no Actions/Python alerts
+but cannot build the Swift database on Linux. The hosted title gate requires
+`[WIP] P15-38: Move ambient background to design system for consistency`;
+set that canonical title and mark the PR ready to obtain native CI evidence.
 
 P15-24 / [#1447](https://github.com/DanAakesen/jarvis/issues/1447) corrects the
 normal-window-only selection that hid Microsoft authentication beneath the gate.

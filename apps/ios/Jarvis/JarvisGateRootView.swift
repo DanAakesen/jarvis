@@ -112,8 +112,7 @@ private final class JarvisGateModel: ObservableObject {
     func load() async {
         guard case .loading = presentation else { return }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-factory-fixture") {
+            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") {
             presentation = .unlocked
             isPrivacyCoverVisible = false
             return
