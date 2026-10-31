@@ -33,6 +33,7 @@ struct ContentView: View {
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
         let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
         let fixtureMode = settingsPreview
+            || JarvisUITestConfiguration.isEnabled
             || arguments.contains("--screenshot-chat-fixture")
             || factoryFixtureMode
         var initialNavigation = JarvisNavigationState()
@@ -42,7 +43,7 @@ struct ContentView: View {
         if settingsPreview {
             initialNavigation.navigate(to: .settings)
         }
-        if factoryScreenshot != nil {
+        if factoryScreenshot != nil && !JarvisUITestConfiguration.isEnabled {
             initialNavigation.navigate(to: .softwareFactory)
         }
         self.fixtureMode = fixtureMode
@@ -121,8 +122,10 @@ struct ContentView: View {
                     JarvisChatScreen(
                         client: chatClient,
                         fixtureMode: fixtureMode,
+                        allowsFixtureAttachments: JarvisUITestConfiguration.isEnabled,
                         startupError: startupError,
-                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
+                        onOpenSidebar: { setSidebarOpen(true) }
                     )
                         .navigationDestination(for: JarvisDestination.self) { destination in
                             if destination == .workspaces {
@@ -135,8 +138,10 @@ struct ContentView: View {
                                 JarvisChatScreen(
                                     client: chatClient,
                                     fixtureMode: fixtureMode,
+                                    allowsFixtureAttachments: JarvisUITestConfiguration.isEnabled,
                                     startupError: startupError,
-                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
+                                    onOpenSidebar: { setSidebarOpen(true) }
                                 )
                             } else if destination == .notes {
                                 JarvisNotesArea(

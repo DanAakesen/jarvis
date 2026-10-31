@@ -101,18 +101,10 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
             ~/Library/Developer/Xcode/DerivedData/SourcePackages
           key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift') }}
-      - name: Generate project and build for Simulator
+      - name: Generate Xcode project
         working-directory: apps/ios
-        run: |
-          xcodegen generate
-          xcodebuild \
-            -project Jarvis.xcodeproj \
-            -scheme Jarvis \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-      - name: Boot iPhone Simulator and capture screenshots
+        run: xcodegen generate
+      - name: Boot iPhone Simulator and run XCUITest smoke flow
         run: |
           set -euo pipefail
           DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
@@ -121,19 +113,56 @@ jobs:
             echo "::error::No available iPhone Simulator device was found."
             exit 1
           fi
+          SCREENSHOT_DIR="$RUNNER_TEMP/ios-screenshots"
+          RESULT_BUNDLE="$RUNNER_TEMP/ios-ui-tests.xcresult"
+          mkdir -p "$SCREENSHOT_DIR/ui-tests"
+          echo "IOS_SIMULATOR_UDID=$DEVICE_ID" >> "$GITHUB_ENV"
+          echo "IOS_SIMULATOR_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
+          echo "IOS_SCREENSHOT_DIR=$SCREENSHOT_DIR" >> "$GITHUB_ENV"
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          echo "IOS_APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          echo "IOS_RESULT_BUNDLE=$RESULT_BUNDLE" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcodebuild \
+            -project apps/ios/Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RESULT_BUNDLE" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - name: Export XCUITest screenshots
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -d "$IOS_RESULT_BUNDLE" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$IOS_RESULT_BUNDLE" \
+              --output-path "$IOS_SCREENSHOT_DIR/ui-tests"
+          else
+            echo "::warning::The XCUITest result bundle was not created."
+          fi
+      - name: Compare simulator screenshots with board renders
+        run: |
+          set -euo pipefail
+          swift scripts/ios/board-compare.swift \
+            "$IOS_SCREENSHOT_DIR/ui-tests" \
+            "$IOS_SCREENSHOT_DIR/board-renders"
+      - name: Capture established Factory screenshots
+        run: |
+          set -euo pipefail
+          DEVICE_ID="$IOS_SIMULATOR_UDID"
+          APP_PATH="$IOS_APP_PATH"
+          SCREENSHOT_DIR="$IOS_SCREENSHOT_DIR"
           if [[ ! -d "$APP_PATH" ]]; then
             echo "::error::The unsigned Simulator app was not produced."
             exit 1
           fi
-          SCREENSHOT_DIR="$RUNNER_TEMP/ios-screenshots"
-          mkdir -p "$SCREENSHOT_DIR"
-          echo "IOS_SIMULATOR_UDID=$DEVICE_ID" >> "$GITHUB_ENV"
-          echo "IOS_SIMULATOR_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
-          xcrun simctl boot "$DEVICE_ID"
-          xcrun simctl bootstatus "$DEVICE_ID" -b
-          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          xcrun simctl spawn "$DEVICE_ID" defaults delete com.danaakesen.jarvis || true
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
@@ -161,29 +190,55 @@ jobs:
           done
       - name: Upload iOS screenshots
         id: screenshots
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ios-screenshots/*.png
+          path: ${{ runner.temp }}/ios-screenshots/**/*.png
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+          GATE_RESULT: ${{ job.status }}
         run: |
           set -euo pipefail
           marker='<!-- ios-screenshot-review -->'
           comment_file="$RUNNER_TEMP/ios-screenshot-comment.md"
           payload_file="$RUNNER_TEMP/ios-screenshot-comment.json"
+          board_url="https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html"
+          if [[ -n "${ARTIFACT_URL:-}" ]]; then
+            artifact_link="[Download simulator screenshots, paired board renders, and comparison results]($ARTIFACT_URL)"
+          else
+            artifact_link="Screenshot artifact upload was unavailable."
+          fi
           cat > "$comment_file" <<EOF
           $marker
-          ### iOS simulator screenshots
+          ### iOS simulator review — $GATE_RESULT
 
-          [Download the light, dark, sidebar, and Factory screenshots]($ARTIFACT_URL)
+          $artifact_link
 
-          Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
+          Captured on ${IOS_SIMULATOR_NAME:-an iPhone simulator}. The artifact is retained for 14 days. Each `ios-<screen>-<appearance>-<language>.png` is paired with `board-<screen>-<appearance>-<language>.png`.
+
+          | Screen | Approved board reference | Artifact screenshots |
+          | --- | --- | --- |
+          | Sign-in | [Sign-in]($board_url?screen=signin&state=idle) | `ios-sign-in-{light,dark}-{da,en}` |
+          | Chat | [Chat]($board_url?screen=chat) | `ios-chat-{light,dark}-{da,en}` |
+          | Sidebar | [Sidebar]($board_url?screen=chat&sidebar=open) | `ios-sidebar-{light,dark}-{da,en}` |
+          | Plus menu | [Attachments]($board_url?screen=chat&plus=open) | `ios-plus-menu-{light,dark}-{da,en}` |
+          | Notifications | [Needs you]($board_url?screen=chat&needs=open) | `ios-notifications-{light,dark}-{da,en}` |
+          | Voice | [Voice]($board_url?screen=voice&voice=listening) | `ios-screen-voice-{light,dark}-{da,en}` |
+          | Notes | [Notes]($board_url?screen=notes&tab=notes) | `ios-screen-notes-{light,dark}-{da,en}` |
+          | Health | [Health]($board_url?screen=health&tab=dashboard) | `ios-screen-health-{light,dark}-{da,en}` |
+          | Software Factory | [Factory]($board_url?screen=factory&tab=board) | `ios-screen-softwareFactory-{light,dark}-{da,en}` |
+          | Settings | [Settings]($board_url?screen=settings&tab=general) | `ios-screen-settings-{light,dark}-{da,en}` |
+          | Status | [Status]($board_url?screen=status) | `ios-screen-status-{light,dark}-{da,en}` |
+          | Usage | [Usage]($board_url?screen=usage) | `ios-screen-usage-{light,dark}-{da,en}` |
+          | Proactive | [Proactive]($board_url?screen=proactive) | `ios-screen-proactive-{light,dark}-{da,en}` |
+          | Workspaces | [Workspaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/workspaces.html) | `ios-screen-workspaces-{light,dark}-{da,en}` |
           EOF
           jq -n --rawfile body "$comment_file" '{body: $body}' > "$payload_file"
           comment_id="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \

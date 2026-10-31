@@ -43,6 +43,7 @@ struct JarvisSidebar: View {
                 .buttonStyle(JarvisSidebarButtonStyle())
                 .foregroundStyle(settingsFocused || settingsHovered ? Color.accentColor : Color.primary)
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
+                .accessibilityIdentifier("sidebar.settings")
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
             }
@@ -102,6 +103,7 @@ struct JarvisSidebar: View {
         .buttonStyle(JarvisSidebarButtonStyle())
         .disabled(!destination.isNavigable)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("sidebar.\(destination.rawValue)")
         .focused($focusedDestination, equals: destination)
         .onHover { hoveredDestination = $0 ? destination : nil }
     }

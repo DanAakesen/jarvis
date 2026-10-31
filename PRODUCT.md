@@ -64,8 +64,16 @@ interruption and lock/call microphone recovery are not part of this screen.
 Follow-ups to file separately: background audio; Bluetooth; audio route changes;
 call interruption handling; microphone recovery after device lock; microphone
 recovery after a phone call; CarPlay; Live Activity; and Action Button.
-The screen requires an existing Keychain owner-session token; native sign-in is
-not included, so first-install voice remains unavailable until that separate work.
+Voice requires a valid owner-session token from the native MSAL sign-in flow.
+Signed configuration, live sign-in and real-device voice behavior still require
+their separate acceptance.
+
+## Native iPhone navigation and Voice exit (#1466; 31 October 2026)
+
+The Chat toolbar provides a labeled sidebar button as an alternative to the
+right-edge drag. Both open the same navigation drawer. Ending Voice closes the
+session and returns to Chat; minimizing keeps the session active and returns to
+Chat with the minimized voice bar.
 
 ## Backend log authorization qualification (#1341; 29 October 2026)
 

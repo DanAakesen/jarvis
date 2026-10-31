@@ -2802,10 +2802,12 @@ The approved `docs/ios/design/board.html?sidebar=open` frame informs the
 composition, not literal values. The iPhone shell keeps a plain system
 background sidebar fixed behind the screen; a right-side drag tracks the
 screen's leftward movement, dimming and blur, and a tap or reverse drag closes
-it. The sidebar header places Jarvis left and an icon-only Settings control
-right. Areas are ordered bottom-to-top from Proactive through Chat; Banking is
-disabled and labeled Later. Selection, keyboard focus, pointer hover and press
-change row text/icon styling only, without a row surface or border.
+it. Chat also provides a localized, icon-only toolbar button that opens the
+same sidebar without a gesture. The sidebar header places Jarvis left and an
+icon-only Settings control right. Areas are ordered bottom-to-top from Proactive
+through Chat; Banking is disabled and labeled Later. Selection, keyboard focus,
+pointer hover and press change row text/icon styling only, without a row surface
+or border.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
@@ -2821,6 +2823,8 @@ The approved `docs/ios/design/board.html?voice=idle` frame informs the
 composition, not literal values. Voice has no top bar: one orb and one short
 status line occupy the central field, with mute, add, captions and end controls
 anchored at the bottom. A downward swipe minimizes to a persistent voice bar.
+End voice closes the session and returns to Chat; minimizing keeps the session
+active and returns to Chat with the mini bar.
 During screen sharing, a full-width status bar with Stop stays above the controls;
 the camera tile remains draggable in the thumb zone.
 

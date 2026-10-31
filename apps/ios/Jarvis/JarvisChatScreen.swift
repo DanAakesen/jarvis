@@ -27,6 +27,7 @@ private struct RenderedChatRow: Identifiable {
 struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
     @State private var activitySheet: ActivitySheetKind?
     @State private var composerMode: ChatComposerMode = .chat
@@ -37,12 +38,16 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     let onNavigate: (JarvisDestination) -> Void
+    let onOpenSidebar: () -> Void
+    let allowsFixtureAttachments: Bool
 
     init(
         client: JarvisClient?,
         fixtureMode: Bool = false,
+        allowsFixtureAttachments: Bool = false,
         startupError: String? = nil,
-        onNavigate: @escaping (JarvisDestination) -> Void
+        onNavigate: @escaping (JarvisDestination) -> Void,
+        onOpenSidebar: @escaping () -> Void = {}
     ) {
         _model = StateObject(wrappedValue: JarvisChatModel(
             client: client,
@@ -50,6 +55,8 @@ struct JarvisChatScreen: View {
             startupError: startupError
         ))
         self.onNavigate = onNavigate
+        self.onOpenSidebar = onOpenSidebar
+        self.allowsFixtureAttachments = allowsFixtureAttachments
     }
 
     private var renderedRows: [RenderedChatRow] {
@@ -85,6 +92,18 @@ struct JarvisChatScreen: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: onOpenSidebar) {
+                    Image(systemName: "line.3.horizontal")
+                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel(JarvisNotesLocalization.string(
+                    .openSidebar,
+                    language: JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+                ))
+                .accessibilityIdentifier("navigation.openSidebar")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     activitySheet = .needsYou
@@ -105,6 +124,7 @@ struct JarvisChatScreen: View {
                 }
                 .buttonStyle(.glass)
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
+                .accessibilityIdentifier("chat.notifications")
             }
         }
         .task {
@@ -399,12 +419,13 @@ struct JarvisChatScreen: View {
                 }
                 .buttonStyle(.glass)
                 .disabled(
-                    model.fixtureMode ||
+                    (model.fixtureMode && !allowsFixtureAttachments) ||
                         model.isSending ||
                         model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount
                 )
                 .accessibilityLabel("Add attachment")
                 .accessibilityHint(addAttachmentHint)
+                .accessibilityIdentifier("chat.addAttachment")
 
                 TextField("Ask Jarvis", text: $model.draft, axis: .vertical)
                     .font(.body)
@@ -428,6 +449,7 @@ struct JarvisChatScreen: View {
                 .frame(width: JarvisDesignTokens.chatMessageMaximumWidth * JarvisDesignTokens.chatModeWidthFraction)
                 .labelsHidden()
                 .accessibilityLabel("Chat or voice")
+                .accessibilityIdentifier("chat.mode")
 
                 if model.isSending {
                     Button {

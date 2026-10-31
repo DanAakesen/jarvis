@@ -7,7 +7,7 @@ struct VoiceScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var model: VoiceScreenModel
-    let onMinimize: () -> Void
+    let onReturnToChat: () -> Void
 
     @State private var cameraOffset: CGSize = .zero
     @State private var cameraDragOrigin: CGSize = .zero
@@ -217,8 +217,12 @@ struct VoiceScreenView: View {
                 tint: .white,
                 prominent: true
             ) {
-                Task { await model.end() }
+                Task {
+                    await model.end()
+                    onReturnToChat()
+                }
             }
+            .accessibilityIdentifier("voice.end")
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
@@ -339,11 +343,11 @@ struct VoiceScreenView: View {
                 dampingFraction: JarvisDesignTokens.voiceMinimizeSpringDamping
             )) {
                 model.minimize()
-                onMinimize()
+                onReturnToChat()
             }
         } else {
             model.minimize()
-            onMinimize()
+            onReturnToChat()
         }
     }
 

@@ -111,6 +111,10 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
+        if JarvisUITestConfiguration.isEnabled {
+            presentation = .signIn(.idle)
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") {
             presentation = .unlocked
@@ -212,6 +216,13 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func performPrimaryAction() {
+        if JarvisUITestConfiguration.isEnabled {
+            if case .signIn = presentation {
+                presentation = .unlocked
+                isPrivacyCoverVisible = false
+            }
+            return
+        }
         switch presentation {
         case .signIn(.denied):
             Task { await signOut() }
@@ -442,6 +453,7 @@ private struct JarvisGateSurface: View {
                     }
                     .buttonStyle(JarvisGateButtonStyle())
                     .disabled(isSigningIn)
+                    .accessibilityIdentifier("gate.primaryAction")
                 }
             }
             .padding(.horizontal, JarvisDesignTokens.gateContentInset)

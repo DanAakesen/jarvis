@@ -83,6 +83,11 @@ final class VoiceScreenModel: ObservableObject {
         errorMessage = nil
         microphoneDenied = false
         signInRequired = false
+        if JarvisUITestConfiguration.isEnabled {
+            voiceState = .listening
+            isAudioReady = true
+            return
+        }
         voiceState = .connecting
         do {
             let tokenStore = try KeychainTokenStore()

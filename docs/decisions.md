@@ -1,3 +1,28 @@
+## 31 October 2026 — iOS simulator visual and behavior gate (P15-32 / #1466)
+
+Extend the existing ready-PR Mac job and single iPhone simulator boot with a
+`JarvisUITests` smoke flow. Use DEBUG-only synthetic sign-in and voice fixtures,
+never a real account, token, microphone session, backend or voice service. Check
+sidebar drag/button, every enabled navigation route, Chat attachment-menu
+entries, ending Voice back to Chat, and opening Needs you then pressing Done.
+Attach every screen in light/dark and Danish/English.
+
+Render the matching frames from the checked-in iOS board HTML with macOS WebKit.
+Compare 22×48 cell means for RGB color and luminance structure with a 0.38
+tolerance; this is a broad drift gate, not pixel-perfect equality. Missing
+screens/references and out-of-tolerance drift fail CI. Upload paired simulator
+and board images plus comparison results as a 14-day artifact, and update one PR
+comment with a table mapping screens to board renders. A UI PR without these
+attachments is not ready for review; do not commit generated screenshots or add
+a second Mac job or simulator boot.
+
+The approved navigation shell gains a localized Chat toolbar button to open the
+sidebar alongside the existing edge drag. Ending Voice ends the session before
+returning to Chat; minimizing remains a separate active-session action. The
+DEBUG-only fixture keeps screenshot and interaction checks independent of live
+sign-in and voice setup. Xcode simulator, artifact and PR-comment execution
+remain unverified until a ready iOS pull request runs on GitHub Actions.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry
