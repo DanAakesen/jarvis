@@ -1,9 +1,21 @@
+## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
+
+The Dynamic Island card is approved on the system surfaces board. Render compact
+(orb and small waveform), minimal (orb only while another activity shares the
+Island), and expanded (orb, Jarvis, localized state, elapsed timer, waveform,
+Mute and End) through the existing P15-34 activity and `JarvisVoiceActivity`
+extension. Reuse its attributes, state and session-scoped intents; do not create
+a second voice activity or add APNs. Keep Danish as the default, English
+available, the dark-glass/cyan-rim/amber orb, restrained orange accents and stone
+secondary. Simulator captures of all three Island states beside the board remain
+acceptance evidence; Linux tests do not establish native rendering or dispatch.
+
 ## 31 October 2026 — local hands-free Lock Screen Live Activity (P15-34 / #1470)
 
 Dan approved the hands-free Lock Screen card on the system surfaces board,
 as recorded in #1470 (ref #1456). This supersedes the earlier To agree status
-for this card only; Dynamic Island, task/decision push surfaces and Connection
-lost remain outside this approval.
+for this card only. Dynamic Island approval is recorded separately in P15-35;
+task/decision push surfaces and Connection lost remain outside approval.
 
 Use a locally requested ActivityKit activity and an embedded WidgetKit extension,
 not APNs or push tokens. Start after audio capture is ready and dismiss on

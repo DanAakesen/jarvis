@@ -78,9 +78,22 @@ misreporting listening. Mute/Unmute and End operate on the existing in-app sessi
 while locked, without opening the app or signing in. Stale controls cannot affect
 a replacement session. Copy follows the app language, Danish by default, with
 English resources. Activities disabled by the system do not prevent voice.
-No APNs, push tokens, backend changes or Dynamic Island layout are included.
+No APNs, push tokens or backend changes are included. P15-35 adds the approved
+Dynamic Island presentation to this same activity.
 Native button dispatch, background audio and the Simulator/board comparison
 remain acceptance checks, not claims established by Linux tests.
+
+## Native voice Dynamic Island (P15-35 / #1472)
+
+Use the same ActivityKit Live Activity, attributes, state and embedded
+`JarvisVoiceActivity` extension as the Lock Screen; do not request a second voice
+activity. Compact shows the Jarvis orb and a small waveform, minimal shows only
+the orb when another activity shares the Island, and expanded shows Jarvis, the
+localized Listening/Speaking/Muted state, elapsed time, waveform, and working
+Mute and End actions. Danish is the default and English is supported. Preserve
+the dark-glass orb, cyan rim, amber center, orange as a restrained primary
+accent, and stone as secondary. Simulator captures of compact, minimal and
+expanded beside the approved board are required before acceptance.
 
 ## Backend log authorization qualification (#1341; 29 October 2026)
 

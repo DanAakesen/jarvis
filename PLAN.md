@@ -2141,7 +2141,13 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   Next: the existing ready-PR Mac build, Simulator/approved-board artifact
   comparison and locked-device controls.
   Apple compilation, screenshot capture and real background audio remain blockers
-  to acceptance; no APNs or Dynamic Island work is included.
+  to acceptance; no APNs work is included.
+
+- **P15-35 / #1472:** Dynamic Island compact/minimal/expanded layouts now reuse
+  the P15-34 activity, attributes, state, extension and session-scoped intents.
+  No second activity is created. Linux Core tests cover the shared state and
+  intent boundary; native WidgetKit compilation and compact/minimal/expanded
+  Simulator captures beside the approved board remain pending.
 
 - **Active phase:** P15, iOS Phase 1c. The Phase 1a shell/CI and Phase 1b manual TestFlight workflow are implemented; P15-10 adds Chat, P15-11 Voice, P15-12 Notes, P15-13 the sidebar, P15-14 Workspaces, and P15-16 sign-in/Face ID. Existing `JarvisCore` clients and synthetic fixtures reuse web routes; Linux tests cover the pure-Swift package. The app preview and P15-15 simulator screenshots use an explicitly labelled synthetic fixture. Next: complete Linux checks, then use the existing ready-PR Mac compile for SwiftUI verification and owner review. The first owner-started TestFlight archive/export/upload remains unproven; no later screen is authorized without the owner's approval.
 - **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.

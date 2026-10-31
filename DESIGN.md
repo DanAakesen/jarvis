@@ -2791,14 +2791,16 @@ only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
 replies, tool rows and status lines such as Writing it up are unboxed plain
 text. Phone screens carry no explainer, helper or hint text.
 
-All concept board screens and the Lock Screen hands-free session on
-`docs/ios/design/surfaces.html` are approved. P15-34 implements the latter with
-the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
-elapsed timer, measured waveform and Mute/End controls. Stone is secondary;
-only End has a small orange tint, never a large solid fill. System timer updates
-and audio-derived waveform snapshots need no perpetual decorative animation.
-The Dynamic Island, Lock Screen tasks and decisions, and Connection lost
-surfaces remain unapproved.
+All concept board screens, the Lock Screen hands-free session, and the Dynamic
+Island on `docs/ios/design/surfaces.html` are approved. P15-34 implements the
+Lock Screen and P15-35 adds Island compact, minimal and expanded presentations
+to that same activity. Reuse the dark-glass/cyan-rim/tangled-amber orb. Compact
+has the orb and a small waveform; minimal has only the orb beside another
+activity; expanded has Jarvis, localized voice state, elapsed timer, waveform,
+and Mute/End controls. Stone is secondary; orange remains a restrained accent
+with no large solid fills. System timer updates and audio-derived waveform
+snapshots need no perpetual decorative animation. Lock Screen tasks and
+decisions, and Connection lost remain unapproved.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
