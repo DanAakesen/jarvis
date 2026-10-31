@@ -3,14 +3,6 @@ import LocalAuthentication
 import SwiftUI
 import UIKit
 
-private enum JarvisSignInState: Equatable {
-    case idle
-    case signingIn
-    case failed
-    case denied
-    case offline
-}
-
 private enum JarvisLockState: Equatable {
     case waiting
     case failed
@@ -186,19 +178,8 @@ private final class JarvisGateModel: ObservableObject {
             contentEpoch += 1
             presentation = .lock(.waiting)
             await authenticate()
-        } catch is CancellationError {
-            presentation = .signIn(.idle)
-        } catch let error as JarvisClientError {
-            switch error {
-            case .notOwner:
-                presentation = .signIn(.denied)
-            case .networkFailure, .timedOut, .serviceUnavailable:
-                presentation = .signIn(.offline)
-            default:
-                presentation = .signIn(.failed)
-            }
         } catch {
-            presentation = .signIn(.failed)
+            presentation = .signIn(JarvisSignInState.recovering(from: error))
         }
     }
 

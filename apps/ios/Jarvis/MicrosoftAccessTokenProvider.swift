@@ -57,26 +57,28 @@ final class MicrosoftAccessTokenProvider: AccessTokenProvider {
         webParameters.webviewType = .authenticationSession
         let parameters = MSALInteractiveTokenParameters(scopes: [scope], webviewParameters: webParameters)
 
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await JarvisSignInRequest().token(start: { completion in
             application.acquireToken(with: parameters) { result, error in
+                let outcome: Result<String, Error>
                 if let error {
                     let nsError = error as NSError
                     if nsError.domain == MSALErrorDomain, nsError.code == MSALError.userCanceled.rawValue {
-                        continuation.resume(throwing: CancellationError())
+                        outcome = .failure(CancellationError())
                     } else if Self.isOffline(error) {
-                        continuation.resume(throwing: JarvisClientError.networkFailure)
+                        outcome = .failure(JarvisClientError.networkFailure)
                     } else {
-                        continuation.resume(throwing: error)
+                        outcome = .failure(error)
                     }
-                    return
+                } else if let token = result?.accessToken, !token.isEmpty {
+                    outcome = .success(token)
+                } else {
+                    outcome = .failure(MicrosoftAccessTokenProviderError.emptyToken)
                 }
-                guard let token = result?.accessToken, !token.isEmpty else {
-                    continuation.resume(throwing: MicrosoftAccessTokenProviderError.emptyToken)
-                    return
-                }
-                continuation.resume(returning: token)
+                Task { @MainActor in completion(outcome) }
             }
-        }
+        }, cancel: {
+            _ = MSALPublicClientApplication.cancelCurrentWebAuthSession()
+        })
     }
 
     func requestSignIn() async {
@@ -118,12 +120,18 @@ final class MicrosoftAccessTokenProvider: AccessTokenProvider {
 
     private static func presentationViewController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-        guard let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) else { return nil }
+            .filter { $0.activationState == .foregroundActive }
+        let windows = scenes.flatMap(\.windows).filter {
+            !$0.isHidden && $0.windowLevel == .normal && $0.rootViewController != nil
+        }
+        guard let window = windows.first(where: \.isKeyWindow) ?? windows.first else { return nil }
 
         var viewController = window.rootViewController
         while let presented = viewController?.presentedViewController {
             viewController = presented
         }
+        guard let viewController, viewController.viewIfLoaded?.window === window,
+              !viewController.isBeingDismissed else { return nil }
         return viewController
     }
 }

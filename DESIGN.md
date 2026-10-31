@@ -2965,6 +2965,11 @@ gate, and an opaque privacy cover, shown in a window above any open sheet, hides
 system LocalAuthentication prompt; the passcode fallback is also system UI,
 not a custom keypad. No helper text or lock-interval control is shown.
 
+Microsoft authentication uses the foreground app's normal window, never the
+privacy-cover window. Token acquisition stops after two minutes and returns to
+the existing failed/retry surface; cancelling the sheet restores the idle action.
+The Danish/English copy and gate composition remain unchanged.
+
 ## Native iOS Health dashboard (P15-18; owner-approved 31 October 2026)
 
 The approved composition is one native scroll beneath a Health/refresh title row,

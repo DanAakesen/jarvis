@@ -1,5 +1,22 @@
 import Foundation
 
+public enum JarvisSignInState: Equatable, Sendable {
+    case idle
+    case signingIn
+    case failed
+    case denied
+    case offline
+
+    public static func recovering(from error: Error) -> Self {
+        if error is CancellationError { return .idle }
+        switch error as? JarvisClientError {
+        case .notOwner: return .denied
+        case .networkFailure, .timedOut, .serviceUnavailable: return .offline
+        default: return .failed
+        }
+    }
+}
+
 public enum JarvisGateDecision: Equatable, Sendable {
     case signIn
     case locked

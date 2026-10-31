@@ -3429,6 +3429,12 @@ no per-screen hardcoded values, and a stated reason for each custom component.
 | P15-20 | [#1432](https://github.com/DanAakesen/jarvis/issues/1432) | Native iPhone Settings area | Native grouped Settings root with searchable General/Models/Health/Account sections and drill-down pages; shared owner-session routes, Danish/English copy, bounded Core validation, save-failure draft preservation, account revocation and synthetic fixture coverage. Notifications remain disabled (web-push only); health upload credential creation remains disabled because POST requires fresh Microsoft sign-in; web-only advanced tuning, retrieval thresholds, timeouts and project administration are omitted. No iOS-specific backend route; preserve the existing Mac/screenshot cost guard. | P15-03 (#1388), P15-09 (#1394), P15-13 (#1399), P15-16 (#1417) | In progress |
 | P15-19 | [#1431](https://github.com/DanAakesen/jarvis/issues/1431) | Native iPhone Software Factory | Approved SwiftUI Board, selected-project Needs Dan and Releases, task/release detail, state-aware controls, confirmed restart flow, steering and create-task sheets reuse existing authenticated routes. Pure-Swift models, filtering, control availability and same-submission-ID retries are fixture-tested on Linux; visible copy is Danish/English. The CI screenshot hook captures all Factory segments/details/key states in the existing one-boot job. The selected-project choice is intentional: no cross-project aggregation or APNs is added. The Factory design-board frames are now present on main; Mac compile, frame comparison and owner visual review remain pending. | P15-03, P15-08, P15-09, P15-13, P15-15, P15-16 | In progress |
 
+P15-23 / [#1445](https://github.com/DanAakesen/jarvis/issues/1445) corrects sign-in
+presentation selection and adds bounded, cancellation-safe MSAL recovery with
+focused Core tests. Local implementation is complete; next verify the Mac app
+build, real-device Microsoft sheet, signed TestFlight keychain grant and live
+Entra redirect. Device acceptance remains open; no upload is authorized here.
+
 ## Factory canonical-status parity (16 October 2026)
 
 Scoped partial correction for [#811](https://github.com/DanAakesen/jarvis/issues/811),
