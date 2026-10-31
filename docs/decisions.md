@@ -21,6 +21,24 @@ board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
 
+## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
+
+The owner approved the Health concept on 31 October. Build the Dashboard first
+with the existing Daily capabilities/query, target and `/now/events` routes; add
+no HealthKit upload or iOS-specific backend path. Reuse the web app's existing
+`GET /daily/nutrition-targets` route for protein and calorie targets, although
+the issue's endpoint list did not enumerate it.
+
+Keep Track workout disabled and omit Last lifts and plus in this Dashboard-only
+implementation. The shared lift routes from #1423 are now present on main, so
+future native logging can use that contract without adding a route or payload.
+Keep calculations and Copenhagen period logic in pure-Swift `JarvisCore`, and
+use synthetic-only FixtureTransport previews in both app languages. The
+checked-in Health board was a blank placeholder when this screen was built, so
+the approved issue—not that local frame—guided its composition. Preserve the
+existing simulator screenshot/Mac cost guard; Health screenshot review remains
+outstanding.
+
 ## 30 October 2026 — share the workout lift contract (P15-17 / #1423)
 
 Store one owner-scoped lift row per exercise entry, with kg, reps and a single

@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings on 31 October 2026; sections 11 and 12 reuse existing routes. P15-14 implements Workspaces without a new backend route. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings and Health on 31 October 2026; sections 11–13 reuse existing routes. P15-14 implements Workspaces without a new backend route. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -173,7 +173,27 @@ Sources checked before implementation: `apps/backend/src/core/settings.ts`,
 `apps/web/src/TaskRecipesSettings.tsx`, `apps/backend/src/core/index.ts` and
 `apps/backend/src/auth/session/routes.ts`.
 
-## 13. Software Factory area (P15-19)
+## 13. Health dashboard (P15-18)
+
+The approved Dashboard reuses the authenticated Daily API. The iPhone does not upload HealthKit data and adds no backend route or iOS-specific payload. Before querying, it calls `GET /daily/capabilities` with `Accept: application/json;version=5` and only requests advertised sources.
+
+| Dashboard block or action | Existing endpoint and source |
+|---|---|
+| Gym and Run rings; recent-session rows | `POST /daily/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |
+| Steps ring | `POST /daily/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /daily/training-targets`. |
+| Protein and calorie balance | `POST /daily/query` with `source: "daily.nutrition.days"` and the selected date range; protein, resting-calorie and deficit targets come from `GET /daily/nutrition-targets`. |
+| Sleep value and sleep-night detail | `POST /daily/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
+| Open a workout | `POST /daily/query` with `source: "daily.health.workout"` and the exact `workoutId` from a workout row. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
+| Open meals | `POST /daily/query` with `source: "daily.nutrition.meals"` and the selected date range. |
+| Body trend catalogue and detail | `POST /daily/query` with `source: "daily.health.metric-catalog"`, then `source: "daily.health.metrics"` with each selected exact metric name and date range. |
+| Protein chart and target line | `POST /daily/query` with `source: "daily.nutrition.days"` and `GET /daily/nutrition-targets`. |
+| Freshness status | `POST /daily/query` with `source: "daily.sync"`. Dashboard refresh listens to the existing authenticated `GET /now/events` stream for `refresh` or `now` events, then reloads the same reads. |
+
+`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. This Dashboard implementation leaves Track workout disabled and Last lifts/plus omitted. The shared lift routes described in section 15 are now present on main from #1423; future native logging should reuse them without a substitute route or payload.
+
+Sources checked: `apps/backend/src/daily/index.ts`, `apps/backend/src/daily/query.ts`, `apps/backend/src/daily/health/read-model.ts`, `apps/backend/src/daily/routes/training-targets.ts`, `apps/backend/src/daily/routes/nutrition-targets.ts`, `apps/web/src/daily/client.ts`, `apps/web/src/daily/sections/overview/health-panel/data.ts`, `apps/web/src/daily/sections/overview/useTopCardData.ts`, `apps/web/src/daily/nutrition-targets.ts` and `apps/web/src/daily/sections/workouts/WorkoutDetail.tsx`.
+
+## 14. Software Factory area (P15-19)
 
 The Factory area reuses the authenticated web/backend routes. It adds no iOS-specific route or backend behavior. Project administration (other than the existing completion-policy control in task creation), Git graph visualization, backfill, and sandbox routes remain out of scope.
 
@@ -196,7 +216,7 @@ view.
 | Show recent commits | When `graph` is present, its flat `commits` array contains `{sha, message, author, committedAt, parents}` and `truncated` indicates incomplete history. There is no separate compact-commit endpoint or DTO. Show a compact list from these commit records; do not render the web-only branch graph. |
 
 Contract verification (31 October 2026): `apps/backend/src/factory/index.ts`, `board.ts`, `projects.ts`, `task-store.ts`, and `release-view.ts`; `apps/backend/src/core/now.ts` and `apps/backend/src/auth/hook.ts`; `apps/web/src/factory/TasksPage.tsx`, `TaskControls.tsx`, `release-data.ts`, and `ReleasePage.tsx`; and `apps/web/src/task-events.ts`. The owner-session stream, task-list agent/state filters, and returned commit record shape are verified in those sources. Production authorization, project selection, and all writes remain on the existing authenticated API.
-## 14. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
+## 15. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
 
 The web Health area and native Track workout screen use the same owner routes;
 there are no iOS-specific endpoints. The source of truth is the backend and

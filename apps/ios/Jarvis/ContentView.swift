@@ -17,6 +17,7 @@ struct ContentView: View {
     private let fixtureMode: Bool
     private let settingsClient: JarvisSettingsClient?
     @State private var notesClient: JarvisNotesClient?
+    @State private var healthClient: JarvisHealthClient?
     @State private var factoryClient: JarvisFactoryClient?
     private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
     private let factoryFixtureMode: Bool
@@ -83,6 +84,7 @@ struct ContentView: View {
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _notesClient = State(initialValue: Self.makeNotesClient())
+        _healthClient = State(initialValue: Self.makeHealthClient())
         _factoryClient = State(initialValue: Self.makeFactoryClient(
             previewState: factoryScreenshot?.state,
             fixtureMode: factoryFixtureMode
@@ -141,6 +143,13 @@ struct ContentView: View {
                                     client: notesClient,
                                     language: language,
                                     onRetryConfiguration: { notesClient = Self.makeNotesClient() }
+                                )
+                            } else if destination == .health {
+                                JarvisHealthArea(
+                                    client: healthClient,
+                                    language: language,
+                                    observeRefreshEvents: !fixtureMode,
+                                    onRetryConfiguration: { healthClient = Self.makeHealthClient() }
                                 )
                             } else if destination == .softwareFactory {
                                 JarvisFactoryArea(
@@ -398,6 +407,17 @@ struct ContentView: View {
                 accessTokenProvider: JarvisUnavailableAccessTokenProvider()
             )
             return JarvisNotesClient(client: client)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func makeHealthClient() -> JarvisHealthClient? {
+        do {
+            let client = try JarvisComposition.makeClient(
+                accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+            )
+            return JarvisHealthClient(client: client)
         } catch {
             return nil
         }

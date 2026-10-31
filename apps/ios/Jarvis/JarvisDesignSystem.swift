@@ -152,6 +152,35 @@ enum JarvisDesignTokens {
             ? UIColor(red: CGFloat(82) / 255, green: CGFloat(220) / 255, blue: 1, alpha: 1)
             : UIColor(red: CGFloat(20) / 255, green: CGFloat(118) / 255, blue: CGFloat(141) / 255, alpha: 1)
     })
+    static let healthHorizontalInset: CGFloat = 16
+    static let healthSectionSpacing: CGFloat = 16
+    static let healthRowSpacing: CGFloat = 12
+    static let healthControlHeight: CGFloat = 44
+    static let healthRingSize: CGFloat = 64
+    static let healthRingStroke: CGFloat = 5
+    static let healthChartHeight: CGFloat = 120
+    static let healthMenuSpacing: CGFloat = 6
+    static let healthSparklineWidth: CGFloat = 82
+    static let healthSparklineHeight: CGFloat = 34
+    static let healthChartLineWidth: CGFloat = 2
+    static let healthTargetLineWidth: CGFloat = 1
+    static let healthTargetLineDash: [CGFloat] = [4, 3]
+    static let healthPanelRadius: CGFloat = 22
+    static let healthAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.706, blue: 0.361, alpha: 1)
+            : UIColor(red: 0.706, green: 0.373, blue: 0.024, alpha: 1)
+    })
+    static let healthAccentForeground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.114, green: 0.071, blue: 0, alpha: 1)
+            : UIColor.white
+    })
+    static let healthAccentSecondary = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.322, green: 0.863, blue: 0.98, alpha: 1)
+            : UIColor(red: 0.078, green: 0.463, blue: 0.553, alpha: 1)
+    })
     static let factoryHorizontalInset: CGFloat = 16
     static let factorySectionSpacing: CGFloat = 12
     static let factoryControlHeight: CGFloat = 44
