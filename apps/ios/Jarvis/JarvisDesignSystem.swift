@@ -27,6 +27,31 @@ enum JarvisDesignTokens {
     static let sidebarGestureStartFraction: CGFloat = 0.62
     static let sidebarGestureMinimumDistance: CGFloat = 8
     static let sidebarOpenThreshold: CGFloat = 0.5
+    static let sidebarBackground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 7.0 / 255, green: 9.0 / 255, blue: 15.0 / 255, alpha: 1)
+            : UIColor(red: 246.0 / 255, green: 240.0 / 255, blue: 230.0 / 255, alpha: 1)
+    })
+    static let sidebarAmbientCool = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 0.30)
+            : UIColor(red: 20.0 / 255, green: 118.0 / 255, blue: 141.0 / 255, alpha: 0.24)
+    })
+    static let sidebarAmbientWarm = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 180.0 / 255, blue: 92.0 / 255, alpha: 0.26)
+            : UIColor(red: 232.0 / 255, green: 162.0 / 255, blue: 58.0 / 255, alpha: 0.30)
+    })
+    static let sidebarAmbientGreen = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 0.16)
+            : UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 0.18)
+    })
+    static let sidebarAmbientBlue = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 59.0 / 255, green: 139.0 / 255, blue: 255.0 / 255, alpha: 0.20)
+            : UIColor(red: 47.0 / 255, green: 128.0 / 255, blue: 237.0 / 255, alpha: 0.16)
+    })
     static let sidebarBrandFontSize: CGFloat = 22
     static let sidebarSettingsButtonSize: CGFloat = 44
     static let sidebarHeaderLeadingInset: CGFloat = 26

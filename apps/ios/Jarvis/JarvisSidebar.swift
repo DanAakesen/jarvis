@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 private struct JarvisSidebarButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -44,7 +45,11 @@ struct JarvisSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
-                .foregroundStyle(settingsFocused || settingsHovered ? Color.accentColor : Color.primary)
+                .foregroundStyle(
+                    settingsFocused || settingsHovered
+                        ? JarvisDesignTokens.settingsAccent
+                        : Color.primary
+                )
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
@@ -77,7 +82,39 @@ struct JarvisSidebar: View {
             }
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
-        .background(Color(uiColor: .systemBackground))
+        .background {
+            GeometryReader { geometry in
+                let ambientRadius = max(geometry.size.width * 0.6, geometry.size.height * 0.36)
+                ZStack {
+                    JarvisDesignTokens.sidebarBackground
+                    RadialGradient(
+                        colors: [JarvisDesignTokens.sidebarAmbientCool, .clear],
+                        center: UnitPoint(x: 0.12, y: 0.10),
+                        startRadius: 0,
+                        endRadius: ambientRadius
+                    )
+                    RadialGradient(
+                        colors: [JarvisDesignTokens.sidebarAmbientWarm, .clear],
+                        center: UnitPoint(x: 0.94, y: 0.20),
+                        startRadius: 0,
+                        endRadius: ambientRadius
+                    )
+                    RadialGradient(
+                        colors: [JarvisDesignTokens.sidebarAmbientGreen, .clear],
+                        center: UnitPoint(x: 0.24, y: 0.98),
+                        startRadius: 0,
+                        endRadius: ambientRadius
+                    )
+                    RadialGradient(
+                        colors: [JarvisDesignTokens.sidebarAmbientBlue, .clear],
+                        center: UnitPoint(x: 0.92, y: 0.80),
+                        startRadius: 0,
+                        endRadius: ambientRadius
+                    )
+                }
+            }
+            .ignoresSafeArea()
+        }
         .accessibilityHidden(!isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()
@@ -118,6 +155,6 @@ struct JarvisSidebar: View {
 
     private func rowColor(for destination: JarvisDestination, selected: Bool) -> Color {
         guard destination.isNavigable else { return .secondary }
-        return selected ? Color.accentColor : Color.primary
+        return selected ? JarvisDesignTokens.settingsAccent : Color.primary
     }
 }

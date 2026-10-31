@@ -2809,10 +2809,14 @@ the board's top-to-bottom order from Proactive through Chat and sits at the thum
 end; Workspaces remains routable but is not a sidebar item. Banking is disabled
 and labeled Later.
 Selection, keyboard focus, pointer hover and press change row text/icon styling
-only, without a row surface or border. The revealed-screen tap-to-close surface
-moves with the screen so it cannot intercept sidebar buttons. The right-edge
-drag is simultaneous with screen gestures and its pure-Swift recognition policy
-is unit tested.
+only, without a row surface or border; the selected destination uses the shared
+orange accent, while the Settings icon uses the same accent on focus/hover. The
+sidebar clears the device's actual top safe area and uses the board's light/dark
+page and ambient color treatment. The revealed-screen tap-to-close surface moves
+with the screen so it cannot intercept sidebar buttons. The right-edge drag is
+simultaneous with screen gestures and its pure-Swift recognition policy is unit
+tested. The simulator artifact includes open-sidebar screenshots in both
+appearances beside the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because

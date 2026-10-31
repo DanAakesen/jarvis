@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -93,6 +94,7 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let safeAreaInsets = Self.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets)
             let drawerWidth = min(
                 geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
                 JarvisDesignTokens.sidebarMaximumWidth
@@ -105,7 +107,7 @@ struct ContentView: View {
                 JarvisSidebar(
                     currentDestination: navigation.currentDestination,
                     isOpen: navigation.isSidebarOpen,
-                    safeAreaInsets: geometry.safeAreaInsets,
+                    safeAreaInsets: safeAreaInsets,
                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
                     onClose: closeSidebar
                 )
@@ -238,7 +240,7 @@ struct ContentView: View {
                         navigate(to: .voice, drawerWidth: drawerWidth)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, geometry.safeAreaInsets.bottom + JarvisDesignTokens.voiceControlBottomInset)
+                    .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.voiceControlBottomInset)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -262,6 +264,22 @@ struct ContentView: View {
         case "dark": .dark
         default: nil
         }
+    }
+
+    private static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow) else {
+            return fallback
+        }
+        let insets = window.safeAreaInsets
+        return EdgeInsets(
+            top: max(fallback.top, insets.top),
+            leading: max(fallback.leading, insets.left),
+            bottom: max(fallback.bottom, insets.bottom),
+            trailing: max(fallback.trailing, insets.right)
+        )
     }
 
     private func sidebarDragGesture(

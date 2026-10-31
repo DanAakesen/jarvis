@@ -145,6 +145,9 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
             for language in da en; do
@@ -181,7 +184,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, sidebar, and Factory screenshots]($ARTIFACT_URL)
+          [Download the light, dark, open-sidebar, and Factory screenshots]($ARTIFACT_URL)
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
