@@ -24,26 +24,29 @@ private enum JarvisGatePresentation: Equatable {
     case unlocked
 }
 
-private enum JarvisInterfaceLanguage: Equatable {
-    case danish
-    case english
-
-    static var current: JarvisInterfaceLanguage {
-        Locale.preferredLanguages.first?.lowercased().hasPrefix("da") == true ? .danish : .english
+private extension JarvisAppLanguage {
+    static var current: JarvisAppLanguage {
+        JarvisAppLanguage(
+            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+        ) ?? .default
     }
 
-    var signIn: String { self == .danish ? "Log ind med Microsoft" : "Sign in with Microsoft" }
-    var signingIn: String { self == .danish ? "Logger ind" : "Signing in" }
-    var retry: String { self == .danish ? "Prøv igen" : "Try again" }
-    var failed: String { self == .danish ? "Login mislykkedes" : "Sign-in failed" }
-    var denied: String { self == .danish ? "Kontoen har ikke adgang" : "Account not allowed" }
-    var signOut: String { self == .danish ? "Log ud" : "Sign out" }
-    var offline: String { self == .danish ? "Ingen forbindelse" : "No connection" }
-    var faceIDFailed: String { self == .danish ? "Face ID mislykkedes" : "Face ID failed" }
-    var usePasscode: String { self == .danish ? "Brug adgangskode" : "Use Passcode" }
-    var signedOut: String { self == .danish ? "Du er logget ud" : "You are signed out" }
-    var faceIDReason: String { self == .danish ? "Lås Jarvis op" : "Unlock Jarvis" }
-    var faceIDLabel: String { self == .danish ? "Face ID" : "Face ID" }
+    func text(_ key: JarvisNotesLocalizationKey) -> String {
+        JarvisNotesLocalization.string(key, language: self)
+    }
+
+    var signIn: String { text(.gateSignIn) }
+    var signingIn: String { text(.gateSigningIn) }
+    var retry: String { text(.gateRetry) }
+    var failed: String { text(.gateFailed) }
+    var denied: String { text(.gateDenied) }
+    var signOut: String { text(.gateSignOut) }
+    var offline: String { text(.gateOffline) }
+    var faceIDFailed: String { text(.gateFaceIDFailed) }
+    var usePasscode: String { text(.gateUsePasscode) }
+    var signedOut: String { text(.gateSignedOut) }
+    var faceIDReason: String { text(.gateFaceIDReason) }
+    var faceIDLabel: String { text(.gateFaceIDLabel) }
 }
 
 @MainActor
@@ -204,7 +207,7 @@ private final class JarvisGateModel: ObservableObject {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 context.evaluatePolicy(
                     biometricPolicy,
-                    localizedReason: JarvisInterfaceLanguage.current.faceIDReason
+                    localizedReason: JarvisAppLanguage.current.faceIDReason
                 ) { success, error in
                     if success {
                         continuation.resume()
@@ -225,7 +228,12 @@ private final class JarvisGateModel: ObservableObject {
 
 struct JarvisGateRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model = JarvisGateModel()
+
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
 
     var body: some View {
         ZStack {
@@ -237,7 +245,7 @@ struct JarvisGateRootView: View {
             if model.presentation != .unlocked {
                 JarvisGateSurface(
                     presentation: model.presentation,
-                    language: .current,
+                    language: language,
                     onPrimaryAction: primaryAction
                 )
                 .transition(.opacity)
@@ -273,7 +281,7 @@ struct JarvisGateRootView: View {
 
 private struct JarvisGateSurface: View {
     let presentation: JarvisGatePresentation
-    let language: JarvisInterfaceLanguage
+    let language: JarvisAppLanguage
     let onPrimaryAction: () -> Void
 
     private var orbActivity: JarvisOrbActivity {

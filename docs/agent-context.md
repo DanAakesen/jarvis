@@ -1512,12 +1512,17 @@ identity and no-timestamp reasons appear as `not_reported_or_redacted` in
 artifacts (open web clients accept HTTP reasons only for down checks); read them
 in the `system.smoke_check` events instead.
 
-Only `rate_limit_exceeded` retries a check, once. A numeric SSE `retry_after`
+`rate_limit_exceeded` retries a check once. A numeric SSE `retry_after`
 (seconds) or HTTP `Retry-After` hint sets the wait, clamped to 30–60 seconds;
 without a valid hint it waits a full 60 seconds after the rejection. Retries
 re-enter the same pacing queue. A second throttle fails with the named reason,
 including `chat_canary`; other second-attempt failures retain their actual reason.
-Other errors, assertion failures and timeouts never retry. A rescued first
+`chat_github_read` also retries `github_issue_unavailable` once, through the same
+queue without the rate-limit backoff. Both retry causes share a two-attempt cap.
+A successful `github_read` / `issue_get` receipt for issue 700 with a nonblank
+title passes without requiring the reply to repeat the title. A failed retry
+retains its actual safe reason in acceptance/release evidence; other errors,
+assertion failures and timeouts never retry. A rescued first
 throttle is not retained in the report; inspect dependency telemetry too. #816's
 coordination client is never opened for smoke turns; the agent test
 `test_smoke_invocations_open_no_coordination_connection` pins that.
@@ -6214,10 +6219,10 @@ the URLSession task. `KeychainTokenStore` stores the token as a generic password
 with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` and synchronization
 disabled. `JarvisComposition` reads `JARVIS_API_BASE_URL` from the Info.plist
 build setting and accepts the access-token provider as an input; it adds no
-production host or sign-in implementation. There is no WebSocket seam in
-`JarvisCore` yet, so the app does not define a WebSocket adapter until #1391
-lands. App-target adapters are compile-checked by the Mac job only; CI does not
-boot a simulator or run adapter tests.
+production host or sign-in implementation. P15-11 supplies the app's
+`URLSessionWebSocketTransport` against the #1391 seam. App-target adapters are
+compile-checked by the existing ready-PR Mac job; Linux does not compile Apple
+frameworks.
 
 P15-05 adds `JarvisApprovalsClient` and `JarvisWorkspaceClient` on those same
 authenticated HTTP and SSE seams. Approvals decode only the pending-confirmation
@@ -6302,23 +6307,62 @@ the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
-and captures the main screen in light and dark appearance plus the open sidebar in
-light appearance. The sidebar screenshot uses the `--screenshot-sidebar-open`
-launch argument to initialize the real navigation shell in its open state. It
-uploads those PNGs as a 14-day workflow artifact and posts or updates one pull request comment with
-the artifact link. GitHub comments cannot display files directly from workflow
-artifacts, so the images are not inline previews; open the artifact to view them.
-This job does not sign, use secrets, or upload to TestFlight.
+and captures the Chat screen in light and dark appearance plus the open sidebar
+in light appearance. Chat captures use `--screenshot-chat-fixture` to select
+clearly marked synthetic data without a backend; the sidebar capture also uses
+`--screenshot-sidebar-open` to initialize the real navigation shell in its open
+state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
+one pull request comment with the artifact link. GitHub comments cannot display
+files directly from workflow artifacts, so the images are not inline previews;
+open the artifact to view them. This job does not sign, use secrets, or upload
+to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
-SwiftUI binds them to a native `NavigationStack`. Chat is the root placeholder,
-and other enabled destinations plus Settings are title-only pages with native
-back navigation. Banking remains disabled and labeled Later. The fixed-behind
-sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
-its shared styling and gesture tokens are in `JarvisDesignTokens.swift`. Run
-`swift build` and `swift test` from `apps/ios/Packages/JarvisCore` for Linux
-validation.
+SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice and Notes are native screens, other
+enabled destinations are title-only pages, and Settings exposes the persisted
+Danish/English app-language preference (Danish by default), with native back
+navigation. Banking remains disabled and labeled Later. The fixed-behind
+sidebar opens through a right-side drag or the localized VoiceOver action;
+its shared styling and gesture tokens are in `JarvisSidebar.swift`.
+
+P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
+screen state and calls the existing chat, Now-feed, approvals and workspace
+clients. The Now bar and Needs you sheet use existing `/now` snapshot, activity
+dismissal, confirmation and event routes. Final history supplies persisted tool
+outcomes; reattachment prefers the active turn for the latest displayed session,
+then falls back to the first server-ordered turn; the active-turn lookup repeats
+when the Now stream reconnects. `ChatHistoryPagingState` preserves the oldest
+loaded cursor across refreshes of the latest page. The web
+limits are five attachments, up to 20 MB for documents and
+10 MB for images. Local camera/photo data is uploaded only on send. Synthetic
+fixtures are selected only in previews and screenshot mode. The app has no
+native Entra sign-in provider, so its unavailable provider fails closed without
+an existing Keychain session. ReplayKit remains disabled until its Broadcast
+Upload Extension and Stop lifecycle exist. Fixture mode supports one sample
+text turn; attachment uploads and feed writes are disabled rather than faked.
+There is no backend route specific to iOS. Run `swift build` and `swift test` from
+`apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
+SwiftUI compile check.
+
+P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
+reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
+The app-owned language preference selects the complete Notes localization catalog
+and date locale; do not derive it from `GET /settings` or voice language. Keep the
+web/backend source files there authoritative and do not add iOS routes.
+Synthetic note/task/graph fixture scenarios and Linux tests live in
+`JarvisCoreTests`. The SwiftUI area provides Notes, Tasks, List and Graph tabs,
+creation sheets, conditional note saves and conflict recovery. It depends on an
+existing stored owner session: no native Entra sign-in provider exists yet, and
+the app must show an error instead of using fixture content when sign-in is
+unavailable. No standalone folder creation, destructive note/task action,
+task-create priority or offline cache is implemented.
+
+Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
+checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
+check and is gated on a ready pull request; do not add simulator boots, UI tests
+or screenshots to CI. The current screenshot workflow covers only the app's
+main screen and sidebar, so Notes-tab/state screenshots are not produced by CI.
 
 P15-16 adds `JarvisGatePolicy` to pure-Swift `JarvisCore`; its Linux tests cover
 cold start, the 60-second background threshold, missing/expired sessions, denied
@@ -6353,6 +6397,45 @@ Pass the web validator's optional trusted Blob host or registered tool names
 through `GeneratedViewDecodingContext` on `JSONDecoder.userInfo` when available.
 The Swift source status also accepts `running`, matching the runtime guard even
 though the TypeScript declaration and JSON schema omit it.
+
+### Native voice screen and audio (P15-11)
+
+The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
+values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
+used by both app and extension are in `apps/ios/Shared/VoiceScreenShareContract.swift`.
+`VoiceScreenModel` connects the existing Keychain token, `GET /settings`,
+`VoiceSessionClient`, and app-target URLSession/AVFoundation adapters. PCM16
+microphone capture and speaker playback use mono 24 kHz; speech-start immediately
+stops queued playback. The session can minimize to a persistent shell bar without
+ending audio or the screen-share monitor.
+
+Camera inspection uses the existing `/screen/frames` handle request; shared
+screen inspection uses the existing description request and sends its result on
+the same voice socket. The `JarvisBroadcast` ReplayKit extension writes only
+bounded JPEG frames and small lifecycle markers into the registered
+`group.com.danaakesen.jarvis` container; the host app reads the latest fresh frame
+and requests stop through that same container. No backend route or dependency
+was added. The Linux metadata check
+validates the extension target, its embed relationship, and both App Group
+entitlements. The existing ready-PR Mac build is the only Apple compile check;
+keep this PR in draft until Linux checks pass.
+
+The current shell has no native sign-in flow. Voice requires an owner-session
+token already present in Keychain; with an empty store it displays “Sign in
+required” and keeps session controls disabled. Do not invent a backend route or
+claim first-install voice acceptance until the separate native sign-in work is
+available.
+
+Run `swift build` and `swift test` from
+`apps/ios/Packages/JarvisCore`. These checks do not compile SwiftUI, AVFoundation,
+ReplayKit or camera code. Physical iPhone checks are still required for
+permission recovery, full-duplex audio, immediate barge-in, camera preview/photo,
+and starting/stopping screen share. Follow-ups to file separately: background
+audio; Bluetooth; audio route changes; call interruption handling; microphone
+recovery after device lock; microphone recovery after a phone call; CarPlay; Live
+Activity; and Action Button. These remain unverified. The extension App ID and
+its App Group provisioning also need the owner's portal check before signed
+device testing.
 
 ## iOS Phase 1b: owner-started TestFlight upload
 

@@ -168,7 +168,9 @@ public final class JarvisChatClient: Sendable {
         let typeMatches = upload.contentType == expectedType ||
             fileExtension == "md" && upload.contentType == "text/plain" ||
             fileExtension == "csv" && upload.contentType == "application/csv"
-        let maximumBytes = Self.imageContentTypes[fileExtension] == nil ? 20 * 1024 * 1024 : 10 * 1024 * 1024
+        let maximumBytes = Self.imageContentTypes[fileExtension] == nil
+            ? ChatAttachmentLimits.maximumFileBytes
+            : ChatAttachmentLimits.maximumImageBytes
         guard !upload.data.isEmpty, upload.data.count <= maximumBytes,
               !basename.isEmpty, basename.unicodeScalars.count <= 255,
               !upload.fileName.contains("\r"), !upload.fileName.contains("\n"),
@@ -196,7 +198,7 @@ public final class JarvisChatClient: Sendable {
               let attachment = try? JSONDecoder().decode(ChatAttachmentDescriptor.self, from: response.body),
               Self.validUUID(attachment.id),
               attachment.size > 0,
-              attachment.size <= 20 * 1024 * 1024 else {
+              attachment.size <= ChatAttachmentLimits.maximumFileBytes else {
             throw JarvisChatClientError.invalidResponse
         }
         return attachment
@@ -339,7 +341,9 @@ public final class JarvisChatClient: Sendable {
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw JarvisChatClientError.invalidTextLength
         }
-        guard attachmentIds.count <= 5 else { throw JarvisChatClientError.tooManyAttachments }
+        guard attachmentIds.count <= ChatAttachmentLimits.maximumCount else {
+            throw JarvisChatClientError.tooManyAttachments
+        }
         guard Set(attachmentIds).count == attachmentIds.count,
               attachmentIds.allSatisfy(Self.validUUID) else {
             throw JarvisChatClientError.invalidAttachmentIDs

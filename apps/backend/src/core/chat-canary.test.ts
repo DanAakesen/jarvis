@@ -233,8 +233,104 @@ describe('post-deploy chat acceptance suite', () => {
     await expect(suite.chat_canary!()).resolves.toMatchObject({
       status: 'down', reason: 'acceptance_check_failed',
     });
-    // A completed reply that fails its assertion is never run again.
+    expect(agent.stream).toHaveBeenCalledTimes(9);
+    expect(vi.mocked(agent.stream).mock.calls.filter(([input]) => input.text === prompts[2])).toHaveLength(2);
+  });
+
+  it('accepts the GitHub receipt without requiring the title in reply text', async () => {
+    const agent = passingAgent((input) => input.text === prompts[2] ? {
+      text: 'I found the camera issue.',
+      calls: [{
+        name: 'github_read', operation: 'issue_get', number: 700, outcome: 'ok', title: 'Camera preview behavior',
+      }],
+    } : undefined);
+    const suite = await probes(agent);
+
+    await expect(suite.chat_github_read!()).resolves.toEqual({ status: 'ok' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'ok' });
     expect(agent.stream).toHaveBeenCalledTimes(8);
+  });
+
+  it('retries a missed GitHub read once and shares the passing result with the aggregate', async () => {
+    let attempts = 0;
+    const starts: number[] = [];
+    const base = passingAgent((input) => input.text === prompts[2] && attempts++ === 0
+      ? { text: 'I will look up the issue.' } : undefined);
+    const agent: ConversationAgent = {
+      async *stream(input, owner, signal) {
+        starts.push(Date.now());
+        yield* base.stream(input, owner, signal);
+      },
+    };
+    const suite = await probes(agent);
+
+    await expect(suite.chat_github_read!()).resolves.toEqual({ status: 'ok' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'ok' });
+    expect(attempts).toBe(2);
+    expect(starts).toHaveLength(9);
+    expect(starts.slice(1).every((start, index) => start - starts[index]! >= 8_000)).toBe(true);
+  });
+
+  it.each<Partial<ConversationAgentToolCall>>([
+    { outcome: 'error' },
+    { outcome: 'refused' },
+    { number: 701 },
+    { title: undefined },
+    { title: '' },
+    { title: '   ' },
+    { name: 'other_tool' },
+    { operation: 'issue_list' },
+  ])('keeps an invalid GitHub receipt down after one retry: %j', async (invalid) => {
+    const agent = passingAgent((input) => input.text === prompts[2] ? {
+      text: 'Issue 700 is Camera preview behavior.',
+      calls: [{
+        name: 'github_read', operation: 'issue_get', number: 700, outcome: 'ok', title: 'Camera preview behavior',
+        ...invalid,
+      }],
+    } : undefined);
+    const suite = await probes(agent);
+
+    await expect(suite.chat_github_read!()).resolves.toEqual({ status: 'down', reason: 'github_issue_unavailable' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+    expect(vi.mocked(agent.stream).mock.calls.filter(([input]) => input.text === prompts[2])).toHaveLength(2);
+    expect(agent.stream).toHaveBeenCalledTimes(9);
+  });
+
+  it.each(['rate_limit_exceeded', 'github_issue_unavailable'])(
+    'does not add a third GitHub attempt after retrying %s', async (firstReason) => {
+      let attempts = 0;
+      const agent = passingAgent((input) => {
+        if (input.text !== prompts[2]) return undefined;
+        attempts++;
+        if ((attempts === 1) === (firstReason === 'rate_limit_exceeded')) {
+          throw new ChatAgentError('rate_limit_exceeded');
+        }
+        return { text: 'I could not read the issue.' };
+      });
+      const suite = await probes(agent);
+      const reason = firstReason === 'rate_limit_exceeded' ? 'github_issue_unavailable' : 'rate_limit_exceeded';
+
+      await expect(suite.chat_github_read!()).resolves.toEqual({ status: 'down', reason });
+      await expect(suite.chat_canary!()).resolves.toEqual({
+        status: 'down', reason: reason === 'rate_limit_exceeded' ? reason : 'acceptance_check_failed',
+      });
+      expect(attempts).toBe(2);
+      expect(agent.stream).toHaveBeenCalledTimes(9);
+    },
+  );
+
+  it('retains the exact invocation failure from the GitHub retry', async () => {
+    let attempts = 0;
+    const agent = passingAgent((input) => {
+      if (input.text !== prompts[2]) return undefined;
+      if (attempts++ === 0) return { text: 'I will look up the issue.' };
+      throw new ChatAgentInvocationError('Chat agent failed', 'agent_http_503');
+    });
+    const suite = await probes(agent);
+
+    await expect(suite.chat_github_read!()).resolves.toEqual({ status: 'down', reason: 'agent_http_503' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+    expect(attempts).toBe(2);
   });
 
   it.each([...chatAgentFailureReasons])('retains the fixed hosted origin %s for only the failed prompt', async (code) => {

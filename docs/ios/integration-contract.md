@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client on 29 October 2026. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. Updated on 30 October 2026 for the owner's approved Sign-in and Lock concept and previously confirmed decisions about Face ID and Lock Screen approvals. P15-16 implements the approved screens; unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -27,12 +27,15 @@ Draft for the native iPhone app, derived from reading the current backend and we
 
 - URL: `wss://BACKEND/voice` (English) or `wss://BACKEND/voice/da` (Danish). It is a WebSocket carrying JSON, not WebRTC.
 - Auth: two subprotocols, `jarvis.voice.v1` and `jarvis.auth.TOKEN`. UNVERIFIED: whether an `Authorization` header on the upgrade request is also accepted.
+- Language: read `settings.voice.defaultLanguage` from the existing authenticated `GET /settings` route for each new session; the default is `da`.
 - Audio: base64 PCM16 little-endian, mono, 24 kHz inside JSON messages. There is no Opus.
 - The microphone is open (no push to talk). Starting to speak during playback must stop playback at once.
-- Client sends: `input_audio_buffer.append {audio}`, `jarvis.microphone.active`, `jarvis.microphone.muted`, `jarvis.session.end`, `jarvis.camera.state`, `jarvis.voice.playback.completed {responseId, audible}`.
+- Client sends: `input_audio_buffer.append {audio}`, `jarvis.microphone.active`, `jarvis.microphone.muted`, `jarvis.session.end`, `jarvis.camera.state`, `jarvis.voice.playback.completed {responseId, audible}`, `jarvis.screen.context`, and `jarvis.screen.context.unavailable`.
 - Server sends: `jarvis.session.ready` (with a numeric session id), `jarvis.session.ended`, `conversation.item.input_audio_transcription.completed`, `input_audio_buffer.speech_started`, `response.created`, `response.audio.delta` or `response.output_audio.delta {delta}`, `response.done` or `response.cancelled`.
 - Reconnect: exponential backoff, up to 8 attempts, at most 10 seconds apart.
-- Source: `apps/web/src/voice-client.ts`, `apps/backend/src/voice/`.
+- Camera: post a JPEG to `POST /screen/frames` with `sessionId`, `frame`, `question`, `turnId`, and `mode: "handle"`; use its `frameId` and `capturedAt` in a `jarvis.screen.context` message with `source: "camera"` and the same `itemId`.
+- Screen sharing: inspect the latest JPEG through the same authenticated `POST /screen/frames` route without `mode`; send its `description` and `capturedAt` in `jarvis.screen.context` with `source: "screen"`. Report capture failures with `jarvis.screen.context.unavailable`.
+- Source: `apps/web/src/voice-client.ts`, `apps/web/src/screen-sharing.ts`, `apps/backend/src/voice/`, `apps/backend/src/vision/screen.ts`, and `apps/backend/src/core/settings.ts`.
 
 ## 4. Generated views
 
@@ -103,3 +106,30 @@ The approve and decline route itself needs no change.
 - CarPlay: the voice-based conversational category would use the same voice WebSocket. The phone is usually locked in the car, so everything it needs must be readable after the first unlock (section 1). CarPlay shows no notifications for conversational apps, so nothing in the car can depend on one. The build plan holds the entitlement steps and limits.
 - Apple Watch: Live Activities appear on the Watch without extra work. A native Watch app is outside version 1.
 - Music: Jarvis can ask Apple Music (MusicKit) or another player to start something. It cannot be the CarPlay audio app, because an app has one CarPlay category.
+
+## 11. Notes area (P15-12)
+
+The Notes area uses the existing owner-authenticated vault routes. No iOS-specific route or payload is needed.
+Its Danish/English interface language is an app-owned local preference (`jarvis.appLanguage`), defaulting to Danish; the voice setting is not used for Notes UI copy.
+
+| Screen action | Existing route and contract |
+|---|---|
+| Load the vault folders | `GET /notes/tree` returns `directories`, `rootNoteCount`, `truncated` and `updatedAt`. |
+| List notes or load one folder in the tree | `GET /notes?limit=50&offset=N`, optionally with `directory=PATH`, `folder=NAME` or `query=TEXT`. Results are sorted by path, not recency. |
+| Open a note in the editor | `GET /notes/note?path=PATH` returns `path`, Markdown `content`, the current `sha` and a GitHub URL. |
+| Create a note | `POST /notes` with `{path, content}` returns `path`, `commit` and `url`. |
+| Save an edited note | `PUT /notes/note` with `{path, content, sha}` returns `path`, `commit` and `url`. A stale `sha` returns `409` with the latest `currentSha` and `content`; retain the draft and require an explicit recovery choice. |
+| Load task groups or search tasks | `GET /vault/tasks?state=open|all`, optionally with `q=TEXT`. The response includes task due dates/times, priority, source path/line/version and the backend's `today`. Personal/Work scope is inferred from the source path, as in the web client. |
+| Complete or reopen a task | `PATCH /vault/tasks` with the exact source `path`, `line`, `text`, `version` and `done`. A stale version returns `409`; refresh before another write. |
+| Edit task text, due date/time or priority | `PUT /vault/tasks` with the exact source identity/version plus `newText`, `due`, `time` and `priority`. |
+| Create a task | `POST /vault/tasks` with `{text, scope: "personal"|"work", due?, time?}`. The create contract has no priority field. |
+| Load the graph | `GET /knowledge/graph` returns the graph nodes and edges. |
+| Search note graph nodes | `GET /knowledge/search?q=TEXT` returns matching graph `nodeId`s and snippets. Load the graph first so results can be resolved to note paths. |
+
+The web graph's read-only note preview uses `GET /memory/:id`, with the id derived from the vault path. The iOS graph opens a note through `GET /notes/note?path=PATH` instead, so its editor has the `sha` required for a safe conditional save.
+
+The web Notes and Tasks views call these routes directly; their assistant tools (`vault_search`, `show_knowledge`, `vault_read`, `vault_write`, `vault_task_create`, `vault_task_complete` and `vault_task_edit`) are not screen endpoints and are not invoked by this area. `vault_delete` is confirmation-gated and is not a substitute for a screen delete route.
+
+There is no note delete, rename or move route; no folder create or rename route; no task delete route; no task priority on create; and no offline cache. Do not expose those operations or simulate them locally. A new folder is not independently created: a directory only appears when it contains a note. Search and editor writes must not claim offline persistence. No additional backend work is authorized by P15-12.
+
+Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx`, `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (the separate voice-language setting).
