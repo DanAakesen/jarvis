@@ -187,6 +187,7 @@ private struct BoardCompare {
             application.activate(ignoringOtherApps: true)
 
             var failures: [String] = []
+            var report: [String] = []
             for theme in ["light", "dark"] {
                 for language in ["da", "en"] {
                     for reference in references {
@@ -216,12 +217,18 @@ private struct BoardCompare {
                         let result = try compare(app: appPNG, board: boardPNG)
                         let line = "\(attachmentName): color \(result.colorDelta), structure \(result.structureDrift)"
                         print(line)
+                        report.append(line)
                         if result.colorDelta > tolerance || result.structureDrift > tolerance {
                             failures.append(line)
                         }
                     }
                 }
             }
+            try (report.joined(separator: "\n") + "\n").write(
+                to: outputDirectory.appendingPathComponent("comparison.txt"),
+                atomically: true,
+                encoding: .utf8
+            )
             if !failures.isEmpty {
                 throw BoardCompareError.comparisonFailed(failures.joined(separator: "\n"))
             }
@@ -264,13 +271,13 @@ private struct BoardCompare {
         for manifestURL in files where manifestURL.lastPathComponent == "manifest.json" {
             guard
                 let data = try? Data(contentsOf: manifestURL),
-                let manifest = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+                let manifest = try? JSONSerialization.jsonObject(with: data)
             else { continue }
-            if let entry = manifest.first(where: { entry in
-                let attachmentName = URL(fileURLWithPath: entry.value).deletingPathExtension().lastPathComponent
-                return entry.key.lowercased().hasSuffix(".png") && attachmentName == name
-            }) {
-                return manifestURL.deletingLastPathComponent().appendingPathComponent(entry.key)
+            if let exportedName = manifestExportedFilename(manifest, matching: name) {
+                let fileName = URL(fileURLWithPath: exportedName).lastPathComponent
+                if let url = files.first(where: { $0.lastPathComponent == fileName }) {
+                    return url
+                }
             }
         }
         for url in files
@@ -278,6 +285,34 @@ private struct BoardCompare {
             return url
         }
         return nil
+    }
+
+    private static func manifestExportedFilename(_ value: Any, matching name: String) -> String? {
+        switch value {
+        case let entries as [Any]:
+            return entries.lazy.compactMap { manifestExportedFilename($0, matching: name) }.first
+        case let entry as [String: Any]:
+            let nameKeys = ["name", "attachmentName", "suggestedHumanReadableName", "displayName"]
+            let fileKeys = ["exportedFileName", "filename", "fileName"]
+            let attachmentNames = nameKeys.compactMap { entry[$0] as? String }
+            if attachmentNames.contains(where: {
+                URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent == name
+            }) {
+                if let fileName = fileKeys.compactMap({ entry[$0] as? String }).first {
+                    return fileName
+                }
+            }
+            for (fileName, attachmentName) in entry {
+                if let attachmentName = attachmentName as? String,
+                   URL(fileURLWithPath: attachmentName).deletingPathExtension().lastPathComponent == name,
+                   fileName.lowercased().hasSuffix(".png") {
+                    return fileName
+                }
+            }
+            return entry.values.lazy.compactMap { manifestExportedFilename($0, matching: name) }.first
+        default:
+            return nil
+        }
     }
 
     private static func writePNG(_ image: CGImage, to url: URL) throws {

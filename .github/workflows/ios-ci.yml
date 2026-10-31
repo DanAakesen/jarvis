@@ -27,9 +27,11 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast"]
+            abort "unexpected iOS targets" unless project["targets"].keys.sort == %w[Jarvis JarvisBroadcast JarvisUITests].sort
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
+            abort "UI-test target is required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
+            abort "Jarvis UI-test scheme is required" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
             abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
             bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
@@ -194,7 +196,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ios-screenshots/**/*.png
+          path: |
+            ${{ runner.temp }}/ios-screenshots/**/*.png
+            ${{ runner.temp }}/ios-screenshots/board-renders/comparison.txt
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
@@ -221,24 +225,26 @@ jobs:
 
           $artifact_link
 
-          Captured on ${IOS_SIMULATOR_NAME:-an iPhone simulator}. The artifact is retained for 14 days. Each `ios-<screen>-<appearance>-<language>.png` is paired with `board-<screen>-<appearance>-<language>.png`.
+          Captured on ${IOS_SIMULATOR_NAME:-an iPhone simulator}. The artifact is retained for 14 days.
+
+          Each <code>ios-&lt;screen&gt;-&lt;appearance&gt;-&lt;language&gt;.png</code> is paired with <code>board-&lt;screen&gt;-&lt;appearance&gt;-&lt;language&gt;.png</code>.
 
           | Screen | Approved board reference | Artifact screenshots |
           | --- | --- | --- |
-          | Sign-in | [Sign-in]($board_url?screen=signin&state=idle) | `ios-sign-in-{light,dark}-{da,en}` |
-          | Chat | [Chat]($board_url?screen=chat) | `ios-chat-{light,dark}-{da,en}` |
-          | Sidebar | [Sidebar]($board_url?screen=chat&sidebar=open) | `ios-sidebar-{light,dark}-{da,en}` |
-          | Plus menu | [Attachments]($board_url?screen=chat&plus=open) | `ios-plus-menu-{light,dark}-{da,en}` |
-          | Notifications | [Needs you]($board_url?screen=chat&needs=open) | `ios-notifications-{light,dark}-{da,en}` |
-          | Voice | [Voice]($board_url?screen=voice&voice=listening) | `ios-screen-voice-{light,dark}-{da,en}` |
-          | Notes | [Notes]($board_url?screen=notes&tab=notes) | `ios-screen-notes-{light,dark}-{da,en}` |
-          | Health | [Health]($board_url?screen=health&tab=dashboard) | `ios-screen-health-{light,dark}-{da,en}` |
-          | Software Factory | [Factory]($board_url?screen=factory&tab=board) | `ios-screen-softwareFactory-{light,dark}-{da,en}` |
-          | Settings | [Settings]($board_url?screen=settings&tab=general) | `ios-screen-settings-{light,dark}-{da,en}` |
-          | Status | [Status]($board_url?screen=status) | `ios-screen-status-{light,dark}-{da,en}` |
-          | Usage | [Usage]($board_url?screen=usage) | `ios-screen-usage-{light,dark}-{da,en}` |
-          | Proactive | [Proactive]($board_url?screen=proactive) | `ios-screen-proactive-{light,dark}-{da,en}` |
-          | Workspaces | [Workspaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/workspaces.html) | `ios-screen-workspaces-{light,dark}-{da,en}` |
+          | Sign-in | [Sign-in]($board_url?screen=signin&state=idle) | <code>ios-sign-in-{light,dark}-{da,en}</code> · <code>board-sign-in-{light,dark}-{da,en}</code> |
+          | Chat | [Chat]($board_url?screen=chat) | <code>ios-chat-{light,dark}-{da,en}</code> · <code>ios-screen-chat-{light,dark}-{da,en}</code> · matching <code>board-*.png</code> |
+          | Sidebar | [Sidebar]($board_url?screen=chat&sidebar=open) | <code>ios-sidebar-{light,dark}-{da,en}</code> · <code>board-sidebar-{light,dark}-{da,en}</code> |
+          | Plus menu | [Attachments]($board_url?screen=chat&plus=open) | <code>ios-plus-menu-{light,dark}-{da,en}</code> · <code>board-plus-menu-{light,dark}-{da,en}</code> |
+          | Notifications | [Needs you]($board_url?screen=chat&needs=open) | <code>ios-notifications-{light,dark}-{da,en}</code> · <code>board-notifications-{light,dark}-{da,en}</code> |
+          | Voice | [Voice]($board_url?screen=voice&voice=listening) | <code>ios-screen-voice-{light,dark}-{da,en}</code> · <code>board-screen-voice-{light,dark}-{da,en}</code> |
+          | Notes | [Notes]($board_url?screen=notes&tab=notes) | <code>ios-screen-notes-{light,dark}-{da,en}</code> · <code>board-screen-notes-{light,dark}-{da,en}</code> |
+          | Health | [Health]($board_url?screen=health&tab=dashboard) | <code>ios-screen-health-{light,dark}-{da,en}</code> · <code>board-screen-health-{light,dark}-{da,en}</code> |
+          | Software Factory | [Factory]($board_url?screen=factory&tab=board) | <code>ios-screen-softwareFactory-{light,dark}-{da,en}</code> · <code>board-screen-softwareFactory-{light,dark}-{da,en}</code> |
+          | Settings | [Settings]($board_url?screen=settings&tab=general) | <code>ios-screen-settings-{light,dark}-{da,en}</code> · <code>board-screen-settings-{light,dark}-{da,en}</code> |
+          | Status | [Status]($board_url?screen=status) | <code>ios-screen-status-{light,dark}-{da,en}</code> · <code>board-screen-status-{light,dark}-{da,en}</code> |
+          | Usage | [Usage]($board_url?screen=usage) | <code>ios-screen-usage-{light,dark}-{da,en}</code> · <code>board-screen-usage-{light,dark}-{da,en}</code> |
+          | Proactive | [Proactive]($board_url?screen=proactive) | <code>ios-screen-proactive-{light,dark}-{da,en}</code> · <code>board-screen-proactive-{light,dark}-{da,en}</code> |
+          | Workspaces | [Workspaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/workspaces.html) | <code>ios-screen-workspaces-{light,dark}-{da,en}</code> · <code>board-screen-workspaces-{light,dark}-{da,en}</code> |
           EOF
           jq -n --rawfile body "$comment_file" '{body: $body}' > "$payload_file"
           comment_id="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
