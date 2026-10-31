@@ -42,13 +42,14 @@ private extension JarvisAppLanguage {
     var faceIDLabel: String { text(.gateFaceIDLabel) }
 }
 
-private final class JarvisGateOverlayWindow: UIWindow {
+final class JarvisGateOverlayWindow: UIWindow {
+    var isPrivacyCover = false
     override var canBecomeKey: Bool { false }
 }
 
 @MainActor
 private final class JarvisGateOverlay {
-    private var window: UIWindow?
+    private var window: JarvisGateOverlayWindow?
 
     func update(visible: Bool, model: JarvisGateModel) {
         guard visible else {
@@ -56,13 +57,17 @@ private final class JarvisGateOverlay {
             window = nil
             return
         }
-        guard window == nil,
-              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
+        if let window {
+            window.isPrivacyCover = model.presentation == .unlocked
+            return
+        }
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
             return
         }
 
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         let overlay = JarvisGateOverlayWindow(windowScene: scene)
+        overlay.isPrivacyCover = model.presentation == .unlocked
         overlay.windowLevel = .alert + 1
         let host = UIHostingController(rootView: JarvisGateOverlayView(model: model))
         host.view.backgroundColor = .clear

@@ -4,8 +4,11 @@ Use a two-minute MSAL callback deadline and the existing localized failed/retry
 surface rather than leaving sign-in pending indefinitely. Timeout/task
 cancellation dismisses MSAL web authentication and settles once; ignore later
 callbacks. User sheet cancellation still returns to idle, and denied/offline
-states stay distinct. Select an attached controller in a visible normal-level
-foreground-active app window, never the privacy cover. Keep the current redirect
+states stay distinct. P15-24 / #1447 corrects the normal-level-only selection:
+select the top visible controller of the highest eligible visible window in a
+foreground-active scene, including the gate hosting controller, never the
+privacy-only cover. Keep the gate window alive during interactive authentication
+so its sheet remains above the Sign-in screen. Keep the current redirect
 formula and keychain group; no identifiers or credentials are copied into docs.
 
 Core recovery tests are local evidence only. Successful build 8 upload does not
