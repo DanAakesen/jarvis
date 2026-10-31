@@ -109,6 +109,11 @@ public struct JarvisNavigationState: Equatable {
         path.removeLast()
     }
 
+    public mutating func voiceSessionStateChanged(_ state: VoiceSessionState) {
+        guard state == .ended else { return }
+        navigate(to: .chat)
+    }
+
     public mutating func openSidebar() {
         isSidebarOpen = true
     }

@@ -6362,6 +6362,10 @@ below. Other enabled destinations remain title-only pages. Banking remains
 disabled and labeled Later. The fixed-behind sidebar opens through a right-side
 drag or the localized VoiceOver action; its shared styling and gesture tokens
 are in `JarvisSidebar.swift`.
+P15-28 returns ended voice sessions to Chat, including when minimized, and resets
+sidebar progress. Focused `JarvisCoreTests` cover the cleared stack, reopened
+sidebar navigation and unchanged navigation for other voice states. SwiftUI
+rendering and real-device voice-end interaction require Apple-target verification.
 
 P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
 screen state and calls the existing chat, Now-feed, approvals and workspace

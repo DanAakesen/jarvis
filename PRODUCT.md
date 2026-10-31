@@ -54,7 +54,9 @@ TestFlight keychain/Entra configuration require separate verification.
 
 The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
-without ending the session. Language follows the existing `voice.default_language`
+without ending the session. Ending voice, including from the minimized bar, returns
+to Chat with a cleared navigation stack and a usable sidebar.
+Language follows the existing `voice.default_language`
 setting, defaulting to Danish. Microphone capture and speaker playback use the
 existing voice socket contract; speaking over playback interrupts it immediately.
 Camera inspection and screen sharing reuse the web app's existing vision and
