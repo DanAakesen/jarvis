@@ -2952,10 +2952,11 @@ for review.
 ## Native iOS sign-in and lock (P15-16; 30 October 2026)
 
 The approved Sign-in and Lock frames in `docs/ios/design/board.html` guide the
-composition only. A shared Jarvis orb sits above one native prominent action;
-short failure text stays beside the action. The existing orb identity needs a
-custom SwiftUI graphic because a system control cannot express the Jarvis orb.
-Orb colors, scale, spacing and motion are shared in `JarvisDesignSystem.swift`.
+composition. Sign-in uses a large dark-glass orb with a cyan rim and warm
+filament core, a soft cyan/amber/blue ambient backdrop, the Jarvis wordmark, and
+one orange Microsoft action. The lock keeps the shared orb and native Face ID
+or passcode behavior without the sign-in wordmark or branding. Orb colors,
+scale, spacing and motion are shared in `JarvisDesignSystem.swift`.
 
 The gate follows the app-owned Danish/English preference through the JarvisCore
 localization catalog. Idle orb breathing stops with Reduce Motion; signing-in uses a
