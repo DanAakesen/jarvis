@@ -95,11 +95,3 @@
 "gate.signedOut" = "Du er logget ud";
 "gate.faceIDReason" = "Lås Jarvis op";
 "gate.faceIDLabel" = "Face ID";
-"voiceActivity.listening" = "Lytter";
-"voiceActivity.speaking" = "Taler";
-"voiceActivity.muted" = "Lydløs";
-"voiceActivity.mute" = "Slå mikrofon fra";
-"voiceActivity.unmute" = "Slå mikrofon til";
-"voiceActivity.end" = "Afslut";
-"voiceActivity.orb" = "Jarvis stemmesession";
-"voiceActivity.waveform" = "Lydaktivitet";

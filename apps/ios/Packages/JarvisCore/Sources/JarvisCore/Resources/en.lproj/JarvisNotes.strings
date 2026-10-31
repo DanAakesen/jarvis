@@ -95,11 +95,3 @@
 "gate.signedOut" = "You are signed out";
 "gate.faceIDReason" = "Unlock Jarvis";
 "gate.faceIDLabel" = "Face ID";
-"voiceActivity.listening" = "Listening";
-"voiceActivity.speaking" = "Speaking";
-"voiceActivity.muted" = "Muted";
-"voiceActivity.mute" = "Mute";
-"voiceActivity.unmute" = "Unmute";
-"voiceActivity.end" = "End";
-"voiceActivity.orb" = "Jarvis voice session";
-"voiceActivity.waveform" = "Audio activity";
