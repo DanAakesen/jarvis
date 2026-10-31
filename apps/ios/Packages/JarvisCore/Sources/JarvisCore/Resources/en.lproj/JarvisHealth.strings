@@ -1,7 +1,9 @@
+"health.title" = "Health";
 "health.dashboard" = "Dashboard";
 "health.trackWorkout" = "Track workout";
 "health.refresh" = "Refresh";
 "health.search" = "Search health metrics";
+"health.clearSearch" = "Clear search";
 "health.period.today" = "Today";
 "health.period.yesterday" = "Yesterday";
 "health.period.sevenDays" = "7 days";
@@ -9,7 +11,9 @@
 "health.gym" = "Gym";
 "health.run" = "Run";
 "health.steps" = "Steps";
+"health.activity" = "Activity";
 "health.target" = "of %@";
+"health.targetLabel" = "Target";
 "health.noTarget" = "No target";
 "health.unavailable" = "Unavailable";
 "health.accessDenied" = "Health data is available to the owner only";
@@ -52,3 +56,6 @@
 "health.fresh" = "Updated";
 "health.stale" = "Showing previous data";
 "health.averagePerDay" = "average per day";
+"health.partial" = "Showing some results";
+"health.hourShort" = "h";
+"health.minuteShort" = "min";

@@ -14,6 +14,10 @@ final class JarvisHealthClientTests: XCTestCase {
             JarvisHealthLocalization.formattedDate("2026-10-31", language: .da),
             JarvisHealthLocalization.formattedDate("2026-10-31", language: .en)
         )
+        let danishTime = JarvisHealthLocalization.formattedDateTime("2026-10-31T08:00:00Z", language: .da)
+        let englishTime = JarvisHealthLocalization.formattedDateTime("2026-10-31T08:00:00Z", language: .en)
+        XCTAssertFalse(danishTime.contains("T"))
+        XCTAssertNotEqual(danishTime, englishTime)
     }
 
     func testPeriodPresetsUseCopenhagenDatesAndInclusiveDayCounts() throws {
@@ -43,6 +47,64 @@ final class JarvisHealthClientTests: XCTestCase {
             500
         )
         XCTAssertNil(JarvisHealthLogic.calorieBalance(eaten: 1_200, restingKcal: nil, deficitKcal: 300))
+    }
+
+    func testTargetReadsReuseTheExistingDailyRoutes() async throws {
+        let fixture = try FixtureTransport(scenario: Data(
+            """
+            {
+              "version": 1,
+              "interactions": [
+                {
+                  "method": "GET",
+                  "path": "/api/daily/training-targets",
+                  "response": {
+                    "statusCode": 200,
+                    "body": {
+                      "targets": {
+                        "gymSessionsPerWeek": 3,
+                        "runSessionsPerWeek": 2,
+                        "dailySteps": 8000
+                      }
+                    }
+                  }
+                },
+                {
+                  "method": "GET",
+                  "path": "/api/daily/nutrition-targets",
+                  "response": {
+                    "statusCode": 200,
+                    "body": {
+                      "targets": {
+                        "restingKcal": 2200,
+                        "deficitKcal": 400,
+                        "proteinGrams": 130
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+            """.utf8
+        ))
+        let client = JarvisHealthClient(client: try makeClient(fixture))
+
+        let training = try await client.trainingTargets()
+        let nutrition = try await client.nutritionTargets()
+
+        XCTAssertEqual(training.targets.gymSessionsPerWeek, 3)
+        XCTAssertEqual(training.targets.runSessionsPerWeek, 2)
+        XCTAssertEqual(training.targets.dailySteps, 8000)
+        XCTAssertEqual(nutrition.targets.restingKcal, 2200)
+        XCTAssertEqual(nutrition.targets.deficitKcal, 400)
+        XCTAssertEqual(nutrition.targets.proteinGrams, 130)
+        let requests = await fixture.recordedRequests()
+        XCTAssertEqual(requests.map(\.path), [
+            "/api/daily/training-targets",
+            "/api/daily/nutrition-targets",
+        ])
+        let remainingInteractions = await fixture.remainingInteractions()
+        XCTAssertEqual(remainingInteractions, 0)
     }
 
     func testWorkoutAndBodyMetricClassificationMatchesDailyNames() {

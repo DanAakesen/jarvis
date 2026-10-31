@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The owner approved the Health concept on 31 October 2026; section 12 uses only existing Daily routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -133,3 +133,23 @@ The web Notes and Tasks views call these routes directly; their assistant tools 
 There is no note delete, rename or move route; no folder create or rename route; no task delete route; no task priority on create; and no offline cache. Do not expose those operations or simulate them locally. A new folder is not independently created: a directory only appears when it contains a note. Search and editor writes must not claim offline persistence. No additional backend work is authorized by P15-12.
 
 Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx`, `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (the separate voice-language setting).
+
+## 12. Health dashboard (P15-18)
+
+The approved Dashboard reuses the authenticated Daily API. The iPhone does not upload HealthKit data and adds no backend route or iOS-specific payload. Before querying, it calls `GET /daily/capabilities` with `Accept: application/json;version=5` and only requests advertised sources.
+
+| Dashboard block or action | Existing endpoint and source |
+|---|---|
+| Gym and Run rings; recent-session rows | `POST /daily/query` with `source: "daily.health.workouts"` and the selected Copenhagen date range. |
+| Steps ring | `POST /daily/query` with `source: "daily.health.metrics"`, `metric: "step_count"` and the selected date range. Targets come from `GET /daily/training-targets`. |
+| Protein and calorie balance | `POST /daily/query` with `source: "daily.nutrition.days"` and the selected date range; protein, resting-calorie and deficit targets come from `GET /daily/nutrition-targets`. |
+| Sleep value and sleep-night detail | `POST /daily/query` with `source: "daily.health.sleep"`; the selected night is queried again for its detail screen. |
+| Open a workout | `POST /daily/query` with `source: "daily.health.workout"` and the exact `workoutId` from a workout row. Optional heart-rate samples use `source: "daily.health.heart-rate"` with that same ID. |
+| Open meals | `POST /daily/query` with `source: "daily.nutrition.meals"` and the selected date range. |
+| Body trend catalogue and detail | `POST /daily/query` with `source: "daily.health.metric-catalog"`, then `source: "daily.health.metrics"` with each selected exact metric name and date range. |
+| Protein chart and target line | `POST /daily/query` with `source: "daily.nutrition.days"` and `GET /daily/nutrition-targets`. |
+| Freshness status | `POST /daily/query` with `source: "daily.sync"`. Dashboard refresh listens to the existing authenticated `GET /now/events` stream for `refresh` or `now` events, then reloads the same reads. |
+
+`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. The issue's Track workout segment, Last lifts block and plus action remain disabled or omitted because their write/read routes depend on #1423, which is not merged in this checkout. Do not add a substitute route or payload.
+
+Sources checked: `apps/backend/src/daily/index.ts`, `apps/backend/src/daily/query.ts`, `apps/backend/src/daily/health/read-model.ts`, `apps/backend/src/daily/routes/training-targets.ts`, `apps/backend/src/daily/routes/nutrition-targets.ts`, `apps/web/src/daily/client.ts`, `apps/web/src/daily/sections/overview/health-panel/data.ts`, `apps/web/src/daily/sections/overview/useTopCardData.ts`, `apps/web/src/daily/nutrition-targets.ts` and `apps/web/src/daily/sections/workouts/WorkoutDetail.tsx`.

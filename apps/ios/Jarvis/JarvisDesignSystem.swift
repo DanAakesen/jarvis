@@ -121,6 +121,12 @@ enum JarvisDesignTokens {
     static let healthRingSize: CGFloat = 64
     static let healthRingStroke: CGFloat = 5
     static let healthChartHeight: CGFloat = 120
+    static let healthMenuSpacing: CGFloat = 6
+    static let healthSparklineWidth: CGFloat = 82
+    static let healthSparklineHeight: CGFloat = 34
+    static let healthChartLineWidth: CGFloat = 2
+    static let healthTargetLineWidth: CGFloat = 1
+    static let healthTargetLineDash: [CGFloat] = [4, 3]
     static let healthPanelRadius: CGFloat = 22
     static let healthAccent = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark

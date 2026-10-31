@@ -14,6 +14,7 @@ struct ContentView: View {
     private let startupError: String?
     private let fixtureMode: Bool
     @State private var notesClient: JarvisNotesClient?
+    @State private var healthClient: JarvisHealthClient?
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -46,6 +47,7 @@ struct ContentView: View {
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _notesClient = State(initialValue: Self.makeNotesClient())
+        _healthClient = State(initialValue: Self.makeHealthClient())
     }
 
     var body: some View {
@@ -98,6 +100,13 @@ struct ContentView: View {
                                     client: notesClient,
                                     language: language,
                                     onRetryConfiguration: { notesClient = Self.makeNotesClient() }
+                                )
+                            } else if destination == .health {
+                                JarvisHealthArea(
+                                    client: healthClient,
+                                    language: language,
+                                    observeRefreshEvents: !fixtureMode,
+                                    onRetryConfiguration: { healthClient = Self.makeHealthClient() }
                                 )
                             } else if destination == .settings {
                                 JarvisAppSettingsView(storedLanguage: $storedLanguage)
@@ -310,6 +319,17 @@ struct ContentView: View {
                 accessTokenProvider: JarvisUnavailableAccessTokenProvider()
             )
             return JarvisNotesClient(client: client)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func makeHealthClient() -> JarvisHealthClient? {
+        do {
+            let client = try JarvisComposition.makeClient(
+                accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+            )
+            return JarvisHealthClient(client: client)
         } catch {
             return nil
         }

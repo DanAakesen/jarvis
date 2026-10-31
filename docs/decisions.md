@@ -1,3 +1,19 @@
+## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
+
+The owner approved the Health concept on 31 October. Build the Dashboard first
+with the existing Daily capabilities/query, target and `/now/events` routes; add
+no HealthKit upload or iOS-specific backend path. Reuse the web app's existing
+`GET /daily/nutrition-targets` route for protein and calorie targets, although
+the issue's endpoint list did not enumerate it.
+
+Keep Track workout disabled and omit Last lifts and plus until #1423's existing
+lift routes are merged; do not invent a write route or payload. Keep calculations
+and Copenhagen period logic in pure-Swift `JarvisCore`, and use synthetic-only
+FixtureTransport previews in both app languages. The checked-in Health board is
+currently a blank placeholder, so the written approved issue—not that stale
+local frame—is the composition source. Preserve the existing simulator
+screenshot/Mac cost guard; Health screenshot review remains outstanding.
+
 ## 30 October 2026 — build the approved native iPhone Voice screen (P15-11 / #1401)
 
 Use the approved Voice concept as a visual reference, not a source of literal

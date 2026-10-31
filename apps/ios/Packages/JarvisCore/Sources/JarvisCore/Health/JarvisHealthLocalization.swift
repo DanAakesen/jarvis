@@ -1,10 +1,12 @@
 import Foundation
 
 public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
+    case title = "health.title"
     case dashboard = "health.dashboard"
     case trackWorkout = "health.trackWorkout"
     case refresh = "health.refresh"
     case search = "health.search"
+    case clearSearch = "health.clearSearch"
     case today = "health.period.today"
     case yesterday = "health.period.yesterday"
     case sevenDays = "health.period.sevenDays"
@@ -12,7 +14,9 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case gym = "health.gym"
     case run = "health.run"
     case steps = "health.steps"
+    case activity = "health.activity"
     case target = "health.target"
+    case targetLabel = "health.targetLabel"
     case noTarget = "health.noTarget"
     case unavailable = "health.unavailable"
     case accessDenied = "health.accessDenied"
@@ -55,6 +59,9 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case fresh = "health.fresh"
     case stale = "health.stale"
     case averagePerDay = "health.averagePerDay"
+    case partial = "health.partial"
+    case hourShort = "health.hourShort"
+    case minuteShort = "health.minuteShort"
 }
 
 public enum JarvisHealthLocalization {
@@ -82,6 +89,25 @@ public enum JarvisHealthLocalization {
         output.calendar = Calendar(identifier: .gregorian)
         output.timeZone = TimeZone(secondsFromGMT: 0)
         output.dateStyle = .medium
+        return output.string(from: date)
+    }
+
+    public static func formattedDateTime(_ value: String, language: JarvisAppLanguage) -> String {
+        let input = ISO8601DateFormatter()
+        input.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = input.date(from: value) ?? {
+            input.formatOptions = [.withInternetDateTime]
+            return input.date(from: value)
+        }() else {
+            return value
+        }
+
+        let output = DateFormatter()
+        output.locale = language.locale
+        output.calendar = Calendar(identifier: .gregorian)
+        output.timeZone = TimeZone(identifier: "Europe/Copenhagen")
+        output.dateStyle = .medium
+        output.timeStyle = .short
         return output.string(from: date)
     }
 }

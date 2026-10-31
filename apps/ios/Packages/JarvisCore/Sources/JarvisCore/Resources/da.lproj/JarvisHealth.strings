@@ -1,7 +1,9 @@
+"health.title" = "Sundhed";
 "health.dashboard" = "Overblik";
 "health.trackWorkout" = "Log træning";
 "health.refresh" = "Opdater";
 "health.search" = "Søg i sundhedsdata";
+"health.clearSearch" = "Ryd søgning";
 "health.period.today" = "I dag";
 "health.period.yesterday" = "I går";
 "health.period.sevenDays" = "7 dage";
@@ -9,7 +11,9 @@
 "health.gym" = "Styrketræning";
 "health.run" = "Løb";
 "health.steps" = "Skridt";
+"health.activity" = "Aktivitet";
 "health.target" = "af %@";
+"health.targetLabel" = "Mål";
 "health.noTarget" = "Intet mål";
 "health.unavailable" = "Ikke tilgængelig";
 "health.accessDenied" = "Sundhedsdata er kun tilgængelige for ejeren";
@@ -52,3 +56,6 @@
 "health.fresh" = "Opdateret";
 "health.stale" = "Viser tidligere data";
 "health.averagePerDay" = "gennemsnit pr. dag";
+"health.partial" = "Viser en del af resultaterne";
+"health.hourShort" = "t";
+"health.minuteShort" = "min";
