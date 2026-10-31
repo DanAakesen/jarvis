@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum JarvisDesignTokens {
     static let sidebarWidthFraction: CGFloat = 0.74
@@ -113,6 +114,29 @@ enum JarvisDesignTokens {
     static let notesGraphNeighbourOpacity: Double = 0.72
     static let notesGraphNodeOpacity: Double = 0.46
     static let notesSearchSnippetLineLimit = 2
+    static let healthHorizontalInset: CGFloat = 16
+    static let healthSectionSpacing: CGFloat = 16
+    static let healthRowSpacing: CGFloat = 12
+    static let healthControlHeight: CGFloat = 44
+    static let healthRingSize: CGFloat = 64
+    static let healthRingStroke: CGFloat = 5
+    static let healthChartHeight: CGFloat = 120
+    static let healthPanelRadius: CGFloat = 22
+    static let healthAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.706, blue: 0.361, alpha: 1)
+            : UIColor(red: 0.706, green: 0.373, blue: 0.024, alpha: 1)
+    })
+    static let healthAccentForeground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.114, green: 0.071, blue: 0, alpha: 1)
+            : UIColor.white
+    })
+    static let healthAccentSecondary = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.322, green: 0.863, blue: 0.98, alpha: 1)
+            : UIColor(red: 0.078, green: 0.463, blue: 0.553, alpha: 1)
+    })
     static let gateContentInset: CGFloat = 32
     static let gateOrbSize: CGFloat = 224
     static let gateControlSpacing: CGFloat = 24
