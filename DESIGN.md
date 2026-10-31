@@ -2770,11 +2770,11 @@ one at 700px and narrower.
 
 ## Native iOS colour and Chat look (owner decision, 31 October 2026)
 
-Orange is the primary accent of the iPhone app and cyan is the secondary
+Orange is the primary accent of the iPhone app and stone is the secondary
 (`accent-2`). Dark mode uses `#ffb45c` with `#1d1200` text on primary controls
-and `#52dcfa` for the secondary; light mode uses `#b45f06` with white text and
-`#14768d`. The cyan is a placeholder that Dan will replace later, so screens use
-only the token. The orb is unchanged: the real web orb with a dark glass sphere,
+and `#c9bfae` for the secondary; light mode uses `#b45f06` with white text and
+`#6f6551`. Dan chose stone (a warm neutral) on 31 October to replace the
+earlier cyan, so screens use only the token. The orb is unchanged: the real web orb with a dark glass sphere,
 a cyan rim and an orange and amber glowing tangled centre, with no orbit
 ellipses or tilted circles. This applies to the iPhone app and the published
 concept pages only: the web app is not changed and keeps its own palette.

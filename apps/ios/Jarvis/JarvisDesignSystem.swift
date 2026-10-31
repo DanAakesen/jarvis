@@ -178,8 +178,8 @@ enum JarvisDesignTokens {
     })
     static let healthAccentSecondary = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.322, green: 0.863, blue: 0.98, alpha: 1)
-            : UIColor(red: 0.078, green: 0.463, blue: 0.553, alpha: 1)
+            ? UIColor(red: 0.788, green: 0.749, blue: 0.682, alpha: 1)
+            : UIColor(red: 0.435, green: 0.396, blue: 0.318, alpha: 1)
     })
     static let factoryHorizontalInset: CGFloat = 16
     static let factorySectionSpacing: CGFloat = 12
