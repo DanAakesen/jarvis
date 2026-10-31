@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The owner approved the Health concept on 31 October 2026; section 12 uses only existing Daily routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes, Voice, Sign-in and Lock concepts on 30 October 2026; these implementations reuse existing routes. P15-14 also implements Workspaces without a new backend route. The owner approved the Health concept on 31 October 2026; section 12 uses only existing Daily routes. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -42,7 +42,7 @@ Draft for the native iPhone app, derived from reading the current backend and we
 - Shape: `GeneratedView`, version 1, in `packages/contracts/src/index.d.ts` with runtime guards in `index.js`. It is JSON, not Zod.
 - Renderers: table, list, detail, text (plain or markdown), timeline, chart (line, bar or area, up to 5 series and 1000 points), task-card, status, image, html-app, knowledge-graph, code.
 - Actions (up to 10 per view): open-route, open-link, call-tool, window.
-- Native decisions still open: html-app (a stored HTML artifact of up to 512 KiB; needs a sandboxed web view), knowledge-graph, and code.
+- Native decisions still open: html-app (a stored HTML artifact of up to 512 KiB; needs a sandboxed web view), knowledge-graph, and code. P15-14 leaves all three as unsupported cards and does not execute supplied HTML. Its optional web link opens only the configured HTTPS app root because no item deep link is established by this contract.
 
 ## 5. App control (workspace commands)
 
@@ -51,6 +51,7 @@ Draft for the native iPhone app, derived from reading the current backend and we
 - Acknowledge each command within 10 seconds (the `workspace-command` event carries `expiresAt`): `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
 - A command `target` is `active`, `desktop`, `phone` or `all`.
 - UNVERIFIED: replay after an SSE reconnect, which commands are desktop only, version negotiation, and how the phone and the desktop choose the active client.
+- P15-14 registers its current window snapshot as a `phone` client and acknowledges each received command by its deadline. This does not resolve the active-client choice or replay behavior above; a successful open request is not evidence that the phone was selected.
 
 ## 6. Tools
 

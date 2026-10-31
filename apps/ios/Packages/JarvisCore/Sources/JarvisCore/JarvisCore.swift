@@ -5,6 +5,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     case voice
     case notes
     case health
+    case workspaces
     case softwareFactory
     case banking
     case usage
@@ -13,7 +14,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     case settings
 
     public static let sidebarItems: [JarvisDestination] = [
-        .proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .chat,
+        .proactive, .status, .usage, .banking, .softwareFactory, .health, .workspaces, .notes, .chat,
     ]
 
     public var id: String { rawValue }
@@ -24,6 +25,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
         case .voice: "Voice"
         case .notes: "Notes"
         case .health: "Health"
+        case .workspaces: "Workspaces"
         case .softwareFactory: "Software Factory"
         case .banking: "Banking"
         case .usage: "Usage"
@@ -38,6 +40,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
         switch self {
         case .chat: key = .chatTitle
         case .voice: key = .voiceTitle
+        case .workspaces: key = .workspacesTitle
         case .notes: key = .notes
         case .health: key = .healthTitle
         case .softwareFactory: key = .softwareFactoryTitle
@@ -56,6 +59,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
         case .voice: "waveform"
         case .notes: "note.text"
         case .health: "dumbbell"
+        case .workspaces: "square.stack.3d.up"
         case .softwareFactory: "hammer"
         case .banking: "creditcard"
         case .usage: "chart.bar"

@@ -21,6 +21,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case settingsTitle = "settings.title"
     case chatTitle = "navigation.chat"
     case voiceTitle = "navigation.voice"
+    case workspacesTitle = "navigation.workspaces"
     case healthTitle = "navigation.health"
     case softwareFactoryTitle = "navigation.softwareFactory"
     case bankingTitle = "navigation.banking"

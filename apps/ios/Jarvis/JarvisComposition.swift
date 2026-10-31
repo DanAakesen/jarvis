@@ -20,6 +20,22 @@ struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {
 }
 
 enum JarvisComposition {
+    static func makeWebAppURL(bundle: Bundle = .main) -> URL? {
+        guard let value = bundle.object(forInfoDictionaryKey: "JARVIS_WEB_APP_URL") as? String,
+              var components = URLComponents(string: value),
+              components.scheme?.lowercased() == "https",
+              components.host != nil,
+              components.user == nil,
+              components.password == nil,
+              components.query == nil,
+              components.fragment == nil,
+              components.path.isEmpty || components.path == "/" else {
+            return nil
+        }
+        components.path = ""
+        return components.url
+    }
+
     static func makeClient(
         accessTokenProvider: any AccessTokenProvider,
         bundle: Bundle = .main,

@@ -2805,9 +2805,9 @@ SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
-stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes are native screens;
-the unbuilt areas use title-only placeholders, and Settings hosts the app-language preference.
-Reduced Motion removes settling animation.
+stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes
+are native screens; the unbuilt areas use title-only placeholders, and Settings
+hosts the app-language preference. Reduced Motion removes settling animation.
 
 ## Native iOS Voice screen (P15-11; 30 October 2026)
 
@@ -2956,8 +2956,36 @@ The checked-in `docs/ios/design/board.html?screen=health&tab=dashboard&lang=en`
 currently renders a blank Health placeholder rather than the approved frames.
 The implementation follows the approved issue description and does not copy
 literal values from that stale local board. The workout segment is disabled,
-while Last lifts and plus are omitted, because the required existing lift routes
-from #1423 are not merged; no replacement API is implied. The existing iOS
+while Last lifts and plus are omitted; the shared lift routes from #1423 are
+available on main, but this Dashboard implementation does not expose them. No
+replacement API is implied. The existing iOS
 screenshot hook remains within its three-capture cost guard and does not traverse
 Health, so light/dark Health simulator images and key-state screenshots remain
 unverified for owner review.
+
+## Native iOS Workspaces (P15-14; 30 October 2026)
+
+Use the system navigation bar with an inline Workspaces title and refresh action,
+then a text-and-icon kind filter, search field and native grouped list. Preserve
+the web order of Pinned, Today, This week and Earlier; native menus and swipe
+actions expose pin, rename and remove. Opening a supported item presents one
+large native sheet. Shared geometry and chart values live in
+`JarvisDesignTokens` in `apps/ios/Jarvis/JarvisDesignSystem.swift`; SwiftUI system
+typography, colors, symbols, controls and scrolling remain the default.
+Renderer subviews adapt heterogeneous generated-view payloads to native
+components. Charts use Apple's Charts framework for numeric/categorical axes,
+grouped bars, area baselines and accessible values instead of a custom plot.
+
+The approved reference is `docs/ios/design/workspaces.html`; its generated
+sample data is illustrative. The native screen pins search to the bottom, as in
+the reference, and has no create/plus action because neither the web Workspaces
+pane nor the shared backend contract has a create route. All Workspaces UI and
+accessibility copy follows the persisted app-language preference (Danish by
+default, with English). `html-app`, `knowledge-graph` and `code` remain
+unsupported cards; their optional link opens only a validated configured HTTPS
+web-app root, not a guessed item deep link. Supplied HTML, JavaScript and CSS are
+never executed.
+
+The shared native sign-in orb uses a dark glass sphere and orange center without
+orbit or meridian ellipses. The approved Workspaces frame contains no orb, so the
+screen does not add one.

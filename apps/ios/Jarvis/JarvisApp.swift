@@ -1,4 +1,3 @@
-import JarvisCore
 import SwiftUI
 
 @main
