@@ -988,6 +988,16 @@ describe('shared glass tokens', () => {
     expect(jarvisMessage).toBe('var(--surface-translucent)');
   });
 
+  it('matches Plus-menu readability frost on both speakers’ bubbles', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const bubbles = /\.conversation-message\[data-speaker="dan"\],\s*\.conversation-message\[data-speaker="jarvis"\]\s*\{([^}]*)\}/;
+    const plusMenu = /\.app-shell \.composer-more :is\(\.more-menu-list, \.more-menu-flyout\)\s*\{([^}]*)\}/;
+
+    for (const property of ['background', 'backdrop-filter', '-webkit-backdrop-filter']) {
+      expect(ruleDeclaration(history, bubbles, property)).toBe(ruleDeclaration(sharedStyles, plusMenu, property));
+    }
+  });
+
   it('bounds phone voice to a transparent non-intercepting dock and keeps fullscreen rules desktop-only', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     const voice = readFileSync('src/VoiceControls.css', 'utf8');
