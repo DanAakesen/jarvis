@@ -100,6 +100,11 @@ private final class JarvisGateModel: ObservableObject {
            let client = try? JarvisComposition.makeClient(accessTokenProvider: provider) {
             self.provider = provider
             self.client = client
+            let notificationClient = try? JarvisComposition.makeClient(
+                accessTokenProvider: provider,
+                requestTimeout: JarvisApprovalNotificationCoordinator.requestTimeout
+            )
+            JarvisApprovalNotificationCoordinator.shared.configure(client: notificationClient ?? client)
             provider.onSignInRequired = { [weak self] in
                 self?.clientRequestedSignIn()
             }
@@ -113,6 +118,11 @@ private final class JarvisGateModel: ObservableObject {
         guard case .loading = presentation else { return }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") {
+            presentation = .unlocked
+            isPrivacyCoverVisible = false
+            return
+        }
+        if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
             presentation = .unlocked
             isPrivacyCoverVisible = false
             return
@@ -138,6 +148,7 @@ private final class JarvisGateModel: ObservableObject {
                 presentation = .signIn(.idle)
             case .unlocked:
                 presentation = .unlocked
+                await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
             }
         } catch {
             presentation = .signIn(.failed)
@@ -159,6 +170,11 @@ private final class JarvisGateModel: ObservableObject {
                 Task { await authenticate() }
             } else {
                 isPrivacyCoverVisible = false
+                if presentation == .unlocked {
+                    Task {
+                        await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
+                    }
+                }
             }
         @unknown default:
             isPrivacyCoverVisible = true
@@ -276,6 +292,7 @@ private final class JarvisGateModel: ObservableObject {
             }
             presentation = .unlocked
             isPrivacyCoverVisible = false
+            await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
         } catch let error as LAError where error.code == .biometryLockout || error.code == .userFallback {
             presentation = .lock(.passcode)
         } catch {
@@ -289,7 +306,19 @@ struct JarvisGateRootView: View {
     @StateObject private var model = JarvisGateModel()
 
     var body: some View {
-        ContentView()
+        Group {
+            if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
+                JarvisLockScreenTasksPreview(
+                    language: JarvisAppLanguage(
+                        rawValue: ProcessInfo.processInfo.arguments
+                            .first(where: { $0.hasPrefix("--screenshot-lockscreen-language=") })?
+                            .replacingOccurrences(of: "--screenshot-lockscreen-language=", with: "") ?? ""
+                    ) ?? .default
+                )
+            } else {
+                ContentView()
+            }
+        }
             .id(model.contentEpoch)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)

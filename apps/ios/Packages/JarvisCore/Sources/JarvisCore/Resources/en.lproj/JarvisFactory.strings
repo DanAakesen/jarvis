@@ -34,6 +34,7 @@
 "factory.backlog" = "Backlog";
 "factory.done" = "Done";
 "factory.running" = "Running";
+"factory.activityProgress" = "Task progress";
 "factory.open" = "Open";
 "factory.closed" = "Closed";
 "factory.pauseRequested" = "Pause requested";

@@ -2791,10 +2791,10 @@ only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
 replies, tool rows and status lines such as Writing it up are unboxed plain
 text. Phone screens carry no explainer, helper or hint text.
 
-All concept board screens are approved. The five surfaces on
-`docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free
-session, the Dynamic Island, Lock Screen tasks and decisions, and Connection
-lost) are not approved yet.
+All concept board screens are approved. P15-36 approves only the Lock Screen
+tasks and decisions surface on `docs/ios/design/surfaces.html`; the Lock Screen
+hands-free session, Dynamic Island and Connection lost surfaces remain marked
+To agree.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -3027,3 +3027,23 @@ never executed.
 The shared native sign-in orb uses a dark glass sphere and orange center without
 orbit or meridian ellipses. The approved Workspaces frame contains no orb, so the
 screen does not add one.
+
+## Native iOS Lock Screen tasks and decisions (P15-36; 31 October 2026)
+
+Follow the approved Lock Screen tasks card in
+`docs/ios/design/surfaces.html`: the Factory Live Activity presents the Factory
+symbol, localized state, actual task activity, elapsed time from `startedAt`,
+and a linear progress track. Since existing task routes provide no numeric
+progress, the track is indeterminate rather than showing an invented fraction.
+The approval notification uses the system Jarvis app icon (the dark glass orb
+with cyan rim and amber tangled centre), server-provided summary and expiry,
+and authentication-required Approve/Decline actions. Orange remains a small
+accent; stone is the secondary token.
+
+ActivityKit and WidgetKit provide the system Lock Screen presentation. App
+language comes from `JarvisAppLanguage`; notification action feedback is shown
+in the existing Now activity sheet. Local updates use the existing `/now`
+snapshot/events and Factory task event stream. No APNs delivery or update is
+claimed while the app is suspended; the device registration and backend push
+work remain open. No Dynamic Island presentation is configured; that system
+surface remains unapproved.

@@ -34,6 +34,7 @@
 "factory.backlog" = "Efterslæb";
 "factory.done" = "Færdig";
 "factory.running" = "Kører";
+"factory.activityProgress" = "Opgavens fremdrift";
 "factory.open" = "Åben";
 "factory.closed" = "Lukket";
 "factory.pauseRequested" = "Pause afventer";

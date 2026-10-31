@@ -40,10 +40,14 @@ enum JarvisComposition {
     static func makeClient(
         accessTokenProvider: any AccessTokenProvider,
         bundle: Bundle = .main,
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        requestTimeout: Duration = .seconds(30)
     ) throws -> JarvisClient {
         try JarvisClient(
-            configuration: JarvisClientConfiguration(baseURL: apiBaseURL(bundle: bundle)),
+            configuration: JarvisClientConfiguration(
+                baseURL: apiBaseURL(bundle: bundle),
+                requestTimeout: requestTimeout
+            ),
             transport: URLSessionTransport(session: session),
             tokenStore: try KeychainTokenStore(),
             accessTokenProvider: accessTokenProvider

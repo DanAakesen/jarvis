@@ -7,6 +7,8 @@ public enum JarvisApprovalLocalizationKey: String, CaseIterable, Sendable {
     case approvedFromLockScreen = "approval.approvedFromLockScreen"
     case declinedFromLockScreen = "approval.declinedFromLockScreen"
     case actionFailed = "approval.actionFailed"
+    case notificationNow = "approval.notificationNow"
+    case previewSummary = "approval.previewSummary"
 }
 
 public enum JarvisApprovalLocalization {
