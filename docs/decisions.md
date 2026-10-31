@@ -1,3 +1,14 @@
+## 30 October 2026 — share the workout lift contract (P15-17 / #1423)
+
+Store one owner-scoped lift row per exercise entry, with kg, reps and a single
+set count; use normalized names for recall/grouping rather than adding an
+exercise registry. Keep create idempotent, corrections partial, and deletes
+soft. Expose history and latest-per-exercise reads through the existing Daily
+query/capability contract and owner-only write routes; service identities do
+not gain access. The web Track workout section and Dashboard Last lifts block
+are the v1 surfaces. iOS reuses the same routes in a separate screen issue;
+there is no iOS-specific backend path, chart, or coaching tool.
+
 ## 30 October 2026 — build the approved native iPhone Voice screen (P15-11 / #1401)
 
 Use the approved Voice concept as a visual reference, not a source of literal
@@ -7626,6 +7637,12 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-31 | The iPhone app uses orange as the primary accent and cyan as the secondary accent. Primary orange is `#ffb45c` with dark text `#1d1200` in dark mode and `#b45f06` with white text in light mode. The secondary cyan is the token `accent-2`: `#52dcfa` in dark mode and `#14768d` in light mode. Dan wants the cyan replaced by a better colour later, so builders use only the token and never the literal value. The orb is unchanged: the real web orb with a dark glass sphere, a cyan rim, an orange and amber glowing tangled centre, and no orbit ellipses or tilted circles. | Dan: orange as the primary colour and the current cyan as the secondary, to be improved in time. The web app is not changed by this decision and keeps its own palette. The concept board and the system surfaces page are republished as `docs/ios/design/board.html` and `docs/ios/design/surfaces.html` with this palette. | Confirmed by Dan |
+| 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
+| 2026-10-31 | The system surfaces page `docs/ios/design/surfaces.html` has five surfaces that are still marked To agree and are not approved: the Lock Screen hands-free session, the Dynamic Island, Lock Screen tasks and decisions that need APNs, and Connection lost. They must not be built until Dan approves them. | Approval of the board screens does not cover these surfaces. APNs push is a known backend gap and needs its own decision before any push surface is built. | Open, to agree with Dan |
+| 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |
+| 2026-10-31 | The Chat look is unified. Only the user bubble has a background: a soft orange-tinted glass pill. Jarvis replies, tool rows and status lines such as Writing it up are unboxed plain text. No solid orange fills are used anywhere: large orange areas are too harsh on the eyes, so orange is used for small accents, tints and strokes. | Dan approved this final Chat look on 2026-10-31 after reviewing the board. It applies to every surface that shows conversation text. The build is tracked in #1400 and the rule is repeated in #1430, #1431 and #1432. | Confirmed by Dan |
+| 2026-10-31 | On the Factory board every column is collapsible. Each column header shows a chevron, the title, a count pill and a one-line status detail, and Done starts collapsed. The build is tracked in #1431. | Dan changed the concept board after the first publish. The header is a disclosure button with a VoiceOver label that includes the count and the expanded or collapsed state. | Confirmed by Dan |
 | 2026-10-30 | Dan approved the Workspaces concept. The reference page is `docs/ios/design/workspaces.html`, published beside the concept board. The build is tracked in #1425. | The approved page is the visual reference only, and the native iOS standards row still governs how it is built. | Confirmed by Dan |
 | 2026-10-30 | Notes version 1 is approved by Dan: four tabs (Notes, Tasks, List, Graph), a fixed bottom search and plus control, and creation bottom sheets for new notes and tasks. Builds are tracked in #1420. | This supersedes the earlier row that held the Notes concept frames as a proposal. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. The board is `docs/ios/design/board.html`. | Confirmed by Dan |
 | 2026-10-30 | Dan approved the Sign-in and Lock (Face ID) concept frames on the board as the reference for their build. The Notes concept frames (Notes, Tasks, Graph, editor, new note sheet, and new task sheet) are a proposal pending his review and are not yet approved. | The approved frames guide their build as a visual reference only; the native iOS standards row still governs how they are built. The Notes frames must not be built until Dan approves them. The board is `docs/ios/design/board.html`. | Sign-in and Lock confirmed by Dan; Notes proposed |
@@ -9473,9 +9490,10 @@ Use the existing ready-PR iOS screenshot job and its one simulator boot for the
 Factory segments, details and key states in light/dark and Danish/English. This
 is the issue-specific extension to the existing screenshot artifact, not
 authorization for another Mac job, simulator boot, UI test or backend path.
-Screenshots use synthetic fixture transport only. The local design board does
-not yet expose the approved Factory frames; record that visual comparison gap
-for owner review rather than copying literal values or claiming frame parity.
+Screenshots use synthetic fixture transport only. The merged main branch now
+includes the approved Factory frames in `docs/ios/design/board.html`. Record
+frame-level differences after comparing them with simulator captures; no parity
+claim is made before an Apple build and screenshot review.
 The owner reviews the pull request and starts any TestFlight upload.
 
 ## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow

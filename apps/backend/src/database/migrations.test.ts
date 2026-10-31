@@ -49,6 +49,21 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
     expect(down.sql).toContain('must be retained');
   });
+  it('stores owner lift entries with bounded kg, idempotency and a guarded reverse batch', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0070_daily_lift_entries.sql');
+    expect(migration?.sql).toContain('CREATE TABLE daily.lift_entries');
+    expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');
+    expect(migration?.sql).toContain('exercise_key nvarchar(80) NOT NULL');
+    expect(migration?.sql).toContain('weight_kg decimal(6,2)');
+    expect(migration?.sql).toContain('performed_at datetime2(3)');
+    expect(migration?.sql).toContain('revision bigint NOT NULL');
+    expect(migration?.sql).toContain('UNIQUE (owner_object_id, idempotency_key)');
+    expect(migration?.sql).toContain('IX_daily_lift_entries_owner_exercise_performed');
+    const down = await readDownMigration('0070_daily_lift_entries.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('Workout lift history must be retained');
+    expect(down.sql).toContain('DROP TABLE daily.lift_entries;');
+  });
   it('tracks scoped GitHub App mint recovery while retaining unresolved legacy alerts', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0062_github_app_mint_recovery.sql');
     expect(migration?.sql).toContain('github_app_scope_key char(64)');
@@ -326,6 +341,7 @@ describe('committed SQL manifest', () => {
       '0067_workspaces_identifiers.sql',
       '0068_issue_delivery_origin.sql',
       '0069_runtime_test_sessions.sql',
+      '0070_daily_lift_entries.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

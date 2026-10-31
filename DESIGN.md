@@ -2768,6 +2768,28 @@ second surface. Skeleton loaders fill the message's width through the
 and the `cards` placeholder shows four columns, two at 900px and narrower and
 one at 700px and narrower.
 
+## Native iOS colour and Chat look (owner decision, 31 October 2026)
+
+Orange is the primary accent of the iPhone app and cyan is the secondary
+(`accent-2`). Dark mode uses `#ffb45c` with `#1d1200` text on primary controls
+and `#52dcfa` for the secondary; light mode uses `#b45f06` with white text and
+`#14768d`. The cyan is a placeholder that Dan will replace later, so screens use
+only the token. The orb is unchanged: the real web orb with a dark glass sphere,
+a cyan rim and an orange and amber glowing tangled centre, with no orbit
+ellipses or tilted circles. This applies to the iPhone app and the published
+concept pages only: the web app is not changed and keeps its own palette.
+
+No solid orange fills are used anywhere, because large orange areas are too
+harsh on the eyes. Orange appears as small accents, tints and strokes. In Chat
+only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
+replies, tool rows and status lines such as Writing it up are unboxed plain
+text. Phone screens carry no explainer, helper or hint text.
+
+All concept board screens are approved. The five surfaces on
+`docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free
+session, the Dynamic Island, Lock Screen tasks and decisions, and Connection
+lost) are not approved yet.
+
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
 The approved `docs/ios/design/board.html?sidebar=open` frame informs the
@@ -2812,16 +2834,17 @@ The approved `docs/ios/design/board.html?screen=chat` frames guide composition,
 not literal data or dimensions. Keep Chat as the shell root: the transcript
 scrolls above a pinned composer, the compact Now bar sits immediately above it,
 and the navigation bar's bell opens Needs you. User and Jarvis messages use
-opposite alignment, a 24-hour timestamp at each sender/minute group, and
-translucent system glass. The activity sheet reuses the web feed's activity
+opposite alignment and a 24-hour timestamp at each sender/minute group. Only the
+user message has a background, a soft orange-tinted glass pill (see the colour
+and Chat look section above); Jarvis replies and tool rows are unboxed text. The activity sheet reuses the web feed's activity
 categories and shows away mode separately from its persisted activity items.
 
 Use SwiftUI's native `ScrollView`, text field, file and photo pickers, sheets,
 system button styles, SF Symbols and semantic type/color. `JarvisDesignTokens`
 in `JarvisDesignSystem.swift` is the shared source for custom geometry and
-motion, including existing sidebar values. Message bubbles are custom because
+motion, including existing sidebar values. The user message pill is custom because
 the system has no conversation bubble with distinct sender alignment and a
-shared glass surface; the inline Now bar is custom because it combines live
+tinted glass surface; the inline Now bar is custom because it combines live
 status and the pending confirmation's two actions in the composer stack; the
 activity sheet is custom because it groups the existing feed categories and
 confirmation decisions. Reduced Motion removes the message-arrival animation;
@@ -2889,10 +2912,10 @@ Board and Needs Dan intentionally use one selected project per request. There is
 no all-project aggregation. Existing APIs own project placement and live
 invalidation; task details use the resumable task event stream. No APNs,
 project administration, git graph, backfill, or sandbox UI is represented.
-The checked-in `docs/ios/design/board.html` does not currently contain a Factory
-frame, so visual comparison against the newly approved Factory concept is
-pending; the pull request records this difference and supplies fixture-based
-light/dark screenshots for review.
+The merged `docs/ios/design/board.html` includes the approved Factory frames and
+states. Native frame comparison remains pending an Apple build and simulator
+screenshots; the existing CI job supplies fixture-based light/dark screenshots
+for review.
 
 ## Native iOS sign-in and lock (P15-16; 30 October 2026)
 

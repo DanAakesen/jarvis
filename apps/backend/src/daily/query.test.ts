@@ -36,6 +36,14 @@ function fixture() {
     targets: { gymSessionsPerWeek: 0, runSessionsPerWeek: null, dailySteps: null },
     updatedAt: '2026-10-16T07:00:00.000Z',
   });
+  const liftHistory = vi.fn().mockResolvedValue({
+    items: [{
+      id: '33333333-3333-4333-8333-333333333333', exerciseName: 'Bench press', weightKg: 80,
+      reps: 4, sets: 3, performedAt: '2026-10-16T07:00:00.000Z', deletedAt: null,
+      updatedAt: '2026-10-16T07:05:00.000Z', revision: 1,
+    }],
+    next: null,
+  });
   const meals = vi.fn().mockResolvedValue({ rows: [{ id: '01', meal_date: new Date('2026-10-16'), energy_kcal: 123, protein_grams: null,
     components_json: '[]', nutrient_provenance_json: '{"kind":"synthetic-label"}', revision: 2n, deleted_at: null,
     owner_object_id: owner, apple_health_claim_token_hash: 'must-not-escape' }], next: null });
@@ -67,10 +75,27 @@ function fixture() {
     nutrition: vi.fn(() => ({ history: meals, days, favorites, plans })),
     briefs: vi.fn(() => ({ history: briefHistory, detail: briefDetail })),
     trainingTargets: vi.fn(() => ({ read: targetRead })),
+    lifts: vi.fn(() => ({ history: liftHistory })),
   };
-  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, metricCatalog, sync, workoutDetail, workoutMetrics, heartRate, targetRead, meals, days, favorites, plans, briefHistory, briefDetail };
+  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, metricCatalog, sync, workoutDetail, workoutMetrics, heartRate, targetRead, liftHistory, meals, days, favorites, plans, briefHistory, briefDetail };
 }
 describe('one shared Daily read contract', () => {
+  it('returns owner lift history with the shared envelope and denies agent reads', async () => {
+    const f = fixture();
+    const query = { source: sources.lifts, limit: 10, lastPerExercise: true };
+    const result = await f.service.query(query, request(), signal());
+    expect(result).toMatchObject({
+      source: sources.lifts, period: null, status: 'available',
+      units: { weightKg: 'kg', reps: 'reps', sets: 'sets' },
+      freshness: { sourceProcessedCommittedAt: null, latestReturnedRecordUpdatedAt: '2026-10-16T07:05:00.000Z' },
+      coverage: { returned: 1, hasMore: false, next: null },
+    });
+    expect(result.items[0]).toMatchObject({ exerciseName: 'Bench press', weightKg: 80, reps: 4, sets: 3 });
+    expect(f.liftHistory).toHaveBeenCalledWith({ limit: 10, lastPerExercise: true }, expect.any(AbortSignal));
+    const agent = request({ principal: undefined, agentPrincipal: { kind: 'jarvis-agent', objectId: owner } });
+    await expect(f.service.query(query, agent, signal())).rejects.toMatchObject({ statusCode: 403 });
+    expect(f.liftHistory).toHaveBeenCalledOnce();
+  });
   it('shares historical brief metadata/body through HTTP and the same sensitive tool, without interpreting time or delivering', async () => {
     const f = fixture();
     const query = { source: sources.briefs, limit: 1, cursor: { startedAt: 'raw stored time', id: ' previous ' } };
