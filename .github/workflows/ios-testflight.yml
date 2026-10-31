@@ -28,10 +28,6 @@ jobs:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
-          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
-          IOS_APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROFILE_BASE64 }}
-          IOS_BROADCAST_PROFILE_BASE64: ${{ secrets.IOS_BROADCAST_PROFILE_BASE64 }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           JARVIS_API_BASE_URL: ${{ secrets.JARVIS_API_BASE_URL }}
           JARVIS_ENTRA_CLIENT_ID: ${{ secrets.JARVIS_ENTRA_CLIENT_ID }}
@@ -42,10 +38,6 @@ jobs:
             APP_STORE_CONNECT_KEY_P8 \
             APP_STORE_CONNECT_KEY_ID \
             APP_STORE_CONNECT_ISSUER_ID \
-            IOS_DISTRIBUTION_P12_BASE64 \
-            IOS_DISTRIBUTION_P12_PASSWORD \
-            IOS_APP_PROFILE_BASE64 \
-            IOS_BROADCAST_PROFILE_BASE64 \
             APPLE_TEAM_ID \
             JARVIS_API_BASE_URL \
             JARVIS_ENTRA_CLIENT_ID \
@@ -70,101 +62,9 @@ jobs:
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/xcodegen/bin/xcodegen" --version
-      - name: Install reusable signing assets
-        env:
-          IOS_DISTRIBUTION_P12_BASE64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
-          IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
-          IOS_APP_PROFILE_BASE64: ${{ secrets.IOS_APP_PROFILE_BASE64 }}
-          IOS_BROADCAST_PROFILE_BASE64: ${{ secrets.IOS_BROADCAST_PROFILE_BASE64 }}
-          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
-        run: |
-          umask 077
-          python3 - <<'PY'
-          import base64
-          from datetime import datetime, timezone
-          import json
-          import os
-          from pathlib import Path
-          import plistlib
-          import re
-          import secrets
-          import subprocess
-
-          temp = Path(os.environ["RUNNER_TEMP"])
-          keychain = temp / "testflight-signing.keychain-db"
-          password = secrets.token_hex(32)
-
-          def security(*args):
-              return subprocess.run(
-                  ["security", *args], check=True, capture_output=True
-              ).stdout
-
-          try:
-              p12 = temp / "distribution.p12"
-              p12.write_bytes(base64.b64decode(
-                  os.environ["IOS_DISTRIBUTION_P12_BASE64"], validate=True
-              ))
-              security("create-keychain", "-p", password, str(keychain))
-              security("set-keychain-settings", "-lut", "21600", str(keychain))
-              security("unlock-keychain", "-p", password, str(keychain))
-              security("import", str(p12), "-P",
-                       os.environ["IOS_DISTRIBUTION_P12_PASSWORD"],
-                       "-k", str(keychain), "-T", "/usr/bin/codesign",
-                       "-T", "/usr/bin/security")
-              security("set-key-partition-list", "-S", "apple-tool:,apple:",
-                       "-s", "-k", password, str(keychain))
-              security("list-keychains", "-d", "user", "-s", str(keychain),
-                       str(Path.home() / "Library/Keychains/login.keychain-db"))
-              profile_dir = (
-                  Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles"
-              )
-              profile_dir.mkdir(parents=True, exist_ok=True)
-              profiles = {}
-              targets = {}
-              for target, variable, bundle in (
-                  ("Jarvis", "IOS_APP_PROFILE_BASE64", "com.danaakesen.jarvis"),
-                  ("JarvisBroadcast", "IOS_BROADCAST_PROFILE_BASE64",
-                   "com.danaakesen.jarvis.broadcast"),
-              ):
-                  path = profile_dir / f"{target}-TestFlight.mobileprovision"
-                  path.write_bytes(base64.b64decode(os.environ[variable], validate=True))
-                  profile = plistlib.loads(security("cms", "-D", "-i", str(path)))
-                  uuid = profile["UUID"]
-                  team = os.environ["APPLE_TEAM_ID"]
-                  if (
-                      not re.fullmatch(
-                          r"[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}", uuid
-                      )
-                      or profile["TeamIdentifier"] != [team]
-                      or profile["Entitlements"]["application-identifier"]
-                      != f"{team}.{bundle}"
-                      or profile["ExpirationDate"].replace(tzinfo=timezone.utc)
-                      <= datetime.now(timezone.utc)
-                      or "ProvisionedDevices" in profile
-                      or profile.get("ProvisionsAllDevices", False)
-                      or profile["Entitlements"].get("get-task-allow", False)
-                  ):
-                      raise ValueError("Invalid App Store profile")
-                  profiles[bundle] = uuid
-                  targets[target] = {"settings": {"base": {
-                      "CODE_SIGN_STYLE": "Manual",
-                      "CODE_SIGN_IDENTITY": "Apple Distribution",
-                      "PROVISIONING_PROFILE_SPECIFIER": uuid,
-                      "DEVELOPMENT_TEAM": team,
-                  }}}
-              (temp / "signing-profiles.json").write_text(json.dumps(profiles))
-              (temp / "signing-project.json").write_text(json.dumps({
-                  "include": [str(Path("apps/ios/project.yml").resolve())],
-                  "targets": targets,
-              }))
-          except Exception:
-              raise SystemExit("::error::Signing setup failed. Check the stored distribution certificate, password and App Store profiles.") from None
-          finally:
-              (temp / "distribution.p12").unlink(missing_ok=True)
-          PY
       - name: Generate Xcode project
-        run: |
-          xcodegen generate --spec "$RUNNER_TEMP/signing-project.json" --project apps/ios
+        working-directory: apps/ios
+        run: xcodegen generate
       - name: Write App Store Connect key
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
@@ -172,27 +72,52 @@ jobs:
           umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
-      - name: Archive with manual signing
+      - name: Archive with automatic signing
         env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           JARVIS_API_BASE_URL: ${{ secrets.JARVIS_API_BASE_URL }}
           JARVIS_ENTRA_CLIENT_ID: ${{ secrets.JARVIS_ENTRA_CLIENT_ID }}
           JARVIS_ENTRA_AUTHORITY_URL: ${{ secrets.JARVIS_ENTRA_AUTHORITY_URL }}
           JARVIS_ENTRA_API_SCOPE: ${{ secrets.JARVIS_ENTRA_API_SCOPE }}
         run: |
-          umask 077
           if ! xcodebuild \
             -project apps/ios/Jarvis.xcodeproj \
             -scheme Jarvis \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Jarvis.xcarchive" \
-            -configuration Release \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             JARVIS_API_BASE_URL="$JARVIS_API_BASE_URL" \
             JARVIS_ENTRA_CLIENT_ID="$JARVIS_ENTRA_CLIENT_ID" \
             JARVIS_ENTRA_AUTHORITY_URL="$JARVIS_ENTRA_AUTHORITY_URL" \
             JARVIS_ENTRA_API_SCOPE="$JARVIS_ENTRA_API_SCOPE" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1; then
-            echo "::error::Archive failed. Check certificate/profile validity, entitlements and the iOS compile check. Raw signing logs are withheld."
+            echo "::error::Archive failed. A sanitised excerpt of the log follows; identifiers are masked."
+            grep -E -i -e 'error:' -e 'Provisioning profile' -e 'No profile' \
+              -e 'requires a development team' -e 'Communication with Apple' \
+              -e 'No Accounts' -e 'not registered' -e 'No signing certificate' \
+              -e 'Automatic signing' -e 'entitlement' -e 'capabilit' \
+              -e 'App Store Connect' -e 'authentication' -e 'not authorized' \
+              -e 'bundle identifier' -e 'App ID' -e 'cloud signing' \
+              "$RUNNER_TEMP/archive.log" \
+              | sed -E \
+                -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" \
+                -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' \
+                -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' \
+                -e 's/%/%25/g' \
+                -e 's/^[[:space:]]+//' \
+              | awk '!seen[$0]++' \
+              | head -n 40 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
             exit 1
           fi
       - name: Prepare export options
@@ -200,7 +125,6 @@ jobs:
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           python3 - <<'PY'
-          import json
           import os
           from pathlib import Path
           import plistlib
@@ -209,9 +133,6 @@ jobs:
           if options.get("teamID") != "__APPLE_TEAM_ID__":
               raise SystemExit("Export options team placeholder is missing.")
           options["teamID"] = os.environ["APPLE_TEAM_ID"]
-          options["provisioningProfiles"] = json.loads(
-              (Path(os.environ["RUNNER_TEMP"]) / "signing-profiles.json").read_text()
-          )
           path = Path(os.environ["RUNNER_TEMP"]) / "ExportOptions.plist"
           descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
           with os.fdopen(descriptor, "wb") as stream:
@@ -222,31 +143,44 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
-          umask 077
           if ! xcodebuild \
             -exportArchive \
             -archivePath "$RUNNER_TEMP/Jarvis.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             > "$RUNNER_TEMP/export.log" 2>&1; then
-            echo "::error::Export or upload failed. Check signing assets, upload-key permissions and App Store Connect build/version status. Raw signing logs are withheld."
+            echo "::error::Export or upload failed. A sanitised excerpt of the log follows; identifiers are masked."
+            grep -E -i -e 'error' -e 'Provisioning profile' -e 'No profile' \
+              -e 'Communication with Apple' -e 'No Accounts' -e 'No signing certificate' \
+              -e 'distribution' -e 'entitlement' -e 'capabilit' -e 'App Store Connect' \
+              -e 'authentication' -e 'not authorized' -e 'bundle identifier' \
+              -e 'App ID' -e 'cloud signing' -e 'upload' -e 'validat' -e 'version' \
+              "$RUNNER_TEMP/export.log" \
+              | sed -E \
+                -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" \
+                -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' \
+                -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' \
+                -e 's/%/%25/g' \
+                -e 's/^[[:space:]]+//' \
+              | awk '!seen[$0]++' \
+              | head -n 40 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
             exit 1
           fi
-      - name: Delete temporary signing assets
+      - name: Revoke development certificates
+        if: always() && github.ref == 'refs/heads/main'
+        timeout-minutes: 5
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ruby .github/scripts/testflight_certificate_cleanup.rb
+      - name: Delete App Store Connect key
         if: always()
-        run: |
-          if [[ -f "$RUNNER_TEMP/testflight-signing.keychain-db" ]]; then
-            if ! security delete-keychain "$RUNNER_TEMP/testflight-signing.keychain-db" >/dev/null 2>&1; then
-              echo "::error::Temporary signing keychain cleanup failed."
-              cleanup_failed=1
-            fi
-          fi
-          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/distribution.p12" \
-            "$RUNNER_TEMP/signing-profiles.json" "$RUNNER_TEMP/signing-project.json" \
-            "$RUNNER_TEMP/ExportOptions.plist" "$RUNNER_TEMP/archive.log" "$RUNNER_TEMP/export.log" \
-            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/Jarvis-TestFlight.mobileprovision" \
-            "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/JarvisBroadcast-TestFlight.mobileprovision"
-          exit "${cleanup_failed:-0}"
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"

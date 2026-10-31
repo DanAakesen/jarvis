@@ -1304,12 +1304,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Stack overview
 
-The owner-dispatched iOS TestFlight boundary uses a stored Apple Distribution
-P12/private key in a temporary runner keychain and one App Store profile per
-app/extension target. A CI-only XcodeGen spec and manual export profile map
-reuse those assets; neither archive nor export permits provisioning updates.
-The protected App Store Connect key is upload-only. Always-run cleanup removes
-signing material and withheld tool logs; renewal is an owner setup operation.
+The owner-dispatched iOS TestFlight workflow retains automatic signing and its
+existing App Store Connect key. Its final main-only certificate cleanup uses
+that key through Ruby standard-library ES256/HTTPS, validates the full paginated
+listing, and revokes only `DEVELOPMENT`/`IOS_DEVELOPMENT` certificates. Distribution
+and other certificate types are preserved. API output is withheld; cleanup
+failure fails the step, and a separate always-run step removes the local key.
 
 | Area | Choice | Status |
 | --- | --- | --- |
