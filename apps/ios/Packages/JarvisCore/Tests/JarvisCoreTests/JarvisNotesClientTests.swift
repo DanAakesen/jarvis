@@ -28,6 +28,12 @@ final class JarvisNotesClientTests: XCTestCase {
         XCTAssertEqual(JarvisNotesLocalization.string(.work, language: .da), "Arbejde")
         XCTAssertEqual(JarvisNotesLocalization.string(.reload, language: .da), "Genindlæs seneste")
         XCTAssertEqual(JarvisNotesLocalization.string(.keepDraft, language: .da), "Behold min")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceCaptionYou, language: .da), "Dig")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceHideCaptions, language: .da), "Skjul undertekster")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceCaptionYou, language: .en), "You")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceHideCaptions, language: .en), "Hide captions")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceShowCaptions, language: .da), "Vis undertekster")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceShowCaptions, language: .en), "Show captions")
     }
 
     func testNotesDatesFollowTheSelectedAppLanguage() {

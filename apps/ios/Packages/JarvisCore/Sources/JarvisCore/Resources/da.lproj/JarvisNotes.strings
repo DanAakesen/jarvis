@@ -95,3 +95,8 @@
 "gate.signedOut" = "Du er logget ud";
 "gate.faceIDReason" = "Lås Jarvis op";
 "gate.faceIDLabel" = "Face ID";
+"voice.captionYou" = "Dig";
+"voice.captionJarvis" = "Jarvis";
+"voice.captionsLabel" = "Undertekster";
+"voice.hideCaptions" = "Skjul undertekster";
+"voice.showCaptions" = "Vis undertekster";

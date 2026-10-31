@@ -87,15 +87,14 @@ struct JarvisChatScreen: View {
                             if model.needsYouCount > 0 {
                                 Text(model.needsYouCount > 99 ? "99+" : "\(model.needsYouCount)")
                                     .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
                                     .padding(.horizontal, JarvisDesignTokens.chatBadgeInset)
-                                    .background(.regularMaterial, in: Capsule())
+                                    .background(JarvisDesignTokens.primaryAccent, in: Capsule())
                                     .offset(x: JarvisDesignTokens.chatBadgeInset, y: -JarvisDesignTokens.chatBadgeInset)
                             }
                         }
                         .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                 }
-                .buttonStyle(.glass)
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
             }
         }
@@ -189,9 +188,6 @@ struct JarvisChatScreen: View {
                     .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.messages.isEmpty && model.streamingText.isEmpty {
-            ContentUnavailableView("No messages", systemImage: "bubble.left.and.bubble.right")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {

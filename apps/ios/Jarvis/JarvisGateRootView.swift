@@ -396,58 +396,91 @@ private struct JarvisGateSurface: View {
                 JarvisDesignTokens.pageBackground.opacity(JarvisDesignTokens.gateBackgroundOpacity)
             }
 
-            VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
-                Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
-                JarvisOrbView(activity: orbActivity)
+            if isSignIn {
+                GeometryReader { geometry in
+                    JarvisOrbView(activity: orbActivity)
+                        .accessibilityHidden(true)
+                        .position(
+                            x: geometry.size.width / 2,
+                            y: JarvisDesignTokens.gateOrbCenterTop
+                        )
 
-                if isSignIn {
                     Text("Jarvis")
                         .font(.system(size: 40, weight: .bold))
                         .tracking(-1.2)
                         .foregroundStyle(.primary)
-                }
+                        .position(
+                            x: geometry.size.width / 2,
+                            y: geometry.safeAreaInsets.top
+                                + JarvisDesignTokens.gateSignInTitleTop
+                                + JarvisDesignTokens.gateSignInTitleHeight / 2
+                        )
 
-                if isLocked {
-                    Image(systemName: "faceid")
-                        .font(.system(size: JarvisDesignTokens.gateFaceIDSymbolSize, weight: .regular))
-                        .foregroundStyle(.primary)
-                        .accessibilityLabel(language.faceIDLabel)
-                }
-
-                if let message {
-                    Text(message)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                }
-
-                Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
-
-                if let buttonTitle {
-                    Button(action: onPrimaryAction) {
-                        HStack(spacing: JarvisDesignTokens.gateControlSpacing / 2) {
-                            if isSigningIn {
-                                ProgressView()
-                                    .tint(JarvisDesignTokens.gateActionForeground)
-                                    .accessibilityHidden(true)
-                            } else if presentation == .signIn(.idle) {
-                                JarvisMicrosoftMark()
-                            } else if presentation == .lock(.signedOut) {
-                                Image(systemName: "person.crop.circle")
-                                    .accessibilityHidden(true)
-                            }
-                            Text(buttonTitle)
-                        }
-                        .frame(maxWidth: .infinity)
+                    VStack(spacing: JarvisDesignTokens.gateControlSpacing / 2) {
+                        gateMessage
+                        primaryActionButton
                     }
-                    .buttonStyle(JarvisGateButtonStyle())
-                    .disabled(isSigningIn)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, JarvisDesignTokens.gateSignInHorizontalInset)
+                    .padding(.bottom, JarvisDesignTokens.gateSignInBottomInset)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
                 }
+            } else {
+                VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
+                    Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
+                    JarvisOrbView(activity: orbActivity)
+                        .accessibilityHidden(true)
+
+                    if isLocked {
+                        Image(systemName: "faceid")
+                            .font(.system(size: JarvisDesignTokens.gateFaceIDSymbolSize, weight: .regular))
+                            .foregroundStyle(.primary)
+                            .accessibilityLabel(language.faceIDLabel)
+                    }
+
+                    gateMessage
+                    Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
+                    primaryActionButton
+                }
+                .padding(.horizontal, JarvisDesignTokens.gateContentInset)
+                .padding(.bottom, JarvisDesignTokens.gateContentInset)
             }
-            .padding(.horizontal, JarvisDesignTokens.gateContentInset)
-            .padding(.bottom, JarvisDesignTokens.gateContentInset)
         }
         .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var gateMessage: some View {
+        if let message {
+            Text(message)
+                .font(.body)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    @ViewBuilder
+    private var primaryActionButton: some View {
+        if let buttonTitle {
+            Button(action: onPrimaryAction) {
+                HStack(spacing: JarvisDesignTokens.gateControlSpacing / 2) {
+                    if isSigningIn {
+                        ProgressView()
+                            .tint(JarvisDesignTokens.gateActionForeground)
+                            .accessibilityHidden(true)
+                    } else if presentation == .signIn(.idle) {
+                        JarvisMicrosoftMark()
+                    } else if presentation == .lock(.signedOut) {
+                        Image(systemName: "person.crop.circle")
+                            .accessibilityHidden(true)
+                    }
+                    Text(buttonTitle)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(JarvisGateButtonStyle())
+            .disabled(isSigningIn)
+        }
     }
 }
 

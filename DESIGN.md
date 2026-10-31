@@ -2830,9 +2830,11 @@ During screen sharing, a full-width status bar with Stop stays above the control
 the camera tile remains draggable in the thumb zone.
 
 Use system glass buttons, SF Symbols, semantic colours, type styles, permission
-prompts, sheets and the ReplayKit picker. The custom orb and camera tile are
-needed for the approved voice-focused layout and live camera preview; their
-dimensions, state colours and motion values come from the shared iOS token layer.
+prompts, sheets and the ReplayKit picker. Voice reuses the shared Jarvis orb, with
+state-driven motion and muted/offline treatments. Live captions use a labeled
+glass surface with a dismiss action; the CC control restores a hidden caption
+surface. Orb and caption geometry and motion values come from the shared iOS token
+layer. The camera tile remains custom for its live preview.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
@@ -2849,6 +2851,8 @@ opposite alignment and a 24-hour timestamp at each sender/minute group. Only the
 user message has a background, a soft orange-tinted glass pill (see the colour
 and Chat look section above); Jarvis replies and tool rows are unboxed text. The activity sheet reuses the web feed's activity
 categories and shows away mode separately from its persisted activity items.
+A genuinely empty history leaves the transcript clear beside the pinned composer;
+the app does not add a generic empty panel or invent sample messages.
 
 Use SwiftUI's native `ScrollView`, text field, file and photo pickers, sheets,
 system button styles, SF Symbols and semantic type/color. `JarvisDesignTokens`
