@@ -220,20 +220,20 @@ struct JarvisNotesArea: View {
             }
         }
         .navigationDestination(isPresented: $editorPresented) {
-            if let editor {
+            if let current = editor {
                 JarvisNoteEditorView(
                     client: client,
                     copy: copy,
-                    note: editor,
+                    note: current,
                     onSaved: { refreshed in editor = refreshed },
                     onClose: { editorPresented = false }
                 )
             }
-            .alert(copy.title, isPresented: $noticePresented) {
-                Button(copy.ok, role: .cancel) { notice = nil }
-            } message: {
-                Text(notice ?? "")
-            }
+        }
+        .alert(copy.title, isPresented: $noticePresented) {
+            Button(copy.ok, role: .cancel) { notice = nil }
+        } message: {
+            Text(notice ?? "")
         }
         .toolbar(.hidden, for: .navigationBar)
         .accessibilityLabel(copy.title)
@@ -747,7 +747,7 @@ struct JarvisNotesArea: View {
     private func folderRow(_ folder: VaultFolderNode) -> some View {
         DisclosureGroup(isExpanded: folderBinding(folder.path)) {
             directoryContent(folder.path)
-            ForEach(folder.children) { child in folderRow(child) }
+            ForEach(folder.children) { child in AnyView(folderRow(child)) }
         } label: {
             HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                 Image(systemName: "folder")
