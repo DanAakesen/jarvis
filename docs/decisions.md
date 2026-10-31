@@ -630,6 +630,17 @@ A fresh short viewport with no prior measurement is ambiguous, so keep navigatio
 available. Preserve autofocus and existing controls; no physical iPhone browser
 mode is inferred from the screenshot. This corrects the focus-only #1295 choice.
 
+## 31 October 2026 — detect the iOS keyboard from a short initial viewport (#1295)
+
+The prior equal-shrink tests began with a full-height viewport, but an app opened
+in an already-short viewport has no pre-keyboard height to compare. Keep startup
+autofocus from hiding navigation; after a primary pointer press inside the
+composer, use the unchanged screen height as the fallback keyboard reference.
+Observed viewport expansion or leaving the composer restores navigation. The
+actual App was inspected in Chromium at 390×480 with all viewport heights short;
+the dock hid while the composer remained positioned above the bottom edge and
+returned on expansion. This is simulated evidence, not physical iPhone acceptance.
+
 ## Reserve phone typing space when geometry is inconclusive (#1295; 26 October 2026)
 
 The owner reports navigation still above the iPhone keyboard after #1294.
