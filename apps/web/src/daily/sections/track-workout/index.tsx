@@ -5,7 +5,7 @@ import type { DailySectionDefinition } from '../types';
 export const section: DailySectionDefinition = {
   id: 'track-workout',
   label: 'Track workout',
-  order: 30,
+  order: 25,
   usesPeriod: false,
   requiredSources: [sources.lifts],
   Component: lazy(() => import('./TrackWorkoutSection')),

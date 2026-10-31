@@ -17,7 +17,7 @@
 .lift-form-success { color: var(--success); }
 .lift-form-error, .lift-form-success, .lift-row-error p { margin: 0; }
 .lift-history-list { display: grid; gap: 0; padding: 0; margin: var(--space-2) 0 0; list-style: none; }
-.lift-history-row { display: grid; gap: var(--space-3); min-width: 0; padding-block: var(--space-3); border-bottom: 1px solid var(--rule); }
+.lift-history-row { display: grid; gap: var(--space-3); min-width: 0; padding-block: var(--space-3); }
 .lift-history-entry { display: grid; gap: var(--space-1); min-width: 0; }
 .lift-history-entry strong { overflow-wrap: anywhere; }
 .lift-history-entry span, .lift-history-entry time { color: var(--text-muted); font-size: var(--type-small); }

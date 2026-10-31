@@ -187,11 +187,11 @@ export default function TrackWorkoutSection({ backendUrl, getAccessToken, source
         </label>
         {selectedLast && <p className="lift-last-used">Last used {formatTime(selectedLast.performedAt)}</p>}
         <div className="button-group lift-entry-actions">
+          {formError && <button className="secondary-button" type="button" disabled={saving || !online} onClick={() => form.current?.requestSubmit()}>Retry</button>}
           <button className="primary-button" type="submit" disabled={saving || !online} aria-busy={saving}>
             <span className="button-label">Save lift</span>
             <span className="button-loading-indicator" aria-hidden="true"><Loader label="Saving lift" variant="inline" announce={false} /></span>
           </button>
-          {formError && <button className="secondary-button" type="button" disabled={saving || !online} onClick={() => form.current?.requestSubmit()}>Retry</button>}
         </div>
         {formError && <p className="lift-form-error" role="alert">{formError}</p>}
         {formSuccess && <p className="lift-form-success" role="status">Lift saved.</p>}
@@ -227,8 +227,8 @@ export default function TrackWorkoutSection({ backendUrl, getAccessToken, source
             <label>Sets<input required type="number" min="1" max="100" step="1" value={edit.values.sets}
               onChange={event => { setRowError(null); setEdit(previous => previous ? { ...previous, values: { ...previous.values, sets: event.target.value } } : previous); }} /></label>
             <div className="button-group">
-              <button className="primary-button" type="submit" disabled={rowBusy || !online}>Save changes</button>
               <button className="secondary-button" type="button" disabled={rowBusy} onClick={() => { setEdit(null); setRowError(null); }}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={rowBusy || !online}>Save changes</button>
             </div>
           </form> : <div className="button-group lift-row-actions">
             <button className="secondary-button" type="button" disabled={rowBusy} onClick={() => {

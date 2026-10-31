@@ -11,7 +11,8 @@ export function dailyFixture(query: DailyQuery, items: Record<string, DailyJson>
     units: query.source.startsWith('daily.nutrition.') ? { energy_kcal: 'kcal', '*_grams': 'g' } :
       query.source === 'daily.health.sleep' ? { '*_hours': 'h' } :
         query.source === 'daily.health.workouts' ? { duration_seconds: 's', '*_unit': 'retained per-record unit', '*_heart_rate': 'bpm' } :
-          { unit: 'retained per-record unit' },
+          query.source === dailyQuerySources.lifts ? { weightKg: 'kg', reps: 'reps', sets: 'sets' } :
+            { unit: 'retained per-record unit' },
     provenance: { store: 'daily-sql', detail: 'retained-record', calculations: query.source === dailyQuerySources.days ? 'derived-from-retained-meals' : 'existing-read-model', consistency: 'independent-committed-reads' },
     freshness: { observedAt: '2026-10-17T07:00:00Z', sourceProcessedCommittedAt: null, latestReturnedRecordUpdatedAt: null, staleness: 'unknown' },
     coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
