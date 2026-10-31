@@ -12,6 +12,7 @@ struct JarvisOrbView: View {
     @State private var pulse = false
 
     let activity: JarvisOrbActivity
+    var diameter: CGFloat = JarvisDesignTokens.gateOrbSize
 
     private var amplitude: CGFloat {
         switch activity {
@@ -145,7 +146,7 @@ struct JarvisOrbView: View {
             .animation(pulseAnimation, value: scenePhase)
             .accessibilityHidden(true)
         }
-        .frame(width: JarvisDesignTokens.gateOrbSize, height: JarvisDesignTokens.gateOrbSize)
+        .frame(width: diameter, height: diameter)
         .onAppear { pulse = true }
     }
 

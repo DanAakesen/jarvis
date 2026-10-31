@@ -68,7 +68,12 @@ struct VoiceScreenView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            if model.voiceState == .idle { await model.start() }
+            if model.voiceState == .idle {
+                #if targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-activity-fixture") { return }
+                #endif
+                await model.start()
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

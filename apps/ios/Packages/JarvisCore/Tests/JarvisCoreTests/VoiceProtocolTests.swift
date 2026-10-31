@@ -197,6 +197,29 @@ final class VoiceProtocolTests: XCTestCase {
 }
 
 final class VoiceSessionClientTests: XCTestCase {
+    func testMutedMicrophoneSuppressesAudioUntilUnmuted() async throws {
+        let (stream, continuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        defer { continuation.finish() }
+        let transport = FakeWebSocketTransport(streams: [stream])
+        let client = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!, transport: transport
+        )
+        try await client.start(accessToken: "fixture.token_1", language: .da)
+        try await client.setMuted(true)
+        try await client.sendAudio(Data([1, 2]))
+        try await client.setMuted(true)
+        var sent = await transport.sentTexts()
+        XCTAssertEqual(sent.filter { $0.contains("jarvis.microphone.muted") }.count, 1)
+        XCTAssertFalse(sent.contains { $0.contains("input_audio_buffer.append") })
+        try await client.setMuted(false)
+        try await client.sendAudio(Data([1, 2]))
+        sent = await transport.sentTexts()
+        XCTAssertEqual(sent.filter { $0.contains("input_audio_buffer.append") }.count, 1)
+        try await client.end()
+        let state = await client.state()
+        XCTAssertEqual(state, .ended)
+    }
+
     func testFakeSocketSessionHandlesMuteInterruptEndAndReconnect() async throws {
         let first = AsyncThrowingStream<String, any Error> { continuation in
             continuation.yield(#"{"type":"jarvis.session.ready","sessionId":41}"#)

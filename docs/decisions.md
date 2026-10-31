@@ -1,3 +1,28 @@
+## 31 October 2026 — local hands-free Lock Screen Live Activity (P15-34 / #1470)
+
+Dan approved the hands-free Lock Screen card on the system surfaces board,
+as recorded in #1470 (ref #1456). This supersedes the earlier To agree status
+for this card only; Dynamic Island, task/decision push surfaces and Connection
+lost remain outside this approval.
+
+Use a locally requested ActivityKit activity and an embedded WidgetKit extension,
+not APNs or push tokens. Start after audio capture is ready and dismiss on
+end/failure; dismiss orphaned activities on cold launch. Keep only a local session
+UUID, time, language, phase/mute flag and bounded audio levels in activity data.
+LiveActivityIntent Mute/Unmute uses explicit desired state (repeat-safe); End
+targets the same weak in-memory voice owner. Reject stale controls without
+reading credentials or starting a session. Preserve local mute even if the socket
+write fails. Declare background audio for this existing audio session; call/route
+recovery is not added.
+
+Reuse the orb and approved composition, with Danish-default/English copy, stone
+secondary and a restrained orange End tint. The system timer runs without
+app-driven ticking; waveform updates use real PCM levels, at most once a second.
+Thinking/reconnecting are truthful additional statuses. Simulator fixtures are
+synthetic and compiled out of device builds. Linux Core tests are local evidence;
+Apple compilation, actual Lock Screen controls/background audio and the
+Simulator/board screenshot comparison remain pending native acceptance.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry
@@ -7699,7 +7724,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-31 | The iPhone app uses orange as the primary accent and cyan as the secondary accent. Primary orange is `#ffb45c` with dark text `#1d1200` in dark mode and `#b45f06` with white text in light mode. The secondary cyan is the token `accent-2`: `#52dcfa` in dark mode and `#14768d` in light mode. Dan wants the cyan replaced by a better colour later, so builders use only the token and never the literal value. The orb is unchanged: the real web orb with a dark glass sphere, a cyan rim, an orange and amber glowing tangled centre, and no orbit ellipses or tilted circles. | Dan: orange as the primary colour and the current cyan as the secondary, to be improved in time. The web app is not changed by this decision and keeps its own palette. The concept board and the system surfaces page are republished as `docs/ios/design/board.html` and `docs/ios/design/surfaces.html` with this palette. | Superseded by the stone secondary above |
 | 2026-10-31 | The web app shares the orange primary and stone secondary palette: `#ffb45c` with `#1d1200` control text in dark mode and `#b45f06` with white text in light mode; stone is `#c9bfae` in dark mode and `#6f6551` in light mode. Light-theme focus and link text use a deeper orange for 4.5:1 contrast. Existing per-user `--theme-accent` overrides remain supported. The orb's cyan glass edge and listening/voice colors stay unchanged; orange fills remain limited to primary controls and soft tints. | Dan's P15-21 decision on 31 October 2026 aligns web interaction, selection, progress and quiet secondary roles with the approved palette while retaining the separately owned orb and voice appearance. | Confirmed by Dan |
 | 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
-| 2026-10-31 | The system surfaces page `docs/ios/design/surfaces.html` has five surfaces that are still marked To agree and are not approved: the Lock Screen hands-free session, the Dynamic Island, Lock Screen tasks and decisions that need APNs, and Connection lost. They must not be built until Dan approves them. | Approval of the board screens does not cover these surfaces. APNs push is a known backend gap and needs its own decision before any push surface is built. | Open, to agree with Dan |
+| 2026-10-31 | P15-34 / #1470 approves the local Lock Screen hands-free session. Dynamic Island, Lock Screen tasks and decisions that need APNs, and Connection lost remain To agree and must not be built without approval. | The hands-free card's approval does not authorize other system surfaces or APNs. | Hands-free agreed; other surfaces open |
 | 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |
 | 2026-10-31 | The Chat look is unified. Only the user bubble has a background: a soft orange-tinted glass pill. Jarvis replies, tool rows and status lines such as Writing it up are unboxed plain text. No solid orange fills are used anywhere: large orange areas are too harsh on the eyes, so orange is used for small accents, tints and strokes. | Dan approved this final Chat look on 2026-10-31 after reviewing the board. It applies to every surface that shows conversation text. The build is tracked in #1400 and the rule is repeated in #1430, #1431 and #1432. | Confirmed by Dan |
 | 2026-10-31 | On the Factory board every column is collapsible. Each column header shows a chevron, the title, a count pill and a one-line status detail, and Done starts collapsed. The build is tracked in #1431. | Dan changed the concept board after the first publish. The header is a disclosure button with a VoiceOver label that includes the count and the expanded or collapsed state. | Confirmed by Dan |

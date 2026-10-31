@@ -18,6 +18,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>JARVIS_API_BASE_URL</key>
 	<string>$(JARVIS_API_BASE_URL)</string>
 	<key>JARVIS_WEB_APP_URL</key>

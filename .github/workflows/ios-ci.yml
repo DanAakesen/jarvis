@@ -27,11 +27,15 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
             abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
+            abort "voice activity extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisVoiceActivity" && dependency["embed"] == true }
+            abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
+            abort "voice activity must share attributes and intents" unless project.dig("targets", "JarvisVoiceActivity", "sources").any? { |source| source["path"] == "Shared" }
+            abort "Danish must be the development language" unless project.dig("options", "developmentLanguage") == "da"
             bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
             abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
             abort "unexpected deployment target" unless project.dig("targets", "Jarvis", "deploymentTarget") == "26.0"
@@ -50,6 +54,10 @@ jobs:
           assert Path("apps/ios/Jarvis/Assets.xcassets/AppIcon.appiconset/JarvisAppIcon.png").is_file()
           info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
           assert info["ITSAppUsesNonExemptEncryption"] is False
+          assert info["NSSupportsLiveActivities"] is True
+          assert "audio" in info["UIBackgroundModes"]
+          activity_info = plistlib.loads(Path("apps/ios/VoiceActivity/Info.plist").read_bytes())
+          assert activity_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
           app_group = ["group.com.danaakesen.jarvis"]
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
           assert entitlements["com.apple.security.application-groups"] == app_group
@@ -159,6 +167,23 @@ jobs:
               done
             done
           done
+          open -a Simulator
+          xcrun simctl ui "$DEVICE_ID" appearance dark
+          for language in da en; do
+            for state in listening speaking muted; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-voice-activity-fixture \
+                "--voice-activity-language=$language" "--voice-activity-state=$state"
+              sleep 3
+              osascript -e 'tell application "Simulator" to activate' \
+                -e 'tell application "System Events" to keystroke "l" using command down'
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/voice-lock-${state}-${language}.png"
+              osascript -e 'tell application "Simulator" to activate' \
+                -e 'tell application "System Events" to keystroke "h" using {command down, shift down}'
+            done
+          done
+          cp docs/ios/design/hands-free-board.png "$SCREENSHOT_DIR/voice-approved-board.png"
       - name: Upload iOS screenshots
         id: screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -181,7 +206,12 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, sidebar, and Factory screenshots]($ARTIFACT_URL)
+          [Download the light, dark, sidebar, Factory, and voice Lock Screen screenshots]($ARTIFACT_URL)
+
+          Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
+          Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.
+          Danish/English Listening, Speaking and Muted states are included. Screenshot capture
+          does not verify Lock Screen button dispatch or real background audio.
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
