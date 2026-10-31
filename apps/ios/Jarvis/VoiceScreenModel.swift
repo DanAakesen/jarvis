@@ -491,5 +491,7 @@ private struct MissingVoiceAccessTokenProvider: AccessTokenProvider {
         throw JarvisClientError.signInRequired
     }
 
-    func requestSignIn() async {}
+    func requestSignIn() async {
+        NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
+    }
 }

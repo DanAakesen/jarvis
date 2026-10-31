@@ -2868,6 +2868,6 @@ Orb colors, scale, spacing and motion are shared in `JarvisDesignSystem.swift`.
 The gate follows the app-owned Danish/English preference through the JarvisCore
 localization catalog. Idle orb breathing stops with Reduce Motion; signing-in uses a
 stronger, faster pulse. The app shell is blurred and inaccessible behind the
-gate, and an opaque privacy cover hides it while inactive. Face ID uses the
+gate, and an opaque privacy cover, shown in a window above any open sheet, hides it while inactive. Face ID uses the
 system LocalAuthentication prompt; the passcode fallback is also system UI,
 not a custom keypad. No helper text or lock-interval control is shown.

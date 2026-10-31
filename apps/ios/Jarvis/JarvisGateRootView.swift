@@ -1,6 +1,7 @@
 import JarvisCore
 import LocalAuthentication
 import SwiftUI
+import UIKit
 
 private enum JarvisSignInState: Equatable {
     case idle
@@ -49,15 +50,47 @@ private extension JarvisAppLanguage {
     var faceIDLabel: String { text(.gateFaceIDLabel) }
 }
 
+private final class JarvisGateOverlayWindow: UIWindow {
+    override var canBecomeKey: Bool { false }
+}
+
+@MainActor
+private final class JarvisGateOverlay {
+    private var window: UIWindow?
+
+    func update(visible: Bool, model: JarvisGateModel) {
+        guard visible else {
+            window?.isHidden = true
+            window = nil
+            return
+        }
+        guard window == nil,
+              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
+            return
+        }
+
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        let overlay = JarvisGateOverlayWindow(windowScene: scene)
+        overlay.windowLevel = .alert + 1
+        let host = UIHostingController(rootView: JarvisGateOverlayView(model: model))
+        host.view.backgroundColor = .clear
+        overlay.rootViewController = host
+        overlay.isHidden = false
+        window = overlay
+    }
+}
+
 @MainActor
 private final class JarvisGateModel: ObservableObject {
     @Published private(set) var presentation: JarvisGatePresentation = .loading
+    @Published private(set) var contentEpoch = 0
     @Published private var isPrivacyCoverVisible = true
 
     private let policy = JarvisGatePolicy()
     private let tokenStore: KeychainTokenStore?
     private let provider: MicrosoftAccessTokenProvider?
     private let client: JarvisClient?
+    private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
 
     var shouldCoverContent: Bool {
@@ -71,7 +104,7 @@ private final class JarvisGateModel: ObservableObject {
             self.provider = provider
             self.client = client
             provider.onSignInRequired = { [weak self] in
-                self?.sessionExpired()
+                self?.clientRequestedSignIn()
             }
         } else {
             provider = nil
@@ -81,6 +114,11 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
+        if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") {
+            presentation = .unlocked
+            isPrivacyCoverVisible = false
+            return
+        }
         guard let tokenStore else {
             presentation = .signIn(.failed)
             return
@@ -127,6 +165,11 @@ private final class JarvisGateModel: ObservableObject {
         @unknown default:
             isPrivacyCoverVisible = true
         }
+        refreshOverlay()
+    }
+
+    func refreshOverlay() {
+        overlay.update(visible: shouldCoverContent, model: self)
     }
 
     func signIn() async {
@@ -139,6 +182,7 @@ private final class JarvisGateModel: ObservableObject {
 
         do {
             _ = try await client.createOwnerSession()
+            contentEpoch += 1
             presentation = .lock(.waiting)
             await authenticate()
         } catch is CancellationError {
@@ -165,6 +209,7 @@ private final class JarvisGateModel: ObservableObject {
         do {
             try await tokenStore?.delete()
             try provider?.signOut()
+            contentEpoch += 1
             presentation = .signIn(.idle)
         } catch {
             presentation = .signIn(.denied)
@@ -177,6 +222,32 @@ private final class JarvisGateModel: ObservableObject {
 
     func usePasscode() async {
         await authenticate(usingPasscode: true)
+    }
+
+    func performPrimaryAction() {
+        switch presentation {
+        case .signIn(.denied):
+            Task { await signOut() }
+        case .signIn:
+            Task { await signIn() }
+        case .lock(.failed):
+            Task { await retryUnlock() }
+        case .lock(.passcode):
+            Task { await usePasscode() }
+        case .lock(.signedOut):
+            beginSignIn()
+        case .loading, .unlocked, .lock(.waiting):
+            break
+        }
+    }
+
+    func clientRequestedSignIn() {
+        switch presentation {
+        case .unlocked, .lock:
+            sessionExpired()
+        case .loading, .signIn:
+            break
+        }
     }
 
     private func sessionExpired() {
@@ -228,54 +299,53 @@ private final class JarvisGateModel: ObservableObject {
 
 struct JarvisGateRootView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model = JarvisGateModel()
+
+    var body: some View {
+        ContentView()
+            .id(model.contentEpoch)
+            .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
+            .allowsHitTesting(!model.shouldCoverContent)
+            .accessibilityHidden(model.shouldCoverContent)
+            .task {
+                model.refreshOverlay()
+                await model.load()
+            }
+            .onChange(of: model.shouldCoverContent) { _, _ in
+                model.refreshOverlay()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                model.scenePhaseChanged(phase)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .jarvisSignInRequired).receive(on: DispatchQueue.main)) { _ in
+                model.clientRequestedSignIn()
+            }
+    }
+}
+
+private struct JarvisGateOverlayView: View {
+    @ObservedObject var model: JarvisGateModel
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
     var body: some View {
-        ZStack {
-            ContentView()
-                .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
-                .allowsHitTesting(!model.shouldCoverContent)
-                .accessibilityHidden(model.shouldCoverContent)
-
+        Group {
             if model.presentation != .unlocked {
                 JarvisGateSurface(
                     presentation: model.presentation,
                     language: language,
-                    onPrimaryAction: primaryAction
+                    onPrimaryAction: model.performPrimaryAction
                 )
-                .transition(.opacity)
-            } else if model.shouldCoverContent {
+            } else {
                 Color(uiColor: .systemBackground)
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
             }
         }
-        .task { await model.load() }
-        .onChange(of: scenePhase) { _, phase in
-            model.scenePhaseChanged(phase)
-        }
-    }
-
-    private func primaryAction() {
-        switch model.presentation {
-        case .signIn(.denied):
-            Task { await model.signOut() }
-        case .signIn:
-            Task { await model.signIn() }
-        case .lock(.failed):
-            Task { await model.retryUnlock() }
-        case .lock(.passcode):
-            Task { await model.usePasscode() }
-        case .lock(.signedOut):
-            model.beginSignIn()
-        case .loading, .unlocked, .lock(.waiting):
-            break
-        }
+        .accessibilityAddTraits(.isModal)
     }
 }
 

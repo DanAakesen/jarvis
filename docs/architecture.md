@@ -1390,7 +1390,10 @@ again. The app uses MSAL for the configured tenant's delegated `access_as_user`
 scope and sends its token only through the existing `JarvisClient` owner-session
 flow. The opaque session token remains in the device-only Keychain store. A
 LocalAuthentication gate plus a privacy cover keeps shell content hidden while
-locked or inactive. No backend route is added.
+locked or inactive. The gate and cover render in a separate window above the app,
+so presented sheets stay covered. Content clients that receive a 401 notify the
+gate, which shows the signed-out screen, and a fresh sign-in rebuilds the shell so
+its first load runs with the new session. No backend route is added.
 
 ### iOS chat streaming (P15-04)
 

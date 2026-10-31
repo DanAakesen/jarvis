@@ -5,12 +5,18 @@ enum JarvisCompositionError: Error {
     case missingBaseURL
 }
 
+extension Notification.Name {
+    static let jarvisSignInRequired = Notification.Name("JarvisSignInRequired")
+}
+
 struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {
     func currentToken(for request: HTTPRequest) async throws -> String {
         throw JarvisClientError.signInRequired
     }
 
-    func requestSignIn() async {}
+    func requestSignIn() async {
+        NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
+    }
 }
 
 enum JarvisComposition {
