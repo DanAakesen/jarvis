@@ -2856,3 +2856,18 @@ No note delete/rename/move, task delete, task-create priority, or offline cache
 is represented. Danish and English strings come from the JarvisCore localization
 catalog; the app-owned Settings preference defaults to Danish and controls date
 formatting as well as visible and accessibility copy.
+
+## Native iOS sign-in and lock (P15-16; 30 October 2026)
+
+The approved Sign-in and Lock frames in `docs/ios/design/board.html` guide the
+composition only. A shared Jarvis orb sits above one native prominent action;
+short failure text stays beside the action. The existing orb identity needs a
+custom SwiftUI graphic because a system control cannot express the Jarvis orb.
+Orb colors, scale, spacing and motion are shared in `JarvisDesignSystem.swift`.
+
+The gate follows the app-owned Danish/English preference through the JarvisCore
+localization catalog. Idle orb breathing stops with Reduce Motion; signing-in uses a
+stronger, faster pulse. The app shell is blurred and inaccessible behind the
+gate, and an opaque privacy cover, shown in a window above any open sheet, hides it while inactive. Face ID uses the
+system LocalAuthentication prompt; the passcode fallback is also system UI,
+not a custom keypad. No helper text or lock-interval control is shown.

@@ -82,3 +82,15 @@
 "notes.expanded" = "Åben";
 "notes.collapsed" = "Lukket";
 "notes.graphPanZoomHint" = "Træk for at flytte, knib for at zoome";
+"gate.signIn" = "Log ind med Microsoft";
+"gate.signingIn" = "Logger ind";
+"gate.retry" = "Prøv igen";
+"gate.failed" = "Login mislykkedes";
+"gate.denied" = "Kontoen har ikke adgang";
+"gate.signOut" = "Log ud";
+"gate.offline" = "Ingen forbindelse";
+"gate.faceIDFailed" = "Face ID mislykkedes";
+"gate.usePasscode" = "Brug adgangskode";
+"gate.signedOut" = "Du er logget ud";
+"gate.faceIDReason" = "Lås Jarvis op";
+"gate.faceIDLabel" = "Face ID";

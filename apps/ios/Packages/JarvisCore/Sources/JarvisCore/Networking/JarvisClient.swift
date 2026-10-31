@@ -415,6 +415,8 @@ public final class JarvisClient: Sendable {
             return try await accessTokenProvider.currentToken(for: request)
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as JarvisClientError {
+            throw error
         } catch {
             await accessTokenProvider.requestSignIn()
             throw JarvisClientError.signInRequired

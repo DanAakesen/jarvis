@@ -99,7 +99,18 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case expanded = "notes.expanded"
     case collapsed = "notes.collapsed"
     case graphPanZoomHint = "notes.graphPanZoomHint"
-
+    case gateSignIn = "gate.signIn"
+    case gateSigningIn = "gate.signingIn"
+    case gateRetry = "gate.retry"
+    case gateFailed = "gate.failed"
+    case gateDenied = "gate.denied"
+    case gateSignOut = "gate.signOut"
+    case gateOffline = "gate.offline"
+    case gateFaceIDFailed = "gate.faceIDFailed"
+    case gateUsePasscode = "gate.usePasscode"
+    case gateSignedOut = "gate.signedOut"
+    case gateFaceIDReason = "gate.faceIDReason"
+    case gateFaceIDLabel = "gate.faceIDLabel"
 }
 
 public enum JarvisNotesLocalization {

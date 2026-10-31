@@ -82,3 +82,15 @@
 "notes.expanded" = "Expanded";
 "notes.collapsed" = "Collapsed";
 "notes.graphPanZoomHint" = "Drag to pan and pinch to zoom";
+"gate.signIn" = "Sign in with Microsoft";
+"gate.signingIn" = "Signing in";
+"gate.retry" = "Try again";
+"gate.failed" = "Sign-in failed";
+"gate.denied" = "Account not allowed";
+"gate.signOut" = "Sign out";
+"gate.offline" = "No connection";
+"gate.faceIDFailed" = "Face ID failed";
+"gate.usePasscode" = "Use Passcode";
+"gate.signedOut" = "You are signed out";
+"gate.faceIDReason" = "Unlock Jarvis";
+"gate.faceIDLabel" = "Face ID";

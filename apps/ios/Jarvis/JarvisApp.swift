@@ -5,7 +5,7 @@ import SwiftUI
 struct JarvisApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            JarvisGateRootView()
         }
     }
 }

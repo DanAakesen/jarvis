@@ -10,6 +10,9 @@ settings:
 packages:
   JarvisCore:
     path: Packages/JarvisCore
+  MSAL:
+    url: https://github.com/AzureAD/microsoft-authentication-library-for-objc
+    exactVersion: 2.17.0
 targets:
   Jarvis:
     type: application
@@ -23,6 +26,8 @@ targets:
     dependencies:
       - package: JarvisCore
         product: JarvisCore
+      - package: MSAL
+        product: MSAL
       - target: JarvisBroadcast
         embed: true
     settings:
