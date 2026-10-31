@@ -36,11 +36,13 @@ struct JarvisChatScreen: View {
     @State private var cameraPresented = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
+    private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
 
     init(
         client: JarvisClient?,
         fixtureMode: Bool = false,
+        initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
@@ -49,6 +51,7 @@ struct JarvisChatScreen: View {
             fixtureMode: fixtureMode,
             startupError: startupError
         ))
+        self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
     }
 
@@ -103,12 +106,15 @@ struct JarvisChatScreen: View {
                         }
                         .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                 }
-                .buttonStyle(.glass)
+                .jarvisToolbarButtonStyle()
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
             }
         }
         .task {
             await model.load()
+            if let initialActivitySheet {
+                activitySheet = initialActivitySheet
+            }
             await model.watchActivity()
         }
         .sheet(item: $activitySheet) { sheet in

@@ -173,6 +173,10 @@ contract allows documents up to 20 MB and images up to 10 MB per attachment.
 Synthetic fixtures are clearly marked and used only in previews and CI
 screenshots. Native Entra sign-in and ReplayKit broadcast support are separate
 follow-ups; no fake conversation or successful live sign-in is implied.
+
+The notifications toolbar button and its sheet's Done button use one shared
+system-style surface, without stacked button fills or strokes (P15-29 / #1459).
+
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical

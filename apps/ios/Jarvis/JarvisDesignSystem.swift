@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+extension View {
+    func jarvisToolbarButtonStyle() -> some View {
+        // The system toolbar owns the glass surface; the button adds no second fill.
+        buttonStyle(.plain)
+    }
+}
+
 enum JarvisDesignTokens {
     static let controlMinimumHeight: CGFloat = 44
     static let contentInset: CGFloat = 20
