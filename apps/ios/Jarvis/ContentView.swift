@@ -8,7 +8,7 @@ struct ContentView: View {
     @GestureState private var sidebarDrag = SidebarDrag()
     @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
-    @StateObject private var voiceModel = VoiceScreenModel()
+    @StateObject private var voiceModel: VoiceScreenModel
     @State private var animationTargetProgress: CGFloat = 0
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?

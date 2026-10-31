@@ -25,7 +25,11 @@ struct VoiceScreenView: View {
 
                 VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
                     Spacer(minLength: 0)
-                    VoiceOrbView(status: connectionTitle ?? model.statusText, state: model.voiceState) {
+                    VoiceOrbView(
+                        status: connectionTitle ?? model.statusText,
+                        state: model.voiceState,
+                        canMinimize: model.isSessionActive && !model.showsConnectionRecovery
+                    ) {
                         minimizeVoice()
                     }
                     if let connectionTitle {
@@ -149,7 +153,7 @@ struct VoiceScreenView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.glass)
-            .tint(.secondary)
+            .tint(JarvisDesignTokens.accentSecondary)
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
     }
@@ -428,6 +432,7 @@ private struct VoiceOrbView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: String
     let state: VoiceSessionState
+    let canMinimize: Bool
     let onMinimize: () -> Void
 
     private var accent: Color {
@@ -515,7 +520,21 @@ private struct VoiceOrbView: View {
         )
         .accessibilityElement()
         .accessibilityLabel("Jarvis voice. \(status)")
-        .accessibilityAction(named: Text("Minimize voice"), onMinimize)
+        .modifier(VoiceOrbMinimizeAction(isEnabled: canMinimize, action: onMinimize))
+    }
+}
+
+private struct VoiceOrbMinimizeAction: ViewModifier {
+    let isEnabled: Bool
+    let action: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.accessibilityAction(named: Text("Minimize voice"), action)
+        } else {
+            content
+        }
     }
 }
 

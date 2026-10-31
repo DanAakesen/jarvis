@@ -96,6 +96,8 @@ final class VoiceScreenModel: ObservableObject {
         guard !isStarting, sessionClient == nil else { return }
         isStarting = true
         defer { isStarting = false }
+        sessionGeneration += 1
+        let generation = sessionGeneration
         errorMessage = nil
         microphoneDenied = false
         signInRequired = false
@@ -105,19 +107,22 @@ final class VoiceScreenModel: ObservableObject {
             guard let token = try await tokenStore.read() else {
                 throw JarvisClientError.signInRequired
             }
+            guard sessionGeneration == generation else { return }
             let httpClient = try JarvisComposition.makeClient(
                 accessTokenProvider: MissingVoiceAccessTokenProvider()
             )
             let language = try await httpClient.voiceDefaultLanguage()
+            guard sessionGeneration == generation else { return }
             guard await VoiceAudioEngine.requestMicrophonePermission() else {
+                guard sessionGeneration == generation else { return }
                 microphoneDenied = true
                 voiceState = .failed
+                markRetryFailedIfNeeded()
                 return
             }
+            guard sessionGeneration == generation else { return }
             let baseURL = try JarvisComposition.apiBaseURL()
             self.httpClient = httpClient
-            sessionGeneration += 1
-            let generation = sessionGeneration
             let audio = self.audio
             let client = VoiceSessionClient(
                 baseURL: baseURL,
@@ -140,14 +145,17 @@ final class VoiceScreenModel: ObservableObject {
             )
             sessionClient = client
             try await client.start(accessToken: token, language: language)
+            guard sessionGeneration == generation else { return }
             startScreenShareMonitoring()
         } catch {
+            guard sessionGeneration == generation else { return }
             errorMessage = Self.message(for: error)
             if let clientError = error as? JarvisClientError,
                case .signInRequired = clientError {
                 signInRequired = true
             }
             voiceState = .failed
+            markRetryFailedIfNeeded()
             let failedClient = sessionClient
             sessionClient = nil
             if let failedClient { try? await failedClient.end() }
@@ -165,9 +173,12 @@ final class VoiceScreenModel: ObservableObject {
         guard connectionPresentationState == .lost, !isStarting else { return }
         connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
         sessionGeneration += 1
+        let retryGeneration = sessionGeneration
         let interruptedClient = sessionClient
         sessionClient = nil
         if let interruptedClient { try? await interruptedClient.end() }
+        guard sessionGeneration == retryGeneration,
+              connectionPresentationState == .retrying else { return }
         await start()
     }
 
@@ -410,6 +421,11 @@ final class VoiceScreenModel: ObservableObject {
         voiceState = state
         guard state == .failed else { return }
         Task { await resetFailedSession() }
+    }
+
+    private func markRetryFailedIfNeeded() {
+        guard connectionPresentationState == .retrying else { return }
+        connectionPresentationState = connectionPresentationMachine.apply(.retryFailed)
     }
 
     private func resetFailedSession() async {

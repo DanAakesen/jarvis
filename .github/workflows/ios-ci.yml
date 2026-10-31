@@ -145,6 +145,14 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          for language in da en; do
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-voice-connection-lost \
+              "--screenshot-voice-language=$language"
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot \
+              "$SCREENSHOT_DIR/voice-connection-lost-${language}-dark.png"
+          done
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
             for language in da en; do
@@ -172,6 +180,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+          BOARD_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/ios/design/surfaces.html
         run: |
           set -euo pipefail
           marker='<!-- ios-screenshot-review -->'
@@ -181,7 +190,9 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, sidebar, and Factory screenshots]($ARTIFACT_URL)
+          [Download the light, dark, sidebar, Voice connection-loss, and Factory screenshots]($ARTIFACT_URL)
+
+          [Compare with the approved Connection lost surface]($BOARD_URL)
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF

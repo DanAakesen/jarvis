@@ -176,11 +176,12 @@ enum JarvisDesignTokens {
             ? UIColor(red: 0.114, green: 0.071, blue: 0, alpha: 1)
             : UIColor.white
     })
-    static let healthAccentSecondary = Color(uiColor: UIColor { traits in
+    static let accentSecondary = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.788, green: 0.749, blue: 0.682, alpha: 1)
             : UIColor(red: 0.435, green: 0.396, blue: 0.318, alpha: 1)
     })
+    static let healthAccentSecondary = accentSecondary
     static let factoryHorizontalInset: CGFloat = 16
     static let factorySectionSpacing: CGFloat = 12
     static let factoryControlHeight: CGFloat = 44

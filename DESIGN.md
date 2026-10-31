@@ -2791,10 +2791,10 @@ only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
 replies, tool rows and status lines such as Writing it up are unboxed plain
 text. Phone screens carry no explainer, helper or hint text.
 
-All concept board screens are approved. The five surfaces on
+All concept board screens are approved. Four surfaces on
 `docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free
-session, the Dynamic Island, Lock Screen tasks and decisions, and Connection
-lost) are not approved yet.
+session, the Dynamic Island, and Lock Screen tasks and decisions) are not
+approved yet. Connection lost is approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -2833,6 +2833,12 @@ keeps Stop visible while broadcasting.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
+
+After a real realtime drop, Voice replaces its controls with the muted orb,
+“Connection lost” title, and two glass actions. Retry now uses the bounded
+session retry path; End closes the session and returns to Chat. Orange is the
+primary action accent, stone is secondary, and the surface has no explanatory
+copy.
 
 ## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
