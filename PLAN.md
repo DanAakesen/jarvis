@@ -3451,6 +3451,14 @@ fixture sheet's light/dark capture hook. Next: existing Mac compile and simulato
 review. Before/after screenshots remain pending: #1448's light Chat image is
 gate-obscured and its artifact contains no open-sheet baseline.
 
+P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) retains the
+working automatic signing and existing secrets; the rejected manual P12/profile
+approach is removed. An always-run main-only API cleanup revokes only visible
+Apple/iOS development certificates, never distribution certificates. Focused
+offline tests pass. Next: verify the existing key's certificate API permissions
+and live cleanup on an owner-started run. Draft status was requested until then;
+the available browser is signed out, so owner draft conversion remains pending.
+
 ## Factory canonical-status parity (16 October 2026)
 
 Scoped partial correction for [#811](https://github.com/DanAakesen/jarvis/issues/811),
