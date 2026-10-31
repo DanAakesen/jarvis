@@ -3440,7 +3440,8 @@ normal-window-only selection that hid Microsoft authentication beneath the gate.
 The highest eligible visible foreground-active window now hosts sign-in; the
 privacy-only cover remains excluded and the gate stays alive during the request.
 All 18 focused Core presentation/gate tests pass locally, including timeout and
-cancel recovery. Mac compile and real-device sheet visibility, successful unlock
+cancel recovery; `swift build` and all 163 Core tests also pass. Mac compile and
+real-device sheet visibility, successful unlock
 and usable cancellation remain to verify; no TestFlight upload is authorized here.
 
 ## Factory canonical-status parity (16 October 2026)
