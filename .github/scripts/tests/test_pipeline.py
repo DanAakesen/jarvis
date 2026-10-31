@@ -1,5 +1,7 @@
+import base64
 import copy
 from contextlib import redirect_stdout
+from datetime import datetime
 import hashlib
 import io
 import json
@@ -9,6 +11,7 @@ import plistlib
 import shlex
 import subprocess
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -714,16 +717,17 @@ class SafeFailureTests(unittest.TestCase):
         options = plistlib.loads((ROOT / "apps/ios/ExportOptions.plist").read_bytes())
         self.assertEqual(options["destination"], "upload")
         self.assertEqual(options["method"], "app-store-connect")
-        self.assertEqual(options["signingStyle"], "automatic")
+        self.assertEqual(options["signingStyle"], "manual")
+        self.assertEqual(options["signingCertificate"], "Apple Distribution")
         self.assertEqual(options["teamID"], "__APPLE_TEAM_ID__")
 
         key_step = next(step for step in job["steps"] if step.get("name") == "Write App Store Connect key")
         self.assertIn("umask 077", key_step["run"])
         self.assertIn("chmod 600", key_step["run"])
-        cleanup = next(step for step in job["steps"] if step.get("name") == "Delete App Store Connect key")
+        cleanup = next(step for step in job["steps"] if step.get("name") == "Delete temporary signing assets")
         self.assertEqual(cleanup["if"], "always()")
         self.assertIn("rm -f", cleanup["run"])
-        for name in ("Archive with automatic signing", "Export and upload to TestFlight"):
+        for name in ("Archive with manual signing", "Export and upload to TestFlight"):
             step = next(step for step in job["steps"] if step.get("name") == name)
             self.assertIn("2>&1", step["run"])
             self.assertRegex(
@@ -734,6 +738,154 @@ class SafeFailureTests(unittest.TestCase):
                 step["run"],
                 r"(?m)^\s*echo\s+.*(?:APP_STORE_CONNECT|APPLE_TEAM_ID)",
             )
+
+    def test_testflight_never_requests_provisioning_or_logs_raw_signing_output(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-testflight.yml")
+        steps = {step.get("name"): step for step in workflow["jobs"]["upload"]["steps"]}
+        source = (ROOT / ".github/workflows/ios-testflight.yml").read_text()
+        self.assertNotIn("-allowProvisioningUpdates", source)
+        self.assertNotIn("CODE_SIGN_STYLE=Automatic", source)
+        archive = steps["Archive with manual signing"]
+        self.assertNotIn("-authenticationKey", archive["run"])
+        self.assertIn("-configuration Release", archive["run"])
+        self.assertNotIn("APP_STORE_CONNECT_KEY_ID", archive["env"])
+        self.assertIn("-authenticationKeyPath", steps["Export and upload to TestFlight"]["run"])
+        for name in ("Archive with manual signing", "Export and upload to TestFlight"):
+            self.assertNotIn("grep", steps[name]["run"])
+            self.assertNotIn("cat ", steps[name]["run"])
+        required = {
+            "IOS_DISTRIBUTION_P12_BASE64", "IOS_DISTRIBUTION_P12_PASSWORD",
+            "IOS_APP_PROFILE_BASE64", "IOS_BROADCAST_PROFILE_BASE64",
+        }
+        self.assertTrue(required <= set(steps["Check signing configuration"]["env"]))
+        for variable in required:
+            self.assertIn(variable + " \\", steps["Check signing configuration"]["run"])
+        generate = steps["Generate Xcode project"]["run"]
+        self.assertIn('--spec "$RUNNER_TEMP/signing-project.json" --project apps/ios', generate)
+        cleanup = steps["Delete temporary signing assets"]
+        self.assertEqual(cleanup["if"], "always()")
+        for asset in ("testflight-signing.keychain-db", "distribution.p12", "AuthKey.p8",
+                      "signing-project.json", "signing-profiles.json", "ExportOptions.plist",
+                      "Jarvis-TestFlight.mobileprovision", "JarvisBroadcast-TestFlight.mobileprovision"):
+            self.assertIn(asset, cleanup["run"])
+
+    def test_testflight_signing_setup_and_export_use_both_validated_profiles(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-testflight.yml")
+        steps = {step.get("name"): step for step in workflow["jobs"]["upload"]["steps"]}
+        script = steps["Install reusable signing assets"]["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        export_script = steps["Prepare export options"]["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        team = "FIXTURE1234"
+        uuid = "00000000-0000-0000-0000-000000000001"
+        bundles = {"Jarvis": "com.danaakesen.jarvis",
+                   "JarvisBroadcast": "com.danaakesen.jarvis.broadcast"}
+        profiles = {
+            target: {"UUID": uuid[:-1] + str(index), "TeamIdentifier": [team],
+                     "ExpirationDate": datetime(2099, 1, 1),
+                     "Entitlements": {"application-identifier": f"{team}.{bundle}",
+                                      "get-task-allow": False}}
+            for index, (target, bundle) in enumerate(bundles.items(), 1)
+        }
+        cases = ("valid", "expired", "wrong_team", "wrong_bundle", "development",
+                 "ad_hoc", "enterprise", "bad_uuid", "invalid_base64", "import_failure")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                temp = Path(directory)
+                selected = copy.deepcopy(profiles)
+                profile = selected["JarvisBroadcast"]
+                if case == "expired":
+                    profile["ExpirationDate"] = datetime(2000, 1, 1)
+                elif case == "wrong_team":
+                    profile["TeamIdentifier"] = ["OTHER12345"]
+                elif case == "wrong_bundle":
+                    profile["Entitlements"]["application-identifier"] = f"{team}.other"
+                elif case == "development":
+                    profile["Entitlements"]["get-task-allow"] = True
+                elif case == "ad_hoc":
+                    profile["ProvisionedDevices"] = ["fixture-device"]
+                elif case == "enterprise":
+                    profile["ProvisionsAllDevices"] = True
+                elif case == "bad_uuid":
+                    profile["UUID"] = "-" * 36
+                env = {
+                    "RUNNER_TEMP": directory, "APPLE_TEAM_ID": team,
+                    "IOS_DISTRIBUTION_P12_BASE64": base64.b64encode(b"fixture-p12").decode(),
+                    "IOS_DISTRIBUTION_P12_PASSWORD": "fixture-password",
+                    "IOS_APP_PROFILE_BASE64": base64.b64encode(b"fixture-app-profile").decode(),
+                    "IOS_BROADCAST_PROFILE_BASE64": base64.b64encode(b"fixture-extension-profile").decode(),
+                }
+                if case == "invalid_base64":
+                    env["IOS_BROADCAST_PROFILE_BASE64"] = "!"
+                calls = []
+
+                def security(args, **kwargs):
+                    self.assertTrue(kwargs["capture_output"])
+                    calls.append(args)
+                    if args[1] == "import" and case == "import_failure":
+                        raise subprocess.CalledProcessError(1, args, output=b"private diagnostics")
+                    if args[1] == "cms":
+                        target = Path(args[-1]).name.split("-TestFlight")[0]
+                        return SimpleNamespace(stdout=plistlib.dumps(selected[target]))
+                    return SimpleNamespace(stdout=b"")
+
+                with patch.dict(os.environ, env), patch.object(Path, "home", return_value=temp / "home"), \
+                     patch("subprocess.run", side_effect=security), redirect_stdout(io.StringIO()) as output:
+                    if case == "valid":
+                        exec(script, {})
+                    else:
+                        with self.assertRaises(SystemExit) as failure:
+                            exec(script, {})
+                        self.assertIn("Signing setup failed", str(failure.exception))
+                        self.assertNotIn("private diagnostics", str(failure.exception))
+                self.assertEqual(output.getvalue(), "")
+                self.assertFalse((temp / "distribution.p12").exists())
+                if case != "valid":
+                    self.assertFalse((temp / "signing-project.json").exists())
+                    continue
+                spec = json.loads((temp / "signing-project.json").read_text())
+                self.assertEqual(spec["include"], [str(ROOT / "apps/ios/project.yml")])
+                expected = {bundle: profiles[target]["UUID"] for target, bundle in bundles.items()}
+                self.assertEqual(json.loads((temp / "signing-profiles.json").read_text()), expected)
+                for target in bundles:
+                    settings = spec["targets"][target]["settings"]["base"]
+                    self.assertEqual(settings, {
+                        "CODE_SIGN_STYLE": "Manual", "CODE_SIGN_IDENTITY": "Apple Distribution",
+                        "PROVISIONING_PROFILE_SPECIFIER": profiles[target]["UUID"],
+                        "DEVELOPMENT_TEAM": team,
+                    })
+                self.assertIn("set-key-partition-list", [args[1] for args in calls])
+                with patch.dict(os.environ, env):
+                    exec(export_script, {})
+                options = plistlib.loads((temp / "ExportOptions.plist").read_bytes())
+                self.assertEqual(options["provisioningProfiles"], expected)
+                self.assertEqual(options["signingStyle"], "manual")
+                self.assertEqual(options["teamID"], team)
+                self.assertEqual((temp / "ExportOptions.plist").stat().st_mode & 0o777, 0o600)
+
+    def test_testflight_cleanup_removes_files_even_when_keychain_deletion_fails(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-testflight.yml")
+        cleanup = next(step["run"] for step in workflow["jobs"]["upload"]["steps"]
+                       if step.get("name") == "Delete temporary signing assets")
+        with tempfile.TemporaryDirectory() as directory:
+            temp = Path(directory)
+            profile_dir = temp / "home/Library/Developer/Xcode/UserData/Provisioning Profiles"
+            profile_dir.mkdir(parents=True)
+            files = [temp / name for name in (
+                "testflight-signing.keychain-db", "AuthKey.p8", "distribution.p12",
+                "signing-profiles.json", "signing-project.json", "ExportOptions.plist",
+                "archive.log", "export.log",
+            )] + [profile_dir / f"{target}-TestFlight.mobileprovision"
+                  for target in ("Jarvis", "JarvisBroadcast")]
+            for path in files:
+                path.write_text("private-fixture")
+            result = subprocess.run(
+                ["bash", "-e", "-c", "security() { echo private-fixture; return 1; }\n" + cleanup],
+                env={**os.environ, "RUNNER_TEMP": directory, "HOME": str(temp / "home")},
+                capture_output=True, text=True,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("keychain cleanup failed", result.stdout)
+            self.assertNotIn("private-fixture", result.stdout + result.stderr)
+            self.assertTrue(all(not path.exists() for path in files[1:]))
 
     def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
         source = (ROOT / ".github/workflows/ci.yml").read_text()

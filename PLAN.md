@@ -3444,6 +3444,12 @@ cancel recovery; `swift build` and all 163 Core tests also pass. Mac compile and
 real-device sheet visibility, successful unlock
 and usable cancellation remain to verify; no TestFlight upload is authorized here.
 
+P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) replaces
+per-run automatic certificate creation with reusable distribution signing for
+both iOS targets, manual export and always-run private-asset cleanup. Focused
+offline signing tests pass. Next: owner configures the four new signing secrets
+and verifies a manual TestFlight archive/upload; no upload is dispatched here.
+
 ## Factory canonical-status parity (16 October 2026)
 
 Scoped partial correction for [#811](https://github.com/DanAakesen/jarvis/issues/811),

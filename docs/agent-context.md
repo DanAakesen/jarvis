@@ -6533,14 +6533,26 @@ environment; the owner must restrict that environment to the `main` branch and
 configure `APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`,
 `APP_STORE_CONNECT_ISSUER_ID`, `APPLE_TEAM_ID`, `JARVIS_API_BASE_URL`,
 `JARVIS_ENTRA_CLIENT_ID`, `JARVIS_ENTRA_AUTHORITY_URL`, and
-`JARVIS_ENTRA_API_SCOPE` there before dispatching.
+`JARVIS_ENTRA_API_SCOPE` there before dispatching. Add the reusable signing
+secrets `IOS_DISTRIBUTION_P12_BASE64`, `IOS_DISTRIBUTION_P12_PASSWORD`,
+`IOS_APP_PROFILE_BASE64`, and `IOS_BROADCAST_PROFILE_BASE64`. The P12 must
+contain an Apple Distribution certificate and its private key; both App Store
+profiles must use that certificate, the configured team and their exact bundle
+IDs (`com.danaakesen.jarvis` and `com.danaakesen.jarvis.broadcast`), including
+the registered App Group and the app's keychain entitlement.
 The workflow refuses non-main refs, captures `xcodebuild` output rather than
-logging signing identifiers, writes the key with mode 600, and deletes it in
-an always-run cleanup step.
+logging signing identifiers, and imports the P12 into a temporary keychain.
+A temporary XcodeGen spec supplies manual signing per target without changing
+local project defaults. Archive and export never use provisioning updates or
+create certificates/profiles; the App Store Connect key is used only for upload.
+Expired or mismatched profiles fail setup. Renew the stored certificate/profiles
+outside CI when needed; do not revoke unrelated certificates automatically.
+Private temporary files, installed profiles, logs and the keychain are deleted
+in an always-run cleanup step. Failure messages withhold raw tool diagnostics.
 
 Only the owner starts an upload: **Actions → iOS TestFlight**, select `main`,
 then **Run workflow**. A merge or pull request does not upload anything. The
-first archive and export/upload remain unproven; see the first-run checklist
+reusable-signing archive and export/upload remain unproven; see the setup checklist
 and disabled `xcrun altool --upload-app` fallback in
 [`docs/ios/build-plan.md`](ios/build-plan.md). Do not run or dispatch this
 workflow while reviewing changes.

@@ -9575,6 +9575,25 @@ environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
 
+## 31 October 2026 — P15-26 reusable TestFlight signing
+
+Build 11 ([run 41243519928](https://github.com/DanAakesen/jarvis/actions/runs/41243519928))
+failed because automatic signing requested development certificates at the
+account limit for both Jarvis and JarvisBroadcast. Supersede automatic signing
+with one owner-stored Apple Distribution P12/private key and separate App Store
+profiles in protected environment secrets. Import locally into an ephemeral
+keychain; generate a temporary XcodeGen override per target and export using the
+same profile UUIDs. Keep local project defaults unchanged.
+
+Remove provisioning updates from archive and export; the API key authenticates
+upload only. Do not revoke account certificates automatically, since they may
+serve other builds. The owner renews assets outside CI. Capture signing-tool
+output and emit fixed recovery messages rather than raw excerpts, which can
+contain decoded private signing data. Always clean up temporary assets and logs,
+including partial setup. Offline tests cover the configuration, profile
+validation, export mapping and cleanup; real macOS signing/upload remains
+unverified until the owner configures the four new secrets and dispatches.
+
 ## 30 October 2026 — P15-09 Apple adapter boundary
 
 Keep Apple framework implementations in the iOS app target. The URLSession
