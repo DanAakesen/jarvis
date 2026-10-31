@@ -10,7 +10,7 @@ import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact, ty
 
 type Load = { key: string } & ({ status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'ready'; artifact: HtmlArtifact; document: string });
 
-const themeTokens = { text: '--text', muted: '--text-muted', accent: '--glass-edge-cool', 'accent-warm': '--glass-glow-warm', error: '--error', background: '--report-surface' } as const;
+const themeTokens = { text: '--text', muted: '--text-muted', accent: '--primary-action', 'accent-warm': '--glass-glow-warm', error: '--error', background: '--report-surface' } as const;
 
 function hostTheme(): HtmlAppTheme {
   const root = getComputedStyle(document.documentElement);

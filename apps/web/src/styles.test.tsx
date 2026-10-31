@@ -841,7 +841,7 @@ describe('shared glass tokens', () => {
       'color',
     );
 
-    expect(shellIconColor).toBe('var(--text-muted)');
+    expect(shellIconColor).toBe('var(--secondary-accent)');
     expect(sidebarTextColor).toBe('var(--text-muted)');
     expect(topbarTextColor).toBe('var(--text-muted)');
     expect(iconSource).toContain("stroke: 'currentColor'");
@@ -1053,6 +1053,29 @@ describe('shared glass tokens', () => {
     }
   });
 
+  it('uses the orange and stone palette without changing the cyan orb or listening states', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const dark = ':root\\[data-theme="dark"\\]';
+
+    expect(tokenValue(source, ':root', '--focus')).toBe('#a65300');
+    expect(tokenValue(source, dark, '--focus')).toBe('#ffb45c');
+    expect(tokenValue(source, ':root', '--primary-action')).toBe('var(--theme-accent, #b45f06)');
+    expect(tokenValue(source, dark, '--primary-action')).toBe('var(--theme-accent, #ffb45c)');
+    expect(tokenValue(source, ':root', '--primary-action-text')).toBe('var(--theme-accent-foreground, #ffffff)');
+    expect(tokenValue(source, dark, '--primary-action-text')).toBe('var(--theme-accent-foreground, #1d1200)');
+    expect(tokenValue(source, ':root', '--secondary-accent')).toBe('#6f6551');
+    expect(tokenValue(source, dark, '--secondary-accent')).toBe('#c9bfae');
+    expect(tokenValue(source, ':root', '--state-listening')).toBe('#14768d');
+    expect(tokenValue(source, dark, '--state-listening')).toBe('#52dcfa');
+    expect(tokenValue(source, ':root', '--stage-seam')).toBe('var(--theme-accent-secondary, #14768d)');
+    expect(tokenValue(source, dark, '--stage-seam')).toBe('var(--theme-accent-secondary, #52c7dc)');
+    expect(tokenValue(source, ':root', '--stage-rim')).toBe('var(--theme-accent-secondary, #388da0)');
+    expect(tokenValue(source, dark, '--stage-rim')).toBe('var(--theme-accent-secondary, #55bace)');
+    expect(tokenValue(source, ':root', '--stage-orb')).toBe('var(--theme-accent, #14768d)');
+    expect(tokenValue(source, dark, '--stage-orb')).toBe('var(--theme-accent, #52dcfa)');
+    expect(tokenValue(source, ':root', '--glass-edge-cool')).toBe('var(--stage-orb)');
+  });
+
   it('removes the bottom shell bar and shares subtle selection without outlined slabs', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
@@ -1095,18 +1118,13 @@ describe('shared glass tokens', () => {
     expect(source).toContain('@media (pointer: coarse) { .presence-chip-trigger { min-width: 44px; min-height: 44px; justify-content: center; } }');
   });
 
-  it('lights each rail icon in its own tone and floats its name flat beside it', () => {
+  it('uses orange for selected rail icons and floats their names flat beside them', () => {
     const source = readFileSync('src/styles.css', 'utf8');
-    const tones = ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'workspaces'];
-    for (const tone of tones) {
-      expect(tokenValue(source, ':root', `--rail-tone-${tone}`), tone).toMatch(/^#[0-9a-f]{6}$/);
-      expect(source, tone).toContain(`--rail-tone-${tone}: #`);
-      if (tone !== 'home') expect(source).toContain(`.rail-link[data-tone="${tone}"] { --rail-tone: var(--rail-tone-${tone}); }`);
-    }
-    expect(source.match(/--rail-tone-home: #/g)).toHaveLength(2);
     const link = ruleDeclaration(source, /\n\.rail-link\s*\{([^}]*)\}/, '--state-selected-bg');
     expect(link).toBe('color-mix(in srgb, var(--rail-tone) 16%, transparent)');
     expect(ruleDeclaration(source, /\n\.rail-link\s*\{([^}]*)\}/, '--state-selected-fg')).toBe('var(--rail-tone)');
+    expect(ruleDeclaration(source, /\n\.rail-link\s*\{([^}]*)\}/, '--rail-tone')).toBe('var(--focus)');
+    expect(source).not.toContain('--rail-tone-home');
     expect(tokenValue(source, ':root', '--state-selected-bg')).not.toContain('--rail-tone');
 
     const tip = /\n\.rail-tip\s*\{([^}]*)\}/;

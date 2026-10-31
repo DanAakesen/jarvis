@@ -89,7 +89,7 @@
 .conversation-messages { margin: var(--space-5) 0; padding: 0; list-style: none; }
 .conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0 calc(var(--space-4) + var(--space-2)); padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 75%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
-.conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow); }
+.conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--secondary-accent) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .message-heading { margin-bottom: var(--space-2); font-size: var(--type-small); }
 .queue-count, .conversation-message[data-speaker="dan"] > .queued-state { color: var(--text-muted); font-size: var(--type-small); }
@@ -411,9 +411,9 @@
 }
 .conversation-message[data-speaker="jarvis"] {
   padding-left: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--secondary-accent) 22%, transparent);
   border-bottom-left-radius: 6px;
-  background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-edge-cool) 10%, transparent), transparent 70%);
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--secondary-accent) 10%, transparent), transparent 70%);
   box-shadow: 0 6px 18px -14px color-mix(in srgb, var(--ink-solid) 60%, transparent);
 }
 .conversation-message[data-speaker="dan"] + .conversation-message[data-speaker="dan"],
@@ -423,7 +423,7 @@
 .conversation-message .markdown-content > :last-child { margin-bottom: 0; }
 .message-metadata { gap: var(--space-2); margin-top: var(--space-1); font-size: var(--type-caption); }
 
-/* Tool calls: compact glass chips led by the assembling J. Running chips glow cyan and their J reassembles. */
+/* Tool calls: compact glass chips led by the assembling J. Running chips glow orange and their J reassembles. */
 .message-tools { gap: var(--space-2); margin: var(--space-2) 0 var(--space-1); }
 .message-tools > li { gap: var(--space-2); }
 .tool-chip {
@@ -434,12 +434,12 @@
 .tool-chip-outcome { color: var(--text-muted); font-weight: 500; }
 .tool-chip[data-state="running"] {
   position: relative; overflow: hidden;
-  background: color-mix(in srgb, var(--glass-edge-cool) 14%, var(--glass-hover));
-  box-shadow: 0 0 14px -4px var(--glass-edge-cool);
+  background: color-mix(in srgb, var(--primary-action) 14%, var(--glass-hover));
+  box-shadow: 0 0 14px -4px var(--primary-action);
 }
 .tool-chip[data-state="running"]::after {
   position: absolute; inset: 0; content: ""; pointer-events: none;
-  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--glass-edge-cool) 30%, transparent) 50%, transparent 70%);
+  background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--primary-action) 30%, transparent) 50%, transparent 70%);
   background-size: 250% 100%; animation: tool-shimmer 1.8s linear infinite;
 }
 .tool-chip[data-state="error"] { background: var(--error-wash); }
@@ -451,9 +451,9 @@
   .message-tools .task-reference { min-height: 44px; }
 }
 .assembling-j { width: 16px; height: 18px; flex: 0 0 auto; overflow: visible; }
-.assembling-j-block { fill: color-mix(in srgb, var(--glass-edge-cool) 75%, var(--text)); transform-box: fill-box; transform-origin: center; }
-.tool-chip:not([data-state="running"]) .assembling-j-block { fill: color-mix(in srgb, var(--glass-edge-cool) 45%, var(--text-muted)); opacity: .9; }
-.tool-chip[data-state="running"] .assembling-j { filter: drop-shadow(0 0 2px var(--glass-edge-cool)); }
+.assembling-j-block { fill: color-mix(in srgb, var(--primary-action) 75%, var(--text)); transform-box: fill-box; transform-origin: center; }
+.tool-chip:not([data-state="running"]) .assembling-j-block { fill: color-mix(in srgb, var(--secondary-accent) 45%, var(--text-muted)); opacity: .9; }
+.tool-chip[data-state="running"] .assembling-j { filter: drop-shadow(0 0 2px var(--primary-action)); }
 .tool-chip[data-state="running"] .assembling-j-block { animation: j-assemble 1.6s cubic-bezier(.5, 0, .3, 1) infinite; animation-delay: calc(var(--i) * 55ms); }
 .assembling-j-mark { fill: none; stroke-width: .75; stroke-linecap: round; stroke-linejoin: round; }
 .tool-chip[data-state="ok"] .assembling-j-mark { stroke: var(--success); }
@@ -492,13 +492,13 @@
 /* Live turn: the assembling J while Jarvis thinks, then one line per tool on a thin lit trail, then the answer. */
 .live-turn { min-width: 200px; }
 .live-turn-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--text-muted); font-size: var(--type-small); }
-.live-turn-status .assembling-j { width: 18px; height: 20px; filter: drop-shadow(0 0 3px var(--glass-edge-cool)); }
-.live-turn-status .assembling-j-block { fill: color-mix(in srgb, var(--glass-edge-cool) 75%, var(--text)); animation: j-assemble 1.6s cubic-bezier(.5, 0, .3, 1) infinite; animation-delay: calc(var(--i) * 55ms); }
+.live-turn-status .assembling-j { width: 18px; height: 20px; filter: drop-shadow(0 0 3px var(--primary-action)); }
+.live-turn-status .assembling-j-block { fill: color-mix(in srgb, var(--primary-action) 75%, var(--text)); animation: j-assemble 1.6s cubic-bezier(.5, 0, .3, 1) infinite; animation-delay: calc(var(--i) * 55ms); }
 .live-turn-tools { position: relative; display: grid; gap: var(--space-2); margin: var(--space-2) 0 var(--space-1) var(--space-2); padding: 0 0 0 var(--space-4); list-style: none; }
 .live-turn-tools::before { position: absolute; top: 6px; bottom: 6px; left: 0; width: 2px; border-radius: 0; content: "";
-  background: linear-gradient(color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), color-mix(in srgb, var(--glass-edge-cool) 15%, transparent)); }
+  background: linear-gradient(color-mix(in srgb, var(--primary-action) 70%, transparent), color-mix(in srgb, var(--primary-action) 15%, transparent)); }
 .live-turn-tools > li { position: relative; animation: conversation-enter var(--motion-state) var(--ease-enter); }
-.live-turn-tools > li::before { position: absolute; top: 50%; left: -14px; width: 10px; height: 2px; content: ""; background: color-mix(in srgb, var(--glass-edge-cool) 50%, transparent); }
+.live-turn-tools > li::before { position: absolute; top: 50%; left: -14px; width: 10px; height: 2px; content: ""; background: color-mix(in srgb, var(--primary-action) 50%, transparent); }
 .live-turn .streaming-reply { margin-top: var(--space-2); }
 .live-turn-status + .streaming-reply, .live-turn > .message-author + .streaming-reply { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) { .live-turn-status .assembling-j-block, .live-turn-tools > li { animation: none; } }
@@ -564,7 +564,7 @@
   background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-glow-warm) 7%, transparent), transparent 70%);
 }
 .conversation-message[data-speaker="jarvis"] {
-  border-color: color-mix(in srgb, var(--glass-edge-cool) 18%, transparent);
+  border-color: color-mix(in srgb, var(--secondary-accent) 18%, transparent);
   background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-rim-light) 5%, transparent), transparent 60%);
 }
 .conversation-message.live-turn { border-style: dashed; border-color: color-mix(in srgb, var(--glass-edge-cool) 22%, transparent); }
@@ -585,10 +585,10 @@
 @media (prefers-reduced-motion: reduce) { .conversation-latest { animation: none; } }
 :root[data-motion="reduced"] .conversation-latest { animation: none; }
 @media (pointer: coarse) { .conversation-history .composer-send { width: 44px; height: 44px; min-height: 44px; } }
-/* Rim colours swapped (Dan, 7 October): Dan's bubble is cool cyan, Jarvis's is the bright amber of its core. */
+/* Dan's bubble has a soft orange rim; Jarvis's is the bright amber of its core. */
 .conversation-message[data-speaker="dan"] {
-  border-color: color-mix(in srgb, var(--glass-edge-cool) 42%, transparent);
-  background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-edge-cool) 7%, transparent), transparent 70%);
+  border-color: color-mix(in srgb, var(--primary-action) 42%, transparent);
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--primary-action) 7%, transparent), transparent 70%);
 }
 .conversation-message[data-speaker="jarvis"] {
   border-color: color-mix(in srgb, var(--glass-glow-warm) 40%, transparent);

@@ -207,7 +207,7 @@ const buttonPairings: Pairing[] = [
     label: 'Primary button / rest',
     foreground: 'var(--primary-action-text)',
     backgrounds: [
-      { label: 'top gradient stop', layers: ['color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid))'] },
+      { label: 'top gradient stop', layers: ['var(--primary-action)'] },
       { label: 'bottom gradient stop', layers: ['color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid))'] },
     ],
     threshold: 4.5,
@@ -281,7 +281,7 @@ const buttonPairings: Pairing[] = [
     label: 'Primary button / busy loader',
     foreground: 'var(--primary-action-text)',
     backgrounds: [
-      { label: 'top gradient stop', layers: ['color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid))'] },
+      { label: 'top gradient stop', layers: ['var(--primary-action)'] },
       { label: 'bottom gradient stop', layers: ['color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid))'] },
     ],
     threshold: 3,
@@ -390,18 +390,16 @@ function semanticPairings(): Pairing[] {
     { label: 'Knowledge graph Tasks mark', foreground: 'var(--graph-tasks)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
   ];
 
-  for (const tone of ['home', 'daily', 'proactive', 'factory', 'notes', 'usage', 'status', 'workspaces']) {
-    for (const [state, percent] of [['selected', 16], ['hover', 24], ['pressed', 32]] as const) {
-      pairings.push({
-        label: `Rail icon ${tone} tone / ${state}`,
-        foreground: `var(--rail-tone-${tone})`,
-        backgrounds: ['--surface-translucent', '--surface-muted', '--shell-slab'].map((name) => ({
-          label: `${name} with ${state} tint`,
-          layers: [`var(${name})`, `color-mix(in srgb, var(--rail-tone-${tone}) ${percent}%, transparent)`],
-        })),
-        threshold: 3,
-      });
-    }
+  for (const [state, percent] of [['selected', 16], ['hover', 24], ['pressed', 32]] as const) {
+    pairings.push({
+      label: `Rail icon orange / ${state}`,
+      foreground: 'var(--focus)',
+      backgrounds: ['--surface-translucent', '--surface-muted', '--shell-slab'].map((name) => ({
+        label: `${name} with ${state} tint`,
+        layers: [`var(${name})`, `color-mix(in srgb, var(--focus) ${percent}%, transparent)`],
+      })),
+      threshold: 3,
+    });
   }
 
   for (const [tone, token] of [['People', 'people'], ['Work', 'work'], ['Personal', 'personal'], ['General', 'general'], ['Tasks', 'tasks']] as const) {
