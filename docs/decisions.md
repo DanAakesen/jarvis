@@ -1,3 +1,13 @@
+## 31 October 2026 — native Chat plus menu (#1462)
+
+Match the approved Chat board with an anchored popover above the composer plus
+button and include Camera, Attach, Enable video, Share screen and Voice language.
+Use the existing AVFoundation camera session and ReplayKit broadcast extension;
+camera, video and screen frames stay on-device until the user sends a Chat turn.
+Persist the language choice through the existing authenticated `/settings`
+contract and apply it to the next Chat session. Add the open-menu state to the
+existing simulator screenshot job without another simulator boot or Mac job.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry
