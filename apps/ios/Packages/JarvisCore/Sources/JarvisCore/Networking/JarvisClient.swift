@@ -291,12 +291,13 @@ public final class JarvisClient: Sendable {
         method: HTTPMethod,
         path: [String],
         body: Data? = nil,
-        accept: String = "text/event-stream"
+        accept: String = "text/event-stream",
+        headers: [String: String] = [:]
     ) async throws -> HTTPStreamResponse {
         let request = try await makeRequest(
             method: method,
             path: path,
-            headers: [:],
+            headers: headers,
             body: body,
             authorization: .current,
             queryItems: [],
