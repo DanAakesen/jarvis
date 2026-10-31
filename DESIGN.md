@@ -2836,6 +2836,8 @@ needed for the approved voice-focused layout and live camera preview; their
 dimensions, state colours and motion values come from the shared iOS token layer.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
+Ending voice returns to Chat and closes the sidebar through the existing
+progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.

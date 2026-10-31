@@ -1364,6 +1364,9 @@ sidebar state. The SwiftUI target binds that state to `NavigationStack` and
 renders the fixed-behind sidebar and title-only placeholders for unbuilt
 destinations. P15-10 replaces the Chat root placeholder with the native chat
 screen and P15-11 replaces the Voice placeholder with the native voice screen.
+The shell observes voice state changes; `.ended` resets navigation to Chat and
+closes the sidebar using the existing progress/animation reset. Other voice states
+leave navigation unchanged.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

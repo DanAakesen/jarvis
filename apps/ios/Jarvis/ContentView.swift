@@ -181,6 +181,10 @@ struct ContentView: View {
                         }
                 }
                 .task { await workspaceRuntime.run() }
+                .onChange(of: voiceModel.voiceState) { _, state in
+                    navigation.voiceSessionStateChanged(state)
+                    if state == .ended { setSidebarOpen(false) }
+                }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
                     guard destination != nil,
                           let destination = workspaceRuntime.consumeRequestedDestination() else {
