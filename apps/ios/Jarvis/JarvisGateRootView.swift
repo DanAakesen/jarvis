@@ -358,6 +358,11 @@ private struct JarvisGateSurface: View {
     let language: JarvisAppLanguage
     let onPrimaryAction: () -> Void
 
+    private var isSignIn: Bool {
+        if case .signIn = presentation { return true }
+        return false
+    }
+
     private var orbActivity: JarvisOrbActivity {
         if presentation == .signIn(.signingIn) { return .signingIn }
         if presentation == .loading { return .calm }
@@ -398,12 +403,23 @@ private struct JarvisGateSurface: View {
 
     var body: some View {
         ZStack {
-            Rectangle().fill(.regularMaterial)
-            Color(uiColor: .systemBackground).opacity(JarvisDesignTokens.gateBackgroundOpacity)
+            if isSignIn {
+                JarvisGateAmbientBackground()
+            } else {
+                Rectangle().fill(.regularMaterial)
+                Color(uiColor: .systemBackground).opacity(JarvisDesignTokens.gateBackgroundOpacity)
+            }
 
             VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
                 Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
                 JarvisOrbView(activity: orbActivity)
+
+                if isSignIn {
+                    Text("Jarvis")
+                        .font(.system(size: 40, weight: .bold))
+                        .tracking(-1.2)
+                        .foregroundStyle(.primary)
+                }
 
                 if isLocked {
                     Image(systemName: "faceid")
@@ -426,9 +442,11 @@ private struct JarvisGateSurface: View {
                         HStack(spacing: JarvisDesignTokens.gateControlSpacing / 2) {
                             if isSigningIn {
                                 ProgressView()
-                                    .tint(.white)
+                                    .tint(JarvisDesignTokens.gateActionForeground)
                                     .accessibilityHidden(true)
-                            } else if presentation == .signIn(.idle) || presentation == .lock(.signedOut) {
+                            } else if presentation == .signIn(.idle) {
+                                JarvisMicrosoftMark()
+                            } else if presentation == .lock(.signedOut) {
                                 Image(systemName: "person.crop.circle")
                                     .accessibilityHidden(true)
                             }
@@ -436,8 +454,7 @@ private struct JarvisGateSurface: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(JarvisGateButtonStyle())
                     .disabled(isSigningIn)
                 }
             }
@@ -445,5 +462,100 @@ private struct JarvisGateSurface: View {
             .padding(.bottom, JarvisDesignTokens.gateContentInset)
         }
         .ignoresSafeArea()
+    }
+}
+
+private struct JarvisGateAmbientBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            let diameter = size.width * 1.35
+
+            ZStack {
+                Color(uiColor: .systemBackground)
+                glow(
+                    JarvisDesignTokens.gateAmbientCool,
+                    opacity: colorScheme == .dark ? 0.3 : 0.24,
+                    diameter: diameter,
+                    x: size.width * 0.08,
+                    y: size.height * 0.1
+                )
+                glow(
+                    JarvisDesignTokens.gateAmbientWarm,
+                    opacity: colorScheme == .dark ? 0.26 : 0.3,
+                    diameter: diameter,
+                    x: size.width * 0.94,
+                    y: size.height * 0.16
+                )
+                glow(
+                    JarvisDesignTokens.gateAmbientBlue,
+                    opacity: colorScheme == .dark ? 0.2 : 0.16,
+                    diameter: diameter,
+                    x: size.width * 0.96,
+                    y: size.height * 0.82
+                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func glow(
+        _ color: Color,
+        opacity: Double,
+        diameter: CGFloat,
+        x: CGFloat,
+        y: CGFloat
+    ) -> some View {
+        Circle()
+            .fill(
+                RadialGradient(
+                    colors: [color.opacity(opacity), color.opacity(opacity * 0.3), .clear],
+                    center: .center,
+                    startRadius: 0,
+                    endRadius: diameter * 0.5
+                )
+            )
+            .frame(width: diameter, height: diameter)
+            .position(x: x, y: y)
+            .accessibilityHidden(true)
+    }
+}
+
+private struct JarvisMicrosoftMark: View {
+    var body: some View {
+        HStack(spacing: 2) {
+            VStack(spacing: 2) {
+                square(Color(red: 242.0 / 255, green: 80.0 / 255, blue: 34.0 / 255))
+                square(Color(red: 0, green: 164.0 / 255, blue: 239.0 / 255))
+            }
+            VStack(spacing: 2) {
+                square(Color(red: 127.0 / 255, green: 186.0 / 255, blue: 0))
+                square(Color(red: 1, green: 185.0 / 255, blue: 0))
+            }
+        }
+        .frame(width: 20, height: 20)
+        .accessibilityHidden(true)
+    }
+
+    private func square(_ color: Color) -> some View {
+        Rectangle()
+            .fill(color)
+            .frame(width: 9, height: 9)
+    }
+}
+
+private struct JarvisGateButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(JarvisDesignTokens.gateActionForeground)
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(JarvisDesignTokens.gateActionAccent, in: Capsule())
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.86 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

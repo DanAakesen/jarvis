@@ -211,10 +211,23 @@ enum JarvisDesignTokens {
             : UIColor(red: 20.0 / 255, green: 118.0 / 255, blue: 141.0 / 255, alpha: 1)
     })
     static let gateContentInset: CGFloat = 32
-    static let gateOrbSize: CGFloat = 224
+    static let gateOrbSize: CGFloat = 250
     static let gateControlSpacing: CGFloat = 24
     static let gateBackgroundBlurRadius: CGFloat = 36
     static let gateBackgroundOpacity: Double = 0.66
+    static let gateAmbientCool = Color(red: 0.32, green: 0.86, blue: 0.98)
+    static let gateAmbientWarm = Color(red: 1, green: 0.71, blue: 0.36)
+    static let gateAmbientBlue = Color(red: 0.23, green: 0.55, blue: 1)
+    static let gateActionAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.706, blue: 0.361, alpha: 1)
+            : UIColor(red: 0.706, green: 0.373, blue: 0.024, alpha: 1)
+    })
+    static let gateActionForeground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.114, green: 0.071, blue: 0, alpha: 1)
+            : UIColor.white
+    })
     static let gateFaceIDSymbolSize: CGFloat = 44
     static let gateIdlePulse: CGFloat = 0.025
     static let gateSigningPulse: CGFloat = 0.09
@@ -224,7 +237,8 @@ enum JarvisDesignTokens {
     static let orbGlassHighlight = Color(red: 0.26, green: 0.34, blue: 0.42)
     static let orbGlassShadow = Color(red: 0.025, green: 0.04, blue: 0.06)
     static let orbGlassShadowColor = Color.black.opacity(0.38)
-    static let orbGlassEdge = Color.white.opacity(0.22)
+    static let orbCyan = Color(red: 0.32, green: 0.86, blue: 0.98)
+    static let orbGlassEdge = orbCyan.opacity(0.82)
     static let orbGlassCenter = UnitPoint(x: 0.35, y: 0.27)
     static let orbGlassStartRadiusScale: CGFloat = 0.02
     static let orbGlassEndRadiusScale: CGFloat = 0.8
@@ -236,7 +250,6 @@ enum JarvisDesignTokens {
     static let orbCoreCenter = UnitPoint(x: 0.5, y: 0.5)
     static let orbCoreEdgeOpacity: Double = 0.2
     static let orbCoreGlowRadiusScale: CGFloat = 0.24
-    static let orbCoreGlowSizeScale: CGFloat = 0.62
     static let orbCenterSizeScale: CGFloat = 0.065
     static let orbCenterGlowOpacity: Double = 0.86
     static let orbCenterGlowRadiusScale: CGFloat = 0.09
