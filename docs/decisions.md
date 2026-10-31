@@ -1,3 +1,17 @@
+## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
+
+Use a two-minute MSAL callback deadline and the existing localized failed/retry
+surface rather than leaving sign-in pending indefinitely. Timeout/task
+cancellation dismisses MSAL web authentication and settles once; ignore later
+callbacks. User sheet cancellation still returns to idle, and denied/offline
+states stay distinct. Select an attached controller in a visible normal-level
+foreground-active app window, never the privacy cover. Keep the current redirect
+formula and keychain group; no identifiers or credentials are copied into docs.
+
+Core recovery tests are local evidence only. Successful build 8 upload does not
+prove device presentation, signed keychain grants or the live Entra redirect;
+those remain real-device/configuration checks.
+
 ## 31 October 2026 — build the approved native iPhone Settings area (P15-20 / #1432)
 
 Implement the four approved Settings segments in the existing SwiftUI

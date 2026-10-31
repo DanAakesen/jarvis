@@ -41,6 +41,14 @@ does not require extra pre-live exclusion of test transcripts from search, recen
 context or rolling summaries. Preserve existing authenticated owner checks and
 the approved separate UI history. No context wipe is included.
 
+## Native iPhone sign-in recovery (#1445; 31 October 2026)
+
+Microsoft sign-in must open system authentication UI from the active app window,
+not the privacy cover. Failure to start or a two-minute token-acquisition timeout
+must leave the spinner and show the existing Danish/English failure and retry
+copy. Cancelling the sheet returns to idle. Real-device presentation and signed
+TestFlight keychain/Entra configuration require separate verification.
+
 ## Native iPhone Voice screen (#1401; 30 October 2026)
 
 The approved Voice screen presents one orb and one short live status, with mute,
