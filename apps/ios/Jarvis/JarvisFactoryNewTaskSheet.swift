@@ -65,6 +65,7 @@ struct JarvisFactoryNewTaskSheet: View {
                             Text(project.name).tag(project.id)
                         }
                     }
+                    .disabled(savingPolicy)
                     Picker(copy.text(.agentLabel), selection: $agent) {
                         ForEach(FactoryAgent.allCases, id: \.rawValue) { option in
                             Text(copy.agent(option)).tag(option)

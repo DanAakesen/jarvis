@@ -578,7 +578,7 @@ private struct FactoryDiskEventRow: View {
             guard case .number(let number)? = value[key],
                   number.isFinite,
                   number >= 0,
-                  number <= Double(Int64.max) else { return nil }
+                  number < Double(Int64.max) else { return nil }
             return FactoryDiskMeasurement(
                 id: key,
                 label: label,
