@@ -41,6 +41,23 @@ does not require extra pre-live exclusion of test transcripts from search, recen
 context or rolling summaries. Preserve existing authenticated owner checks and
 the approved separate UI history. No context wipe is included.
 
+## Native iPhone Voice screen (#1401; 30 October 2026)
+
+The approved Voice screen presents one orb and one short live status, with mute,
+add, captions and end controls during a session. A downward swipe minimizes
+without ending the session. Language follows the existing `voice.default_language`
+setting, defaulting to Danish. Microphone capture and speaker playback use the
+existing voice socket contract; speaking over playback interrupts it immediately.
+Camera inspection and screen sharing reuse the web app's existing vision and
+voice-context routes. Denied microphone permission offers a path to Settings.
+Face ID locking is separate; background audio, Bluetooth and route changes, call
+interruption and lock/call microphone recovery are not part of this screen.
+Follow-ups to file separately: background audio; Bluetooth; audio route changes;
+call interruption handling; microphone recovery after device lock; microphone
+recovery after a phone call; CarPlay; Live Activity; and Action Button.
+The screen requires an existing Keychain owner-session token; native sign-in is
+not included, so first-install voice remains unavailable until that separate work.
+
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
 Retained backend-log chat access remains disabled until Azure isolation is proven.
@@ -131,6 +148,22 @@ composer top-corner borders only on mobile with the chat window shown.
 
 Frost the background behind both speakers' chat bubbles like the Plus menu,
 retaining sharp text, translucency, existing layout and the desktop top-edge fade.
+
+## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
+
+Chat is the iPhone app's root conversation surface. It streams the existing
+conversation events, pages the existing history cursor, reattaches/cancels
+active turns, sends up to five local attachments, and shows persisted tool
+outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
+activity dismissal, confirmation decisions and event stream. No iOS-specific
+backend path is part of the screen.
+
+The composer offers Chat and Voice navigation; voice capture remains out of
+scope. Photos and camera captures remain on-device until send. The existing web
+contract allows documents up to 20 MB and images up to 10 MB per attachment.
+Synthetic fixtures are clearly marked and used only in previews and CI
+screenshots. Native Entra sign-in and ReplayKit broadcast support are separate
+follow-ups; no fake conversation or successful live sign-in is implied.
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical

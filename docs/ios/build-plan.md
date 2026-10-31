@@ -4,7 +4,7 @@ Status: the foundation phase is authorised. The owner answered the checklist on 
 
 Backend rule (confirmed 30 October 2026): Jarvis is one unified backend with several frontends. The iPhone app reuses the routes, streams, tools, and artifacts the web app already uses, with no iOS-specific backend paths. An iPhone screen that needs something the web app does not already use is raised as an explicit decision before the backend changes. Anything an iPhone design needs that the backend does not already provide is flagged to Dan, who decides whether that backend build starts then.
 
-Related documents: `iOS app.md` (confirmed decisions), `docs/ios/integration-contract.md` (backend endpoints the app talks to) and `docs/ios/design/` (the concept board and the surfaces gallery).
+Related documents: `iOS app.md` (confirmed decisions), `docs/ios/integration-contract.md` (backend endpoints the app talks to) and `docs/ios/design/` (the concept board, the Workspaces concept page and the surfaces gallery).
 
 Basis labels: **Checked** means the official GitHub or Apple page was read. **Not re-read** means a research finding or memory not yet confirmed on the page. **My call** is a design choice. The Checked pages were read on 29 October 2026. Runner images and their open issues change often, so recheck them before the first build.
 
@@ -61,7 +61,7 @@ Why: standard `macos-26` runners are free today because the repository is public
 Rules:
 
 1. Keep logic in the pure-Swift `JarvisCore` package, which builds and tests on cheap Linux on every push. Cloud agents get the toolchain through `copilot-setup-steps`. The SwiftUI layer stays thin.
-2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the plist and the entitlements) and a Mac job that needs the Linux job to pass first.
+2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the app/extension plists and their entitlements) and a Mac job that needs the Linux job to pass first. P15-11's ReplayKit extension and App Group are covered by those metadata checks; it adds no Mac job or simulator work.
 3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds for the simulator with `CODE_SIGNING_ALLOWED=NO`. It does not boot a simulator, run UI tests or take screenshots. Screenshots run only on manual dispatch.
 4. The TestFlight workflow builds, archives and uploads in one job, started by the owner by manual dispatch, so the ship run is also the only compile run for that upload. Uploads happen only when the owner starts them, which also lowers Mac minutes.
 5. Authors keep pull requests in draft until the Linux checks pass and the change is final, and batch related changes. The expectation is one Mac run per pull request.
@@ -140,7 +140,8 @@ Enabling capabilities needs the Account Holder or Admin role, and changing an Ap
 | --- | --- | --- | --- |
 | Capabilities | Push Notifications (Broadcast left off) | Alerts, silent updates and Live Activity updates. | Done |
 | Capabilities | Time Sensitive Notifications | Lets a decision request break through a Focus mode. | Done |
-| Capabilities | App Groups, with `group.com.danaakesen.jarvis` created and attached | Shares state between the app, its widgets and its Live Activities. | Done |
+| Capabilities | App Groups, with `group.com.danaakesen.jarvis` created and attached | Shares state between the app, its widgets, Live Activities and the P15-11 ReplayKit extension. | Done for the app; extension App ID provisioning remains to be verified before signed device testing |
+| Extension App ID | `com.danaakesen.jarvis.broadcast`, with the existing App Group enabled | Registers the P15-11 ReplayKit broadcast target for signed installation. | Owner portal/provisioning check required before device testing |
 | App Services | MusicKit | Lets Jarvis start Apple Music. | Done, it costs nothing |
 | Capabilities | HealthKit (Clinical Health Records left off) | The owner's pick, ahead of need. Version 1 has no Health data. | Done |
 | Capabilities | Side Button Access | The owner's pick. Lets a voice assistant start from the side button through an App Intent. Apple limits it to Japan, on iOS 26.2 or later. | Done |
@@ -150,7 +151,7 @@ Enabling capabilities needs the Account Holder or Admin role, and changing an Ap
 | Separate request | CarPlay, category Voice-based conversational | Voice in the car. Apple must approve it, and it then shows as a managed capability. | Later: when CarPlay work starts |
 | Later App IDs | The Watch app and the widgets extension each get their own App ID | Each target has its own bundle ID. | Later: when those targets exist |
 
-Nothing else on the portal list is needed. Data Protection stays off: if it is ever used, the level must not be complete, because CarPlay and a locked phone cannot read such files (see the CarPlay notes). A tick only permits a capability, and the app's entitlements file decides what a build uses. Camera, microphone, location, photos and Face ID need no portal tick: each needs a purpose string in the app's `Info.plist`, and iOS shows its own Allow prompt.
+No other portal capability is needed for this screen. Data Protection stays off: if it is ever used, the level must not be complete, because CarPlay and a locked phone cannot read such files (see the CarPlay notes). A tick only permits a capability, and the app's entitlements file decides what a build uses. Camera, microphone, location, photos and Face ID need no portal tick: each needs a purpose string in the app's `Info.plist`, and iOS shows its own Allow prompt.
 
 Basis: Checked for the role, the profile rule, MusicKit being an App Services tick, and Time Sensitive being a plain tick (Apple lists the capabilities that need extra steps, and it is not among them). Checked in a mirror of the `xcodebuild` manual page: with `-allowProvisioningUpdates` it creates and updates app IDs, profiles and certificates for automatically signed targets, so the Watch and widget App IDs may register themselves (Unproven 2). Observed on 30 October 2026, read back from the portal after saving: the ticked capabilities above, MusicKit on, the group attached, the Push sub-option being Broadcast (left off), and Apple's profile-invalidation warning on save. Checked in Apple's documentation, read the same day: the Side Button Access limits, and the rule that camera, microphone, location, photos and Face ID need an `Info.plist` purpose string and no portal tick.
 

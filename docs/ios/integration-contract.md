@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client on 29 October 2026. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. Other unapproved screens remain out of scope.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The Face ID lock and Lock Screen approvals remain separate decisions.
 
 ## 1. Sign-in and session
 
@@ -27,12 +27,15 @@ Draft for the native iPhone app, derived from reading the current backend and we
 
 - URL: `wss://BACKEND/voice` (English) or `wss://BACKEND/voice/da` (Danish). It is a WebSocket carrying JSON, not WebRTC.
 - Auth: two subprotocols, `jarvis.voice.v1` and `jarvis.auth.TOKEN`. UNVERIFIED: whether an `Authorization` header on the upgrade request is also accepted.
+- Language: read `settings.voice.defaultLanguage` from the existing authenticated `GET /settings` route for each new session; the default is `da`.
 - Audio: base64 PCM16 little-endian, mono, 24 kHz inside JSON messages. There is no Opus.
 - The microphone is open (no push to talk). Starting to speak during playback must stop playback at once.
-- Client sends: `input_audio_buffer.append {audio}`, `jarvis.microphone.active`, `jarvis.microphone.muted`, `jarvis.session.end`, `jarvis.camera.state`, `jarvis.voice.playback.completed {responseId, audible}`.
+- Client sends: `input_audio_buffer.append {audio}`, `jarvis.microphone.active`, `jarvis.microphone.muted`, `jarvis.session.end`, `jarvis.camera.state`, `jarvis.voice.playback.completed {responseId, audible}`, `jarvis.screen.context`, and `jarvis.screen.context.unavailable`.
 - Server sends: `jarvis.session.ready` (with a numeric session id), `jarvis.session.ended`, `conversation.item.input_audio_transcription.completed`, `input_audio_buffer.speech_started`, `response.created`, `response.audio.delta` or `response.output_audio.delta {delta}`, `response.done` or `response.cancelled`.
 - Reconnect: exponential backoff, up to 8 attempts, at most 10 seconds apart.
-- Source: `apps/web/src/voice-client.ts`, `apps/backend/src/voice/`.
+- Camera: post a JPEG to `POST /screen/frames` with `sessionId`, `frame`, `question`, `turnId`, and `mode: "handle"`; use its `frameId` and `capturedAt` in a `jarvis.screen.context` message with `source: "camera"` and the same `itemId`.
+- Screen sharing: inspect the latest JPEG through the same authenticated `POST /screen/frames` route without `mode`; send its `description` and `capturedAt` in `jarvis.screen.context` with `source: "screen"`. Report capture failures with `jarvis.screen.context.unavailable`.
+- Source: `apps/web/src/voice-client.ts`, `apps/web/src/screen-sharing.ts`, `apps/backend/src/voice/`, `apps/backend/src/vision/screen.ts`, and `apps/backend/src/core/settings.ts`.
 
 ## 4. Generated views
 

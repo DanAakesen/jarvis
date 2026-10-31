@@ -1,3 +1,20 @@
+## 30 October 2026 — build the approved native iPhone Voice screen (P15-11 / #1401)
+
+Use the approved Voice concept as a visual reference, not a source of literal
+values. Keep protocol/session logic in pure Swift `JarvisCore`, and implement
+audio, camera, screen capture and SwiftUI in thin Apple targets. Read the existing
+`voice.default_language` through `GET /settings`, use the same voice socket and
+vision routes as web, and add no iOS-specific backend path. The ReplayKit
+extension passes bounded screen JPEGs through the registered App Group. Keep the
+session active when the screen is minimized; do not make Face ID locking change
+voice lifecycle. Background audio, Bluetooth, route changes, call interruption
+handling, microphone recovery after device lock, microphone recovery after a
+phone call, CarPlay, Live Activity and Action Button remain unverified and are
+separate follow-ups requiring a real phone. Linux protocol/contract tests do not
+establish Apple target compilation or device acceptance. The current shell has no
+native sign-in UI, so the screen fails closed when the owner-session token is not
+already present; do not expand this screen into an unapproved auth implementation.
+
 ## 30 October 2026 — localize the iOS Notes area from app preference (#1420)
 
 Use the app-owned `jarvis.appLanguage` preference for Notes, Tasks, List, Graph,
@@ -7595,6 +7612,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-30 | Dan approved the Workspaces concept. The reference page is `docs/ios/design/workspaces.html`, published beside the concept board. The build is tracked in #1425. | The approved page is the visual reference only, and the native iOS standards row still governs how it is built. | Confirmed by Dan |
+| 2026-10-30 | Notes version 1 is approved by Dan: four tabs (Notes, Tasks, List, Graph), a fixed bottom search and plus control, and creation bottom sheets for new notes and tasks. Builds are tracked in #1420. | This supersedes the earlier row that held the Notes concept frames as a proposal. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. The board is `docs/ios/design/board.html`. | Confirmed by Dan |
 | 2026-10-30 | Dan approved the Sign-in and Lock (Face ID) concept frames on the board as the reference for their build. The Notes concept frames (Notes, Tasks, Graph, editor, new note sheet, and new task sheet) are a proposal pending his review and are not yet approved. | The approved frames guide their build as a visual reference only; the native iOS standards row still governs how they are built. The Notes frames must not be built until Dan approves them. The board is `docs/ios/design/board.html`. | Sign-in and Lock confirmed by Dan; Notes proposed |
 | 2026-10-30 | Dan approved the Chat, Voice, and sidebar concept frames on the board as the reference for the first iOS screen builds. Notes, Workspaces, Settings, and the other areas are placeholder pages in version 1 of the build. | The approved frames guide the first builds as a visual reference only; the native iOS standards row still governs how they are built. The board is `docs/ios/design/board.html`. Each screen still needs its own issue and the owner's approvals before it merges or ships. | Confirmed by Dan |
 | 2026-10-30 | The iPhone app follows the native iOS standards and does not hardcode values per screen. It uses system components and styles first: standard SwiftUI controls, `NavigationStack`, sheets with detents, Liquid Glass materials and system glass button styles, SF Symbols, Dynamic Type, system colours and semantic tokens, and system pickers and permission flows such as the ReplayKit broadcast picker and AVFoundation capture. Scrolling uses the system behaviour: native `ScrollView` and `List`, momentum and rubber-band bounce, overlay indicators, iOS 26 scroll edge effects under glass bars, interactive keyboard dismissal, and system scroll position and pull to refresh, with no custom scroll implementations or fake scrollbars. Anything custom goes through one shared design-token and component layer (colours, spacing, radii, typography, glass modifiers, button styles, icons), with no per-screen hardcoded values or one-off styling. Each custom component needs a stated reason why no system one fits. The concept board is a visual reference only, not a source of literal values, and its scrolling is only an approximation. | Dan: it is key that everything built follows the iOS standard way as much as possible and does not hardcode values each time something is built; the same goes for scrolling. System components give appearance, accessibility, reduced motion, and reduced transparency behavior for free, and a shared layer keeps custom work consistent. See `docs/ios/build-plan.md` (Native iOS standards). | Confirmed by Dan |
@@ -9371,6 +9390,32 @@ Settings render title-only placeholders; Banking remains disabled and marked
 Later. The sidebar uses system colors, typography, scrolling and SF Symbols,
 with shared tokens for custom geometry and motion. No backend changes are part
 of this decision.
+
+## 30 October 2026 — P15-10 native Chat screen
+
+The owner approved the Chat concept for implementation in this screen issue.
+Use the board for composition only. Keep chat/SSE, history, attachment, Now
+feed and confirmation behavior on the existing authenticated web routes; keep
+time grouping and Now-feed decoding in the Linux-testable `JarvisCore`.
+`JarvisDesignSystem.swift` is the shared source for native screen geometry and
+glass-related tokens.
+
+Message bubbles are custom because native SwiftUI has no conversation-specific
+sender alignment with the approved glass treatment. The inline Now bar is
+custom to combine live state and a pending confirmation's Approve/Decline
+actions; the activity sheet is custom to present the existing feed categories
+and decisions. Use native scrolling, sheets, file/photo pickers, system glass
+button styles and SF Symbols elsewhere.
+
+The web attachment limits are authoritative: up to five files, documents up
+to 20 MB and images up to 10 MB. Camera/photos stay local until the existing
+upload route is called on send. The app fixture is synthetic and only selected
+by previews and the screenshot launch argument. It supports one sample text
+turn; fixture-mode attachment uploads and feed writes are disabled rather than
+returning fake success. Native Entra sign-in is not implemented here, so the app
+provider fails closed without an existing Keychain session. ReplayKit sharing
+remains disabled until a Broadcast Upload Extension and Stop lifecycle are
+implemented; no backend change is authorized or needed.
 
 ## 30 October 2026 — P15-12 iOS Notes area
 

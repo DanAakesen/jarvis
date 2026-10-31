@@ -25,6 +25,8 @@ public enum VoiceSessionEvent: Equatable, Sendable {
     case responseCreated(id: String?)
     case audioDelta
     case responseFinished
+    case responseCancelled
+    case playbackFinished(responseID: String)
     case connectionDropped
     case reconnectAttempt(Int)
     case reconnected
@@ -37,6 +39,7 @@ public enum VoiceSessionEvent: Equatable, Sendable {
 public struct VoiceSessionStateMachine: Sendable {
     public private(set) var state: VoiceSessionState = .idle
     private var responseID: String?
+    private var responseHasAudio = false
 
     public init() {}
 
@@ -56,6 +59,7 @@ public struct VoiceSessionStateMachine: Sendable {
             defer {
                 state = .listening
                 responseID = nil
+                responseHasAudio = false
             }
             if let responseID {
                 return [.interruptPlayback(responseID: responseID)]
@@ -63,17 +67,32 @@ public struct VoiceSessionStateMachine: Sendable {
         case .speechStarted where isLive:
             state = .listening
             responseID = nil
+            responseHasAudio = false
         case .responseCreated(let id) where isLive:
             responseID = id
+            responseHasAudio = false
             state = .ready
         case .audioDelta where isLive:
+            responseHasAudio = true
             state = .speaking
         case .responseFinished where isLive:
+            if !responseHasAudio || responseID == nil {
+                state = .listening
+                responseID = nil
+                responseHasAudio = false
+            }
+        case .responseCancelled where isLive:
             state = .listening
             responseID = nil
+            responseHasAudio = false
+        case .playbackFinished(let id) where isLive && state == .speaking && responseID == id:
+            state = .listening
+            responseID = nil
+            responseHasAudio = false
         case .connectionDropped where isLive:
             state = .reconnecting(attempt: 0)
             responseID = nil
+            responseHasAudio = false
         case .reconnectAttempt(let attempt) where isReconnecting:
             state = .reconnecting(attempt: attempt)
         case .reconnected where isReconnecting:
@@ -83,9 +102,11 @@ public struct VoiceSessionStateMachine: Sendable {
         case .sessionEnded, .endRequested:
             state = .ended
             responseID = nil
+            responseHasAudio = false
         case .failed:
             state = .failed
             responseID = nil
+            responseHasAudio = false
         default:
             break
         }
@@ -151,6 +172,7 @@ public actor VoiceSessionClient {
     private let reconnectPolicy: VoiceReconnectPolicy
     private let onMessage: @Sendable (VoiceServerMessage) -> Void
     private let onAction: @Sendable (VoiceSessionAction) -> Void
+    private let onStateChange: @Sendable (VoiceSessionState) -> Void
     private var machine = VoiceSessionStateMachine()
     private var endpoint: URL?
     private var subprotocols: [String] = []
@@ -167,7 +189,8 @@ public actor VoiceSessionClient {
         clock: any ChatClock = ContinuousChatClock(),
         reconnectPolicy: VoiceReconnectPolicy = VoiceReconnectPolicy(),
         onMessage: @escaping @Sendable (VoiceServerMessage) -> Void = { _ in },
-        onAction: @escaping @Sendable (VoiceSessionAction) -> Void = { _ in }
+        onAction: @escaping @Sendable (VoiceSessionAction) -> Void = { _ in },
+        onStateChange: @escaping @Sendable (VoiceSessionState) -> Void = { _ in }
     ) {
         self.baseURL = baseURL
         self.transport = transport
@@ -175,6 +198,7 @@ public actor VoiceSessionClient {
         self.reconnectPolicy = reconnectPolicy
         self.onMessage = onMessage
         self.onAction = onAction
+        self.onStateChange = onStateChange
     }
 
     public func state() -> VoiceSessionState {
@@ -187,7 +211,7 @@ public actor VoiceSessionClient {
         let target = try VoiceEndpoint.url(baseURL: baseURL, language: language)
         endpoint = target
         subprotocols = [VoiceEndpoint.subprotocol, "jarvis.auth.\(accessToken)"]
-        machine.apply(.start)
+        apply(.start)
         do {
             try await transport.connect(url: target, subprotocols: subprotocols)
             isConnected = true
@@ -197,10 +221,11 @@ public actor VoiceSessionClient {
                 clearCredentials()
                 return
             }
-            machine.apply(.connected)
+            apply(.connected)
             receiveTask = Task { await self.receiveMessages() }
         } catch {
-            if !userEnded { machine.apply(.failed) }
+            if !userEnded { apply(.failed) }
+            await transport.close(code: 1011)
             clearCredentials()
             throw error
         }
@@ -214,7 +239,7 @@ public actor VoiceSessionClient {
         guard isLive else { throw VoiceProtocolError.invalidState }
         guard muted != isMuted else { return }
         isMuted = muted
-        machine.apply(muted ? .microphoneMuted : .microphoneActive)
+        apply(muted ? .microphoneMuted : .microphoneActive)
         if isConnected {
             try await send(muted ? .microphoneMuted : .microphoneActive)
         }
@@ -229,14 +254,26 @@ public actor VoiceSessionClient {
         }
     }
 
+    public func sendScreenContext(_ context: VoiceScreenContext) async throws {
+        try await send(.screenContext(context))
+    }
+
+    public func sendScreenContextUnavailable(
+        itemID: String? = nil,
+        reason: VoiceScreenUnavailableReason? = nil
+    ) async throws {
+        try await send(.screenContextUnavailable(itemID: itemID, reason: reason))
+    }
+
     public func playbackCompleted(responseID: String, audible: Bool) async throws {
+        apply(.playbackFinished(responseID: responseID))
         try await send(.playbackCompleted(responseID: responseID, audible: audible))
     }
 
     public func end() async throws {
         guard isLive else { return }
         userEnded = true
-        machine.apply(.endRequested)
+        apply(.endRequested)
         receiveTask?.cancel()
         receiveTask = nil
         var sendError: (any Error)?
@@ -278,19 +315,19 @@ public actor VoiceSessionClient {
         switch message {
         case .sessionReady:
             reconnectAttempts = 0
-            machine.apply(.sessionReady)
+            apply(.sessionReady)
             try await send(isMuted ? .microphoneMuted : .microphoneActive)
-            machine.apply(isMuted ? .microphoneMuted : .microphoneActive)
+            apply(isMuted ? .microphoneMuted : .microphoneActive)
             if let cameraState {
                 try await send(.cameraState(on: cameraState))
             }
         case .sessionEnded:
-            machine.apply(.sessionEnded)
+            apply(.sessionEnded)
             isConnected = false
             await transport.close(code: 1000)
             clearCredentials()
         case .speechStarted:
-            let actions = machine.apply(.speechStarted)
+            let actions = apply(.speechStarted)
             for action in actions {
                 onAction(action)
                 if case .interruptPlayback(let responseID) = action {
@@ -298,12 +335,15 @@ public actor VoiceSessionClient {
                 }
             }
         case .responseCreated(let responseID):
-            machine.apply(.responseCreated(id: responseID))
+            apply(.responseCreated(id: responseID))
         case .audioDelta:
-            machine.apply(.audioDelta)
-        case .responseDone, .responseCancelled:
-            machine.apply(.responseFinished)
-        case .transcriptionCompleted, .unknown:
+            apply(.audioDelta)
+        case .responseDone:
+            apply(.responseFinished)
+        case .responseCancelled:
+            apply(.responseCancelled)
+        case .transcriptionCompleted, .transcriptionDelta, .assistantTranscriptDelta,
+            .visualContext, .screenContextUnavailable, .unknown:
             break
         }
     }
@@ -313,17 +353,17 @@ public actor VoiceSessionClient {
               let endpoint,
               reconnectPolicy.maximumAttempts > 0 else {
             if isLive {
-                machine.apply(.failed)
+                apply(.failed)
                 clearCredentials()
             }
             return
         }
 
         isConnected = false
-        machine.apply(.connectionDropped)
+        apply(.connectionDropped)
         let firstAttempt = reconnectAttempts + 1
         guard firstAttempt <= reconnectPolicy.maximumAttempts else {
-            machine.apply(.reconnectExhausted)
+            apply(.reconnectExhausted)
             await transport.close(code: 1011)
             clearCredentials()
             return
@@ -331,7 +371,7 @@ public actor VoiceSessionClient {
         for attempt in firstAttempt...reconnectPolicy.maximumAttempts {
             guard reconnectPolicy.shouldReconnect(attempt: attempt, userEnded: userEnded),
                   !Task.isCancelled else { return }
-            machine.apply(.reconnectAttempt(attempt))
+            apply(.reconnectAttempt(attempt))
             do {
                 try await clock.sleep(for: reconnectPolicy.delay(forAttempt: attempt))
             } catch is CancellationError {
@@ -348,14 +388,14 @@ public actor VoiceSessionClient {
                 }
                 reconnectAttempts = attempt
                 isConnected = true
-                machine.apply(.reconnected)
+                apply(.reconnected)
                 return
             } catch {
                 reconnectAttempts = attempt
             }
         }
         guard !userEnded, isLive else { return }
-        machine.apply(.reconnectExhausted)
+        apply(.reconnectExhausted)
         await transport.close(code: 1011)
         clearCredentials()
     }
@@ -367,6 +407,13 @@ public actor VoiceSessionClient {
 
     private func clearCredentials() {
         subprotocols.removeAll(keepingCapacity: false)
+    }
+
+    @discardableResult
+    private func apply(_ event: VoiceSessionEvent) -> [VoiceSessionAction] {
+        let actions = machine.apply(event)
+        onStateChange(machine.state)
+        return actions
     }
 
     private var isLive: Bool {

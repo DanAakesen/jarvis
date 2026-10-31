@@ -6,9 +6,13 @@ struct ContentView: View {
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @GestureState private var sidebarDrag = SidebarDrag()
     @State private var navigation = JarvisNavigationState()
+    @StateObject private var voiceModel = VoiceScreenModel()
     @State private var animationTargetProgress: CGFloat = 0
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?
+    private let chatClient: JarvisClient?
+    private let startupError: String?
+    private let fixtureMode: Bool
     @State private var notesClient: JarvisNotesClient?
 
     private var language: JarvisAppLanguage {
@@ -17,9 +21,26 @@ struct ContentView: View {
 
     init() {
         let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
+        let fixtureMode = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture")
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
+        }
+        self.fixtureMode = fixtureMode
+        if fixtureMode {
+            let client = try? JarvisFixtureScenario.makeClient()
+            chatClient = client
+            startupError = client == nil ? "Fixture preview is unavailable." : nil
+        } else {
+            do {
+                chatClient = try JarvisComposition.makeClient(
+                    accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+                )
+                startupError = nil
+            } catch {
+                chatClient = nil
+                startupError = "Chat isn't configured."
+            }
         }
         _navigation = State(initialValue: initialNavigation)
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
@@ -54,9 +75,25 @@ struct ContentView: View {
                         set: { navigation.setPath($0) }
                     )
                 ) {
-                    JarvisPlaceholderView(destination: .chat)
+                    JarvisChatScreen(
+                        client: chatClient,
+                        fixtureMode: fixtureMode,
+                        startupError: startupError,
+                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                    )
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            if destination == .notes {
+                            if destination == .voice {
+                                VoiceScreenView(model: voiceModel) {
+                                    navigate(to: .chat, drawerWidth: drawerWidth)
+                                }
+                            } else if destination == .chat {
+                                JarvisChatScreen(
+                                    client: chatClient,
+                                    fixtureMode: fixtureMode,
+                                    startupError: startupError,
+                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                                )
+                            } else if destination == .notes {
                                 JarvisNotesArea(
                                     client: notesClient,
                                     language: language,
@@ -106,6 +143,15 @@ struct ContentView: View {
                     .animation(sidebarAnimation, value: animationTargetProgress)
                     .accessibilityHidden(true)
                     .allowsHitTesting(false)
+
+                if voiceModel.isMinimized {
+                    VoiceMiniBar(model: voiceModel) {
+                        voiceModel.restore()
+                        navigate(to: .voice, drawerWidth: drawerWidth)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    .padding(.bottom, geometry.safeAreaInsets.bottom + JarvisDesignTokens.voiceControlBottomInset)
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .background(Color(uiColor: .systemBackground))
@@ -207,6 +253,11 @@ struct ContentView: View {
     }
 
     private func navigate(to destination: JarvisDestination, drawerWidth: CGFloat) {
+        if destination == .voice {
+            voiceModel.restore()
+        } else if navigation.currentDestination == .voice && voiceModel.isSessionActive {
+            voiceModel.minimize()
+        }
         let currentProgress = sidebarDrag.isActive
             ? sidebarDrag.startProgress - sidebarDrag.translation / max(drawerWidth, 1)
             : presentedProgress
