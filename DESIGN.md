@@ -2837,6 +2837,8 @@ surface. Orb and caption geometry and motion values come from the shared iOS tok
 layer. The camera tile remains custom for its live preview.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
+Ending voice returns to Chat and closes the sidebar through the existing
+progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.

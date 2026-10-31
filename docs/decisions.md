@@ -9681,3 +9681,12 @@ orange filament core on a black background, with no rings or orbit ellipses
 around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
+## 31 October 2026 — return ended native voice sessions to Chat (P15-28 / #1458)
+
+Observe voice state at the navigation shell rather than adding separate exit
+callbacks to the full-screen and minimized controls. Only `.ended` clears the
+route stack to Chat; connecting, active and failed states preserve navigation.
+Reset sidebar progress through the existing shell helper so its overlay cannot
+keep intercepting input. Audio, camera and broadcast teardown remain owned by
+`VoiceScreenModel.end()`. Linux navigation tests do not verify SwiftUI rendering
+or real-device interaction.

@@ -3466,3 +3466,11 @@ claimed work, review-ready PRs, task states and other columns. Next: exact-head
 CI, independent PM review and normal gated integration, followed by PM-owned
 rendered acceptance. #811 remains open; this is not historical 502 attribution,
 sustained performance acceptance or permission to resume #717/#741.
+## Native voice end returns to Chat (P15-28 / #1458; 31 October 2026)
+
+- Implemented shell observation of `.ended`, returning fullscreen and minimized
+  voice sessions to the Chat root and resetting sidebar progress.
+- Focused Linux navigation regressions pass: cleared stack, usable sidebar and
+  unchanged navigation for non-ended voice states.
+- Apple-target compilation and real-device End voice/sidebar interaction remain
+  unverified; no deployment or device acceptance is claimed.
