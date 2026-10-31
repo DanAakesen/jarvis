@@ -189,7 +189,7 @@ describe('Daily composition', () => {
     const baselineRoutes = await routeTable(baseline);
     const onRoutes = await routeTable(on);
     expect([...onRoutes].filter((url) => !baselineRoutes.has(url)).sort()).toEqual([
-      '/daily/capabilities', '/daily/nutrition-targets', '/daily/training-targets', '/daily/query',
+      '/daily/capabilities', '/daily/lifts', '/daily/lifts/:id', '/daily/nutrition-targets', '/daily/training-targets', '/daily/query',
       ...dailyToolNames.flatMap((name) => [`/tools/${name}`, `/tools/${name === 'health_summary' ? 'daily_health_summary' : name === 'health_history' ? 'daily_health_history' : name.replace(/^health_/u, 'daily_')}`]),
     ].sort());
     expect([...baselineRoutes].filter((url) => !onRoutes.has(url))).toEqual([]);

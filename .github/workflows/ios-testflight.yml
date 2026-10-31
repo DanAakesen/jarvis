@@ -99,7 +99,25 @@ jobs:
             JARVIS_ENTRA_AUTHORITY_URL="$JARVIS_ENTRA_AUTHORITY_URL" \
             JARVIS_ENTRA_API_SCOPE="$JARVIS_ENTRA_API_SCOPE" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1; then
-            echo "::error::Archive failed; detailed output was withheld to protect signing identifiers."
+            echo "::error::Archive failed. A sanitised excerpt of the log follows; identifiers are masked."
+            grep -E -i -e 'error:' -e 'Provisioning profile' -e 'No profile' \
+              -e 'requires a development team' -e 'Communication with Apple' \
+              -e 'No Accounts' -e 'not registered' -e 'No signing certificate' \
+              -e 'Automatic signing' -e 'entitlement' -e 'capabilit' \
+              -e 'App Store Connect' -e 'authentication' -e 'not authorized' \
+              -e 'bundle identifier' -e 'App ID' -e 'cloud signing' \
+              "$RUNNER_TEMP/archive.log" \
+              | sed -E \
+                -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" \
+                -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' \
+                -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' \
+                -e 's/%/%25/g' \
+                -e 's/^[[:space:]]+//' \
+              | awk '!seen[$0]++' \
+              | head -n 40 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
             exit 1
           fi
       - name: Prepare export options
@@ -135,7 +153,24 @@ jobs:
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             > "$RUNNER_TEMP/export.log" 2>&1; then
-            echo "::error::Export or upload failed; detailed output was withheld to protect signing identifiers."
+            echo "::error::Export or upload failed. A sanitised excerpt of the log follows; identifiers are masked."
+            grep -E -i -e 'error' -e 'Provisioning profile' -e 'No profile' \
+              -e 'Communication with Apple' -e 'No Accounts' -e 'No signing certificate' \
+              -e 'distribution' -e 'entitlement' -e 'capabilit' -e 'App Store Connect' \
+              -e 'authentication' -e 'not authorized' -e 'bundle identifier' \
+              -e 'App ID' -e 'cloud signing' -e 'upload' -e 'validat' -e 'version' \
+              "$RUNNER_TEMP/export.log" \
+              | sed -E \
+                -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" \
+                -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' \
+                -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' \
+                -e 's/%/%25/g' \
+                -e 's/^[[:space:]]+//' \
+              | awk '!seen[$0]++' \
+              | head -n 40 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
             exit 1
           fi
       - name: Delete App Store Connect key

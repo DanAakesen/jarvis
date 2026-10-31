@@ -1931,6 +1931,23 @@ so none of that is claimed. Phone width means 390×844 touch plus 320; also chec
 768 and 1280. Local runs and synthetic-browser checks are not qualification: CI is
 the authority, and no live record, physical phone or Daily activation is proved.
 
+## Workout lift log checks (P15-17 / #1423)
+
+Use synthetic lift entries only. From the repository root, run
+`npm test --workspace @jarvis/web -- src/daily/presentation.test.ts src/daily/lifts-client.test.ts src/daily/sections/track-workout/TrackWorkoutSection.test.tsx src/daily/sections/overview/LastLifts.test.tsx`,
+`npm run build`, and `npm run lint`. Backend coverage includes
+`src/daily/lifts/lifts.test.ts`, `src/daily/lifts/lifts-store.test.ts`,
+`src/daily/routes/lifts.test.ts`, `src/daily/query.test.ts`,
+`src/daily/index.test.ts` and `src/database/migrations.test.ts` from
+`apps/backend`; the migration test checks the offline reverse batch. Contract
+guards live in `packages/contracts/src/daily.test.js`.
+
+The shared read path is `/daily/query` with source `daily.health.lifts`; recent
+history is cursor-paged, while `lastPerExercise` returns one latest active entry
+per normalized exercise key. Write routes are owner-only, and the Jarvis agent
+does not receive access. Keep the iOS client on these same routes; this issue
+does not authorize an iOS screen or endpoint.
+
 ## Daily view tool checks (18 October 2026; P12-16)
 
 `daily_show` (`apps/backend/src/daily/tools/show.ts`) and its pure builder

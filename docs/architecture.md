@@ -8103,6 +8103,25 @@ while coverage failures retain an inline error and Retry. Settled empty health
 probes provide the Settings upload link, qualified to their seven-day period.
 No backend, contracts, routes, source permissions or dependencies change.
 
+## Workout lift log (30 October 2026; P15-17 / #1423)
+
+`daily.lift_entries` stores owner-scoped kg/reps/sets records with a normalized
+exercise key, `datetime2(3)` timestamps, revision, soft deletion and a guarded
+reverse migration. The backend exposes strict, bounded owner-only writes at
+`POST /daily/lifts`, `PATCH /daily/lifts/:id` and `DELETE /daily/lifts/:id`;
+create retries are idempotent by body UUID. `/daily/query` adds the paged
+`daily.health.lifts` source and its latest-per-exercise mode, using the existing
+freshness, units, revision and coverage envelope. The source is advertised in
+capability version 6. Service identities, including the Jarvis agent, cannot
+read or mutate lift data.
+
+Health discovers the Track workout section only when the source is available.
+It uses the shared query client for autocomplete/last-used values and paged
+history, and the same routes for create, correction and soft deletion. The
+overview's Last lifts block reads the latest non-deleted entry per exercise.
+There is no exercise registry, coaching tool, chart, per-set model or iOS-only
+route; a native client can reuse this HTTP contract unchanged.
+
 ## P12-36 Daily responsive presentation audit (18 October 2026)
 
 This is a web-presentation-only change. Overview formats its latest workout time

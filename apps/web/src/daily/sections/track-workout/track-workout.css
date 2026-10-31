@@ -1,0 +1,32 @@
+.track-workout { display: grid; gap: var(--space-5); min-width: 0; }
+.track-workout h2 { margin: 0; }
+.track-workout-offline { margin: 0; color: var(--text-muted); }
+.lift-entry-form, .lift-edit-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+.lift-entry-form label, .lift-edit-form label { display: grid; gap: var(--space-1); min-width: 0; font-size: var(--type-small); }
+.lift-entry-form input, .lift-edit-form input {
+  width: 100%; min-width: 0; min-height: 44px; padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--control-rule); border-radius: var(--radius-control);
+  background: var(--surface); color: var(--text); font: inherit; font-variant-numeric: tabular-nums;
+}
+.lift-entry-form input:focus-visible, .lift-edit-form input:focus-visible {
+  outline: 3px solid var(--focus); outline-offset: 2px;
+}
+.lift-last-used { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: var(--type-small); }
+.lift-entry-actions, .lift-edit-form .button-group { grid-column: 1 / -1; }
+.lift-form-error, .lift-row-error { color: var(--error); }
+.lift-form-success { color: var(--success); }
+.lift-form-error, .lift-form-success, .lift-row-error p { margin: 0; }
+.lift-history-list { display: grid; gap: 0; padding: 0; margin: var(--space-2) 0 0; list-style: none; }
+.lift-history-row { display: grid; gap: var(--space-3); min-width: 0; padding-block: var(--space-3); }
+.lift-history-entry { display: grid; gap: var(--space-1); min-width: 0; }
+.lift-history-entry strong { overflow-wrap: anywhere; }
+.lift-history-entry span, .lift-history-entry time { color: var(--text-muted); font-size: var(--type-small); }
+.lift-row-actions { align-items: center; }
+.lift-row-error, .lift-history-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.lift-history-error p { margin: 0; }
+.lift-history-more { margin-top: var(--space-3); }
+.lift-edit-form { padding-top: var(--space-2); }
+@media (min-width: 800px) {
+  .lift-history-row { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .lift-edit-form { grid-column: 1 / -1; }
+}

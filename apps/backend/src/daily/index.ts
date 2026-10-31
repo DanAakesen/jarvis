@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -19,6 +19,7 @@ import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
 import { dailyFeedRoutes } from './feeds/routes.js';
+import { liftRoutes } from './routes/lifts.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources, trainingTargets?: TrainingTargetsAccess): readonly BackendModule[] {
@@ -47,6 +48,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         if (data.feeds) await app.register(dailyFeedRoutes(data.feeds));
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
+        if (data.lifts) await app.register(liftRoutes(data.lifts));
         if (connector) await app.register(dailyMcpRoutes(data.query, connector));
         const unsubscribe = data.changes.subscribe(change => {
           if (change.owner.toLowerCase() === app.ownerObjectId.toLowerCase()) app.nowEventHub.publish({ type: 'refresh' });
@@ -73,14 +75,15 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         const hasVersion = (version: number) => accepted.includes(`application/json;version=${version}`) ||
           accepted.includes(`application/json;version="${version}"`);
         const version = hasVersion(dailyCapabilitiesVersion) ? dailyCapabilitiesVersion
-          : hasVersion(4) ? 4 : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
+          : hasVersion(5) ? 5 : hasVersion(4) ? 4 : hasVersion(3) ? 3 : hasVersion(2) ? 2 : dailyContractVersion;
         const vary = reply.getHeader('Vary');
         reply.header('Vary', [...(Array.isArray(vary) ? vary : vary ? [String(vary)] : []), 'Accept'].join(', '));
         reply.type(version > dailyContractVersion ? `application/json;version=${version}` : 'application/json');
         return {
           module: dailyModuleId,
           version,
-          stage: internalNutrition || savedNutrition || nutritionTargets ? 'internal-nutrition-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
+          stage: internalNutrition || savedNutrition || nutritionTargets ? 'internal-nutrition-rehearsal'
+            : data?.lifts ? 'lift-log-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
           pages: [],
@@ -92,7 +95,19 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
                 : version === 4
                   ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
                     ? dailyQuerySourcesV4 : dailyQuerySourcesV3
-                  : data.trainingTargets
+                  : version === 5
+                    ? data.trainingTargets
+                    ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? dailyQuerySourcesV5 : dailyQuerySourcesV5WithoutFeeds
+                    : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? dailyQuerySourcesV4 : dailyQuerySourcesV3
+                    : data.lifts
+                    ? request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                      ? data.trainingTargets
+                        ? data.feeds ? dailyQuerySourcesV6 : dailyQuerySourcesV6WithoutFeeds
+                        : data.feeds ? dailyQuerySourcesV6WithoutTrainingTargets : dailyQuerySourcesV6WithoutFeedsOrTrainingTargets
+                      : data.trainingTargets ? dailyQuerySourcesV5WithoutFeeds : dailyQuerySourcesV3
+                    : data.trainingTargets
                     ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
                       ? dailyQuerySourcesV5 : dailyQuerySourcesV5WithoutFeeds
                     : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
