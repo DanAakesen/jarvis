@@ -17,7 +17,7 @@ struct JarvisActivitySheet: View {
                             Text(error)
                         } actions: {
                             Button("Retry") { Task { await model.refreshActivity() } }
-                                .buttonStyle(.glassProminent)
+                                .buttonStyle(.glass)
                                 .disabled(model.fixtureMode)
                                 .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                         }

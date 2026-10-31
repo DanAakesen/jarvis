@@ -285,7 +285,7 @@ struct JarvisHealthArea: View {
             }
             .scrollIndicators(.hidden)
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(JarvisScreenBackground())
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -432,9 +432,9 @@ struct JarvisHealthArea: View {
                     refreshVersion += 1
                 }
             }
-                .buttonStyle(.bordered)
-                .tint(JarvisDesignTokens.healthAccent)
-                .disabled(isLoading)
+            .buttonStyle(.glass)
+            .tint(JarvisDesignTokens.healthAccent)
+            .disabled(isLoading)
         }
         .foregroundStyle(failure == .offline ? .secondary : .primary)
         .accessibilityElement(children: .contain)
