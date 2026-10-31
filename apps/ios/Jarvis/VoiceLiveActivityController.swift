@@ -41,8 +41,12 @@ final class VoiceLiveActivityController {
 
     func update(state: VoiceSessionState, isMuted: Bool, pcm16: Data? = nil) {
         guard let activity else { return }
+        switch state {
+        case .idle, .ended, .failed: return
+        default: break
+        }
         let phase = VoiceLiveActivityPhase(state: state, isMuted: isMuted)
-        let isQuiet = isMuted || phase == .thinking || phase == .reconnecting
+        let isQuiet = isMuted || phase == .thinking || phase == .connecting || phase == .reconnecting
         if isQuiet {
             waveform = Array(repeating: 0, count: VoiceWaveform.sampleCount)
         } else if let pcm16 {

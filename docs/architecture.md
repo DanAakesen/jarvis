@@ -1571,7 +1571,8 @@ APNs registration or backend route is involved. Muting gates local capture befor
 the asynchronous socket write, and the Core client also suppresses muted frames.
 The app declares audio background mode for the existing play-and-record session;
 route/interruption recovery and real locked-device behavior remain unverified.
-The extension supplies only a Lock Screen configuration, not Dynamic Island.
+The extension supplies the Lock Screen UI; WidgetKit's mandatory Dynamic Island
+builder returns empty views, with no Island layout or controls.
 
 ### iOS approvals and workspace commands (P15-05)
 

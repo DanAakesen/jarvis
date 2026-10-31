@@ -55,9 +55,11 @@ jobs:
           info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
           assert info["ITSAppUsesNonExemptEncryption"] is False
           assert info["NSSupportsLiveActivities"] is True
+          assert info["CFBundleDevelopmentRegion"] == "da"
           assert "audio" in info["UIBackgroundModes"]
           activity_info = plistlib.loads(Path("apps/ios/VoiceActivity/Info.plist").read_bytes())
           assert activity_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
+          assert activity_info["CFBundleDevelopmentRegion"] == "da"
           app_group = ["group.com.danaakesen.jarvis"]
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
           assert entitlements["com.apple.security.application-groups"] == app_group

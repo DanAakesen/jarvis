@@ -15,7 +15,9 @@ reading credentials or starting a session. Preserve local mute even if the socke
 write fails. Declare background audio for this existing audio session; call/route
 recovery is not added.
 
-Reuse the orb and approved composition, with Danish-default/English copy, stone
+Reuse the orb geometry with static SwiftUI paths in the widget rather than
+depending on Canvas archiving; the app's existing Canvas renderer is unchanged.
+Keep the approved composition, with Danish-default/English copy, stone
 secondary and a restrained orange End tint. The system timer runs without
 app-driven ticking; waveform updates use real PCM levels, at most once a second.
 Thinking/reconnecting are truthful additional statuses. Simulator fixtures are

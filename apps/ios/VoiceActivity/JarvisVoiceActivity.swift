@@ -16,6 +16,17 @@ struct JarvisVoiceActivity: Widget {
             VoiceLockScreenView(attributes: context.attributes, state: context.state)
                 .activityBackgroundTint(Color.black.opacity(0.86))
                 .activitySystemActionForegroundColor(JarvisDesignTokens.liveActivityStone)
+        } dynamicIsland: { _ in
+            // WidgetKit requires this builder; the Island surface is not part of P15-34.
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.center) { EmptyView() }
+            } compactLeading: {
+                EmptyView()
+            } compactTrailing: {
+                EmptyView()
+            } minimal: {
+                EmptyView()
+            }
         }
     }
 }
@@ -31,7 +42,10 @@ struct VoiceLockScreenView: View {
     var body: some View {
         VStack(spacing: JarvisDesignTokens.liveActivitySpacing) {
             HStack(spacing: JarvisDesignTokens.rowSpacing) {
-                JarvisOrbView(activity: .calm, diameter: JarvisDesignTokens.liveActivityOrbSize)
+                JarvisOrbView(
+                    activity: .calm, diameter: JarvisDesignTokens.liveActivityOrbSize,
+                    usesStaticFilaments: true
+                )
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
                     Text(text(.title)).font(.headline).foregroundStyle(.white)
                     Text(text(VoiceLiveActivityCopy(rawValue: state.phase.rawValue) ?? .listening))

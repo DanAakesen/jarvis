@@ -3,6 +3,7 @@
 "speaking" = "Speaking";
 "muted" = "Muted";
 "thinking" = "Thinking";
+"connecting" = "Connecting";
 "reconnecting" = "Reconnecting";
 "mute" = "Mute";
 "unmute" = "Unmute";

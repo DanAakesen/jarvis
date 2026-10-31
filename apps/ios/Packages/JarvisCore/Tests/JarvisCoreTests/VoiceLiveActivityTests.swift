@@ -8,6 +8,7 @@ final class VoiceLiveActivityTests: XCTestCase {
         XCTAssertEqual(VoiceLiveActivityPhase(state: .speaking, isMuted: false), .speaking)
         XCTAssertEqual(VoiceLiveActivityPhase(state: .speaking, isMuted: true), .muted)
         XCTAssertEqual(VoiceLiveActivityPhase(state: .ready, isMuted: false), .thinking)
+        XCTAssertEqual(VoiceLiveActivityPhase(state: .connecting, isMuted: false), .connecting)
         XCTAssertEqual(VoiceLiveActivityPhase(state: .reconnecting(attempt: 2), isMuted: true), .reconnecting)
     }
 

@@ -1,11 +1,13 @@
 import Foundation
 
 public enum VoiceLiveActivityPhase: String, Codable, CaseIterable, Sendable {
-    case listening, speaking, muted, thinking, reconnecting
+    case listening, speaking, muted, thinking, connecting, reconnecting
 
     public init(state: VoiceSessionState, isMuted: Bool) {
         if case .reconnecting = state {
             self = .reconnecting
+        } else if state == .connecting {
+            self = .connecting
         } else if isMuted {
             self = .muted
         } else {
@@ -15,7 +17,7 @@ public enum VoiceLiveActivityPhase: String, Codable, CaseIterable, Sendable {
 }
 
 public enum VoiceLiveActivityCopy: String, CaseIterable, Sendable {
-    case title, listening, speaking, muted, thinking, reconnecting
+    case title, listening, speaking, muted, thinking, connecting, reconnecting
     case mute, unmute, end, elapsed, waveform, unavailable, updateFailed
 
     public func text(language: JarvisAppLanguage = .default) -> String {

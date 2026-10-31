@@ -2134,9 +2134,12 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 - **P15-34 / #1470:** local voice Live Activity and session-scoped Lock Screen
   Mute/End are implemented with Danish/English copy, measured waveform, native
-  widget extension and audio background declaration. Focused Core tests pass.
-  Next: finish package/metadata/security checks, then the existing ready-PR Mac
-  build, Simulator/approved-board artifact comparison and locked-device controls.
+  widget extension and audio background declaration. Core build, focused tests,
+  all 170 package tests (after an existing reconnect polling flake), iOS metadata
+  and 50 pipeline checks pass locally; secret scanning is clean. Actions CodeQL
+  reports no alerts; Swift database creation is unavailable here.
+  Next: the existing ready-PR Mac build, Simulator/approved-board artifact
+  comparison and locked-device controls.
   Apple compilation, screenshot capture and real background audio remain blockers
   to acceptance; no APNs or Dynamic Island work is included.
 

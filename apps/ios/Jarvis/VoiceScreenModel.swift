@@ -221,11 +221,13 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     func performLiveActivityCommand(_ command: VoiceLiveActivityCommand) async throws {
-        guard liveActivitySessionID != nil, canUseControls else {
+        guard liveActivitySessionID != nil else {
             throw VoiceLiveActivityError.unavailable
         }
         switch command {
-        case .setMuted(let muted): try await setMuted(muted)
+        case .setMuted(let muted):
+            guard canUseControls else { throw VoiceLiveActivityError.unavailable }
+            try await setMuted(muted)
         case .end: await end()
         }
     }
@@ -461,7 +463,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func resetFailedSession() async {
-        guard voiceState == .failed, sessionClient != nil else { return }
+        guard voiceState == .failed, sessionClient != nil, !isEnding else { return }
+        isEnding = true
+        defer { isEnding = false }
         sessionGeneration += 1
         liveActivitySessionID = nil
         screenShareBridge.requestStop()

@@ -13,6 +13,7 @@ struct JarvisOrbView: View {
 
     let activity: JarvisOrbActivity
     var diameter: CGFloat = JarvisDesignTokens.gateOrbSize
+    var usesStaticFilaments = false
 
     private var amplitude: CGFloat {
         switch activity {
@@ -82,42 +83,48 @@ struct JarvisOrbView: View {
                         width: size * 0.56,
                         height: size * 0.56
                     )
-                Canvas { context, canvasSize in
-                    var glowContext = context
-                    glowContext.addFilter(.blur(radius: canvasSize.width * 0.08))
+                Group {
+                    if usesStaticFilaments {
+                        staticFilaments
+                    } else {
+                        Canvas { context, canvasSize in
+                            var glowContext = context
+                            glowContext.addFilter(.blur(radius: canvasSize.width * 0.08))
 
-                    for (index, points) in self.filamentCurves.enumerated() {
-                        let path = self.filamentPath(points, size: canvasSize)
-                        let color = self.filamentColors[index % self.filamentColors.count]
-                        glowContext.stroke(
-                            path,
-                            with: .color(color.opacity(0.9)),
-                            lineWidth: canvasSize.width * 0.065
-                        )
-                        context.stroke(
-                            path,
-                            with: .color(color.opacity(0.9)),
-                            lineWidth: canvasSize.width * 0.022
-                        )
-                        context.stroke(
-                            path,
-                            with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.82)),
-                            lineWidth: canvasSize.width * 0.006
-                        )
-                    }
+                            for (index, points) in self.filamentCurves.enumerated() {
+                                let path = self.filamentPath(points, size: canvasSize)
+                                let color = self.filamentColors[index % self.filamentColors.count]
+                                glowContext.stroke(
+                                    path,
+                                    with: .color(color.opacity(0.9)),
+                                    lineWidth: canvasSize.width * 0.065
+                                )
+                                context.stroke(
+                                    path,
+                                    with: .color(color.opacity(0.9)),
+                                    lineWidth: canvasSize.width * 0.022
+                                )
+                                context.stroke(
+                                    path,
+                                    with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.82)),
+                                    lineWidth: canvasSize.width * 0.006
+                                )
+                            }
 
-                    for (index, point) in self.filamentSparks.enumerated() {
-                        let diameter = canvasSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
-                        let rect = CGRect(
-                            x: point.x * canvasSize.width - diameter / 2,
-                            y: point.y * canvasSize.height - diameter / 2,
-                            width: diameter,
-                            height: diameter
-                        )
-                        context.fill(
-                            Path(ellipseIn: rect),
-                            with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
-                        )
+                            for (index, point) in self.filamentSparks.enumerated() {
+                                let diameter = canvasSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
+                                let rect = CGRect(
+                                    x: point.x * canvasSize.width - diameter / 2,
+                                    y: point.y * canvasSize.height - diameter / 2,
+                                    width: diameter,
+                                    height: diameter
+                                )
+                                context.fill(
+                                    Path(ellipseIn: rect),
+                                    with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
+                                )
+                            }
+                        }
                     }
                 }
                 .frame(width: size * 0.42, height: size * 0.42)
@@ -157,6 +164,32 @@ struct JarvisOrbView: View {
             Color(red: 1, green: 0.48, blue: 0.16),
             Color(red: 1, green: 0.78, blue: 0.38),
         ]
+    }
+
+    private var staticFilaments: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(filamentCurves.indices, id: \.self) { index in
+                    let path = filamentPath(filamentCurves[index], size: geometry.size)
+                    let color = filamentColors[index % filamentColors.count]
+                    path.stroke(color.opacity(0.9), lineWidth: geometry.size.width * 0.065)
+                        .blur(radius: geometry.size.width * 0.08)
+                    path.stroke(color.opacity(0.9), lineWidth: geometry.size.width * 0.022)
+                    path.stroke(
+                        JarvisDesignTokens.orbCoreHighlight.opacity(0.82),
+                        lineWidth: geometry.size.width * 0.006
+                    )
+                }
+                ForEach(filamentSparks.indices, id: \.self) { index in
+                    let point = filamentSparks[index]
+                    let diameter = geometry.size.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
+                    Circle()
+                        .fill(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
+                        .frame(width: diameter, height: diameter)
+                        .position(x: point.x * geometry.size.width, y: point.y * geometry.size.height)
+                }
+            }
+        }
     }
 
     private var filamentCurves: [[CGPoint]] {
