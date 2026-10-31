@@ -4,6 +4,12 @@ enum JarvisOrbActivity: Equatable {
     case idle
     case signingIn
     case calm
+    case listening
+    case thinking
+    case speaking
+    case muted
+    case reconnecting
+    case offline
 }
 
 struct JarvisOrbView: View {
@@ -19,14 +25,21 @@ struct JarvisOrbView: View {
         switch activity {
         case .idle: JarvisDesignTokens.gateIdlePulse
         case .signingIn: JarvisDesignTokens.gateSigningPulse
-        case .calm: 0
+        case .listening: JarvisDesignTokens.voiceOrbListeningPulse
+        case .thinking: JarvisDesignTokens.voiceOrbThinkingPulse
+        case .speaking: JarvisDesignTokens.voiceOrbSpeakingPulse
+        case .calm, .muted, .reconnecting, .offline: 0
         }
     }
 
     private var animationDuration: Double {
-        activity == .signingIn
-            ? JarvisDesignTokens.gateOrbSigningDuration
-            : JarvisDesignTokens.gateOrbIdleDuration
+        switch activity {
+        case .signingIn: JarvisDesignTokens.gateOrbSigningDuration
+        case .listening: JarvisDesignTokens.voiceOrbListeningDuration
+        case .thinking: JarvisDesignTokens.voiceOrbThinkingDuration
+        case .speaking: JarvisDesignTokens.voiceOrbSpeakingDuration
+        default: JarvisDesignTokens.gateOrbIdleDuration
+        }
     }
 
     var body: some View {
@@ -151,10 +164,29 @@ struct JarvisOrbView: View {
             .animation(pulseAnimation, value: pulse)
             .animation(pulseAnimation, value: activity)
             .animation(pulseAnimation, value: scenePhase)
-            .accessibilityHidden(true)
+            .saturation(saturation)
+            .grayscale(activity == .offline ? 1 : 0)
+            .brightness(brightness)
         }
         .frame(width: diameter, height: diameter)
         .onAppear { pulse = true }
+    }
+
+    private var saturation: Double {
+        switch activity {
+        case .muted: 0.35
+        case .reconnecting: 0.6
+        case .offline: 0
+        default: 1
+        }
+    }
+
+    private var brightness: Double {
+        switch activity {
+        case .muted: -0.2
+        case .offline: -0.3
+        default: 0
+        }
     }
 
     private var filamentColors: [Color] {

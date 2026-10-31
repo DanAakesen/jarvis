@@ -8,6 +8,7 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
     let observedHeight = viewport?.height ?? window.innerHeight;
     let focusedHeight: number | null = null;
     let focusedTyping = false;
+    let composerTapped = false;
     let focusFrame = 0;
     const measure = () => {
       // Pinch zoom is not a keyboard inset; leave the layout available for native panning.
@@ -24,6 +25,7 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
       if (!composerFocused && !composerControlFocused) {
         focusedHeight = null;
         focusedTyping = false;
+        composerTapped = false;
       } else if (normalScale) {
         focusedHeight ??= observedHeight;
         if (visibleHeight < focusedHeight - 120) {
@@ -34,11 +36,15 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
           // across multiple resize frames, then allow a later shrink to reopen.
           focusedTyping = false;
           focusedHeight = visibleHeight;
+          composerTapped = false;
         }
       }
       if (normalScale) observedHeight = Math.max(observedHeight, visibleHeight);
       const keyboardInset = viewport && Math.max(window.innerHeight, document.documentElement.clientHeight) - visibleHeight - top > 120;
-      const keyboardOpen = normalScale && Boolean(focusedTyping || keyboardInset);
+      // iOS can shrink both layout and visual viewports when the app is already
+      // short. After a composer tap, screen.height remains the stable reference.
+      const screenKeyboardInset = composerTapped && composerFocused && window.screen.height - visibleHeight - top > 120;
+      const keyboardOpen = normalScale && Boolean(focusedTyping || keyboardInset || screenKeyboardInset);
       element.setAttribute('data-keyboard-open', String(keyboardOpen));
       const height = normalScale && viewport ? `${viewport.height}px` : '100dvh';
       for (const [name, value] of [['--phone-chat-top', `${top}px`], ['--phone-chat-height', height]] as const) {
@@ -58,6 +64,10 @@ export function usePhoneChatViewport(shell: RefObject<HTMLElement | null>, enabl
     const outsideComposer = (target: EventTarget | null) => target instanceof Element &&
       !target.closest('.conversation-input, .more-menu-list, .more-menu-flyout');
     const startOutsidePress = (event: PointerEvent) => {
+      if (event.isPrimary && event.target instanceof Element && event.target.closest('.conversation-input')) {
+        composerTapped = true;
+        measure();
+      }
       // A second finger abandons the tap rather than becoming a new candidate.
       cancelOutsidePress();
       const input = document.activeElement;
