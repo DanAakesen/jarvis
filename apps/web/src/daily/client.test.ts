@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources as sources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, type DailyQuery } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources as sources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, type DailyQuery } from '@jarvis/contracts';
 import { DailyReadError, isDailyResult, loadDailySources, queryDaily } from './client';
 import { dailyFixture, jsonResponse } from './test-support';
 
@@ -39,6 +39,20 @@ describe('owner-authenticated Daily query client', () => {
     expect(isDailyResult(dailyFixture(days, [total], { date: query.startDate }), days)).toBe(true);
     expect(isDailyResult(dailyFixture(days, [{ ...total, unknown_nutrients: ['protein_grams'], partial_nutrients: ['protein_grams'] }]), days)).toBe(false);
     expect(isDailyResult(dailyFixture(days, [{ ...total, meal_count: 0 }]), days)).toBe(false);
+  });
+  it('validates paginated lift entries, kg units and last-per-exercise results', () => {
+    const lifts: DailyQuery = { source: sources.lifts, limit: 10, lastPerExercise: true };
+    const entry = {
+      id: '33333333-3333-4333-8333-333333333333', exerciseName: 'Bench press', weightKg: 80.29,
+      reps: 4, sets: 3, performedAt: '2026-10-17T06:00:00.000Z', deletedAt: null,
+      updatedAt: '2026-10-17T06:01:00.000Z', revision: 1,
+    };
+    const value = dailyFixture(lifts, [entry], { performedAt: entry.performedAt, id: entry.id });
+    value.units = { weightKg: 'kg', reps: 'reps', sets: 'sets' };
+    expect(isDailyResult(value, lifts)).toBe(true);
+    expect(isDailyResult({ ...value, units: { ...value.units, weightKg: 'lb' } }, lifts)).toBe(false);
+    expect(isDailyResult({ ...value, items: [{ ...entry, weightKg: 80.123 }] }, lifts)).toBe(false);
+    expect(isDailyResult({ ...value, items: [{ ...entry, deletedAt: entry.performedAt }] }, lifts)).toBe(false);
   });
   it('uses the existing token supplier, read-only POST, no-store and an abort signal', async () => {
     const value = dailyFixture(query, [{ value: 0, unit: 'm' }]);
@@ -110,7 +124,7 @@ describe('owner-authenticated Daily query client', () => {
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(queryDaily(null, query, token, signal())).rejects.toMatchObject({ kind: 'disabled' });
   });
-  it('requests v5 first and accepts each earlier version only with its own unchanged source list', async () => {
+  it('requests v6 first and accepts each earlier version only with its own unchanged source list', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: dailyQuerySourcesV1 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 2, sources: dailyQuerySourcesV2 }))
@@ -119,6 +133,10 @@ describe('owner-authenticated Daily query client', () => {
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 3, sources: dailyQuerySourcesV4 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV3 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV4 }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6WithoutFeedsOrTrainingTargets }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6WithoutTrainingTargets }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6WithoutFeeds }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 5, sources: dailyQuerySourcesV5WithoutFeeds }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 5, sources: dailyQuerySourcesV5 }));
     vi.stubGlobal('fetch', fetch);
@@ -131,9 +149,13 @@ describe('owner-authenticated Daily query client', () => {
     // A v4 answer without the feed sources is what the backend sends while the feeds are off.
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV3);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV4);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6WithoutFeedsOrTrainingTargets);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6WithoutTrainingTargets);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6WithoutFeeds);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV5WithoutFeeds);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV5);
-    expect(fetch).toHaveBeenCalledTimes(9);
+    expect(fetch).toHaveBeenCalledTimes(13);
   });
   it('does not claim success for oversized or mismatched responses', async () => {
     const fetch = vi.fn()

@@ -1,5 +1,5 @@
 export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
-export { dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './daily.js';
+export { dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './daily.js';
 export { vaultMirrorStatusSchema, vaultMirrorStatusViewSchema } from './vault-mirror.js';
 
 export const generatedViewVersion = 1;

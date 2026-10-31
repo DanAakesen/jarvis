@@ -2,6 +2,7 @@ import { useContext } from 'react';
 import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contracts';
 import { Loader } from '../Loader';
 import { TopCards } from './sections/overview/TopCards';
+import { LastLifts } from './sections/overview/LastLifts';
 import { DailyRefreshContext } from './refresh';
 import './daily.css';
 import './daily-overview.css';
@@ -27,9 +28,11 @@ export function DailyOverview({ backendUrl, getAccessToken, capabilities, onRetr
       ? <div className="daily-notice" role="alert"><p>{capabilities.error}</p>
         <button className="secondary-button" type="button" onClick={onRetryAvailability}>Retry availability</button></div>
       : !capabilities.sources ? <Loader label="Checking Health availability" variant="rows" />
-        : hasCardSource
-          ? <TopCards backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion} available={available} />
-          : <p className="daily-empty" role="status">No Health data</p>}
+        : <>
+          {hasCardSource && <TopCards backendUrl={backendUrl} getAccessToken={getAccessToken} refreshVersion={refreshVersion} available={available} />}
+          {available.includes(sources.lifts) && <LastLifts backendUrl={backendUrl} getAccessToken={getAccessToken}
+            refreshVersion={refreshVersion} available={available} />}
+          {!hasCardSource && !available.includes(sources.lifts) && <p className="daily-empty" role="status">No Health data</p>}
+        </>}
   </section>;
 }
-

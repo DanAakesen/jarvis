@@ -62,7 +62,7 @@ jobs:
           assert extension_info["CFBundlePackageType"] == "XPC!"
           assert extension_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
           assert extension["NSExtensionPointIdentifier"] == "com.apple.broadcast-services-upload"
-          assert extension["NSExtensionAttributes"]["RPBroadcastProcessMode"] == "RPBroadcastProcessModeSampleBuffer"
+          assert extension["RPBroadcastProcessMode"] == "RPBroadcastProcessModeSampleBuffer"
           PY
 
   macos:

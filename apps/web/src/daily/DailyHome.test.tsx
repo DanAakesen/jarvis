@@ -14,8 +14,8 @@ const token = async () => 'synthetic-fixture';
 const backendUrl = 'http://localhost:3999';
 // The shell's freshness pill reads the sync source once per mount and once per refresh-stream step.
 const shellReads = 1;
-// Overview cards: week workouts, steps, nutrition days, meals, sleep and the metric catalogue.
-const todayReads = 6;
+// Overview cards: week workouts, steps, nutrition days, meals, sleep, metric catalogue and latest lifts.
+const todayReads = 7;
 // Health panel, once expanded: metrics, catalogue, sleep, workouts, nutrition days and sync.
 const healthReads = 6;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
@@ -209,7 +209,7 @@ describe('Daily overview', () => {
     await listed();
     // An unknown id falls back to the first section and leaves the address as it was.
     expect(sectionLinks().getAllByRole('link').map(link => link.textContent))
-      .toEqual(['Overview', 'Nutrition', 'Body & sleep', 'Briefs', 'Data', 'Rules & sources']);
+      .toEqual(['Overview', 'Track workout', 'Nutrition', 'Body & sleep', 'Briefs', 'Data', 'Rules & sources']);
     expect(sectionLink('Overview').getAttribute('aria-current')).toBe('page');
     expect(sectionLinks().getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toHaveLength(1);
     expect(screen.getByTestId('daily-section-url').textContent).toBe('unknown');
@@ -331,7 +331,7 @@ describe('Daily overview', () => {
     await user.tab();
     const named = (element: Element | null) => element?.getAttribute('aria-label') ?? element?.textContent;
     for (const name of ['Overview period', 'Training', 'Health', 'Body',
-      'Show Training', 'Show Health', 'Show Body']) {
+      'Show Training', 'Show Health', 'Show Body', 'Track workout']) {
       expect(named(document.activeElement)).toBe(name);
       await user.tab();
     }
