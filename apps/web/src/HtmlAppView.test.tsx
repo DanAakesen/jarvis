@@ -36,6 +36,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   Reflect.deleteProperty(navigator, 'userActivation');
   document.documentElement.style.removeProperty('--report-surface');
+  document.documentElement.style.removeProperty('--primary-action');
   document.documentElement.style.removeProperty('color-scheme');
   delete document.documentElement.dataset.theme;
 });
@@ -173,6 +174,7 @@ describe('HtmlAppView', () => {
   it('synchronises the solid surface after load and theme changes without reloading report state', async () => {
     document.documentElement.dataset.theme = 'dark';
     document.documentElement.style.setProperty('--report-surface', '#091018');
+    document.documentElement.style.setProperty('--primary-action', '#ffb45c');
     document.documentElement.style.colorScheme = 'dark';
     const fetchMock = vi.fn(async () => json(artifact));
     renderView(fetchMock);
@@ -182,14 +184,15 @@ describe('HtmlAppView', () => {
 
     fireEvent.load(frame);
     expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
-      jarvisHostTheme: 1, scheme: 'dark', tokens: expect.objectContaining({ '--background': '#091018' }),
+      jarvisHostTheme: 1, scheme: 'dark', tokens: expect.objectContaining({ '--background': '#091018', '--accent': '#ffb45c' }),
     }), '*');
     act(() => {
       document.documentElement.style.setProperty('--report-surface', '#f0f5f7');
+      document.documentElement.style.setProperty('--primary-action', '#b45f06');
       document.documentElement.dataset.theme = 'light';
     });
     await waitFor(() => expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
-      jarvisHostTheme: 1, scheme: 'light', tokens: expect.objectContaining({ '--background': '#f0f5f7' }),
+      jarvisHostTheme: 1, scheme: 'light', tokens: expect.objectContaining({ '--background': '#f0f5f7', '--accent': '#b45f06' }),
     }), '*'));
     expect(frame.srcdoc).toBe(originalDocument);
     expect(fetchMock).toHaveBeenCalledTimes(1);

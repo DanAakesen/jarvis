@@ -49,12 +49,13 @@
   --chrome-glass-blur: 10px;
   --readability-glass-blur: 16px;
   --report-surface: #f0f5f7;
+  --secondary-accent: #6f6551;
   --text-muted: #5c564f;
-  --rule: #d8cfc2;
+  --rule: color-mix(in srgb, var(--secondary-accent) 24%, transparent);
   --ink-solid: #000;
   --highlight-solid: #fff;
   --voice-glow-source: #beebff;
-  --focus: #14768d;
+  --focus: #a65300;
   /* Entry fields: a thin tinted rim and a short light underneath, shared by every field. */
   --field-focus-rule: color-mix(in srgb, var(--focus) 80%, var(--control-rule));
   --field-focus-glow: 0 6px 14px -8px color-mix(in srgb, var(--focus) 75%, transparent);
@@ -68,8 +69,8 @@
   --warning-text: #593a16;
   --success-wash: #dcedf1;
   --error-wash: #f6e0dc;
-  --primary-action: var(--theme-accent, #14768d);
-  --primary-action-hover: var(--theme-accent, #0f5f72);
+  --primary-action: var(--theme-accent, #b45f06);
+  --primary-action-hover: var(--theme-accent, #934d00);
   --primary-action-text: var(--theme-accent-foreground, #ffffff);
   --primary-action-disabled: #66757c;
   --primary-action-disabled-text: #ffffff;
@@ -82,9 +83,9 @@
   --orb-shadow: rgb(13 26 32 / 16%);
   --orb-highlight: var(--theme-accent-secondary, rgb(255 255 255 / 22%));
   --code-surface: #f0e9df;
-  --feedback-sheen: rgb(20 118 141 / 10%);
+  --feedback-sheen: color-mix(in srgb, var(--primary-action) 10%, transparent);
   --ambient-field:
-    radial-gradient(ellipse at 16% 16%, rgb(20 118 141 / 9%), transparent 34%),
+    radial-gradient(ellipse at 16% 16%, color-mix(in srgb, var(--secondary-accent) 9%, transparent), transparent 34%),
     radial-gradient(ellipse at 86% 14%, rgb(201 138 58 / 11%), transparent 34%),
     radial-gradient(ellipse at 60% 86%, rgb(93 135 153 / 7%), transparent 42%);
   --ambient-opacity: 1;
@@ -102,8 +103,8 @@
   --success-surface: #e3f2f5;
   --warning: #835000;
   --warning-surface: #fff3cd;
-  --pending: #14768d;
-  --pending-surface: #e3f2f5;
+  --pending: #b45f06;
+  --pending-surface: color-mix(in srgb, var(--primary-action) 10%, var(--surface));
   --error-surface: #fbe9e9;
   --overlay: rgb(32 37 44 / 52%);
   --stage-background: #e7edef;
@@ -140,11 +141,11 @@
   --state-selected-hover: color-mix(in srgb, var(--state-selected-indicator) 14%, transparent);
   --state-selected-pressed: color-mix(in srgb, var(--state-selected-indicator) 22%, transparent);
   /* Architectural Glass: selected items become a complete illuminated surface, never an accent edge. */
-  --glass-selected: color-mix(in srgb, var(--glass-edge-cool) 18%, var(--surface));
-  --glass-selected-glow: 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 42%, transparent), 0 0 18px color-mix(in srgb, var(--glass-edge-cool) 22%, transparent);
-  --glass-shell-sheen: linear-gradient(180deg, color-mix(in srgb, var(--glass-edge-cool) 6%, transparent), transparent 42%);
-  --message-dan-tint: color-mix(in srgb, var(--glass-edge-warm) 18%, transparent);
-  --message-jarvis-tint: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent);
+  --glass-selected: color-mix(in srgb, var(--primary-action) 18%, var(--surface));
+  --glass-selected-glow: 0 0 0 1px color-mix(in srgb, var(--primary-action) 42%, transparent), 0 0 18px color-mix(in srgb, var(--primary-action) 22%, transparent);
+  --glass-shell-sheen: linear-gradient(180deg, color-mix(in srgb, var(--secondary-accent) 6%, transparent), transparent 42%);
+  --message-dan-tint: color-mix(in srgb, var(--primary-action) 18%, transparent);
+  --message-jarvis-tint: color-mix(in srgb, var(--secondary-accent) 12%, transparent);
   /* Stage glass: the Jarvis room shows through angled side slabs, the message window and the composer. */
   --stage-slab: var(--surface-translucent);
   --shell-slab: var(--surface-translucent);
@@ -179,15 +180,6 @@
   --motion-ambient: 34s;
   --ease-standard: cubic-bezier(.2, .65, .3, 1);
   --ease-enter: cubic-bezier(.16, 1, .3, 1);
-  /* One tone per rail icon, lit only while it is selected; the same lightness keeps the rail even. */
-  --rail-tone-home: #005a6a;
-  --rail-tone-daily: #016129;
-  --rail-tone-proactive: #005d55;
-  --rail-tone-factory: #874300;
-  --rail-tone-notes: #663e9e;
-  --rail-tone-usage: #695701;
-  --rail-tone-status: #912964;
-  --rail-tone-workspaces: #0256a9;
 }
 
 :root[data-theme="dark"] {
@@ -197,9 +189,10 @@
   --surface-muted: rgb(8 15 22 / 92%);
   --surface-translucent: rgb(9 16 23 / 90%);
   --report-surface: #091018;
+  --secondary-accent: #c9bfae;
   --text-muted: #c0ccd2;
-  --rule: rgb(226 246 255 / 16%);
-  --focus: #8be9ff;
+  --rule: color-mix(in srgb, var(--secondary-accent) 18%, transparent);
+  --focus: #ffb45c;
   --text: #f3fff9;
   --control-rule: #74878a;
   --disabled-surface: #202a34;
@@ -210,10 +203,10 @@
   --warning-text: #ffe1bd;
   --success-wash: #12303a;
   --error-wash: #47292c;
-  --primary-action: var(--theme-accent, #52dcfa);
-  --primary-action-hover: var(--theme-accent, #8be9ff);
+  --primary-action: var(--theme-accent, #ffb45c);
+  --primary-action-hover: var(--theme-accent, #ffc27a);
   --primary-action-disabled: #3f4c55;
-  --primary-action-text: var(--theme-accent-foreground, #04161d);
+  --primary-action-text: var(--theme-accent-foreground, #1d1200);
   --primary-action-disabled-text: #e3ecef;
   --success: #a8eefc;
   --state-listening: #52dcfa;
@@ -224,11 +217,11 @@
   --orb-shadow: rgb(0 0 0 / 46%);
   --orb-highlight: var(--theme-accent-secondary, rgb(255 255 255 / 18%));
   --code-surface: #101720;
-  --feedback-sheen: rgb(255 230 206 / 9%);
+  --feedback-sheen: color-mix(in srgb, var(--primary-action) 10%, transparent);
   --ambient-field:
-    radial-gradient(ellipse at 20% 18%, rgb(82 220 250 / 13%), transparent 34%),
+    radial-gradient(ellipse at 20% 18%, color-mix(in srgb, var(--secondary-accent) 13%, transparent), transparent 34%),
     radial-gradient(ellipse at 78% 15%, rgb(255 180 92 / 11%), transparent 36%),
-    radial-gradient(ellipse at 52% 88%, rgb(82 220 250 / 6%), transparent 42%);
+    radial-gradient(ellipse at 52% 88%, color-mix(in srgb, var(--secondary-accent) 6%, transparent), transparent 42%);
   --ambient-opacity: .84;
   --surface-blur: 24px;
   --soft-shadow: 0 22px 70px rgb(0 0 0 / 30%);
@@ -237,8 +230,8 @@
   --dialog-shadow: 0 20px 64px rgb(0 0 0 / 62%);
   --success-surface: #14323d;
   --warning: #ffc27a;
-  --pending: #8be9ff;
-  --pending-surface: #17303d;
+  --pending: #ffb45c;
+  --pending-surface: color-mix(in srgb, var(--primary-action) 12%, var(--surface));
   --error-surface: #321b1e;
   --overlay: rgb(0 0 0 / 72%);
   --stage-background: #030b13;
@@ -259,14 +252,6 @@
   --chart-series-warm: #ffb45c;
   --glass-rim-light: rgb(255 255 255 / 34%);
   --slab-shadow: 0 30px 80px rgb(0 0 0 / 50%);
-  --rail-tone-home: #41d9f8;
-  --rail-tone-daily: #83dc97;
-  --rail-tone-proactive: #41dfcf;
-  --rail-tone-factory: #feb079;
-  --rail-tone-notes: #ceb5ff;
-  --rail-tone-usage: #dec358;
-  --rail-tone-status: #ffa3cf;
-  --rail-tone-workspaces: #9dc7fe;
 }
 
 :root[data-theme="light"] {
@@ -306,7 +291,7 @@
    reset and the bar is built from its parts instead. */
 * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent; }
 :is(.conversation-transcript, .area-sidebar, .context-panel, .workspace-view-content, .shell-main):hover {
-  scrollbar-color: color-mix(in srgb, var(--glass-edge-cool) 60%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--secondary-accent) 60%, transparent) transparent;
 }
 @supports selector(::-webkit-scrollbar) {
   @media (pointer: fine) {
@@ -324,7 +309,7 @@
     }
     .knowledge-note-body::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--text) 38%, transparent); }
     :is(.conversation-transcript, .area-sidebar, .context-panel, .workspace-view-content, .shell-main):hover::-webkit-scrollbar-thumb,
-    ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--glass-edge-cool) 60%, transparent); }
+    ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--secondary-accent) 60%, transparent); }
   }
 }
 body {
@@ -400,34 +385,26 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   border: 0;
   border-radius: var(--radius-control);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--secondary-accent);
   cursor: pointer;
 }
 .rail-button:hover, .rail-link:hover, .sidebar-close:hover, .topbar-icon-button:hover { background: var(--rule); color: var(--text); }
-/* Selection pairs the shared cyan wash with stronger icon strokes, not an outlined tile. */
+/* Selection pairs the shared orange wash with stronger icon strokes, not an outlined tile. */
 .rail-link[aria-current="page"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; }
 .rail-link svg { transition: scale var(--motion-press) var(--ease-standard), filter var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
 .rail-link[aria-current="page"] svg {
   color: var(--state-selected-indicator);
   stroke-width: 2.1;
 }
-/* Each rail icon lights in its own tone when selected. The tone only feeds the shared selected-state roles on the link,
-   so the tile tint, hover and press states, stroke weight and focus ring stay the app-wide ones. */
+/* Selected rail icons use the shared orange state; quiet rail icons use the secondary stone accent. */
 .rail-link {
-  --rail-tone: var(--rail-tone-home);
+  --rail-tone: var(--focus);
   --state-selected-fg: var(--rail-tone);
   --state-selected-indicator: var(--rail-tone);
   --state-selected-bg: color-mix(in srgb, var(--rail-tone) 16%, transparent);
   --state-selected-hover: color-mix(in srgb, var(--rail-tone) 24%, transparent);
   --state-selected-pressed: color-mix(in srgb, var(--rail-tone) 32%, transparent);
 }
-.rail-link[data-tone="daily"] { --rail-tone: var(--rail-tone-daily); }
-.rail-link[data-tone="proactive"] { --rail-tone: var(--rail-tone-proactive); }
-.rail-link[data-tone="factory"] { --rail-tone: var(--rail-tone-factory); }
-.rail-link[data-tone="notes"] { --rail-tone: var(--rail-tone-notes); }
-.rail-link[data-tone="usage"] { --rail-tone: var(--rail-tone-usage); }
-.rail-link[data-tone="status"] { --rail-tone: var(--rail-tone-status); }
-.rail-link[data-tone="workspaces"] { --rail-tone: var(--rail-tone-workspaces); }
 /* Rail labels (P14-32): the control's name beside the hovered or keyboard-focused rail icon. It sits outside the rail so
    the rail's 3D tilt and glass never skew it, and its transparent bridge lets the pointer travel from the icon onto it. */
 .rail-tip {
@@ -639,7 +616,7 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 }
 .primary-button, .jobs-action-primary {
   border-color: color-mix(in srgb, var(--primary-action) 54%, var(--highlight-solid));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--primary-action) 93%, var(--highlight-solid)),
+  background: linear-gradient(180deg, var(--primary-action),
     color-mix(in srgb, var(--primary-action) 94%, var(--ink-solid)));
   color: var(--primary-action-text); box-shadow: var(--button-primary-shadow);
 }
@@ -1051,7 +1028,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .sidebar-close:hover, .workspace-window .workspace-icon-control:hover, .workspace-window .workspace-arrange-menu > summary:hover { background: var(--glass-hover); color: var(--text); }
 .sidebar-close:active, .workspace-window .workspace-icon-control:active { background: var(--glass-pressed); transform: scale(.94); }
 .workspace-window .workspace-close-control:hover { background: var(--error-wash); color: var(--text); }
-.workspace-window .workspace-pin-control[aria-pressed="true"] { background: var(--glass-selected); color: var(--glass-glow-warm); box-shadow: var(--glass-selected-glow); }
+.workspace-window .workspace-pin-control[aria-pressed="true"] { background: var(--glass-selected); color: var(--primary-action); box-shadow: var(--glass-selected-glow); }
 .workspace-window .workspace-icon-control:disabled { cursor: wait; opacity: .55; }
 .workspace-resize-edge-corner::after { content: none; }
 @media (pointer: coarse) {
@@ -1345,7 +1322,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .more-menu-item[aria-disabled="true"] { color: var(--disabled-text); cursor: not-allowed; }
 .more-menu-item[aria-disabled="true"]:hover { background: transparent; }
 .more-menu-item[aria-checked="true"] { font-weight: 650; }
-.more-menu-check { display: grid; width: 20px; place-items: center; color: var(--glass-edge-cool); visibility: hidden; }
+.more-menu-check { display: grid; width: 20px; place-items: center; color: var(--primary-action); visibility: hidden; }
 .more-menu-item[aria-checked="true"] .more-menu-check { visibility: visible; }
 @keyframes more-menu-enter {
   from { transform: translateY(4px) scale(.98); }
@@ -1658,7 +1635,7 @@ a.task-card-title { text-decoration: none; }
 .kanban-column-heading h2 { margin: 0; font-size: var(--type-subheading); font-weight: 650; line-height: var(--line-heading); }
 .kanban-count { min-width: 24px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; text-align: center; }
 .kanban-dot { --tone: var(--text-muted); width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 60%, transparent); }
-.kanban-dot-running, .kanban-dot-in-progress { --tone: var(--glass-edge-cool); }
+.kanban-dot-running, .kanban-dot-in-progress { --tone: var(--primary-action); }
 .kanban-dot-paused, .kanban-dot-in-review { --tone: var(--warning); }
 .kanban-dot-needs-attention, .kanban-dot-needs-dan { --tone: var(--glass-glow-warm); }
 .kanban-dot-done { --tone: var(--success); }
@@ -1674,7 +1651,7 @@ a.task-card-title { text-decoration: none; }
 }
 .kanban-card h3 { margin: 0 0 var(--space-2); font-size: var(--type-subsection); line-height: var(--line-heading); }
 .kanban-card[data-selected="true"] { background: var(--glass-selected); box-shadow: var(--panel-shadow); }
-.kanban-card[data-state="Running"] { transform: none; box-shadow: 0 0 22px -8px color-mix(in srgb, var(--glass-edge-cool) 60%, transparent); }
+.kanban-card[data-state="Running"] { transform: none; box-shadow: 0 0 22px -8px color-mix(in srgb, var(--primary-action) 60%, transparent); }
 .kanban-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-2); padding: 0; list-style: none; }
 .kanban-chips li { max-width: 100%; padding: var(--space-1) var(--space-2); overflow: hidden; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text-muted); font-size: var(--type-caption); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .kanban-activity { max-width: none; margin: 0 0 var(--space-2); color: var(--text); font-size: var(--type-small); overflow-wrap: anywhere; }
@@ -2226,7 +2203,7 @@ a.task-card-title { text-decoration: none; }
   }
   option:hover, option:focus-visible { outline: none; background: var(--glass-hover); }
   option:checked { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
-  option::checkmark { color: var(--glass-edge-cool); }
+  option::checkmark { color: var(--primary-action); }
   option:disabled { color: var(--disabled-text); cursor: not-allowed; }
   @media (pointer: coarse) { option { min-height: 44px; } }
 }
@@ -2267,16 +2244,16 @@ a.task-card-title { text-decoration: none; }
   font-weight: 650;
 }
 .kanban-pulse li > span { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px var(--tone); }
-.kanban-pulse li[data-tone="running"] { --tone: var(--glass-edge-cool); }
+.kanban-pulse li[data-tone="running"] { --tone: var(--primary-action); }
 .kanban-pulse li[data-tone="needs-attention"] { --tone: var(--glass-glow-warm); }
 .kanban-pulse li[data-tone="done"] { --tone: var(--success); }
 .kanban-pulse li[data-tone="running"] > span, .kanban-dot-running, .kanban-dot-in-progress { animation: kanban-live 2.4s ease-in-out infinite; }
 @keyframes kanban-live {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), 0 0 10px var(--glass-edge-cool); }
-  50% { box-shadow: 0 0 0 6px transparent, 0 0 16px var(--glass-edge-cool); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-action) 70%, transparent), 0 0 10px var(--primary-action); }
+  50% { box-shadow: 0 0 0 6px transparent, 0 0 16px var(--primary-action); }
 }
 .kanban-column { --tone: var(--text-muted); }
-.kanban-column:has(.kanban-dot-running, .kanban-dot-in-progress) { --tone: var(--glass-edge-cool); }
+.kanban-column:has(.kanban-dot-running, .kanban-dot-in-progress) { --tone: var(--primary-action); }
 .kanban-column:has(.kanban-dot-paused, .kanban-dot-in-review) { --tone: var(--warning); }
 .kanban-column:has(.kanban-dot-needs-attention, .kanban-dot-needs-dan) { --tone: var(--glass-glow-warm); }
 .kanban-column:has(.kanban-dot-done) { --tone: var(--success); }
@@ -2295,7 +2272,7 @@ a.task-card-title { text-decoration: none; }
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--glass-edge-cool) 10%, transparent) 50%, transparent 70%);
+  background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--primary-action) 10%, transparent) 50%, transparent 70%);
   background-size: 250% 100%;
   content: "";
   pointer-events: none;
@@ -2344,7 +2321,7 @@ a.task-card-title { text-decoration: none; }
 .release-trail-pipeline li::before { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 8px var(--tone); content: ""; }
 .release-trail-pipeline li[data-tone="ok"] { --tone: var(--success); }
 .release-trail-pipeline li[data-tone="bad"] { --tone: var(--error); }
-.release-trail-pipeline li[data-tone="live"] { --tone: var(--glass-edge-cool); }
+.release-trail-pipeline li[data-tone="live"] { --tone: var(--primary-action); }
 .release-trail-pipeline a { color: var(--text); overflow-wrap: anywhere; }
 .release-trail-commits, .release-trail-line {
   position: relative;
@@ -2364,8 +2341,8 @@ a.task-card-title { text-decoration: none; }
   left: 8%;
   height: 2px;
   border-radius: var(--radius-pill);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--glass-edge-cool) 15%, transparent), color-mix(in srgb, var(--glass-edge-cool) 80%, transparent));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--glass-edge-cool) 40%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary-action) 15%, transparent), color-mix(in srgb, var(--primary-action) 80%, transparent));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--primary-action) 40%, transparent);
   content: "";
 }
 .release-trail-line::before { top: 50%; opacity: .5; background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 12px); box-shadow: none; }
@@ -2379,18 +2356,18 @@ a.task-card-title { text-decoration: none; }
   width: 16px;
   height: 16px;
   margin-bottom: var(--space-1);
-  border: 2px solid color-mix(in srgb, var(--glass-edge-cool) 70%, transparent);
+  border: 2px solid color-mix(in srgb, var(--primary-action) 70%, transparent);
   border-radius: 50%;
   background: var(--stage-background);
   transition: transform var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard);
 }
 .release-trail-commits li[data-latest] .release-trail-dot {
-  border-color: var(--glass-edge-cool);
-  background: var(--glass-edge-cool);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--glass-edge-cool) 25%, transparent), 0 0 16px var(--glass-edge-cool);
+  border-color: var(--primary-action);
+  background: var(--primary-action);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary-action) 25%, transparent), 0 0 16px var(--primary-action);
   animation: kanban-live 2.4s ease-in-out infinite;
 }
-.release-trail-commits a:hover .release-trail-dot, .release-trail-commits a:focus-visible .release-trail-dot { transform: scale(1.25); box-shadow: 0 0 14px var(--glass-edge-cool); }
+.release-trail-commits a:hover .release-trail-dot, .release-trail-commits a:focus-visible .release-trail-dot { transform: scale(1.25); box-shadow: 0 0 14px var(--primary-action); }
 .release-trail-commits a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
 .release-trail-commits code { color: var(--text); font-family: var(--font-mono); font-size: var(--type-caption); }
 .release-trail-message { max-width: 100%; overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; }
@@ -2503,7 +2480,7 @@ a.task-chip { border-radius: var(--radius-control); }
 a.task-chip:hover { background: var(--glass-pressed); }
 .task-chip-mono { font-family: var(--font-mono); font-size: var(--type-caption); font-weight: 500; }
 .task-state-chip { --tone: var(--text-muted); background: color-mix(in srgb, var(--tone) 16%, transparent); }
-.task-state-chip[data-state="Running"] { --tone: var(--glass-edge-cool); }
+.task-state-chip[data-state="Running"] { --tone: var(--primary-action); }
 .task-state-chip:is([data-state="Paused"], [data-state="PauseRequested"]) { --tone: var(--warning); }
 .task-state-chip[data-state="NeedsAttention"] { --tone: var(--glass-glow-warm); }
 .task-state-chip[data-state="Done"] { --tone: var(--success); }
@@ -2532,9 +2509,9 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .timeline-stream[data-stream="connected"] .timeline-stream-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
 .timeline-stream[data-stream="error"] .timeline-stream-dot { background: var(--error); }
 .task-trail { position: relative; margin: var(--space-2) 0 0; padding: 0; list-style: none; }
-.task-trail::before { position: absolute; top: 8px; bottom: 8px; left: 5px; width: 2px; border-radius: 0; background: linear-gradient(var(--glass-edge-cool), color-mix(in srgb, var(--glass-edge-cool) 15%, transparent)); content: ""; }
+.task-trail::before { position: absolute; top: 8px; bottom: 8px; left: 5px; width: 2px; border-radius: 0; background: linear-gradient(var(--primary-action), color-mix(in srgb, var(--primary-action) 15%, transparent)); content: ""; }
 .task-trail > li { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: var(--space-3); padding: var(--space-2) 0; }
-.task-trail-dot { --tone: var(--glass-edge-cool); position: relative; z-index: 1; width: 12px; height: 12px; margin-top: var(--space-1); border: 2px solid var(--tone); border-radius: 50%; background: var(--surface); }
+.task-trail-dot { --tone: var(--primary-action); position: relative; z-index: 1; width: 12px; height: 12px; margin-top: var(--space-1); border: 2px solid var(--tone); border-radius: 50%; background: var(--surface); }
 .task-trail > li[data-source="dan"] .task-trail-dot { --tone: var(--glass-glow-warm); }
 .task-trail > li[data-source="github"] .task-trail-dot { --tone: var(--success); }
 .task-trail > li[data-source="backend"] .task-trail-dot { --tone: var(--text-muted); }
@@ -2552,7 +2529,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .task-disk-label { display: flex; justify-content: space-between; gap: var(--space-2); margin: 0 0 var(--space-2); font-size: var(--type-caption); font-weight: 600; }
 .task-disk-label time { color: var(--text-muted); font-weight: 400; }
 .task-disk-gauge { display: block; height: 6px; overflow: hidden; border-radius: var(--radius-control); background: var(--glass-hover); }
-.task-disk-gauge > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--glass-edge-cool), color-mix(in srgb, var(--glass-edge-cool) 60%, var(--glass-glow-warm))); }
+.task-disk-gauge > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--primary-action), color-mix(in srgb, var(--primary-action) 60%, var(--glass-glow-warm))); }
 .task-disk-readings li[data-low] .task-disk-gauge > span { background: linear-gradient(90deg, var(--glass-glow-warm), var(--error)); }
 .task-disk-readings li[data-low] .task-disk-label { color: var(--warning-text); }
 .task-window .task-disk-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin: var(--space-2) 0 0; font-size: var(--type-caption); }
@@ -2711,7 +2688,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .workspace-window .workspace-title-drag { cursor: grab; user-select: none; }
 .workspace-window-dragging .workspace-title-drag { cursor: grabbing; }
 .workspace-window .workspace-title-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
-.workspace-window-dragging { box-shadow: 0 34px 80px -20px color-mix(in srgb, var(--ink-solid) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent) !important; }/* On the home page the window area starts below the tab bar, so windows never slide under it. */
+.workspace-window-dragging { box-shadow: 0 34px 80px -20px color-mix(in srgb, var(--ink-solid) 65%, transparent), 0 0 0 1px color-mix(in srgb, var(--focus) 45%, transparent) !important; }/* On the home page the window area starts below the tab bar, so windows never slide under it. */
 @media (width > 700px) and (not ((max-height: 500px) and (pointer: coarse))) {
 
 }
@@ -2762,8 +2739,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* Background work and attention share one opaque, neutral popover surface. */
 .jobs-ring { width: 18px; height: 18px; flex: 0 0 auto; rotate: -90deg; }
 .jobs-ring circle { fill: none; stroke-width: 2.4; }
-.jobs-ring-track { stroke: color-mix(in srgb, var(--glass-edge-cool) 22%, transparent); }
-.jobs-ring-value { stroke: var(--glass-edge-cool); stroke-linecap: round; filter: drop-shadow(0 0 3px var(--glass-edge-cool)); transition: stroke-dashoffset 600ms var(--ease-standard); }
+.jobs-ring-track { stroke: color-mix(in srgb, var(--primary-action) 22%, transparent); }
+.jobs-ring-value { stroke: var(--primary-action); stroke-linecap: round; filter: drop-shadow(0 0 3px var(--primary-action)); transition: stroke-dashoffset 600ms var(--ease-standard); }
 .jobs-mark { width: 16px; height: 16px; flex: 0 0 auto; --tone: var(--text-muted); }
 .jobs-mark circle { fill: color-mix(in srgb, var(--tone) 18%, transparent); stroke: color-mix(in srgb, var(--tone) 70%, transparent); stroke-width: 1.2; }
 .jobs-mark path { fill: none; stroke: var(--tone); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -3147,12 +3124,12 @@ a.task-chip:hover { background: var(--glass-pressed); }
 }
 :root[data-motion="reduced"] .app-shell:not(.app-signed-out) { transition: none; }
 :root[data-motion="reduced"] .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel) { filter: none; }
-/* Jarvis navigated here (P9-40): the named Settings section or task card glows once in cyan, then settles. */
+/* Jarvis navigated here (P9-40): the named Settings section or task card glows once in orange, then settles. */
 [data-navigated] { animation: navigated-glow 2.8s var(--ease-standard) both; }
 @keyframes navigated-glow {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 0%, transparent); }
-  18% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), 0 0 28px color-mix(in srgb, var(--glass-edge-cool) 35%, transparent); }
-  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 0%, transparent); }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-action) 0%, transparent); }
+  18% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-action) 70%, transparent), 0 0 28px color-mix(in srgb, var(--primary-action) 35%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-action) 0%, transparent); }
 }
 :root[data-motion="reduced"] [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); }
 @media (prefers-reduced-motion: reduce) { [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); } }
@@ -3209,7 +3186,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell .workspaces-action svg { width: 15px; height: 15px; }
 .workspaces-action:hover { background: var(--glass-hover); color: var(--text); }
 .workspaces-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.workspaces-action[aria-pressed="true"] { color: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--text)); }
+.workspaces-action[aria-pressed="true"] { color: var(--state-selected-fg); }
 .workspaces-item[data-busy] .workspaces-open { opacity: .6; cursor: progress; }
 .workspaces-item[data-opened] .workspaces-open { animation: workspaces-opened 1.4s var(--ease-standard); }
 @keyframes workspaces-opened {
@@ -3234,18 +3211,18 @@ a.task-chip:hover { background: var(--glass-pressed); }
 /* Dan, 8 October: the Workspaces search must stay readable over a busy room. */
 .workspaces-search { background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(10px) saturate(1.2); }
 .workspaces-search input::placeholder { color: var(--text-muted); opacity: 1; }
-/* Code view (P9-41): the file Jarvis is reading, read-only. Highlighted ranges are tinted cyan with a brighter line
+/* Code view (P9-41): the file Jarvis is reading, read-only. Highlighted ranges are tinted orange with a brighter line
    number; query matches are marked amber. Switching files fades the body in. */
 .code-view { display: flex; min-width: 0; max-width: 100%; flex-direction: column; height: 100%; min-height: 0; margin: 0; }
 .code-view-header { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-2); padding: 0 0 var(--space-3); font-size: var(--type-small); }
 .code-view-path { flex: 1 1 220px; min-width: 0; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-caption); overflow-wrap: anywhere; }
 .code-view-path strong { color: var(--text); font-weight: 650; }
 .code-view-chip { min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-muted); font-family: var(--font-mono); font-size: var(--type-caption); overflow-wrap: anywhere; }
-.code-view-link { color: var(--glass-edge-cool); font-size: var(--type-caption); font-weight: 600; text-decoration: none; }
+.code-view-link { color: var(--focus); font-size: var(--type-caption); font-weight: 600; text-decoration: none; }
 .code-view-link:hover { text-decoration: underline; }
 .code-view-wrap { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; gap: var(--space-2); padding-inline: var(--space-2); border-radius: var(--radius-control); color: var(--text-muted); font-size: var(--type-caption); cursor: pointer; }
 .code-view-wrap:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
-.code-view-wrap input { accent-color: var(--glass-edge-cool); }
+.code-view-wrap input { accent-color: var(--primary-action); }
 .code-view-body { flex: 1; min-width: 0; max-width: 100%; min-height: 0; overflow: auto; border: 1px solid var(--rule); border-radius: var(--radius-panel); background: color-mix(in srgb, var(--code-surface) 70%, transparent);
   overscroll-behavior: contain; animation: code-view-in 360ms var(--ease-enter) both; }
 .code-view-body:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -3257,8 +3234,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .code-line-number { display: inline-block; width: 4.5ch; margin-right: var(--space-4); padding-right: var(--space-3); color: color-mix(in srgb, var(--text-muted) 70%, transparent); text-align: right; user-select: none; }
 .code-line-text { white-space: pre; color: var(--text); }
 .code-view--wrap .code-line-text { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.code-line[data-highlighted] { background: color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
-.code-line[data-highlighted] .code-line-number { color: var(--glass-edge-cool); font-weight: 650; }
+.code-line[data-highlighted] { background: color-mix(in srgb, var(--primary-action) 14%, transparent); }
+.code-line[data-highlighted] .code-line-number { color: var(--focus); font-weight: 650; }
 .code-match { border-radius: var(--radius-control); background: color-mix(in srgb, var(--glass-glow-warm) 32%, transparent); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
 @keyframes code-view-in { from { opacity: 0; translate: 0 6px; } }
 :root[data-motion="reduced"] .code-view-body { animation: none; }
@@ -3348,7 +3325,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .mobile-menu-page { display: grid; flex: 0 0 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: var(--space-1); scroll-snap-align: start; }
 .mobile-menu-link { display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; align-items: center; gap: var(--space-2); min-height: 64px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text);
   font: inherit; font-weight: 600; text-align: left; text-decoration: none; cursor: pointer; }
-.mobile-menu-link > svg:first-child { width: 22px; height: 22px; color: var(--glass-edge-cool); }
+.mobile-menu-link > svg:first-child { width: 22px; height: 22px; color: var(--secondary-accent); }
 .mobile-menu-link > svg:last-child { width: 18px; height: 18px; color: var(--text-muted); }
 .mobile-menu-link > span { min-width: 0; }
 .mobile-menu-link:hover, .mobile-menu-link:focus-visible { background: var(--glass-hover); }
@@ -3423,7 +3400,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .kanban-filter-toggle:hover { background: var(--glass-hover); }
 .kanban-filter-toggle:active { background: var(--glass-pressed); }
 .app-shell .kanban-filter-toggle svg { width: 18px; height: 18px; flex: none; }
-.kanban-filter-badge { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--glass-edge-cool) 18%, transparent); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
+.kanban-filter-badge { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--secondary-accent) 18%, transparent); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .kanban-chevron { display: grid; margin-left: auto; place-items: center; color: var(--text-muted); transition: rotate var(--motion-state) var(--ease-enter); }
 .kanban-filter-panel[data-open="false"] .kanban-chevron { rotate: -90deg; }
 .kanban-filter-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--motion-panel) var(--ease-enter); }
@@ -3606,7 +3583,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .usage-rank-value { font-weight: 650; font-variant-numeric: tabular-nums; }
 .usage-rank-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text) 6%, transparent); }
 .usage-rank-track span { display: block; height: 100%; border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), var(--glass-edge-cool)); animation: usage-grow 700ms var(--ease-enter) both; transform-origin: left; }
+  background: linear-gradient(90deg, color-mix(in srgb, var(--primary-action) 70%, transparent), var(--primary-action)); animation: usage-grow 700ms var(--ease-enter) both; transform-origin: left; }
 .usage-quiet { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
 .usage-empty { margin: 0; padding: var(--space-5); color: var(--text-muted); text-align: center; }
 .usage-limit-note { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
@@ -3639,7 +3616,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .role-controls { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(120px, 1fr); gap: var(--space-2); }
 .role-controls select { width: 100%; min-height: 40px; }
 .role-badges { display: flex; flex-wrap: wrap; gap: var(--space-1); grid-column: 2; }
-.model-badge { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
+.model-badge { padding: var(--space-1) var(--space-2); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--secondary-accent) 14%, transparent); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
 .deployments { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
 .deployments-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .deployments-head h3, .advanced-group h3 { margin: 0; font-size: var(--type-subsection); font-weight: 650; }
@@ -3650,14 +3627,14 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .deployment-meta { color: var(--text-muted); font-family: inherit; font-size: var(--type-caption); font-weight: 500; }
 .deployment-confirm { display: flex; gap: var(--space-2); }
 .deployment-add { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; column-gap: var(--space-3); row-gap: var(--space-3); padding: var(--space-3); border-radius: 14px;
-  background: color-mix(in srgb, var(--glass-edge-cool) 6%, transparent); }
+  background: color-mix(in srgb, var(--secondary-accent) 6%, transparent); }
 .advanced-group { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
 .advanced-field input[type="number"] { width: 100%; }
 .advanced-number { display: flex; align-items: center; gap: var(--space-2); }
 .advanced-unit { color: var(--text-muted); font-size: var(--type-small); }
 .advanced-range label { display: flex; justify-content: space-between; gap: var(--space-3); }
 .advanced-range output { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 650; }
-.advanced-range input[type="range"] { width: 100%; accent-color: var(--glass-edge-cool); }
+.advanced-range input[type="range"] { width: 100%; accent-color: var(--primary-action); }
 .advanced-range-ends { display: flex; justify-content: space-between; color: var(--text-muted); font-size: var(--type-caption); }
 .advanced-toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 52px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--text) 3%, transparent); cursor: pointer; }
@@ -3668,7 +3645,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
   background: color-mix(in srgb, var(--text) 18%, transparent); cursor: pointer; transition: background-color var(--motion-state) var(--ease-standard); }
 .advanced-toggle input[role="switch"]::after { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--text); content: "";
   transition: translate var(--motion-state) var(--ease-enter); }
-.advanced-toggle input[role="switch"]:checked { background: var(--glass-edge-cool); }
+.advanced-toggle input[role="switch"]:checked { background: var(--primary-action); }
 .advanced-toggle input[role="switch"]:checked::after { translate: 18px 0; background: var(--primary-action-text); }
 .advanced-toggle input[role="switch"]:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .advanced-segmented { display: inline-flex; max-width: 100%; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-3); padding: var(--space-1); border-radius: var(--radius-control); background: color-mix(in srgb, var(--text) 6%, transparent); }
@@ -3783,12 +3760,12 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .health-upload-reveal { display: grid; gap: var(--space-2); min-width: 0; }
 @media (max-width: 700px) { .health-upload-contract > div { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); } }
 /* Settings polish (Dan, 8 October). Section headers no longer paint a slab on hover: the title brightens and the chevron
-   turns cyan and nudges. Save is a plain row at the end of the page, with no floating glass pill around the button. */
+   turns orange and nudges. Save is a plain row at the end of the page, with no floating glass pill around the button. */
 .collapsible-toggle:hover, .collapsible-toggle:active { background: transparent; }
 .collapsible-toggle .collapsible-title { transition: color var(--motion-press) var(--ease-standard), text-shadow var(--motion-press) var(--ease-standard); }
-.collapsible-toggle:hover .collapsible-title { color: var(--text); text-shadow: 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent); }
+.collapsible-toggle:hover .collapsible-title { color: var(--text); text-shadow: 0 0 14px color-mix(in srgb, var(--focus) 45%, transparent); }
 .app-shell .collapsible-toggle .collapsible-chevron { transition: rotate var(--motion-state) var(--ease-enter), translate var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
-.app-shell .collapsible-toggle:hover .collapsible-chevron { color: var(--glass-edge-cool); translate: 2px 0; }
+.app-shell .collapsible-toggle:hover .collapsible-chevron { color: var(--focus); translate: 2px 0; }
 .app-shell .collapsible-section[data-open="true"] .collapsible-toggle:hover .collapsible-chevron { translate: 0 2px; }
 .collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
 .settings-page > .settings-save { position: static; width: auto; max-width: none; margin: var(--space-4) 0 0; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
@@ -3815,13 +3792,13 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .html-app-notice { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
 .html-app-state { display: grid; justify-items: start; gap: var(--space-3); color: var(--text-muted); }
 .html-app-state p { margin: 0; }
-/* Timeline (P9-47): a quiet rail with a dot per event, the label or date as an amber marker, then title and summary. */
+/* Timeline (P9-47): an orange rail with a dot per event, the label or date as an amber marker, then title and summary. */
 .generated-view-timeline.generated-view-timeline { position: relative; display: grid; gap: var(--space-4); margin: var(--space-1) 0; padding: 0 0 0 var(--space-5); list-style: none; }
 .generated-view-timeline::before { position: absolute; top: 8px; bottom: 8px; left: 6px; width: 2px; border-radius: 0;
-  background: linear-gradient(color-mix(in srgb, var(--glass-edge-cool) 55%, transparent), color-mix(in srgb, var(--glass-edge-cool) 10%, transparent)); content: ""; }
+  background: linear-gradient(color-mix(in srgb, var(--primary-action) 55%, transparent), color-mix(in srgb, var(--primary-action) 10%, transparent)); content: ""; }
 .generated-view-timeline > li { position: relative; display: grid; gap: var(--space-1); }
 .generated-view-timeline > li::before { position: absolute; top: 5px; left: -25px; width: 10px; height: 10px; border-radius: 50%;
-  background: var(--glass-edge-cool); box-shadow: 0 0 10px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent); content: ""; }
+  background: var(--primary-action); box-shadow: 0 0 10px color-mix(in srgb, var(--primary-action) 70%, transparent); content: ""; }
 .generated-view-timeline .timeline-marker { color: var(--glass-glow-warm); font-size: var(--type-caption); font-weight: 650; letter-spacing: 0.02em; }
 .generated-view-timeline .timeline-marker:empty { display: none; }
 .generated-view-timeline strong { margin: 0; color: var(--text); }
