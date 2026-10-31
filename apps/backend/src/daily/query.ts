@@ -22,6 +22,8 @@ import type { DailyCoachStore } from './coach-store.js';
 import { TrainingTargetsStore } from './training/targets-store.js';
 import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { presentTrainingTargets } from './training/targets.js';
+import { LiftEntriesStore } from './lifts/lifts-store.js';
+import type { LiftEntriesAccess } from './lifts/lifts-store.js';
 import { name as healthName } from './health/value.js';
 export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
@@ -30,6 +32,7 @@ export interface DailyReaders {
   nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'days' | 'favorites' | 'plans'>;
   briefs(request: FastifyRequest): Pick<DailyBriefReadModel, 'history' | 'detail'>;
   trainingTargets?(request: FastifyRequest): Pick<TrainingTargetsStore, 'read'>;
+  lifts?(request: FastifyRequest): Pick<LiftEntriesStore, 'history'>;
 }
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
 const inboxFields = ['retained', 'retained_bytes', 'byte_limit', 'row_limit', 'pending', 'processing', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
@@ -52,6 +55,7 @@ export class DailyQueryService {
     resolveDailyOwner(request);
     if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Health query. Use one source with only its supported selectors and exact returned cursor.');
     if (input.source === sources.attention || input.source === sources.calendar) resolveDailyBrowserOwner(request);
+    if (input.source === sources.lifts) resolveDailyBrowserOwner(request);
     if ((input.source === sources.briefs || input.source === sources.brief) && request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
     signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
     signal.throwIfAborted();
@@ -73,7 +77,18 @@ export class DailyQueryService {
     let detailMetricsTruncated = false;
     let units: Record<string, string>;
     const brief = input.source === sources.briefs || input.source === sources.brief;
-    if (input.source === sources.trainingTargets) {
+    if (input.source === sources.lifts) {
+      const lifts = this.readers.lifts?.(request);
+      if (!lifts) throw new ToolFailure('Lift history is unavailable.');
+      const page = await lifts.history({
+        limit: input.limit ?? 50,
+        ...(input.cursor ? { cursor: input.cursor } : {}),
+        ...(input.lastPerExercise === undefined ? {} : { lastPerExercise: input.lastPerExercise }),
+      }, signal);
+      items = page.items as Record<string, DailyJson>[];
+      next = page.next;
+      units = { weightKg: 'kg', reps: 'reps', sets: 'sets' };
+    } else if (input.source === sources.trainingTargets) {
       const targets = this.readers.trainingTargets?.(request);
       if (!targets) throw new ToolFailure('Training targets are unavailable.');
       const result = presentTrainingTargets(await targets.read(signal));
@@ -251,18 +266,23 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     checkOwner(request);
     return TrainingTargetsStore.forRequest(pool, request);
   };
+  const lifts: LiftEntriesAccess = request => {
+    checkOwner(request);
+    return LiftEntriesStore.forRequest(pool, request, changes);
+  };
   const readers: DailyReaders = {
     health: request => { checkOwner(request); return DailyHealthReadModel.forRequest(pool, request); },
     nutrition,
     briefs: request => { checkOwner(request); return DailyBriefReadModel.forRequest(pool, request); },
     trainingTargets,
+    lifts,
   };
   const foodLookup: DailyFoodLookup | undefined = frida
     ? async (input, request, signal) => { checkOwner(request); return frida.lookup(input, signal); }
     : undefined;
   const feedService = feeds ? createDailyFeeds(pool, owner, changes, feeds, now) : undefined;
   return {
-    query: new DailyQueryService(readers, now, feedService), changes, trainingTargets,
+    query: new DailyQueryService(readers, now, feedService), changes, trainingTargets, lifts,
     health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
     nutrition,
     coach: (request: FastifyRequest) => { checkOwner(request); return SqlDailyCoachStore.forRequest(pool, request); },
@@ -275,6 +295,7 @@ export interface DailyData {
   query: Pick<DailyQueryService, 'query'>;
   changes: DailyChanges;
   trainingTargets?: TrainingTargetsAccess;
+  lifts?: LiftEntriesAccess;
   health?: (request: FastifyRequest) => Pick<DailyHealthReadModel, 'history' | 'sync'>;
   nutrition?: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'days' | 'feedback' | 'preferences'>;
   coach?: (request: FastifyRequest) => DailyCoachStore;

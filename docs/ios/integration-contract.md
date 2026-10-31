@@ -171,3 +171,34 @@ Sources checked before implementation: `apps/backend/src/core/settings.ts`,
 `apps/backend/src/vault/index.ts`, `apps/backend/src/core/recipe-management.ts`,
 `apps/web/src/TaskRecipesSettings.tsx`, `apps/backend/src/core/index.ts` and
 `apps/backend/src/auth/session/routes.ts`.
+
+## 13. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
+
+The web Health area and native Track workout screen use the same owner routes;
+there are no iOS-specific endpoints. The source of truth is the backend and
+shared contract code cited below.
+
+- Capability version 6 advertises `daily.health.lifts`. Query it with
+  `POST /daily/query` and `{source: "daily.health.lifts", limit?, cursor?,
+  lastPerExercise?}`. `limit` is 1–100 (default 50); replay the exact
+  `coverage.next` cursor `{performedAt, id}`. Without `lastPerExercise`, this
+  returns recent non-deleted entries. With it true, the result contains the
+  latest non-deleted row for each normalized exercise key. The response uses
+  the standard Daily `items`, `units`, `freshness`, `coverage` and `revision`
+  envelope; weight is `kg`, and reps/sets are counts.
+- Create with `POST /daily/lifts` and a JSON body containing a UUID
+  `idempotencyKey`, `exerciseName` (1–80 characters), `weightKg` (0–1000,
+  at most two decimals), `reps` (1–1000), `sets` (1–100), and optional
+  `performedAt` ISO timestamp. If omitted, the server records the current
+  time. A new row responds 201; a matching retry responds 200 with the prior
+  entry and `replayed: true`.
+- Correct any subset of `exerciseName`, `weightKg`, `reps` and `sets` with
+  `PATCH /daily/lifts/:id`. Soft-delete with `DELETE /daily/lifts/:id`.
+  Successful corrections and deletes return `{entry}`; missing/deleted IDs
+  return 404. Bodies are strict and bounded; invalid requests return 400,
+  store failures 503. These routes and lift reads are owner-only; the Jarvis
+  agent token does not have access.
+- Source: `packages/contracts/src/daily.js`,
+  `packages/contracts/src/index.d.ts`, `apps/backend/src/daily/query.ts`,
+  `apps/backend/src/daily/routes/lifts.ts`, and
+  `apps/backend/src/daily/lifts/lifts.ts`.

@@ -41,6 +41,11 @@ const columns: Record<DailySourceId, readonly Column[]> = {
   [sources.attention]: [{ key: 'type', label: 'Type' }, { key: 'bucket', label: 'Waiting' }, { key: 'ageBusinessDays', label: 'Age (business days)', numeric: true }, { key: 'hidden', label: 'Hidden' }],
   [sources.calendar]: [{ key: 'title', label: 'Event' }, { key: 'startsAt', label: 'Starts' }, { key: 'endsAt', label: 'Ends' }, { key: 'calendarName', label: 'Calendar' }, { key: 'location', label: 'Location' }],
   [sources.trainingTargets]: [],
+  [sources.lifts]: [
+    { key: 'performedAt', label: 'Date' }, { key: 'exerciseName', label: 'Exercise' },
+    { key: 'weightKg', label: 'Weight', unit: 'kg', numeric: true },
+    { key: 'reps', label: 'Reps', numeric: true }, { key: 'sets', label: 'Sets', numeric: true },
+  ],
 };
 export function dailyColumns(source: DailySourceId) { return columns[source]; }
 // A column that carries a unit or is flagged numeric holds quantities even when a page records none of them.
@@ -53,6 +58,13 @@ export function initialDailyPeriod(now = new Date()) {
   return { startDate: start.toISOString().slice(0, 10), endDate };
 }
 export function dailyRequest(source: DailySourceId, period: { startDate: string; endDate: string }, cursor?: DailyCursor, recordId?: string): DailyQuery | null {
+  if (source === sources.lifts) {
+    const liftCursor = cursor && 'performedAt' in cursor && typeof cursor.id === 'string'
+      ? { performedAt: cursor.performedAt, id: cursor.id } : undefined;
+    if (cursor && !liftCursor) return null;
+    const query = { source, limit: 50, ...(liftCursor ? { cursor: liftCursor } : {}) };
+    return isDailyQuery(query) ? query : null;
+  }
   if ([sources.metrics, sources.sleep, sources.workouts, sources.meals].some(id => id === source) && !isDailyPeriod(period)) return null;
   const value = source === sources.sync ? { source } : source === sources.workout ? { source, workoutId: recordId } :
     source === sources.brief ? { source, briefId: recordId } :

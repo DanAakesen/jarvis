@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
+import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
 
 test('Daily reserves four distinct stable view IDs without registering renderers', () => {
   assert.equal(dailyModuleId, 'daily');
@@ -12,9 +12,9 @@ test('Daily reserves four distinct stable view IDs without registering renderers
   assert.ok(Object.isFrozen(dailyViewIds));
 });
 
-test('capability v1-v4 source lists remain fixed while v5 adds owner training targets', () => {
-  assert.equal(dailyCapabilitiesVersion, 5);
-  assert.equal(dailyCapabilitiesAccept, 'application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json');
+test('capability v1-v5 source lists remain fixed while v6 adds owner workout lifts', () => {
+  assert.equal(dailyCapabilitiesVersion, 6);
+  assert.equal(dailyCapabilitiesAccept, 'application/json;version=6, application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json');
   assert.deepEqual(dailyQuerySourcesV1, [
     'daily.health.metrics', 'daily.health.sleep', 'daily.health.workouts', 'daily.health.workout',
     'daily.health.heart-rate', 'daily.nutrition.meals', 'daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.sync',
@@ -33,11 +33,32 @@ test('capability v1-v4 source lists remain fixed while v5 adds owner training ta
   ]);
   assert.deepEqual(dailyQuerySourcesV5, [...dailyQuerySourcesV4, dailyQuerySources.trainingTargets]);
   assert.deepEqual(dailyQuerySourcesV5WithoutFeeds, [...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
+  assert.deepEqual(dailyQuerySourcesV6, [...dailyQuerySourcesV5, dailyQuerySources.lifts]);
+  assert.deepEqual(dailyQuerySourcesV6WithoutFeeds, [...dailyQuerySourcesV5WithoutFeeds, dailyQuerySources.lifts]);
+  assert.deepEqual(dailyQuerySourcesV6WithoutTrainingTargets, [...dailyQuerySourcesV4, dailyQuerySources.lifts]);
+  assert.deepEqual(dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, [...dailyQuerySourcesV3, dailyQuerySources.lifts]);
   assert.ok(Object.isFrozen(dailyQuerySourcesV2));
   assert.ok(Object.isFrozen(dailyQuerySourcesV3));
   assert.ok(Object.isFrozen(dailyQuerySourcesV4));
   assert.ok(Object.isFrozen(dailyQuerySourcesV5));
   assert.ok(Object.isFrozen(dailyQuerySourcesV5WithoutFeeds));
+  assert.ok(Object.isFrozen(dailyQuerySourcesV6));
+  assert.ok(Object.isFrozen(dailyQuerySourcesV6WithoutFeeds));
+  assert.ok(Object.isFrozen(dailyQuerySourcesV6WithoutTrainingTargets));
+  assert.ok(Object.isFrozen(dailyQuerySourcesV6WithoutFeedsOrTrainingTargets));
+});
+
+test('lift history queries validate bounded pagination and the latest-per-exercise option', () => {
+  const lifts = { source: dailyQuerySources.lifts };
+  assert.equal(isDailyQuery(lifts), true);
+  assert.equal(isDailyQuery({ ...lifts, limit: 100, lastPerExercise: true }), true);
+  assert.equal(isDailyQuery({ ...lifts, limit: 1, cursor: { performedAt: '2026-10-30T12:00:00Z', id: 'abcdef01-2345-4678-89ab-cdef01234567' } }), true);
+  for (const patch of [
+    { owner: 'foreign' }, { startDate: '2026-10-01' }, { limit: 101 }, { limit: 0 },
+    { lastPerExercise: 'yes' }, { cursor: { performedAt: '2026-10-30', id: 'lift-1' } },
+    { cursor: { performedAt: '2026-10-30T12:00:00Z', id: 'lift-1', owner: 'foreign' } },
+  ]) assert.equal(isDailyQuery({ ...lifts, ...patch }), false, JSON.stringify(patch));
+  assert.ok(dailyQuerySchema.properties.source.enum.includes(dailyQuerySources.lifts));
 });
 
 test('training target query accepts no caller selectors', () => {

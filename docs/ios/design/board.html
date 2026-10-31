@@ -17,7 +17,8 @@
   --text-muted: #5c564f;
   --rule: #d8cfc2;
   --focus: #14768d;
-  --accent: #14768d;
+  --accent: #b45f06;
+  --accent-2: #14768d;
   --accent-text: var(--highlight-solid);
   --record-stop: #e5383b;
   --success: #14697e;
@@ -69,8 +70,9 @@
   --text-muted: #c0ccd2;
   --rule: rgb(226 246 255 / 16%);
   --focus: #8be9ff;
-  --accent: #52dcfa;
-  --accent-text: #04161d;
+  --accent: #ffb45c;
+  --accent-2: #52dcfa;
+  --accent-text: #1d1200;
   --success: #a8eefc;
   --danger: #ff9b94;
   --warn: #ffc46b;
@@ -329,7 +331,7 @@ html:not([data-tags="on"]) .phone :is(.sample, .ptag, .sheet-foot) { display: no
   transition: transform .38s cubic-bezier(.32, .72, 0, 1);
 }
 /* Chat: the message list runs under the glass (Now bar and composer). Its bottom padding equals the Now bar plus composer height, so the last message rests just above the bar and everything else passes visibly under the glass. No fade or panel sits behind the dock. */
-.phone[data-scr="chat"] .edge-b, .phone[data-scr="notes"] .edge-b { display: none; }
+.phone[data-scr="chat"] .edge-b, .phone[data-scr="notes"] .edge-b, .phone[data-scr="hub"] .edge-b { display: none; }
 #log { bottom: 0; padding-bottom: calc(var(--log-end, 190px) + 12px); transition: padding-bottom .38s cubic-bezier(.32, .72, 0, 1); }
 /* The dock only groups the Now bar and the composer: no fill, blur, border or shadow, and it passes pointer events through to the list. */
 .dock { position: absolute; left: 0; right: 0; bottom: 0; height: 0; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; pointer-events: none; }
@@ -353,10 +355,9 @@ html:not([data-tags="on"]) .phone :is(.sample, .ptag, .sheet-foot) { display: no
 .msg { position: relative; max-width: 78%; padding: 9px 15px; border-radius: 22px; corner-shape: squircle; font-size: 17px; line-height: 1.35; overflow-wrap: anywhere; }
 .msg:not(.tail, .typing) { margin-bottom: -4px; }
 .msg.tail { margin-bottom: 4px; }
-.msg.user { align-self: flex-end; color: var(--accent-text); -webkit-backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat)); backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat)); background: linear-gradient(to bottom, var(--sheen), transparent 60%), color-mix(in srgb, var(--accent) 90%, transparent); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 24%, transparent), inset 0 1px 0 var(--rim-mid), inset 0 0 0 1px var(--rim-lo); }
-.msg.user.tail { border-bottom-right-radius: 7px; }
-.msg.bot { align-self: flex-start; -webkit-backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat)); backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat)); background: linear-gradient(to bottom, var(--sheen), transparent 60%), linear-gradient(var(--bubble-in), var(--bubble-in)), var(--g-fill); box-shadow: 0 3px 12px color-mix(in srgb, var(--text) 10%, transparent), inset 0 1px 0 var(--rim-mid), inset 0 0 0 1px var(--rim-lo); }
-.msg.bot.tail, .msg.bot.typing { border-bottom-left-radius: 7px; }
+.msg.user { align-self: flex-end; color: var(--text); border-radius: 24px; -webkit-backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat)); backdrop-filter: blur(var(--frost-blur, 14px)) saturate(var(--g-sat)); background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, transparent); }
+.msg.bot { align-self: flex-start; max-width: 94%; padding: 2px 4px; margin-bottom: 10px; border-radius: 0; background: none; box-shadow: none; }
+.msg.bot.tail, .msg.bot.typing { margin-bottom: 10px; }
 .msg.fresh { animation: msg-in .3s cubic-bezier(.22, 1, .36, 1); }
 .msg.user.fresh { transform-origin: 100% 100%; }
 .msg.bot.fresh { transform-origin: 0 100%; }
@@ -532,12 +533,12 @@ html:not([data-tags="on"]) .phone :is(.sample, .ptag, .sheet-foot) { display: no
 .sample { align-self: center; margin: 0; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--text-muted); background: color-mix(in srgb, var(--text) 7%, transparent); }
 .ptag { display: inline-block; flex: none; padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
 .phone:not([data-prop="on"]) .pro { display: none !important; }
-.tgroup { --g-c: var(--text-muted); align-self: flex-start; width: min(100%, 300px); margin-top: -4px; border-radius: 16px; background: color-mix(in srgb, var(--text) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 9%, transparent); font-size: 13px; }
+.tgroup { --g-c: var(--text-muted); align-self: flex-start; width: min(100%, 300px); margin-top: -4px; border-radius: 16px; background: none; box-shadow: none; font-size: 13px; }
 .tgroup[data-g="refused"] { --g-c: var(--warn); }
 .tgroup[data-g="error"] { --g-c: var(--danger); }
 .tgroup[data-g="ok"] { --g-c: var(--success); }
 .tg-work[hidden], .tg-head[hidden], .msg[hidden], .tlink[hidden] { display: none; }
-.tg-work, .tg-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0 12px; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; }
+.tg-work, .tg-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; }
 .tg-head { position: relative; border: 0; border-radius: inherit; background: transparent; text-align: left; cursor: pointer; transition: background-color .15s ease; }
 .tg-head::before { content: ''; position: absolute; inset: -6px 0; }
 .tg-head:active { background: color-mix(in srgb, var(--text) 8%, transparent); }
@@ -564,7 +565,7 @@ html:not([data-tags="on"]) .phone :is(.sample, .ptag, .sheet-foot) { display: no
 }
 @keyframes phrase-shine { from { background-position: 100% 0; } to { background-position: 0% 0; } }
 @media (prefers-reduced-motion: reduce) { .live-phrase[data-typed] { animation: none; color: var(--text-muted); background: none; } }
-.tcalls { display: flex; flex-direction: column; margin: 0; padding: 0 6px 6px; list-style: none; }
+.tcalls { display: flex; flex-direction: column; margin: 0; padding: 0 0 6px; list-style: none; }
 .tc { --tc-c: var(--text-muted); display: block; border-radius: 10px; font-size: 13px; }
 .tc-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 6px; color: var(--text); font: inherit; font-weight: 500; line-height: 1.2; }
 button.tc-row { width: 100%; min-height: 44px; border: 0; border-radius: inherit; background: transparent; text-align: left; cursor: pointer; transition: background-color .15s ease; }
@@ -1252,17 +1253,17 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 /* Notes area: segmented Notes | Tasks | Graph, search scopes, native rows, graph canvas, pushed editor, sheets. */
 .phone { --f-people: var(--orb-thinking); --f-work: var(--accent); --f-personal: rgb(45 179 93); --f-general: var(--text-muted); --n-row: color-mix(in srgb, var(--highlight-solid) 70%, var(--page)); --n-ease: cubic-bezier(.32, .72, 0, 1); }
 :root[data-theme="dark"] .phone { --f-personal: rgb(61 220 132); --n-row: color-mix(in srgb, var(--highlight-solid) 8%, var(--page)); }
-#view-notes [hidden], .ned [hidden], .nsh [hidden] { display: none !important; }
+#view-notes [hidden], #view-hub [hidden], .ned [hidden], .nsh [hidden] { display: none !important; }
 .nbar { position: absolute; z-index: 6; left: 16px; right: 16px; bottom: var(--dock-bottom); display: flex; flex-direction: column; gap: 8px; pointer-events: none; transform: translateY(var(--lift)); transition: transform .38s var(--n-ease); }
 .nbar > * { pointer-events: auto; }
 .nbar-row { display: flex; align-items: center; gap: 8px; }
 .nbar .nsearch { flex: 1; min-width: 0; }
 .nbar .search { height: 50px; margin: 0; }
 .nbar .nseg { margin: 0; }
-#view-notes #notes-scroll { padding-top: var(--safe-top); }
-#t-notes { display: flex; align-items: center; box-sizing: border-box; height: var(--nav-h); padding: 0 72px 0 20px; margin-bottom: var(--nhead-gap); }
-#view-notes { --nhead-gap: 12px; }
-.phone[data-scr="notes"] .nav-title { display: none; }
+#view-notes #notes-scroll, #view-hub #hub-scroll { padding-top: var(--safe-top); }
+#t-notes, #t-hub { display: flex; align-items: center; box-sizing: border-box; height: var(--nav-h); padding: 0 72px 0 20px; margin-bottom: var(--nhead-gap); }
+#view-notes, #view-hub { --nhead-gap: 12px; }
+.phone[data-scr="notes"] .nav-title, .phone[data-scr="hub"] .nav-title { display: none; }
 .nbar .nsearch .ntxt { padding: 0 2px 0 12px; }
 .nbar .nplus { flex: none; width: 50px; height: 50px; border: 0; padding: 0; color: var(--text); cursor: pointer; }
 .nbar .nplus .ic { width: 22px; height: 22px; stroke-width: 2; }
@@ -1469,6 +1470,104 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 .nmenu > button[aria-checked="true"] .ck { opacity: 1; }
 .ntoast { position: absolute; z-index: 35; left: 16px; right: 16px; bottom: 34px; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 6px 4px 20px; border-radius: 26px; background: var(--g-fill-bar); --frost-blur: 24px; font-size: 15px; font-weight: 500; }
 .ntoast > * { position: relative; z-index: 1; }
+/* Hub areas: Health, Factory, Settings. Same chrome as Notes (title row, switcher, fixed bar); rows tint icon and text only. */
+#hpane { padding-bottom: 110px; }
+#hpane[data-chips] { padding-bottom: 160px; }
+.hhd { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin: 14px 20px 2px; }
+.hhd h3 { margin: 0; font-size: 20px; line-height: 25px; font-weight: 700; }
+.hhd .ntxt { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0; font-size: 15px; }
+.hhd .ntxt .ic { width: 14px; height: 14px; stroke-width: 2.4; }
+.fch { display: flex; align-items: center; gap: 10px; width: calc(100% - 40px); min-height: 52px; margin: 14px 20px 2px; padding: 4px 0; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.fch > .ic { flex: none; width: 16px; height: 16px; stroke-width: 2.4; color: var(--text-muted); transition: transform .25s var(--n-ease, ease); }
+.fch[aria-expanded="false"] > .ic { transform: rotate(-90deg); }
+.fch .fct { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.fch h3 { margin: 0; font-size: 20px; line-height: 25px; font-weight: 700; }
+.fch .fcd { color: var(--text-muted); font-size: 13px; line-height: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fch .fcn { flex: none; min-width: 26px; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--text) 9%, transparent); color: var(--text); font-size: 15px; font-weight: 600; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.fch:active { color: var(--accent); }
+.fch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .fch > .ic { transition: none; } }
+#hpane > :first-child { margin-top: 0; }
+.hcard { margin: 6px 16px 0; padding: 16px; border-radius: 26px; background: var(--fill-group); }
+.hrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 16px; border: 0; background: none; color: var(--text); font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+button.hrow, .hmain { cursor: pointer; }
+.hrow > .ic:first-child, .hmain > .ic:first-child { flex: none; width: 22px; height: 22px; color: var(--accent); }
+.hl { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hl b { font-weight: 500; font-size: 17px; line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl small { color: var(--text-muted); font-size: 13px; line-height: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl small .ic { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
+.hv { flex: none; max-width: 52%; color: var(--text-muted); font-size: 15px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hv.acc { color: var(--accent); font-weight: 600; }
+.hv.bad { color: var(--danger); }
+.hv.wrn { color: var(--warn); }
+.hrow .go { flex: none; width: 14px; height: 14px; stroke-width: 2.6; color: var(--text-muted); }
+button.hrow:active b, button.hrow:active .hv, .hmain:active b { color: var(--accent); }
+button.hrow:focus-visible, .hmain:focus-visible, .hsw:focus-visible { outline: none; }
+button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.hsw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.hrow.dng b, .hrow.dng > .ic:first-child { color: var(--danger); }
+.hrow:disabled, .hrow[aria-disabled="true"] { opacity: .5; cursor: default; }
+.hmain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; }
+.hrings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.hring { display: grid; justify-items: center; gap: 2px; }
+.hring svg { width: 76px; height: 76px; }
+.hring .bg { fill: none; stroke: color-mix(in srgb, var(--text) 14%, transparent); stroke-width: 7; }
+.hring .fg { fill: none; stroke: var(--rc, var(--accent)); stroke-width: 7; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 32px 32px; }
+.hring b { font-size: 17px; font-weight: 600; }
+.hring small { color: var(--text-muted); font-size: 13px; }
+.hspark { flex: none; width: 84px; height: 30px; fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hbars { display: flex; align-items: flex-end; gap: 8px; height: 84px; }
+.hbars > div { flex: 1; display: grid; justify-items: center; align-items: end; gap: 4px; height: 100%; }
+.hbars i { display: block; width: 100%; border-radius: 5px 5px 2px 2px; background: var(--accent); opacity: .85; }
+.hbars small { color: var(--text-muted); font-size: 11px; }
+.hfresh { margin: 14px 20px 0; color: var(--text-muted); font-size: 13px; }
+.hhint { min-height: 18px; margin: 8px 20px 0; color: var(--text-muted); font-size: 13px; }
+.hsug { margin: 8px 16px 0; }
+.hbtn { width: calc(100% - 32px); margin: 12px 16px 0; }
+.hform .nf > input[type="number"] { text-align: right; -moz-appearance: textfield; }
+.hsw { flex: none; position: relative; width: 51px; height: 31px; border: 0; border-radius: 16px; background: color-mix(in srgb, var(--text) 22%, transparent); cursor: pointer; transition: background-color .2s ease; }
+.hsw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 30%); transition: transform .25s var(--n-ease); }
+.hsw[aria-checked="true"] { background: var(--accent); }
+.hsw[aria-checked="true"]::after { transform: translateX(20px); }
+.hsw[aria-disabled="true"], .hsw:disabled { opacity: .5; cursor: default; }
+.hrow .nseg { margin: 0; width: 190px; flex: none; }
+.hrow .nseg[aria-disabled="true"] { opacity: .5; }
+.hst { display: inline-flex; align-items: center; gap: 4px; }
+.hst.run { color: var(--accent); }
+.hst.pau { color: var(--warn); }
+.hst.bad { color: var(--danger); }
+.hst.ok { color: var(--success); }
+.hsave { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 20px; margin: 8px 20px 0; font-size: 13px; color: var(--text-muted); }
+.hsave.bad { color: var(--danger); }
+.hsave .ic { width: 15px; height: 15px; }
+.hsave .ic.spin { animation: gspin .9s linear infinite; }
+.hsave .ntxt { min-height: 28px; padding: 0 4px; font-size: 13px; }
+.hdl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; padding: 12px 16px; font-size: 15px; }
+.hdl dt { color: var(--text-muted); }
+.hdl dd { margin: 0; text-align: right; }
+.htl { display: grid; grid-template-columns: 48px 1fr; gap: 10px; align-items: baseline; padding: 9px 16px; font-size: 15px; }
+.htl time { color: var(--text-muted); font-size: 13px; }
+.hbarc { display: block; height: 6px; margin: 8px 0 0; border-radius: 3px; background: color-mix(in srgb, var(--text) 14%, transparent); overflow: hidden; }
+.hbarc i { display: block; height: 100%; background: var(--accent); }
+#hdet .ned-scroll { padding-bottom: 48px; }
+.hsteer { width: 100%; min-height: 110px; padding: 12px 16px; border: 0; border-radius: 22px; outline: 0; resize: none; background: var(--fill-group); color: var(--text); font: 17px/1.4 var(--font-body); }
+.hsteer:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+#hsh { color-scheme: light; }
+:root[data-theme="dark"] #hsh { color-scheme: dark; }
+#hsh .nsh-hd h2 { font-size: 17px; }
+.hu { font-style: normal; color: var(--text-muted); font-size: 15px; }
+.hv .ic { width: 14px; height: 14px; vertical-align: -2px; margin-right: 3px; }
+.hmain > .ic.t-run, .hl small .t-run { color: var(--accent); }
+.hmain > .ic.t-pau { color: var(--warn); }
+.hmain > .ic.t-bad { color: var(--danger); }
+.hmain > .ic.t-ok { color: var(--success); }
+.hmain > .ic.t-idle { color: var(--text-muted); }
+.hmain .hl b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.hdet-acts .hrow { min-height: 50px; }
+@media (prefers-reduced-motion: reduce) {
+  .hsw, .hsw::after { transition: none !important; }
+  .hsave .ic.spin { animation: none; }
+}
 @media (prefers-reduced-motion: reduce) {
   .nseg-thumb, .nsw-row, .ned, .nsh, .nscrim, .nfh .ic, .ntr .ic { transition: none !important; }
   .nskel i, .ng-load .ic { animation: none; }
@@ -1540,6 +1639,12 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     <symbol id="i-rows" viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M4 6h.01M4 12h.01M4 18h.01"/></symbol>
     <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4"/><path d="M5 4h12l-2.5 4 2.5 4H5"/></symbol>
     <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></symbol>
+    <symbol id="i-pr" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M6 8.5v7M18 15.5V10a3 3 0 0 0-3-3h-3"/><path d="m14 4-2.5 3L14 10"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-signout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8.5V20l-4-2v-4.5Z"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m16 7 3 3"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11Z"/></symbol>
     <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 11v5M9.5 13.5h5"/></symbol>
   </defs>
 </svg>
@@ -1707,6 +1812,69 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
         <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
       </label>
     </div>
+    <div class="ctl" id="ctl-health" title="Health area. Also ?screen=health&tab=dashboard|track&state=default|empty|loading|error|offline|search|newlift|saving|savefail, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Health</span>
+        <select id="health-sel">
+          <option value="">Health: choose</option>
+          <option value="dashboard:default">Health: Dashboard</option>
+          <option value="track:default">Health: Track workout</option>
+          <option value="track:newlift">Health: New lift</option>
+          <option value="track:saving">Health: Saving</option>
+          <option value="track:savefail">Health: Save failed</option>
+          <option value="dashboard:search">Health: Search</option>
+          <option value="dashboard:empty">Health: Dashboard empty</option>
+          <option value="track:empty">Health: No lifts</option>
+          <option value="dashboard:loading">Health: Loading</option>
+          <option value="dashboard:error">Health: Error</option>
+          <option value="dashboard:offline">Health: Offline</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-factory" title="Software Factory. Also ?screen=factory&tab=board|needs|releases&state=default|empty|loading|error|offline|stale|search|detail|release|steer|newtask, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Factory</span>
+        <select id="factory-sel">
+          <option value="">Factory: choose</option>
+          <option value="board:default">Factory: Board</option>
+          <option value="needs:default">Factory: Needs Dan</option>
+          <option value="releases:default">Factory: Releases</option>
+          <option value="board:detail">Factory: Task detail</option>
+          <option value="releases:release">Factory: Release detail</option>
+          <option value="board:steer">Factory: Steer</option>
+          <option value="board:newtask">Factory: New task</option>
+          <option value="board:search">Factory: Search</option>
+          <option value="board:stale">Factory: Cached</option>
+          <option value="board:empty">Factory: Empty</option>
+          <option value="board:loading">Factory: Loading</option>
+          <option value="board:error">Factory: Error</option>
+          <option value="board:offline">Factory: Offline</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-settings" title="Settings. Also ?screen=settings&tab=general|models|health|account&state=default|loading|error|forbidden|offline|saving|savefail|search|signout, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Settings</span>
+        <select id="settings-sel">
+          <option value="">Settings: choose</option>
+          <option value="general:default">Settings: General</option>
+          <option value="models:default">Settings: Models</option>
+          <option value="health:default">Settings: Health</option>
+          <option value="account:default">Settings: Account</option>
+          <option value="account:signout">Settings: Sign out</option>
+          <option value="general:search">Settings: Search</option>
+          <option value="general:saving">Settings: Saving</option>
+          <option value="general:savefail">Settings: Save failed</option>
+          <option value="general:loading">Settings: Loading</option>
+          <option value="general:error">Settings: Error</option>
+          <option value="general:forbidden">Settings: Not owner</option>
+          <option value="general:offline">Settings: Offline</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
   </div>
 </header>
 
@@ -1736,7 +1904,6 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
               <g class="rg g3" style="--d:70s"><circle class="c" cx="150" cy="150" r="122" pathLength="100" stroke-dasharray="30 70"/><circle class="a" cx="150" cy="150" r="122" pathLength="100" stroke-dasharray="2.5 97.5" stroke-dashoffset="-75"/></g>
             </svg>
             <div class="orb-sphere">
-              <svg class="orb-fil" viewBox="0 0 250 250" focusable="false"><ellipse cx="125" cy="125" rx="104" ry="38"/><ellipse cx="125" cy="125" rx="104" ry="38" transform="rotate(60 125 125)"/><ellipse cx="125" cy="125" rx="104" ry="38" transform="rotate(120 125 125)"/></svg>
               <canvas class="orb-fx" id="orb-fx"></canvas>
             </div>
           </div>
@@ -1853,6 +2020,31 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
                             </div>
                           </div>
                         </section>
+
+          <section class="view" id="view-hub" aria-labelledby="t-hub" hidden>
+            <div class="scroller" id="hub-scroll" data-large="true">
+              <h2 class="large-title" id="t-hub"></h2>
+              <div class="nseg glass" id="hseg" data-flat role="tablist" style="--n:4"></div>
+              <div class="nbanner" id="hbanner" role="status" hidden><svg class="ic" aria-hidden="true"><use href="#i-offline"/></svg><span id="hbanner-t"></span></div>
+              <div class="npane" id="hpane" role="tabpanel"></div>
+              <div class="nskel" id="hskel" role="status" hidden><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="nstate" id="hstate" hidden><svg class="ic" aria-hidden="true"><use id="hstate-ic" href="#i-notes"/></svg><p id="hstate-t"></p><button class="nbtn glass" id="hstate-b" type="button" hidden></button></div>
+            </div>
+            <div class="nbar" id="hbar">
+              <div class="nchips" id="hchips" role="group" hidden></div>
+              <div class="nbar-row">
+                <div class="nsearch">
+                  <div class="search glass" role="search">
+                    <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+                    <input id="h-search" type="search" autocomplete="off" maxlength="200">
+                    <button class="clear" id="h-clear" type="button" hidden><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+                  </div>
+                  <button class="ntxt" id="h-cancel" type="button" hidden></button>
+                </div>
+                <button class="g-btn glass nplus" id="hplus" type="button" aria-haspopup="menu" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
+              </div>
+            </div>
+          </section>
 
           <section class="view" id="view-area" aria-labelledby="t-area" hidden>
             <div class="scroller" id="area-scroll" data-large="true">
@@ -1999,6 +2191,32 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
             <ul class="group" id="ned-conn"></ul>
           </div>
         </section>
+
+        <section class="ned" id="hdet" aria-labelledby="hdet-title" inert>
+          <div class="ned-edge" aria-hidden="true"></div>
+          <header class="ned-bar">
+            <button class="ned-back glass" id="hdet-back" type="button" data-flat><svg class="ic" aria-hidden="true"><use href="#i-chev-left"/></svg><span id="hdet-back-t"></span></button>
+            <span class="ned-st" id="hdet-st" role="status"></span>
+          </header>
+          <div class="ned-scroll" id="hdet-scroll">
+            <h1 class="ned-title" id="hdet-title"></h1>
+            <p class="ned-meta" id="hdet-meta"></p>
+            <div id="hdet-body"></div>
+          </div>
+        </section>
+
+        <div class="nscrim" id="hscrim" hidden></div>
+        <section class="nsh glass" id="hsh" data-flat role="dialog" aria-modal="true" aria-labelledby="hsh-title" data-d="m" inert>
+          <span class="grab" aria-hidden="true"></span>
+          <div class="nsh-hd">
+            <button class="g-btn glass" id="hsh-x" type="button" data-flat><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
+            <h2 id="hsh-title"></h2>
+            <button class="g-btn glass tint" id="hsh-ok" type="button" data-flat><svg class="ic" aria-hidden="true"><use href="#i-tick"/></svg></button>
+          </div>
+          <div class="nsh-body" id="hsh-body"></div>
+        </section>
+        <div class="nmenu glass" id="hmenu" data-flat role="menu" hidden></div>
+        <div class="ntoast glass" id="htoast" data-flat role="status" hidden><span id="htoast-t"></span><button class="ntxt" id="htoast-b" type="button"></button></div>
 
         <div class="nscrim" id="nscrim" hidden></div>
         <section class="nsh glass" id="nsh" data-flat role="dialog" aria-modal="true" aria-labelledby="nsh-title" data-d="m" inert>
@@ -2178,6 +2396,33 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
         <tr><th scope="row">Workspace sheet, pin, previous workspaces</th><td class="st">Web today</td><td>Workspace.tsx, workspace-pins, HtmlAppView, core/workspaces.ts. Detents and drag are iPhone layout only.</td></tr>
       </tbody>
     </table>
+    <h2 id="notes-health-h">Health</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Dashboard: training rings, today, last lifts, sessions, body trend, protein, freshness line</th><td class="st">Web today</td><td>Health area of the web: Apple Health workouts, nutrition and sleep from the daily health endpoints. Period chips are client-side filters.</td></tr>
+        <tr><th scope="row">Track workout: lift log (name, kg, reps, sets, history, edit, delete, last values prefilled)</th><td class="st">Proposed</td><td>Needs new backend (Proposed): a lifts record (for example daily.training.lifts) with list, create, update and delete on the one shared API. The web gets the same screen from it.</td></tr>
+      </tbody>
+    </table>
+    <h2 id="notes-factory-h">Software Factory</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Board, Needs Dan, task detail, timeline, usage, artifacts</th><td class="st">Web today</td><td>Software Factory board and task pages: GET tasks per project, task detail and events.</td></tr>
+        <tr><th scope="row">Steer, pause, resume, cancel, recover, create task</th><td class="st">Web today</td><td>The same task control routes the web uses (steer, pause, resume, cancel, recover, create with agent and completion policy).</td></tr>
+        <tr><th scope="row">Releases and release detail (runs, linked tasks)</th><td class="st">Web today</td><td>Releases page of the web: status, commit, runs, deployments and linked tasks.</td></tr>
+        <tr><th scope="row">Live updates and push for Needs Dan</th><td class="st">Proposed</td><td>Needs new backend (Proposed): APNs device registration and a push trigger. Live task updates reuse the web's event stream; the app falls back to refresh.</td></tr>
+        <tr><th scope="row">One board across all projects</th><td class="st">Proposed</td><td>Needs new backend (Proposed). Today the web shows one project at a time, so the app does the same with the project chips.</td></tr>
+      </tbody>
+    </table>
+    <h2 id="notes-settings-h">Settings</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Appearance, personality, voice, research depth, proactive and notification switches, memory</th><td class="st">Web today</td><td>Settings page of the web and its settings and memory routes.</td></tr>
+        <tr><th scope="row">Models, reasoning, decisions provider, deployments, coding agents</th><td class="st">Web today</td><td>Owner-only model and deployment settings of the web. Non-owners see the Sign in as the owner state.</td></tr>
+        <tr><th scope="row">Training and nutrition targets, upload credential</th><td class="st">Web today</td><td>Health settings and the upload credential routes of the web.</td></tr>
+        <tr><th scope="row">Sign out, sign out on all devices, renew</th><td class="st">Web today</td><td>Session routes of the web. The native sign-in handoff for the app is Needs new backend (Proposed).</td></tr>
+        <tr><th scope="row">Push notification registration</th><td class="st">Proposed</td><td>Needs new backend (Proposed): APNs token registration. The switch is a client preference until then.</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
@@ -2230,18 +2475,18 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const DEVICE = { w: 440, h: 956 };
-  const TITLES = { chat: 'Chat', voice: 'Voice', notes: 'Notes', area: '' };
-  const LARGE = { notes: true, area: true };
+  const TITLES = { chat: 'Chat', voice: 'Voice', notes: 'Notes', area: '', hub: '' };
+  const LARGE = { notes: true, area: true, hub: true };
   /* Areas that exist on the web app. Only chat, voice and notes are drawn here; the rest open a placeholder page. */
   const AREAS = {
     chat: { label: 'Chat', screen: 'chat' },
-    factory: { label: 'Software Factory', ph: true, re: /\b(software factory|factory)\b/ },
+    factory: { label: 'Software Factory', hub: true, re: /\b(software factory|factory)\b/ },
     notes: { label: 'Notes', screen: 'notes' },
-    health: { label: 'Health', ph: true, re: /\bhealth\b/ },
+    health: { label: 'Health', hub: true, re: /\bhealth\b/ },
     usage: { label: 'Usage', ph: true, re: /\busage\b/ },
     status: { label: 'Status', ph: true, re: /\bstatus\b/ },
     proactive: { label: 'Proactive', ph: true, re: /\bproactive\b/ },
-    settings: { label: 'Settings', ph: true, re: /\bsettings?\b/ },
+    settings: { label: 'Settings', hub: true, re: /\bsettings?\b/ },
     banking: { label: 'Banking', later: true, re: /\bbanking\b/ }
   };
   const USER_LINE = 'Remind me to call the dentist tomorrow at 9.';
@@ -2256,11 +2501,12 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
   const startScreen = params.get('screen');
   const startArea = AREAS[startScreen] && AREAS[startScreen].ph ? startScreen : '';
+  const startHub = AREAS[startScreen] && AREAS[startScreen].hub ? startScreen : '';
   const state = {
     theme: pick(params.get('theme'), ['light', 'dark'], matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
     zoom: pick(params.get('zoom'), ['fit', 'full'], 'fit'),
-    screen: startArea ? 'area' : pick(startScreen, ['chat', 'voice', 'notes'], 'chat'),
-    area: startArea,
+    screen: startHub ? 'hub' : startArea ? 'area' : pick(startScreen, ['chat', 'voice', 'notes'], 'chat'),
+    area: startHub || startArea,
     voice: pick(params.get('voice'), Object.keys(VOICE), 'idle'),
     vpreset: pick(params.get('voice'), ['muted', 'reconnecting', 'offline', 'video', 'sheet-small', 'sheet-large'], ''),
     kbd: params.get('kbd') === '1',
@@ -2430,7 +2676,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
 
   /* Scrolling screens */
   const log = $('#log');
-  const scrollers = { chat: log, notes: $('#notes-scroll'), area: $('#area-scroll') };
+  const scrollers = { chat: log, notes: $('#notes-scroll'), area: $('#area-scroll'), hub: $('#hub-scroll') };
   function syncEdges() {
     const sc = scrollers[state.screen];
     const y = sc ? sc.scrollTop : 0;
@@ -2475,7 +2721,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   log.addEventListener('scroll', () => { logAtBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 48; }, { passive: true });
   new ResizeObserver(() => { if (logAtBottom && state.screen === 'chat') stick(); }).observe(log);
 
-  const currentArea = () => (state.screen === 'area' ? state.area : state.screen === 'voice' ? 'chat' : state.screen);
+  const currentArea = () => (state.screen === 'area' || state.screen === 'hub' ? state.area : state.screen === 'voice' ? 'chat' : state.screen);
   function showScreen(name, areaId) {
     if (name === 'voice' && state.screen !== 'voice') {
       state.vlang = state.lang;
@@ -2487,13 +2733,15 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
       const a = AREAS[state.area];
       $('#t-area').textContent = a.label;
       $('#area-note').textContent = '';
-    } else state.area = '';
+    } else if (name === 'hub') state.area = areaId || state.area || 'health';
+    else state.area = '';
     $$('.view').forEach(v => { v.hidden = v.id !== 'view-' + name; });
     const large = !!LARGE[name];
     navbar.classList.toggle('is-large', large);
-    navTitle.textContent = name === 'area' ? AREAS[state.area].label : TITLES[name];
+    navTitle.textContent = name === 'area' || name === 'hub' ? AREAS[state.area].label : TITLES[name];
     if (large) navTitle.setAttribute('aria-hidden', 'true'); else navTitle.removeAttribute('aria-hidden');
     composer.hidden = name !== 'chat';
+    phone.dataset.hub = name === 'hub' ? state.area : '';
     phone.dataset.scr = name;
     $('#nowbar').hidden = name !== 'chat' && name !== 'voice';
     $('#ctl-now').hidden = name !== 'chat';
@@ -3204,7 +3452,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   phone.addEventListener('pointerdown', e => {
     if (state.kbd && !e.target.closest('.composer, .nowbar, .kb, .sidebar, .attach, .nbar')) { draft.blur(); setKeyboard(false); }
   });
-  window.jvKeyboard = on => { if (!on || state.screen === 'notes') setKeyboard(!!on); };
+  window.jvKeyboard = on => { if (!on || state.screen === 'notes' || state.screen === 'hub') setKeyboard(!!on); };
   draft.addEventListener('focus', () => setKeyboard(true));
   draft.dataset.ph = draft.placeholder;
   draft.addEventListener('blur', () => { if (!kb.contains(document.activeElement)) setKeyboard(false); });
@@ -3780,7 +4028,8 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     const a = AREAS[id];
     if (!a || a.later) return;
     setSidebar(false, { restore: false });
-    if (a.screen) showScreen(a.screen === 'chat' && state.screen === 'voice' ? 'voice' : a.screen);
+    if (a.hub) showScreen('hub', id);
+    else if (a.screen) showScreen(a.screen === 'chat' && state.screen === 'voice' ? 'voice' : a.screen);
     else showScreen('area', id);
     announce('Opened ' + a.label);
   }
@@ -5644,6 +5893,7 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
   });
   $('#ng-open').addEventListener('click', () => { if (S.sel != null) openNote(S.sel, $('#ng-open')); });
   $('#ng-reset').addEventListener('click', e => {
+    if (!onNotes()) return;
     const b = e.currentTarget;
     b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin');
     setTimeout(() => b.classList.remove('spin'), 750);
@@ -5930,6 +6180,866 @@ html:has(.phone[data-gate]) .ios-ind { display: none; }
     apply(tab, state, ['notes', 'tasks'].includes(params.get('scope')) ? params.get('scope') : '');
     if (sel) sel.value = tab + ':' + state;
   } else render();
+})();
+
+/* Hub areas: Health, Software Factory, Settings (same chrome as Notes). Sample data only. */
+(() => {
+  const $ = s => document.querySelector(s), $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+  const params = new URLSearchParams(location.search);
+  let lang = params.get('lang') === 'en' ? 'en' : 'da';
+  const L = (en, da) => (lang === 'en' ? en : da);
+  const P = a => a[lang === 'en' ? 0 : 1];
+  const phone = $('#phone'), view = $('#view-hub'), scroller = $('#hub-scroll'), navbar = $('#navbar'), pane = $('#hpane');
+  const det = $('#hdet'), sh = $('#hsh'), scrim = $('#hscrim'), menu = $('#hmenu'), tbar = $('#htoast'), sIn = $('#h-search'), bar = $('#hbar');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  const loc = () => (lang === 'en' ? 'en-GB' : 'da-DK');
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const ic = (id, cls = '') => '<svg class="ic ' + cls + '" aria-hidden="true"><use href="#' + id + '"/></svg>';
+  const num = (n, d) => new Intl.NumberFormat(loc(), { maximumFractionDigits: d == null ? 1 : d }).format(n);
+  const dfmt = d => new Intl.DateTimeFormat(loc(), { day: 'numeric', month: 'short' }).format(d);
+  const D = (m, d) => new Date(2026, m - 1, d);
+  const scaleK = () => phone.getBoundingClientRect().width / phone.offsetWidth || 1;
+  const onHub = () => phone.dataset.scr === 'hub';
+  const kbd = on => { if (window.jvKeyboard) window.jvKeyboard(on); };
+  const setSeg = (el, i) => {
+    el.style.setProperty('--i', i);
+    $$('[role="tab"]', el).forEach((b, k) => { b.setAttribute('aria-selected', k === i ? 'true' : 'false'); b.tabIndex = k === i ? 0 : -1; });
+  };
+  const restore = el => { if (el && el.isConnected && !el.inert) { try { el.focus({ preventScroll: true }); } catch (err) { /* ignore */ } } };
+
+  const AR = {
+    health: { title: () => L('Health', 'Sundhed'), tabs: () => [['dashboard', L('Dashboard', 'Overblik')], ['track', L('Track workout', 'Log træning')]] },
+    factory: { title: () => L('Software Factory', 'Softwarefabrik'), tabs: () => [['board', L('Board', 'Tavle')], ['needs', L('Needs Dan', 'Kræver Dan')], ['releases', L('Releases', 'Udgivelser')]] },
+    settings: { title: () => L('Settings', 'Indstillinger'), tabs: () => [['general', L('General', 'Generelt')], ['models', L('Models', 'Modeller')], ['health', L('Health', 'Sundhed')], ['account', L('Account', 'Konto')]] }
+  };
+  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, shut: { done: true }, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
+  const tab = () => S.tabs[S.area];
+  const offline = () => S.st === 'offline';
+  const NOW = new Date(2026, 9, 30, 9, 41);
+  let seq = 500;
+
+  /* Menu and toast */
+  let menuAnchor = null;
+  function closeMenu() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    if (menuAnchor) menuAnchor.setAttribute('aria-expanded', 'false');
+    menuAnchor = null;
+  }
+  function openMenu(anchor, items) {
+    closeMenu();
+    menu.innerHTML = items.map((it, i) => '<button type="button" role="' + (it.radio ? 'menuitemradio' : 'menuitem') + '"' + (it.radio ? ' aria-checked="' + !!it.checked + '"' : '') + ' data-i="' + i + '">' + (it.icon ? ic(it.icon) : '') + '<span>' + esc(it.label) + '</span>' + (it.radio ? ic('i-tick', 'ck') : '') + '</button>').join('');
+    menu.hidden = false; menuAnchor = anchor; menu._items = items;
+    anchor.setAttribute('aria-expanded', 'true');
+    const sk = scaleK(), pr = phone.getBoundingClientRect(), ar = anchor.getBoundingClientRect();
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const left = ar.right - pr.left > pr.width / 2 ? (ar.right - pr.left) / sk - w : (ar.left - pr.left) / sk;
+    let top = (ar.bottom - pr.top) / sk + 8;
+    if (anchor.closest('.nbar') || top + h > phone.offsetHeight - 24) top = (ar.top - pr.top) / sk - h - 8;
+    menu.style.left = Math.max(8, Math.min(left, phone.offsetWidth - w - 8)) + 'px';
+    menu.style.top = Math.max(8, top) + 'px';
+    menu.querySelector('button').focus();
+  }
+  menu.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const it = menu._items[+b.dataset.i], a = menuAnchor;
+    closeMenu();
+    if (a) a.focus();
+    it.act();
+  });
+  menu.addEventListener('keydown', e => {
+    const bs = $$('button', menu), i = bs.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); bs[(i + 1) % bs.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!menu.hidden && !menu.contains(e.target) && !(menuAnchor && menuAnchor.contains(e.target))) closeMenu();
+  }, true);
+  let toastTimer = 0;
+  function toast(text, undo) {
+    $('#htoast-t').textContent = text;
+    const b = $('#htoast-b');
+    b.hidden = !undo; b.textContent = L('Undo', 'Fortryd');
+    b.onclick = () => { clearTimeout(toastTimer); tbar.hidden = true; if (undo) undo(); };
+    tbar.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { tbar.hidden = true; }, 4000);
+  }
+
+  /* Shared markup */
+  const grp = rows => '<ul class="group">' + rows.map(r => '<li>' + r + '</li>').join('') + '</ul>';
+  const hd = (title, right) => '<div class="hhd"><h3>' + esc(title) + '</h3>' + (right || '') + '</div>';
+  const hrow = o => {
+    const tag = o.div ? 'div' : 'button', inner = (o.icon ? ic(o.icon) : '') + '<span class="hl"><b>' + esc(o.b) + '</b>' + (o.s ? '<small>' + o.s + '</small>' : '') + '</span>' + (o.v != null ? '<span class="hv ' + (o.c || '') + '">' + o.v + '</span>' : '') + (o.extra || '') + (o.go ? ic('i-chevron', 'go') : '');
+    return '<' + tag + ' class="hrow' + (o.dng ? ' dng' : '') + '"' + (o.div ? '' : ' type="button"') + (o.attr ? ' ' + o.attr : '') + '>' + inner + '</' + tag + '>';
+  };
+  const nf = (label, input, unit) => '<li class="nf"><span>' + esc(label) + '</span>' + input + (unit ? '<i class="hu">' + unit + '</i>' : '') + '</li>';
+  const spark = pts => '<svg class="hspark" viewBox="0 0 84 30" aria-hidden="true"><polyline points="' + pts.map((v, i) => (i * 84 / (pts.length - 1)).toFixed(1) + ',' + (28 - v * 26).toFixed(1)).join(' ') + '"/></svg>';
+  const segHtml = (id, opts, cur, dis) => '<div class="nseg glass" id="' + id + '" data-flat role="tablist" style="--n:' + opts.length + '"' + (dis ? ' aria-disabled="true"' : '') + '>' + opts.map(o => '<button type="button" role="tab" data-seg="' + id + '" data-v="' + o[0] + '"' + (dis ? ' tabindex="-1"' : '') + '>' + esc(o[1]) + '</button>').join('') + '</div>';
+  const fixSegs = (root, cur) => $$('.nseg', root).forEach(s => { const bs = $$('[role="tab"]', s), i = bs.findIndex(b => b.dataset.v === cur[s.id]); if (i >= 0) setSeg(s, i); });
+
+  /* HEALTH data */
+  const LIFTS = [
+    { id: 1, n: ['Squat', 'Squat'], kg: 100, reps: 5, sets: 3, d: D(10, 28) },
+    { id: 2, n: ['Deadlift', 'Dødløft'], kg: 120, reps: 3, sets: 3, d: D(10, 25) },
+    { id: 3, n: ['Squat', 'Squat'], kg: 97.5, reps: 5, sets: 3, d: D(10, 21) },
+    { id: 4, n: ['Deadlift', 'Dødløft'], kg: 117.5, reps: 3, sets: 3, d: D(10, 18) },
+    { id: 5, n: ['Bench press', 'Bænkpres'], kg: 80, reps: 4, sets: 3, d: D(10, 12) },
+    { id: 6, n: ['Bench press', 'Bænkpres'], kg: 77.5, reps: 5, sets: 3, d: D(10, 5) },
+    { id: 7, n: ['Squat', 'Squat'], kg: 95, reps: 5, sets: 3, d: D(10, 3) }
+  ];
+  const ln = l => (Array.isArray(l.n) ? P(l.n) : l.n);
+  const byDate = (a, b) => b.d - a.d || b.id - a.id;
+  const names = () => { const s = []; LIFTS.slice().sort(byDate).forEach(l => { if (!s.includes(ln(l))) s.push(ln(l)); }); return s; };
+  const known = nm => LIFTS.slice().sort(byDate).find(l => ln(l).toLowerCase() === nm.trim().toLowerCase());
+  const lw = l => num(l.kg) + ' kg × ' + l.reps + ' × ' + l.sets;
+  const lastTxt = l => L('last ', 'sidst ') + lw(l) + ', ' + dfmt(l.d);
+  const PER = { today: { gym: [1, 1], run: [0, 1], steps: [6420, 8000] }, week: { gym: [3, 4], run: [1, 2], steps: [48200, 56000] }, month: { gym: [12, 16], run: [5, 8], steps: [203000, 240000] } };
+  const perName = k => ({ today: L('Today', 'I dag'), week: L('7 days', '7 dage'), month: L('30 days', '30 dage') }[k]);
+  const ring = (label, v, t, color, txt) => {
+    const pct = Math.min(1, v / t), C = 163.36;
+    return '<div class="hring" role="img" aria-label="' + esc(label + ' ' + txt) + '"><svg viewBox="0 0 64 64"><circle class="bg" cx="32" cy="32" r="26"/><circle class="fg" cx="32" cy="32" r="26" style="--rc:' + color + '" stroke-dasharray="' + (pct * C).toFixed(1) + ' ' + C + '"/></svg><b>' + esc(txt) + '</b><small>' + esc(label) + '</small></div>';
+  };
+  function dashRows() {
+    const g = [], last = [], sess = [], body = [];
+    names().slice(0, 3).forEach(n => { const l = known(n); last.push({ k: n, h: hrow({ icon: 'i-dumbbell', b: n, s: esc(lw(l)), v: esc(dfmt(l.d)), go: true, attr: 'data-ex="' + esc(n) + '" data-jump="1"' }) }); });
+    [[L('Upper body', 'Overkrop'), 'i-dumbbell', 52, D(10, 28)], [L('Easy run', 'Let løbetur'), 'i-status', 31, D(10, 26)], [L('Legs', 'Ben'), 'i-dumbbell', 48, D(10, 24)]].forEach(s => sess.push({ k: s[0], h: hrow({ div: true, icon: s[1], b: s[0], s: s[2] + ' min', v: esc(dfmt(s[3])) }) }));
+    [[L('Weight', 'Vægt'), num(82.4) + ' kg', [.7, .62, .66, .5, .45, .4, .32]], [L('Body fat', 'Fedtprocent'), num(18.2) + (lang === 'da' ? ' %' : '%'), [.8, .72, .7, .6, .58, .5, .45]], [L('Muscle mass', 'Muskelmasse'), num(36.1) + ' kg', [.2, .28, .3, .38, .4, .5, .55]]].forEach(b =>     body.push({ k: b[0], h: hrow({ div: true, b: b[0], v: b[1] + '', extra: spark(b[2]) }) }));
+    const today = [{ k: L('Protein left', 'Protein tilbage'), h: hrow({ div: true, icon: 'i-heart', b: L('Protein left', 'Protein tilbage'), s: L('of 140 g', 'af 140 g'), v: '98 g', c: 'acc' }) },
+      { k: L('Calories left', 'Kalorier tilbage'), h: hrow({ div: true, icon: 'i-proactive', b: L('Calories left', 'Kalorier tilbage'), s: L('of 2,600 kcal', 'af 2.600 kcal'), v: num(1240, 0) + ' kcal' }) },
+      { k: L('Sleep', 'Søvn'), h: hrow({ div: true, icon: 'i-clock', b: L('Sleep', 'Søvn'), s: L('last night', 'i nat'), v: L('7 h 20 min', '7 t 20 min') }) }];
+    return { today, last, sess, body, g };
+  }
+  const protein = [96, 120, 88, 140, 132, 70, 42];
+  function dashPane() {
+    const r = dashRows(), p = PER[S.period];
+    const rings = '<div class="hcard"><div class="hrings">' + ring(L('Gym', 'Træning'), p.gym[0], p.gym[1], 'var(--accent)', p.gym[0] + '/' + p.gym[1]) + ring(L('Run', 'Løb'), p.run[0], p.run[1], 'var(--success)', p.run[0] + '/' + p.run[1]) + ring(L('Steps', 'Skridt'), p.steps[0], p.steps[1], 'var(--warn)', num(p.steps[0], 0)) + '</div></div>';
+    const days = [24, 25, 26, 27, 28, 29, 30].map(d => new Intl.DateTimeFormat(loc(), { weekday: 'narrow' }).format(D(10, d)));
+    const bars = '<div class="hcard"><div class="hbars" role="img" aria-label="' + esc(L('Protein per day', 'Protein pr. dag')) + '">' + protein.map((v, i) => '<div><i style="height:' + Math.round(v / 150 * 100) + '%"></i><small>' + days[i] + '</small></div>').join('') + '</div></div>';
+    return rings + hd(L('Today', 'I dag')) + grp(r.today.map(x => x.h)) +
+      hd(L('Last lifts', 'Seneste løft'), '<button class="ntxt" type="button" data-tab="track">' + esc(L('Track', 'Log')) + '</button>') + grp(r.last.map(x => x.h)) +
+      hd(L('Recent sessions', 'Seneste træninger')) + grp(r.sess.map(x => x.h)) +
+      hd(L('Body trend', 'Kropsudvikling')) + grp(r.body.map(x => x.h)) +
+      hd(L('Protein', 'Protein')) + bars +
+      '<p class="hfresh">' + esc(L('Apple Health · updated 09:12', 'Apple Sundhed · opdateret 09:12')) + '</p>';
+  }
+  function dashSearch(q) {
+    const r = dashRows(), all = r.today.concat(r.last, r.sess, r.body).filter(x => x.k.toLowerCase().includes(q));
+    return all.length ? grp(all.map(x => x.h)) : '';
+  }
+  const liftRow = l => '<li class="nsw" data-k="lift" data-id="' + l.id + '"><button class="nsw-act l" type="button" tabindex="-1" aria-hidden="true" data-a="edit">' + ic('i-pencil') + esc(L('Edit', 'Rediger')) + '</button><button class="nsw-act r" type="button" tabindex="-1" aria-hidden="true" data-a="del">' + ic('i-trash') + esc(L('Delete', 'Slet')) + '</button>' +
+    '<div class="nsw-row"><button class="hmain" type="button" data-open aria-keyshortcuts="Delete">' + ic('i-dumbbell') + '<span class="hl"><b>' + esc(ln(l)) + '</b><small>' + esc(lw(l)) + '</small></span></button><span class="hv">' + esc(dfmt(l.d)) + '</span></div></li>';
+  const exRows = list => names().filter(n => list(n)).map(n => hrow({ icon: 'i-dumbbell', b: n, s: esc(lastTxt(known(n))), attr: 'data-ex="' + esc(n) + '"' }));
+  function formHtml(pre, f) {
+    const v = x => esc(f[x]);
+    return '<ul class="group hform">' +
+      nf(L('Name', 'Navn'), '<input id="' + pre + '-name" type="text" maxlength="60" autocomplete="off" autocapitalize="sentences" value="' + v('name') + '">') +
+      nf(L('Weight', 'Vægt'), '<input id="' + pre + '-kg" type="number" inputmode="decimal" step="0.5" min="0" max="999" value="' + v('kg') + '">', 'kg') +
+      nf(L('Reps', 'Gentagelser'), '<input id="' + pre + '-reps" type="number" inputmode="numeric" step="1" min="1" max="99" value="' + v('reps') + '">') +
+      nf(L('Sets', 'Sæt'), '<input id="' + pre + '-sets" type="number" inputmode="numeric" step="1" min="1" max="99" value="' + v('sets') + '">') + '</ul>' +
+      '<div class="hsug nchips" id="' + pre + '-sug" role="group" aria-label="' + esc(L('Past exercises', 'Tidligere øvelser')) + '"></div><p class="hhint" id="' + pre + '-hint" aria-live="polite"></p>';
+  }
+  const fOf = pre => (pre === 'hf' ? S.f : SF);
+  let SF = { name: '', kg: '', reps: '', sets: '' };
+  const validF = f => f.name.trim() && +f.kg > 0 && +f.reps > 0 && +f.sets > 0;
+  function bits(pre) {
+    const f = fOf(pre), nm = f.name.trim().toLowerCase(), k = known(f.name);
+    const sg = $('#' + pre + '-sug');
+    if (sg) {
+      const m = names().filter(n => n.toLowerCase().includes(nm) && n.toLowerCase() !== nm).slice(0, 4);
+      sg.innerHTML = m.map(n => '<button class="nchip glass" data-flat type="button" data-sug="' + esc(n) + '">' + esc(n) + '</button>').join('');
+      sg.hidden = !m.length;
+    }
+    const h = $('#' + pre + '-hint'); if (h) h.textContent = k ? lastTxt(k) : '';
+    if (pre === 'hf') {
+      const b = $('#hf-save'); if (b) b.disabled = !validF(f) || offline() || S.save === 'saving';
+    } else $('#hsh-ok').disabled = !validF(f) || offline();
+  }
+  function prefill(pre, nm) {
+    const f = fOf(pre), k = known(nm);
+    f.name = nm;
+    if (k) { f.kg = String(k.kg); f.reps = String(k.reps); f.sets = String(k.sets); }
+    ['name', 'kg', 'reps', 'sets'].forEach(x => { const el = $('#' + pre + '-' + x); if (el) el.value = f[x]; });
+    bits(pre);
+  }
+  function saveLine() {
+    if (S.save === 'saving') return '<div class="hsave" role="status">' + ic('i-spin', 'spin') + esc(L('Saving…', 'Gemmer…')) + '</div>';
+    if (S.save === 'fail') return '<div class="hsave bad" role="alert">' + ic('i-offline') + esc(L('Could not save', 'Kunne ikke gemme')) + '<button class="ntxt" type="button" id="hf-retry">' + esc(L('Try again', 'Prøv igen')) + '</button></div>';
+    if (S.save === 'ok') return '<div class="hsave" role="status">' + ic('i-check-circle') + esc(L('Logged', 'Logget')) + '</div>';
+    return '<div class="hsave"></div>';
+  }
+  function trackPane() {
+    const hist = LIFTS.slice().sort(byDate);
+    let h = formHtml('hf', S.f) + '<button class="nbtn glass tint hbtn" type="button" id="hf-save" data-flat>' + esc(L('Save', 'Gem')) + '</button><div id="hf-status">' + saveLine() + '</div>';
+    if (!hist.length) return h + '<div class="nstate">' + ic('i-dumbbell') + '<p>' + esc(L('No lifts logged', 'Ingen løft logget')) + '</p></div>';
+    h += hd(L('Exercises', 'Øvelser')) + grp(exRows(() => true)) + hd(L('History', 'Historik')) + '<ul class="group">' + hist.map(liftRow).join('') + '</ul>';
+    return h;
+  }
+  function trackSearch(q) {
+    const ex = exRows(n => n.toLowerCase().includes(q)), hist = LIFTS.slice().sort(byDate).filter(l => ln(l).toLowerCase().includes(q));
+    return (ex.length ? hd(L('Exercises', 'Øvelser')) + grp(ex) : '') + (hist.length ? hd(L('History', 'Historik')) + '<ul class="group">' + hist.map(liftRow).join('') + '</ul>' : '');
+  }
+  function doSave() {
+    const f = S.f;
+    if (!validF(f) || offline() || S.save === 'saving') return;
+    S.save = 'saving'; paintSave();
+    setTimeout(() => {
+      if (S.st === 'savefail') { S.save = 'fail'; paintSave(); return; }
+      LIFTS.push({ id: seq++, n: known(f.name) ? known(f.name).n : f.name.trim(), kg: +f.kg, reps: +f.reps, sets: +f.sets, d: D(10, 30) });
+      S.save = 'ok'; render(); const b = $('#hf-save'); if (b) b.focus({ preventScroll: true });
+    }, reduce.matches ? 0 : 650);
+  }
+  function paintSave() {
+    const st = $('#hf-status'); if (st) st.innerHTML = saveLine();
+    bits('hf');
+  }
+  /* FACTORY data */
+  const PROJ = ['Jarvis', 'Atlas', 'Harbor'];
+  const COLS = [['needs', ['Needs Dan', 'Kræver Dan']], ['prog', ['In progress', 'I gang']], ['review', ['In review', 'Til gennemsyn']], ['ready', ['Ready', 'Klar']], ['backlog', ['Backlog', 'Backlog']], ['done', ['Done', 'Færdig']]];
+  const FT = [
+    { id: 409, p: 0, col: 'needs', needs: true, t: ['Choose storage for note attachments', 'Vælg lager til notevedhæftninger'], ag: 'Codex', st: 'attn', why: ['Decision needed', 'Beslutning mangler'] },
+    { id: 412, p: 0, col: 'prog', t: ['Fix reconnect during voice calls', 'Ret genforbindelse i taleopkald'], ag: 'Copilot', st: 'run', pr: 88, ck: 'run' },
+    { id: 392, p: 0, col: 'prog', t: ['Move the task store to the new schema', 'Flyt opgavelageret til det nye skema'], ag: 'Codex', st: 'pau', blk: 405 },
+    { id: 405, p: 0, col: 'review', t: ['Add the health upload credential', 'Tilføj upload-nøgle til sundhed'], ag: 'Copilot', st: 'ok', pr: 84, ck: 'ok' },
+    { id: 401, p: 0, col: 'review', needs: true, t: ['Speed up the note graph layout', 'Gør notegrafen hurtigere'], ag: 'Codex', st: 'bad', pr: 81, ck: 'fail', why: ['Checks failed', 'Tjek fejlede'] },
+    { id: 398, p: 0, col: 'ready', t: ['Rename labels in the workspace sheet', 'Omdøb etiketter i arbejdsarket'], ag: 'Copilot', st: 'idle' },
+    { id: 395, p: 0, col: 'backlog', t: ['Show lift history in the dashboard', 'Vis løftehistorik i overblikket'], ag: 'Copilot', st: 'idle' },
+    { id: 388, p: 0, col: 'backlog', t: ['Export notes as a zip file', 'Eksportér noter som zip-fil'], ag: 'Codex', st: 'idle' },
+    { id: 380, p: 0, col: 'done', t: ['Add dark mode to the sign-in screen', 'Tilføj mørk tilstand til log ind'], ag: 'Copilot', st: 'done', pr: 77, ck: 'ok' },
+    { id: 376, p: 0, col: 'done', t: ['Fix the calendar sync window', 'Ret kalenderens synkvindue'], ag: 'Codex', st: 'done', pr: 74, ck: 'ok' },
+    { id: 52, p: 1, col: 'prog', t: ['Cache the route planner results', 'Cache resultater fra ruteplanlæggeren'], ag: 'Copilot', st: 'run', pr: 19, ck: 'run' },
+    { id: 49, p: 1, col: 'ready', t: ['Update the map tiles', 'Opdatér kortfliserne'], ag: 'Codex', st: 'idle' }
+  ];
+  const STX = { run: [['Running', 'Kører'], 'i-spin', 't-run', 'run'], pau: [['Paused', 'På pause'], 'i-pause', 't-pau', 'pau'], bad: [['Failed', 'Fejlet'], 'i-x-circle', 't-bad', 'bad'], ok: [['Ready for review', 'Klar til gennemsyn'], 'i-check-circle', 't-ok', 'ok'], idle: [['Waiting', 'Venter'], 'i-clock', 't-idle', ''], attn: [['Needs Dan', 'Kræver Dan'], 'i-bell', 't-pau', 'pau'], done: [['Done', 'Færdig'], 'i-tick', 't-ok', 'ok'] };
+  const ftitle = x => P(x.t);
+  const taskRow = x => {
+    const sx = STX[x.st], acts = x.st === 'run' ? [L('Pause', 'Pause'), 'i-pause', 'pause'] : x.st === 'pau' ? [L('Resume', 'Genoptag'), 'i-play', 'pause'] : x.st === 'bad' ? [L('Recover', 'Gendan'), 'i-retry', 'recover'] : null;
+    const sub = esc('#' + x.id + ' · ' + x.ag + ' · ') + '<span class="hst ' + sx[3] + '">' + esc(P(sx[0])) + '</span>' + (x.blk ? esc(' · ' + L('blocked by', 'blokeret af') + ' #' + x.blk) : '') + (x.why ? esc(' · ' + P(x.why)) : '');
+    return '<li class="nsw" data-k="task" data-id="' + x.id + '">' + (acts ? '<button class="nsw-act l" type="button" tabindex="-1" aria-hidden="true" data-a="' + acts[2] + '">' + ic(acts[1]) + esc(acts[0]) + '</button>' : '') +
+      (x.st !== 'done' ? '<button class="nsw-act r" type="button" tabindex="-1" aria-hidden="true" data-a="cancel">' + ic('i-x-circle') + esc(L('Cancel', 'Annullér')) + '</button>' : '') +
+      '<div class="nsw-row"><button class="hmain" type="button" data-open>' + ic(sx[1], sx[2]) + '<span class="hl"><b>' + esc(ftitle(x)) + '</b><small>' + sub + '</small></span></button>' + (x.pr ? '<span class="hv' + (x.ck === 'fail' ? ' bad' : '') + '">' + ic('i-pr') + x.pr + '</span>' : '') + '</div></li>';
+  };
+  const projTasks = () => (S.st === 'empty' ? [] : FT.filter(x => x.p === S.proj));
+  const tally = (list, key) => { const m = new Map(); list.forEach(x => m.set(key(x), (m.get(key(x)) || 0) + 1)); return [...m]; };
+  const colDetail = items => {
+    const live = items.filter(x => x.st !== 'idle' && x.st !== 'done');
+    const parts = live.length
+      ? tally(live, x => (x.st === 'attn' ? L('waiting on you', 'venter på dig') : P(STX[x.st][0]).toLowerCase())).map(([k, n]) => n + ' ' + k).concat(items.length > live.length ? [(items.length - live.length) + ' ' + L('waiting', 'venter')] : [])
+      : tally(items, x => x.ag).map(([k, n]) => n + ' ' + k);
+    return parts.join(' · ');
+  };
+  function boardPane(needsOnly) {
+    const list = projTasks();
+    let h = '';
+    COLS.forEach(c => {
+      if (needsOnly && c[0] !== 'needs') return;
+      const items = needsOnly ? list.filter(x => x.needs) : list.filter(x => x.col === c[0]);
+      if (!items.length && c[0] !== 'done') return;
+      if (!items.length) return;
+      const open = !S.shut[c[0]];
+      h += '<button class="fch" type="button" data-col="' + c[0] + '" aria-expanded="' + open + '" aria-label="' + esc(P(c[1]) + ', ' + items.length + '. ' + colDetail(items) + '. ' + (open ? L('Collapse', 'Skjul') : L('Expand', 'Vis'))) + '">' + ic('i-chev-down') + '<span class="fct"><h3>' + esc(P(c[1])) + '</h3><span class="fcd">' + esc(colDetail(items)) + '</span></span><span class="fcn">' + items.length + '</span></button>';
+      if (open) h += '<ul class="group">' + items.map(taskRow).join('') + '</ul>';
+    });
+    return h;
+  }
+  function factSearch(q) {
+    const m = projTasks().filter(x => ftitle(x).toLowerCase().includes(q) || ('#' + x.id).includes(q));
+    return m.length ? '<ul class="group">' + m.map(taskRow).join('') + '</ul>' : '';
+  }
+  const REL = [
+    { id: 'r3', v: 'v2026.10.3', st: 'ok', d: D(10, 29), c: 'a1b2c3d', tasks: [405, 412], runs: [[['Build', 'Byg'], '4 min', 'ok'], [['Tests', 'Tests'], '6 min', 'ok'], [['Deploy', 'Udrul'], '2 min', 'ok']] },
+    { id: 'r2', v: 'v2026.10.2', st: 'run', d: D(10, 22), c: '7e4f9a1', tasks: [380], runs: [[['Build', 'Byg'], '4 min', 'ok'], [['Deploy', 'Udrul'], '1 min', 'run']] },
+    { id: 'r1', v: 'v2026.10.1', st: 'bad', d: D(10, 9), c: '3d8c0b5', tasks: [376], runs: [[['Build', 'Byg'], '5 min', 'ok'], [['Deploy', 'Udrul'], '3 min', 'bad']] }
+  ];
+  const RST = { ok: [['Deployed', 'Udrullet'], 'ok'], run: [['Deploying', 'Udruller'], 'run'], bad: [['Failed', 'Fejlet'], 'bad'] };
+  const releases = () => (S.st === 'empty' || S.proj !== 0 ? [] : REL);
+  function relPane() {
+    return '<ul class="group">' + releases().map(r => '<li>' + hrow({ icon: 'i-cloud', b: r.v, s: esc(r.c + ' · ' + dfmt(r.d)), v: '<span class="hst ' + RST[r.st][1] + '">' + esc(P(RST[r.st][0])) + '</span>', go: true, attr: 'data-rel="' + r.id + '"' }) + '</li>').join('') + '</ul>';
+  }
+
+  /* SETTINGS data */
+  const DEP = [[['Chat', 'Chat'], 'gpt-5-chat', 'East US', 'i-chat'], [['Voice', 'Tale'], 'gpt-5-voice', 'East US', 'i-voice'], [['Research', 'Research'], 'gpt-5-deep', 'Sweden Central', 'i-search']];
+  const SV = { appearance: 'system', persona: 'warm', voice: 'nova', depth: 'standard', proactive: true, notify: true, model: 'gpt', effort: 'medium', decider: 'azure', agent: 'copilot', par: '2', gym: '4', run: '2', steps: '8000', protein: '140', kcal: '2600' };
+  const OPT = () => ({
+    appearance: [['light', L('Light', 'Lys')], ['dark', L('Dark', 'Mørk')], ['system', 'System']],
+    persona: [['warm', L('Warm', 'Varm')], ['direct', L('Direct', 'Direkte')], ['playful', L('Playful', 'Legende')]],
+    voice: [['nova', 'Nova'], ['sage', 'Sage'], ['ember', 'Ember']],
+    depth: [['standard', 'Standard'], ['deep', L('Deep', 'Dyb')]],
+    model: [['gpt', 'GPT-5'], ['mini', 'GPT-5 mini'], ['sonnet', 'Claude Sonnet']],
+    effort: [['low', L('Low', 'Lav')], ['medium', L('Medium', 'Mellem')], ['high', L('High', 'Høj')]],
+    decider: [['azure', 'Azure OpenAI'], ['anthropic', 'Anthropic']],
+    agent: [['copilot', 'Copilot'], ['codex', 'Codex']],
+    par: [['1', '1'], ['2', '2'], ['3', '3']],
+    gym: [['3', '3'], ['4', '4'], ['5', '5']],
+    run: [['1', '1'], ['2', '2'], ['3', '3']],
+    steps: [['6000', num(6000, 0)], ['8000', num(8000, 0)], ['10000', num(10000, 0)]],
+    protein: [['120', '120 g'], ['140', '140 g'], ['160', '160 g']],
+    kcal: [['2400', num(2400, 0) + ' kcal'], ['2600', num(2600, 0) + ' kcal'], ['2800', num(2800, 0) + ' kcal']]
+  });
+  const pickRow = (k, label, icon) => { const cur = OPT()[k].find(o => o[0] === SV[k]); return { k: label, h: hrow({ icon, b: label, v: esc(cur[1]), go: true, attr: 'data-pick="' + k + '" aria-haspopup="menu" aria-expanded="false"' }) }; };
+  const swRow = (k, label, icon) => ({ k: label, h: '<div class="hrow">' + ic(icon) + '<span class="hl"><b>' + esc(label) + '</b></span><button class="hsw" type="button" role="switch" aria-checked="' + SV[k] + '" aria-label="' + esc(label) + '" data-sw="' + k + '"' + (offline() ? ' aria-disabled="true"' : '') + '></button></div>' });
+  const valRow = (label, val, icon, sub) => ({ k: label, h: hrow({ div: true, icon, b: label, s: sub ? esc(sub) : '', v: esc(val) }) });
+  function setGroups() {
+    const seg = { k: L('Appearance', 'Udseende'), h: '<div class="hrow">' + ic('i-settings') + '<span class="hl"><b>' + esc(L('Appearance', 'Udseende')) + '</b></span>' + segHtml('hs-app', OPT().appearance, SV.appearance, offline()) + '</div>' };
+    return {
+      general: [
+        { h: L('Appearance', 'Udseende'), rows: [seg] },
+        { h: 'Jarvis', rows: [pickRow('persona', L('Personality', 'Personlighed'), 'i-smile'), valRow(L('Identity and role', 'Identitet og rolle'), L('Dan · Owner', 'Dan · Ejer'), 'i-user'), pickRow('voice', L('Voice', 'Stemme'), 'i-voice'), pickRow('depth', L('Research', 'Research'), 'i-search')] },
+        { h: L('Behaviour', 'Adfærd'), rows: [swRow('proactive', L('Proactive suggestions', 'Proaktive forslag'), 'i-proactive'), swRow('notify', L('Notifications', 'Notifikationer'), 'i-bell'), valRow(L('Routines', 'Rutiner'), L('3 active', '3 aktive'), 'i-calendar')] },
+        { h: L('Memory', 'Hukommelse'), rows: [valRow(L('Prefers short answers', 'Foretrækker korte svar'), dfmt(D(9, 14)), 'i-info'), valRow(L('Training days: Mon, Wed, Fri', 'Træningsdage: man, ons, fre'), dfmt(D(10, 2)), 'i-info'), valRow(L('Notes are written in Danish', 'Noter skrives på dansk'), dfmt(D(10, 20)), 'i-info')] }
+      ],
+      models: [
+        { h: 'Jarvis', rows: [pickRow('model', L('Model', 'Model'), 'i-cloud'), pickRow('effort', L('Reasoning', 'Ræsonnement'), 'i-info'), pickRow('decider', L('Decisions provider', 'Beslutningsudbyder'), 'i-key')] },
+        { h: L('Deployments', 'Udrulninger'), rows: DEP.map(d => valRow(Array.isArray(d[0]) ? P(d[0]) : d[0], d[1], d[3] || 'i-cloud', d[2])) },
+        { h: L('Coding agents', 'Kodeagenter'), rows: [pickRow('agent', L('Default agent', 'Standardagent'), 'i-code'), pickRow('par', L('Parallel tasks', 'Parallelle opgaver'), 'i-usage'), valRow(L('Daily limit', 'Dagsgrænse'), '20 $', 'i-clock')] }
+      ],
+      health: [
+        { h: L('Training targets', 'Træningsmål'), rows: [pickRow('gym', L('Gym per week', 'Styrketræning pr. uge'), 'i-dumbbell'), pickRow('run', L('Runs per week', 'Løbeture pr. uge'), 'i-status'), pickRow('steps', L('Steps per day', 'Skridt pr. dag'), 'i-health')] },
+        { h: L('Nutrition targets', 'Kostmål'), rows: [pickRow('protein', L('Protein per day', 'Protein pr. dag'), 'i-heart'), pickRow('kcal', L('Calories per day', 'Kalorier pr. dag'), 'i-proactive')] },
+        { h: L('Upload', 'Upload'), rows: [valRow(L('Upload credential', 'Upload-nøgle'), L('Active', 'Aktiv'), 'i-key', L('Created ', 'Oprettet ') + dfmt(D(10, 3)))] }
+      ],
+      account: [
+        { h: L('Owner', 'Ejer'), rows: [valRow('Dan', L('Owner', 'Ejer'), 'i-user')] },
+        { h: L('Credentials', 'Legitimationer'), rows: [{ k: L('Session', 'Session'), h: hrow({ div: true, icon: 'i-key', b: L('Session', 'Session'), s: esc(L('Valid until ', 'Gyldig til ') + dfmt(D(11, 12))), extra: '<button class="ntxt" type="button" data-ren="' + L('Session', 'Session') + '">' + esc(L('Renew', 'Forny')) + '</button>' }) }, valRow(L('Upload credential', 'Upload-nøgle'), L('Active', 'Aktiv'), 'i-key')] },
+        { h: '', rows: [{ k: L('Sign out', 'Log ud'), h: hrow({ icon: 'i-signout', b: L('Sign out', 'Log ud'), dng: true, attr: 'data-so="one"' }) }, { k: L('Sign out on all devices', 'Log ud på alle enheder'), h: hrow({ icon: 'i-signout', b: L('Sign out on all devices', 'Log ud på alle enheder'), dng: true, attr: 'data-so="all"' }) }] }
+      ]
+    };
+  }
+  const setPane = () => setGroups()[tab()].map(g => (g.h ? hd(g.h) : '<div class="hhd" aria-hidden="true"></div>') + grp(g.rows.map(r => r.h))).join('');
+  function setSearch(q) {
+    const all = [].concat(...Object.values(setGroups()).map(gs => [].concat(...gs.map(g => g.rows)))).filter(r => r.k.toLowerCase().includes(q));
+    return all.length ? grp(all.map(r => r.h)) : '';
+  }
+
+  /* Render */
+  function showState(icon, text, btn, act) {
+    $('#hstate-ic').setAttribute('href', '#' + icon);
+    $('#hstate-t').textContent = text;
+    const b = $('#hstate-b'); b.hidden = !btn; if (btn) { b.textContent = btn; b.dataset.act = act || ''; }
+    $('#hstate').hidden = false;
+  }
+  function banner() {
+    const bn = $('#hbanner'), st = S.st;
+    let txt = '', tone = 'warn', btn = '';
+    if (st === 'offline') txt = L('Offline. Showing a copy', 'Offline. Viser en kopi');
+    else if (st === 'stale') txt = L('Showing cached data', 'Viser gemte data');
+    else if (S.area === 'settings' && st === 'saving') txt = L('Saving…', 'Gemmer…');
+    else if (S.area === 'settings' && st === 'savefail') { txt = L('Could not save', 'Kunne ikke gemme'); tone = 'error'; btn = L('Try again', 'Prøv igen'); }
+    bn.hidden = !txt; bn.dataset.tone = tone;
+    bn.innerHTML = ic(tone === 'error' ? 'i-offline' : st === 'saving' ? 'i-spin' : 'i-offline') + '<span id="hbanner-t">' + esc(txt) + '</span>' + (btn ? '<button class="ntxt" type="button" id="hbanner-b">' + esc(btn) + '</button>' : '');
+  }
+  const blocked = () => S.st === 'loading' || S.st === 'error' || S.st === 'forbidden';
+  function render() {
+    if (!onHub()) return;
+    S.area = phone.dataset.hub || S.area;
+    const a = S.area, tb = tab(), st = S.st, q = S.q.trim().toLowerCase(), sr = S.searching, ar = AR[a];
+    $('#t-hub').textContent = ar.title();
+    const seg = $('#hseg'), tabs = ar.tabs();
+    if (seg.dataset.k !== a + lang) {
+      seg.dataset.k = a + lang; seg.style.setProperty('--n', tabs.length);
+      seg.innerHTML = tabs.map(t => '<button type="button" role="tab" data-v="' + t[0] + '">' + esc(t[1]) + '</button>').join('');
+    }
+    seg.setAttribute('aria-label', ar.title());
+    setSeg(seg, tabs.findIndex(t => t[0] === tb));
+    sIn.placeholder = L('Search', 'Søg'); sIn.setAttribute('aria-label', L('Search', 'Søg'));
+    $('#h-clear').hidden = !S.q; $('#h-clear').setAttribute('aria-label', L('Clear', 'Ryd'));
+    $('#h-cancel').hidden = !sr; $('#h-cancel').textContent = L('Cancel', 'Annuller');
+    const rb = $('#ng-reset'); rb.hidden = !!det.classList.contains('open'); rb.disabled = offline();
+    rb.setAttribute('aria-label', L('Refresh', 'Opdatér')); rb.title = L('Refresh', 'Opdatér');
+    banner();
+    const chips = $('#hchips');
+    let cs = null;
+    if (!sr && !blocked()) {
+      if (a === 'health' && tb === 'dashboard') cs = ['period', Object.keys(PER).map(k => [k, perName(k)]), S.period];
+      else if (a === 'factory') cs = ['proj', PROJ.map((n, i) => [String(i), n]), String(S.proj)];
+    }
+    chips.hidden = !cs; pane.toggleAttribute('data-chips', !!cs);
+    chips.innerHTML = cs ? cs[1].map(c => '<button class="nchip glass" data-flat type="button" data-ch="' + cs[0] + ':' + c[0] + '" aria-pressed="' + (c[0] === cs[2]) + '">' + esc(c[1]) + '</button>').join('') : '';
+    chips.setAttribute('aria-label', a === 'factory' ? L('Project', 'Projekt') : L('Period', 'Periode'));
+    const plus = $('#hplus'), pl = a === 'health' ? [L('New lift', 'Nyt løft'), 'i-plus'] : a === 'factory' ? [L('New task', 'Ny opgave'), 'i-plus'] : tb === 'models' ? [L('Add deployment', 'Tilføj udrulning'), 'i-plus'] : tb === 'health' ? [L('Create credential', 'Opret nøgle'), 'i-plus'] : [L('Add', 'Tilføj'), 'i-plus'];
+    plus.setAttribute('aria-label', pl[0]); plus.title = pl[0];
+    plus.disabled = offline() || blocked() || (a === 'settings' && tb !== 'models' && tb !== 'health'); plus.hidden = sr;
+    pane.hidden = true; pane.innerHTML = '';
+    $('#hskel').hidden = st !== 'loading'; $('#hstate').hidden = true;
+    if (st === 'error') showState('i-offline', L('Could not load', 'Kunne ikke hentes'), L('Try again', 'Prøv igen'), 'retry');
+    else if (st === 'forbidden') showState('i-user', L('Sign in as the owner', 'Log ind som ejer'));
+    else if (st === 'loading') { /* skeleton */ }
+    else if (sr) {
+      let h = '';
+      if (q) h = a === 'health' ? (tb === 'dashboard' ? dashSearch(q) : trackSearch(q)) : a === 'factory' ? factSearch(q) : setSearch(q);
+      if (q && !h) showState('i-search', L('No results', 'Ingen resultater'));
+      else if (h) { pane.innerHTML = h; pane.hidden = false; }
+    } else if (a === 'health' && tb === 'dashboard') {
+      if (st === 'empty') showState('i-health', L('No health data', 'Ingen sundhedsdata'));
+      else { pane.innerHTML = dashPane(); pane.hidden = false; }
+    } else if (a === 'health') { pane.innerHTML = st === 'empty' ? trackPane0() : trackPane(); pane.hidden = false; bits('hf'); }
+    else if (a === 'factory' && tb === 'releases') {
+      if (!releases().length) showState('i-cloud', L('No releases', 'Ingen udgivelser'));
+      else { pane.innerHTML = relPane(); pane.hidden = false; }
+    } else if (a === 'factory') {
+      const h = boardPane(tb === 'needs');
+      if (!h) showState(tb === 'needs' ? 'i-check-circle' : 'i-code', tb === 'needs' ? L('Nothing needs you', 'Intet kræver dig') : L('No tasks', 'Ingen opgaver'), L('New task', 'Ny opgave'), 'newtask');
+      else { pane.innerHTML = h; pane.hidden = false; }
+    } else { pane.innerHTML = setPane(); pane.hidden = false; fixSegs(pane, { 'hs-app': SV.appearance }); }
+    if (offline()) $$('[data-pick],[data-so],[data-ren],[data-sw],.hrow[data-act]', pane).forEach(b => { b.disabled = true; });
+    if (window.jvEdges) window.jvEdges();
+  }
+  function trackPane0() {
+    return formHtml('hf', S.f) + '<button class="nbtn glass tint hbtn" type="button" id="hf-save" data-flat>' + esc(L('Save', 'Gem')) + '</button><div id="hf-status">' + saveLine() + '</div><div class="nstate">' + ic('i-dumbbell') + '<p>' + esc(L('No lifts logged', 'Ingen løft logget')) + '</p></div>';
+  }
+  /* Detail (pushed screen) and sheets */
+  let detOpen = false, DT = null, shOpen = false, shk = null, noClick = 0, curArea = null;
+  const refocus = sel => { const b = sel && $(sel); if (b) b.focus({ preventScroll: true }); };
+  function syncInert() {
+    const cover = shOpen || detOpen;
+    view.inert = cover; navbar.inert = cover && onHub();
+    det.inert = !detOpen || shOpen; sh.inert = !shOpen;
+  }
+  const dlist = rows => '<ul class="group"><li><dl class="hdl">' + rows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(r[1]) + '</dd>').join('') + '</dl></li></ul>';
+  function paintDetail() {
+    let h = '';
+    $('#hdet-back-t').textContent = AR[S.area].title();
+    if (DT.kind === 'task') {
+      const x = FT.find(k => k.id === DT.id);
+      if (!x) { closeDetail(true); return; }
+      const sx = STX[x.st], acts = [hrow({ icon: 'i-chat', b: L('Steer', 'Styr'), go: true, attr: 'data-act="steer"' })];
+      if (x.st === 'run') acts.push(hrow({ icon: 'i-pause', b: L('Pause', 'Pause'), attr: 'data-act="pause"' }));
+      if (x.st === 'pau') acts.push(hrow({ icon: 'i-play', b: L('Resume', 'Genoptag'), attr: 'data-act="pause"' }));
+      if (x.st === 'bad') acts.push(hrow({ icon: 'i-retry', b: L('Recover', 'Gendan'), attr: 'data-act="recover"' }));
+      if (x.pr) acts.push(hrow({ icon: 'i-pr', b: L('Open PR', 'Åbn PR'), v: '#' + x.pr, attr: 'data-act="pr"' }));
+      if (x.st !== 'done') acts.push(hrow({ icon: 'i-x-circle', b: L('Cancel task', 'Annullér opgave'), dng: true, attr: 'data-act="cancel"' }));
+      const ev = [['09:02', L('Task created', 'Opgave oprettet')], ['09:04', L('Agent started', 'Agent startet')]];
+      if (x.st === 'pau') ev.push(['09:35', L('Paused', 'På pause')]);
+      if (x.pr) ev.push(['09:31', L('Pull request opened', 'Pull request åbnet') + ' #' + x.pr]);
+      if (x.ck) ev.push([x.ck === 'run' ? '09:40' : '09:38', x.ck === 'ok' ? L('Checks passed', 'Tjek bestået') : x.ck === 'fail' ? L('Checks failed', 'Tjek fejlede') : L('Checks running', 'Tjek kører')]);
+      $('#hdet-title').textContent = ftitle(x);
+      $('#hdet-meta').textContent = '#' + x.id + ' · ' + x.ag + ' · ' + PROJ[x.p];
+      $('#hdet-st').textContent = P(sx[0]);
+      h = '<div class="hdet-acts">' + grp(acts) + '</div>' +
+        hd(L('Request', 'Anmodning')) + dlist([[L('Project', 'Projekt'), PROJ[x.p]], [L('Agent', 'Agent'), x.ag], [L('Created', 'Oprettet'), dfmt(D(10, 27))], [L('On completion', 'Ved færdig'), L('Deliver PR', 'Lever PR')]]) +
+        hd(L('Timeline', 'Tidslinje')) + '<ul class="group">' + ev.map(e => '<li class="htl"><time>' + e[0] + '</time><span>' + esc(e[1]) + '</span></li>').join('') + '</ul>';
+      if (x.st !== 'idle' && x.st !== 'attn') h += hd(L('Usage', 'Forbrug')) + dlist([[L('Tokens', 'Tokens'), num(184, 0) + ' k'], [L('Time', 'Tid'), '27 min'], [L('Disk', 'Disk'), '312 MB']]) +
+        hd(L('Artifacts', 'Artefakter')) + grp([hrow({ div: true, icon: 'i-notes', b: L('Run log', 'Kørselslog'), v: '42 KB' }), hrow({ div: true, icon: 'i-notes', b: L('Test report', 'Testrapport'), v: '18 KB' })]);
+    } else {
+      const r = REL.find(k => k.id === DT.id);
+      if (!r) { closeDetail(true); return; }
+      const rs = { ok: L('Passed', 'Bestået'), run: L('Running', 'Kører'), bad: L('Failed', 'Fejlet') };
+      $('#hdet-title').textContent = r.v;
+      $('#hdet-meta').textContent = r.c + ' · ' + dfmt(r.d);
+      $('#hdet-st').textContent = P(RST[r.st][0]);
+      h = hd(L('Runs', 'Kørsler')) + grp(r.runs.map(u => hrow({ div: true, icon: u[2] === 'ok' ? 'i-check-circle' : u[2] === 'run' ? 'i-spin' : 'i-x-circle', b: P(u[0]), s: esc(u[1]), v: '<span class="hst ' + u[2] + '">' + esc(rs[u[2]]) + '</span>' }))) +
+        hd(L('Tasks', 'Opgaver')) + grp(r.tasks.map(id => FT.find(k => k.id === id)).filter(Boolean).map(x => hrow({ icon: 'i-code', b: ftitle(x), s: esc('#' + x.id), go: true, attr: 'data-jt="' + x.id + '"' })));
+    }
+    $('#hdet-body').innerHTML = h;
+    if (offline()) $$('button', $('#hdet-body')).forEach(b => { b.disabled = true; });
+  }
+  function openDetail(kind, id, from) {
+    closeMenu();
+    DT = { kind, id, from: from || document.activeElement };
+    paintDetail();
+    if (!DT) return;
+    $('#hdet-scroll').scrollTop = 0;
+    det.classList.add('open'); detOpen = true; syncInert();
+    $('#hdet-back').focus({ preventScroll: true });
+    render();
+  }
+  function closeDetail(silent) {
+    if (!detOpen) return;
+    const from = DT && DT.from;
+    det.classList.remove('open'); detOpen = false; DT = null; syncInert();
+    if (!silent) { render(); restore(from); }
+  }
+  $('#hdet-back').addEventListener('click', () => closeDetail());
+  let eb = null;
+  det.addEventListener('pointerdown', e => { const r = det.getBoundingClientRect(); if (detOpen && (e.clientX - r.left) / scaleK() < 28) eb = { x: e.clientX, id: e.pointerId }; });
+  const ebEnd = e => { if (eb && e.pointerId === eb.id) { const dx = (e.clientX - eb.x) / scaleK(); eb = null; if (e.type === 'pointerup' && dx > 80) closeDetail(); } };
+  det.addEventListener('pointerup', ebEnd); det.addEventListener('pointercancel', ebEnd);
+  det.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || !DT) return;
+    if (b.dataset.jt) { DT = { kind: 'task', id: +b.dataset.jt, from: DT.from }; paintDetail(); $('#hdet-scroll').scrollTop = 0; refocus('#hdet-back'); return; }
+    if (b.dataset.act && DT.kind === 'task') { const a = b.dataset.act, id = DT.id; taskAct(id, a, b); if (a === 'pause' || a === 'recover') refocus('[data-act="' + (a === 'recover' ? 'steer' : 'pause') + '"]'); }
+  });
+
+  function taskAct(id, a, from) {
+    const x = FT.find(k => k.id === id);
+    if (!x || offline()) return;
+    if (a === 'pause') x.st = x.st === 'run' ? 'pau' : 'run';
+    else if (a === 'recover') { x.st = 'run'; x.col = 'prog'; x.needs = false; x.ck = 'run'; delete x.why; toast(L('Recovery started', 'Gendannelse startet')); }
+    else if (a === 'cancel') { openSheet('confirm', { c: 'cancel', id, from: from || document.activeElement }); return; }
+    else if (a === 'steer') { openSheet('steer', { id, from: from || document.activeElement }); return; }
+    else if (a === 'pr') { toast(L('Opening pull request', 'Åbner pull request')); return; }
+    render(); if (detOpen) paintDetail();
+  }
+  function doCancel(id) {
+    const i = FT.findIndex(k => k.id === id);
+    if (i < 0) return;
+    const [x] = FT.splice(i, 1);
+    closeSheet(true); if (detOpen) closeDetail(true);
+    render();
+    toast(L('Task cancelled', 'Opgave annulleret'), () => { FT.splice(Math.min(i, FT.length), 0, x); render(); });
+  }
+  function delLift(id) {
+    const i = LIFTS.findIndex(l => l.id === id);
+    if (i < 0) return;
+    const [x] = LIFTS.splice(i, 1);
+    closeSheet(true); render();
+    toast(L('Deleted', 'Slettet'), () => { LIFTS.splice(Math.min(i, LIFTS.length), 0, x); render(); });
+  }
+  function rowAct(k, id, a) {
+    if (offline()) return;
+    if (k === 'lift') { if (a === 'edit') openSheet('lift', { id }); else delLift(id); } else taskAct(id, a);
+  }
+
+  /* Sheets */
+  const projPill = () => esc(PROJ[shk.pj]) + ic('i-chev-down');
+  function okState() {
+    if (!shk) return;
+    const k = shk.kind, v = x => !!$(x).value.trim() && !offline();
+    let ok = false;
+    if (k === 'lift') ok = !!validF(SF) && !offline();
+    else if (k === 'steer') ok = v('#hs-steer');
+    else if (k === 'newtask') ok = v('#hs-title');
+    else if (k === 'deploy') ok = v('#hs-name');
+    else if (k === 'cred') ok = v('#hs-label');
+    $('#hsh-ok').disabled = !ok;
+  }
+  function openSheet(kind, o) {
+    o = o || {};
+    if (shOpen) return;
+    closeMenu();
+    shk = { kind, o, from: o.from || document.activeElement, kb: false, pj: S.proj, ag: 'copilot', pol: 'pr' };
+    const body = $('#hsh-body'), ok = $('#hsh-ok'), form = kind !== 'confirm';
+    ok.style.visibility = form ? '' : 'hidden'; ok.tabIndex = form ? 0 : -1;
+    ok.setAttribute('aria-label', L('Save', 'Gem'));
+    $('#hsh-x').setAttribute('aria-label', L('Close', 'Luk'));
+    sh.dataset.d = kind === 'confirm' ? 's' : 'm';
+    const ttl = $('#hsh-title');
+    if (kind === 'lift') {
+      const l = o.id ? LIFTS.find(x => x.id === o.id) : null;
+      SF = l ? { name: ln(l), kg: String(l.kg), reps: String(l.reps), sets: String(l.sets) } : { name: '', kg: '', reps: '', sets: '' };
+      ttl.textContent = l ? L('Edit lift', 'Rediger løft') : L('New lift', 'Nyt løft');
+      body.innerHTML = formHtml('hs', SF) + (l ? '<div class="nsh-acts"><button class="nbtn glass danger" id="hs-del" type="button" data-flat>' + ic('i-trash') + esc(L('Delete', 'Slet')) + '</button></div>' : '');
+    } else if (kind === 'steer') {
+      ttl.textContent = L('Steer', 'Styr') + ' #' + o.id;
+      body.innerHTML = '<textarea class="hsteer" id="hs-steer" aria-label="' + esc(L('Message to the agent', 'Besked til agenten')) + '" placeholder="' + esc(L('Message to the agent', 'Besked til agenten')) + '" spellcheck="false"></textarea>';
+    } else if (kind === 'newtask') {
+      ttl.textContent = L('New task', 'Ny opgave');
+      body.innerHTML = '<ul class="group">' + nf(L('Title', 'Titel'), '<input id="hs-title" type="text" maxlength="120" autocomplete="off">') + nf(L('Project', 'Projekt'), '<button type="button" class="nsh-pill" id="hs-proj" aria-haspopup="menu" aria-expanded="false" style="margin-left:auto">' + projPill() + '</button>') + '</ul>' +
+        '<ul class="group"><li class="nf ta"><textarea id="hs-req" aria-label="' + esc(L('Request', 'Anmodning')) + '" placeholder="' + esc(L('Request', 'Anmodning')) + '" spellcheck="false"></textarea></li></ul>' +
+        '<ul class="group">' + nf(L('Agent', 'Agent'), segHtml('hs-ag', [['codex', 'Codex'], ['copilot', 'Copilot']], 'copilot')) + nf(L('On completion', 'Ved færdig'), segHtml('hs-pol', [['pr', L('Deliver PR', 'Lever PR')], ['none', L('No deploy', 'Ingen udrulning')]], 'pr')) + '</ul>';
+      setSeg($('#hs-ag'), 1); setSeg($('#hs-pol'), 0);
+    } else if (kind === 'deploy') {
+      ttl.textContent = L('Add deployment', 'Tilføj udrulning');
+      body.innerHTML = '<ul class="group">' + nf(L('Name', 'Navn'), '<input id="hs-name" type="text" maxlength="60" autocomplete="off">') + nf(L('Region', 'Region'), '<input id="hs-region" type="text" maxlength="40" autocomplete="off" value="East US">') + '</ul>';
+    } else if (kind === 'cred') {
+      ttl.textContent = L('Create credential', 'Opret nøgle');
+      body.innerHTML = '<ul class="group">' + nf(L('Label', 'Navn'), '<input id="hs-label" type="text" maxlength="60" autocomplete="off">') + '</ul>';
+    } else {
+      const c = o.c, all = o.all;
+      ttl.textContent = c === 'cancel' ? L('Cancel task?', 'Annullér opgave?') : all ? L('Sign out on all devices?', 'Log ud på alle enheder?') : L('Sign out?', 'Log ud?');
+      body.innerHTML = '<div class="nsh-acts"><button class="nbtn glass danger" type="button" data-flat data-c="go">' + esc(c === 'cancel' ? L('Cancel task', 'Annullér opgave') : all ? L('Sign out on all devices', 'Log ud på alle enheder') : L('Sign out', 'Log ud')) + '</button><button class="nbtn glass" type="button" data-flat data-c="keep">' + esc(c === 'cancel' ? L('Keep', 'Behold') : L('Cancel', 'Annuller')) + '</button></div>';
+    }
+    ok.disabled = form;
+    shOpen = true; syncInert();
+    scrim.hidden = false; void scrim.offsetWidth; scrim.classList.add('on');
+    sh.classList.add('open');
+    if (kind === 'lift') bits('hs'); else okState();
+    const f = $('#hs-name') || $('#hs-steer') || $('#hs-title') || $('#hs-label') || $('#hsh-x');
+    f.focus({ preventScroll: true });
+    if (f !== $('#hsh-x')) { shk.kb = true; kbd(true); }
+  }
+  function closeSheet(silent) {
+    if (!shOpen) return;
+    const from = shk && shk.from;
+    sh.classList.remove('open'); scrim.classList.remove('on'); sh.style.transform = ''; sh.style.transition = '';
+    if (shk && shk.kb) kbd(false);
+    sh.dataset.d = 'm';
+    shOpen = false; shk = null; syncInert();
+    setTimeout(() => { if (!shOpen) scrim.hidden = true; }, 320);
+    if (!silent) restore(from);
+  }
+  function submit() {
+    if (!shk || $('#hsh-ok').disabled) return;
+    const k = shk.kind, o = shk.o;
+    if (k === 'lift') {
+      const f = SF, kn = known(f.name), nm = kn ? kn.n : f.name.trim();
+      if (o.id) { const l = LIFTS.find(x => x.id === o.id); if (l) Object.assign(l, { n: nm, kg: +f.kg, reps: +f.reps, sets: +f.sets }); }
+      else LIFTS.push({ id: seq++, n: nm, kg: +f.kg, reps: +f.reps, sets: +f.sets, d: D(10, 30) });
+      closeSheet(true); render(); toast(L('Logged', 'Logget'));
+    } else if (k === 'steer') { closeSheet(); toast(L('Steering sent', 'Styring sendt')); }
+    else if (k === 'newtask') {
+      const t = $('#hs-title').value.trim();
+      FT.unshift({ id: seq++, p: shk.pj, col: 'backlog', t: [t, t], ag: shk.ag === 'codex' ? 'Codex' : 'Copilot', st: 'idle' });
+      S.proj = shk.pj; closeSheet(true); render(); toast(L('Task created', 'Opgave oprettet'));
+    } else if (k === 'deploy') {
+      DEP.push([$('#hs-name').value.trim(), 'gpt-5-custom', $('#hs-region').value.trim() || 'East US', 'i-cloud']);
+      closeSheet(true); render(); toast(L('Deployment added', 'Udrulning tilføjet'));
+    } else if (k === 'cred') { closeSheet(); toast(L('Credential created', 'Nøgle oprettet')); }
+  }
+  $('#hsh-ok').addEventListener('click', submit);
+  $('#hsh-x').addEventListener('click', () => closeSheet());
+  scrim.addEventListener('click', () => closeSheet());
+  function onForm(pre, id, v) {
+    const f = fOf(pre), key = id.slice(pre.length + 1);
+    if (id.indexOf(pre + '-') !== 0 || !(key in f)) return;
+    f[key] = v;
+    if (key === 'name' && known(v) && !f.kg && !f.reps && !f.sets) prefill(pre, v); else bits(pre);
+    if (pre === 'hf' && S.save === 'ok') { S.save = ''; paintSave(); }
+  }
+  sh.addEventListener('input', e => { if (shk && shk.kind === 'lift') onForm('hs', e.target.id, e.target.value); okState(); });
+  sh.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'number') { e.preventDefault(); submit(); } });
+  sh.addEventListener('click', e => {
+    if (!shk) return;
+    const sg = e.target.closest('.nseg [data-v]');
+    if (sg) { const seg = sg.closest('.nseg'); if (seg.id === 'hs-ag') { shk.ag = sg.dataset.v; setSeg(seg, sg.dataset.v === 'codex' ? 0 : 1); } else { shk.pol = sg.dataset.v; setSeg(seg, sg.dataset.v === 'pr' ? 0 : 1); } return; }
+    const sug = e.target.closest('[data-sug]');
+    if (sug) { prefill('hs', sug.dataset.sug); okState(); return; }
+    if (e.target.closest('#hs-proj')) {
+      const btn = $('#hs-proj');
+      openMenu(btn, PROJ.map((n, i) => ({ label: n, radio: true, checked: shk.pj === i, act: () => { shk.pj = i; btn.innerHTML = projPill(); } })));
+      return;
+    }
+    if (e.target.closest('#hs-del')) { delLift(shk.o.id); return; }
+    const c = e.target.closest('[data-c]');
+    if (!c) return;
+    if (c.dataset.c === 'keep') closeSheet();
+    else if (shk.o.c === 'cancel') doCancel(shk.o.id);
+    else { closeSheet(); toast(L('Signed out', 'Logget ud')); }
+  });
+  let sd0 = null;
+  sh.addEventListener('pointerdown', e => { if (e.target.closest('.grab, .nsh-hd') && !e.target.closest('button')) { sd0 = { y: e.clientY, id: e.pointerId, dy: 0 }; try { sh.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } } });
+  sh.addEventListener('pointermove', e => { if (sd0 && e.pointerId === sd0.id) { sd0.dy = (e.clientY - sd0.y) / scaleK(); sh.style.transition = 'none'; sh.style.transform = 'translate3d(0,calc(var(--lift) + ' + Math.max(0, sd0.dy) + 'px),0)'; } });
+  const sdEnd = e => { if (sd0 && e.pointerId === sd0.id) { const d = sd0.dy; sd0 = null; sh.style.transition = ''; sh.style.transform = ''; if (d > 90) closeSheet(); } };
+  sh.addEventListener('pointerup', sdEnd); sh.addEventListener('pointercancel', sdEnd);
+
+  /* Tabs, chips and search */
+  function setTab(tb, focus) {
+    S.tabs[S.area] = tb; S.q = ''; sIn.value = ''; scroller.scrollTop = 0;
+    render();
+    if (focus) refocus('#hseg [data-v="' + tb + '"]');
+  }
+  $('#hseg').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) setTab(b.dataset.v); });
+  $('#hseg').addEventListener('keydown', e => {
+    const order = AR[S.area].tabs().map(t => t[0]), i = order.indexOf(tab());
+    if (e.key === 'ArrowRight') { e.preventDefault(); setTab(order[Math.min(i + 1, order.length - 1)], true); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); setTab(order[Math.max(i - 1, 0)], true); }
+  });
+  sIn.addEventListener('focus', () => { if (!S.searching) { S.searching = true; render(); } kbd(true); });
+  sIn.addEventListener('pointerdown', () => kbd(true));
+  sIn.addEventListener('input', () => { S.q = sIn.value; render(); });
+  $('#h-clear').addEventListener('click', () => { sIn.value = ''; S.q = ''; render(); sIn.focus(); });
+  function endSearch() { S.searching = false; S.q = ''; sIn.value = ''; sIn.blur(); kbd(false); render(); }
+  $('#h-cancel').addEventListener('click', endSearch);
+  sIn.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endSearch(); } });
+
+  /* Settings commit: saving then saved, focus stays on the control */
+  let cTimer = 0;
+  function commit(sel) {
+    S.st = 'saving'; render(); refocus(sel);
+    clearTimeout(cTimer);
+    cTimer = setTimeout(() => { if (S.st === 'saving') { S.st = 'default'; render(); refocus(sel); toast(L('Saved', 'Gemt')); } }, reduce.matches ? 0 : 600);
+  }
+
+  /* Plus */
+  const plusBtn = $('#hplus');
+  plusBtn.removeAttribute('aria-haspopup'); plusBtn.removeAttribute('aria-expanded');
+  plusBtn.addEventListener('click', () => {
+    if (plusBtn.disabled) return;
+    if (S.area === 'health') openSheet('lift', { from: plusBtn });
+    else if (S.area === 'factory') openSheet('newtask', { from: plusBtn });
+    else if (tab() === 'models') openSheet('deploy', { from: plusBtn });
+    else if (tab() === 'health') openSheet('cred', { from: plusBtn });
+  });
+
+  /* Refresh */
+  $('#ng-reset').addEventListener('click', () => {
+    if (!onHub() || offline()) return;
+    const b = $('#ng-reset'), st = S.st;
+    b.classList.add('spin'); setTimeout(() => b.classList.remove('spin'), 750);
+    if (st === 'default' || st === 'stale') {
+      S.st = 'loading'; render();
+      setTimeout(() => { if (S.st === 'loading') { S.st = st === 'stale' ? 'default' : st; render(); } }, reduce.matches ? 0 : 600);
+    }
+  });
+
+  /* Click delegation */
+  const closeRow = li => { li.removeAttribute('data-open'); li.querySelector('.nsw-row').style.setProperty('--dx', '0px'); };
+  view.addEventListener('click', e => {
+    if (Date.now() - noClick < 300) return;
+    const t = e.target;
+    let b = t.closest('.nsw-act');
+    if (b) { const li = b.closest('.nsw'); closeRow(li); rowAct(li.dataset.k, +li.dataset.id, b.dataset.a); return; }
+    b = t.closest('.hmain[data-open]');
+    if (b) {
+      const li = b.closest('.nsw');
+      if (li.dataset.open) { closeRow(li); return; }
+      if (li.dataset.k === 'task') openDetail('task', +li.dataset.id, b); else if (!offline()) openSheet('lift', { id: +li.dataset.id, from: b });
+      return;
+    }
+    if ((b = t.closest('[data-rel]'))) { openDetail('rel', b.dataset.rel, b); return; }
+    if ((b = t.closest('[data-ch]'))) {
+      const c = b.dataset.ch.split(':');
+      if (c[0] === 'period') S.period = c[1]; else S.proj = +c[1];
+      render(); refocus('[data-ch="' + b.dataset.ch + '"]'); return;
+    }
+    if ((b = t.closest('[data-tab]'))) { setTab(b.dataset.tab); return; }
+    if ((b = t.closest('[data-ex]'))) {
+      const nm = b.dataset.ex;
+      if (S.searching) endSearch();
+      if (b.dataset.jump || S.tabs[S.area] !== 'track') setTab('track');
+      prefill('hf', nm); scroller.scrollTop = 0; refocus('#hf-kg'); return;
+    }
+    if ((b = t.closest('[data-sug]'))) { prefill('hf', b.dataset.sug); return; }
+    if (t.closest('#hf-save')) { doSave(); return; }
+    if (t.closest('#hf-retry')) { S.st = 'default'; doSave(); return; }
+    const colB = t.closest('[data-col]');
+    if (colB) { const k = colB.dataset.col; S.shut[k] = !S.shut[k]; render(); refocus('[data-col="' + k + '"]'); return; }
+    if ((b = t.closest('[data-sw]'))) { if (offline()) return; const k = b.dataset.sw; SV[k] = !SV[k]; commit('[data-sw="' + k + '"]'); return; }
+    if ((b = t.closest('[data-pick]'))) {
+      if (offline()) return;
+      if (!menu.hidden && menuAnchor === b) { closeMenu(); return; }
+      const k = b.dataset.pick;
+      openMenu(b, OPT()[k].map(o => ({ label: o[1], radio: true, checked: SV[k] === o[0], act: () => { SV[k] = o[0]; commit('[data-pick="' + k + '"]'); } })));
+      return;
+    }
+    if ((b = t.closest('[data-seg="hs-app"]'))) { if (offline()) return; SV.appearance = b.dataset.v; commit('[data-seg="hs-app"][data-v="' + b.dataset.v + '"]'); return; }
+    if (t.closest('[data-ren]')) { if (!offline()) toast(L('Session renewed', 'Session fornyet')); return; }
+    if ((b = t.closest('[data-so]'))) { if (!offline()) openSheet('confirm', { c: 'so', all: b.dataset.so === 'all', from: b }); return; }
+    if (t.closest('#hbanner-b')) { commit('#hpane'); return; }
+    if ((b = t.closest('#hstate-b'))) {
+      if (b.dataset.act === 'retry') { S.st = 'default'; render(); } else if (b.dataset.act === 'newtask') openSheet('newtask', { from: b });
+    }
+  });
+  view.addEventListener('keydown', e => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    const li = e.target.closest && e.target.closest('.nsw');
+    if (li && !e.target.closest('input')) { e.preventDefault(); rowAct(li.dataset.k, +li.dataset.id, li.dataset.k === 'lift' ? 'del' : 'cancel'); }
+  });
+  view.addEventListener('input', e => { if (e.target.closest('.hform')) onForm('hf', e.target.id, e.target.value); });
+
+  /* Long-press on a task steers it; swipe reveals row actions */
+  let lp = null;
+  const lpStop = () => { if (lp) { clearTimeout(lp.t); lp = null; } };
+  view.addEventListener('pointerdown', e => {
+    const b = e.target.closest('.nsw[data-k="task"] .hmain');
+    if (!b || e.button || offline()) return;
+    lp = { x: e.clientX, y: e.clientY, t: setTimeout(() => { lp = null; noClick = Date.now() + 600; openSheet('steer', { id: +b.closest('.nsw').dataset.id, from: b }); }, 520) };
+  });
+  view.addEventListener('pointermove', e => { if (lp && Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 8) lpStop(); });
+  view.addEventListener('pointerup', lpStop); view.addEventListener('pointercancel', lpStop);
+  let sw = null;
+  const SWF = 150, SWA = 96;
+  view.addEventListener('pointerdown', e => {
+    $$('.nsw[data-open]', view).forEach(li => { if (!li.contains(e.target)) closeRow(li); });
+    const row = e.target.closest('.nsw-row');
+    if (!row || offline() || e.button > 0) return;
+    const li = row.parentElement;
+    sw = { li, row, x0: e.clientX, y0: e.clientY, base: li.dataset.open === 'l' ? SWA : li.dataset.open === 'r' ? -SWA : 0, lock: '', id: e.pointerId, dx: 0 };
+  });
+  view.addEventListener('pointermove', e => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const sk = scaleK(), dx = (e.clientX - sw.x0) / sk, dy = (e.clientY - sw.y0) / sk;
+    if (!sw.lock) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      sw.lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      if (sw.lock === 'y') { sw = null; return; }
+      sw.li.dataset.drag = '1';
+      try { sw.row.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    }
+    const hasL = !!sw.li.querySelector('.nsw-act.l'), hasR = !!sw.li.querySelector('.nsw-act.r');
+    sw.dx = Math.max(hasR ? -280 : 0, Math.min(hasL ? 280 : 0, sw.base + dx));
+    sw.row.style.setProperty('--dx', sw.dx + 'px');
+  });
+  const swEnd = e => {
+    if (!sw || e.pointerId !== sw.id) return;
+    const s = sw; sw = null;
+    if (s.lock !== 'x') return;
+    noClick = Date.now();
+    s.li.removeAttribute('data-drag');
+    const k = s.li.dataset.k, id = +s.li.dataset.id, l = s.li.querySelector('.nsw-act.l'), r = s.li.querySelector('.nsw-act.r');
+    if (s.dx >= SWF && l) { closeRow(s.li); rowAct(k, id, l.dataset.a); }
+    else if (s.dx <= -SWF && r) { closeRow(s.li); rowAct(k, id, r.dataset.a); }
+    else if (s.dx > 56) { s.li.dataset.open = 'l'; s.row.style.setProperty('--dx', SWA + 'px'); }
+    else if (s.dx < -56) { s.li.dataset.open = 'r'; s.row.style.setProperty('--dx', -SWA + 'px'); }
+    else closeRow(s.li);
+  };
+  view.addEventListener('pointerup', swEnd);
+  view.addEventListener('pointercancel', swEnd);
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !onHub()) return;
+    if (!menu.hidden) { const a = menuAnchor; closeMenu(); restore(a); }
+    else if (shOpen) closeSheet();
+    else if (detOpen) closeDetail();
+  });
+
+  /* Board wiring */
+  function applyLang() {
+    $('#hsh-x').setAttribute('aria-label', L('Close', 'Luk'));
+    $('#hsh-ok').setAttribute('aria-label', L('Save', 'Gem'));
+    $('#hdet-back').setAttribute('aria-label', L('Back', 'Tilbage'));
+    $('#hdet-back-t').textContent = AR[S.area].title();
+  }
+  function apply(area, tb, state) {
+    closeMenu(); if (shOpen) closeSheet(true); if (detOpen) closeDetail(true);
+    curArea = area;
+    Object.assign(S, { area, st: 'default', q: '', searching: false, save: '', shut: { done: true }, f: { name: '', kg: '', reps: '', sets: '' } });
+    S.tabs[area] = tb; sIn.value = '';
+    if (state === 'search') { S.searching = true; S.q = area === 'health' ? L('bench', 'bænk') : area === 'factory' ? L('reconnect', 'genforbindelse') : 'model'; sIn.value = S.q; }
+    else if (['empty', 'loading', 'error', 'offline', 'stale', 'forbidden', 'saving', 'savefail'].includes(state)) S.st = state;
+    if (area === 'health' && (state === 'saving' || state === 'savefail')) {
+      S.f = { name: L('Bench press', 'Bænkpres'), kg: '80', reps: '4', sets: '3' };
+      S.save = state === 'saving' ? 'saving' : 'fail';
+      S.st = state === 'saving' ? 'default' : 'savefail';
+    }
+    kbd(S.searching);
+    render();
+    if (state === 'detail') openDetail('task', 412, null);
+    else if (state === 'release') openDetail('rel', 'r3', null);
+    else if (state === 'steer') openSheet('steer', { id: 412 });
+    else if (state === 'newtask') openSheet('newtask');
+    else if (state === 'newlift') openSheet('lift');
+    else if (state === 'signout') openSheet('confirm', { c: 'so', all: false });
+  }
+  function go(area, tb, state) {
+    curArea = area;
+    if (window.jvShowScreen) window.jvShowScreen('hub', area);
+    apply(area, tb, state);
+  }
+  [['health', '#health-sel'], ['factory', '#factory-sel'], ['settings', '#settings-sel']].forEach(a => {
+    const s = $(a[1]);
+    if (s) s.addEventListener('change', () => { if (!s.value) return; const v = s.value.split(':'); go(a[0], v[0], v[1]); });
+  });
+  document.addEventListener('jv:lang', e => {
+    lang = e.detail === 'en' ? 'en' : 'da';
+    if (shOpen) closeSheet(true);
+    applyLang(); if (onHub()) { render(); if (detOpen) paintDetail(); }
+  });
+  function onScreen() {
+    if (onHub()) {
+      const a = phone.dataset.hub || S.area;
+      if (a !== curArea) {
+        curArea = a; closeMenu(); if (shOpen) closeSheet(true); if (detOpen) closeDetail(true);
+        Object.assign(S, { area: a, st: 'default', q: '', searching: false, save: '', shut: { done: true } }); sIn.value = '';
+      }
+      $('#ng-reset').hidden = false; applyLang(); render();
+      return;
+    }
+    curArea = null; kbd(false); closeMenu(); if (shOpen) closeSheet(true); if (detOpen) closeDetail(true);
+  }
+  new MutationObserver(onScreen).observe(phone, { attributes: true, attributeFilter: ['data-scr', 'data-hub'] });
+  applyLang();
+  if (onHub()) {
+    curArea = S.area; $('#ng-reset').hidden = false;
+    const sc = params.get('screen');
+    if (AR[sc]) {
+      const tabs = AR[sc].tabs().map(t => t[0]), tb = tabs.includes(params.get('tab')) ? params.get('tab') : tabs[0], state = params.get('state') || 'default';
+      apply(sc, tb, state);
+      const sel = $('#' + sc + '-sel'); if (sel) sel.value = tb + ':' + state;
+    } else render();
+  }
 })();
 
 </script>
