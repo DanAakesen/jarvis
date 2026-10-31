@@ -67,6 +67,7 @@ struct JarvisHealthDetailView: View {
                 detailList(data)
             }
         }
+        .jarvisAmbientBackground()
         .navigationTitle(kind.title(language: language))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -104,7 +105,7 @@ struct JarvisHealthDetailView: View {
         heartRateUnavailable: Bool,
         heartRateFailure: JarvisHealthFailure?
     ) -> some View {
-        List {
+        JarvisList {
             Section(copy.text(.workout)) {
                 let workoutDate = date(row["workout_date"]) ?? date(row["start_at"])
                 healthValue(
@@ -179,7 +180,7 @@ struct JarvisHealthDetailView: View {
     }
 
     private func sleepList(_ rows: [[String: JSONValue]]) -> some View {
-        List {
+        JarvisList {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 Section(JarvisHealthLocalization.formattedDate(date(row["sleep_date"]) ?? "", language: language)) {
                     if let hours = row["total_sleep_hours"]?.numberValue ?? row["asleep_hours"]?.numberValue {
@@ -201,7 +202,7 @@ struct JarvisHealthDetailView: View {
     }
 
     private func mealsList(_ rows: [[String: JSONValue]]) -> some View {
-        List {
+        JarvisList {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 Section(row["meal_name"]?.stringValue ?? "\(copy.text(.meals)) \(index + 1)") {
                     if let time = row["occurred_at"]?.stringValue {

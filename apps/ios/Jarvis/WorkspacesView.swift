@@ -41,7 +41,7 @@ struct WorkspacesView: View {
             }
             results
         }
-        .background(Color(uiColor: .systemBackground))
+        .jarvisAmbientBackground()
         .navigationTitle(text(.title))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -182,7 +182,7 @@ struct WorkspacesView: View {
     }
 
     private var results: some View {
-        List {
+        JarvisList {
             if loadState == .loading && items.isEmpty {
                 Section {
                     ProgressView(text(.loading))

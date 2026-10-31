@@ -62,6 +62,7 @@ struct JarvisActivitySheet: View {
             }
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
+            .jarvisAmbientBackground()
             .navigationTitle(kind.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

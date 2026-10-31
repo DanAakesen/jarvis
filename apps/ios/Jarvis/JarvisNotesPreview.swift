@@ -24,7 +24,7 @@ import SwiftUI
     .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 
-private enum JarvisNotesPreview {
+enum JarvisNotesPreview {
     static func makeClient() -> JarvisNotesClient? {
         let scenario = Data(
             """

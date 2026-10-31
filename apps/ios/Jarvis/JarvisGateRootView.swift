@@ -112,7 +112,8 @@ private final class JarvisGateModel: ObservableObject {
     func load() async {
         guard case .loading = presentation else { return }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") {
+            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
+            ProcessInfo.processInfo.arguments.contains("--screenshot-factory-fixture") {
             presentation = .unlocked
             isPrivacyCoverVisible = false
             return
@@ -330,9 +331,7 @@ private struct JarvisGateOverlayView: View {
                     onPrimaryAction: model.performPrimaryAction
                 )
             } else {
-                Color(uiColor: .systemBackground)
-                    .ignoresSafeArea()
-                    .accessibilityHidden(true)
+                JarvisAmbientBackground(showsOrb: false)
             }
         }
         .accessibilityAddTraits(.isModal)
@@ -389,12 +388,7 @@ private struct JarvisGateSurface: View {
 
     var body: some View {
         ZStack {
-            if isSignIn {
-                JarvisGateAmbientBackground()
-            } else {
-                Rectangle().fill(.regularMaterial)
-                Color(uiColor: .systemBackground).opacity(JarvisDesignTokens.gateBackgroundOpacity)
-            }
+            JarvisAmbientBackground()
 
             VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
                 Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
@@ -451,64 +445,6 @@ private struct JarvisGateSurface: View {
     }
 }
 
-private struct JarvisGateAmbientBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
-    var body: some View {
-        GeometryReader { geometry in
-            let size = geometry.size
-            let diameter = size.width * 1.35
-
-            ZStack {
-                Color(uiColor: .systemBackground)
-                glow(
-                    JarvisDesignTokens.gateAmbientCool,
-                    opacity: colorScheme == .dark ? 0.3 : 0.24,
-                    diameter: diameter,
-                    x: size.width * 0.08,
-                    y: size.height * 0.1
-                )
-                glow(
-                    JarvisDesignTokens.gateAmbientWarm,
-                    opacity: colorScheme == .dark ? 0.26 : 0.3,
-                    diameter: diameter,
-                    x: size.width * 0.94,
-                    y: size.height * 0.16
-                )
-                glow(
-                    JarvisDesignTokens.gateAmbientBlue,
-                    opacity: colorScheme == .dark ? 0.2 : 0.16,
-                    diameter: diameter,
-                    x: size.width * 0.96,
-                    y: size.height * 0.82
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .ignoresSafeArea()
-    }
-
-    private func glow(
-        _ color: Color,
-        opacity: Double,
-        diameter: CGFloat,
-        x: CGFloat,
-        y: CGFloat
-    ) -> some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [color.opacity(opacity), color.opacity(opacity * 0.3), .clear],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: diameter * 0.5
-                )
-            )
-            .frame(width: diameter, height: diameter)
-            .position(x: x, y: y)
-            .accessibilityHidden(true)
-    }
-}
 
 private struct JarvisMicrosoftMark: View {
     var body: some View {

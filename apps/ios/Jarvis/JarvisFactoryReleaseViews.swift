@@ -92,7 +92,7 @@ struct JarvisFactoryReleaseDetailView: View {
     }
 
     var body: some View {
-        List {
+        JarvisList {
             Section {
                 LabeledContent(copy.text(.state), value: copy.releaseStatus(release.status))
                 LabeledContent(copy.text(.commit), value: String(release.sha.prefix(12)))
@@ -205,6 +205,7 @@ struct JarvisFactoryReleaseDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .jarvisAmbientBackground()
         .navigationTitle(release.version)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

@@ -171,7 +171,7 @@ struct JarvisNotesArea: View {
                 searchContent
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
@@ -308,7 +308,7 @@ struct JarvisNotesArea: View {
             } else if let tree, folderGroups.isEmpty {
                 stateView(icon: "note.text", title: copy.emptyNotes, retry: nil)
             } else {
-                List {
+                JarvisList {
                     ForEach(visibleFolderGroups, id: \.self) { folder in
                         Section {
                             if expandedFolders.contains(folder) {
@@ -364,7 +364,7 @@ struct JarvisNotesArea: View {
             } else if folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0 {
                 stateView(icon: "folder", title: copy.emptyList, retry: nil)
             } else {
-                List {
+                JarvisList {
                     if (tree?.rootNoteCount ?? 0) > 0 {
                         Section {
                             if expandedFolders.contains("") {
@@ -415,7 +415,7 @@ struct JarvisNotesArea: View {
             } else if visibleSearchNotes.isEmpty && visibleSearchTasks.isEmpty {
                 stateView(icon: "magnifyingglass", title: copy.noResults, retry: nil)
             } else {
-                List {
+                JarvisList {
                     if !visibleSearchNotes.isEmpty {
                         Section {
                             ForEach(visibleSearchNotes, id: \.nodeId) { hit in
@@ -656,7 +656,7 @@ struct JarvisNotesArea: View {
             if groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty {
                 stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
             } else {
-                List {
+                JarvisList {
                     if !groups.overdue.isEmpty {
                         Section {
                             ForEach(groups.overdue) { task in taskRow(task, today: list.today) }

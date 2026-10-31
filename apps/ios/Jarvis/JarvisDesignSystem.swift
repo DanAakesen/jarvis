@@ -214,10 +214,19 @@ enum JarvisDesignTokens {
     static let gateOrbSize: CGFloat = 250
     static let gateControlSpacing: CGFloat = 24
     static let gateBackgroundBlurRadius: CGFloat = 36
-    static let gateBackgroundOpacity: Double = 0.66
-    static let gateAmbientCool = Color(red: 0.32, green: 0.86, blue: 0.98)
-    static let gateAmbientWarm = Color(red: 1, green: 0.71, blue: 0.36)
-    static let gateAmbientBlue = Color(red: 0.23, green: 0.55, blue: 1)
+    static let ambientPage = adaptiveColor(light: 0xf6f0e6, dark: 0x07090f)
+    static let ambientCool = adaptiveColor(light: 0x14768d, dark: 0x52dcfa)
+    static let ambientWarm = adaptiveColor(light: 0xe8a23a, dark: 0xffb45c)
+    static let ambientGreen = adaptiveColor(light: 0x2db35d, dark: 0x3ddc84)
+    static let ambientBlue = adaptiveColor(light: 0x2f80ed, dark: 0x3b8bff)
+    static let ambientReferenceSize = CGSize(width: 440, height: 956)
+    static let ambientOrbCenter = UnitPoint(x: 0.5, y: 430.0 / 956)
+    static let ambientOrbScale: CGFloat = 1.45
+    static let ambientOrbBlur: CGFloat = 6
+    static let ambientOrbDarkOpacity: Double = 0.55
+    static let ambientOrbLightOpacity: Double = 0.42
+    static let ambientOrbVeilOpacity: Double = 0.46
+    static let glassSolid = adaptiveColor(light: 0xefe8dc, dark: 0x161c24)
     static let gateActionAccent = Color(uiColor: UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 1, green: 0.706, blue: 0.361, alpha: 1)
@@ -253,4 +262,137 @@ enum JarvisDesignTokens {
     static let orbCenterSizeScale: CGFloat = 0.065
     static let orbCenterGlowOpacity: Double = 0.86
     static let orbCenterGlowRadiusScale: CGFloat = 0.09
+
+    private static func adaptiveColor(light: UInt32, dark: UInt32) -> Color {
+        Color(uiColor: UIColor { traits in
+            let rgb = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(
+                red: CGFloat((rgb >> 16) & 0xff) / 255,
+                green: CGFloat((rgb >> 8) & 0xff) / 255,
+                blue: CGFloat(rgb & 0xff) / 255,
+                alpha: 1
+            )
+        })
+    }
+}
+
+struct JarvisAmbientBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+    var showsOrb = true
+
+    var body: some View {
+        JarvisDesignTokens.ambientPage
+            .overlay {
+                Canvas { context, size in
+                    // CSS paints the first gradient on top; radii are relative to the full screen.
+                    glow(&context, size: size, color: JarvisDesignTokens.ambientBlue,
+                         center: UnitPoint(x: 0.92, y: 0.80), radii: CGSize(width: 0.54, height: 0.30),
+                         opacity: colorScheme == .dark ? 0.20 : 0.16)
+                    glow(&context, size: size, color: JarvisDesignTokens.ambientGreen,
+                         center: UnitPoint(x: 0.24, y: 0.98), radii: CGSize(width: 0.70, height: 0.38),
+                         opacity: colorScheme == .dark ? 0.16 : 0.18)
+                    glow(&context, size: size, color: JarvisDesignTokens.ambientWarm,
+                         center: UnitPoint(x: 0.94, y: 0.20), radii: CGSize(width: 0.54, height: 0.34),
+                         opacity: colorScheme == .dark ? 0.26 : 0.30)
+                    glow(&context, size: size, color: JarvisDesignTokens.ambientCool,
+                         center: UnitPoint(x: 0.12, y: 0.10), radii: CGSize(width: 0.60, height: 0.36),
+                         opacity: colorScheme == .dark ? 0.30 : 0.24)
+                }
+            }
+            .overlay {
+                if showsOrb {
+                    GeometryReader { geometry in
+                        let scale = geometry.size.width / JarvisDesignTokens.ambientReferenceSize.width
+                        JarvisOrbView(activity: .calm)
+                            .scaleEffect(JarvisDesignTokens.ambientOrbScale * scale)
+                            .blur(radius: JarvisDesignTokens.ambientOrbBlur * scale)
+                            .opacity(colorScheme == .dark
+                                     ? JarvisDesignTokens.ambientOrbDarkOpacity
+                                     : JarvisDesignTokens.ambientOrbLightOpacity)
+                            .position(
+                                x: geometry.size.width * JarvisDesignTokens.ambientOrbCenter.x,
+                                y: geometry.size.height * JarvisDesignTokens.ambientOrbCenter.y
+                            )
+                    }
+                    JarvisDesignTokens.ambientPage.opacity(JarvisDesignTokens.ambientOrbVeilOpacity)
+                }
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private func glow(
+        _ context: inout GraphicsContext,
+        size: CGSize,
+        color: Color,
+        center: UnitPoint,
+        radii: CGSize,
+        opacity: Double
+    ) {
+        var layer = context
+        layer.translateBy(x: size.width * center.x, y: size.height * center.y)
+        layer.scaleBy(x: size.width * radii.width, y: size.height * radii.height)
+        layer.fill(
+            Path(ellipseIn: CGRect(x: -1, y: -1, width: 2, height: 2)),
+            with: .radialGradient(
+                Gradient(colors: [color.opacity(opacity), color.opacity(0)]),
+                center: .zero,
+                startRadius: 0,
+                endRadius: 0.70
+            )
+        )
+    }
+}
+
+struct JarvisGlassSurface: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if reduceTransparency {
+            JarvisDesignTokens.glassSolid
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
+    }
+}
+
+struct JarvisForm<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        Form {
+            content.listRowBackground(JarvisGlassSurface())
+        }
+        .jarvisAmbientBackground()
+    }
+}
+
+struct JarvisList<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        List {
+            content.listRowBackground(JarvisGlassSurface())
+        }
+        .scrollContentBackground(.hidden)
+    }
+}
+
+extension View {
+    func jarvisAmbientBackground() -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scrollContentBackground(.hidden)
+            .background { JarvisAmbientBackground() }
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar, .bottomBar)
+            .presentationBackground { JarvisAmbientBackground() }
+    }
 }

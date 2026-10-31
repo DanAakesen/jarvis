@@ -19,7 +19,7 @@ struct JarvisNewNoteSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            JarvisForm {
                 TextField(copy.titleField, text: $title)
                     .textInputAutocapitalization(.sentences)
                 TextField(copy.folderField, text: $folder)
@@ -111,7 +111,7 @@ struct JarvisNewTaskSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            JarvisForm {
                 TextField(copy.titleField, text: $title, axis: .vertical)
                     .lineLimit(1...3)
                 Picker(copy.scope, selection: $scope) {

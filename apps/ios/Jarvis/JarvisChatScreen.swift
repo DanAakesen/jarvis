@@ -82,6 +82,7 @@ struct JarvisChatScreen: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composer
         }
+        .jarvisAmbientBackground()
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -109,6 +110,10 @@ struct JarvisChatScreen: View {
         }
         .task {
             await model.load()
+            if model.fixtureMode,
+               ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications") {
+                activitySheet = .needsYou
+            }
             await model.watchActivity()
         }
         .sheet(item: $activitySheet) { sheet in
@@ -332,7 +337,7 @@ struct JarvisChatScreen: View {
         .background {
             if reduceTransparency {
                 RoundedRectangle(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
-                    .fill(Color(uiColor: isUser ? .secondarySystemGroupedBackground : .secondarySystemBackground))
+                    .fill(JarvisDesignTokens.glassSolid)
             }
         }
         .glassEffect(
@@ -460,7 +465,7 @@ struct JarvisChatScreen: View {
             .padding(JarvisDesignTokens.chatComposerSpacing)
             .background {
                 RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
-                    .fill(reduceTransparency ? Color(uiColor: .secondarySystemBackground) : Color.clear)
+                    .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
                     .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatComposerRadius))
             }
             .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)

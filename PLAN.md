@@ -3435,6 +3435,17 @@ focused Core tests. Local implementation is complete; next verify the Mac app
 build, real-device Microsoft sheet, signed TestFlight keychain grant and live
 Entra redirect. Device acceptance remains open; no upload is authorized here.
 
+P15-38 / [#1478](https://github.com/DanAakesen/jarvis/issues/1478) centralizes the
+approved Chat ambient field and subdued orb for native screens, app-owned sheets
+and the glass sidebar; shared glass forms/lists preserve Reduce Transparency.
+Five focused Linux source-contract tests pass, including both board palettes
+and glow geometry, screen/sheet adoption and the one-boot screenshot hook.
+The existing screenshot artifact now pairs all eight requested surfaces in both
+appearances with interactive board renders in `comparisons.html`. Main was
+refreshed and already contained in this branch. Next: ready-PR Mac compile,
+simulator captures/board comparison, green CI and owner visual acceptance;
+Linux cannot produce native screenshots and the draft PR currently skips CI.
+
 P15-24 / [#1447](https://github.com/DanAakesen/jarvis/issues/1447) corrects the
 normal-window-only selection that hid Microsoft authentication beneath the gate.
 The highest eligible visible foreground-active window now hosts sign-in; the

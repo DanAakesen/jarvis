@@ -67,7 +67,7 @@ struct JarvisSidebar: View {
             }
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
-        .background(Color(uiColor: .systemBackground))
+        .background(JarvisGlassSurface())
         .accessibilityHidden(!isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()

@@ -1,3 +1,23 @@
+## 31 October 2026 — one native iPhone ambient background (P15-38 / #1478)
+
+Use the approved Chat backdrop on every native screen and app-owned sheet,
+as requested after TestFlight build 12. Keep one definition in
+`JarvisDesignSystem.swift`, not per-screen gradient copies: the board's four
+elliptical glows, theme-specific page colours, and subdued static orb.
+Voice and sign-in/lock reuse the same field beneath their foreground orb.
+Cards/list rows and the sidebar use glass, with a solid Reduce Transparency
+fallback. Preserve gate privacy coverage and existing screen behaviour.
+
+Extend the existing ready-PR screenshot hook without another Mac job or
+simulator boot. Package both appearances of all eight requested surfaces with
+`comparisons.html` and the checked-in board so native captures and concept
+renders can be viewed side by side. Notifications means the existing Needs you
+sheet, not a new APNs screen. Preview transports stay synthetic and Voice fixture
+startup never opens the microphone. Linux source contracts and Swift syntax
+parsing are local evidence only; Mac compile/captures, CI green and owner visual
+acceptance remain pending. Main was fetched and was already an ancestor of the
+working branch, so no history rewrite or merge was needed.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry

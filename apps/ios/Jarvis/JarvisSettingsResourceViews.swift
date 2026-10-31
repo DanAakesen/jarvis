@@ -22,7 +22,7 @@ struct JarvisProactiveSettingsView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error)
                     .foregroundStyle(.red)
@@ -111,7 +111,7 @@ struct JarvisRoutinesSettingsView: View {
     }
 
     var body: some View {
-        List {
+        JarvisList {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -150,6 +150,7 @@ struct JarvisRoutinesSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .jarvisAmbientBackground()
         .navigationTitle(copy(.routinesRow))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -237,7 +238,7 @@ struct JarvisMemorySettingsView: View {
     }
 
     var body: some View {
-        List {
+        JarvisList {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -273,6 +274,7 @@ struct JarvisMemorySettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .jarvisAmbientBackground()
         .navigationTitle(copy(.memoryRow))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: copy(.memorySearch))
@@ -415,7 +417,7 @@ private struct JarvisMemoryEditorView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -585,7 +587,7 @@ struct JarvisTargetsSettingsView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -707,7 +709,7 @@ struct JarvisHealthCredentialView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -790,7 +792,7 @@ struct JarvisOwnerSettingsView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -843,7 +845,7 @@ struct JarvisCredentialsSettingsView: View {
     }
 
     var body: some View {
-        List {
+        JarvisList {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -878,6 +880,7 @@ struct JarvisCredentialsSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .jarvisAmbientBackground()
         .navigationTitle(copy(.credentialsRow))
         .navigationBarTitleDisplayMode(.inline)
     }

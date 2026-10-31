@@ -58,7 +58,7 @@ struct JarvisFactoryNewTaskSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            JarvisForm {
                 Section {
                     Picker(copy.text(.projectLabel), selection: $selectedProjectID) {
                         ForEach(projects) { project in

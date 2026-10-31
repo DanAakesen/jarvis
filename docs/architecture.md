@@ -1473,6 +1473,14 @@ no contract gap requiring backend work was found.
 
 ### iOS Chat screen (P15-10)
 
+P15-38 centralizes native backdrop rendering in `JarvisDesignSystem.swift`:
+`JarvisAmbientBackground` supplies the shared light/dark elliptical ambient
+field and static decorative orb; `jarvisAmbientBackground()` installs it behind
+screen content and app-owned sheet presentations while exposing scroll
+backgrounds. `JarvisForm` and `JarvisList` supply shared glass row surfaces with
+a Reduce Transparency fallback. Voice and gates reuse the field beneath their
+foreground orb. There are no client/server contract or persistence changes.
+
 `JarvisChatScreen` is the SwiftUI presentation layer; `JarvisChatModel` owns
 screen-scoped loading, streaming, cursor paging, attachment drafts, cancellation
 and reattachment. The shared `JarvisChatClient` remains responsible for the
