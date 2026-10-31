@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum JarvisDesignTokens {
     static let sidebarWidthFraction: CGFloat = 0.74
@@ -113,6 +114,24 @@ enum JarvisDesignTokens {
     static let notesGraphNeighbourOpacity: Double = 0.72
     static let notesGraphNodeOpacity: Double = 0.46
     static let notesSearchSnippetLineLimit = 2
+    static let settingsHorizontalInset = notesHorizontalInset
+    static let settingsSectionSpacing = notesSectionSpacing
+    static let settingsControlHeight = notesControlHeight
+    static let settingsRowMinimumHeight = notesRowMinimumHeight
+    static let settingsIconSize = notesIconSize
+    static let settingsSearchRadius: CGFloat = 20
+    static let settingsSkeletonValueWidth: CGFloat = 64
+    static let settingsSkeletonValueHeight: CGFloat = 12
+    static let settingsAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: CGFloat(180) / 255, blue: CGFloat(92) / 255, alpha: 1)
+            : UIColor(red: CGFloat(180) / 255, green: CGFloat(95) / 255, blue: CGFloat(6) / 255, alpha: 1)
+    })
+    static let settingsSecondaryAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: CGFloat(82) / 255, green: CGFloat(220) / 255, blue: 1, alpha: 1)
+            : UIColor(red: CGFloat(20) / 255, green: CGFloat(118) / 255, blue: CGFloat(141) / 255, alpha: 1)
+    })
     static let gateContentInset: CGFloat = 32
     static let gateOrbSize: CGFloat = 224
     static let gateControlSpacing: CGFloat = 24

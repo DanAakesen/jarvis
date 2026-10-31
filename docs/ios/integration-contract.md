@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. The Settings concept was approved on 31 October 2026; section 12 uses only existing routes. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -133,3 +133,40 @@ The web Notes and Tasks views call these routes directly; their assistant tools 
 There is no note delete, rename or move route; no folder create or rename route; no task delete route; no task priority on create; and no offline cache. Do not expose those operations or simulate them locally. A new folder is not independently created: a directory only appears when it contains a note. Search and editor writes must not claim offline persistence. No additional backend work is authorized by P15-12.
 
 Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx`, `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (the separate voice-language setting).
+
+## 12. Settings area (P15-20)
+
+The four native segments reuse the existing owner-session bearer token and the
+web application's routes. The handlers below use the verified owner principal;
+no iOS-only route, authentication path or backend change is part of this screen.
+
+| Screen action | Existing route and verified contract |
+|---|---|
+| Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
+| Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
+| Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
+| Edit training/nutrition targets | `GET` and `PATCH /daily/training-targets` and `/daily/nutrition-targets` use the existing bounded target schemas. A patch is a top-level object of changed values; `null` clears a target. |
+| Read Health upload credential state | `GET /api/health/upload-credential` returns the state and optional expiry. Its `POST` explicitly rejects owner-session tokens with 403 and requires Microsoft sign-in. V1 therefore displays state only; it does not create, rotate, revoke or reveal a one-time token. A native HealthKit upload path is not defined. |
+| Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |
+| List, view, edit or delete memory | `GET /memory?folder=General&limit=50&offset=N&query=TEXT` returns `items`, `count`, `limit`, `offset` and `hasMore`. Items may include both `memory` and `vault_note`; the native settings list filters to `memory`, as the web panel does. `GET /memory/:id` reads one; `PATCH /memory/:id` accepts `{text}`; `DELETE /memory/:id` may return 202 when approval is pending. |
+| List and delete routines | `GET /routines` returns `{routines}`. The web panel deletes through `DELETE /recipes/:id`, which returns 204. |
+| Read account and sign out | `GET /me` returns the validated owner display name. `DELETE /auth/session` revokes the current session; `DELETE /auth/sessions` revokes all sessions. The existing client removes the device's Keychain token only after the server confirms the revocation. |
+
+Notifications remain disabled: the backend supports web push, but APNs device
+registration and test delivery are not implemented. Advanced voice tuning,
+retrieval thresholds, timeouts and project administration remain web-only in v1.
+The checked-in `docs/ios/design/board.html` does not contain the approved
+`screen=settings` frames referenced by the issue; the implementation follows
+those owner-approved frames rather than treating the older local board as source
+for settings values. The existing screenshot workflow is retained unchanged
+under the Mac-run cost guard.
+
+Sources checked before implementation: `apps/backend/src/core/settings.ts`,
+`apps/web/src/SettingsPage.tsx` and its panels, `apps/backend/src/core/model-deployments.ts`,
+`apps/backend/src/daily/routes/training-targets.ts`,
+`apps/backend/src/daily/routes/nutrition-targets.ts`,
+`apps/backend/src/daily/health-upload/capability-routes.ts`,
+`apps/backend/src/proactive/routes.ts`, `apps/web/src/proactive-data.ts`,
+`apps/backend/src/vault/index.ts`, `apps/backend/src/core/recipe-management.ts`,
+`apps/web/src/TaskRecipesSettings.tsx`, `apps/backend/src/core/index.ts` and
+`apps/backend/src/auth/session/routes.ts`.

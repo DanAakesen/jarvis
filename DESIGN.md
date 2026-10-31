@@ -2857,6 +2857,35 @@ is represented. Danish and English strings come from the JarvisCore localization
 catalog; the app-owned Settings preference defaults to Danish and controls date
 formatting as well as visible and accessibility copy.
 
+## Native iOS Settings area (P15-20; 31 October 2026)
+
+The owner-approved Settings concept uses four text-only segments—General,
+Models, Health and Account—with a left-aligned Settings title/refresh row and a
+fixed bottom search/plus bar. Native SwiftUI grouped lists, forms, pickers,
+toggles, navigation, system materials and confirmation dialogs carry the
+content. The segmented text switcher is custom because the approved four-label
+presentation is not the native segmented-control treatment; the bottom bar is
+custom because the search and context-sensitive plus action must remain fixed
+at the bottom rather than move into navigation chrome. The header is custom to
+keep the Settings title and refresh action in the approved row.
+
+Shared color and geometry values live in `JarvisDesignTokens` in
+`apps/ios/Jarvis/JarvisDesignSystem.swift`. The existing shared accent tokens
+provide the approved orange primary and cyan secondary in dark and light
+appearance; the appearance setting changes only Light/Dark/System, because the
+token layer owns accent and tint. The cyan token remains a placeholder for a
+future owner decision. Orange is limited to small accents, tints and strokes.
+No orb appears in this area.
+
+All visible copy and accessibility labels use the Danish/English
+`JarvisSettingsLocalization` catalog; the app language preference defaults to
+Danish. Disabled Notifications and Health credential creation are explicit
+backend limitations, not fake controls. Advanced voice tuning, retrieval
+thresholds, timeouts and project administration remain web-only. The checked-in
+design board has no `screen=settings` frames, so it cannot be used to list
+frame-by-frame visual deltas; the owner-approved issue concept is authoritative.
+The existing CI screenshot set is unchanged under the iOS Mac-run cost guard.
+
 ## Native iOS sign-in and lock (P15-16; 30 October 2026)
 
 The approved Sign-in and Lock frames in `docs/ios/design/board.html` guide the

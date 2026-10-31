@@ -6319,12 +6319,12 @@ to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
-SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice and Notes are native screens, other
-enabled destinations are title-only pages, and Settings exposes the persisted
-Danish/English app-language preference (Danish by default), with native back
-navigation. Banking remains disabled and labeled Later. The fixed-behind
-sidebar opens through a right-side drag or the localized VoiceOver action;
-its shared styling and gesture tokens are in `JarvisSidebar.swift`.
+SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice
+and Notes are native screens; Settings is the native four-segment area described
+below. Other enabled destinations remain title-only pages. Banking remains
+disabled and labeled Later. The fixed-behind sidebar opens through a right-side
+drag or the localized VoiceOver action; its shared styling and gesture tokens
+are in `JarvisSidebar.swift`.
 
 P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
 screen state and calls the existing chat, Now-feed, approvals and workspace
@@ -6357,6 +6357,19 @@ existing stored owner session: no native Entra sign-in provider exists yet, and
 the app must show an error instead of using fixture content when sign-in is
 unavailable. No standalone folder creation, destructive note/task action,
 task-create priority or offline cache is implemented.
+
+P15-20 mounts the approved Settings area at the existing Settings destination.
+`JarvisSettingsClient` wraps the shared `JarvisClient`; Settings views reuse only
+the routes listed in section 12 of `docs/ios/integration-contract.md`. Pure
+validation, target bounds, memory paging/filtering, dirty tracking and account
+revocation remain in JarvisCore. The app-owned Danish/English language defaults
+to Danish; the shared appearance theme is propagated to the app color scheme.
+Notifications and Health upload credential creation stay disabled because the
+backend lacks APNs support and rejects owner-session credential creation.
+Advanced voice tuning, retrieval thresholds, timeouts and project administration
+remain web-only. Use `--screenshot-settings-fixture` to start the screen with a
+synthetic Settings response; the existing CI workflow remains unchanged and
+captures only its established Chat/sidebar set.
 
 Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
 checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile

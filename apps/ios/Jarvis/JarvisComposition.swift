@@ -7,6 +7,7 @@ enum JarvisCompositionError: Error {
 
 extension Notification.Name {
     static let jarvisSignInRequired = Notification.Name("JarvisSignInRequired")
+    static let jarvisSessionRevoked = Notification.Name("JarvisSessionRevoked")
 }
 
 struct JarvisUnavailableAccessTokenProvider: AccessTokenProvider {

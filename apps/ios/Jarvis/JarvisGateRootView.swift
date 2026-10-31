@@ -114,7 +114,8 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
-        if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") {
+        if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
+            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") {
             presentation = .unlocked
             isPrivacyCoverVisible = false
             return
@@ -319,6 +320,9 @@ struct JarvisGateRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .jarvisSignInRequired).receive(on: DispatchQueue.main)) { _ in
                 model.clientRequestedSignIn()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
+                Task { await model.signOut() }
             }
     }
 }

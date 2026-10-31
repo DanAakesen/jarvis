@@ -189,9 +189,9 @@ public struct JarvisTargetBound: Codable, Equatable, Sendable {
 }
 
 public struct JarvisTargetValues: Codable, Equatable, Sendable {
-    public let targets: [String: Int?]
+    public let targets: [String: JarvisSettingsValue]
     public let bounds: [String: JarvisTargetBound]
-    public let missing: [String]?
+    public let missing: [String]
     public let updatedAt: String?
 }
 
@@ -212,6 +212,15 @@ public struct JarvisMemoryItem: Codable, Equatable, Sendable, Identifiable {
     public let folder: String
     public let text: String
     public let updatedAt: String?
+
+    public init(id: String, kind: String, title: String, folder: String, text: String, updatedAt: String?) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.folder = folder
+        self.text = text
+        self.updatedAt = updatedAt
+    }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
@@ -296,6 +305,7 @@ public struct JarvisSettingsClient: Sendable {
     }
 
     public func saveSettings(_ patch: JarvisSettingsPatch) async throws -> JarvisSettingsResponse {
+        try JarvisSettingsLogic.validateSettingsPatch(patch)
         let body = try JSONEncoder().encode(patch)
         return try await send(.patch, path: ["settings"], body: body)
     }
@@ -324,27 +334,49 @@ public struct JarvisSettingsClient: Sendable {
     }
 
     public func loadTrainingTargets() async throws -> JarvisTargetValues {
-        try await send(.get, path: ["daily", "training-targets"], idempotent: true)
+        let value: JarvisTargetValues = try await send(.get, path: ["daily", "training-targets"], idempotent: true)
+        try Self.validateTargets(value, keys: ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"])
+        return value
     }
 
-    public func saveTrainingTargets(_ changes: [String: Int?]) async throws -> JarvisTargetValues {
-        try JarvisSettingsLogic.validateTargets(changes, keys: ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"])
+    public func saveTrainingTargets(
+        _ changes: [String: Int?],
+        bounds: [String: JarvisTargetBound]
+    ) async throws -> JarvisTargetValues {
+        try JarvisSettingsLogic.validateTargets(
+            changes,
+            keys: ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"],
+            bounds: bounds
+        )
         let body = try JSONEncoder().encode(TargetPatch(values: changes))
-        return try await send(.patch, path: ["daily", "training-targets"], body: body)
+        let value: JarvisTargetValues = try await send(.patch, path: ["daily", "training-targets"], body: body)
+        try Self.validateTargets(value, keys: ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"])
+        return value
     }
 
     public func loadNutritionTargets() async throws -> JarvisTargetValues {
-        try await send(.get, path: ["daily", "nutrition-targets"], idempotent: true)
+        let value: JarvisTargetValues = try await send(.get, path: ["daily", "nutrition-targets"], idempotent: true)
+        try Self.validateTargets(value, keys: ["restingKcal", "deficitKcal", "proteinGrams"])
+        return value
     }
 
-    public func saveNutritionTargets(_ changes: [String: Int?]) async throws -> JarvisTargetValues {
-        try JarvisSettingsLogic.validateTargets(changes, keys: ["restingKcal", "deficitKcal", "proteinGrams"])
+    public func saveNutritionTargets(
+        _ changes: [String: Int?],
+        bounds: [String: JarvisTargetBound]
+    ) async throws -> JarvisTargetValues {
+        try JarvisSettingsLogic.validateTargets(
+            changes,
+            keys: ["restingKcal", "deficitKcal", "proteinGrams"],
+            bounds: bounds
+        )
         let body = try JSONEncoder().encode(TargetPatch(values: changes))
-        return try await send(.patch, path: ["daily", "nutrition-targets"], body: body)
+        let value: JarvisTargetValues = try await send(.patch, path: ["daily", "nutrition-targets"], body: body)
+        try Self.validateTargets(value, keys: ["restingKcal", "deficitKcal", "proteinGrams"])
+        return value
     }
 
     public func loadHealthUploadCredential() async throws -> JarvisHealthUploadCredential {
-        try await send(.get, path: ["api", "health", "upload-credential"], idempotent: true)
+        try await send(.get, path: ["health", "upload-credential"], idempotent: true)
     }
 
     public func loadProactiveSettings() async throws -> JarvisProactiveSettings {
@@ -371,10 +403,22 @@ public struct JarvisSettingsClient: Sendable {
         let page: JarvisMemoryPage = try await send(
             .get, path: ["memory"], queryItems: items, idempotent: true
         )
-        guard page.items.allSatisfy({ $0.kind == "memory" }) else {
+        guard page.count == page.items.count, page.items.count <= limit,
+              page.limit == limit, page.offset == offset,
+              page.items.allSatisfy({
+                  ($0.kind == "memory" || $0.kind == "vault_note") &&
+                      JarvisSettingsLogic.validMemoryID($0.id) && $0.text.utf8.count <= 20_000
+              }) else {
             throw JarvisSettingsClientError.invalidResponse
         }
-        return page
+        let visibleItems = page.items.filter { $0.kind == "memory" }
+        return JarvisMemoryPage(
+            items: visibleItems,
+            count: visibleItems.count,
+            limit: page.limit,
+            offset: page.offset,
+            hasMore: page.hasMore
+        )
     }
 
     public func readMemory(id: String) async throws -> JarvisMemoryItem {
@@ -408,7 +452,7 @@ public struct JarvisSettingsClient: Sendable {
 
     public func deleteRoutine(id: String) async throws {
         guard JarvisSettingsLogic.validRoutineID(id) else { throw JarvisSettingsClientError.invalidRequest }
-        try await sendNoContent(.delete, path: ["routines", id])
+        try await sendNoContent(.delete, path: ["recipes", id])
     }
 
     public func loadOwnerProfile() async throws -> JarvisOwnerProfile {
@@ -490,6 +534,31 @@ public struct JarvisSettingsClient: Sendable {
         default: return .invalidResponse
         }
     }
+
+    private static func validateTargets(_ value: JarvisTargetValues, keys: Set<String>) throws {
+        guard Set(value.targets.keys) == keys,
+              Set(value.bounds.keys) == keys,
+              value.bounds.values.allSatisfy({
+                  !$0.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+                      $0.label.count <= 80 && !$0.unit.isEmpty && $0.unit.count <= 16 &&
+                      $0.min >= 0 && $0.max >= $0.min
+              }),
+              value.targets.allSatisfy({ key, target in
+                  guard let bound = value.bounds[key] else { return false }
+                  switch target {
+                  case .null: return JarvisSettingsLogic.validTarget(nil, bound: bound)
+                  case .integer(let integer): return JarvisSettingsLogic.validTarget(integer, bound: bound)
+                  default: return false
+                  }
+              }),
+              Set(value.missing) == Set(keys.filter({
+                  if case .null = value.targets[$0] { return true }
+                  return false
+              })),
+              value.updatedAt.map(validISO8601Date) ?? true else {
+            throw JarvisSettingsClientError.invalidResponse
+        }
+    }
 }
 
 private struct DeploymentBody: Encodable {
@@ -555,11 +624,137 @@ public enum JarvisSettingsLogic {
             guard case .object(let editedValues) = value else { continue }
             let oldValues: [String: JarvisSettingsValue]
             if case .object(let previous) = savedAreas[area] { oldValues = previous } else { oldValues = [:] }
-            for (key, newValue) in editedValues where oldValues[key] != newValue {
-                areas[area, default: [:]][key] = newValue
+            if area == "roles" {
+                for (role, roleValue) in editedValues {
+                    guard case .object(let editedRole) = roleValue else { continue }
+                    let oldRole: [String: JarvisSettingsValue]
+                    if case .object(let previous) = oldValues[role] { oldRole = previous } else { oldRole = [:] }
+                    let changedFields = editedRole.filter { oldRole[$0.key] != $0.value }
+                    if !changedFields.isEmpty {
+                        areas["roles", default: [:]][role] = .object(changedFields)
+                    }
+                }
+            } else {
+                for (key, newValue) in editedValues where oldValues[key] != newValue {
+                    areas[area, default: [:]][key] = newValue
+                }
             }
         }
         return areas.isEmpty ? nil : JarvisSettingsPatch(areas: areas)
+    }
+
+    public static func validSettingsFieldValue(
+        _ value: JarvisSettingsValue,
+        options: [String]? = nil,
+        maximumLength: Int? = nil,
+        numericBounds: ClosedRange<Double>? = nil,
+        integerOnly: Bool = false,
+        allowEmpty: Bool = true
+    ) -> Bool {
+        switch value {
+        case .string(let value):
+            return (allowEmpty || !value.isEmpty) &&
+                value.utf8.count <= (maximumLength ?? 2_000) &&
+                !value.unicodeScalars.contains(where: {
+                    $0.value < 0x20 && $0 != "\n" && $0 != "\r" && $0 != "\t"
+                }) &&
+                (options?.isEmpty != false || options?.contains(value) == true)
+        case .integer(let value):
+            guard let numericBounds else { return false }
+            return numericBounds.contains(Double(value))
+        case .number(let value):
+            guard let numericBounds, value.isFinite else { return false }
+            return numericBounds.contains(value) && (!integerOnly || value.rounded() == value)
+        case .boolean:
+            return options == nil && numericBounds == nil
+        case .object, .array, .null:
+            return false
+        }
+    }
+
+    public static func validateSettingsPatch(_ patch: JarvisSettingsPatch) throws {
+        guard !patch.areas.isEmpty else { throw JarvisSettingsClientError.invalidRequest }
+        let roles: Set<String> = ["chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot"]
+        let reasoning: [String] = ["none", "minimal", "low", "medium", "high", "xhigh"]
+        for (area, fields) in patch.areas {
+            guard !fields.isEmpty else { throw JarvisSettingsClientError.invalidRequest }
+            if area == "roles" {
+                for (role, value) in fields {
+                    guard roles.contains(role), case .object(let roleFields) = value, !roleFields.isEmpty,
+                          roleFields.allSatisfy({ key, value in
+                              switch key {
+                              case "model":
+                                  validSettingsFieldValue(value, maximumLength: 128, allowEmpty: false)
+                              case "reasoningEffort":
+                                  validSettingsFieldValue(value, options: reasoning)
+                              default:
+                                  false
+                              }
+                          }) else {
+                        throw JarvisSettingsClientError.invalidRequest
+                    }
+                }
+                continue
+            }
+            for (key, value) in fields {
+                let valid: Bool
+                switch (area, key) {
+                case ("appearance", "theme"):
+                    valid = validSettingsFieldValue(value, options: ["light", "dark", "system"])
+                case ("personality", "tone"):
+                    valid = validSettingsFieldValue(value, options: ["british_butler", "warm", "direct", "playful"])
+                case ("personality", "responseStyle"):
+                    valid = validSettingsFieldValue(value, options: ["concise", "balanced", "detailed"])
+                case ("personality", "customInstructions"), ("identity", "description"):
+                    valid = validSettingsFieldValue(value, maximumLength: 2_000)
+                case ("presentation", "showWork"):
+                    valid = validSettingsFieldValue(value)
+                case ("decisions", "provider"):
+                    valid = validSettingsFieldValue(value, options: ["jev", "microsoft"])
+                case ("jarvis", "reasoning"):
+                    valid = validSettingsFieldValue(value, options: reasoning)
+                case ("codex", "reasoning"):
+                    valid = validSettingsFieldValue(value, options: ["default"] + reasoning)
+                case ("jarvis", "model"), ("codex", "model"), ("copilot", "model"),
+                     ("voice", "speechToTextModel"), ("voice", "englishModel"),
+                     ("voice", "englishVoice"), ("voice", "danishVoice"):
+                    valid = validSettingsFieldValue(value, maximumLength: 128, allowEmpty: false)
+                case ("voice", "defaultLanguage"):
+                    valid = validSettingsFieldValue(value, options: ["da", "en"])
+                case ("research", "depth"):
+                    valid = validSettingsFieldValue(value, options: ["quick", "standard", "deep"])
+                case ("research", "maxSources"),
+                     ("global", "maxParallelTasks"), ("global", "maxCheckAttempts"),
+                     ("global", "screenShareDailyFrameCap"), ("global", "visionDailyBudgetUsd"),
+                     ("global", "conversationSummaryDailyLimit"), ("newProjects", "maxParallelTasks"):
+                    guard let bounds = numericBounds(area: area, key: key) else {
+                        throw JarvisSettingsClientError.invalidRequest
+                    }
+                    valid = validSettingsFieldValue(
+                        value,
+                        numericBounds: bounds,
+                        integerOnly: !(area == "global" && key == "visionDailyBudgetUsd")
+                    )
+                case ("newProjects", "owner"):
+                    valid = validSettingsFieldValue(value, options: nil, maximumLength: 39, allowEmpty: false) &&
+                        stringValue(value).map { matches($0, pattern: #"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"#) } == true
+                case ("newProjects", "templatesRepository"):
+                    valid = validSettingsFieldValue(value, maximumLength: 140, allowEmpty: false) &&
+                        stringValue(value).map { matches($0, pattern: #"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9._-]{1,100}$"#) } == true
+                case ("newProjects", "defaultBranch"):
+                    valid = validGitBranch(value)
+                case ("newProjects", "visibility"):
+                    valid = validSettingsFieldValue(value, options: ["private", "public"])
+                case ("newProjects", "defaultAgent"):
+                    valid = validSettingsFieldValue(value, options: ["codex", "copilot"])
+                case ("newProjects", "policy"):
+                    valid = validSettingsFieldValue(value, options: ["deliver_pr", "complete_without_deployment"])
+                default:
+                    valid = false
+                }
+                guard valid else { throw JarvisSettingsClientError.invalidRequest }
+            }
+        }
     }
 
     public static func validOption(_ value: String, options: [String]) -> Bool {
@@ -567,20 +762,30 @@ public enum JarvisSettingsLogic {
     }
 
     public static func validTarget(_ value: Int?, bound: JarvisTargetBound) -> Bool {
+        guard bound.min >= 0, bound.max >= bound.min else { return false }
         guard let value else { return true }
         return (bound.min...bound.max).contains(value)
     }
 
-    public static func validateTargets(_ values: [String: Int?], keys: Set<String>) throws {
+    public static func validateTargets(
+        _ values: [String: Int?],
+        keys: Set<String>,
+        bounds: [String: JarvisTargetBound]
+    ) throws {
         guard !values.isEmpty,
               values.keys.allSatisfy(keys.contains),
-              values.values.allSatisfy({ value in value.map { $0 >= 0 && $0 <= 1_000_000 } ?? true }) else {
+              values.keys.allSatisfy({ key in
+                  guard let bound = bounds[key] else { return false }
+                  return validTarget(values[key] ?? nil, bound: bound)
+              }) else {
             throw JarvisSettingsClientError.invalidRequest
         }
     }
 
     public static func validDeploymentInput(model: String, version: String, sku: String, capacity: Int) -> Bool {
-        model.utf8.count <= 128 && !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        model == model.trimmingCharacters(in: .whitespacesAndNewlines) &&
+            model.utf8.count <= 128 && !model.isEmpty &&
+            !model.unicodeScalars.contains(where: { $0.value < 0x20 }) &&
             matches(version, pattern: #"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"#) &&
             matches(sku, pattern: #"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"#) &&
             (1...100_000).contains(capacity)
@@ -599,7 +804,10 @@ public enum JarvisSettingsLogic {
     }
 
     public static func validMemoryID(_ id: String) -> Bool {
-        matches(id, pattern: #"^(?:[1-9][0-9]{0,18}|vault_[A-Za-z0-9_-]{1,256})$"#)
+        if matches(id, pattern: #"^[1-9][0-9]{0,18}$"#) {
+            return Int64(id).map { $0 > 0 } ?? false
+        }
+        return matches(id, pattern: #"^vault_[A-Za-z0-9_-]{1,256}$"#)
     }
 
     public static func validMemoryText(_ text: String) -> Bool {
@@ -609,16 +817,61 @@ public enum JarvisSettingsLogic {
     }
 
     public static func validRoutineID(_ id: String) -> Bool {
-        matches(id, pattern: #"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"#)
+        matches(id, pattern: #"^[a-f0-9]{64}$"#)
     }
 
     public static func validRevision(_ revision: String) -> Bool {
         matches(revision, pattern: #"^[a-f0-9]{64}$"#)
     }
 
+    public static func numericBounds(area: String, key: String) -> ClosedRange<Double>? {
+        switch (area, key) {
+        case ("research", "maxSources"): 1...50
+        case ("global", "maxParallelTasks"): 1...100
+        case ("global", "maxCheckAttempts"): 0...10
+        case ("global", "screenShareDailyFrameCap"): 1...300
+        case ("global", "visionDailyBudgetUsd"): 0...100
+        case ("global", "conversationSummaryDailyLimit"): 0...48
+        case ("newProjects", "maxParallelTasks"): 1...100
+        default: nil
+        }
+    }
+
+    private static func validGitBranch(_ value: JarvisSettingsValue) -> Bool {
+        guard case .string(let branch) = value,
+              !branch.isEmpty,
+              branch.utf16.count <= 255,
+              branch.unicodeScalars.allSatisfy({ $0.value > 0x20 }),
+              !matches(branch, pattern: #"[~^:?*\\\[\]]"#),
+              !branch.contains(".."),
+              !branch.contains("@{"),
+              branch != "@",
+              !branch.hasPrefix("-"),
+              !branch.hasPrefix("/"),
+              !branch.hasSuffix("/"),
+              !branch.contains("//"),
+              !branch.hasSuffix("."),
+              !branch.split(separator: "/", omittingEmptySubsequences: false).contains(where: {
+                  $0.hasPrefix(".") || $0.hasSuffix(".lock")
+              }) else { return false }
+        return true
+    }
+
+    private static func stringValue(_ value: JarvisSettingsValue) -> String? {
+        guard case .string(let string) = value else { return nil }
+        return string
+    }
+
     private static func matches(_ value: String, pattern: String) -> Bool {
         value.range(of: pattern, options: .regularExpression) != nil
     }
+
+}
+
+private func validISO8601Date(_ value: String) -> Bool {
+    let fractional = ISO8601DateFormatter()
+    fractional.formatOptions.insert(.withFractionalSeconds)
+    return fractional.date(from: value) != nil || ISO8601DateFormatter().date(from: value) != nil
 }
 
 public struct JarvisSettingsEditState: Equatable, Sendable {
@@ -637,15 +890,37 @@ public struct JarvisSettingsEditState: Equatable, Sendable {
     public var isDirty: Bool { changes != nil }
 
     public mutating func set(_ value: JarvisSettingsValue, area: String, key: String) {
-        guard case .object(var areas) = self.value else { return }
-        var fields: [String: JarvisSettingsValue]
-        if case .object(let current) = areas[area] {
-            fields = current
+        set(value, path: [area, key])
+    }
+
+    public mutating func set(_ value: JarvisSettingsValue, path: [String]) {
+        guard (2...3).contains(path.count), case .object(var areas) = self.value else { return }
+        if path.count == 2 {
+            var fields: [String: JarvisSettingsValue]
+            if case .object(let current) = areas[path[0]] {
+                fields = current
+            } else {
+                fields = [:]
+            }
+            fields[path[1]] = value
+            areas[path[0]] = .object(fields)
         } else {
-            fields = [:]
+            var areaFields: [String: JarvisSettingsValue]
+            if case .object(let current) = areas[path[0]] {
+                areaFields = current
+            } else {
+                areaFields = [:]
+            }
+            var nestedFields: [String: JarvisSettingsValue]
+            if case .object(let current) = areaFields[path[1]] {
+                nestedFields = current
+            } else {
+                nestedFields = [:]
+            }
+            nestedFields[path[2]] = value
+            areaFields[path[1]] = .object(nestedFields)
+            areas[path[0]] = .object(areaFields)
         }
-        fields[key] = value
-        areas[area] = .object(fields)
         self.value = .object(areas)
     }
 
