@@ -6320,7 +6320,7 @@ to TestFlight.
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
 SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice
-and Notes are native screens; Settings is the native four-segment area described
+and Notes are native screens; Settings is the native grouped-list area described
 below. Other enabled destinations remain title-only pages. Banking remains
 disabled and labeled Later. The fixed-behind sidebar opens through a right-side
 drag or the localized VoiceOver action; its shared styling and gesture tokens

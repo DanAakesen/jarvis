@@ -2859,15 +2859,14 @@ formatting as well as visible and accessibility copy.
 
 ## Native iOS Settings area (P15-20; 31 October 2026)
 
-The owner-approved Settings concept uses four text-only segments—General,
-Models, Health and Account—with a left-aligned Settings title/refresh row and a
-fixed bottom search/plus bar. Native SwiftUI grouped lists, forms, pickers,
-toggles, navigation, system materials and confirmation dialogs carry the
-content. The segmented text switcher is custom because the approved four-label
-presentation is not the native segmented-control treatment; the bottom bar is
-custom because the search and context-sensitive plus action must remain fixed
-at the bottom rather than move into navigation chrome. The header is custom to
-keep the Settings title and refresh action in the approved row.
+The Settings root is one native grouped list with General, Models, Health and
+Account sections and drill-down detail pages, so all settings remain discoverable
+without switching tabs. A fixed bottom search/plus bar filters row labels across
+all sections and opens the deployment form. Native SwiftUI grouped lists, forms,
+pickers, toggles, navigation, system materials and confirmation dialogs carry
+the content. The bottom bar is custom because search and add deployment remain
+fixed at the bottom rather than move into navigation chrome. The header keeps
+the Settings title and refresh action in one row.
 
 Shared color and geometry values live in `JarvisDesignTokens` in
 `apps/ios/Jarvis/JarvisDesignSystem.swift`. The existing shared accent tokens

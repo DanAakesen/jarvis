@@ -136,9 +136,10 @@ Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps
 
 ## 12. Settings area (P15-20)
 
-The four native segments reuse the existing owner-session bearer token and the
-web application's routes. The handlers below use the verified owner principal;
-no iOS-only route, authentication path or backend change is part of this screen.
+The four native Settings sections reuse the existing owner-session bearer token
+and the web application's routes. The handlers below use the verified owner
+principal; no iOS-only route, authentication path or backend change is part of
+this screen.
 
 | Screen action | Existing route and verified contract |
 |---|---|

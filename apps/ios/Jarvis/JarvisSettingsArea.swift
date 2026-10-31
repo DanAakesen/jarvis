@@ -1,7 +1,7 @@
 import JarvisCore
 import SwiftUI
 
-private enum JarvisSettingsSegment: String, CaseIterable, Identifiable {
+private enum JarvisSettingsSection: String, CaseIterable, Identifiable {
     case general
     case models
     case health
@@ -60,8 +60,6 @@ struct JarvisSettingsArea: View {
     let client: JarvisSettingsClient?
     let onSignedOut: () -> Void
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var segment: JarvisSettingsSegment = .general
     @State private var search = ""
     @State private var path: [JarvisSettingsDetail] = []
     @State private var response: JarvisSettingsResponse?
@@ -85,7 +83,6 @@ struct JarvisSettingsArea: View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 header
-                segmentSwitcher
                 if loading && response == nil {
                     loadingSkeleton
                 } else if response == nil {
@@ -157,30 +154,6 @@ struct JarvisSettingsArea: View {
         .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
     }
 
-    private var segmentSwitcher: some View {
-        HStack(spacing: 0) {
-            ForEach(JarvisSettingsSegment.allCases) { item in
-                Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) {
-                        segment = item
-                    }
-                } label: {
-                    Text(item.title(language: language))
-                        .font(.subheadline.weight(segment == item ? .semibold : .regular))
-                        .foregroundStyle(segment == item ? JarvisDesignTokens.settingsAccent : Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.settingsControlHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(segment == item ? .isSelected : [])
-                .accessibilityLabel(item.title(language: language))
-            }
-        }
-        .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy(.title))
-    }
-
     private var settingsList: some View {
         List {
             if let error = loadError, response != nil {
@@ -188,57 +161,72 @@ struct JarvisSettingsArea: View {
                     .foregroundStyle(error == .offline ? .secondary : .red)
                     .listRowBackground(Color.clear)
             }
-            ForEach(visibleRows) { row in
-                if let detail = row.detail {
-                    NavigationLink(value: detail) {
-                        rowContent(row)
+            ForEach(JarvisSettingsSection.allCases) { section in
+                let rows = visibleRows(in: section)
+                if !rows.isEmpty || (section == .account && !visibleAccountActions.isEmpty) {
+                    Section {
+                        ForEach(rows) { row in
+                            if let detail = row.detail {
+                                NavigationLink(value: detail) {
+                                    rowContent(row)
+                                }
+                                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                            } else {
+                                Button {} label: {
+                                    rowContent(row)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(true)
+                                .accessibilityHint(row.disabledHint.map(copy) ?? "")
+                                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                            }
+                        }
+                        if section == .account {
+                            accountActions
+                        }
+                    } header: {
+                        Text(section.title(language: language))
                     }
-                    .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
-                } else {
-                    Button {} label: {
-                        rowContent(row)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(true)
-                    .accessibilityHint(row.disabledHint.map(copy) ?? "")
-                    .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
-                }
-            }
-            if segment == .account && !visibleAccountActions.isEmpty {
-                if let signOutError {
-                    Text(signOutError)
-                        .foregroundStyle(.red)
-                }
-                if visibleAccountActions.contains("signOut") {
-                    Button {
-                        confirmCurrentSignOut = true
-                    } label: {
-                        rowContent(JarvisSettingsRow(id: "signOut", title: .signOut, detail: nil))
-                    }
-                    .disabled(signingOut)
-                    .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
-                }
-                if visibleAccountActions.contains("signOutAll") {
-                    Button {
-                        confirmAllSignOut = true
-                    } label: {
-                        rowContent(JarvisSettingsRow(id: "signOutAll", title: .signOutAll, detail: nil))
-                    }
-                    .disabled(signingOut)
-                    .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                    .textCase(nil)
                 }
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .overlay {
-            if visibleRows.isEmpty && visibleAccountActions.isEmpty {
+            if !hasVisibleContent {
                 Text(copy(search.isEmpty ? .noItems : .noResults))
                     .foregroundStyle(.secondary)
                     .accessibilityAddTraits(.updatesFrequently)
             }
         }
         .refreshable { await reload() }
+    }
+
+    @ViewBuilder
+    private var accountActions: some View {
+        if let signOutError {
+            Text(signOutError)
+                .foregroundStyle(.red)
+        }
+        if visibleAccountActions.contains("signOut") {
+            Button {
+                confirmCurrentSignOut = true
+            } label: {
+                rowContent(JarvisSettingsRow(id: "signOut", title: .signOut, detail: nil))
+            }
+            .disabled(signingOut)
+            .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+        }
+        if visibleAccountActions.contains("signOutAll") {
+            Button {
+                confirmAllSignOut = true
+            } label: {
+                rowContent(JarvisSettingsRow(id: "signOutAll", title: .signOutAll, detail: nil))
+            }
+            .disabled(signingOut)
+            .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+        }
     }
 
     private var bottomBar: some View {
@@ -267,7 +255,6 @@ struct JarvisSettingsArea: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.settingsSearchRadius))
 
             Button {
-                guard segment == .models else { return }
                 path.append(.newDeployment)
             } label: {
                 Image(systemName: "plus")
@@ -279,9 +266,7 @@ struct JarvisSettingsArea: View {
                     .contentShape(Circle())
             }
             .buttonStyle(.glass)
-            .disabled(segment != .models)
-            .accessibilityLabel(copy(segment == .models ? .addDeployment : .add))
-            .accessibilityHint(copy(segment == .health ? .credentialCreateUnavailable : .addUnavailable))
+            .accessibilityLabel(copy(.addDeployment))
         }
         .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
         .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
@@ -318,8 +303,13 @@ struct JarvisSettingsArea: View {
         .accessibilityHidden(true)
     }
 
-    private var visibleRows: [JarvisSettingsRow] {
-        let rows = rowsForSelectedSegment()
+    private var hasVisibleContent: Bool {
+        JarvisSettingsSection.allCases.contains { !visibleRows(in: $0).isEmpty } ||
+            !visibleAccountActions.isEmpty
+    }
+
+    private func visibleRows(in section: JarvisSettingsSection) -> [JarvisSettingsRow] {
+        let rows = rows(for: section)
         return JarvisSettingsLogic.filter(
             rows.map(\.id),
             labels: Dictionary(uniqueKeysWithValues: rows.map { ($0.id, copy($0.title)) }),
@@ -337,8 +327,8 @@ struct JarvisSettingsArea: View {
         ))
     }
 
-    private func rowsForSelectedSegment() -> [JarvisSettingsRow] {
-        switch segment {
+    private func rows(for section: JarvisSettingsSection) -> [JarvisSettingsRow] {
+        switch section {
         case .general:
             return [
                 row("language", .language, .appLanguage, value: copy(language == .da ? .danish : .english)),
