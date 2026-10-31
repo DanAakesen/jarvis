@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
+    @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @GestureState private var sidebarDrag = SidebarDrag()
     @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
@@ -14,6 +15,7 @@ struct ContentView: View {
     private let chatClient: JarvisClient?
     private let startupError: String?
     private let fixtureMode: Bool
+    private let settingsClient: JarvisSettingsClient?
     @State private var notesClient: JarvisNotesClient?
     @State private var healthClient: JarvisHealthClient?
     @State private var factoryClient: JarvisFactoryClient?
@@ -27,12 +29,18 @@ struct ContentView: View {
     init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
         let arguments = ProcessInfo.processInfo.arguments
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
+        let settingsPreview = arguments.contains("--screenshot-settings-fixture")
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
         let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
-        let fixtureMode = arguments.contains("--screenshot-chat-fixture") || factoryFixtureMode
+        let fixtureMode = settingsPreview
+            || arguments.contains("--screenshot-chat-fixture")
+            || factoryFixtureMode
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
+        }
+        if settingsPreview {
+            initialNavigation.navigate(to: .settings)
         }
         if factoryScreenshot != nil {
             initialNavigation.navigate(to: .softwareFactory)
@@ -45,18 +53,23 @@ struct ContentView: View {
         if fixtureMode {
             resolvedClient = try? JarvisFixtureScenario.makeClient()
             resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
+            settingsClient = try? JarvisFixtureScenario.makeSettingsClient()
         } else if let client {
             resolvedClient = client
             resolvedStartupError = nil
+            settingsClient = JarvisSettingsClient(client: client)
         } else {
             do {
-                resolvedClient = try JarvisComposition.makeClient(
+                let resolved = try JarvisComposition.makeClient(
                     accessTokenProvider: JarvisUnavailableAccessTokenProvider()
                 )
+                resolvedClient = resolved
                 resolvedStartupError = nil
+                settingsClient = JarvisSettingsClient(client: resolved)
             } catch {
                 resolvedClient = nil
                 resolvedStartupError = "Chat isn't configured."
+                settingsClient = nil
             }
         }
         chatClient = resolvedClient
@@ -152,7 +165,14 @@ struct ContentView: View {
                                     liveUpdatesEnabled: !factoryFixtureMode
                                 )
                             } else if destination == .settings {
-                                JarvisAppSettingsView(storedLanguage: $storedLanguage)
+                                JarvisSettingsArea(
+                                    storedLanguage: $storedLanguage,
+                                    storedTheme: $storedTheme,
+                                    client: settingsClient,
+                                    onSignedOut: {
+                                        NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
+                                    }
+                                )
                             } else {
                                 JarvisPlaceholderView(destination: destination, language: language)
                             }
@@ -233,6 +253,15 @@ struct ContentView: View {
             }
         }
         .ignoresSafeArea()
+        .preferredColorScheme(themeColorScheme)
+    }
+
+    private var themeColorScheme: ColorScheme? {
+        switch storedTheme {
+        case "light": .light
+        case "dark": .dark
+        default: nil
+        }
     }
 
     private func sidebarDragGesture(
@@ -444,36 +473,5 @@ private struct JarvisPlaceholderView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(destination.localizedTitle(language: language))
             .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private struct JarvisAppSettingsView: View {
-    @Binding var storedLanguage: String
-
-    private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
-    }
-
-    var body: some View {
-        Form {
-            Picker(
-                JarvisNotesLocalization.string(.languageTitle, language: language),
-                selection: $storedLanguage
-            ) {
-                Text(JarvisNotesLocalization.string(.languageDanish, language: language))
-                    .tag(JarvisAppLanguage.da.rawValue)
-                Text(JarvisNotesLocalization.string(.languageEnglish, language: language))
-                    .tag(JarvisAppLanguage.en.rawValue)
-            }
-            .pickerStyle(.segmented)
-        }
-        .navigationTitle(JarvisNotesLocalization.string(.settingsTitle, language: language))
-        .navigationBarTitleDisplayMode(.inline)
-        .environment(\.locale, language.locale)
-        .onAppear {
-            if JarvisAppLanguage(rawValue: storedLanguage) == nil {
-                storedLanguage = JarvisAppLanguage.default.rawValue
-            }
-        }
     }
 }

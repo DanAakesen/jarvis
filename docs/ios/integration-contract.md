@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes, Voice, Sign-in and Lock concepts on 30 October 2026; these implementations reuse existing routes. P15-14 also implements Workspaces without a new backend route. The owner approved the Health concept on 31 October 2026; section 12 uses only existing Daily routes. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings and Health on 31 October 2026; sections 11–13 reuse existing routes. P15-14 implements Workspaces without a new backend route. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -135,7 +135,45 @@ There is no note delete, rename or move route; no folder create or rename route;
 
 Sources checked before implementation: `apps/web/src/notes/notes-data.ts`, `apps/web/src/notes/NotesArea.tsx`, `apps/web/src/notes/NotesTree.tsx`, `apps/web/src/tasks/tasks-data.ts`, `apps/web/src/tasks/TasksPanel.tsx`, `apps/web/src/knowledge/knowledge-data.ts`, `apps/web/src/knowledge/KnowledgeGraphView.tsx`, `apps/web/src/SettingsPage.tsx`, `apps/backend/src/vault/index.ts` (vault route schemas and handlers) and `apps/backend/src/core/settings.ts` (the separate voice-language setting).
 
-## 12. Health dashboard (P15-18)
+## 12. Settings area (P15-20)
+
+The four native Settings sections reuse the existing owner-session bearer token
+and the web application's routes. The handlers below use the verified owner
+principal; no iOS-only route, authentication path or backend change is part of
+this screen.
+
+| Screen action | Existing route and verified contract |
+|---|---|
+| Load or save General and Models settings | `GET /settings` returns `settings`, `options` and `credentials`; `PATCH /settings` accepts `{settings: partialSettings}` and returns the fresh response. Appearance exposes only the shared `theme` setting; shared design tokens own accent/tint. |
+| Load models and deployments | `GET /models` returns the catalogue and deployment data. `POST /models/deployments` creates a deployment; `DELETE /models/deployments/:name` removes one. |
+| Renew a credential | `POST /settings/credentials/:name/renew` is owner-only and supports `codex-login`; it returns `{credential}`. |
+| Edit training/nutrition targets | `GET` and `PATCH /daily/training-targets` and `/daily/nutrition-targets` use the existing bounded target schemas. A patch is a top-level object of changed values; `null` clears a target. |
+| Read Health upload credential state | `GET /api/health/upload-credential` returns the state and optional expiry. Its `POST` explicitly rejects owner-session tokens with 403 and requires Microsoft sign-in. V1 therefore displays state only; it does not create, rotate, revoke or reveal a one-time token. A native HealthKit upload path is not defined. |
+| Toggle proactive work | `GET /proactive/settings` returns `paused` and a 64-character `revision` among its settings. `PATCH /proactive/settings` accepts `{paused, expectedRevision}`; the revision prevents stale writes. |
+| List, view, edit or delete memory | `GET /memory?folder=General&limit=50&offset=N&query=TEXT` returns `items`, `count`, `limit`, `offset` and `hasMore`. Items may include both `memory` and `vault_note`; the native settings list filters to `memory`, as the web panel does. `GET /memory/:id` reads one; `PATCH /memory/:id` accepts `{text}`; `DELETE /memory/:id` may return 202 when approval is pending. |
+| List and delete routines | `GET /routines` returns `{routines}`. The web panel deletes through `DELETE /recipes/:id`, which returns 204. |
+| Read account and sign out | `GET /me` returns the validated owner display name. `DELETE /auth/session` revokes the current session; `DELETE /auth/sessions` revokes all sessions. The existing client removes the device's Keychain token only after the server confirms the revocation. |
+
+Notifications remain disabled: the backend supports web push, but APNs device
+registration and test delivery are not implemented. Advanced voice tuning,
+retrieval thresholds, timeouts and project administration remain web-only in v1.
+The checked-in `docs/ios/design/board.html` does not contain the approved
+`screen=settings` frames referenced by the issue; the implementation follows
+those owner-approved frames rather than treating the older local board as source
+for settings values. The existing screenshot workflow is retained unchanged
+under the Mac-run cost guard.
+
+Sources checked before implementation: `apps/backend/src/core/settings.ts`,
+`apps/web/src/SettingsPage.tsx` and its panels, `apps/backend/src/core/model-deployments.ts`,
+`apps/backend/src/daily/routes/training-targets.ts`,
+`apps/backend/src/daily/routes/nutrition-targets.ts`,
+`apps/backend/src/daily/health-upload/capability-routes.ts`,
+`apps/backend/src/proactive/routes.ts`, `apps/web/src/proactive-data.ts`,
+`apps/backend/src/vault/index.ts`, `apps/backend/src/core/recipe-management.ts`,
+`apps/web/src/TaskRecipesSettings.tsx`, `apps/backend/src/core/index.ts` and
+`apps/backend/src/auth/session/routes.ts`.
+
+## 13. Health dashboard (P15-18)
 
 The approved Dashboard reuses the authenticated Daily API. The iPhone does not upload HealthKit data and adds no backend route or iOS-specific payload. Before querying, it calls `GET /daily/capabilities` with `Accept: application/json;version=5` and only requests advertised sources.
 
@@ -151,11 +189,11 @@ The approved Dashboard reuses the authenticated Daily API. The iPhone does not u
 | Protein chart and target line | `POST /daily/query` with `source: "daily.nutrition.days"` and `GET /daily/nutrition-targets`. |
 | Freshness status | `POST /daily/query` with `source: "daily.sync"`. Dashboard refresh listens to the existing authenticated `GET /now/events` stream for `refresh` or `now` events, then reloads the same reads. |
 
-`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. This Dashboard implementation leaves Track workout disabled and Last lifts/plus omitted. The shared lift routes described in section 14 are now present on main from #1423; future native logging should reuse them without a substitute route or payload.
+`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. This Dashboard implementation leaves Track workout disabled and Last lifts/plus omitted. The shared lift routes described in section 15 are now present on main from #1423; future native logging should reuse them without a substitute route or payload.
 
 Sources checked: `apps/backend/src/daily/index.ts`, `apps/backend/src/daily/query.ts`, `apps/backend/src/daily/health/read-model.ts`, `apps/backend/src/daily/routes/training-targets.ts`, `apps/backend/src/daily/routes/nutrition-targets.ts`, `apps/web/src/daily/client.ts`, `apps/web/src/daily/sections/overview/health-panel/data.ts`, `apps/web/src/daily/sections/overview/useTopCardData.ts`, `apps/web/src/daily/nutrition-targets.ts` and `apps/web/src/daily/sections/workouts/WorkoutDetail.tsx`.
 
-## 13. Software Factory area (P15-19)
+## 14. Software Factory area (P15-19)
 
 The Factory area reuses the authenticated web/backend routes. It adds no iOS-specific route or backend behavior. Project administration (other than the existing completion-policy control in task creation), Git graph visualization, backfill, and sandbox routes remain out of scope.
 
@@ -178,8 +216,7 @@ view.
 | Show recent commits | When `graph` is present, its flat `commits` array contains `{sha, message, author, committedAt, parents}` and `truncated` indicates incomplete history. There is no separate compact-commit endpoint or DTO. Show a compact list from these commit records; do not render the web-only branch graph. |
 
 Contract verification (31 October 2026): `apps/backend/src/factory/index.ts`, `board.ts`, `projects.ts`, `task-store.ts`, and `release-view.ts`; `apps/backend/src/core/now.ts` and `apps/backend/src/auth/hook.ts`; `apps/web/src/factory/TasksPage.tsx`, `TaskControls.tsx`, `release-data.ts`, and `ReleasePage.tsx`; and `apps/web/src/task-events.ts`. The owner-session stream, task-list agent/state filters, and returned commit record shape are verified in those sources. Production authorization, project selection, and all writes remain on the existing authenticated API.
-
-## 14. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
+## 15. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
 
 The web Health area and native Track workout screen use the same owner routes;
 there are no iOS-specific endpoints. The source of truth is the backend and

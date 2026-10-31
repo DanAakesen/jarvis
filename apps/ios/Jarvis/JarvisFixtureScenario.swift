@@ -13,6 +13,103 @@ enum JarvisFixtureScenario {
         )
     }
 
+    static func makeSettingsClient() throws -> JarvisSettingsClient {
+        let client = try JarvisClient(
+            configuration: JarvisClientConfiguration(
+                baseURL: URL(string: "https://fixture.invalid/api")!
+            ),
+            transport: FixtureTransport(scenario: Data(settingsScenario.utf8)),
+            tokenStore: FixtureTokenStore(),
+            accessTokenProvider: FixtureTokenProvider()
+        )
+        return JarvisSettingsClient(client: client)
+    }
+
+    private static let settingsScenario = #"""
+    {
+      "version": 1,
+      "interactions": [{
+        "method": "GET",
+        "path": "/api/settings",
+        "response": {
+          "statusCode": 200,
+          "body": {
+            "settings": {
+              "appearance": {"theme": "system"},
+              "personality": {"tone": "british_butler", "responseStyle": "balanced", "customInstructions": ""},
+              "identity": {"description": "Synthetic assistant identity"},
+              "presentation": {"showWork": true},
+              "voice": {
+                "defaultLanguage": "da",
+                "speechToTextModel": "mai-transcribe",
+                "englishModel": "gpt-realtime-2.1",
+                "englishVoice": "en-GB-Ryan:DragonHDLatestNeural",
+                "danishVoice": "da-DK-JeppeNeural"
+              },
+              "research": {"depth": "standard", "maxSources": 5},
+              "jarvis": {"model": "fixture-model", "reasoning": "medium"},
+              "decisions": {"provider": "jev"},
+              "roles": {
+                "chat": {"model": "fixture-model", "reasoningEffort": "medium"},
+                "vision": {"model": "fixture-vision", "reasoningEffort": "none"},
+                "research": {"model": "fixture-research", "reasoningEffort": "medium"},
+                "voice": {"model": "fixture-voice", "reasoningEffort": "none"},
+                "transcription": {"model": "fixture-transcription", "reasoningEffort": "none"},
+                "embedding": {"model": "fixture-embedding", "reasoningEffort": "none"},
+                "codex": {"model": "fixture-codex", "reasoningEffort": "medium"},
+                "copilot": {"model": "fixture-copilot", "reasoningEffort": "none"}
+              },
+              "codex": {"model": "fixture-codex", "reasoning": "medium"},
+              "copilot": {"model": "fixture-copilot"},
+              "global": {
+                "maxParallelTasks": 2, "maxCheckAttempts": 2, "screenShareDailyFrameCap": 10,
+                "visionDailyBudgetUsd": 1, "conversationSummaryDailyLimit": 10
+              },
+              "newProjects": {
+                "owner": "fixture-owner", "visibility": "private",
+                "templatesRepository": "fixture/templates", "defaultAgent": "codex",
+                "policy": "deliver_pr", "maxParallelTasks": 2, "defaultBranch": "main"
+              }
+            },
+            "options": {
+              "themes": ["light", "dark", "system"],
+              "personalityTones": ["british_butler", "warm", "direct", "playful"],
+              "personalityResponseStyles": ["concise", "balanced", "detailed"],
+              "languages": ["da", "en"],
+              "speechToTextModels": ["mai-transcribe"],
+              "englishModels": ["gpt-realtime-2.1"],
+              "englishVoices": ["en-GB-Ryan:DragonHDLatestNeural"],
+              "danishVoices": ["da-DK-JeppeNeural"],
+              "researchDepths": ["quick", "standard", "deep"],
+              "jarvisModels": ["fixture-model"],
+              "reasoningEfforts": ["none", "low", "medium", "high"],
+              "decisionProviders": ["jev", "microsoft"],
+              "roles": {
+                "chat": {"models": ["fixture-model"], "reasoningEffortsByModel": {"fixture-model": ["none", "medium"]}},
+                "vision": {"models": ["fixture-vision"], "reasoningEffortsByModel": {"fixture-vision": ["none"]}},
+                "research": {"models": ["fixture-research"], "reasoningEffortsByModel": {"fixture-research": ["medium"]}},
+                "voice": {"models": ["fixture-voice"], "reasoningEffortsByModel": {"fixture-voice": ["none"]}},
+                "transcription": {"models": ["fixture-transcription"], "reasoningEffortsByModel": {"fixture-transcription": ["none"]}},
+                "embedding": {"models": ["fixture-embedding"], "reasoningEffortsByModel": {"fixture-embedding": ["none"]}},
+                "codex": {"models": ["fixture-codex"], "reasoningEffortsByModel": {"fixture-codex": ["medium"]}},
+                "copilot": {"models": ["fixture-copilot"], "reasoningEffortsByModel": {"fixture-copilot": ["none"]}}
+              },
+              "codexModels": ["fixture-codex"],
+              "codexReasoningEfforts": ["medium"],
+              "copilotModels": ["fixture-copilot"],
+              "projectVisibilities": ["private", "public"],
+              "projectAgents": ["codex", "copilot"],
+              "projectPolicies": ["deliver_pr", "complete_without_deployment"]
+            },
+            "credentials": [
+              {"name": "codex-login", "status": "ok", "expiresAt": null, "lastRenewedAt": null}
+            ]
+          }
+        }
+      }]
+    }
+    """#
+
     private static let scenario = #"""
     {
       "version": 1,

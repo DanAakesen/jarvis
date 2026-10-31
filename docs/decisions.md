@@ -1,3 +1,26 @@
+## 31 October 2026 — build the approved native iPhone Settings area (P15-20 / #1432)
+
+Implement the four approved Settings segments in the existing SwiftUI
+`NavigationStack`, using grouped lists, native editors, pickers, toggles and
+confirmation dialogs. Keep route models, local bounds, dirty tracking, memory
+filtering and sign-out client calls in pure-Swift `JarvisCore`; use the existing
+owner-session routes only and add no iOS-specific backend path.
+
+The app-owned language preference remains Danish by default and selects all
+Settings copy; the existing shared theme token owns accent/tint, and the saved
+appearance theme updates the app color scheme. Notifications remain disabled
+until APNs registration and test-send support exist. Health credential status is
+read-only because the existing POST requires fresh Microsoft sign-in and
+rejects the stored owner-session token; do not invent a route or persist the
+one-time upload token. Advanced voice tuning, retrieval thresholds, timeouts and
+project administration remain web-only in v1.
+
+The checked-in design board does not include the owner-approved Settings frames
+referenced by the issue. Follow the approved issue concept, do not copy literal
+board values, and record visible differences in the pull request. Keep the
+existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
+do not establish SwiftUI compilation or rendered-device acceptance.
+
 ## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
 
 The owner approved the Health concept on 31 October. Build the Dashboard first

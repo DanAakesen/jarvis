@@ -2880,6 +2880,33 @@ is represented. Danish and English strings come from the JarvisCore localization
 catalog; the app-owned Settings preference defaults to Danish and controls date
 formatting as well as visible and accessibility copy.
 
+## Native iOS Settings area (P15-20; 31 October 2026)
+
+The Settings root is one native grouped list with General, Models, Health and
+Account sections and drill-down detail pages, so all settings remain discoverable
+without switching tabs. A fixed bottom search/plus bar filters row labels across
+all sections and opens the deployment form. Native SwiftUI grouped lists, forms,
+pickers, toggles, navigation, system materials and confirmation dialogs carry
+the content. The bottom bar is custom because search and add deployment remain
+fixed at the bottom rather than move into navigation chrome. The header keeps
+the Settings title and refresh action in one row.
+
+Shared color and geometry values live in `JarvisDesignTokens` in
+`apps/ios/Jarvis/JarvisDesignSystem.swift`. The existing shared accent tokens
+provide the approved orange primary and cyan secondary in dark and light
+appearance; the appearance setting changes only Light/Dark/System, because the
+token layer owns accent and tint. The cyan token remains a placeholder for a
+future owner decision. Orange is limited to small accents, tints and strokes.
+No orb appears in this area.
+
+All visible copy and accessibility labels use the Danish/English
+`JarvisSettingsLocalization` catalog; the app language preference defaults to
+Danish. Disabled Notifications and Health credential creation are explicit
+backend limitations, not fake controls. Advanced voice tuning, retrieval
+thresholds, timeouts and project administration remain web-only. The checked-in
+design board has no `screen=settings` frames, so it cannot be used to list
+frame-by-frame visual deltas; the owner-approved issue concept is authoritative.
+The existing CI screenshot set is unchanged under the iOS Mac-run cost guard.
 ## Native iOS Software Factory (P15-19; 31 October 2026)
 
 The approved Factory screen uses the existing Notes chrome: a Software Factory

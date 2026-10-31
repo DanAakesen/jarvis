@@ -1381,6 +1381,25 @@ Standalone folder creation, note delete/rename/move, task delete and priority
 on task creation remain unavailable because the shared backend has no matching
 screen route or payload.
 
+### iOS Settings area (P15-20)
+
+The Settings destination mounts a four-segment native SwiftUI area inside the
+existing navigation shell. Its `JarvisSettingsClient` reuses the app's
+`JarvisClient` owner-session token and only the routes documented in section 12
+of `docs/ios/integration-contract.md`; `JarvisCore` owns the typed route models,
+input bounds, memory paging/filtering, dirty tracking and sign-out calls. The
+SwiftUI views own presentation state and use native lists, forms, pickers,
+toggles and confirmation dialogs. Settings language remains the app-owned
+Danish/English preference; the saved appearance theme is propagated to the
+application's color scheme.
+
+Health upload is status-only: although the existing status GET accepts the
+owner principal, the POST explicitly rejects owner-session tokens. Notifications
+remain disabled until the existing web-push implementation has an APNs
+registration and test-send path. Advanced voice tuning, retrieval thresholds,
+timeouts and project administration remain web-only. Synthetic fixture
+transport is used in Settings fixture mode; no iOS-specific backend route or
+dependency is added.
 ### iOS Software Factory area (P15-19)
 
 `JarvisFactoryClient` composes over the existing authenticated `JarvisClient` and
@@ -1623,9 +1642,10 @@ The small custom ring, material panel and trend sparkline share geometry and
 color tokens in `JarvisDesignTokens`: SwiftUI has no native labeled ring or
 sparkline, and a standard `List`/`Form` cannot compose the approved single
 scrolling surface with mixed Charts content. Navigation, refresh, menus,
-search, scrolling, charts and detail lists remain system controls. Track
-workout, Last lifts and plus remain disabled or omitted until the existing
-lift routes from #1423 are merged; no backend path or payload is added.
+search, scrolling, charts and detail lists remain system controls. Track workout
+remains disabled and Last lifts and plus remain omitted in this Dashboard-only
+implementation, although the shared lift routes from #1423 are available on
+main; no iOS-specific backend path or payload is added.
 
 ## Web skeleton and configuration
 
