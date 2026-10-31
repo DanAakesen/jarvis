@@ -6430,6 +6430,14 @@ copy follows the preferred iOS language, Danish or English. No backend route is
 added. The app target needs the Mac build for type-checking; device auth and
 MSAL redirect acceptance remain unverified here.
 
+P15-23 bounds MSAL token acquisition with the Core-owned `JarvisSignInRequest`
+(120 seconds). Run `swift test --filter JarvisGatePolicyTests` in the same Core
+package for timeout, callback failure, cancellation and late-callback recovery.
+MSAL presentation excludes the cover and inactive scenes. Linux tests cannot
+verify system authentication-sheet presentation, signed TestFlight keychain
+grants or the live Entra registration. Build 8's upload workflow succeeded; that
+is not evidence of working device sign-in.
+
 P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
 `WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English
 and Danish `/voice` endpoints and token subprotocols, preserves unknown server

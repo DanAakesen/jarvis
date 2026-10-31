@@ -1443,6 +1443,14 @@ so presented sheets stay covered. Content clients that receive a 401 notify the
 gate, which shows the signed-out screen, and a fresh sign-in rebuilds the shell so
 its first load runs with the new session. No backend route is added.
 
+`JarvisSignInRequest` bounds the MSAL callback bridge to two minutes, cancels the
+interactive web session on timeout/task cancellation, and settles its continuation
+once so late callbacks cannot create an owner session. Presentation selects a
+visible normal-level window in a foreground-active scene, excluding the privacy
+cover. Core-owned `JarvisSignInState` maps timeout/start failures to failed/retry,
+sheet cancellation to idle, and preserves denied/offline recovery. The subsequent
+owner-session HTTP request retains its existing bounded transport timeout.
+
 ### iOS chat streaming (P15-04)
 
 `JarvisCore` parses server-sent events incrementally from bytes and keeps the
