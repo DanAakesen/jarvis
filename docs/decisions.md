@@ -630,6 +630,17 @@ A fresh short viewport with no prior measurement is ambiguous, so keep navigatio
 available. Preserve autofocus and existing controls; no physical iPhone browser
 mode is inferred from the screenshot. This corrects the focus-only #1295 choice.
 
+## 31 October 2026 — detect the iOS keyboard from a short initial viewport (#1295)
+
+The prior equal-shrink tests began with a full-height viewport, but an app opened
+in an already-short viewport has no pre-keyboard height to compare. Keep startup
+autofocus from hiding navigation; after a primary pointer press inside the
+composer, use the unchanged screen height as the fallback keyboard reference.
+Observed viewport expansion or leaving the composer restores navigation. The
+actual App was inspected in Chromium at 390×480 with all viewport heights short;
+the dock hid while the composer remained positioned above the bottom edge and
+returned on expansion. This is simulated evidence, not physical iPhone acceptance.
+
 ## Reserve phone typing space when geometry is inconclusive (#1295; 26 October 2026)
 
 The owner reports navigation still above the iPhone keyboard after #1294.
@@ -9574,6 +9585,30 @@ provisioning and Xcode 26's export-options behavior. The owner configures the
 environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
+
+## 31 October 2026 — P15-26 automatic signing with development cleanup
+
+Build 11 hit the development-certificate limit under automatic signing.
+The owner rejected manual distribution signing because they have no Mac to
+export its private key; adding P12/profile secrets would block working uploads.
+Keep the original automatic archive/export and export options, with no new
+secrets or dependencies.
+
+As explicitly authorized in PR #1451, revoke all API-visible `DEVELOPMENT` and
+`IOS_DEVELOPMENT` certificates after every main-only run, including failed
+archive/export. This also removes older/shared Apple/iOS development
+certificates and can invalidate their development profiles. Never revoke
+distribution certificates; preserve Mac-specific and unknown types too.
+Use the existing App Store Connect key, Ruby standard-library ES256/HTTPS,
+bounded full-list pagination and fail-closed type/identifier checks. Withhold
+certificate/key identifiers, tokens and raw diagnostics; report API failures
+without false success. Always delete the local key after the cleanup attempt.
+
+Offline tests verify the signed JWT, development-only deletion, pagination,
+error/privacy handling and unchanged signing workflow. The key's real
+list/revoke permissions and live cleanup remain unverified; no Apple
+certificates are revoked and no upload is dispatched while implementing this.
+The owner requested draft status until live verification.
 
 ## 30 October 2026 — P15-09 Apple adapter boundary
 

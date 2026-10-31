@@ -6538,9 +6538,26 @@ The workflow refuses non-main refs, captures `xcodebuild` output rather than
 logging signing identifiers, writes the key with mode 600, and deletes it in
 an always-run cleanup step.
 
+P15-26 retains automatic archive/export signing and the existing secrets.
+After export (including archive/export failure), an always-run main-only step
+uses Ruby's standard OpenSSL/HTTP libraries and the existing API key to list
+App Store Connect certificates and revoke only `DEVELOPMENT` and
+`IOS_DEVELOPMENT` types. All distribution, Mac-specific and unknown types are
+preserved. This deliberately cleans all visible Apple/iOS development
+certificates, including ones predating the run or used by another app; their
+development profiles may need automatic renewal. No certificate/key identifiers,
+JWTs or raw API errors are logged. Listing is paginated and bounded; failure
+is reported rather than treated as success. The API key file is deleted even
+if certificate cleanup fails. No P12/private-key export or profile secrets are
+required. The existing key needs permission to list and revoke certificates;
+verify that on the next owner-started run. If the account is already at its
+limit, the first archive may fail, but final cleanup can free capacity for the
+next run. A hard runner termination may prevent always-run cleanup.
+
 Only the owner starts an upload: **Actions → iOS TestFlight**, select `main`,
 then **Run workflow**. A merge or pull request does not upload anything. The
-first archive and export/upload remain unproven; see the first-run checklist
+certificate-cleanup API permissions and real cleanup remain unverified; see the
+setup checklist
 and disabled `xcrun altool --upload-app` fallback in
 [`docs/ios/build-plan.md`](ios/build-plan.md). Do not run or dispatch this
 workflow while reviewing changes.
