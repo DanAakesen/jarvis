@@ -41,7 +41,7 @@ struct WorkspacesView: View {
             }
             results
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(JarvisScreenBackground())
         .navigationTitle(text(.title))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

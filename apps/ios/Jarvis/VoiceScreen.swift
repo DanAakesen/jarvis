@@ -18,8 +18,7 @@ struct VoiceScreenView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(uiColor: .systemBackground)
-                    .ignoresSafeArea()
+                JarvisScreenBackground()
 
                 VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
                     Spacer(minLength: 0)

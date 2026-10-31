@@ -94,7 +94,7 @@ struct JarvisSettingsArea: View {
                     settingsList
                 }
             }
-            .background(Color(uiColor: .systemBackground))
+            .background(JarvisScreenBackground())
             .environment(\.locale, language.locale)
             .tint(JarvisDesignTokens.settingsAccent)
             .safeAreaInset(edge: .bottom, spacing: 0) {

@@ -2778,6 +2778,10 @@ earlier cyan, so screens use only the token. The orb is unchanged: the real web 
 a cyan rim and an orange and amber glowing tangled centre, with no orbit
 ellipses or tilted circles. This describes the native iPhone app and published
 concept pages; the web app has a separate palette decision below.
+Native screen roots and Sign-in use the shared `JarvisScreenBackground` and
+`JarvisDesignTokens` in `apps/ios/Jarvis/JarvisDesignSystem.swift` for the
+approved light/dark page fills and four ambient colour fields. The sidebar keeps
+the same page fill without the ambient fields.
 
 The web app uses orange as its primary interaction accent and stone as its
 quiet secondary accent. Dark mode uses `#ffb45c` with `#1d1200` text on primary
@@ -2787,9 +2791,10 @@ states; per-user `--theme-accent` overrides remain supported.
 
 No solid orange fills are used anywhere, because large orange areas are too
 harsh on the eyes. Orange appears as small accents, tints and strokes. In Chat
-only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
-replies, tool rows and status lines such as Writing it up are unboxed plain
-text. Phone screens carry no explainer, helper or hint text.
+only the user bubble has a background, a soft orange-tinted glass pill with a
+16% accent tint. Jarvis replies, tool rows and status lines such as Writing it
+up are unboxed plain text. Phone screens carry no explainer, helper or hint
+text.
 
 All concept board screens are approved. The five surfaces on
 `docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free

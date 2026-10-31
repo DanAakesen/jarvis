@@ -330,7 +330,7 @@ private struct JarvisGateOverlayView: View {
                     onPrimaryAction: model.performPrimaryAction
                 )
             } else {
-                Color(uiColor: .systemBackground)
+                JarvisDesignTokens.pageBackground
                     .ignoresSafeArea()
                     .accessibilityHidden(true)
             }
@@ -393,7 +393,7 @@ private struct JarvisGateSurface: View {
                 JarvisGateAmbientBackground()
             } else {
                 Rectangle().fill(.regularMaterial)
-                Color(uiColor: .systemBackground).opacity(JarvisDesignTokens.gateBackgroundOpacity)
+                JarvisDesignTokens.pageBackground.opacity(JarvisDesignTokens.gateBackgroundOpacity)
             }
 
             VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
@@ -452,61 +452,8 @@ private struct JarvisGateSurface: View {
 }
 
 private struct JarvisGateAmbientBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
-        GeometryReader { geometry in
-            let size = geometry.size
-            let diameter = size.width * 1.35
-
-            ZStack {
-                Color(uiColor: .systemBackground)
-                glow(
-                    JarvisDesignTokens.gateAmbientCool,
-                    opacity: colorScheme == .dark ? 0.3 : 0.24,
-                    diameter: diameter,
-                    x: size.width * 0.08,
-                    y: size.height * 0.1
-                )
-                glow(
-                    JarvisDesignTokens.gateAmbientWarm,
-                    opacity: colorScheme == .dark ? 0.26 : 0.3,
-                    diameter: diameter,
-                    x: size.width * 0.94,
-                    y: size.height * 0.16
-                )
-                glow(
-                    JarvisDesignTokens.gateAmbientBlue,
-                    opacity: colorScheme == .dark ? 0.2 : 0.16,
-                    diameter: diameter,
-                    x: size.width * 0.96,
-                    y: size.height * 0.82
-                )
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .ignoresSafeArea()
-    }
-
-    private func glow(
-        _ color: Color,
-        opacity: Double,
-        diameter: CGFloat,
-        x: CGFloat,
-        y: CGFloat
-    ) -> some View {
-        Circle()
-            .fill(
-                RadialGradient(
-                    colors: [color.opacity(opacity), color.opacity(opacity * 0.3), .clear],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: diameter * 0.5
-                )
-            )
-            .frame(width: diameter, height: diameter)
-            .position(x: x, y: y)
-            .accessibilityHidden(true)
+        JarvisScreenBackground()
     }
 }
 
@@ -537,9 +484,9 @@ private struct JarvisGateButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(JarvisDesignTokens.gateActionForeground)
+            .foregroundStyle(JarvisDesignTokens.gateActionAccent)
             .frame(maxWidth: .infinity, minHeight: 54)
-            .background(JarvisDesignTokens.gateActionAccent, in: Capsule())
+            .background(.regularMaterial, in: Capsule())
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.86 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)

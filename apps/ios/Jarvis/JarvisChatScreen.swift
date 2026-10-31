@@ -69,14 +69,6 @@ struct JarvisChatScreen: View {
 
     private var layout: some View {
         VStack(spacing: 0) {
-            if model.fixtureMode {
-                Label("Fixture data", systemImage: "testtube.2")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-                    .padding(.top, JarvisDesignTokens.chatVerticalInset)
-            }
             conversation
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -168,6 +160,7 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
+        .background(JarvisScreenBackground())
         .onChange(of: composerMode) { _, mode in
             guard mode == .voice else { return }
             composerMode = .chat
@@ -290,9 +283,7 @@ struct JarvisChatScreen: View {
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .padding(JarvisDesignTokens.chatGlassInset)
-                .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
-                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .padding(.vertical, JarvisDesignTokens.chatGlassInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !row.message.attachments.isEmpty {
@@ -315,7 +306,7 @@ struct JarvisChatScreen: View {
 
     private func messageBubble(text: String, role: ConversationRole, interrupted: Bool) -> some View {
         let isUser = role == .dan
-        return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+        let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             Text(text)
                 .font(.body)
                 .foregroundStyle(.primary)
@@ -327,18 +318,27 @@ struct JarvisChatScreen: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(JarvisDesignTokens.chatGlassInset)
-        .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
-        .background {
-            if reduceTransparency {
-                RoundedRectangle(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
-                    .fill(Color(uiColor: isUser ? .secondarySystemGroupedBackground : .secondarySystemBackground))
+        return Group {
+            if isUser {
+                content
+                    .padding(JarvisDesignTokens.chatGlassInset)
+                    .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
+                    .background {
+                        if reduceTransparency {
+                            RoundedRectangle(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        }
+                    }
+                    .glassEffect(
+                        .regular.tint(JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
+                        in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
+                    )
+            } else {
+                content
+                    .padding(.vertical, JarvisDesignTokens.chatGlassInset)
+                    .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
             }
         }
-        .glassEffect(
-            .regular.tint(isUser ? Color.accentColor.opacity(JarvisDesignTokens.chatGlassOpacity) : Color.secondary.opacity(JarvisDesignTokens.chatGlassOpacity)),
-            in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
-        )
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(isUser ? "You" : "Jarvis"): \(text)")
