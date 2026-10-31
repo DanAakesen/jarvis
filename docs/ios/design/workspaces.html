@@ -482,7 +482,7 @@ button, input { font: inherit; color: inherit; }
     closeAll();
   }
   function reload(after) {
-    clearTimers(); S.status = 'loading'; S.note = null; render();
+    clearTimers(); S.busy = ''; S.opened = ''; S.status = 'loading'; S.note = null; render();
     later(() => { S.status = 'ready'; if (after) after(); render(); }, 900);
   }
 
