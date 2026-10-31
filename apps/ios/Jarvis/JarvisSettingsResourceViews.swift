@@ -142,7 +142,7 @@ struct JarvisRoutinesSettingsView: View {
                     .disabled(readOnly || deleting)
                     .accessibilityLabel(copy(.delete))
                 }
-                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
             if let error, !routines.isEmpty {
                 Button(copy(.retry)) { Task { await load() } }
@@ -263,7 +263,7 @@ struct JarvisMemorySettingsView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
             if hasMore {
                 Button(loadingMore ? copy(.loading) : copy(.loadMore)) {
@@ -874,7 +874,7 @@ struct JarvisCredentialsSettingsView: View {
                     }
                 }
 
-                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
         }
         .listStyle(.insetGrouped)

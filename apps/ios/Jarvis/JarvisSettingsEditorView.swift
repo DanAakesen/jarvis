@@ -222,15 +222,15 @@ struct JarvisSettingsEditorView: View {
     private func typedValue(for field: JarvisSettingsField, rawValue: String) -> JarvisSettingsValue? {
         switch field.kind {
         case .choice, .text, .multiline:
-            .string(rawValue)
+            JarvisSettingsValue.string(rawValue)
         case .toggle:
-            .boolean(rawValue == "true")
+            JarvisSettingsValue.boolean(rawValue == "true")
         case .number:
             guard let number = Double(rawValue), number.isFinite else { return nil }
             if number.rounded() == number, let integer = Int(exactly: number) {
-                return .integer(integer)
+                return JarvisSettingsValue.integer(integer)
             }
-            return .number(number)
+            return JarvisSettingsValue.number(number)
         }
     }
 

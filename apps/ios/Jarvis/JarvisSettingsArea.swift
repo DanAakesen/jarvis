@@ -70,6 +70,9 @@ struct JarvisSettingsArea: View {
     @State private var signingOut = false
     @State private var confirmCurrentSignOut = false
     @State private var confirmAllSignOut = false
+    private let loadingSkeletonKeys: [JarvisSettingsLocalizationKey] = [
+        .appearanceRow, .personalityRow, .identityRow, .voiceRow,
+    ]
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -158,7 +161,7 @@ struct JarvisSettingsArea: View {
         List {
             if let error = loadError, response != nil {
                 Text(message(for: error))
-                    .foregroundStyle(error == .offline ? .secondary : .red)
+                    .foregroundStyle(error == .offline ? Color.secondary : Color.red)
                     .listRowBackground(Color.clear)
             }
             ForEach(JarvisSettingsSection.allCases) { section in
@@ -170,7 +173,7 @@ struct JarvisSettingsArea: View {
                                 NavigationLink(value: detail) {
                                     rowContent(row)
                                 }
-                                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
                             } else {
                                 Button {} label: {
                                     rowContent(row)
@@ -178,7 +181,7 @@ struct JarvisSettingsArea: View {
                                 .buttonStyle(.plain)
                                 .disabled(true)
                                 .accessibilityHint(row.disabledHint.map(copy) ?? "")
-                                .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
                             }
                         }
                         if section == .account {
@@ -216,7 +219,7 @@ struct JarvisSettingsArea: View {
                 rowContent(JarvisSettingsRow(id: "signOut", title: .signOut, detail: nil))
             }
             .disabled(signingOut)
-            .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+            .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
         }
         if visibleAccountActions.contains("signOutAll") {
             Button {
@@ -225,7 +228,7 @@ struct JarvisSettingsArea: View {
                 rowContent(JarvisSettingsRow(id: "signOutAll", title: .signOutAll, detail: nil))
             }
             .disabled(signingOut)
-            .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+            .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
         }
     }
 
@@ -286,7 +289,7 @@ struct JarvisSettingsArea: View {
 
     private var loadingSkeleton: some View {
         List {
-            ForEach([.appearanceRow, .personalityRow, .identityRow, .voiceRow], id: \.self) { key in
+            ForEach(loadingSkeletonKeys, id: \.self) { key in
                 HStack {
                     Text(copy(key))
                         .redacted(reason: .placeholder)

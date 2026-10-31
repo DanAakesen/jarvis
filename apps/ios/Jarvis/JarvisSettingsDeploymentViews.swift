@@ -64,7 +64,7 @@ struct JarvisDeploymentsSettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .listRowMinimumHeight(JarvisDesignTokens.settingsRowMinimumHeight)
+                    .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
                 }
                 if let error {
                     Button(copy(.retry)) { Task { await load() } }
