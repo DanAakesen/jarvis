@@ -1439,15 +1439,21 @@ scope and sends its token only through the existing `JarvisClient` owner-session
 flow. The opaque session token remains in the device-only Keychain store. A
 LocalAuthentication gate plus a privacy cover keeps shell content hidden while
 locked or inactive. The gate and cover render in a separate window above the app,
-so presented sheets stay covered. Content clients that receive a 401 notify the
+so app-content sheets stay covered; Microsoft authentication uses the gate's
+hosting controller so its system sheet opens above the Sign-in screen.
+Content clients that receive a 401 notify the
 gate, which shows the signed-out screen, and a fresh sign-in rebuilds the shell so
 its first load runs with the new session. No backend route is added.
 
 `JarvisSignInRequest` bounds the MSAL callback bridge to two minutes, cancels the
 interactive web session on timeout/task cancellation, and settles its continuation
-once so late callbacks cannot create an owner session. Presentation selects a
-visible normal-level window in a foreground-active scene, excluding the privacy
-cover. Core-owned `JarvisSignInState` maps timeout/start failures to failed/retry,
+once so late callbacks cannot create an owner session. Core-owned
+`JarvisSignInPresentation` ranks eligible windows by level, then key-window status,
+and follows presented/visible child controllers. The app selects an attached,
+non-dismissing controller in the highest visible foreground-active window,
+including the gate. The same overlay window is marked ineligible when it only
+serves as a privacy cover; it is retained while interactive sign-in runs.
+Core-owned `JarvisSignInState` maps timeout/start failures to failed/retry,
 sheet cancellation to idle, and preserves denied/offline recovery. The subsequent
 owner-session HTTP request retains its existing bounded transport timeout.
 

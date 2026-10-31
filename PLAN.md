@@ -3435,6 +3435,15 @@ focused Core tests. Local implementation is complete; next verify the Mac app
 build, real-device Microsoft sheet, signed TestFlight keychain grant and live
 Entra redirect. Device acceptance remains open; no upload is authorized here.
 
+P15-24 / [#1447](https://github.com/DanAakesen/jarvis/issues/1447) corrects the
+normal-window-only selection that hid Microsoft authentication beneath the gate.
+The highest eligible visible foreground-active window now hosts sign-in; the
+privacy-only cover remains excluded and the gate stays alive during the request.
+All 18 focused Core presentation/gate tests pass locally, including timeout and
+cancel recovery; `swift build` and all 163 Core tests also pass. Mac compile and
+real-device sheet visibility, successful unlock
+and usable cancellation remain to verify; no TestFlight upload is authorized here.
+
 ## Factory canonical-status parity (16 October 2026)
 
 Scoped partial correction for [#811](https://github.com/DanAakesen/jarvis/issues/811),
