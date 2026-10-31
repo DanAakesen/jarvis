@@ -4,6 +4,7 @@
 "settings.title" = "Settings";
 "navigation.chat" = "Chat";
 "navigation.voice" = "Voice";
+"navigation.workspaces" = "Workspaces";
 "navigation.health" = "Health";
 "navigation.softwareFactory" = "Software Factory";
 "navigation.banking" = "Banking";

@@ -9549,3 +9549,32 @@ commit screenshots or publish them elsewhere. The sidebar launch argument
 initializes the actual navigation state and rendered drawer, not a mock view. The
 offline workflow tests pass, but hosted simulator, artifact and comment behavior
 remain unverified until a ready iOS pull request runs.
+
+## 30 October 2026 — P15-14 native Workspaces (updated 31 October 2026)
+
+The owner-approved Workspaces concept is implemented with SwiftUI system
+navigation, controls and scrolling, shared Jarvis UI tokens, grouped saved items
+and one large generated-view sheet at a time. The screen and app-control runtime
+reuse existing `/workspaces` routes and `/now/events`; no backend or iOS-specific
+route, new dependency, simulator test or Mac job is added. Window/action behavior
+is limited to operations the phone can apply; unsupported operations receive a
+refusal rather than a false success.
+Generated renderer subviews adapt contract payloads to native components; charts
+use Apple's Charts framework rather than a custom plot or third-party package.
+
+The checked-in standalone reference is `docs/ios/design/workspaces.html`; the
+native list pins search to the bottom as shown and omits a create/plus control
+because the shared contract has no create route. The screen does not add an orb
+that is absent from the reference. All Workspaces UI/accessibility strings use
+the persisted Danish/English app preference, defaulting to Danish. The shared
+native gate orb uses a dark glass sphere with an orange center and no orbit or
+meridian ellipses. HTML-app, knowledge-graph and code remain unsupported,
+non-executable cards. A configured HTTPS web-app root may be opened, but no item
+deep link is guessed.
+
+Still open in the integration contract: active-client choice, command replay
+after reconnect, desktop-only commands and version negotiation. Successful
+registration/open does not establish that the phone was selected. The native
+screen also requires a configured API base URL and existing Keychain session;
+sign-in is not added here. Native compile and device/visual verification remain
+for the existing Mac check and owner review.

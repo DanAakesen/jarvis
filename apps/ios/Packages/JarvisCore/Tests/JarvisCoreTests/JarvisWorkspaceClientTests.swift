@@ -197,7 +197,10 @@ final class JarvisWorkspaceClientTests: XCTestCase {
     func testDecodesWorkspaceAndApprovalEventsAndRetainsUnknownEvents() async throws {
         let sessionId = "12345678-1234-4234-8234-123456789abc"
         let events = [
-            ("workspace-ready", ["sessionId": sessionId] as [String: Any]),
+            ("workspace-ready", [
+                "sessionId": sessionId,
+                "trustedBlobHost": "fixture.blob.core.windows.net",
+            ] as [String: Any]),
             ("now", [:] as [String: Any]),
             ("refresh", [:] as [String: Any]),
             ("mode", ["mode": "away"] as [String: Any]),
@@ -226,7 +229,7 @@ final class JarvisWorkspaceClientTests: XCTestCase {
         let received = try await listener.value
 
         XCTAssertEqual(received, [
-            .workspaceReady(sessionId: sessionId),
+            .workspaceReady(sessionId: sessionId, trustedBlobHost: "fixture.blob.core.windows.net"),
             .pendingConfirmationsChanged,
             .pendingConfirmationsChanged,
             .pendingConfirmationsChanged,
@@ -238,7 +241,8 @@ final class JarvisWorkspaceClientTests: XCTestCase {
                     operation: "show",
                     fields: ["viewId": .string("fixture_view")]
                 ),
-                expiresAtMilliseconds: 5_000
+                expiresAtMilliseconds: 5_000,
+                trustedBlobHost: "fixture.blob.core.windows.net"
             ),
             .workspaceCancel(commandId: "fixture_command"),
             .unknown(name: "future-event", data: #"{"value":"synthetic"}"#),
@@ -275,8 +279,10 @@ final class JarvisWorkspaceClientTests: XCTestCase {
         }
 
         XCTAssertEqual(received, [
-            .workspaceReady(sessionId: first),
-            .workspaceReady(sessionId: second),
+            .connectionInterrupted,
+            .connectionInterrupted,
+            .workspaceReady(sessionId: first, trustedBlobHost: nil),
+            .workspaceReady(sessionId: second, trustedBlobHost: nil),
         ])
         let requests = await transport.recordedRequests()
         let sleeps = await clock.sleeps()
@@ -312,7 +318,7 @@ final class JarvisWorkspaceClientTests: XCTestCase {
             var received: [WorkspaceEvent] = []
             for try await event in workspace.events() {
                 received.append(event)
-                if received.count == 2 {
+                if received.count == 3 {
                     try await workspace.register(WorkspaceSnapshot(windows: [], contextPanelOpen: false))
                     return received
                 }
@@ -322,8 +328,9 @@ final class JarvisWorkspaceClientTests: XCTestCase {
 
         let received = try await listener.value
         XCTAssertEqual(received, [
-            .workspaceReady(sessionId: first),
-            .workspaceReady(sessionId: second),
+            .workspaceReady(sessionId: first, trustedBlobHost: nil),
+            .connectionInterrupted,
+            .workspaceReady(sessionId: second, trustedBlobHost: nil),
         ])
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.count, 3)

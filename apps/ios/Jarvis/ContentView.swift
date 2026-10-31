@@ -5,6 +5,7 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @GestureState private var sidebarDrag = SidebarDrag()
+    @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
     @StateObject private var voiceModel = VoiceScreenModel()
     @State private var animationTargetProgress: CGFloat = 0
@@ -22,7 +23,7 @@ struct ContentView: View {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
-    init() {
+    init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
         let arguments = ProcessInfo.processInfo.arguments
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
@@ -38,21 +39,33 @@ struct ContentView: View {
         self.fixtureMode = fixtureMode
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
+        let resolvedClient: JarvisClient?
+        let resolvedStartupError: String?
         if fixtureMode {
-            let client = try? JarvisFixtureScenario.makeClient()
-            chatClient = client
-            startupError = client == nil ? "Fixture preview is unavailable." : nil
+            resolvedClient = try? JarvisFixtureScenario.makeClient()
+            resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
+        } else if let client {
+            resolvedClient = client
+            resolvedStartupError = nil
         } else {
             do {
-                chatClient = try JarvisComposition.makeClient(
+                resolvedClient = try JarvisComposition.makeClient(
                     accessTokenProvider: JarvisUnavailableAccessTokenProvider()
                 )
-                startupError = nil
+                resolvedStartupError = nil
             } catch {
-                chatClient = nil
-                startupError = "Chat isn't configured."
+                resolvedClient = nil
+                resolvedStartupError = "Chat isn't configured."
             }
         }
+        chatClient = resolvedClient
+        startupError = resolvedStartupError
+        _workspaceRuntime = StateObject(
+            wrappedValue: WorkspaceRuntime(
+                client: resolvedClient,
+                webAppURL: webAppURL ?? JarvisComposition.makeWebAppURL()
+            )
+        )
         _navigation = State(initialValue: initialNavigation)
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
@@ -97,7 +110,9 @@ struct ContentView: View {
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            if destination == .voice {
+                            if destination == .workspaces {
+                                WorkspacesView(runtime: workspaceRuntime)
+                            } else if destination == .voice {
                                 VoiceScreenView(model: voiceModel) {
                                     navigate(to: .chat, drawerWidth: drawerWidth)
                                 }
@@ -133,6 +148,22 @@ struct ContentView: View {
                                 JarvisPlaceholderView(destination: destination, language: language)
                             }
                         }
+                }
+                .task { await workspaceRuntime.run() }
+                .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
+                    guard destination != nil,
+                          let destination = workspaceRuntime.consumeRequestedDestination() else {
+                        return
+                    }
+                    navigate(to: destination, drawerWidth: drawerWidth)
+                }
+                .sheet(
+                    item: Binding(
+                        get: { workspaceRuntime.presentedView },
+                        set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
+                    )
+                ) { presented in
+                    GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background(Color(uiColor: .systemBackground))

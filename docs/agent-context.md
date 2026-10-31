@@ -6435,6 +6435,31 @@ through `GeneratedViewDecodingContext` on `JSONDecoder.userInfo` when available.
 The Swift source status also accepts `running`, matching the runtime guard even
 though the TypeScript declaration and JSON schema omit it.
 
+P15-14 adds the native Workspaces list and generated-view sheet in the app target.
+Its `JarvisWorkspacesClient` uses only the existing list/open/patch/delete routes;
+`WorkspaceRuntime` registers a phone snapshot, applies supported commands from
+the existing `/now/events` stream and promptly acknowledges refused or applied
+outcomes. Native generated-view previews cover each contracted renderer and
+unknown-version fallback with synthetic data; Core fixture tests cover the
+existing routes and command acknowledgement. Run `swift build` and `swift test`
+from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
+require the existing Mac compile check; no simulator boot or UI-test job was
+added.
+
+The screen follows the checked-in Workspaces frame's fixed-bottom search. Its
+app and VoiceOver strings use `JarvisWorkspaceLocalization` resources in Danish
+and English, selected by the persisted `JarvisAppLanguage` preference (Danish
+default). The shared native gate orb uses dark glass and an orange center with
+no orbit/meridian ellipses; the Workspaces frame itself has no orb.
+
+The list renders table, list, detail, text, timeline, chart, task-card, status
+and image views. HTML-app, knowledge-graph and code remain unsupported cards,
+and supplied HTML is not executed. `JARVIS_WEB_APP_URL` is optional and accepts
+only an HTTPS origin; it does not identify a workspace item. The app uses the
+existing Keychain session and configured `JARVIS_API_BASE_URL`; no iOS-specific
+backend route is added. Active-client choice and command replay after reconnect
+remain unverified.
+
 ### Native voice screen and audio (P15-11)
 
 The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
