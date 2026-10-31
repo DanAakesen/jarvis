@@ -1600,6 +1600,33 @@ decision routes. The contract comes from `apps/backend/src/core/now.ts` and
 `apps/web/src/now-feed.ts`; approvals are not a new backend capability. Fixture
 success does not establish live service, device, or owner acceptance.
 
+### iOS Health dashboard (P15-18)
+
+The Health destination mounts in the existing `NavigationStack` shell. Its
+`JarvisHealthClient` and `JarvisHealthLogic` live in pure-Swift `JarvisCore`;
+they reuse `JarvisClient` for versioned capabilities, `POST /daily/query`,
+training and nutrition targets, and the authenticated `/now/events` refresh
+stream. The exact source-to-block mapping is in
+`docs/ios/integration-contract.md`. Period boundaries use
+`Europe/Copenhagen`; ring progress and nutrition balances do not invent missing
+targets or readings.
+
+`JarvisHealthArea` owns the selected period, search and asynchronous dashboard
+load state. Its SwiftUI sections render activity rings, the period summary,
+recent workouts, body trends, nutrition and freshness; detail links query the
+same Daily sources. The Danish/English app preference controls visible and
+accessibility copy, dates and number formatting. Dashboard previews replay
+synthetic responses through `FixtureTransport`; Linux tests cover core period,
+calculation, localization and route behavior.
+
+The small custom ring, material panel and trend sparkline share geometry and
+color tokens in `JarvisDesignTokens`: SwiftUI has no native labeled ring or
+sparkline, and a standard `List`/`Form` cannot compose the approved single
+scrolling surface with mixed Charts content. Navigation, refresh, menus,
+search, scrolling, charts and detail lists remain system controls. Track
+workout, Last lifts and plus remain disabled or omitted until the existing
+lift routes from #1423 are merged; no backend path or payload is added.
+
 ## Web skeleton and configuration
 
 - `Modal` shares `useModalLifecycle` with mobile navigation and context sheets:

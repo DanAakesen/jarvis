@@ -2932,6 +2932,37 @@ gate, and an opaque privacy cover, shown in a window above any open sheet, hides
 system LocalAuthentication prompt; the passcode fallback is also system UI,
 not a custom keypad. No helper text or lock-interval control is shown.
 
+## Native iOS Health dashboard (P15-18; owner-approved 31 October 2026)
+
+The approved composition is one native scroll beneath a Health/refresh title row,
+with a text-only Dashboard/Track workout switcher, a small period menu, and the
+fixed glass search bar above the bottom safe area. Dashboard blocks show Gym,
+Run and Steps rings; the selected-period protein, calorie and sleep summary;
+recent sessions; body metric sparklines; a protein chart with a target line; and
+one freshness status. Rows use native navigation for workout, sleep, meals and
+metric details. No explainer, hint or privacy copy is added.
+
+SwiftUI `ScrollView`, `Menu`, `NavigationLink`, `TextField`, `Chart`, SF Symbols,
+semantic surfaces and system materials provide the surrounding interface.
+`JarvisHealthRing` is custom because SwiftUI has no labeled progress ring with a
+center value; `JarvisHealthPanel` groups mixed text and Charts on the single
+scroll surface; sparklines use Charts because SwiftUI has no sparkline control.
+Their geometry and colors are shared in `apps/ios/Jarvis/JarvisDesignSystem.swift`.
+Orange is a small primary accent; cyan is only the secondary token. All visible
+and VoiceOver copy and number/date formatting follow the app-owned Danish/English
+preference.
+
+The checked-in `docs/ios/design/board.html?screen=health&tab=dashboard&lang=en`
+currently renders a blank Health placeholder rather than the approved frames.
+The implementation follows the approved issue description and does not copy
+literal values from that stale local board. The workout segment is disabled,
+while Last lifts and plus are omitted; the shared lift routes from #1423 are
+available on main, but this Dashboard implementation does not expose them. No
+replacement API is implied. The existing iOS
+screenshot hook remains within its three-capture cost guard and does not traverse
+Health, so light/dark Health simulator images and key-state screenshots remain
+unverified for owner review.
+
 ## Native iOS Workspaces (P15-14; 30 October 2026)
 
 Use the system navigation bar with an inline Workspaces title and refresh action,
