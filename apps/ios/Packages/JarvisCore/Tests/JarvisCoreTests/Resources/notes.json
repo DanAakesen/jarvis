@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/notes/tree",
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "directories": ["Work"],
+          "rootNoteCount": 1,
+          "truncated": false,
+          "updatedAt": "2026-10-30T09:00:00.000Z"
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/notes",
+      "query": {"limit": "50", "offset": "0", "directory": "Work"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "notes": [{
+            "path": "Work/synthetic_note.md",
+            "title": "Synthetic note",
+            "folder": "Work",
+            "directory": "Work",
+            "updatedAt": "2026-10-30T08:00:00.000Z"
+          }],
+          "limit": 50,
+          "offset": 0,
+          "hasMore": false
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/notes/note",
+      "query": {"path": "Work/synthetic_note.md"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "path": "Work/synthetic_note.md",
+          "content": "Synthetic note content.",
+          "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "url": "https://demo.invalid/example/repository/blob/main/Work/synthetic_note.md"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/notes",
+      "requestBody": {"path": "Work/new_note.md", "content": "Synthetic draft"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "path": "Work/new_note.md",
+          "commit": "cccccccccccccccccccccccccccccccccccccccc",
+          "url": "https://demo.invalid/example/repository/commit/cccccccccccccccccccccccccccccccccccccccc"
+        }
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notes/note",
+      "requestBody": {
+        "path": "Work/synthetic_note.md",
+        "content": "Synthetic changed draft",
+        "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "response": {
+        "statusCode": 409,
+        "body": {
+          "error": "Synthetic conflict",
+          "currentSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "content": "Synthetic changed note."
+        }
+      }
+    }
+  ]
+}

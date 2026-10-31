@@ -396,6 +396,7 @@ final class FixtureTransportTests: XCTestCase {
             #"{"version":2,"interactions":[]}"#,
             #"{"version":1,"interactions":[]}"#,
             #"{"version":1,"interactions":[{"method":"OPTIONS","path":"/api/tools","response":{"statusCode":200}}]}"#,
+            #"{"version":1,"interactions":[{"method":"TRACE","path":"/api/tools","response":{"statusCode":200}}]}"#,
             #"{"version":1,"interactions":[{"method":"GET","path":"https://fixture.test/api","response":{"statusCode":200}}]}"#,
             #"{"version":1,"interactions":[{"method":"GET","path":"/api/../tools","response":{"statusCode":200}}]}"#,
             #"{"version":1,"interactions":[{"method":"GET","path":"/api/tools?limit=1","response":{"statusCode":200}}]}"#,

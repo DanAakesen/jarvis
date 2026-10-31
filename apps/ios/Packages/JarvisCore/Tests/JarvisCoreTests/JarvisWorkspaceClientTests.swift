@@ -203,7 +203,9 @@ final class JarvisWorkspaceClientTests: XCTestCase {
             ] as [String: Any]),
             ("now", [:] as [String: Any]),
             ("refresh", [:] as [String: Any]),
+            ("mode", ["mode": "away"] as [String: Any]),
             ("status", ["kind": "approval_pending"] as [String: Any]),
+            ("jarvis-activity", ["type": "synthetic"] as [String: Any]),
             ("workspace-command", [
                 "command": ["commandId": "fixture_command", "operation": "show", "viewId": "fixture_view"],
                 "expiresAt": 5_000,
@@ -231,6 +233,8 @@ final class JarvisWorkspaceClientTests: XCTestCase {
             .pendingConfirmationsChanged,
             .pendingConfirmationsChanged,
             .pendingConfirmationsChanged,
+            .pendingConfirmationsChanged,
+            .activityChanged,
             .workspaceCommand(
                 command: WorkspaceCommand(
                     commandId: "fixture_command",

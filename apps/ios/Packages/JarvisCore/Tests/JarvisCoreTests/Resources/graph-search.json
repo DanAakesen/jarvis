@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/knowledge/graph",
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "nodes": [{
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "path": "Work/synthetic_note.md",
+            "title": "Synthetic note",
+            "folder": "Work",
+            "directory": "Work",
+            "updatedAt": "2026-10-30T08:00:00.000Z",
+            "degree": 0
+          }],
+          "edges": [],
+          "updatedAt": "2026-10-30T09:00:00.000Z",
+          "openTaskNoteCount": 0,
+          "taskCountsPartial": false
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/knowledge/search",
+      "query": {"q": "synthetic note"},
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "hits": [
+            {
+              "nodeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "score": 0.8,
+              "snippet": "Synthetic note text."
+            },
+            {
+              "nodeId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "score": 0.5,
+              "snippet": "Unknown synthetic node."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

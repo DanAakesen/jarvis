@@ -158,7 +158,11 @@ final class JarvisChatClientTests: XCTestCase {
         let attachments = Array(repeating: "123e4567-e89b-42d3-a456-426614174000", count: 6)
 
         do {
-            _ = try await chat.sendTurn(sessionId: "12", text: "")
+            _ = try await chat.sendTurn(
+                sessionId: "12",
+                text: "",
+                attachmentIds: ["123e4567-e89b-42d3-a456-426614174000"]
+            )
             XCTFail("Expected empty-text validation")
         } catch {
             XCTAssertEqual(error as? JarvisChatClientError, .invalidTextLength)

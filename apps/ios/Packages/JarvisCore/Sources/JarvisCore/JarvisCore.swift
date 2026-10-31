@@ -35,6 +35,24 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
         }
     }
 
+    public func localizedTitle(language: JarvisAppLanguage) -> String {
+        let key: JarvisNotesLocalizationKey
+        switch self {
+        case .chat: key = .chatTitle
+        case .voice: key = .voiceTitle
+        case .workspaces: key = .workspacesTitle
+        case .notes: key = .notes
+        case .health: key = .healthTitle
+        case .softwareFactory: key = .softwareFactoryTitle
+        case .banking: key = .bankingTitle
+        case .usage: key = .usageTitle
+        case .status: key = .statusTitle
+        case .proactive: key = .proactiveTitle
+        case .settings: key = .settingsTitle
+        }
+        return JarvisNotesLocalization.string(key, language: language)
+    }
+
     public var symbolName: String {
         switch self {
         case .chat: "bubble.left.and.bubble.right"

@@ -14,6 +14,20 @@ final class VoiceProtocolTests: XCTestCase {
                 .playbackCompleted(responseID: "response-fixture", audible: false),
                 #"{"audible":false,"responseId":"response-fixture","type":"jarvis.voice.playback.completed"}"#
             ),
+            (
+                .screenContext(try VoiceScreenContext(
+                    source: .camera,
+                    capturedAt: "2026-10-30T00:00:00.000Z",
+                    question: "What is shown?",
+                    frameId: "frame_fixture",
+                    itemId: "item_fixture"
+                )),
+                #"{"capturedAt":"2026-10-30T00:00:00.000Z","frameId":"frame_fixture","itemId":"item_fixture","question":"What is shown?","source":"camera","type":"jarvis.screen.context"}"#
+            ),
+            (
+                .screenContextUnavailable(itemID: "item_fixture", reason: .dailyLimit),
+                #"{"itemId":"item_fixture","reason":"daily_limit","type":"jarvis.screen.context.unavailable"}"#
+            ),
         ]
 
         for (message, expected) in cases {
@@ -36,6 +50,10 @@ final class VoiceProtocolTests: XCTestCase {
             (#"{"type":"response.output_audio.delta","delta":"AQID"}"#, .audioDelta(type: "response.output_audio.delta", delta: "AQID")),
             (#"{"type":"response.done"}"#, .responseDone),
             (#"{"type":"response.cancelled"}"#, .responseCancelled),
+            (#"{"type":"conversation.item.input_audio_transcription.delta","transcript":"Synthetic","item_id":"item-2"}"#, .transcriptionDelta(transcript: "Synthetic", itemID: "item-2")),
+            (#"{"type":"response.audio_transcript.delta","delta":"Synthetic reply"}"#, .assistantTranscriptDelta("Synthetic reply")),
+            (#"{"type":"jarvis.visual_context","itemId":"item-2","visualPath":"image"}"#, .visualContext(itemID: "item-2", path: "image", reason: nil)),
+            (#"{"type":"jarvis.screen.context.unavailable","itemId":"item-2","reason":"daily_limit"}"#, .screenContextUnavailable(itemID: "item-2", reason: "daily_limit")),
         ]
 
         for (raw, expected) in cases {
@@ -92,6 +110,22 @@ final class VoiceProtocolTests: XCTestCase {
         XCTAssertThrowsError(try VoiceAudioCodec.decodePCM16("AQ=="))
     }
 
+    func testScreenContextRejectsUnboundedOrUncorrelatedInput() {
+        XCTAssertThrowsError(try VoiceScreenContext(
+            source: .camera,
+            capturedAt: "2026-10-30T00:00:00.000Z",
+            question: "What is shown?",
+            frameId: "bad/id",
+            itemId: "item_fixture"
+        ))
+        XCTAssertThrowsError(try VoiceScreenContext(
+            source: .camera,
+            capturedAt: "2026-10-30T00:00:00.000Z",
+            question: "What is shown?",
+            frameId: "frame_fixture"
+        ))
+    }
+
     func testStateMachineCoversNormalSessionAndReconnect() {
         var machine = VoiceSessionStateMachine()
 
@@ -108,6 +142,14 @@ final class VoiceProtocolTests: XCTestCase {
         machine.apply(.audioDelta)
         XCTAssertEqual(machine.state, .speaking)
         machine.apply(.responseFinished)
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.playbackFinished(responseID: "wrong-response"))
+        XCTAssertEqual(machine.state, .speaking)
+        machine.apply(.playbackFinished(responseID: "response-1"))
+        XCTAssertEqual(machine.state, .listening)
+        machine.apply(.responseCreated(id: "response-2"))
+        machine.apply(.audioDelta)
+        machine.apply(.responseCancelled)
         XCTAssertEqual(machine.state, .listening)
         machine.apply(.connectionDropped)
         XCTAssertEqual(machine.state, .reconnecting(attempt: 0))
@@ -180,6 +222,13 @@ final class VoiceSessionClientTests: XCTestCase {
         try await client.setMuted(true)
         try await client.setMuted(false)
         try await client.setCameraState(on: false)
+        try await client.sendScreenContext(VoiceScreenContext(
+            source: .camera,
+            capturedAt: "2026-10-30T00:00:00.000Z",
+            question: "What is shown?",
+            frameId: "frame_fixture",
+            itemId: "item_fixture"
+        ))
         try await client.playbackCompleted(responseID: "response-2", audible: false)
 
         secondContinuation.yield(#"{"type":"response.created","response":{"id":"response-2"}}"#)
@@ -202,6 +251,7 @@ final class VoiceSessionClientTests: XCTestCase {
         XCTAssertTrue(sent.contains(#"{"audio":"AQI=","type":"input_audio_buffer.append"}"#))
         XCTAssertTrue(sent.contains(#"{"type":"jarvis.microphone.muted"}"#))
         XCTAssertTrue(sent.contains(#"{"on":false,"type":"jarvis.camera.state"}"#))
+        XCTAssertTrue(sent.contains(#"{"capturedAt":"2026-10-30T00:00:00.000Z","frameId":"frame_fixture","itemId":"item_fixture","question":"What is shown?","source":"camera","type":"jarvis.screen.context"}"#))
         XCTAssertTrue(sent.contains(#"{"audible":false,"responseId":"response-2","type":"jarvis.voice.playback.completed"}"#))
         XCTAssertTrue(sent.contains(#"{"type":"jarvis.session.end"}"#))
         let closedCodes = await transport.closedCodes()
@@ -264,6 +314,38 @@ final class VoiceSessionClientTests: XCTestCase {
         XCTAssertTrue(sleeps.isEmpty)
     }
 
+    func testSpeakingStateContinuesUntilPlaybackCompletion() async throws {
+        let (stream, continuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        let stateRecorder = VoiceStateRecorder()
+        let client = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!,
+            transport: FakeWebSocketTransport(streams: [stream]),
+            onStateChange: { state in
+                Task { await stateRecorder.record(state) }
+            }
+        )
+
+        try await client.start(accessToken: "fixture.token", language: .en)
+        continuation.yield(#"{"type":"jarvis.session.ready","sessionId":12}"#)
+        await waitForState(.listening, in: client)
+        continuation.yield(#"{"type":"response.created","response":{"id":"response-3"}}"#)
+        continuation.yield(#"{"type":"response.audio.delta","delta":"AAE="}"#)
+        continuation.yield(#"{"type":"response.done"}"#)
+        for _ in 0..<1_000 {
+            if await stateRecorder.count(of: .speaking) >= 2 { break }
+            await Task.yield()
+        }
+        let speakingUpdates = await stateRecorder.count(of: .speaking)
+        XCTAssertEqual(speakingUpdates, 2)
+        let stateBeforePlaybackCompletion = await client.state()
+        XCTAssertEqual(stateBeforePlaybackCompletion, .speaking)
+
+        try await client.playbackCompleted(responseID: "response-3", audible: true)
+        await waitForState(.listening, in: client)
+        continuation.finish()
+        try await client.end()
+    }
+
     private func waitForState(
         _ expected: VoiceSessionState,
         in client: VoiceSessionClient,
@@ -289,6 +371,18 @@ final class VoiceSessionClientTests: XCTestCase {
             await Task.yield()
         }
         XCTFail("Socket did not send \(count) messages containing \(fragment)", file: file, line: line)
+    }
+}
+
+private actor VoiceStateRecorder {
+    private var states: [VoiceSessionState] = []
+
+    func record(_ state: VoiceSessionState) {
+        states.append(state)
+    }
+
+    func count(of expected: VoiceSessionState) -> Int {
+        states.filter { $0 == expected }.count
     }
 }
 
