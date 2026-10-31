@@ -1924,7 +1924,7 @@ describe('App shell', () => {
       return respond(input, init);
     });
   }
-  const healthPages = ['Overview', 'Workouts', 'Nutrition', 'Body & sleep', 'Briefs', 'Data', 'Rules & sources'];
+  const healthPages = ['Overview', 'Workouts', 'Track workout', 'Nutrition', 'Body & sleep', 'Briefs', 'Data', 'Rules & sources'];
 
   it('lists the Health pages in the navigation panel, marks the current one and closes the panel on a pick', async () => {
     mockHealthBackend();

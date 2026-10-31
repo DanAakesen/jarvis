@@ -12,7 +12,7 @@ import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
 import { suggest, type BudgetContext, type Suggestion } from './nutrition/model.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
-import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyViewIds } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, dailyViewIds } from '@jarvis/contracts';
 import type { ToolCallRecord } from '../core/tool-calls.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -80,7 +80,7 @@ describe('Daily integration contract', () => {
       expect((await app.inject({ url: `/daily/capabilities?${field}=${other}`, headers: headers() })).statusCode).toBe(400);
     }
   });
-  it('preserves v1-v4 capabilities and only advertises v5 targets when the reader exists', async () => {
+  it('preserves v1-v5 capabilities and advertises only configured v6 lift sources', async () => {
     const query = vi.fn();
     const data: DailyData = { query: { query }, changes: createDailyChanges() };
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
@@ -116,9 +116,49 @@ describe('Daily integration contract', () => {
       expect(modern.json().sources).not.toContain(dailyQuerySources.calendar);
     }
     const latest = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: dailyCapabilitiesAccept } });
-    expect(latest.json()).toMatchObject({ version: 5, sources: dailyQuerySourcesV3 });
+    expect(latest.json()).toMatchObject({ version: 6, sources: dailyQuerySourcesV3 });
     expect(latest.json().sources).not.toContain(dailyQuerySources.trainingTargets);
     expect(query).not.toHaveBeenCalled();
+  });
+  it('registers owner-only lift reads and writes and omits the lift source for the agent', async () => {
+    const lift = {
+      id: '33333333-3333-4333-8333-333333333333', exerciseName: 'Bench press', weightKg: 80,
+      reps: 4, sets: 3, performedAt: '2026-10-30T12:00:00.000Z', deletedAt: null,
+      updatedAt: '2026-10-30T12:00:00.000Z', revision: 1,
+    };
+    const history = vi.fn(async () => ({ items: [lift], next: null }));
+    const entries = {
+      history, create: vi.fn(async () => ({ entry: lift, replayed: false })),
+      update: vi.fn(async () => lift), delete: vi.fn(async () => lift),
+    };
+    const data: DailyData = {
+      changes: createDailyChanges(),
+      query: new DailyQueryService({
+        health: () => ({ history: vi.fn(), metricCatalog: vi.fn(), sync: vi.fn(), workoutDetail: vi.fn(), workoutMetrics: vi.fn(), heartRate: vi.fn() }),
+        nutrition: () => ({ history: vi.fn(), days: vi.fn(), favorites: vi.fn(), plans: vi.fn() }),
+        briefs: () => ({ history: vi.fn(), detail: vi.fn() }),
+        lifts: () => entries,
+      }),
+      lifts: () => entries,
+    };
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
+    apps.push(app);
+    const capability = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: dailyCapabilitiesAccept } });
+    expect(capability.json()).toMatchObject({ version: 6, sources: dailyQuerySourcesV6WithoutFeedsOrTrainingTargets });
+    const agentCapability = await app.inject({ url: '/daily/capabilities', headers: { ...headers('agent'), accept: dailyCapabilitiesAccept } });
+    expect(agentCapability.json().sources).not.toContain(dailyQuerySources.lifts);
+    expect((await app.inject({ method: 'POST', url: '/daily/query', headers: headers(),
+      payload: { source: dailyQuerySources.lifts, lastPerExercise: true } })).json().items).toEqual([lift]);
+    expect((await app.inject({ method: 'POST', url: '/daily/query', headers: headers('agent'),
+      payload: { source: dailyQuerySources.lifts } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'POST', url: '/daily/lifts', headers: headers(),
+      payload: { idempotencyKey: '44444444-4444-4444-8444-444444444444', exerciseName: 'Bench press', weightKg: 80, reps: 4, sets: 3 } })).statusCode)
+      .toBe(201);
+    expect((await app.inject({ method: 'POST', url: '/daily/lifts', headers: headers('agent'),
+      payload: { idempotencyKey: '44444444-4444-4444-8444-444444444444', exerciseName: 'Bench press', weightKg: 80, reps: 4, sets: 3 } })).statusCode)
+      .toBe(403);
+    expect(entries.create).toHaveBeenCalledOnce();
+    expect(history).toHaveBeenCalledOnce();
   });
   it('registers owner-only browser feed routes and v4 query sources only when feeds are composed', async () => {
     const feedReads = {

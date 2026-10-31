@@ -1,4 +1,4 @@
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
@@ -112,6 +112,18 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
     const first: unknown = value.items[0];
     if (!object(first) || first.id !== query.briefId) return false;
   }
+  if (query.source === dailyQuerySources.lifts) {
+    if (value.units.weightKg !== 'kg' || value.units.reps !== 'reps' || value.units.sets !== 'sets' ||
+        !items.every(item => typeof item.id === 'string' &&
+          /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(item.id) &&
+          typeof item.exerciseName === 'string' && item.exerciseName.length > 0 && item.exerciseName.length <= 80 &&
+          typeof item.weightKg === 'number' && Number.isFinite(item.weightKg) && item.weightKg >= 0 && item.weightKg <= 1000 &&
+          Math.abs(item.weightKg * 100 - Math.round(item.weightKg * 100)) < 1e-7 &&
+          Number.isSafeInteger(item.reps) && Number(item.reps) >= 1 && Number(item.reps) <= 1000 &&
+          Number.isSafeInteger(item.sets) && Number(item.sets) >= 1 && Number(item.sets) <= 100 &&
+          time(item.performedAt) && item.deletedAt === null && time(item.updatedAt) &&
+          Number.isSafeInteger(item.revision) && Number(item.revision) > 0)) return false;
+  }
   if (query.source === dailyQuerySources.metrics && query.metric !== undefined &&
       items.some(item => item.metric_name !== query.metric)) return false;
   if (query.source === dailyQuerySources.metricCatalog && !items.every((item, index) =>
@@ -195,12 +207,15 @@ export async function loadDailySources(backendUrl: string | null, getAccessToken
     const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
       Object.values(dailyQuerySources).some(known => known === input);
     if (!object(value) || value.module !== 'daily' ||
-        (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== dailyCapabilitiesVersion) ||
+        (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5 && value.version !== dailyCapabilitiesVersion) ||
         !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
         new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Health data services are not available yet.', 'disabled');
     const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2
       : value.version === 3 ? dailyQuerySourcesV3 : value.version === 4 ? dailyQuerySourcesV4
-        : [...dailyQuerySourcesV5, ...dailyQuerySourcesV5WithoutFeeds];
+        : value.version === 5 ? [...dailyQuerySourcesV5, ...dailyQuerySourcesV5WithoutFeeds]
+          : [...dailyQuerySourcesV6, ...dailyQuerySourcesV6WithoutFeeds, ...dailyQuerySourcesV6WithoutTrainingTargets,
+            ...dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, ...dailyQuerySourcesV5, ...dailyQuerySourcesV5WithoutFeeds,
+            dailyQuerySourcesV4, dailyQuerySourcesV3].flat();
     if (value.sources.some(id => !allowed.some(known => known === id))) {
       throw new DailyReadError(`Health returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
     }
