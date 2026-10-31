@@ -533,7 +533,7 @@ struct WorkspacesView: View {
     private func normalizedQuery(_ value: String) -> String {
         var result = ""
         for character in value.trimmingCharacters(in: .whitespacesAndNewlines) {
-            guard (result + character).utf16.count <= 120 else { break }
+            guard (result + String(character)).utf16.count <= 120 else { break }
             result.append(character)
         }
         return result

@@ -59,7 +59,7 @@ final class WorkspaceRuntime: ObservableObject {
 
     init(client: JarvisClient?, webAppURL: URL?) {
         workspacesClient = client.map(JarvisWorkspacesClient.init(client:))
-        workspaceClient = client.map(JarvisWorkspaceClient.init(client:))
+        workspaceClient = client.map { JarvisWorkspaceClient(client: $0) }
         self.webAppURL = webAppURL
         connectionStatus = client == nil ? .unavailable : .connecting
     }
@@ -118,16 +118,16 @@ final class WorkspaceRuntime: ObservableObject {
     func canPerform(_ action: GeneratedViewAction) -> Bool {
         switch action {
         case .openRoute(let route):
-            Self.routeDestination(for: route) != nil
+            return Self.routeDestination(for: route) != nil
         case .openLink(let value, _):
-            Self.isSafeWebLink(value)
+            return Self.isSafeWebLink(value)
         case .callTool:
-            false
+            return false
         case .window(let windowAction):
             guard knownViews[windowAction.windowId] != nil else { return false }
             switch windowAction.operation {
-            case .focus, .restore, .close, .minimise: true
-            case .move, .resize: false
+            case .focus, .restore, .close, .minimise: return true
+            case .move, .resize: return false
             }
         }
     }
@@ -223,12 +223,33 @@ final class WorkspaceRuntime: ObservableObject {
 
     private func registerCurrentSnapshot() async throws {
         guard let workspaceClient else { return }
-        let windows = presentedView.map { [WorkspaceWindow(viewId: $0.viewId, title: $0.view.title)] } ?? []
+        let windows = presentedView.map {
+            [WorkspaceWindow(viewId: $0.viewId, title: workspaceTitle(for: $0.view))]
+        } ?? []
         try await workspaceClient.register(WorkspaceSnapshot(
             windows: windows,
             contextPanelOpen: false,
             device: WorkspaceDevice(kind: .phone, label: "iPhone")
         ))
+    }
+
+    private func workspaceTitle(for view: GeneratedView) -> String {
+        switch view {
+        case .table(let envelope): envelope.title
+        case .list(let envelope): envelope.title
+        case .detail(let envelope): envelope.title
+        case .text(let envelope): envelope.title
+        case .timeline(let envelope): envelope.title
+        case .chart(let envelope): envelope.title
+        case .taskCard(let envelope): envelope.title
+        case .status(let envelope): envelope.title
+        case .image(let envelope): envelope.title
+        case .htmlApp(let envelope): envelope.title
+        case .knowledgeGraph(let envelope): envelope.title
+        case .code(let envelope): envelope.title
+        case .unsupportedVersion, .unknown:
+            JarvisWorkspaceLocalization.string(.generatedView, language: language)
+        }
     }
 
     private func updateConnectionStatus(for error: any Error) {
