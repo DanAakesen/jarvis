@@ -6887,7 +6887,8 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if ((b = t.closest('[data-tab]'))) { setTab(b.dataset.tab); return; }
     if ((b = t.closest('[data-ex]'))) {
       const nm = b.dataset.ex;
-      if (b.dataset.jump) setTab('track');
+      if (S.searching) endSearch();
+      if (b.dataset.jump || S.tabs[S.area] !== 'track') setTab('track');
       prefill('hf', nm); scroller.scrollTop = 0; refocus('#hf-kg'); return;
     }
     if ((b = t.closest('[data-sug]'))) { prefill('hf', b.dataset.sug); return; }
