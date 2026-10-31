@@ -173,6 +173,14 @@ jobs:
                 done || true
             exit 1
           fi
+      - name: Revoke development certificates
+        if: always() && github.ref == 'refs/heads/main'
+        timeout-minutes: 5
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ruby .github/scripts/testflight_certificate_cleanup.rb
       - name: Delete App Store Connect key
         if: always()
         run: rm -f "$RUNNER_TEMP/AuthKey.p8"
