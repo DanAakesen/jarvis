@@ -2137,6 +2137,37 @@ describe('App shell', () => {
     expect(shell.getAttribute('data-keyboard-open')).toBe('false');
   });
 
+  it('keeps the dock available on short-screen startup, then hides it after tapping the focused composer', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const viewport = Object.assign(new EventTarget(), { height: 480, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    vi.stubGlobal('innerHeight', 480);
+    vi.stubGlobal('screen', { height: 844 });
+    const layoutHeight = vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(480);
+    await renderSignedIn();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
+    const shell = document.querySelector('.app-shell')!;
+    expect(document.activeElement).toBe(input);
+    expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+
+    fireEvent.pointerDown(input, { pointerType: 'touch', isPrimary: true });
+    expect(shell.getAttribute('data-keyboard-open')).toBe('true');
+    expect(navigation.isConnected).toBe(true);
+
+    await userEvent.setup().type(input, 'Still typing');
+    expect(input).toHaveProperty('value', 'Still typing');
+    viewport.height = 844;
+    vi.stubGlobal('innerHeight', 844);
+    layoutHeight.mockReturnValue(844);
+    act(() => { viewport.dispatchEvent(new Event('resize')); });
+    expect(shell.getAttribute('data-keyboard-open')).toBe('false');
+    expect(navigation.isConnected).toBe(true);
+  });
+
   it('lists the Health pages under Health in the phone menu and nowhere else', async () => {
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
