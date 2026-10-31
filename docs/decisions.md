@@ -9586,6 +9586,30 @@ environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
 
+## 31 October 2026 — P15-26 automatic signing with development cleanup
+
+Build 11 hit the development-certificate limit under automatic signing.
+The owner rejected manual distribution signing because they have no Mac to
+export its private key; adding P12/profile secrets would block working uploads.
+Keep the original automatic archive/export and export options, with no new
+secrets or dependencies.
+
+As explicitly authorized in PR #1451, revoke all API-visible `DEVELOPMENT` and
+`IOS_DEVELOPMENT` certificates after every main-only run, including failed
+archive/export. This also removes older/shared Apple/iOS development
+certificates and can invalidate their development profiles. Never revoke
+distribution certificates; preserve Mac-specific and unknown types too.
+Use the existing App Store Connect key, Ruby standard-library ES256/HTTPS,
+bounded full-list pagination and fail-closed type/identifier checks. Withhold
+certificate/key identifiers, tokens and raw diagnostics; report API failures
+without false success. Always delete the local key after the cleanup attempt.
+
+Offline tests verify the signed JWT, development-only deletion, pagination,
+error/privacy handling and unchanged signing workflow. The key's real
+list/revoke permissions and live cleanup remain unverified; no Apple
+certificates are revoked and no upload is dispatched while implementing this.
+The owner requested draft status until live verification.
+
 ## 30 October 2026 — P15-09 Apple adapter boundary
 
 Keep Apple framework implementations in the iOS app target. The URLSession
