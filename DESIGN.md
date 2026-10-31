@@ -2803,9 +2803,14 @@ composition, not literal values. The iPhone shell keeps a plain system
 background sidebar fixed behind the screen; a right-side drag tracks the
 screen's leftward movement, dimming and blur, and a tap or reverse drag closes
 it. The sidebar header places Jarvis left and an icon-only Settings control
-right. Areas are ordered bottom-to-top from Proactive through Chat; Banking is
-disabled and labeled Later. Selection, keyboard focus, pointer hover and press
-change row text/icon styling only, without a row surface or border.
+right, separated from the list by a neutral rule. Its title, settings hit target,
+and row geometry follow the board through `JarvisDesignTokens`. Areas are ordered
+bottom-to-top from Proactive through Chat; Banking is disabled and labeled Later.
+Selection, keyboard focus, pointer hover and press change row text/icon styling
+only, without a row surface or border. The revealed-screen tap-to-close surface
+moves with the screen so it cannot intercept sidebar buttons. The right-edge
+drag is simultaneous with screen gestures and its pure-Swift recognition policy
+is unit tested.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because

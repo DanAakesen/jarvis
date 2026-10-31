@@ -202,8 +202,6 @@ struct ContentView: View {
                         .accessibilityHidden(true)
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
-                .offset(x: -drawerWidth * progress)
-                .contentShape(Rectangle())
                 .overlay {
                     if progress > 0 {
                         Color.clear
@@ -212,7 +210,9 @@ struct ContentView: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .gesture(sidebarDragGesture(
+                .offset(x: -drawerWidth * progress)
+                .contentShape(Rectangle())
+                .simultaneousGesture(sidebarDragGesture(
                     screenWidth: geometry.size.width,
                     drawerWidth: drawerWidth
                 ))
@@ -322,12 +322,15 @@ struct ContentView: View {
         drawerWidth: CGFloat,
         startProgress: CGFloat
     ) -> Bool {
-        guard abs(value.translation.width) > abs(value.translation.height) else { return false }
-        if startProgress > 0 {
-            return value.startLocation.x < screenWidth - drawerWidth * startProgress
-        }
-        return value.startLocation.x >= screenWidth * JarvisDesignTokens.sidebarGestureStartFraction
-            && value.translation.width < 0
+        JarvisSidebarGesturePolicy.canBegin(
+            startX: Double(value.startLocation.x),
+            translationX: Double(value.translation.width),
+            translationY: Double(value.translation.height),
+            screenWidth: Double(screenWidth),
+            drawerWidth: Double(drawerWidth),
+            startProgress: Double(startProgress),
+            openingStartFraction: Double(JarvisDesignTokens.sidebarGestureStartFraction)
+        )
     }
 
     private var sidebarAnimation: Animation? {

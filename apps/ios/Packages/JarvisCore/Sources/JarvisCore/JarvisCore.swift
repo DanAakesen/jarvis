@@ -121,3 +121,35 @@ public struct JarvisNavigationState: Equatable {
         isSidebarOpen = isOpen
     }
 }
+
+public enum JarvisSidebarGesturePolicy {
+    public static func canBegin(
+        startX: Double,
+        translationX: Double,
+        translationY: Double,
+        screenWidth: Double,
+        drawerWidth: Double,
+        startProgress: Double,
+        openingStartFraction: Double
+    ) -> Bool {
+        guard screenWidth.isFinite,
+              drawerWidth.isFinite,
+              startX.isFinite,
+              translationX.isFinite,
+              translationY.isFinite,
+              startProgress.isFinite,
+              openingStartFraction.isFinite,
+              screenWidth > 0,
+              drawerWidth > 0,
+              (0...1).contains(startProgress),
+              (0...1).contains(openingStartFraction),
+              abs(translationX) > abs(translationY) else {
+            return false
+        }
+
+        if startProgress > 0 {
+            return startX < screenWidth - drawerWidth * startProgress
+        }
+        return startX >= screenWidth * openingStartFraction && translationX < 0
+    }
+}

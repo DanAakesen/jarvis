@@ -29,7 +29,7 @@ struct JarvisSidebar: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Jarvis")
-                    .font(.headline)
+                    .font(.system(size: JarvisDesignTokens.sidebarBrandFontSize, weight: .bold))
                     .foregroundStyle(.primary)
                 Spacer()
                 Button {
@@ -37,7 +37,10 @@ struct JarvisSidebar: View {
                 } label: {
                     Image(systemName: JarvisDestination.settings.symbolName)
                         .font(.system(size: JarvisDesignTokens.sidebarIconSize))
-                        .frame(width: JarvisDesignTokens.sidebarRowHeight, height: JarvisDesignTokens.sidebarRowHeight)
+                        .frame(
+                            width: JarvisDesignTokens.sidebarSettingsButtonSize,
+                            height: JarvisDesignTokens.sidebarSettingsButtonSize
+                        )
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
@@ -46,7 +49,14 @@ struct JarvisSidebar: View {
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
             }
-            .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
+            .padding(.leading, JarvisDesignTokens.sidebarHeaderLeadingInset)
+            .padding(.trailing, JarvisDesignTokens.sidebarHeaderTrailingInset)
+
+            Rectangle()
+                .fill(Color(uiColor: .separator))
+                .frame(height: JarvisDesignTokens.sidebarHeaderRuleHeight)
+                .padding(.horizontal, JarvisDesignTokens.sidebarHeaderRuleInset)
+                .padding(.vertical, JarvisDesignTokens.sidebarHeaderRuleVerticalInset)
 
             GeometryReader { scrollGeometry in
                 ScrollView {
