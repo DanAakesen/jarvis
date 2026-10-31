@@ -1381,6 +1381,35 @@ Standalone folder creation, note delete/rename/move, task delete and priority
 on task creation remain unavailable because the shared backend has no matching
 screen route or payload.
 
+### iOS Software Factory area (P15-19)
+
+`JarvisFactoryClient` composes over the existing authenticated `JarvisClient` and
+reuses `/factory/projects`, the selected project's board and releases, task
+details/events/controls, task creation, and project completion-policy update.
+`JarvisFactoryArea` owns the selected project, Board/Needs Dan/Releases segment,
+search/filter state, retained board snapshot, retry and connection presentation.
+Needs Dan is scoped to the selected project; it does not fan out across projects
+or invent a combined board.
+
+The board invalidation listener consumes the existing `/now/events` `board`
+frames and refreshes only the matching project. Task detail resumes its existing
+task-event stream with `Last-Event-ID`; Core bounds and decodes both streams.
+Task grouping/filtering, default Done collapse, control availability,
+confirmation handling, release-linked task IDs and task submission validation
+remain in `JarvisCore`. A create retry retains the same generated submission UUID
+for an identical draft. Completion policy is saved through the existing project
+PATCH before task creation; it is not included in the create payload.
+
+The SwiftUI app uses native list/group controls, navigation, confirmation
+dialogs, sheets, forms, and the shared token layer. The only network source for
+previews and screenshot states is `JarvisFactoryFixtureScenario`, selected by
+the explicit screenshot launch arguments; fixture mode does not issue live
+requests. Linux fixture tests cover existing routes, control confirmation,
+localization and retry identity. No Factory-specific backend route, APNs,
+project administration, git graph, backfill, or sandbox operation is added.
+The existing ready-PR iOS screenshot job captures Factory states during its
+single simulator boot.
+
 ### iOS sign-in and lock gate (P15-16)
 
 `JarvisGatePolicy` in `JarvisCore` decides the route from token presence,
@@ -1558,7 +1587,10 @@ return HTTP bodies or SSE chunks, including delays through the injectable
 `ChatClock`, dropped streams, and HTTP failures. Core client test conversations
 live in `JarvisCoreTests` resources; there is no shared fixtures target. The
 Chat screen has a separate synthetic scenario in the app target for SwiftUI
-previews and the existing simulator screenshot job only. Linux tests exercise
+previews and the existing simulator screenshot job only. P15-19 adds a
+Factory fixture scenario in the app target for Factory previews and that same
+screenshot job; its launch arguments select segment, state, and Danish/English
+copy. Linux tests exercise
 the real chat and tools clients against test resources, including history
 pagination and reattachment.
 

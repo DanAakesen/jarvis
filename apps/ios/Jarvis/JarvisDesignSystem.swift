@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 enum JarvisDesignTokens {
     static let controlMinimumHeight: CGFloat = 44
@@ -133,6 +134,35 @@ enum JarvisDesignTokens {
     static let notesGraphNeighbourOpacity: Double = 0.72
     static let notesGraphNodeOpacity: Double = 0.46
     static let notesSearchSnippetLineLimit = 2
+    static let factoryHorizontalInset: CGFloat = 16
+    static let factorySectionSpacing: CGFloat = 12
+    static let factoryControlHeight: CGFloat = 44
+    static let factoryIconSize: CGFloat = 18
+    static let factoryRowSpacing: CGFloat = 8
+    static let factoryPlusDiameter: CGFloat = 48
+    static let factoryStateIconSize: CGFloat = 28
+    static let factorySkeletonRowCount = 4
+    static let factorySkeletonCornerRadius: CGFloat = 5
+    static let factorySkeletonTitleHeight: CGFloat = 17
+    static let factorySkeletonSecondaryWidth: CGFloat = 132
+    static let factorySkeletonSecondaryHeight: CGFloat = 12
+    static let factoryMultilineMinimumLines = 4
+    static let factoryMultilineMaximumLines = 10
+    static let factoryAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 180.0 / 255, blue: 92.0 / 255, alpha: 1)
+            : UIColor(red: 180.0 / 255, green: 95.0 / 255, blue: 6.0 / 255, alpha: 1)
+    })
+    static let factoryAccentForeground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 29.0 / 255, green: 18.0 / 255, blue: 0, alpha: 1)
+            : UIColor.white
+    })
+    static let factorySecondaryAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 1)
+            : UIColor(red: 20.0 / 255, green: 118.0 / 255, blue: 141.0 / 255, alpha: 1)
+    })
     static let gateContentInset: CGFloat = 32
     static let gateOrbSize: CGFloat = 224
     static let gateControlSpacing: CGFloat = 24
