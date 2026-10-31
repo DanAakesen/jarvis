@@ -64,12 +64,8 @@ struct GeneratedWorkspaceSheet: View {
                 actionNotice = text(.invalidLink)
                 return
             }
-            switch openURL(url) {
-            case .handled, .systemAction:
-                actionNotice = nil
-            case .discarded:
-                actionNotice = text(.linkOpenFailed)
-            }
+            openURL(url)
+            actionNotice = nil
         case .callTool:
             actionNotice = text(.toolUnavailable)
         case .window(let windowAction):
