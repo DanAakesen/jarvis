@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved the Notes area on 30 October 2026; this contract's section 11 is implemented using only the existing routes. The Voice screen design was approved on 30 October 2026; its implementation reuses the contracts below. The owner approved the Sign-in and Lock concept on 30 October 2026; P15-16 implements those screens and the Face ID lock. The Settings concept was approved on 31 October 2026; section 12 uses only existing routes. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings on 31 October 2026; sections 11 and 12 reuse existing routes. P15-14 implements Workspaces without a new backend route. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
 
 ## 1. Sign-in and session
 
@@ -42,7 +42,7 @@ Draft for the native iPhone app, derived from reading the current backend and we
 - Shape: `GeneratedView`, version 1, in `packages/contracts/src/index.d.ts` with runtime guards in `index.js`. It is JSON, not Zod.
 - Renderers: table, list, detail, text (plain or markdown), timeline, chart (line, bar or area, up to 5 series and 1000 points), task-card, status, image, html-app, knowledge-graph, code.
 - Actions (up to 10 per view): open-route, open-link, call-tool, window.
-- Native decisions still open: html-app (a stored HTML artifact of up to 512 KiB; needs a sandboxed web view), knowledge-graph, and code.
+- Native decisions still open: html-app (a stored HTML artifact of up to 512 KiB; needs a sandboxed web view), knowledge-graph, and code. P15-14 leaves all three as unsupported cards and does not execute supplied HTML. Its optional web link opens only the configured HTTPS app root because no item deep link is established by this contract.
 
 ## 5. App control (workspace commands)
 
@@ -51,6 +51,7 @@ Draft for the native iPhone app, derived from reading the current backend and we
 - Acknowledge each command within 10 seconds (the `workspace-command` event carries `expiresAt`): `POST /now/workspace/commands/:commandId/ack` with `{sessionId, applied}` and optionally `outcome` (`refused` or `error`) and `reason` (1 to 300 characters). It answers 204, also for an identical repeat, 404 when the command is no longer pending, and 409 when the connection is stale. At most 8 commands are pending, and a command id is idempotent by payload fingerprint.
 - A command `target` is `active`, `desktop`, `phone` or `all`.
 - UNVERIFIED: replay after an SSE reconnect, which commands are desktop only, version negotiation, and how the phone and the desktop choose the active client.
+- P15-14 registers its current window snapshot as a `phone` client and acknowledges each received command by its deadline. This does not resolve the active-client choice or replay behavior above; a successful open request is not evidence that the phone was selected.
 
 ## 6. Tools
 
@@ -172,7 +173,30 @@ Sources checked before implementation: `apps/backend/src/core/settings.ts`,
 `apps/web/src/TaskRecipesSettings.tsx`, `apps/backend/src/core/index.ts` and
 `apps/backend/src/auth/session/routes.ts`.
 
-## 13. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
+## 13. Software Factory area (P15-19)
+
+The Factory area reuses the authenticated web/backend routes. It adds no iOS-specific route or backend behavior. Project administration (other than the existing completion-policy control in task creation), Git graph visualization, backfill, and sandbox routes remain out of scope.
+
+The iPhone selects one project at a time. Board, Needs Dan, and Releases are
+scoped to that selected project; Needs Dan does not aggregate across projects,
+and the app does not issue a fan-out of board requests to simulate an all-project
+view.
+
+| Screen action | Existing route and contract |
+|---|---|
+| Load active projects | `GET /factory/projects` returns project records with `id`, `name`, `repo`, `default_branch`, `default_agent`, `policy`, and other existing project fields. |
+| Load one project's board | `GET /factory/board?project=ID` returns `{project: {id, repo}, fetchedAt, stale, columns}`. The six column IDs are `backlog`, `needs_dan`, `ready`, `in_progress`, `in_review`, and `done`. Cards contain an issue (`number`, `url`, `title`, `taskCode`, `labels`, `worker`, open/closed state, update/close times and `blockedBy` issue numbers), an optional PR (`number`, `url`, `draft`, checks `none|pending|passing|failing`), and an optional task (`id`, task state, agent, activity, attempt count, branch, start time and latest session end reason). The backend requires a project ID; load each project separately rather than inventing an all-project board. |
+| Filter board rows | Board placement is server-owned. Agent and task-state filters may be applied to the returned card facts. The separate `GET /factory/tasks` accepts optional `projectId`, `agent` (`codex|copilot`), `state` (`Ready|Running|PauseRequested|Paused|NeedsAttention|Done|Cancelled`), `createdAfter`, `createdBefore`, and `search`, plus bounded `limit` and `offset`. |
+| Refresh board live | Authenticated `GET /now/events` emits `board` with `{projectId, version}` when a project board changes. Refresh only the matching project's board. The backend accepts the existing owner-session bearer token for this stream and closes registered streams when that owner session is revoked. |
+| Load task details | `GET /factory/tasks/:id?eventLimit=N&eventOffset=N` returns the task record, bounded `events` page and `usage` records. |
+| Receive task timeline updates | Authenticated `GET /factory/tasks/:id/events` is an SSE stream. Send `Last-Event-ID` to resume; task events use `event: task`, the persisted event ID and the task event as JSON data. The initial `ready` event marks completion of replay. The existing owner-session bearer token is accepted. |
+| Control a task | `POST /factory/tasks/:id/controls` accepts `{action}` for `steer`, `pause`, `resume`, `cancel`, or `recover`; steering also requires `message`, and an explicitly confirmed restart may include `confirm: true`. A `409` body with `confirmationRequired: true` and a reason requires explicit owner confirmation; only then repeat the same action/message with `confirm: true`. Other `409` responses are conflicts, not confirmation prompts. `POST /factory/tasks/:id/retry` is a distinct retry route for a failed start attempt without sandbox history. |
+| Create a task | `POST /factory/tasks` accepts `{projectId, submissionId, title, request, agent?, modelOverride?, reasoningOverride?}` and returns the task plus linked issue number and URL. Keep the same generated UUID `submissionId` and exact payload when retrying an uncertain request; the backend deduplicates by that ID and payload fingerprint. Completion policy is a project setting, not a task-create field: the existing `PATCH /factory/projects/:id` accepts `{policy: "deliver_pr"|"complete_without_deployment"}` and is used by the web task-creation control to save the selected project's policy. |
+| Load releases and release detail | `GET /factory/projects/:id/releases` returns the project, `releases`, linked `pullRequests`, `workflowRuns`, `deployments`, and nullable `graph`. `GET /factory/releases/:id` resolves a release to its project ID. Release detail is derived from these existing records; task IDs come from linked PR/run records. |
+| Show recent commits | When `graph` is present, its flat `commits` array contains `{sha, message, author, committedAt, parents}` and `truncated` indicates incomplete history. There is no separate compact-commit endpoint or DTO. Show a compact list from these commit records; do not render the web-only branch graph. |
+
+Contract verification (31 October 2026): `apps/backend/src/factory/index.ts`, `board.ts`, `projects.ts`, `task-store.ts`, and `release-view.ts`; `apps/backend/src/core/now.ts` and `apps/backend/src/auth/hook.ts`; `apps/web/src/factory/TasksPage.tsx`, `TaskControls.tsx`, `release-data.ts`, and `ReleasePage.tsx`; and `apps/web/src/task-events.ts`. The owner-session stream, task-list agent/state filters, and returned commit record shape are verified in those sources. Production authorization, project selection, and all writes remain on the existing authenticated API.
+## 14. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
 
 The web Health area and native Track workout screen use the same owner routes;
 there are no iOS-specific endpoints. The source of truth is the backend and

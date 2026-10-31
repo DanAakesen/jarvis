@@ -6,6 +6,7 @@ struct ContentView: View {
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @GestureState private var sidebarDrag = SidebarDrag()
+    @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
     @StateObject private var voiceModel = VoiceScreenModel()
     @State private var animationTargetProgress: CGFloat = 0
@@ -16,15 +17,23 @@ struct ContentView: View {
     private let fixtureMode: Bool
     private let settingsClient: JarvisSettingsClient?
     @State private var notesClient: JarvisNotesClient?
+    @State private var factoryClient: JarvisFactoryClient?
+    private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
+    private let factoryFixtureMode: Bool
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
-    init() {
-        let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
-        let settingsPreview = ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture")
-        let fixtureMode = settingsPreview || ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture")
+    init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
+        let arguments = ProcessInfo.processInfo.arguments
+        let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
+        let settingsPreview = arguments.contains("--screenshot-settings-fixture")
+        let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
+        let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
+        let fixtureMode = settingsPreview
+            || arguments.contains("--screenshot-chat-fixture")
+            || factoryFixtureMode
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
@@ -32,30 +41,52 @@ struct ContentView: View {
         if settingsPreview {
             initialNavigation.navigate(to: .settings)
         }
+        if factoryScreenshot != nil {
+            initialNavigation.navigate(to: .softwareFactory)
+        }
         self.fixtureMode = fixtureMode
+        self.factoryScreenshot = factoryScreenshot
+        self.factoryFixtureMode = factoryFixtureMode
+        let resolvedClient: JarvisClient?
+        let resolvedStartupError: String?
         if fixtureMode {
-            let client = try? JarvisFixtureScenario.makeClient()
-            chatClient = client
+            resolvedClient = try? JarvisFixtureScenario.makeClient()
+            resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
             settingsClient = try? JarvisFixtureScenario.makeSettingsClient()
-            startupError = client == nil ? "Fixture preview is unavailable." : nil
+        } else if let client {
+            resolvedClient = client
+            resolvedStartupError = nil
+            settingsClient = JarvisSettingsClient(client: client)
         } else {
             do {
-                let client = try JarvisComposition.makeClient(
+                let resolved = try JarvisComposition.makeClient(
                     accessTokenProvider: JarvisUnavailableAccessTokenProvider()
                 )
-                chatClient = client
-                settingsClient = JarvisSettingsClient(client: client)
-                startupError = nil
+                resolvedClient = resolved
+                resolvedStartupError = nil
+                settingsClient = JarvisSettingsClient(client: resolved)
             } catch {
-                chatClient = nil
+                resolvedClient = nil
+                resolvedStartupError = "Chat isn't configured."
                 settingsClient = nil
-                startupError = "Chat isn't configured."
             }
         }
+        chatClient = resolvedClient
+        startupError = resolvedStartupError
+        _workspaceRuntime = StateObject(
+            wrappedValue: WorkspaceRuntime(
+                client: resolvedClient,
+                webAppURL: webAppURL ?? JarvisComposition.makeWebAppURL()
+            )
+        )
         _navigation = State(initialValue: initialNavigation)
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _notesClient = State(initialValue: Self.makeNotesClient())
+        _factoryClient = State(initialValue: Self.makeFactoryClient(
+            previewState: factoryScreenshot?.state,
+            fixtureMode: factoryFixtureMode
+        ))
     }
 
     var body: some View {
@@ -92,7 +123,9 @@ struct ContentView: View {
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            if destination == .voice {
+                            if destination == .workspaces {
+                                WorkspacesView(runtime: workspaceRuntime)
+                            } else if destination == .voice {
                                 VoiceScreenView(model: voiceModel) {
                                     navigate(to: .chat, drawerWidth: drawerWidth)
                                 }
@@ -109,6 +142,19 @@ struct ContentView: View {
                                     language: language,
                                     onRetryConfiguration: { notesClient = Self.makeNotesClient() }
                                 )
+                            } else if destination == .softwareFactory {
+                                JarvisFactoryArea(
+                                    client: factoryClient,
+                                    language: factoryScreenshot?.language ?? language,
+                                    onRetryConfiguration: {
+                                        factoryClient = Self.makeFactoryClient(
+                                            previewState: factoryScreenshot?.state,
+                                            fixtureMode: factoryFixtureMode
+                                        )
+                                    },
+                                    previewState: factoryScreenshot?.state,
+                                    liveUpdatesEnabled: !factoryFixtureMode
+                                )
                             } else if destination == .settings {
                                 JarvisSettingsArea(
                                     storedLanguage: $storedLanguage,
@@ -122,6 +168,22 @@ struct ContentView: View {
                                 JarvisPlaceholderView(destination: destination, language: language)
                             }
                         }
+                }
+                .task { await workspaceRuntime.run() }
+                .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
+                    guard destination != nil,
+                          let destination = workspaceRuntime.consumeRequestedDestination() else {
+                        return
+                    }
+                    navigate(to: destination, drawerWidth: drawerWidth)
+                }
+                .sheet(
+                    item: Binding(
+                        get: { workspaceRuntime.presentedView },
+                        set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
+                    )
+                ) { presented in
+                    GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background(Color(uiColor: .systemBackground))
@@ -336,6 +398,23 @@ struct ContentView: View {
                 accessTokenProvider: JarvisUnavailableAccessTokenProvider()
             )
             return JarvisNotesClient(client: client)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func makeFactoryClient(
+        previewState: JarvisFactoryPreviewState?,
+        fixtureMode: Bool
+    ) -> JarvisFactoryClient? {
+        if fixtureMode, let previewState {
+            return try? JarvisFactoryFixtureScenario.makeClient(state: previewState)
+        }
+        do {
+            let client = try JarvisComposition.makeClient(
+                accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+            )
+            return JarvisFactoryClient(client: client)
         } catch {
             return nil
         }

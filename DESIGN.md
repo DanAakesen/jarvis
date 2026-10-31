@@ -2805,9 +2805,9 @@ SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
-stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes are native screens;
-the unbuilt areas use title-only placeholders, and Settings hosts the app-language preference.
-Reduced Motion removes settling animation.
+stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes
+are native screens; the unbuilt areas use title-only placeholders, and Settings
+hosts the app-language preference. Reduced Motion removes settling animation.
 
 ## Native iOS Voice screen (P15-11; 30 October 2026)
 
@@ -2907,6 +2907,42 @@ thresholds, timeouts and project administration remain web-only. The checked-in
 design board has no `screen=settings` frames, so it cannot be used to list
 frame-by-frame visual deltas; the owner-approved issue concept is authoritative.
 The existing CI screenshot set is unchanged under the iOS Mac-run cost guard.
+## Native iOS Software Factory (P15-19; 31 October 2026)
+
+The approved Factory screen uses the existing Notes chrome: a Software Factory
+title and refresh control, a text-only Board / Needs Dan / Releases switcher,
+and a fixed glass search field plus round create button. The project menu and
+board filter sit above the grouped content. Board groups follow In progress,
+In review, Ready, Backlog and Done, with Done collapsed initially; Needs Dan
+shows only the selected project's Needs Dan / NeedsAttention work. Releases open
+a native detail list for status, commit, workflow runs, deployments, linked
+tasks and the existing compact commit records.
+
+Use native SwiftUI `ScrollView`, `DisclosureGroup`, `List`, `Picker`, `Form`,
+`NavigationStack`, sheets and confirmation dialogs. Data-specific task rows
+combine issue, agent/state, PR/check and blocker facts because no single system
+row represents that linked record; timeline and usage rows likewise compose
+native labels and text. SwiftUI has no built-in skeleton, so loading uses
+redacted system shapes. The shared fixed search/create dock uses `safeAreaInset`
+and system glass material. Geometry and the dynamic orange/cyan semantic colors
+live in `JarvisDesignTokens`; no per-screen color values or decorative orb are
+added.
+
+Orange is a small primary action/accent, with the approved dark/light foreground
+pair; cyan remains the shared secondary token and is not hardcoded into a
+Factory element. Selection and task/check state always include text and an icon,
+not color alone. Danish/English copy and date formatting come from `JarvisCore`,
+with the app language defaulting to Danish. System type sizes, appearance,
+VoiceOver labels, and native scrolling remain intact.
+
+Board and Needs Dan intentionally use one selected project per request. There is
+no all-project aggregation. Existing APIs own project placement and live
+invalidation; task details use the resumable task event stream. No APNs,
+project administration, git graph, backfill, or sandbox UI is represented.
+The merged `docs/ios/design/board.html` includes the approved Factory frames and
+states. Native frame comparison remains pending an Apple build and simulator
+screenshots; the existing CI job supplies fixture-based light/dark screenshots
+for review.
 
 ## Native iOS sign-in and lock (P15-16; 30 October 2026)
 
@@ -2922,3 +2958,30 @@ stronger, faster pulse. The app shell is blurred and inaccessible behind the
 gate, and an opaque privacy cover, shown in a window above any open sheet, hides it while inactive. Face ID uses the
 system LocalAuthentication prompt; the passcode fallback is also system UI,
 not a custom keypad. No helper text or lock-interval control is shown.
+
+## Native iOS Workspaces (P15-14; 30 October 2026)
+
+Use the system navigation bar with an inline Workspaces title and refresh action,
+then a text-and-icon kind filter, search field and native grouped list. Preserve
+the web order of Pinned, Today, This week and Earlier; native menus and swipe
+actions expose pin, rename and remove. Opening a supported item presents one
+large native sheet. Shared geometry and chart values live in
+`JarvisDesignTokens` in `apps/ios/Jarvis/JarvisDesignSystem.swift`; SwiftUI system
+typography, colors, symbols, controls and scrolling remain the default.
+Renderer subviews adapt heterogeneous generated-view payloads to native
+components. Charts use Apple's Charts framework for numeric/categorical axes,
+grouped bars, area baselines and accessible values instead of a custom plot.
+
+The approved reference is `docs/ios/design/workspaces.html`; its generated
+sample data is illustrative. The native screen pins search to the bottom, as in
+the reference, and has no create/plus action because neither the web Workspaces
+pane nor the shared backend contract has a create route. All Workspaces UI and
+accessibility copy follows the persisted app-language preference (Danish by
+default, with English). `html-app`, `knowledge-graph` and `code` remain
+unsupported cards; their optional link opens only a validated configured HTTPS
+web-app root, not a guessed item deep link. Supplied HTML, JavaScript and CSS are
+never executed.
+
+The shared native sign-in orb uses a dark glass sphere and orange center without
+orbit or meridian ellipses. The approved Workspaces frame contains no orb, so the
+screen does not add one.

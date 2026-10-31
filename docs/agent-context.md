@@ -6263,6 +6263,26 @@ and cursor-paginated history, a pending confirmation followed by approval, and
 listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
 routes through the authenticated HTTP client; no app-specific backend is used.
 
+### Software Factory UI fixture and screenshots (P15-19)
+
+`JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
+previews and simulator screenshots through `FixtureTransport`; its project,
+board, task, release, event, usage and commit values are synthetic. CI selects
+the screen with `--screenshot-factory-fixture`,
+`--screenshot-factory-state=<state>` and
+`--screenshot-factory-language=da|en`. Supported states are board, needs,
+releases, detail, release, steer, newtask, empty, loading, error, offline,
+stale, reconnecting and search. Capture all those states in light/dark and both
+languages through the existing `ios-ci.yml` simulator boot; do not add a Mac
+job, simulator boot or UI-test target.
+
+The app's Factory project menu selects one project at a time. Needs Dan is
+limited to that project's board; do not add a cross-project query or fan-out.
+The owner's approved Factory concept is not present in the current checked-in
+`docs/ios/design/board.html`, so do not claim a visual pixel/frame comparison
+against that local copy. Keep the documented difference visible for owner
+review.
+
 To add a scenario:
 
 1. Check the existing backend/web route and payload source cited in
@@ -6427,6 +6447,31 @@ Pass the web validator's optional trusted Blob host or registered tool names
 through `GeneratedViewDecodingContext` on `JSONDecoder.userInfo` when available.
 The Swift source status also accepts `running`, matching the runtime guard even
 though the TypeScript declaration and JSON schema omit it.
+
+P15-14 adds the native Workspaces list and generated-view sheet in the app target.
+Its `JarvisWorkspacesClient` uses only the existing list/open/patch/delete routes;
+`WorkspaceRuntime` registers a phone snapshot, applies supported commands from
+the existing `/now/events` stream and promptly acknowledges refused or applied
+outcomes. Native generated-view previews cover each contracted renderer and
+unknown-version fallback with synthetic data; Core fixture tests cover the
+existing routes and command acknowledgement. Run `swift build` and `swift test`
+from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
+require the existing Mac compile check; no simulator boot or UI-test job was
+added.
+
+The screen follows the checked-in Workspaces frame's fixed-bottom search. Its
+app and VoiceOver strings use `JarvisWorkspaceLocalization` resources in Danish
+and English, selected by the persisted `JarvisAppLanguage` preference (Danish
+default). The shared native gate orb uses dark glass and an orange center with
+no orbit/meridian ellipses; the Workspaces frame itself has no orb.
+
+The list renders table, list, detail, text, timeline, chart, task-card, status
+and image views. HTML-app, knowledge-graph and code remain unsupported cards,
+and supplied HTML is not executed. `JARVIS_WEB_APP_URL` is optional and accepts
+only an HTTPS origin; it does not identify a workspace item. The app uses the
+existing Keychain session and configured `JARVIS_API_BASE_URL`; no iOS-specific
+backend route is added. Active-client choice and command replay after reconnect
+remain unverified.
 
 ### Native voice screen and audio (P15-11)
 

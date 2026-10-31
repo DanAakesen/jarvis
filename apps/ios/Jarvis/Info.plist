@@ -20,6 +20,8 @@
 	<false/>
 	<key>JARVIS_API_BASE_URL</key>
 	<string>$(JARVIS_API_BASE_URL)</string>
+	<key>JARVIS_WEB_APP_URL</key>
+	<string>$(JARVIS_WEB_APP_URL)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Jarvis uses the camera when you choose Take photo or share a frame during a voice conversation. Images stay on this device until you send them.</string>
 	<key>NSMicrophoneUsageDescription</key>
