@@ -6,6 +6,7 @@ import UIKit
 @MainActor
 final class VoiceScreenModel: ObservableObject {
     @Published private(set) var voiceState: VoiceSessionState = .idle
+    @Published private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
     @Published private(set) var microphoneDenied = false
     @Published private(set) var signInRequired = false
     @Published private(set) var isAudioReady = false
@@ -21,6 +22,7 @@ final class VoiceScreenModel: ObservableObject {
     @Published private(set) var camera: VoiceCameraCapture?
     @Published private(set) var photoIsReady = false
 
+    private let screenshotConnectionLost: Bool
     private let audio = VoiceAudioEngine()
     private let screenShareBridge = VoiceScreenShareBridge()
     private var captureTask: Task<Void, Never>?
@@ -32,14 +34,28 @@ final class VoiceScreenModel: ObservableObject {
     private var photoForNextTurn: Data?
     private var sessionGeneration = 0
     private var isStarting = false
+    private var connectionPresentationMachine = VoiceConnectionPresentationStateMachine()
 
-    init() {
+    init(screenshotConnectionLost: Bool = false) {
+        self.screenshotConnectionLost = screenshotConnectionLost
+        if screenshotConnectionLost {
+            connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+            voiceState = .reconnecting(attempt: 3)
+        }
         audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
             Task { @MainActor in
                 guard let self, let client = self.sessionClient else { return }
                 try? await client.playbackCompleted(responseID: responseID, audible: audible)
             }
         }
+    }
+
+    var skipsAutomaticStart: Bool {
+        screenshotConnectionLost
+    }
+
+    var showsConnectionRecovery: Bool {
+        connectionPresentationState == .lost || connectionPresentationState == .retrying
     }
 
     var statusText: String {
@@ -101,18 +117,25 @@ final class VoiceScreenModel: ObservableObject {
             let baseURL = try JarvisComposition.apiBaseURL()
             self.httpClient = httpClient
             sessionGeneration += 1
+            let generation = sessionGeneration
             let audio = self.audio
             let client = VoiceSessionClient(
                 baseURL: baseURL,
                 transport: URLSessionWebSocketTransport(),
                 onMessage: { [weak self] message in
-                    Task { @MainActor in self?.receive(message) }
+                    Task { @MainActor in
+                        guard let self, self.sessionGeneration == generation else { return }
+                        self.receive(message)
+                    }
                 },
                 onAction: { action in
                     if case .interruptPlayback = action { audio.stopPlayback() }
                 },
                 onStateChange: { [weak self] state in
-                    Task { @MainActor in self?.receiveSessionState(state) }
+                    Task { @MainActor in
+                        guard let self, self.sessionGeneration == generation else { return }
+                        self.receiveSessionState(state)
+                    }
                 }
             )
             sessionClient = client
@@ -133,7 +156,18 @@ final class VoiceScreenModel: ObservableObject {
     }
 
     func retryIfNeeded() async {
-        guard microphoneDenied || voiceState == .failed else { return }
+        guard connectionPresentationState != .lost,
+              microphoneDenied || voiceState == .failed else { return }
+        await start()
+    }
+
+    func retryNow() async {
+        guard connectionPresentationState == .lost, !isStarting else { return }
+        connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
+        sessionGeneration += 1
+        let interruptedClient = sessionClient
+        sessionClient = nil
+        if let interruptedClient { try? await interruptedClient.end() }
         await start()
     }
 
@@ -174,6 +208,7 @@ final class VoiceScreenModel: ObservableObject {
 
     func end() async {
         sessionGeneration += 1
+        connectionPresentationState = connectionPresentationMachine.apply(.ended)
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
         await stopAudio()
@@ -358,6 +393,20 @@ final class VoiceScreenModel: ObservableObject {
     }
 
     private func receiveSessionState(_ state: VoiceSessionState) {
+        switch state {
+        case .ready, .listening:
+            connectionPresentationState = connectionPresentationMachine.apply(.connected)
+        case .reconnecting:
+            connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+        case .connecting where connectionPresentationState == .lost:
+            connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
+        case .failed:
+            connectionPresentationState = connectionPresentationMachine.apply(.retryFailed)
+        case .ended:
+            connectionPresentationState = connectionPresentationMachine.apply(.ended)
+        case .idle, .connecting, .speaking:
+            break
+        }
         voiceState = state
         guard state == .failed else { return }
         Task { await resetFailedSession() }

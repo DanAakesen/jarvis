@@ -16,6 +16,7 @@ struct ContentView: View {
     private let startupError: String?
     private let fixtureMode: Bool
     private let settingsClient: JarvisSettingsClient?
+    private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
     @State private var healthClient: JarvisHealthClient?
     @State private var factoryClient: JarvisFactoryClient?
@@ -30,9 +31,15 @@ struct ContentView: View {
         let arguments = ProcessInfo.processInfo.arguments
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
+        let voiceConnectionScreenshot = arguments.contains("--screenshot-voice-connection-lost")
+        let voiceScreenshotLanguage = arguments
+            .first(where: { $0.hasPrefix("--screenshot-voice-language=") })
+            .map { String($0.dropFirst("--screenshot-voice-language=".count)) }
+            .flatMap(JarvisAppLanguage.init(rawValue:))
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
         let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
         let fixtureMode = settingsPreview
+            || voiceConnectionScreenshot
             || arguments.contains("--screenshot-chat-fixture")
             || factoryFixtureMode
         var initialNavigation = JarvisNavigationState()
@@ -42,12 +49,19 @@ struct ContentView: View {
         if settingsPreview {
             initialNavigation.navigate(to: .settings)
         }
+        if voiceConnectionScreenshot {
+            initialNavigation.navigate(to: .voice)
+        }
         if factoryScreenshot != nil {
             initialNavigation.navigate(to: .softwareFactory)
         }
         self.fixtureMode = fixtureMode
+        self.voiceScreenshotLanguage = voiceScreenshotLanguage
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
+        _voiceModel = StateObject(
+            wrappedValue: VoiceScreenModel(screenshotConnectionLost: voiceConnectionScreenshot)
+        )
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
@@ -128,9 +142,12 @@ struct ContentView: View {
                             if destination == .workspaces {
                                 WorkspacesView(runtime: workspaceRuntime)
                             } else if destination == .voice {
-                                VoiceScreenView(model: voiceModel) {
-                                    navigate(to: .chat, drawerWidth: drawerWidth)
-                                }
+                                VoiceScreenView(
+                                    model: voiceModel,
+                                    language: voiceScreenshotLanguage ?? language,
+                                    onMinimize: { navigate(to: .chat, drawerWidth: drawerWidth) },
+                                    onEnd: { navigate(to: .chat, drawerWidth: drawerWidth) }
+                                )
                             } else if destination == .chat {
                                 JarvisChatScreen(
                                     client: chatClient,
