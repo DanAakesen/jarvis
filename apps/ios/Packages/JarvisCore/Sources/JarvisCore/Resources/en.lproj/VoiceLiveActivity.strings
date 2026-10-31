@@ -1,0 +1,14 @@
+"title" = "Jarvis";
+"listening" = "Listening";
+"speaking" = "Speaking";
+"muted" = "Muted";
+"thinking" = "Thinking";
+"connecting" = "Connecting";
+"reconnecting" = "Reconnecting";
+"mute" = "Mute";
+"unmute" = "Unmute";
+"end" = "End";
+"elapsed" = "Elapsed time";
+"waveform" = "Audio level";
+"unavailable" = "The voice session has ended.";
+"updateFailed" = "The Lock Screen could not be updated.";

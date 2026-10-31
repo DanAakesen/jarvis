@@ -1,0 +1,14 @@
+"title" = "Jarvis";
+"listening" = "Lytter";
+"speaking" = "Taler";
+"muted" = "Mikrofon slået fra";
+"thinking" = "Tænker";
+"connecting" = "Opretter forbindelse";
+"reconnecting" = "Genopretter forbindelse";
+"mute" = "Slå mikrofon fra";
+"unmute" = "Slå mikrofon til";
+"end" = "Afslut";
+"elapsed" = "Forløbet tid";
+"waveform" = "Lydniveau";
+"unavailable" = "Stemmesessionen er afsluttet.";
+"updateFailed" = "Låseskærmen kunne ikke opdateres.";
