@@ -136,6 +136,40 @@ final class JarvisCoreTests: XCTestCase {
         ))
     }
 
+    func testEndingVoiceReturnsToChatAndKeepsSidebarNavigationUsable() {
+        for minimized in [false, true] {
+            var navigation = JarvisNavigationState()
+            navigation.navigate(to: .notes)
+            navigation.navigate(to: .voice)
+            if minimized { navigation.navigate(to: .settings) }
+            navigation.openSidebar()
+
+            navigation.voiceSessionStateChanged(.ended)
+
+            XCTAssertEqual(navigation.currentDestination, .chat)
+            XCTAssertTrue(navigation.path.isEmpty)
+            XCTAssertFalse(navigation.isSidebarOpen)
+
+            navigation.openSidebar()
+            XCTAssertTrue(navigation.isSidebarOpen)
+            navigation.navigate(to: .notes)
+            XCTAssertEqual(navigation.path, [.notes])
+            XCTAssertFalse(navigation.isSidebarOpen)
+        }
+    }
+
+    func testOtherVoiceStatesDoNotChangeNavigation() {
+        var navigation = JarvisNavigationState()
+        navigation.navigate(to: .voice)
+        navigation.openSidebar()
+        let original = navigation
+
+        for state: VoiceSessionState in [.idle, .connecting, .ready, .listening, .speaking, .reconnecting(attempt: 1), .failed] {
+            navigation.voiceSessionStateChanged(state)
+            XCTAssertEqual(navigation, original)
+        }
+    }
+
     func testNavigationPathRejectsRootDisabledAndDuplicateDestinations() {
         var navigation = JarvisNavigationState()
         navigation.setPath([.chat, .notes, .banking, .notes, .settings])
