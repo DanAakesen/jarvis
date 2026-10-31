@@ -1086,6 +1086,20 @@ describe('shared glass tokens', () => {
     expect(tokenValue(source, ':root', '--glass-edge-cool')).toBe('var(--stage-orb)');
   });
 
+  it('uses the shared stone tone for Factory review status with readable light and dark contrast', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const dark = ':root\\[data-theme="dark"\\]';
+
+    expect(ruleDeclaration(source, /\.kanban-dot-in-review\s*\{([^}]*)\}/, '--tone')).toBe('var(--secondary-accent)');
+    expect(ruleDeclaration(source, /\.kanban-column:has\(\.kanban-dot-in-review\)\s*\{([^}]*)\}/, '--tone'))
+      .toBe('var(--secondary-accent)');
+    for (const theme of [':root', dark]) {
+      const stone = parseColor(tokenValue(source, theme, '--secondary-accent')).color;
+      const page = parseColor(tokenValue(source, theme, '--page')).color;
+      expect(contrast(stone, page)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it('removes the bottom shell bar and shares subtle selection without outlined slabs', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');

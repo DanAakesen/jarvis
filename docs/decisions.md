@@ -1,3 +1,9 @@
+## 31 October 2026 — Factory review status uses stone (P15-33 / #1468)
+
+Use the shared stone secondary tone for the Factory In review status in the web
+board and native iOS screen. Reuse the current light/dark palette tokens rather
+than introducing colors; keep unrelated success states unchanged.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry
