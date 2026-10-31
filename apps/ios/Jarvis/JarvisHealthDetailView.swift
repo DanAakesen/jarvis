@@ -12,10 +12,10 @@ enum JarvisHealthDetailKind {
     func title(language: JarvisAppLanguage) -> String {
         let copy = JarvisHealthCopy(language: language)
         switch self {
-        case .workout(_, _): copy.text(.workout)
-        case .sleep: copy.text(.sleepNight)
-        case .meals: copy.text(.meals)
-        case .metric(_, let title, _): copy.text(title)
+        case .workout(_, _): return copy.text(.workout)
+        case .sleep: return copy.text(.sleepNight)
+        case .meals: return copy.text(.meals)
+        case .metric(_, let title, _): return copy.text(title)
         }
     }
 }

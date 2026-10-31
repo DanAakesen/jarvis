@@ -9482,8 +9482,38 @@ nested path may establish its folder. Do not add a local database or offline
 cache. The app does not yet have a native Entra provider, so existing stored
 sessions can access the routes but first-time/expired-session sign-in remains a
 separate gap. The cost guard also remains binding: CI must not gain additional
-Mac builds, simulator boots, UI tests or screenshot states. No backend route,
-dependency or CI job is added by this screen.
+Mac builds, simulator boots or UI tests. Screen-specific screenshots may extend
+the existing screenshot step only when explicitly required, without adding a
+job or simulator boot. No backend route, dependency or CI job is added by this
+screen.
+
+## 31 October 2026 — P15-19 Software Factory area
+
+Build the owner-approved Factory area with native SwiftUI and the existing
+owner-authenticated Factory routes. The project picker selects one project;
+Board, Needs Dan and Releases make requests only for that selection. Needs Dan
+is intentionally not cross-project: the board endpoint requires a project ID,
+and this screen does not fan out or invent an aggregate. Project administration,
+APNs, the web-only branch graph, backfill and sandbox remain out of scope.
+
+Keep all Factory models, filters, state-based control availability, and request
+validation in pure Swift `JarvisCore`. Task controls repeat the exact request
+with `confirm: true` only after a `409 confirmationRequired` response and owner
+confirmation; other conflicts remain visible. Cancel has a native confirmation.
+Creation uses one generated submission UUID for every retry of the same draft.
+Completion policy is a project setting, so save changes through the existing
+project PATCH and do not send policy in the task-create payload.
+
+Use the existing ready-PR iOS screenshot job and its one simulator boot for the
+Factory segments, details and key states in light/dark and Danish/English. This
+is the issue-specific extension to the existing screenshot artifact, not
+authorization for another Mac job, simulator boot, UI test or backend path.
+Screenshots use synthetic fixture transport only. The merged main branch now
+includes the approved Factory frames in `docs/ios/design/board.html`. Record
+frame-level differences after comparing them with simulator captures; no parity
+claim is made before an Apple build and screenshot review.
+The owner reviews the pull request and starts any TestFlight upload.
+
 ## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
 
 The TestFlight workflow is separate from aggregate CI and uses only

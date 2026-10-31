@@ -150,10 +150,35 @@ The approved Dashboard reuses the authenticated Daily API. The iPhone does not u
 | Protein chart and target line | `POST /daily/query` with `source: "daily.nutrition.days"` and `GET /daily/nutrition-targets`. |
 | Freshness status | `POST /daily/query` with `source: "daily.sync"`. Dashboard refresh listens to the existing authenticated `GET /now/events` stream for `refresh` or `now` events, then reloads the same reads. |
 
-`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. This Dashboard implementation leaves Track workout disabled and Last lifts/plus omitted. The shared lift routes described in section 13 are now present on main from #1423; future native logging should reuse them without a substitute route or payload.
+`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. This Dashboard implementation leaves Track workout disabled and Last lifts/plus omitted. The shared lift routes described in section 14 are now present on main from #1423; future native logging should reuse them without a substitute route or payload.
 
 Sources checked: `apps/backend/src/daily/index.ts`, `apps/backend/src/daily/query.ts`, `apps/backend/src/daily/health/read-model.ts`, `apps/backend/src/daily/routes/training-targets.ts`, `apps/backend/src/daily/routes/nutrition-targets.ts`, `apps/web/src/daily/client.ts`, `apps/web/src/daily/sections/overview/health-panel/data.ts`, `apps/web/src/daily/sections/overview/useTopCardData.ts`, `apps/web/src/daily/nutrition-targets.ts` and `apps/web/src/daily/sections/workouts/WorkoutDetail.tsx`.
-## 13. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
+
+## 13. Software Factory area (P15-19)
+
+The Factory area reuses the authenticated web/backend routes. It adds no iOS-specific route or backend behavior. Project administration (other than the existing completion-policy control in task creation), Git graph visualization, backfill, and sandbox routes remain out of scope.
+
+The iPhone selects one project at a time. Board, Needs Dan, and Releases are
+scoped to that selected project; Needs Dan does not aggregate across projects,
+and the app does not issue a fan-out of board requests to simulate an all-project
+view.
+
+| Screen action | Existing route and contract |
+|---|---|
+| Load active projects | `GET /factory/projects` returns project records with `id`, `name`, `repo`, `default_branch`, `default_agent`, `policy`, and other existing project fields. |
+| Load one project's board | `GET /factory/board?project=ID` returns `{project: {id, repo}, fetchedAt, stale, columns}`. The six column IDs are `backlog`, `needs_dan`, `ready`, `in_progress`, `in_review`, and `done`. Cards contain an issue (`number`, `url`, `title`, `taskCode`, `labels`, `worker`, open/closed state, update/close times and `blockedBy` issue numbers), an optional PR (`number`, `url`, `draft`, checks `none|pending|passing|failing`), and an optional task (`id`, task state, agent, activity, attempt count, branch, start time and latest session end reason). The backend requires a project ID; load each project separately rather than inventing an all-project board. |
+| Filter board rows | Board placement is server-owned. Agent and task-state filters may be applied to the returned card facts. The separate `GET /factory/tasks` accepts optional `projectId`, `agent` (`codex|copilot`), `state` (`Ready|Running|PauseRequested|Paused|NeedsAttention|Done|Cancelled`), `createdAfter`, `createdBefore`, and `search`, plus bounded `limit` and `offset`. |
+| Refresh board live | Authenticated `GET /now/events` emits `board` with `{projectId, version}` when a project board changes. Refresh only the matching project's board. The backend accepts the existing owner-session bearer token for this stream and closes registered streams when that owner session is revoked. |
+| Load task details | `GET /factory/tasks/:id?eventLimit=N&eventOffset=N` returns the task record, bounded `events` page and `usage` records. |
+| Receive task timeline updates | Authenticated `GET /factory/tasks/:id/events` is an SSE stream. Send `Last-Event-ID` to resume; task events use `event: task`, the persisted event ID and the task event as JSON data. The initial `ready` event marks completion of replay. The existing owner-session bearer token is accepted. |
+| Control a task | `POST /factory/tasks/:id/controls` accepts `{action}` for `steer`, `pause`, `resume`, `cancel`, or `recover`; steering also requires `message`, and an explicitly confirmed restart may include `confirm: true`. A `409` body with `confirmationRequired: true` and a reason requires explicit owner confirmation; only then repeat the same action/message with `confirm: true`. Other `409` responses are conflicts, not confirmation prompts. `POST /factory/tasks/:id/retry` is a distinct retry route for a failed start attempt without sandbox history. |
+| Create a task | `POST /factory/tasks` accepts `{projectId, submissionId, title, request, agent?, modelOverride?, reasoningOverride?}` and returns the task plus linked issue number and URL. Keep the same generated UUID `submissionId` and exact payload when retrying an uncertain request; the backend deduplicates by that ID and payload fingerprint. Completion policy is a project setting, not a task-create field: the existing `PATCH /factory/projects/:id` accepts `{policy: "deliver_pr"|"complete_without_deployment"}` and is used by the web task-creation control to save the selected project's policy. |
+| Load releases and release detail | `GET /factory/projects/:id/releases` returns the project, `releases`, linked `pullRequests`, `workflowRuns`, `deployments`, and nullable `graph`. `GET /factory/releases/:id` resolves a release to its project ID. Release detail is derived from these existing records; task IDs come from linked PR/run records. |
+| Show recent commits | When `graph` is present, its flat `commits` array contains `{sha, message, author, committedAt, parents}` and `truncated` indicates incomplete history. There is no separate compact-commit endpoint or DTO. Show a compact list from these commit records; do not render the web-only branch graph. |
+
+Contract verification (31 October 2026): `apps/backend/src/factory/index.ts`, `board.ts`, `projects.ts`, `task-store.ts`, and `release-view.ts`; `apps/backend/src/core/now.ts` and `apps/backend/src/auth/hook.ts`; `apps/web/src/factory/TasksPage.tsx`, `TaskControls.tsx`, `release-data.ts`, and `ReleasePage.tsx`; and `apps/web/src/task-events.ts`. The owner-session stream, task-list agent/state filters, and returned commit record shape are verified in those sources. Production authorization, project selection, and all writes remain on the existing authenticated API.
+
+## 14. Workout lift logs (P15-17 / #1423; verified 30 October 2026)
 
 The web Health area and native Track workout screen use the same owner routes;
 there are no iOS-specific endpoints. The source of truth is the backend and

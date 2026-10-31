@@ -15,19 +15,30 @@ struct ContentView: View {
     private let fixtureMode: Bool
     @State private var notesClient: JarvisNotesClient?
     @State private var healthClient: JarvisHealthClient?
+    @State private var factoryClient: JarvisFactoryClient?
+    private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
+    private let factoryFixtureMode: Bool
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
     init() {
-        let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
-        let fixtureMode = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture")
+        let arguments = ProcessInfo.processInfo.arguments
+        let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
+        let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
+        let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
+        let fixtureMode = arguments.contains("--screenshot-chat-fixture") || factoryFixtureMode
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
         }
+        if factoryScreenshot != nil {
+            initialNavigation.navigate(to: .softwareFactory)
+        }
         self.fixtureMode = fixtureMode
+        self.factoryScreenshot = factoryScreenshot
+        self.factoryFixtureMode = factoryFixtureMode
         if fixtureMode {
             let client = try? JarvisFixtureScenario.makeClient()
             chatClient = client
@@ -48,6 +59,10 @@ struct ContentView: View {
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _notesClient = State(initialValue: Self.makeNotesClient())
         _healthClient = State(initialValue: Self.makeHealthClient())
+        _factoryClient = State(initialValue: Self.makeFactoryClient(
+            previewState: factoryScreenshot?.state,
+            fixtureMode: factoryFixtureMode
+        ))
     }
 
     var body: some View {
@@ -107,6 +122,19 @@ struct ContentView: View {
                                     language: language,
                                     observeRefreshEvents: !fixtureMode,
                                     onRetryConfiguration: { healthClient = Self.makeHealthClient() }
+                                )
+                            } else if destination == .softwareFactory {
+                                JarvisFactoryArea(
+                                    client: factoryClient,
+                                    language: factoryScreenshot?.language ?? language,
+                                    onRetryConfiguration: {
+                                        factoryClient = Self.makeFactoryClient(
+                                            previewState: factoryScreenshot?.state,
+                                            fixtureMode: factoryFixtureMode
+                                        )
+                                    },
+                                    previewState: factoryScreenshot?.state,
+                                    liveUpdatesEnabled: !factoryFixtureMode
                                 )
                             } else if destination == .settings {
                                 JarvisAppSettingsView(storedLanguage: $storedLanguage)
@@ -330,6 +358,23 @@ struct ContentView: View {
                 accessTokenProvider: JarvisUnavailableAccessTokenProvider()
             )
             return JarvisHealthClient(client: client)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func makeFactoryClient(
+        previewState: JarvisFactoryPreviewState?,
+        fixtureMode: Bool
+    ) -> JarvisFactoryClient? {
+        if fixtureMode, let previewState {
+            return try? JarvisFactoryFixtureScenario.makeClient(state: previewState)
+        }
+        do {
+            let client = try JarvisComposition.makeClient(
+                accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+            )
+            return JarvisFactoryClient(client: client)
         } catch {
             return nil
         }
