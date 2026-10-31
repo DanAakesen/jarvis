@@ -43,8 +43,9 @@ the approved separate UI history. No context wipe is included.
 
 ## Native iPhone sign-in recovery (#1445; 31 October 2026)
 
-Microsoft sign-in must open system authentication UI from the active app window,
-not the privacy cover. Failure to start or a two-minute token-acquisition timeout
+Microsoft sign-in must open system authentication UI above the Sign-in gate,
+using the highest eligible visible window in an active scene, not the privacy
+cover. Failure to start or a two-minute token-acquisition timeout
 must leave the spinner and show the existing Danish/English failure and retry
 copy. Cancelling the sheet returns to idle. Real-device presentation and signed
 TestFlight keychain/Entra configuration require separate verification.

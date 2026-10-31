@@ -121,17 +121,28 @@ final class MicrosoftAccessTokenProvider: AccessTokenProvider {
     private static func presentationViewController() -> UIViewController? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
             .filter { $0.activationState == .foregroundActive }
-        let windows = scenes.flatMap(\.windows).filter {
-            !$0.isHidden && $0.windowLevel == .normal && $0.rootViewController != nil
-        }
-        guard let window = windows.first(where: \.isKeyWindow) ?? windows.first else { return nil }
+        guard let window = JarvisSignInPresentation.window(
+            from: scenes.flatMap(\.windows),
+            canPresent: {
+               JarvisSignInPresentation.canPresent(
+                   isHidden: $0.isHidden,
+                   alpha: Double($0.alpha),
+                   isForegroundActive: $0.windowScene?.activationState == .foregroundActive,
+                   isPrivacyCover: ($0 as? JarvisGateOverlayWindow)?.isPrivacyCover == true,
+                   hasRootViewController: $0.rootViewController != nil
+               )
+            },
+            level: { Double($0.windowLevel.rawValue) },
+            isKeyWindow: { $0.isKeyWindow }
+        ), let root = window.rootViewController else { return nil }
 
-        var viewController = window.rootViewController
-        while let presented = viewController?.presentedViewController {
-            viewController = presented
-        }
-        guard let viewController, viewController.viewIfLoaded?.window === window,
-              !viewController.isBeingDismissed else { return nil }
-        return viewController
+        return JarvisSignInPresentation.viewController(from: root, next: {
+            if let presented = $0.presentedViewController { return presented }
+            if let navigation = $0 as? UINavigationController { return navigation.visibleViewController }
+            if let tabs = $0 as? UITabBarController { return tabs.selectedViewController }
+            return nil
+        }, canPresent: {
+            $0.viewIfLoaded?.window === window && !$0.isBeingDismissed
+        })
     }
 }

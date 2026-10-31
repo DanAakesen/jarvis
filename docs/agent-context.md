@@ -6433,7 +6433,12 @@ MSAL redirect acceptance remain unverified here.
 P15-23 bounds MSAL token acquisition with the Core-owned `JarvisSignInRequest`
 (120 seconds). Run `swift test --filter JarvisGatePolicyTests` in the same Core
 package for timeout, callback failure, cancellation and late-callback recovery.
-MSAL presentation excludes the cover and inactive scenes. Linux tests cannot
+P15-24 selects the highest eligible visible window, including the gate's hosting
+controller, but excludes the privacy-only cover and inactive scenes. The existing
+gate window is retained during interactive sign-in. Run
+`swift test --filter 'JarvisSignInPresentationTests|JarvisGatePolicyTests'`
+for window/controller selection and existing timeout/cancellation recovery.
+Linux tests cannot
 verify system authentication-sheet presentation, signed TestFlight keychain
 grants or the live Entra registration. Build 8's upload workflow succeeded; that
 is not evidence of working device sign-in.
