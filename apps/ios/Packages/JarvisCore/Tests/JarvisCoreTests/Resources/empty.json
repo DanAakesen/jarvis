@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "GET",
+      "path": "/api/unused",
+      "response": {"statusCode": 200, "body": []}
+    }
+  ]
+}

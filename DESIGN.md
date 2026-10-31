@@ -2783,9 +2783,9 @@ SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
-stack state live in the pure-Swift `JarvisCore` package. The unbuilt
-areas and Settings use title-only placeholders until their screen issues are
-implemented. Reduced Motion removes settling animation.
+stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes are native screens;
+the unbuilt areas use title-only placeholders, and Settings hosts the app-language preference.
+Reduced Motion removes settling animation.
 
 ## Native iOS Voice screen (P15-11; 30 October 2026)
 
@@ -2834,3 +2834,25 @@ sharing belongs to the Voice screen's broadcast flow.
 Synthetic preview and screenshot mode allows one fixture text turn; attachment
 uploads and activity writes are disabled with accessibility explanations, never
 simulated as successful backend actions.
+
+## Native iOS Notes area (P15-12; 30 October 2026)
+
+The approved iPhone area has four text-only segments (Notes, Tasks, List and
+Graph), with content aligned beneath one title/refresh row. The bottom search
+and plus action stay fixed above the keyboard; Notes adds folder filters directly
+above them. Native SwiftUI Lists, DisclosureGroups, sheets, navigation, system
+materials, semantic colors and SF Symbols provide the interaction and appearance.
+Selection tints labels and icons, never row surfaces. The graph uses a native
+Canvas renderer with pan/zoom and an accessible list alternative.
+
+Custom geometry lives in `JarvisDesignTokens` in
+`apps/ios/Jarvis/JarvisDesignSystem.swift`; cross-platform tree and deterministic
+graph-position logic lives in `JarvisCore`. The checked-in concept board still
+shows three tabs and two plus-menu actions, while this approved issue requires
+four tabs and creation of notes, folders and tasks. The implementation follows
+the four-tab issue and omits standalone New folder because the shared backend
+has no folder-create route; notes saved beneath a nested path create the folder.
+No note delete/rename/move, task delete, task-create priority, or offline cache
+is represented. Danish and English strings come from the JarvisCore localization
+catalog; the app-owned Settings preference defaults to Danish and controls date
+formatting as well as visible and accessibility copy.

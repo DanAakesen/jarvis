@@ -6319,10 +6319,11 @@ to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
-SwiftUI binds them to a native `NavigationStack`. Chat is the root screen, and
-other enabled destinations plus Settings are title-only pages with native back
+SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice and Notes are native screens, other
+enabled destinations are title-only pages, and Settings exposes the persisted
+Danish/English app-language preference (Danish by default), with native back
 navigation. Banking remains disabled and labeled Later. The fixed-behind
-sidebar opens through a right-side drag or the VoiceOver action “Open sidebar”;
+sidebar opens through a right-side drag or the localized VoiceOver action;
 its shared styling and gesture tokens are in `JarvisSidebar.swift`.
 
 P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
@@ -6343,6 +6344,25 @@ text turn; attachment uploads and feed writes are disabled rather than faked.
 There is no backend route specific to iOS. Run `swift build` and `swift test` from
 `apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
 SwiftUI compile check.
+
+P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
+reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
+The app-owned language preference selects the complete Notes localization catalog
+and date locale; do not derive it from `GET /settings` or voice language. Keep the
+web/backend source files there authoritative and do not add iOS routes.
+Synthetic note/task/graph fixture scenarios and Linux tests live in
+`JarvisCoreTests`. The SwiftUI area provides Notes, Tasks, List and Graph tabs,
+creation sheets, conditional note saves and conflict recovery. It depends on an
+existing stored owner session: no native Entra sign-in provider exists yet, and
+the app must show an error instead of using fixture content when sign-in is
+unavailable. No standalone folder creation, destructive note/task action,
+task-create priority or offline cache is implemented.
+
+Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
+checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
+check and is gated on a ready pull request; do not add simulator boots, UI tests
+or screenshots to CI. The current screenshot workflow covers only the app's
+main screen and sidebar, so Notes-tab/state screenshots are not produced by CI.
 
 P15-06 adds the pure-Swift voice WebSocket protocol and fakeable
 `WebSocketTransport` seam to `JarvisCore`. It reuses the web client's English

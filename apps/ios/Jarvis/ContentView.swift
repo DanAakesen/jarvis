@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @GestureState private var sidebarDrag = SidebarDrag()
     @State private var navigation = JarvisNavigationState()
     @StateObject private var voiceModel = VoiceScreenModel()
@@ -12,6 +13,11 @@ struct ContentView: View {
     private let chatClient: JarvisClient?
     private let startupError: String?
     private let fixtureMode: Bool
+    @State private var notesClient: JarvisNotesClient?
+
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
 
     init() {
         let sidebarInitiallyOpen = ProcessInfo.processInfo.arguments.contains("--screenshot-sidebar-open")
@@ -39,6 +45,7 @@ struct ContentView: View {
         _navigation = State(initialValue: initialNavigation)
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
+        _notesClient = State(initialValue: Self.makeNotesClient())
     }
 
     var body: some View {
@@ -86,8 +93,16 @@ struct ContentView: View {
                                     startupError: startupError,
                                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                                 )
+                            } else if destination == .notes {
+                                JarvisNotesArea(
+                                    client: notesClient,
+                                    language: language,
+                                    onRetryConfiguration: { notesClient = Self.makeNotesClient() }
+                                )
+                            } else if destination == .settings {
+                                JarvisAppSettingsView(storedLanguage: $storedLanguage)
                             } else {
-                                JarvisPlaceholderView(destination: destination)
+                                JarvisPlaceholderView(destination: destination, language: language)
                             }
                         }
                 }
@@ -113,7 +128,9 @@ struct ContentView: View {
                     screenWidth: geometry.size.width,
                     drawerWidth: drawerWidth
                 ))
-                .accessibilityAction(named: Text("Open sidebar")) {
+                .accessibilityAction(
+                    named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
+                ) {
                     setSidebarOpen(true)
                 }
                 .accessibilityHidden(navigation.isSidebarOpen)
@@ -140,6 +157,12 @@ struct ContentView: View {
             .background(Color(uiColor: .systemBackground))
             .coordinateSpace(name: "sidebar")
             .clipped()
+            .environment(\.locale, language.locale)
+            .onAppear {
+                if JarvisAppLanguage(rawValue: storedLanguage) == nil {
+                    storedLanguage = JarvisAppLanguage.default.rawValue
+                }
+            }
         }
         .ignoresSafeArea()
     }
@@ -280,6 +303,17 @@ struct ContentView: View {
     private func closeSidebar() {
         setSidebarOpen(false)
     }
+
+    private static func makeNotesClient() -> JarvisNotesClient? {
+        do {
+            let client = try JarvisComposition.makeClient(
+                accessTokenProvider: JarvisUnavailableAccessTokenProvider()
+            )
+            return JarvisNotesClient(client: client)
+        } catch {
+            return nil
+        }
+    }
 }
 
 private struct SidebarDrag: Equatable {
@@ -307,11 +341,43 @@ private struct SidebarProgressObserver: AnimatableModifier {
 
 private struct JarvisPlaceholderView: View {
     let destination: JarvisDestination
+    let language: JarvisAppLanguage
 
     var body: some View {
         Color.clear
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .navigationTitle(destination.title)
+            .navigationTitle(destination.localizedTitle(language: language))
             .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct JarvisAppSettingsView: View {
+    @Binding var storedLanguage: String
+
+    private var language: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
+    var body: some View {
+        Form {
+            Picker(
+                JarvisNotesLocalization.string(.languageTitle, language: language),
+                selection: $storedLanguage
+            ) {
+                Text(JarvisNotesLocalization.string(.languageDanish, language: language))
+                    .tag(JarvisAppLanguage.da.rawValue)
+                Text(JarvisNotesLocalization.string(.languageEnglish, language: language))
+                    .tag(JarvisAppLanguage.en.rawValue)
+            }
+            .pickerStyle(.segmented)
+        }
+        .navigationTitle(JarvisNotesLocalization.string(.settingsTitle, language: language))
+        .navigationBarTitleDisplayMode(.inline)
+        .environment(\.locale, language.locale)
+        .onAppear {
+            if JarvisAppLanguage(rawValue: storedLanguage) == nil {
+                storedLanguage = JarvisAppLanguage.default.rawValue
+            }
+        }
     }
 }

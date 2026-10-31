@@ -15,6 +15,14 @@ establish Apple target compilation or device acceptance. The current shell has n
 native sign-in UI, so the screen fails closed when the owner-session token is not
 already present; do not expand this screen into an unapproved auth implementation.
 
+## 30 October 2026 — localize the iOS Notes area from app preference (#1420)
+
+Use the app-owned `jarvis.appLanguage` preference for Notes, Tasks, List, Graph,
+editor/sheet copy, accessibility strings and date formatting. Danish is the default;
+the Notes screen does not infer its language from the device locale or the separate
+backend voice preference. Keep both language catalogs in JarvisCore so Linux tests
+can validate coverage and date formatting without adding an Apple-only test target.
+
 ## 30 October 2026 — stabilize the GitHub chat acceptance read (#1415)
 
 Judge `chat_github_read` by a successful `github_read` / `issue_get` receipt for
@@ -9408,6 +9416,25 @@ returning fake success. Native Entra sign-in is not implemented here, so the app
 provider fails closed without an existing Keychain session. ReplayKit sharing
 remains disabled until a Broadcast Upload Extension and Stop lifecycle are
 implemented; no backend change is authorized or needed.
+
+## 30 October 2026 — P15-12 iOS Notes area
+
+Implement the owner's approved Notes concept as four native tabs, following the
+issue's Notes/Tasks/List/Graph requirement even though the checked-in concept
+board currently shows only three tabs. Reuse the web app's existing vault and
+knowledge routes through `JarvisNotesClient`; keep note saves conditional on the
+SHA returned by the current note read, and load graph data before resolving
+search node IDs. Read `voice.defaultLanguage` from the existing `/settings`
+route for Danish/English interface copy without writing any settings.
+
+Do not invent backend operations for standalone folder creation, note
+delete/rename/move, task delete or task priority on create. Creating a note at a
+nested path may establish its folder. Do not add a local database or offline
+cache. The app does not yet have a native Entra provider, so existing stored
+sessions can access the routes but first-time/expired-session sign-in remains a
+separate gap. The cost guard also remains binding: CI must not gain additional
+Mac builds, simulator boots, UI tests or screenshot states. No backend route,
+dependency or CI job is added by this screen.
 ## 30 October 2026 — iOS Phase 1b owner-started TestFlight workflow
 
 The TestFlight workflow is separate from aggregate CI and uses only
