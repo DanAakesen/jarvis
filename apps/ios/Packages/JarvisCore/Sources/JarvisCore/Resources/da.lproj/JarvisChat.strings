@@ -38,3 +38,15 @@
 "chat.plus.screenFrameUnavailable" = "Skærmbilledet er ikke tilgængeligt endnu.";
 "chat.plus.menuHint" = "Åbn værktøjer til kamera, filer, video, skærmdeling og stemmesprog.";
 "chat.done" = "Færdig";
+"chat.screenShareStarting" = "Starter skærmdeling…";
+"chat.screenShareLive" = "Du deler din skærm med Jarvis.";
+"chat.screenShareStopped" = "Skærmdeling er stoppet.";
+"chat.screenShareFailed" = "Skærmdeling startede ikke. Prøv igen.";
+"chat.screenShareExtensionMissing" = "Skærmdeling er ikke tilgængelig: denne version indeholder ikke Jarvis' udsendelsesudvidelse.";
+"chat.failedChecksTitle" = "Andre mislykkede tjek";
+"chat.failedChecksSummary" = "%d mislykkedes i baggrunden. Ingen handling nødvendig.";
+"chat.dismiss" = "Afvis";
+"chat.dismissing" = "Afviser…";
+"chat.dismissLabel" = "Afvis %@";
+"chat.backgroundTaskDismissed" = "Afvist.";
+"chat.needsFailedTitle" = "Mislykket og kræver dig";

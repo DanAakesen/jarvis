@@ -38,3 +38,15 @@
 "chat.plus.screenFrameUnavailable" = "The screen frame is not available yet.";
 "chat.plus.menuHint" = "Open camera, file, video, screen sharing, and voice language tools.";
 "chat.done" = "Done";
+"chat.screenShareStarting" = "Starting screen sharing…";
+"chat.screenShareLive" = "Sharing your screen with Jarvis.";
+"chat.screenShareStopped" = "Screen sharing stopped.";
+"chat.screenShareFailed" = "Screen sharing did not start. Try again.";
+"chat.screenShareExtensionMissing" = "Screen sharing is unavailable: this build does not include the Jarvis broadcast extension.";
+"chat.failedChecksTitle" = "Other failed checks";
+"chat.failedChecksSummary" = "%d failed in the background. No action needed.";
+"chat.dismiss" = "Dismiss";
+"chat.dismissing" = "Dismissing…";
+"chat.dismissLabel" = "Dismiss %@";
+"chat.backgroundTaskDismissed" = "Dismissed.";
+"chat.needsFailedTitle" = "Failed and needs you";

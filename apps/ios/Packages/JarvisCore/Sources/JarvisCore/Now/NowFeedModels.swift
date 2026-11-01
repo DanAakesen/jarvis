@@ -15,12 +15,43 @@ public struct BackgroundTaskRecord: Codable, Equatable, Identifiable, Sendable {
     }
 
     public let jobId: String
+    public let kind: String?
     public let title: String
     public let status: Status
     public let detail: String?
     public let startedAt: String
     public let updatedAt: String
     public var id: String { jobId }
+
+    public init(
+        jobId: String, kind: String? = nil, title: String, status: Status, detail: String? = nil,
+        startedAt: String, updatedAt: String
+    ) {
+        self.jobId = jobId
+        self.kind = kind
+        self.title = title
+        self.status = status
+        self.detail = detail
+        self.startedAt = startedAt
+        self.updatedAt = updatedAt
+    }
+}
+
+/// Splits background jobs for the "Needs you" list: finished routine jobs are hidden, failures Dan can retry
+/// (research) are headlines, and every other failure is a quiet, dismissible group.
+public struct BackgroundTaskPresentation: Equatable, Sendable {
+    public let running: [BackgroundTaskRecord]
+    public let actionable: [BackgroundTaskRecord]
+    public let quiet: [BackgroundTaskRecord]
+
+    public init(tasks: [BackgroundTaskRecord]) {
+        running = tasks.filter { $0.status == .running }
+        let failed = tasks.filter { $0.status == .failed }
+        actionable = failed.filter { $0.kind == "research" }
+        quiet = failed.filter { $0.kind != "research" }
+    }
+
+    public var needsYouCount: Int { actionable.count }
 }
 
 public enum NowFeedActivityCategory: String, Codable, Equatable, CaseIterable, Sendable {

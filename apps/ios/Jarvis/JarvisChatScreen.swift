@@ -21,13 +21,11 @@ enum ActivitySheetKind: String, Identifiable {
 private enum ChatSheet: Identifiable {
     case activity(ActivitySheetKind)
     case camera
-    case screenShare
 
     var id: String {
         switch self {
         case .activity(let kind): "activity-\(kind.id)"
         case .camera: "camera"
-        case .screenShare: "screen-share"
         }
     }
 }
@@ -124,6 +122,8 @@ struct JarvisChatScreen: View {
     @State private var cameraPreparationID = UUID()
     @State private var photoCaptureID = UUID()
     @State private var isScreenSharing = false
+    @State private var screenShare = ScreenShareSession()
+    @State private var screenSharePickerToken = 0
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
@@ -278,11 +278,6 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
                 }
-            case .screenShare:
-                screenSharePicker
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -305,6 +300,22 @@ struct JarvisChatScreen: View {
             onNavigate(.voice)
         }
         .onAppear(perform: refreshScreenSharing)
+        .task(id: screenShare.isBusy) {
+            while screenShare.isBusy && !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                refreshScreenSharing()
+            }
+        }
+        .background {
+            VoiceSystemBroadcastPicker(
+                accessibilityLabel: copy(.screenSharePickerLabel),
+                presentationToken: screenSharePickerToken
+            )
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .onDisappear {
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
@@ -564,12 +575,13 @@ struct JarvisChatScreen: View {
             if model.shouldShowNowBar {
                 nowBar
             }
-            if isScreenSharing {
-                Label(copy(.screenSharingActive), systemImage: "dot.radiowaves.left.and.right")
+            if let status = screenShareStatus {
+                Label(status.text, systemImage: status.symbol)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(status.isError ? Color.red : Color.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+                    .accessibilityAddTraits(.updatesFrequently)
             }
             if let error = model.actionError {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -717,8 +729,9 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 isScreenSharing ? copy(.stopSharingScreen) : copy(.shareScreen),
                 symbol: isScreenSharing ? "stop.circle" : "rectangle.on.rectangle",
-                disabled: model.fixtureMode || isPreparingCamera,
-                hint: model.fixtureMode ? copy(.screenSharingUnavailable) : "",
+                disabled: model.fixtureMode || isPreparingCamera || screenShare.state == .starting,
+                hint: model.fixtureMode ? copy(.screenSharingUnavailable)
+                    : (screenShare.state == .starting ? copy(.screenShareStarting) : ""),
                 action: {
                     if isScreenSharing { stopScreenSharing() } else { openScreenSharePicker() }
                 }
@@ -824,19 +837,15 @@ struct JarvisChatScreen: View {
         .accessibilityHint(isPreparingCamera ? copy(.cameraStarting) : hint)
     }
 
-    private var screenSharePicker: some View {
-        VStack(spacing: JarvisDesignTokens.chatSheetRowSpacing) {
-            Text(copy(.screenShareTitle))
-                .font(.title2.weight(.semibold))
-            Text(copy(.screenShareInstructions))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-            VoiceSystemBroadcastPicker(accessibilityLabel: copy(.screenSharePickerLabel))
-                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+    private var screenShareStatus: (text: String, symbol: String, isError: Bool)? {
+        switch screenShare.state {
+        case .idle: nil
+        case .starting: (copy(.screenShareStarting), "dot.radiowaves.left.and.right", false)
+        case .live: (copy(.screenSharingActive), "dot.radiowaves.left.and.right", false)
+        case .stopped: (copy(.screenShareStopped), "stop.circle", false)
+        case .failed: (copy(.screenShareFailed), "exclamationmark.triangle", true)
+        case .extensionMissing: (copy(.screenShareExtensionMissing), "exclamationmark.triangle", true)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(JarvisDesignTokens.chatHorizontalInset)
-        .jarvisAmbientBackground()
     }
 
     private func openCameraForPhoto() {
@@ -972,16 +981,20 @@ struct JarvisChatScreen: View {
     private func openScreenSharePicker() {
         guard !model.fixtureMode else { return }
         stopVideo()
-        presentedSheet = .screenShare
+        if screenShare.requestStart(extensionInstalled: VoiceBroadcastExtension.isInstalled) {
+            screenSharePickerToken += 1
+        }
     }
 
     private func stopScreenSharing() {
         screenShareBridge.requestStop()
+        screenShare.requestStop()
         isScreenSharing = false
     }
 
     private func refreshScreenSharing() {
-        isScreenSharing = screenShareBridge.isSharing
+        screenShare.observe(isSharing: screenShareBridge.isSharing)
+        isScreenSharing = screenShare.state == .live
     }
 
     private func sendMessage() {
