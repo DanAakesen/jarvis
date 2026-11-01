@@ -48,9 +48,11 @@ struct ContentView: View {
     private var initialActivitySheet: ActivitySheetKind? {
         let activityScreenshotIsActive: Bool = activityScreenshotState != nil
         let arguments: Set<String> = Set(ProcessInfo.processInfo.arguments)
-        let notificationsAreRequested: Bool = arguments.contains("--screenshot-notifications-open")
-            || arguments.contains("--screenshot-screen=notifications")
-        let shouldShowNotifications: Bool = fixtureMode && notificationsAreRequested
+        let notificationSheetRequested: Bool =
+            fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
+        let notificationScreenRequested: Bool = fixtureMode && arguments.contains("--screenshot-screen=notifications")
+        let notificationsAreRequested: Bool = notificationSheetRequested || notificationScreenRequested
+        let shouldShowNotifications: Bool = notificationsAreRequested
         if activityScreenshotIsActive {
             return .background
         }
