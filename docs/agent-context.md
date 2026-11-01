@@ -6228,7 +6228,7 @@ For P15-44 / #1490, the relevant references are
 [XCUIElement](https://developer.apple.com/documentation/xcuiautomation/xcuielement)
 (element readiness, typing and keyboard interaction), and
 [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
-These map to the existing system scroll proxy, bottom composer inset, motion
+These map to the existing system scroll proxy, bottom composer layout, motion
 environment and XCTest UI interactions. The pending-row insert/reconciliation is
 application-owned conversation state, not a replacement scroll or input control.
 The fixture-only Reduce Motion override exists to exercise the no-animation path
@@ -6239,6 +6239,19 @@ This follow-up could not read the official pages: `developer.apple.com` failed
 DNS resolution through both the page-fetch tool and curl. These are references
 for the outstanding review, not claims of prior reliance. Simulator visibility,
 keyboard-focus verification and screenshot evidence remain pending.
+
+For the run 41294540199 follow-up, also review
+[VStack](https://developer.apple.com/documentation/swiftui/vstack),
+[ignoresSafeArea](https://developer.apple.com/documentation/swiftui/view/ignoressafearea(_:edges:))
+and [HIG Layout](https://developer.apple.com/design/human-interface-guidelines/layout).
+Official page retrieval again failed DNS resolution before editing; indexed
+guidance was consulted, but direct Apple review remains outstanding. Chat now
+uses native sibling layout for transcript/composer and system keyboard avoidance,
+not a custom overlay or keyboard-height observer. No new visual-design deviation.
+The full failing app hierarchy and element snapshots are retained in run
+41294540199's `ios-screenshots-pr-1491-1` artifact under `chat-behaviour/`.
+They do not establish which UIKit view rejects the activation point. Keep the
+strict native assertions and verify the layout change on ready-PR simulator CI.
 
 `apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup

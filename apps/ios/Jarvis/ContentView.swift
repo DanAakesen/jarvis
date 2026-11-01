@@ -322,7 +322,7 @@ struct ContentView: View {
                 }
             }
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
     }
 

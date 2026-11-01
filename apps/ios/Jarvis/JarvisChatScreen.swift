@@ -111,8 +111,6 @@ struct JarvisChatScreen: View {
     private var layout: some View {
         VStack(spacing: 0) {
             conversation
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
             composer
         }
         .navigationTitle("Chat")

@@ -1517,7 +1517,15 @@ The navigation shell dim overlay is visual-only (`allowsHitTesting(false)`).
 Its intentional tap-to-close layer is gated by `navigation.isSidebarOpen`,
 not asynchronous presented animation progress, to keep closed Chat interactive.
 The native UI gate retains the full app hierarchy on failure; runtime confirmation
-of the run 41291995474 hit-testing correction remains pending.
+of the hit-testing correction remains pending. Run 41294540199 still fails:
+the full hierarchy shows an enabled composer inside the screen, while one
+element snapshot reports invalid bounds from the Main window down. It does not
+identify an occluding view. Chat now allocates the transcript and composer
+separate regions in a native `VStack`, rather than placing interactive controls
+in the transcript's safe-area inset. The shell ignores only container safe areas,
+retaining system keyboard avoidance. The existing Now bar, composer styling,
+localization and strict UI assertions are unchanged; the updated simulator
+gate must establish whether this resolves activation-point failures.
 
 `JarvisNowFeedClient` decodes the existing authenticated `GET /now` response,
 dismisses through `POST /now/activity/:id/dismiss`, and delegates confirmation

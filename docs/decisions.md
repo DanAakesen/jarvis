@@ -1,5 +1,17 @@
 ## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
 
+Run 41294540199 still fails before typing. Its retained hierarchy places an
+enabled composer inside the screen below the Now bar, with no keyboard or
+second window. One element snapshot has invalid bounds for the Main window
+and all ancestors; this is not proof of an offscreen composer. Allocate the
+transcript and composer separate regions with SwiftUI `VStack`, preserving the
+approved pinned composition without a custom overlay or measured offsets.
+Limit the shell's `ignoresSafeArea` to `.container` so the system can avoid
+the keyboard. Keep the UI tests unchanged. This layout correction is pending
+native validation, not a confirmed runtime root-cause finding. PR #1485 remains
+open; its gate-startup fixes also failed its latest input gate, so do not treat
+them as an established solution or copy them speculatively.
+
 For the run 41291995474 hit-testing follow-up, keep the shell's dim layer visual
 only using SwiftUI `allowsHitTesting(false)`. Key the intentional tap-to-close
 layer to logical sidebar-open state rather than animation progress, so residual
@@ -10,8 +22,8 @@ broader navigation change and native validation remain pending.
 Insert a local user bubble when Send is accepted rather than waiting for the
 SSE `user` event. Replace it with the server row on acknowledgment and restore
 the draft if sending fails before acknowledgment. Scroll on latest row identity
-changes, including with Reduce Motion; keep the existing composer safe-area
-inset, glass styling and Danish/English catalogs. Initial history loading must
+changes, including with Reduce Motion; keep the pinned composer, glass styling
+and Danish/English catalogs. Initial history loading must
 finish before sending. Native send/visibility tests and kept screenshots run in
 the existing one-boot ready-PR iOS job, not a new Mac job or TestFlight upload.
 Simulator execution and physical-device acceptance remain separate from Linux

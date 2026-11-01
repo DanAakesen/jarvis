@@ -724,6 +724,15 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('attachment.name = "chat-failure-app-hierarchy"', tests)
         self.assertIn("attachment.lifetime = .keepAlways", tests)
 
+    def test_ios_chat_composer_is_outside_transcript_and_respects_keyboard(self):
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        layout = chat.split("private var layout: some View", 1)[1].split(".navigationTitle", 1)[0]
+        self.assertIn("VStack(spacing: 0) {\n            conversation\n            composer\n        }", layout)
+        self.assertNotIn(".safeAreaInset", layout)
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn(".ignoresSafeArea(.container)", content)
+        self.assertNotIn(".ignoresSafeArea()", content)
+
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
         area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
         header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]
