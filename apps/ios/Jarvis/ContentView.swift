@@ -801,12 +801,7 @@ private struct ContentNavigationSurface: View {
     private var healthDestination: some View {
         let resolvedLanguage: JarvisAppLanguage = healthScreenshotLanguage ?? language
         let shouldObserveRefreshEvents: Bool = !fixtureMode
-        let currentDate: Date
-        if fixtureMode {
-            currentDate = JarvisHealthPreview.now
-        } else {
-            currentDate = Date()
-        }
+        let currentDate: Date = fixtureMode ? JarvisHealthPreview.now : Date()
         let workoutInitiallySelected: Bool = healthScreenshotState != nil
         let shouldPresentNewLift: Bool = healthScreenshotState == "newlift"
         return JarvisHealthArea(
