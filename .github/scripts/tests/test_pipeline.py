@@ -749,6 +749,10 @@ class SafeFailureTests(unittest.TestCase):
                     image = root / name
                     image.touch()  # File-presence fixtures; these are not simulator screenshots.
                     images.append(image)
+                for name in (f"chat-before-{appearance}.png", f"main-{appearance}.png"):
+                    image = root / name
+                    image.touch()
+                    images.append(image)
                 for state in ("listening", "thinking", "speaking"):
                     image = root / f"voice-{state}-{appearance}.png"
                     image.touch()
@@ -779,6 +783,17 @@ class SafeFailureTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Missing simulator capture:", result.stderr)
+            images[0].touch()
+            for name in ("chat-before-light.png", "main-light.png"):
+                image = root / name
+                image.unlink()
+                result = subprocess.run(
+                    ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
+                    capture_output=True, text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f"Missing before/after simulator capture: {name}", result.stderr)
+                image.touch()
 
     def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
         design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
