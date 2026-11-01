@@ -79,7 +79,6 @@ final class JarvisNavigationModelTests: XCTestCase {
         let gate = try source("Jarvis/JarvisGateRootView.swift")
         XCTAssertTrue(gate.contains("JarvisSidebarReveal {"))
         XCTAssertTrue(shell.contains("transaction.disablesAnimations = true"))
-        XCTAssertTrue(shell.contains("guard scenePhase == .active, !navigation.isSidebarOpen"))
         for obsolete in ["@GestureState", "sidebarGestureGeneration", ".simultaneousGesture",
                          ".offset(", ".blur(", ".allowsHitTesting(", "NavigationBisect", "navigationWrites"] {
             XCTAssertFalse(shell.contains(obsolete), obsolete)

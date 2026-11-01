@@ -10267,3 +10267,17 @@ pan are unchanged. Reduced motion disables the spring and live tracking
 animation. The earlier scrim is gone, which also removes any layer that could
 sit over the drawer rows (item taps: scrim no longer overlaps rows, rows carry
 no gestures). Device behaviour is unverified until the next preview build.
+
+## 2026-11-01: sidebar swipe fixes after build 28 (#1484)
+
+The window-level `UIScreenEdgePanGestureRecognizer` did nothing on device and is
+removed. Opening is now a SwiftUI `DragGesture` on a 20pt full-height trailing
+strip above the page inside `JarvisSidebarReveal` (`highPriorityGesture`); the
+close swipe is on the page catcher. Both read translation in the global space
+(the views move with the page, so a local space fed the offset back into the
+drag), set no animation while a finger is down, and animate with a spring on
+release. Programmatic `navigate(to:)` now marks a short window in which a
+shrinking path echoed through the `NavigationStack` binding is dropped as stale;
+this is a hypothesis for "items close the drawer but stay on Chat" and is not
+confirmed. A TEMPORARY on-screen debug line (path, current/shown destination,
+last writes) is in the root and must be removed once Dan confirms.

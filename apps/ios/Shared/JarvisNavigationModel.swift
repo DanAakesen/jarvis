@@ -1,3 +1,4 @@
+import Foundation
 import Combine
 import JarvisCore
 
@@ -9,6 +10,7 @@ final class JarvisNavigationModel: ObservableObject {
     // TEMPORARY on-device diagnosis (path writes); remove once item navigation is confirmed.
     @Published private(set) var debugWrites: [String] = []
     @Published private(set) var debugShown = "-"
+    private var lastProgrammaticNavigation = Date.distantPast
     private let dismissKeyboard: () -> Void
 
     init(initialState: JarvisNavigationState = JarvisNavigationState(),
@@ -49,6 +51,12 @@ final class JarvisNavigationModel: ObservableObject {
     }
 
     func setPath(_ path: [JarvisDestination]) {
+        // NavigationStack can echo its pre-push path back through the binding right after a programmatic
+        // navigate(to:); treat a shrinking echo inside the push transition as stale, never as a user pop.
+        if path.count < state.path.count, Date().timeIntervalSince(lastProgrammaticNavigation) < 0.8 {
+            note("setPath(binding) dropped stale \(path.map(\.rawValue))")
+            return
+        }
         guard path != state.path else {
             note("setPath(binding) ignored \(path.map(\.rawValue))")
             return
@@ -60,6 +68,7 @@ final class JarvisNavigationModel: ObservableObject {
     }
 
     func navigate(to destination: JarvisDestination) {
+        lastProgrammaticNavigation = Date()
         write("navigate(\(destination.rawValue))") { $0.navigate(to: destination) }
     }
 

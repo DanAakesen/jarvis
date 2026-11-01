@@ -97,10 +97,10 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertTrue(item.waitForExistence(timeout: 2))
         XCTAssertTrue(item.isHittable)
         item.tap()
-        XCTAssertTrue(
-            app.buttons["factory.plus"].waitForExistence(timeout: 2),
-            "Tapping a sidebar item must show its screen"
-        )
+        let factoryPlus = app.buttons["factory.plus"]
+        XCTAssertTrue(factoryPlus.waitForExistence(timeout: 2), "Tapping a sidebar item must show its screen")
+        XCTAssertTrue(factoryPlus.isHittable, "The Software Factory screen must be visible, not offset away")
+        XCTAssertFalse(app.buttons["chat.notifications"].isHittable, "The Chat screen must have been left")
         XCTAssertFalse(app.buttons["navigation.chat"].exists, "Tapping a sidebar item must close the drawer")
     }
 }

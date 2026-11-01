@@ -16,26 +16,32 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
 struct JarvisSidebarReveal<Page: View>: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @GestureState private var isDraggingClosed = false
+    @GestureState private var isDraggingOpen = false
     private let page: Page
 
     init(@ViewBuilder page: () -> Page) {
         self.page = page()
     }
 
+    /// No animation while a finger is down (the offset must track it exactly); a spring on release,
+    /// starting from the presented progress.
     private var animation: Animation? {
-        reduceMotion || navigation.dragProgress != nil ? nil : .interactiveSpring(
+        reduceMotion || navigation.dragProgress != nil ? nil : .spring(
             response: JarvisDesignTokens.sidebarSpringResponse,
             dampingFraction: JarvisDesignTokens.sidebarSpringDamping
         )
     }
 
+    // Translation is read in the global space: the views these gestures sit on move with the page,
+    // so a local space would feed the page offset back into the drag and make it jump.
     private func closeSwipe(drawerWidth: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance)
+        DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance, coordinateSpace: .global)
             .updating($isDraggingClosed) { _, state, _ in state = true }
             .onChanged { value in
-                guard value.translation.width > 0,
-                      abs(value.translation.width) > abs(value.translation.height) else { return }
+                guard abs(value.translation.width) >= abs(value.translation.height) || navigation.dragProgress != nil
+                else { return }
                 navigation.updateDrag(progress: 1 - Double(value.translation.width / max(drawerWidth, 1)))
             }
             .onEnded { value in
@@ -50,6 +56,31 @@ struct JarvisSidebarReveal<Page: View>: View {
                     return
                 }
                 navigation.closeSidebar()
+            }
+    }
+
+    private func openSwipe(drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance, coordinateSpace: .global)
+            .updating($isDraggingOpen) { _, state, _ in state = true }
+            .onChanged { value in
+                guard scenePhase == .active, !navigation.isSidebarOpen,
+                      abs(value.translation.width) >= abs(value.translation.height) || navigation.dragProgress != nil
+                else { return }
+                navigation.updateDrag(progress: -Double(value.translation.width / max(drawerWidth, 1)))
+            }
+            .onEnded { value in
+                guard scenePhase == .active, !navigation.isSidebarOpen,
+                      JarvisSidebarGesturePolicy.shouldOpen(
+                        translationX: Double(value.translation.width),
+                        translationY: Double(value.translation.height),
+                        velocityX: Double(value.velocity.width),
+                        drawerWidth: Double(drawerWidth),
+                        openThreshold: Double(JarvisDesignTokens.sidebarOpenThreshold)
+                      ) else {
+                    navigation.cancelDrag()
+                    return
+                }
+                navigation.openSidebar()
             }
     }
 
@@ -85,10 +116,23 @@ struct JarvisSidebarReveal<Page: View>: View {
                     }
                     .shadow(color: .black.opacity(JarvisDesignTokens.screenDimOpacity * Double(progress)), radius: 14)
                     .offset(x: -drawerWidth * progress)
+
+                // Full-height trailing strip above every page layer. It is narrow so the toolbar button beside
+                // it stays tappable, and its high-priority drag wins over scrolling beneath it.
+                if progress == 0 || isDraggingOpen {
+                    Color.clear
+                        .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth, height: geometry.size.height)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(openSwipe(drawerWidth: drawerWidth))
+                        .accessibilityHidden(true)
+                }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
             .animation(animation, value: progress)
             .onChange(of: isDraggingClosed) { _, dragging in
+                if !dragging { navigation.cancelDrag() }
+            }
+            .onChange(of: isDraggingOpen) { _, dragging in
                 if !dragging { navigation.cancelDrag() }
             }
         }
