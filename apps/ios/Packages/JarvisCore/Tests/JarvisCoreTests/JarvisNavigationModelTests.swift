@@ -183,7 +183,7 @@ final class JarvisNavigationModelTests: XCTestCase {
         }
         let tests = try source("JarvisUITests/SidebarNavigationTests.swift")
         XCTAssertTrue(tests.contains("timeout: 2"))
-        XCTAssertTrue(tests.contains("sidebar.exists && sidebar.isHittable"))
+        XCTAssertTrue(tests.contains("sidebar.exists && !sidebar.frame.isEmpty"))
         XCTAssertTrue(tests.contains("self.app.buttons[\"navigation.chat\"].isHittable"))
         XCTAssertTrue(tests.contains("menu.coordinate(withNormalizedOffset:"))
         let regression = try source("JarvisUITests/NavigationReliabilityTests.swift")
