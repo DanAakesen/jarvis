@@ -95,16 +95,6 @@ struct JarvisSidebarReveal<Page: View>: View {
             )
             let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0
             ZStack(alignment: .trailing) {
-                if progress > 0 {
-                    JarvisSidebar(
-                        currentDestination: navigation.currentDestination,
-                        safeAreaInsets: ContentView.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets),
-                        onNavigate: { navigation.navigate(to: $0) }
-                    )
-                    .frame(width: drawerWidth, height: geometry.size.height)
-                    .background { JarvisScreenBackground() }
-                }
-
                 page
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .allowsHitTesting(progress == 0)
@@ -119,6 +109,20 @@ struct JarvisSidebarReveal<Page: View>: View {
                     }
                     .shadow(color: .black.opacity(JarvisDesignTokens.screenDimOpacity * Double(progress)), radius: 14)
                     .offset(x: -drawerWidth * progress)
+
+                // Above the page in z-order and clipped to the strip the page has uncovered: the drawer looks
+                // revealed, yet no page layer can sit over its rows and swallow their taps.
+                if progress > 0 {
+                    JarvisSidebar(
+                        currentDestination: navigation.currentDestination,
+                        safeAreaInsets: ContentView.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets),
+                        onNavigate: { navigation.navigate(to: $0) }
+                    )
+                    .frame(width: drawerWidth, height: geometry.size.height)
+                    .background { JarvisScreenBackground() }
+                    .frame(width: drawerWidth * progress, height: geometry.size.height, alignment: .trailing)
+                    .clipped()
+                }
 
                 // Full-height trailing strip above every page layer. It is narrow so the toolbar button beside
                 // it stays tappable, and its high-priority drag wins over scrolling beneath it.
