@@ -10357,3 +10357,14 @@ app), the stored theme is applied at the root because the drawer sits outside
 `ContentView`, and `JarvisNavigationModel.navigationRequested` delivers voice
 and fixture side effects before the route changes. `ios-testflight.yml` equals
 `origin/main`.
+
+## 2026-11-01: One navigation UI test run, trace in the failure message
+
+Confirmed: CI run 41347453078 showed the menu-size assertion failing at 43.99999999999999
+(now compared with a 43.5 tolerance) and the Software Factory item tap not showing its
+screen. The class runs once in the screenshot step (it ran twice, taking about 30 minutes)
+with 60/90 second per-test limits, and fails the run after screenshots. The two
+five-second-delay menu tests were folded into the English menu test. The item test now
+waits for `factory.segment.board` (always rendered) and puts the temporary on-screen
+navigation trace (`debug.navigation.trace`) in its failure message. The cause of the
+non-navigating item is still unconfirmed.

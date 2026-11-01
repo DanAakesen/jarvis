@@ -413,9 +413,13 @@ struct JarvisGateRootView: View {
 private struct JarvisNavigationDebugLine: View {
     @ObservedObject var navigation: JarvisNavigationModel
 
+    private var summary: String {
+        "path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))")
+            Text(summary)
             ForEach(Array(navigation.debugWrites.enumerated()), id: \.offset) { _, line in
                 Text(line)
             }
@@ -424,7 +428,9 @@ private struct JarvisNavigationDebugLine: View {
         .padding(4)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
         .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(([summary] + navigation.debugWrites).joined(separator: " | "))
+        .accessibilityIdentifier("debug.navigation.trace")
     }
 }
 

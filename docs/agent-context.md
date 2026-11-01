@@ -6317,11 +6317,13 @@ scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
 `xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
 'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/SidebarNavigationTests
 CODE_SIGNING_ALLOWED=NO test`. The ready-PR iOS job runs this focused class
-on its already-booted iPhone and retains `ios-navigation.xcresult` for 14 days,
-including cycle screenshots and failures,
-along with `ios-scheme.xcresult` from the earlier focused scheme invocation.
-Both uploads run on failure; use the scheme bundle when screenshot-step tests
-stop the job before the dedicated navigation invocation.
+once, inside the "Boot iPhone Simulator and capture screenshots" step, with
+per-test time limits (`-default-test-execution-time-allowance 60`,
+`-maximum-test-execution-time-allowance 90`), and retains `ios-scheme.xcresult`
+for 14 days, including failures. A failing class marks the run failed in the
+final "Fail the run when UI tests fail" step after screenshots are captured.
+The earlier separate navigation invocation was removed because it repeated the
+same tests and pushed the job past its time limit.
 Run 41308630589 retains fired menu commands with a closed rendered shell.
 The earlier, now superseded follow-up read the shell's navigation dependency in `ContentView.body`
 before its GeometryReader closure; rendering uses that snapshot, while actions
