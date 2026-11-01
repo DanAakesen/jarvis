@@ -882,6 +882,18 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("screenshot.lifetime = .keepAlways", ui_tests)
         self.assertIn("XCTAssertGreaterThanOrEqual(button.frame.height, 44)", ui_tests)
 
+    def test_lock_screen_approval_expiry_uses_absolute_system_time(self):
+        preview = (ROOT / "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift").read_text()
+        notification = (ROOT / "apps/ios/Jarvis/JarvisApprovalNotificationCoordinator.swift").read_text()
+        for source in (preview, notification):
+            self.assertIn("expiresAt.formatted(", source)
+            self.assertIn(".dateTime.hour().minute().locale(language.locale)", source)
+            self.assertIn("arguments: [expiryTime]", source)
+            self.assertNotIn("RelativeDateTimeFormatter", source)
+        for language, template in (("da", "Udløber kl. %@"), ("en", "Expires at %@")):
+            resource = ROOT / f"apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources/{language}.lproj/JarvisApprovals.strings"
+            self.assertIn(f'"approval.expires" = "{template}";', resource.read_text())
+
     def test_ios_background_activity_empty_state_and_screenshots(self):
         screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
         model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()

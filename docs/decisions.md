@@ -9973,3 +9973,20 @@ sphere, with Reduced Motion and inactive-scene pauses. Keep all Voice copy in
 Danish/English resources. Extend the existing ready-PR simulator capture rather
 than adding another Mac job. Synthetic screenshots, Apple compilation and live
 device acceptance remain separate checks; none is established by Linux tests.
+## 1 November 2026 — approval expiry grammar and #1501 synchronization (P15-46)
+
+Merge main `32af478` in `c84e6bc` with both parents and decision-log entries
+intact. Retain task Live Activity/lock fixes and all calendar screenshot steps.
+The lock-screen preview inserted `RelativeDateTimeFormatter` output into
+`Expires at %@` / `Udløber kl. %@`, producing mixed absolute/relative grammar.
+Use `Date.FormatStyle` hour/minute with the selected app locale, matching
+the existing real notification. Keep both templates and authorization unchanged.
+
+Before the correction, read
+[RelativeDateTimeFormatter](https://developer.apple.com/documentation/foundation/relativedatetimeformatter)
+and [Date.FormatStyle](https://developer.apple.com/documentation/foundation/date/formatstyle)
+through the browser. Apple warns that relative phrases are standalone strings
+and embedding them can be ungrammatical; Date.FormatStyle supports localized
+absolute date/time components. No deliberate platform deviation or custom
+formatter is introduced. New local regressions pass; Mac rendering and live
+acceptance remain unverified.

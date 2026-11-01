@@ -573,6 +573,9 @@ leave error notices in the existing activity feed, including failed items and a
 warning against repeating completed or unverified writes. CI captures the real
 calendar review sheet in Danish/English and light/dark with clearly synthetic
 data and disabled fixture decisions; images are not live-write evidence.
+Lock-screen approval previews use locale-aware system-formatted absolute
+hour/minute expiry with the existing Danish/English templates, matching real
+approval notifications. Do not embed a relative phrase in an absolute template.
 
 ## Shared control geometry (16 October 2026; local candidate)
 

@@ -1,5 +1,14 @@
 ## P15-46 — suggestions create approvals (#1494)
 
+Follow-up after #1501: merged main `32af478` in two-parent commit `c84e6bc`,
+preserving task Live Activities, lock-independent jobs and calendar approval
+screenshots. The lock-screen approval preview incorrectly combined a relative
+phrase with an absolute expiry template; it now uses the same localized
+system-formatted absolute time as the real notification. Two new expiry
+regressions, native parsing and 95 merged backend tests passed locally.
+Fresh updated-head CI and lock-screen captures remain pending, as do the title
+correction and live model/device acceptance.
+
 Implemented shared staging guidance, bounded hosted calendar-offer repair and
 calendar tap approval through the existing feed and single-use action. Focused
 regressions cover propose → yes/ja, direct instructions, older pending proposals,
