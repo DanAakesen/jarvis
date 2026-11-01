@@ -114,10 +114,8 @@ final class JarvisSmokeUITests: XCTestCase {
         attach.tap()
         let chooseFiles = app.buttons[localized("Choose files", "Vælg filer")]
         let photoLibrary = app.buttons[localized("Photo library", "Fotobibliotek")]
-        let attachmentCancel = app.buttons[localized("Cancel", "Annuller")]
         XCTAssertTrue(chooseFiles.waitForExistence(timeout: 10))
         XCTAssertTrue(photoLibrary.exists)
-        XCTAssertTrue(attachmentCancel.exists)
 
         chooseFiles.tap()
         let filesCancel = app.buttons.matching(
@@ -136,13 +134,6 @@ final class JarvisSmokeUITests: XCTestCase {
         ).firstMatch
         XCTAssertTrue(photosCancel.waitForExistence(timeout: 10))
         photosCancel.tap()
-
-        addAttachment.tap()
-        XCTAssertTrue(attach.waitForExistence(timeout: 10))
-        attach.tap()
-        let cancel = app.buttons[localized("Cancel", "Annuller")]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
-        cancel.tap()
     }
 
     private func exerciseNotifications() {

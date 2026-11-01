@@ -26,7 +26,7 @@ import SwiftUI
     .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 
-private enum JarvisHealthPreview {
+enum JarvisHealthPreview {
     static let now = ISO8601DateFormatter().date(from: "2026-10-31T12:00:00Z")!
 
     static func makeClient() -> JarvisHealthClient? {

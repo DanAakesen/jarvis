@@ -84,40 +84,7 @@ struct JarvisSidebar: View {
             }
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
-        .background {
-            GeometryReader { geometry in
-                let ambientRadius = max(geometry.size.width * 0.6, geometry.size.height * 0.36)
-                let isDark = colorScheme == .dark
-                ZStack {
-                    JarvisDesignTokens.pageBackground
-                    RadialGradient(
-                        colors: [JarvisDesignTokens.ambientCool.opacity(isDark ? 0.30 : 0.24), .clear],
-                        center: UnitPoint(x: 0.12, y: 0.10),
-                        startRadius: 0,
-                        endRadius: ambientRadius
-                    )
-                    RadialGradient(
-                        colors: [JarvisDesignTokens.ambientWarm.opacity(isDark ? 0.26 : 0.30), .clear],
-                        center: UnitPoint(x: 0.94, y: 0.20),
-                        startRadius: 0,
-                        endRadius: ambientRadius
-                    )
-                    RadialGradient(
-                        colors: [JarvisDesignTokens.ambientGreen.opacity(isDark ? 0.16 : 0.18), .clear],
-                        center: UnitPoint(x: 0.24, y: 0.98),
-                        startRadius: 0,
-                        endRadius: ambientRadius
-                    )
-                    RadialGradient(
-                        colors: [JarvisDesignTokens.ambientBlue.opacity(isDark ? 0.20 : 0.16), .clear],
-                        center: UnitPoint(x: 0.92, y: 0.80),
-                        startRadius: 0,
-                        endRadius: ambientRadius
-                    )
-                }
-            }
-            .ignoresSafeArea()
-        }
+        .background(JarvisGlassSurface())
         .accessibilityHidden(!isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()

@@ -227,7 +227,7 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
-        .background(JarvisScreenBackground())
+        .jarvisAmbientBackground()
         .onChange(of: composerMode) { _, mode in
             guard mode == .voice else { return }
             composerMode = .chat
@@ -568,7 +568,7 @@ struct JarvisChatScreen: View {
             .padding(JarvisDesignTokens.chatComposerSpacing)
             .background {
                 RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
-                    .fill(reduceTransparency ? Color(uiColor: .secondarySystemBackground) : Color.clear)
+                    .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
                     .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatComposerRadius))
             }
             .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
@@ -702,7 +702,7 @@ struct JarvisChatScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(JarvisDesignTokens.chatHorizontalInset)
-        .background(Color(uiColor: .systemBackground))
+        .jarvisAmbientBackground()
     }
 
     private func openCameraForPhoto() {
@@ -1051,7 +1051,7 @@ private struct JarvisChatCameraSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            JarvisScreenBackground()
             VoiceCameraPreview(session: camera.session)
                 .ignoresSafeArea()
             VStack {

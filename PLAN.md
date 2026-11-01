@@ -3436,6 +3436,36 @@ focused Core tests. Local implementation is complete; next verify the Mac app
 build, real-device Microsoft sheet, signed TestFlight keychain grant and live
 Entra redirect. Device acceptance remains open; no upload is authorized here.
 
+P15-38 / [#1478](https://github.com/DanAakesen/jarvis/issues/1478) centralizes the
+approved Chat ambient field and subdued orb for native screens, app-owned sheets
+and the glass sidebar; shared glass forms/lists preserve Reduce Transparency.
+Five focused Linux source-contract tests pass, including both board palettes
+and glow geometry, screen/sheet adoption and the one-boot screenshot hook.
+The existing screenshot artifact now pairs all eight requested surfaces in both
+appearances with interactive board renders in `comparisons.html`. Main was
+refreshed and already contained in this branch. Next: ready-PR Mac compile,
+simulator captures/board comparison, green CI and owner visual acceptance;
+Linux cannot produce native screenshots and the draft PR currently skips CI.
+Local `swift build`, all 168 Core tests, all 50 pipeline tests and Swift syntax
+parsing pass. Secret scanning is clean; CodeQL reports no Actions/Python alerts
+but cannot build the Swift database on Linux. The hosted title gate requires
+`[WIP] P15-38: Move ambient background to design system for consistency`;
+set that canonical title and mark the PR ready to obtain native CI evidence.
+
+1 November review reconciliation: merge current main, reuse its existing
+`JarvisScreenBackground`/gate wrapper rather than the earlier ambient renderer
+and decorative orb, and preserve main's Chat plus menu and current
+Chat/Sidebar/Voice behaviour. Both screenshot sets, the plus-menu capture,
+comparison/upload steps and documentation entries are retained.
+Next: validate and push the merge, then inspect fresh iOS CI and light/dark
+simulator artifacts; earlier green checks are not evidence for the merged head.
+
+1 November sidebar follow-up (#1465): retain main's corrected drawer gesture,
+tap dismissal, safe-area handling, row order and typography, together with the
+shared ambient/glass backdrop. Preserve main's light/dark open-sidebar and
+Notifications captures alongside the ambient comparison captures. Fresh iOS
+verification is required after this additional main merge.
+
 P15-24 / [#1447](https://github.com/DanAakesen/jarvis/issues/1447) corrects the
 normal-window-only selection that hid Microsoft authentication beneath the gate.
 The highest eligible visible foreground-active window now hosts sign-in; the
