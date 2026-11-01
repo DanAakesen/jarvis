@@ -676,6 +676,36 @@ class SafeFailureTests(unittest.TestCase):
             (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
         )
 
+    def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
+        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        style = design.split("func jarvisToolbarButtonStyle()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("buttonStyle(.plain)", style)
+        for surface in (".background(", ".overlay(", ".glassEffect(", ".stroke("):
+            self.assertNotIn(surface, style)
+        for filename in ("JarvisChatScreen.swift", "JarvisActivitySheet.swift"):
+            source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
+            toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
+            with self.subTest(filename=filename):
+                self.assertIn(".jarvisToolbarButtonStyle()", toolbar)
+                self.assertNotIn(".buttonStyle(.glass)", toolbar)
+                self.assertNotIn(".glassEffect(", toolbar)
+        self.assertIn('Button("Done") { dismiss() }', source)
+
+    def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("for appearance in light dark", capture["run"])
+        self.assertIn("--screenshot-chat-fixture --screenshot-notifications-open", capture["run"])
+        self.assertIn("notifications-${appearance}.png", capture["run"])
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn('fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")', content)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn("self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil", chat)
+        self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
+        self.assertIn(".sheet(item: $presentedSheet", chat)
+        self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
+
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
         workflow = load_workflow(workflow_path)

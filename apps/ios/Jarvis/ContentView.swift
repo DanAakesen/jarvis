@@ -123,6 +123,8 @@ struct ContentView: View {
                     JarvisChatScreen(
                         client: chatClient,
                         fixtureMode: fixtureMode,
+                        initialActivitySheet: fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
+                            ? .needsYou : nil,
                         startupError: startupError,
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )

@@ -1646,6 +1646,11 @@ copy. Linux tests exercise
 the real chat and tools clients against test resources, including history
 pagination and reattachment.
 
+P15-29 adds `--screenshot-notifications-open` alongside the Chat fixture flag.
+It presents the real activity sheet after Chat finishes loading its fixture;
+live startup ignores the initial-sheet input. The existing single simulator
+boot captures the sheet in both appearances.
+
 `JarvisApprovalsClient` reuses `JarvisClient` authentication and error mapping
 for the existing `GET /now` confirmations and `POST /now/confirmations/:id`
 decision routes. The contract comes from `apps/backend/src/core/now.ts` and
