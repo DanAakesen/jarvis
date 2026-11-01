@@ -6591,6 +6591,18 @@ microphone capture and speaker playback use mono 24 kHz; speech-start immediatel
 stops queued playback. The session can minimize to a persistent shell bar without
 ending audio or the screen-share monitor.
 
+After an established socket drops, `VoiceScreenModel` shows the localized
+connection-lost surface while `VoiceSessionClient` runs its bounded reconnect
+policy. Retry now cancels the current client and starts another session through
+the same bounded path; stale callbacks are ignored, and End returns to Chat.
+Initial connection failures do not use this surface. Both app-language catalogs
+include its title and actions.
+The ready-PR Mac job launches the synthetic state with
+`--screenshot-voice-connection-lost` and `--screenshot-voice-language=da|en`,
+uploads both simulator captures with the existing screenshot artifact, and links
+the approved surface page in its PR comment. This fixture does not simulate a
+live connection or replace device acceptance.
+
 Camera inspection uses the existing `/screen/frames` handle request; shared
 screen inspection uses the existing description request and sends its result on
 the same voice socket. The `JarvisBroadcast` ReplayKit extension writes only

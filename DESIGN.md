@@ -2819,8 +2819,8 @@ the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
 elapsed timer, measured waveform and Mute/End controls. Stone is secondary;
 only End has a small orange tint, never a large solid fill. System timer updates
 and audio-derived waveform snapshots need no perpetual decorative animation.
-The Dynamic Island, Lock Screen tasks and decisions, and Connection lost
-surfaces remain unapproved.
+The Dynamic Island and Lock Screen tasks and decisions remain unapproved.
+Connection lost is approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -2874,6 +2874,12 @@ progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
+
+After a real realtime drop, Voice replaces its controls with the muted orb,
+“Connection lost” title, and two glass actions. Retry now uses the bounded
+session retry path; End closes the session and returns to Chat. Orange is the
+primary action accent, stone is secondary, and the surface has no explanatory
+copy.
 
 P15-40 (#1482) keeps the cyan-rimmed dark sphere stationary and animates only the
 tangled orange/amber centre. Listening and speaking use stronger centre motion

@@ -6,6 +6,7 @@ import UIKit
 @MainActor
 final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var voiceState: VoiceSessionState = .idle
+    @Published private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
     @Published private(set) var microphoneDenied = false
     @Published private(set) var signInRequired = false
     @Published private(set) var isAudioReady = false
@@ -21,6 +22,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var camera: VoiceCameraCapture?
     @Published private(set) var photoIsReady = false
 
+    private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
     private let liveActivity = VoiceLiveActivityController()
     private(set) var liveActivitySessionID: UUID?
@@ -34,10 +36,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var photoForNextTurn: Data?
     private var sessionGeneration = 0
     private var isStarting = false
+    private var connectionPresentationMachine = VoiceConnectionPresentationStateMachine()
     private var isEnding = false
     private var screenshotState: VoiceSessionState?
 
-    init() {
+    init(screenshotConnectionLost: Bool = false) {
+        self.screenshotConnectionLost = screenshotConnectionLost
+        if screenshotConnectionLost {
+            connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+            voiceState = .reconnecting(attempt: 3)
+        }
 #if targetEnvironment(simulator)
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--screenshot-voice-fixture"),
@@ -88,6 +96,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
     #endif
+
+    var skipsAutomaticStart: Bool {
+        screenshotConnectionLost
+    }
+
+    var showsConnectionRecovery: Bool {
+        connectionPresentationState == .lost || connectionPresentationState == .retrying
+    }
 
     var statusText: String {
         if case .reconnecting = voiceState { return JarvisVoiceLocalization.string(.reconnecting) }
@@ -164,6 +180,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 microphoneDenied = true
                 voiceState = .failed
                 liveActivitySessionID = nil
+                markRetryFailedIfNeeded()
                 return
             }
             guard sessionGeneration == generation else { return }
@@ -213,6 +230,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 signInRequired = true
             }
             voiceState = .failed
+            markRetryFailedIfNeeded()
             let failedClient = sessionClient
             sessionClient = nil
             liveActivitySessionID = nil
@@ -224,7 +242,29 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     func retryIfNeeded() async {
-        guard microphoneDenied || voiceState == .failed else { return }
+        guard connectionPresentationState != .lost,
+              microphoneDenied || voiceState == .failed else { return }
+        await start()
+    }
+
+    func retryNow() async {
+        guard connectionPresentationState == .lost, !isStarting, !isEnding else { return }
+        connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
+        sessionGeneration += 1
+        let retryGeneration = sessionGeneration
+        isStarting = true
+        defer {
+            if sessionGeneration == retryGeneration { isStarting = false }
+        }
+        let interruptedClient = sessionClient
+        sessionClient = nil
+        liveActivitySessionID = nil
+        stopAudio()
+        await liveActivity.end()
+        if let interruptedClient { try? await interruptedClient.end() }
+        guard sessionGeneration == retryGeneration,
+              connectionPresentationState == .retrying else { return }
+        isStarting = false
         await start()
     }
 
@@ -289,6 +329,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         defer { isEnding = false }
         sessionGeneration += 1
         liveActivitySessionID = nil
+        connectionPresentationState = connectionPresentationMachine.apply(.ended)
         isStarting = false
         let endingClient = sessionClient
         sessionClient = nil
@@ -519,6 +560,20 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func receiveSessionState(_ state: VoiceSessionState) {
+        switch state {
+        case .ready, .listening:
+            connectionPresentationState = connectionPresentationMachine.apply(.connected)
+        case .reconnecting:
+            connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+        case .connecting where connectionPresentationState == .lost:
+            connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
+        case .failed:
+            connectionPresentationState = connectionPresentationMachine.apply(.retryFailed)
+        case .ended:
+            connectionPresentationState = connectionPresentationMachine.apply(.ended)
+        case .idle, .connecting, .speaking:
+            break
+        }
         voiceState = state
         liveActivity.update(state: state, isMuted: isMuted)
         guard state == .failed else { return }
@@ -527,6 +582,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             guard sessionGeneration == generation else { return }
             await resetFailedSession()
         }
+    }
+
+    private func markRetryFailedIfNeeded() {
+        guard connectionPresentationState == .retrying else { return }
+        connectionPresentationState = connectionPresentationMachine.apply(.retryFailed)
     }
 
     private func resetFailedSession() async {

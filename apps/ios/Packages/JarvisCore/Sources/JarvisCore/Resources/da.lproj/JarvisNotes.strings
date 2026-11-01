@@ -4,6 +4,10 @@
 "settings.title" = "Indstillinger";
 "navigation.chat" = "Chat";
 "navigation.voice" = "Stemme";
+"voice.connectionLost" = "Forbindelsen blev afbrudt";
+"voice.retryNow" = "Prøv igen nu";
+"voice.retrying" = "Forbinder igen";
+"voice.connectionEnd" = "Afslut";
 "navigation.workspaces" = "Arbejdsområder";
 "navigation.health" = "Sundhed";
 "navigation.softwareFactory" = "Softwarefabrik";

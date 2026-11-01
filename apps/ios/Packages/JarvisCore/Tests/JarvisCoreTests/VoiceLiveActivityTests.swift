@@ -3,6 +3,26 @@ import XCTest
 @testable import JarvisCore
 
 final class VoiceLiveActivityTests: XCTestCase {
+    func testManualRetryDismissesOldActivityBeforeStartingReplacement() throws {
+        var repository = URL(fileURLWithPath: #filePath)
+        for _ in 0..<7 { repository.deleteLastPathComponent() }
+        let source = try String(
+            contentsOf: repository.appendingPathComponent("apps/ios/Jarvis/VoiceScreenModel.swift"),
+            encoding: .utf8
+        )
+        let retry = try XCTUnwrap(source.components(separatedBy: "func retryNow() async {").last?
+            .components(separatedBy: "func openSettings()").first)
+        XCTAssertTrue(retry.contains("!isStarting, !isEnding"))
+        XCTAssertTrue(retry.contains("isStarting = true"))
+        XCTAssertTrue(retry.contains("liveActivitySessionID = nil"))
+        XCTAssertTrue(retry.contains("sessionGeneration == retryGeneration"))
+        let stop = try XCTUnwrap(retry.range(of: "stopAudio()"))
+        let dismiss = try XCTUnwrap(retry.range(of: "await liveActivity.end()"))
+        let start = try XCTUnwrap(retry.range(of: "await start()"))
+        XCTAssertLessThan(stop.lowerBound, dismiss.lowerBound)
+        XCTAssertLessThan(dismiss.lowerBound, start.lowerBound)
+    }
+
     func testPhaseTracksSpeechMuteThinkingAndReconnect() {
         XCTAssertEqual(VoiceLiveActivityPhase(state: .listening, isMuted: false), .listening)
         XCTAssertEqual(VoiceLiveActivityPhase(state: .speaking, isMuted: false), .speaking)

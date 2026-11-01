@@ -89,6 +89,13 @@ English resources. Activities disabled by the system do not prevent voice.
 No APNs, push tokens, backend changes or Dynamic Island layout are included.
 Native button dispatch, background audio and the Simulator/board comparison
 remain acceptance checks, not claims established by Linux tests.
+## Native voice connection loss (#1476; 31 October 2026)
+
+After an established realtime connection drops, Voice shows a muted orb, the
+“Connection lost” title, and Retry now and End actions. Retry now starts another
+session with the existing bounded reconnect policy; End closes the session and
+returns to Chat. Initial connection failures do not use the lost state. Copy
+follows the app's Danish-default language preference.
 
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
