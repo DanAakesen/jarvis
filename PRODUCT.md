@@ -168,6 +168,14 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+P15-38 / #1478 applies Chat's approved ambient background to every native
+screen and app-owned sheet: one light/dark definition and the same glow positions,
+with glass content surfaces above it. The 1 November reconciliation reuses main's
+`JarvisScreenBackground` (also used by `JarvisGateAmbientBackground`), without
+adding another renderer or decorative orb. Voice and sign-in/lock
+keep their foreground orb over the shared ambient base. This changes no routes,
+notification delivery support or screen functionality.
+
 Chat is the iPhone app's root conversation surface. It streams the existing
 conversation events, pages the existing history cursor, reattaches/cancels
 active turns, sends up to five local attachments, and shows persisted tool
