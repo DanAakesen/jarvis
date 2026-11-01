@@ -10439,3 +10439,7 @@ five-second-delay menu tests were folded into the English menu test. The item te
 waits for `factory.segment.board` (always rendered) and puts the temporary on-screen
 navigation trace (`debug.navigation.trace`) in its failure message. The cause of the
 non-navigating item is still unconfirmed.
+
+## 2026-11-01: Merged navigation 062ef8b; camera-sheet test runs in English only
+
+The navigation branch now runs its UI classes once in the screenshot step with 60/90 second per-test limits, and ChatComposerUITests is listed there. The camera-sheet test looped over two languages (about 30 seconds each) and would hit that limit, so it now covers English only; the Danish menu title is still matched by the other tests.

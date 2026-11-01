@@ -45,7 +45,7 @@ final class ChatComposerUITests: XCTestCase {
     }
 
     func testCameraSheetOpensFromThePlusMenu() {
-        for language in ["en", "da"] {
+        for language in ["en"] {
             let app = launch(language: language, extraArguments: ["--ui-test-camera-sheet"])
             let plus = app.buttons["chat.plus"]
             XCTAssertTrue(plus.waitForExistence(timeout: 10))
