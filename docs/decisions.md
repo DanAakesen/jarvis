@@ -9693,6 +9693,27 @@ orange filament core on a black background, with no rings or orbit ellipses
 around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
+
+## 31 October 2026 — P15-31 iOS sidebar follows the approved board
+
+Owner feedback on TestFlight build 12 requires the native sidebar to match
+`docs/ios/design/board.html`: show the Jarvis title and icon-only Settings
+control, then list Proactive, Status, Usage, Banking, Software Factory, Health,
+Notes and Chat in that top-to-bottom order. Banking remains disabled and labeled
+Later as shown on the board; Workspaces remains routable but is not a sidebar
+entry. The VoiceOver open action remains available, and right-edge drag
+recognition must not block screen controls or the sidebar's navigation buttons.
+
+## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
+
+Done and the notification launcher share `jarvisToolbarButtonStyle()` in
+`JarvisDesignSystem.swift`: plain button labels let the native toolbar own the
+system glass instead of stacking `.glass` button surfaces inside it. Preserve
+the bell count badge, minimum tap target, accessibility label and actions.
+The existing simulator job adds light/dark captures of the real fixture sheet,
+without another Mac job or boot. Linux source checks are not visual acceptance;
+usable before/after simulator screenshots remain pending.
+
 ## 31 October 2026 — return ended native voice sessions to Chat (P15-28 / #1458)
 
 Observe voice state at the navigation shell rather than adding separate exit

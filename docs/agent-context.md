@@ -6345,15 +6345,25 @@ only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
 and captures the Chat screen in light and dark appearance plus the open sidebar
-in light appearance. It also captures the anchored plus menu using
+in light and dark appearance. It also captures the anchored plus menu using
 `--screenshot-chat-plus-menu`. Chat captures use `--screenshot-chat-fixture` to
-select clearly marked synthetic data without a backend; the sidebar capture also uses
+select clearly marked synthetic data without a backend; sidebar captures also use
 `--screenshot-sidebar-open` to initialize the real navigation shell in its open
 state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
 one pull request comment with the artifact link. GitHub comments cannot display
 files directly from workflow artifacts, so the images are not inline previews;
 open the artifact to view them. This job does not sign, use secrets, or upload
 to TestFlight.
+
+For P15-29 / #1459, the same boot also captures `notifications-light.png` and
+`notifications-dark.png` using `--screenshot-chat-fixture
+--screenshot-notifications-open`. Compare the Chat bell and the sheet's Done
+button; both use the shared plain toolbar-label style, without an extra glass
+fill. Linux checks cannot verify the rendered toolbar. The #1448 artifact
+([run 41241917037](https://github.com/DanAakesen/jarvis/actions/runs/41241917037))
+has no open-sheet baseline; its light Chat capture is obscured by the gate.
+Usable before/after simulator comparison remains pending; do not treat that
+capture as visual acceptance.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
