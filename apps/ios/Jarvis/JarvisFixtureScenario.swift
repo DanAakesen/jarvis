@@ -2,20 +2,27 @@ import Foundation
 import JarvisCore
 
 enum JarvisFixtureScenario {
-    static func makeClient(emptyActivity: Bool = false) throws -> JarvisClient {
+    static func makeClient(
+        emptyActivity: Bool = false,
+        calendarChangeLanguage: JarvisAppLanguage? = nil
+    ) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: FixtureTransport(scenario: try fixtureScenarioData(emptyActivity: emptyActivity)),
+            transport: FixtureTransport(scenario: try fixtureScenarioData(
+                emptyActivity: emptyActivity, calendarChangeLanguage: calendarChangeLanguage
+            )),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
     }
 
-    private static func fixtureScenarioData(emptyActivity: Bool) throws -> Data {
+    private static func fixtureScenarioData(
+        emptyActivity: Bool, calendarChangeLanguage: JarvisAppLanguage?
+    ) throws -> Data {
         let data = Data(scenario.utf8)
-        guard emptyActivity else { return data }
+        guard emptyActivity || calendarChangeLanguage != nil else { return data }
         guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               var interactions = root["interactions"] as? [[String: Any]],
               let index = interactions.firstIndex(where: { $0["path"] as? String == "/api/now" }),
@@ -30,6 +37,23 @@ enum JarvisFixtureScenario {
             "awayMode": false,
             "confirmations": [],
         ]
+#if targetEnvironment(simulator)
+        if let calendarChangeLanguage {
+            let summary = calendarChangeLanguage == .da
+                ? "Syntetisk eksempel — ingen kalenderændringer.\nFlyt mødet:\n• Titel: Produktgennemgang\n• Fra: 2. november 2026, 09:00–09:30\n• Til: 2. november 2026, 10:00–10:30\n• Tidszone: Europe/Copenhagen"
+                : "Synthetic preview — no calendar writes.\nReschedule the meeting:\n• Title: Product review\n• From: 2 November 2026, 09:00–09:30\n• To: 2 November 2026, 10:00–10:30\n• Time zone: Europe/Copenhagen"
+            response["body"] = [
+                "running": [], "items": [], "awayMode": false,
+                "updatedAt": "2026-11-01T09:34:00Z",
+                "confirmations": [[
+                    "id": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    "actionKind": "calendar_change",
+                    "summary": summary,
+                    "expiresAt": "2026-11-01T09:44:00Z",
+                ]],
+            ]
+        }
+#endif
         var interaction = interactions[index]
         interaction["response"] = response
         interactions[index] = interaction

@@ -21,6 +21,61 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
 }
 
 describe('pending Google actions', () => {
+  it('refuses an oversized calendar proposal without replacing an existing review', () => {
+    const f = fixture();
+    expect(() => f.actions.stage({ scope: 'calendar', sourceMessageId: '11', sourceSessionId: '1',
+      summary: 'x'.repeat(40_001), execute: f.execute })).toThrow('too large to review');
+    expect(f.actions.pendingBrowserConfirmations()).toHaveLength(1);
+    expect(f.actions.pendingCalendarChange(message('11', 'yes', 1001)))
+      .toHaveProperty('confirmationCode', f.pending.confirmationCode);
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+
+  it.each(['yes', 'ja', 'do it', 'gør det'])('resolves %s to the most recent staged proposal', async (reply) => {
+    const f = fixture();
+    const newest = f.stage();
+    await expect(f.confirm(reply)).rejects.toMatchObject({ name: 'ToolRefusal' });
+    await expect(f.confirm(reply, undefined, newest.confirmationCode)).resolves.toMatchObject({ status: 'completed' });
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.actions.pendingBrowserConfirmations()).toEqual([]);
+  });
+
+  it('uses the same single-use proposal for a tap and a conversational yes', async () => {
+    const f = fixture();
+    const card = f.actions.pendingBrowserConfirmations()[0]!;
+    expect(card).toMatchObject({ id: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
+      actionKind: 'calendar_change', summary: f.pending.summary });
+    await expect(f.actions.resolveBrowserConfirmation(card.id, 'approve', new AbortController().signal))
+      .resolves.toMatchObject({ result: { status: 'completed' } });
+    await expect(f.confirm('yes')).rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.actions.pendingCalendarChange(message('11', 'yes', 1001)))
+      .toMatchObject({ status: 'none', lastChange: { status: 'completed' } });
+  });
+
+  it.each(['reject', 'expire', 'replace', 'abort', 'failure'])('keeps tap approval safe on %s', async (mode) => {
+    const f = fixture();
+    const card = f.actions.pendingBrowserConfirmations()[0]!;
+    const controller = new AbortController();
+    if (mode === 'expire') f.setNow(601000);
+    if (mode === 'replace') f.stage();
+    if (mode === 'abort') controller.abort();
+    if (mode === 'failure') f.execute.mockRejectedValueOnce(new Error('Provider unavailable'));
+    const result = f.actions.resolveBrowserConfirmation(
+      card.id, mode === 'reject' ? 'reject' : 'approve', controller.signal,
+    );
+    if (mode === 'abort' || mode === 'failure') await expect(result).rejects.toThrow();
+    else if (mode === 'reject') await expect(result).resolves.toMatchObject({ result: { status: 'cancelled' } });
+    else await expect(result).resolves.toBe(false);
+    expect(f.execute).toHaveBeenCalledTimes(mode === 'failure' ? 1 : 0);
+    if (mode === 'failure') {
+      await expect(f.actions.resolveBrowserConfirmation(card.id, 'approve', new AbortController().signal))
+        .resolves.toBe(false);
+      expect(f.actions.pendingCalendarChange(message('11', 'yes', 1001)))
+        .toMatchObject({ lastChange: { status: 'unverified' } });
+    }
+  });
+
   it('recovers only a real calendar stage with its original code until expiry', async () => {
     const f = fixture();
     const reader = message('11', 'what is pending?', 1001);

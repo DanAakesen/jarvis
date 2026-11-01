@@ -35,21 +35,26 @@ describe('shared navigation capability instructions', () => {
 
   it('stages calendar changes before requesting approval and recovers real codes across turns', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
-    expect(instructions).toContain('before asking for approval');
-    expect(instructions).toContain('only ok + awaiting_confirmation');
-    expect(instructions).toContain('call calendar_confirm_change without asking again');
+    expect(instructions).toContain('only ok + awaiting_confirmation + eight-digit confirmationCode allows an offer');
+    expect(instructions).toContain('calendar_confirm_change; never ask again');
     expect(instructions).toContain('calendar_get_pending_change');
-    expect(instructions).toContain('Never invent codes or restage on approval');
-    expect(instructions).toContain('calendar_create_events stages all');
-    expect(instructions).toContain('one later approval of that exact list');
+    expect(instructions).toContain('never ask again, invent codes or restage');
+    expect(instructions).toContain('calendar_create_events: all 2–10 in one proposal');
+    expect(instructions).toContain('Later yes/ja (10 min)');
+    expect(instructions).toContain('Server decides agreement; ask if unclear');
     expect(instructions).toContain('never replay completed/unverified items');
-    expect(instructions).toContain('Only actual ok reads establish a calendar check');
-    expect(instructions).toContain('completed confirmation establishes a write');
+    expect(instructions).toContain('Only ok reads prove a calendar check');
+    expect(instructions).toContain('completed confirmation proves a write');
     expect(instructions).toContain('Before approval: each subject/time/attendees');
+    expect(instructions).toContain('Stage approval before state-changing offers');
+    expect(instructions).toContain('Direct commands: stage without questions; clarify missing details only');
+    expect(instructions).toContain('Never bypass the write gate');
     const voice = readFileSync(new URL('../../../../agents/jarvis/jarvis_tools.py', import.meta.url), 'utf8');
     expect(voice).toContain('after outcome ok and status awaiting_confirmation');
     expect(voice).toContain('calendar_get_pending_change');
     expect(voice).toContain('never invent it or restage on approval');
+    expect(voice).toContain('Before offering any state-changing action');
+    expect(voice).toContain('Never skip the existing write');
   });
 
   it('distinguishes extraction limits from missing original email content', () => {

@@ -1,3 +1,42 @@
+## Apple documentation before iOS implementation (owner requirement, 1 November 2026)
+
+Before implementing iOS changes, read the relevant Apple API documentation and
+Human Interface Guidelines. Use platform APIs, modifiers and components instead
+of hand-rolling behavior covered by the system. In the PR description, list the
+Apple pages actually relied on and explain any deliberate deviation. Select
+sources for the affected boundary, such as Foundation networking/serialization,
+SwiftUI navigation, gestures, toolbars and sheets, ActivityKit/Live Activities,
+or AVFoundation capture device discovery; unrelated APIs need not be reviewed.
+If sources cannot be accessed, report that limitation rather than claiming a
+review or attributing unverified guidance to Apple.
+Direct fetch hostname failures do not necessarily block the browser: relevant
+Button, HIG Buttons, presentation-detent and XCTest screenshot pages were read
+through the browser for the P15-46 screenshot follow-up.
+
+## Suggestion approval checks (P15-46 / #1494)
+
+The existing ready-PR iOS CI artifact includes
+`calendar-change-confirmation-{da,en}-{light,dark}.png` and retained
+`ui-test-attachments/`. Captures use `--screenshot-calendar-change-fixture`
+with `--screenshot-notifications-open` and process-only language/theme launch
+preferences. The calendar fixture is Simulator-only, uses no live backend,
+and visibly explains disabled approval actions. Mac CI must run the XCUI tests
+and captures; Linux parsing/Core checks do not establish rendered acceptance.
+
+From `agents/jarvis`, use the existing `.venv/bin/python -m pytest -q` and
+`.venv/bin/python -m ruff check .`; focused regressions are
+`tests/test_calendar_flow.py` and `tests/test_model_client.py`.
+Backend checks from the root: `npm test --workspace @jarvis/backend -- src/google
+src/core/now.test.ts src/core/capability-instructions.test.ts
+src/voice/realtime.test.ts src/modules.test.ts`, plus backend lint/build.
+Calendar tap tests must compose the Google and core modules, not decorate a test
+root manually: shared services register before their encapsulated sibling routes.
+Use synthetic provider results; no live calendar write is needed for qualification.
+Web checks: `npm test --workspace @jarvis/web -- src/now-feed.test.ts
+src/AttentionPopover.test.tsx`, plus web lint/build. Native checks from
+`apps/ios/Packages/JarvisCore`: `swift test --filter
+'JarvisApprovalsClientTests|JarvisNowFeedClientTests'` and `swift build`.
+
 ## Managed policy cause diagnostics (#1373; 30 October 2026)
 
 Use the existing hosted pytest/Ruff environment. Focused checks:

@@ -11,6 +11,10 @@ struct JarvisActivitySheet: View {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
+    private var hasCalendarConfirmation: Bool {
+        model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true
+    }
+
     private func copy(_ key: JarvisChatLocalizationKey) -> String {
         JarvisChatLocalization.string(key, language: appLanguage)
     }
@@ -82,7 +86,8 @@ struct JarvisActivitySheet: View {
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
             .jarvisAmbientBackground()
-            .navigationTitle(kind.title)
+            .navigationTitle(hasCalendarConfirmation && kind == .needsYou && appLanguage == .da
+                             ? "Afventer dig" : kind.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -129,31 +134,64 @@ struct JarvisActivitySheet: View {
 
     private func confirmationSection(_ confirmations: [PendingConfirmation]) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text("Pending confirmations")
+            Text(hasCalendarConfirmation && appLanguage == .da ? "Afventer godkendelse" : "Pending confirmations")
                 .font(.headline)
+                .accessibilityIdentifier("confirmation-section-heading")
             ForEach(confirmations, id: \.id) { confirmation in
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                    Text(confirmation.actionKind == .calendarChange
+                         ? (appLanguage == .da ? "Kalenderændring" : "Calendar change")
+                         : confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
                         .font(.subheadline.weight(.semibold))
+                        .accessibilityIdentifier("confirmation-kind-\(confirmation.id)")
                     Text(confirmation.summary)
                         .font(.body)
-                    Text("Expires \(timeString(confirmation.expiresAt))")
+                        .accessibilityIdentifier("confirmation-review-\(confirmation.id)")
+                    Text(String(format: JarvisApprovalLocalization.string(.expires, language: appLanguage),
+                                timeString(confirmation.expiresAt)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("confirmation-expiry-\(confirmation.id)")
                     HStack {
-                        Button(model.resolvingConfirmationIDs.contains(confirmation.id) ? "Sending…" : "Decline") {
+                        Button {
                             Task { await model.resolve(confirmation, decision: .reject) }
+                        } label: {
+                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
+                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
+                                 : JarvisApprovalLocalization.string(.decline, language: appLanguage))
+                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.glass)
                         .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
-                        .accessibilityHint(model.fixtureMode ? "Approval actions are disabled with fixture data." : "")
+                        .accessibilityIdentifier("confirmation-decline-\(confirmation.id)")
+                        .accessibilityHint(model.fixtureMode
+                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                            : "")
                         Spacer()
-                        Button(model.resolvingConfirmationIDs.contains(confirmation.id) ? "Sending…" : "Approve") {
+                        Button {
                             Task { await model.resolve(confirmation, decision: .approve) }
+                        } label: {
+                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
+                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
+                                 : JarvisApprovalLocalization.string(.approve, language: appLanguage))
+                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.glassProminent)
                         .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
-                        .accessibilityHint(model.fixtureMode ? "Approval actions are disabled with fixture data." : "")
+                        .accessibilityIdentifier("confirmation-approve-\(confirmation.id)")
+                        .accessibilityHint(model.fixtureMode
+                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                            : "")
+                    }
+                    if model.fixtureMode && confirmation.actionKind == .calendarChange {
+                        Text(appLanguage == .da
+                             ? "Godkendelse er deaktiveret med eksempeldata."
+                             : "Approval actions are disabled with fixture data.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("confirmation-fixture-reason")
                     }
                 }
                 .padding(JarvisDesignTokens.chatGlassInset)

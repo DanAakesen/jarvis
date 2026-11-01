@@ -271,9 +271,9 @@ describe('English realtime session', () => {
     expect(session.instructions).toContain('only ok + awaiting_confirmation');
     expect(session.instructions).toContain('eight-digit confirmationCode');
     expect(session.instructions).toContain('calendar_get_pending_change');
-    expect(session.instructions).toContain('call calendar_confirm_change without asking again');
-    expect(session.instructions).toContain('Only actual ok reads establish a calendar check');
-    expect(session.instructions).toContain('completed confirmation establishes a write');
+    expect(session.instructions).toContain('calendar_confirm_change; never ask again');
+    expect(session.instructions).toContain('Only ok reads prove a calendar check');
+    expect(session.instructions).toContain('completed confirmation proves a write');
     expect(session.instructions).toContain('After a successful action, confirm it in one short');
     expect(session.instructions).toContain('Do not read private details aloud');
     expect(session.instructions).toContain('unless Dan asks');
@@ -548,6 +548,21 @@ describe('English realtime session', () => {
       expect(instructions).toContain('Synthetic project (example/repo, project ID synthetic)');
     }
     expect(reduced).toContain(VOICE_CAPABILITY_DISCOVERY_TOOL);
+  });
+
+  it.each(['en', 'da'] as const)('keeps calendar reply approval guidance in %s discovery mode', (language) => {
+    for (const mode of ['full', 'compact'] as const) {
+      const instructions = createRealtimeSessionUpdate(
+        registry, defaultSettings.personality, defaultAwayModeState, language,
+        [], undefined, undefined, undefined, mode, undefined, 'discovery',
+      ).session.instructions;
+      expect(instructions).toContain('Stage approval before state-changing offers');
+      expect(instructions).toContain('Never bypass the write gate');
+      expect(instructions).toContain(language === 'en'
+        ? "backend binds Dan's later reply to an actual staged calendar change"
+        : 'backend knytter Dans senere svar til en faktisk klargjort kalenderændring');
+      expect(instructions).toContain(language === 'en' ? 'pending food estimate' : 'afventende madestimat');
+    }
   });
 
   it('validates and executes a registered tool, returning its result', async () => {

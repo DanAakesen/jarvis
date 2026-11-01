@@ -59,6 +59,35 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Now feed client', () => {
+  it('accepts ten existing approvals plus one full calendar proposal', async () => {
+    const confirmations = Array.from({ length: 10 }, (_, index) => ({
+      id: String.fromCharCode(65 + index).repeat(43), actionKind: 'merge',
+      summary: 'Existing request', expiresAt: payload.updatedAt,
+    }));
+    const calendar = { id: 'Z'.repeat(43), actionKind: 'calendar_change',
+      summary: 'x'.repeat(40_000), expiresAt: payload.updatedAt };
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...payload, confirmations: [...confirmations, calendar],
+    }), { status: 200 }));
+    const feed = await loadNowFeed('https://api.example.com', getAccessToken);
+    expect(feed.confirmations).toHaveLength(11);
+    expect(feed.confirmations[10]?.summary).toBe(calendar.summary);
+  });
+
+  it.each([
+    { count: 2, actionKind: 'calendar_change', size: 100 },
+    { count: 1, actionKind: 'calendar_change', size: 40_001 },
+    { count: 11, actionKind: 'merge', size: 100 },
+    { count: 1, actionKind: 'merge', size: 4001 },
+  ])('preserves approval bounds for %j', async ({ count, actionKind, size }) => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      ...payload, confirmations: Array.from({ length: count }, () => ({
+        id: 'A'.repeat(43), actionKind, summary: 'x'.repeat(size), expiresAt: payload.updatedAt,
+      })),
+    }), { status: 200 }));
+    await expect(loadNowFeed('https://api.example.com', getAccessToken)).rejects.toThrow('invalid Now feed');
+  });
+
   it('loads and validates the protected feed without rounding SQL bigint IDs', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200 }));
 

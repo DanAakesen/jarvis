@@ -10,6 +10,9 @@ import { approvalDeciderFor } from '../core/approval-interpreter.js';
 import { safeErrorFields } from '../logging.js';
 
 declare module 'fastify' {
+  interface FastifyInstance {
+    pendingGoogleActions?: PendingGoogleActions;
+  }
   interface FastifyRequest {
     jarvisConversationMessage?: ConversationMessage;
   }
@@ -1387,6 +1390,10 @@ export function createGoogleModule(
   return {
     id: 'google',
     tools,
+    registerServices: (app) => {
+      app.decorate('pendingGoogleActions', pendingActions);
+      pendingActions.onChanged = () => app.nowEventHub.publish({ type: 'refresh' });
+    },
     registerRoutes: async () => {},
   };
 }

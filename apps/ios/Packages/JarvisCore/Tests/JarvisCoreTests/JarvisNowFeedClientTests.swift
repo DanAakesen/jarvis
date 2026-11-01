@@ -3,6 +3,30 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisNowFeedClientTests: XCTestCase {
+    func testLoadsFullCalendarReviewAlongsideTenExistingConfirmations() async throws {
+        let summary = String(repeating: "x", count: 40_000)
+        let confirmations: [[String: String]] = (0..<11).map { index in
+            let id = String(repeating: index == 10 ? "Z" : String(index), count: 43)
+            return ["id": id, "actionKind": index == 10 ? "calendar_change" : "merge",
+                    "summary": index == 10 ? summary : "Existing request",
+                    "expiresAt": "2026-10-30T00:05:00Z"]
+        }
+        let scenario = try JSONSerialization.data(withJSONObject: [
+            "version": 1, "interactions": [[
+                "method": "GET", "path": "/api/now", "response": [
+                    "statusCode": 200, "body": [
+                        "running": [], "items": [], "updatedAt": "2026-10-30T00:00:02Z",
+                        "awayMode": false, "confirmations": confirmations,
+                    ],
+                ],
+            ]],
+        ])
+        let transport = try FixtureTransport(scenario: scenario)
+        let feed = try await JarvisNowFeedClient(client: makeClient(transport: transport)).load()
+        XCTAssertEqual(feed.confirmations.count, 11)
+        XCTAssertEqual(feed.confirmations.last?.summary, summary)
+    }
+
     func testLoadsFeedDismissesActivityAndResolvesConfirmation() async throws {
         let scenario = Data(
             """

@@ -1,3 +1,81 @@
+## 1 November 2026 — main merge and bilingual calendar approval evidence (P15-46 / #1494)
+
+Merge current main rather than rewriting branch history. Preserve #1493 Chat
+Markdown/HTML behavior, #1500 bell controls, all existing screenshot steps and
+both conflicting decision entries. The resulting `39a8cc87` merge has two
+parents; merged approval regressions passed locally.
+
+The owner requested Danish/English calendar Approve/Decline screenshots. Reuse
+the existing in-app confirmation sheet, approval localization resources,
+Simulator fixture transport and ready-PR iOS screenshot artifact. Synthetic
+review data is not evidence of a live calendar write; fixture actions stay
+disabled and real writes retain the existing approval gate. Calendar
+confirmations use SwiftUI's native large sheet detent so review and controls
+have room; other activity sheets retain their existing detents.
+
+Before this native follow-up, read these Apple sources through the browser:
+
+- [SwiftUI Button](https://developer.apple.com/documentation/swiftui/button)
+- [HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)
+- [presentationDetents(_:)](https://developer.apple.com/documentation/swiftui/view/presentationdetents(_:))
+- [XCTAttachment.init(screenshot:)](https://developer.apple.com/documentation/xctest/xctattachment/init(screenshot:))
+
+Follow their standard action/label, system style, accessibility, touch-target,
+sheet sizing and screenshot-attachment APIs. No custom approval control or
+system notification action is added, and no deliberate platform deviation is
+identified. Browser retrieval worked despite the direct-fetch hostname failures
+recorded below. These sources support this follow-up, not a claim of source
+review before the original implementation. Mac CI rendering/capture remains
+unverified locally.
+
+## 1 November 2026 — Apple documentation requirement and P15-46 review
+
+The owner requires relevant Apple API documentation and HIG review before iOS
+implementation, platform behavior where available, and a PR source/deviation
+list. The P15-46 native diff changes only approval JSON validation limits and
+tests, retaining Foundation `JSONDecoder`/`Codable` and the existing authenticated
+transport. It introduces no custom navigation, gestures, sheets, capture or
+Live Activity behavior. No deliberate platform deviation was identified in this
+diff; the approval count and string-size limits are application/server contracts.
+
+Relevant sources for review:
+
+- [JSONDecoder](https://developer.apple.com/documentation/foundation/jsondecoder)
+- [Encoding and Decoding Custom Types](https://developer.apple.com/documentation/foundation/archives_and_serialization/encoding_and_decoding_custom_types)
+- [URLSession](https://developer.apple.com/documentation/foundation/urlsession)
+- [HIG: Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts)
+
+These links were attempted during the review follow-up, not read before the
+original implementation. Direct retrieval failed with hostname resolution
+errors, and the first web search returned no usable results. Source review
+remains unverified; these references were not relied on before implementation.
+
+The status-check follow-up also attempted
+[Declaring Your Actionable Notification Types](https://developer.apple.com/documentation/usernotifications/declaring-your-actionable-notification-types)
+and [HIG: Notifications](https://developer.apple.com/design/human-interface-guidelines/notifications).
+Direct retrieval still failed. Search returned a cited HIG Notifications excerpt
+about offering simple tasks through notification actions; this is secondary
+search evidence, not a full Apple-page review. P15-46 reuses in-app approval
+controls and changes only native feed decoding limits. It does not add system
+notifications, notification categories or `UNUserNotificationCenter` actions.
+No new native behavior or deliberate platform deviation is introduced by this
+documentation follow-up; full Apple source review remains outstanding.
+
+## 1 November 2026 — bind offers to existing approvals (P15-46 / #1494)
+
+The calendar claim guard excluded questions, so an actionable conversational
+offer could finish without a staging receipt. Calendar staging was also absent
+from the browser approval feed. Require staging in shared instructions and give
+unstaged hosted calendar offers one bounded corrective round. Do not parse prose
+into write arguments or treat the initiating instruction as later approval.
+
+Expose the same staged calendar action to the existing owner-only tap endpoint
+using an opaque browser ID, not its conversational code. Both paths consume once;
+partial/unknown outcomes remain visible and are never automatically replayed.
+Register shared module services on the common Fastify ancestor so sibling routes
+see the same instance. No migration, dependency, authorization relaxation or
+deployment is included. Offline checks are not live model/device acceptance.
+
 ## 1 November 2026 — lock-independent tasks and task activities (P15-49 / #1498)
 
 A persisted background job owns its execution, not its request, progress window
@@ -10035,3 +10113,20 @@ sphere, with Reduced Motion and inactive-scene pauses. Keep all Voice copy in
 Danish/English resources. Extend the existing ready-PR simulator capture rather
 than adding another Mac job. Synthetic screenshots, Apple compilation and live
 device acceptance remain separate checks; none is established by Linux tests.
+## 1 November 2026 — approval expiry grammar and #1501 synchronization (P15-46)
+
+Merge main `32af478` in `c84e6bc` with both parents and decision-log entries
+intact. Retain task Live Activity/lock fixes and all calendar screenshot steps.
+The lock-screen preview inserted `RelativeDateTimeFormatter` output into
+`Expires at %@` / `Udløber kl. %@`, producing mixed absolute/relative grammar.
+Use `Date.FormatStyle` hour/minute with the selected app locale, matching
+the existing real notification. Keep both templates and authorization unchanged.
+
+Before the correction, read
+[RelativeDateTimeFormatter](https://developer.apple.com/documentation/foundation/relativedatetimeformatter)
+and [Date.FormatStyle](https://developer.apple.com/documentation/foundation/date/formatstyle)
+through the browser. Apple warns that relative phrases are standalone strings
+and embedding them can be ungrammatical; Date.FormatStyle supports localized
+absolute date/time components. No deliberate platform deviation or custom
+formatter is introduced. New local regressions pass; Mac rendering and live
+acceptance remain unverified.

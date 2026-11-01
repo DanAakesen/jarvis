@@ -1,3 +1,52 @@
+## P15-46 — suggestions create approvals (#1494)
+
+Follow-up after #1501: merged main `32af478` in two-parent commit `c84e6bc`,
+preserving task Live Activities, lock-independent jobs and calendar approval
+screenshots. The lock-screen approval preview incorrectly combined a relative
+phrase with an absolute expiry template; it now uses the same localized
+system-formatted absolute time as the real notification. Two new expiry
+regressions, native parsing and 95 merged backend tests passed locally.
+Fresh updated-head CI and lock-screen captures remain pending, as do the title
+correction and live model/device acceptance.
+
+Implemented shared staging guidance, bounded hosted calendar-offer repair and
+calendar tap approval through the existing feed and single-use action. Focused
+regressions cover propose → yes/ja, direct instructions, older pending proposals,
+failed staging, expiry/replacement, tap replay and owner/agent authorization.
+Local checks passed: 1,234 agent tests, 2,888 expanded backend tests, 33 web tests,
+and 200 native Core tests (an unrelated voice timing failure passed on rerun).
+Affected lint/build checks, synthetic local HTTP approval and secret scanning
+passed; read-only review found no remaining significant issues. Post-CodeQL
+approval checks passed (105 tests). Python CodeQL found no alerts; JavaScript
+analysis was skipped for database size and Swift database creation failed.
+Implementation and local qualification are complete. Live model and native
+device acceptance remain unverified; no deployment is included.
+
+Review-status follow-up: PR #1495 is already non-draft. At head `3085770`,
+[CI](https://github.com/DanAakesen/jarvis/actions/runs/41291128508) and
+[GitHub CodeQL](https://github.com/DanAakesen/jarvis/actions/runs/41291128372)
+passed; these are separate from the local scanner limitations above.
+[PR title logs](https://github.com/DanAakesen/jarvis/actions/runs/41291128460)
+require `P15-46: Bind Jarvis calendar suggestions to change approvals`.
+The available tools cannot edit PR metadata, and the browser is signed out;
+title correction remains outstanding. Original Apple source review was blocked
+by direct source access; the native screenshot follow-up read relevant Button,
+HIG Buttons, sheet-detent and XCTest documentation through the browser. See the
+source audit in `docs/decisions.md`; this does not establish pre-implementation
+source review for the original work.
+
+Main synchronization: merged `c0c12f6f` in two-parent commit `39a8cc87`,
+retaining #1493 Chat formatting, #1500 bell behavior and both conflicting
+decision-log entries. Merged approval regressions passed: 121 backend tests and
+532 agent tests; backend lint/build and 24 web feed tests also passed.
+Danish/English calendar approval screenshot coverage is implemented in the
+existing Simulator job, with four light/dark captures and retained XCUI
+attachments. Both native approval surfaces reuse localized controls; calendar
+review sheets use the native large detent. Local fixture qualification passed:
+57 pipeline tests, 36 focused Core tests, Swift parsing and fixture typechecking.
+Next: inspect fresh updated-head CI and actual Simulator captures, correct the
+title and verify its gate, and perform live model/device acceptance.
+
 ## Managed policy failure causes (#1373; 30 October 2026)
 
 Implemented optional sanitized `providerCause` across hosted error events,
