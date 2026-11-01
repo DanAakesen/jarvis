@@ -9934,6 +9934,26 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Dispatcher handover (comment on #1484): the drawer now renders from
+`JarvisSidebarDrawerLayer`, the top-most `zIndex(1)` layer of `JarvisGateRootView`,
+driven only by the root-owned `JarvisNavigationModel`; ContentView no longer renders
+it. Destination side effects (voice restore/minimize, navigation fixtures) run from
+one `onChange(of: navigation.currentDestination)`, so drawer rows need no closure
+into ContentView. Reading the code found no single proven cause: the drawer was
+inside the content subtree that the gate blurs and hit-test-disables, and a toolbar
+action reaches it only through the shared model. A TEMPORARY always-visible
+debug badge (open flag, open-tap count, last three isSidebarOpen writes with call
+site, English only because it is diagnostic) lets the owner read device state from a
+screenshot; remove it, its two `@Published` fields and the `caller` parameters once
+the sidebar opens. Focused CI still runs only `SidebarNavigationTests`
+(Danish/English). Apple references: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
+[zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)),
+[EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject),
+[onChange](https://developer.apple.com/documentation/swiftui/view/onchange(of:initial:_:)),
+[ToolbarItem](https://developer.apple.com/documentation/swiftui/toolbaritem) and
+[HIG Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars).
+Native/device behavior is unverified (no Xcode here).
+
 Comment 6562578040 separates Chat's bell/menu into individual trailing ToolbarItems
 with a fixed [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
 The sidebar launcher is outermost at the far right; the bell is to its left.

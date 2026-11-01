@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
@@ -251,6 +250,9 @@ struct ContentView: View {
                     guard appliedSessionEpoch == sessionEpoch else { return }
                     navigation.voiceSessionStateChanged(state)
                 }
+                .onChange(of: navigation.currentDestination) { previous, destination in
+                    destinationChanged(from: previous, to: destination)
+                }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
                     guard destination != nil,
                           let destination = workspaceRuntime.consumeRequestedDestination() else {
@@ -295,26 +297,6 @@ struct ContentView: View {
                 }
             }
             .frame(width: size.width, height: size.height)
-            .overlay(alignment: .trailing) {
-                if navigation.isSidebarOpen {
-                    ZStack(alignment: .trailing) {
-                        Color.black.opacity(JarvisDesignTokens.screenDimOpacity)
-                            .ignoresSafeArea()
-                            .contentShape(Rectangle())
-                            .onTapGesture { navigation.closeSidebar() }
-                            .accessibilityHidden(true)
-
-                        JarvisSidebar(
-                            currentDestination: navigation.currentDestination,
-                            safeAreaInsets: safeAreaInsets,
-                            onNavigate: { navigate(to: $0) }
-                        )
-                        .frame(width: drawerWidth, height: size.height)
-                        .transition(reduceMotion ? .opacity : .move(edge: .trailing))
-                    }
-                }
-            }
-            .animation(sidebarAnimation, value: navigation.isSidebarOpen)
             .background { JarvisScreenBackground() }
             .coordinateSpace(name: "sidebar")
             .clipped()
@@ -348,7 +330,7 @@ struct ContentView: View {
             .first(where: \.isKeyWindow)
     }
 
-    private static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
+    static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
         guard let window = keyWindow else {
             return fallback
         }
@@ -383,31 +365,27 @@ struct ContentView: View {
             }
     }
 
-    private var sidebarAnimation: Animation? {
-        reduceMotion ? nil : .interactiveSpring(
-                response: JarvisDesignTokens.sidebarSpringResponse,
-                dampingFraction: JarvisDesignTokens.sidebarSpringDamping
-        )
+    private func navigate(to destination: JarvisDestination) {
+        navigation.navigate(to: destination)
     }
 
-    private func navigate(to destination: JarvisDestination) {
+    // Every destination change, from the root-owned drawer or from a screen, passes through here.
+    private func destinationChanged(from previous: JarvisDestination, to destination: JarvisDestination) {
         if destination == .voice {
             voiceModel.restore()
-        } else if navigation.currentDestination == .voice && voiceModel.isSessionActive {
+        } else if previous == .voice && voiceModel.isSessionActive {
             voiceModel.minimize()
         }
-        if navigationFixtureMode {
-            switch destination {
-            case .notes:
-                notesClient = Self.makeNotesClient(fixtureMode: true)
-            case .health:
-                healthClient = try? JarvisHealthLiftFixture.makeClient(language: language, empty: false)
-            case .softwareFactory:
-                factoryClient = Self.makeFactoryClient(previewState: .board, fixtureMode: true)
-            default: break
-            }
+        guard navigationFixtureMode else { return }
+        switch destination {
+        case .notes:
+            notesClient = Self.makeNotesClient(fixtureMode: true)
+        case .health:
+            healthClient = try? JarvisHealthLiftFixture.makeClient(language: language, empty: false)
+        case .softwareFactory:
+            factoryClient = Self.makeFactoryClient(previewState: .board, fixtureMode: true)
+        default: break
         }
-        navigation.navigate(to: destination)
     }
 
     static func initialNavigation(arguments: [String] = ProcessInfo.processInfo.arguments) -> JarvisNavigationState {

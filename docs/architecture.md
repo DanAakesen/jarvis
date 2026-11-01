@@ -1394,8 +1394,9 @@ extension. Chat's top-right toolbar and Health/Notes/Factory headers call
 `navigation.openSidebar()` directly. Previews supply the same environment model;
 screenshot launch destinations initialize it before ContentView is installed.
 
-ContentView binds the model path to NavigationStack and conditionally renders a
-topmost trailing drawer with a dim tap-close region. Native transitions honor
+ContentView binds the model path to NavigationStack. `JarvisSidebarDrawerLayer`, the
+top-most layer of GateRoot, conditionally renders the trailing drawer with a dim
+tap-close region; ContentView applies voice/fixture side effects when the destination changes. Native transitions honor
 reduced motion. There are no persistent reveal offsets, animation callbacks,
 drag-generation IDs or open-path hit-testing toggles. The narrow right-edge
 gesture commits only after a completed opening swipe; cancellation leaves the
