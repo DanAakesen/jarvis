@@ -10403,3 +10403,7 @@ app), the stored theme is applied at the root because the drawer sits outside
 `ContentView`, and `JarvisNavigationModel.navigationRequested` delivers voice
 and fixture side effects before the route changes. `ios-testflight.yml` equals
 `origin/main`.
+
+## 2026-11-01 — P15-52 camera-sheet UI test matches the menu item by title
+
+Run 41347453078 failed `testCameraSheetOpensFromThePlusMenu` because `chat.plus.camera` was not found once the native menu item was enabled. The test now matches the item by identifier or by its localized title (Kamera/Camera). Not yet run on a Mac; the navigation branch had no new commits when this was pushed.
