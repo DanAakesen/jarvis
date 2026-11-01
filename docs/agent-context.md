@@ -6271,6 +6271,10 @@ including cycle screenshots and failures,
 along with `ios-scheme.xcresult` from the earlier full-scheme test invocation.
 Both uploads run on failure; use the scheme bundle when screenshot-step tests
 stop the job before the dedicated navigation invocation.
+Run 41308630589 retains fired menu commands with a closed rendered shell.
+The follow-up reads the shell's navigation dependency in `ContentView.body`
+before its GeometryReader closure; rendering uses that snapshot, while actions
+mutate the same persisted state. Full native navigation remains unverified.
 Its 45-minute limit accommodates
 both the existing captures and the new repeated UI sequence. The
 `--ui-test-navigation` fixture is simulator-only and needs no live credentials,

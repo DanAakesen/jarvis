@@ -144,6 +144,7 @@ struct ContentView: View {
     }
 
     var body: some View {
+        let currentNavigation = navigation
         GeometryReader { geometry in
             let safeAreaInsets = Self.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets)
             let drawerWidth = min(
@@ -153,19 +154,19 @@ struct ContentView: View {
             let isDragging = sidebarDrag.isActive && sidebarDrag.generation == sidebarGestureGeneration
             let progress = isDragging
                 ? min(max(sidebarDrag.startProgress - sidebarDrag.translation / max(drawerWidth, 1), 0), 1)
-                : navigation.isSidebarOpen ? CGFloat(1) : CGFloat(0)
+                : currentNavigation.isSidebarOpen ? CGFloat(1) : CGFloat(0)
 
             ZStack(alignment: .trailing) {
                 JarvisSidebar(
-                    currentDestination: navigation.currentDestination,
-                    isOpen: navigation.isSidebarOpen,
+                    currentDestination: currentNavigation.currentDestination,
+                    isOpen: currentNavigation.isSidebarOpen,
                     safeAreaInsets: safeAreaInsets,
                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
                     onClose: closeSidebar
                 )
                 .frame(width: drawerWidth, height: geometry.size.height)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-                .allowsHitTesting(navigation.isSidebarOpen)
+                .allowsHitTesting(currentNavigation.isSidebarOpen)
 
                 NavigationStack(
                     path: Binding(
@@ -273,7 +274,7 @@ struct ContentView: View {
                 ) { presented in
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
-                .allowsHitTesting(!navigation.isSidebarOpen)
+                .allowsHitTesting(!currentNavigation.isSidebarOpen)
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background { JarvisScreenBackground() }
                 .overlay {
@@ -284,7 +285,7 @@ struct ContentView: View {
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
                 .overlay {
-                    if navigation.isSidebarOpen || (isDragging && progress > 0) {
+                    if currentNavigation.isSidebarOpen || (isDragging && progress > 0) {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture(perform: closeSidebar)
@@ -296,16 +297,16 @@ struct ContentView: View {
                     }
                 }
                 .offset(x: -drawerWidth * progress)
-                .animation(sidebarAnimation, value: navigation.isSidebarOpen)
+                .animation(sidebarAnimation, value: currentNavigation.isSidebarOpen)
                 .accessibilityElement(children: .contain)
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {
                     setSidebarOpen(true)
                 }
-                .accessibilityHidden(navigation.isSidebarOpen)
+                .accessibilityHidden(currentNavigation.isSidebarOpen)
 
-                if !navigation.isSidebarOpen {
+                if !currentNavigation.isSidebarOpen {
                     Color.clear
                         .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
                         .contentShape(Rectangle())

@@ -3441,7 +3441,11 @@ Run 41304146202 passes launch input checks in both languages and all three
 short-drag/background recovery cycles, but both repeated-navigation tests fail
 their first menu-button tap. The follow-up defines the plain launcher's full
 44-point label hit shape and retains the earlier full-scheme result bundle on
-failure. The launcher correction is not yet native-verified. Next: verify the revised
+failure. Run 41308630589 still fails both first menu taps; retained app logs prove
+the open command fires, while interruption recovery passes. The next correction
+reads navigation in `ContentView.body` before its deferred geometry closure and
+uses that snapshot for all shell rendering. Native confirmation remains pending.
+Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
 unverified.

@@ -698,8 +698,8 @@ class SafeFailureTests(unittest.TestCase):
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
         self.assertIn(".ignoresSafeArea(.container)", content)
-        self.assertIn(".allowsHitTesting(!navigation.isSidebarOpen)", content)
-        for source, hidden in ((content, ".accessibilityHidden(navigation.isSidebarOpen)"),
+        self.assertIn(".allowsHitTesting(!currentNavigation.isSidebarOpen)", content)
+        for source, hidden in ((content, ".accessibilityHidden(currentNavigation.isSidebarOpen)"),
                                (gate, ".accessibilityHidden(model.shouldCoverContent)")):
             self.assertLess(source.index(".accessibilityElement(children: .contain)"),
                             source.index(hidden))
@@ -731,6 +731,16 @@ class SafeFailureTests(unittest.TestCase):
             "navigation.closeSidebar()", 1
         )[0]
         self.assertIn("guard $0 != navigation.path else { return }", binding_setter)
+
+    def test_ios_navigation_render_dependency_is_read_before_geometry(self):
+        source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        body = source.split("    var body: some View {", 1)[1].split(
+            "    private var themeColorScheme:", 1
+        )[0]
+        self.assertLess(body.index("let currentNavigation = navigation"),
+                        body.index("GeometryReader"))
+        self.assertNotIn("navigation.isSidebarOpen", body)
+        self.assertIn(".animation(sidebarAnimation, value: currentNavigation.isSidebarOpen)", body)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

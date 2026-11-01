@@ -1374,6 +1374,10 @@ automatically. Completion uses the final gesture value and captured committed
 state, not the transient gesture state that may already have reset. Commands
 also replace the edge/close recognizers without replacing the navigation host.
 Unchanged path binding writes do not close the drawer.
+`ContentView.body` reads navigation before creating the deferred GeometryReader
+content, so the shell's render dependency is registered on its first evaluation.
+Reveal, accessibility and input flags use that per-evaluation snapshot; actions
+still mutate the single persisted `JarvisNavigationState`.
 No animation callback writes navigation or presentation state.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and

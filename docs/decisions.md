@@ -9924,6 +9924,19 @@ currently stops the screenshot step before the dedicated navigation bundle is
 created. Keep both test invocations and every UI assertion and timeout intact.
 Build-18 before/after and physical-iPhone acceptance remain outstanding.
 
+Run [41308630589](https://github.com/DanAakesen/jarvis/actions/runs/41308630589)
+still fails the first menu tap in each language; interruption recovery passes.
+The retained full-scheme app console reports `navigationFixture=true` and
+`sidebar=false requested=true` for both failing launches, with no subsequent
+close command. The hit-shape correction did not resolve the failure.
+Navigation was read only inside the deferred GeometryReader content, not during
+the owning view's body evaluation. Read it once in `ContentView.body` before
+creating that closure, and use this per-evaluation snapshot for reveal, hit
+testing and accessibility. This registers the render dependency without a new
+state owner, copied persistent state, navigation-host identity reset or test
+workaround. Indexed Apple State/GeometryReader guidance was consulted; direct
+retrieval remains blocked. Native confirmation of this correction is pending.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in
