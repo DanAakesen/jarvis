@@ -1078,6 +1078,7 @@ struct JarvisChatScreen: View {
     }
 
     private func stopVideo() {
+        guard !usesCameraStub else { return }
         cameraPreparationID = UUID()
         isPreparingCamera = false
         isVideoEnabled = false
@@ -1507,6 +1508,7 @@ private struct JarvisChatCameraSheet: View {
             }
             .padding(JarvisDesignTokens.voiceStatusSpacing)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.cameraSheet")
     }
 }

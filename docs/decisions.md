@@ -10468,6 +10468,7 @@ non-navigating item is still unconfirmed.
 The navigation branch now runs its UI classes once in the screenshot step with 60/90 second per-test limits, and ChatComposerUITests is listed there. The camera-sheet test looped over two languages (about 30 seconds each) and would hit that limit, so it now covers English only; the Danish menu title is still matched by the other tests.
 
 
+
 ## 2026-11-01: Sidebar drawer above the page, clipped to the revealed strip (P15-41)
 
 CI run 41351802814 showed the drawer never became hittable after a menu tap and
@@ -10479,6 +10480,10 @@ element is queried without a type, the container is no longer required to be
 hittable (its rows are), and per-test time allowances are 120/150 s because a
 cold simulator launch took 38 s. Unconfirmed on device until the next preview
 build; the temporary debug line stays until Dan confirms.
+
+## 2026-11-01: Camera-sheet UI test hardening (P15-52)
+
+The combined head failed `testCameraSheetOpensFromThePlusMenu` at the shutter wait (39 s). Cause not confirmed without Xcode. Two likely suspects were changed: `stopVideo()` (called on any non-active scene phase and on disappear) no longer runs under the `--ui-test-camera-sheet` hook, so it cannot dismiss the stub sheet; and the sheet container is now `.accessibilityElement(children: .contain)` so its `chat.cameraSheet` identifier cannot hide `camera.shutter`. The test queries any element type, waits 10 s and prints the hierarchy on failure.
 
 ## 2026-11-02: Root screen chosen from the navigation model, not a NavigationStack path (P15-41)
 
