@@ -149,6 +149,9 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
             for screen in chat voice notifications settings notes health sidebar; do
@@ -161,6 +164,10 @@ jobs:
               sleep 2
               xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/ambient-${screen}-${appearance}.png"
             done
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-chat-fixture --screenshot-notifications-open
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
               for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
@@ -238,7 +245,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download simulator screenshots, Chat plus menu, and side-by-side board comparisons]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, and board comparisons]($ARTIFACT_URL)
 
           Extract the artifact and open \`comparisons.html\` for Chat, Voice, Notifications
           (Needs you sheet), Factory, Settings, Notes, Health, and sidebar in both appearances.

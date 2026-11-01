@@ -3459,6 +3459,12 @@ comparison/upload steps and documentation entries are retained.
 Next: validate and push the merge, then inspect fresh iOS CI and light/dark
 simulator artifacts; earlier green checks are not evidence for the merged head.
 
+1 November sidebar follow-up (#1465): retain main's corrected drawer gesture,
+tap dismissal, safe-area handling, row order and typography, together with the
+shared ambient/glass backdrop. Preserve main's light/dark open-sidebar and
+Notifications captures alongside the ambient comparison captures. Fresh iOS
+verification is required after this additional main merge.
+
 P15-24 / [#1447](https://github.com/DanAakesen/jarvis/issues/1447) corrects the
 normal-window-only selection that hid Microsoft authentication beneath the gate.
 The highest eligible visible foreground-active window now hosts sign-in; the
@@ -3467,6 +3473,13 @@ All 18 focused Core presentation/gate tests pass locally, including timeout and
 cancel recovery; `swift build` and all 163 Core tests also pass. Mac compile and
 real-device sheet visibility, successful unlock
 and usable cancellation remain to verify; no TestFlight upload is authorized here.
+
+P15-29 / [#1459](https://github.com/DanAakesen/jarvis/issues/1459) removes the
+extra glass style from Done and notification toolbar buttons through a shared
+plain-label modifier. Focused source/CI checks cover that contract and the real
+fixture sheet's light/dark capture hook. Next: existing Mac compile and simulator
+review. Before/after screenshots remain pending: #1448's light Chat image is
+gate-obscured and its artifact contains no open-sheet baseline.
 
 P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) retains the
 working automatic signing and existing secrets; the rejected manual P12/profile

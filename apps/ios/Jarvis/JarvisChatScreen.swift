@@ -44,10 +44,7 @@ struct JarvisChatScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
-    @State private var presentedSheet: ChatSheet? =
-        ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") &&
-        ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
-        ? .activity(.needsYou) : nil
+    @State private var presentedSheet: ChatSheet?
     @State private var composerMode: ChatComposerMode = .chat
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
@@ -63,12 +60,14 @@ struct JarvisChatScreen: View {
     @State private var isScreenSharing = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
+    private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
 
     init(
         client: JarvisClient?,
         fixtureMode: Bool = false,
+        initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
@@ -77,6 +76,7 @@ struct JarvisChatScreen: View {
             fixtureMode: fixtureMode,
             startupError: startupError
         ))
+        self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
     }
 
@@ -132,12 +132,15 @@ struct JarvisChatScreen: View {
                         }
                         .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                 }
-                .buttonStyle(JarvisQuietToolbarIconButtonStyle())
+                .jarvisToolbarButtonStyle()
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
             }
         }
         .task {
             await model.load()
+            if let initialActivitySheet {
+                presentedSheet = .activity(initialActivitySheet)
+            }
             await model.watchActivity()
         }
     }
