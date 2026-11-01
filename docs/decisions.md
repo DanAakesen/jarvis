@@ -21,6 +21,17 @@ The plist flag and embedded extension existed; APNs entitlement and delivery
 plumbing did not. Apple compilation, signing, locked-phone rendering and delivery
 remain separate acceptance evidence.
 
+The review follow-up uses Apple's `BGTaskScheduler` for short, discretionary
+reconciliation of existing activities, with launch registration, permitted
+identifier, fetch mode, bounded requests and exactly-once completion on expiry.
+This cannot guarantee execution or update timing. Keep server-owned execution
+and ActivityKit pushes as the lock-safe mechanism; do not put an SSE data stream
+in background URLSession, which Apple provides for file transfers.
+Apple references: [background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app),
+[BGTaskScheduler](https://developer.apple.com/documentation/backgroundtasks/bgtaskscheduler),
+[background file transfers](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background)
+and [ActivityKit push notifications](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications).
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

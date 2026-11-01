@@ -165,6 +165,7 @@ private final class JarvisGateModel: ObservableObject {
         case .background:
             backgroundedAt = Date()
             isPrivacyCoverVisible = true
+            JarvisTaskActivityBackgroundRefresh.shared.schedule()
         case .active:
             let requiresLock = policy.shouldLock(lastBackgroundedAt: backgroundedAt, now: Date())
             backgroundedAt = nil

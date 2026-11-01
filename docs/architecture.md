@@ -1654,6 +1654,13 @@ the app now declares development/production APNs entitlements. Chat observation
 detaches on backgrounding and resumes from history, `/jobs` and active-turn replay;
 it never invokes server cancellation for suspension.
 
+An app-launch-registered `BGAppRefreshTask` reconciles existing task activities
+using authenticated snapshots during a bounded execution window. Backgrounding
+and each scheduled run request the next refresh; iOS controls whether and when
+it runs. Expiration cancels only the refresh, not server work. ActivityKit APNs
+updates remain the suspended-client delivery path. Background URLSession is for
+file uploads/downloads, not the task SSE stream; no such transfer is required here.
+
 `POST /ios/task-activities` accepts `{taskID, activityID, pushToken, language}`;
 resource lookup and registration are authenticated owner-only. Migration 0071
 stores registrations in the existing SQL pool. `JARVIS_ACTIVITYKIT_ENABLED`

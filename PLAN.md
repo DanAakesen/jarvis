@@ -2137,8 +2137,14 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   history/jobs and active-turn replay on return. Automatic background-job/Factory
   activities, task Dynamic Island states, da/en Settings recovery and ActivityKit
   token/update delivery are implemented. Targeted Core tests and metadata checks
-  pass locally. Backend focused tests, lint/build and contract checks pass;
-  SQL integration is blocked by missing isolated loopback configuration.
+  pass locally. The Apple follow-up adds discretionary, bounded BGTaskScheduler
+  reconciliation of existing activities; it never owns server execution or streams
+  SSE through background URLSession. CI identified missing log-event registrations;
+  those are fixed, with 188 focused backend tests and lint/build passing locally.
+  Backend focused tests and contract checks pass;
+  SQL integration is blocked locally by missing isolated loopback configuration;
+  migrations/database contracts and Core checks passed CI on `faaf896`.
+  Its iOS Simulator build was skipped; new-head CI remains pending.
   CodeQL Actions reports no alerts; Swift database creation failed and JavaScript
   analysis was skipped for database size. Source review covers the changed
   boundaries; SQL and live delivery remain unverified.

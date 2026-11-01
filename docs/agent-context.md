@@ -6502,6 +6502,21 @@ is best effort; disconnect must not fail an already persisted job.
 The existing `NSSupportsLiveActivities` flag, WidgetKit target and embedding were
 present; APNs entitlement, token registration and sender were missing.
 
+The Apple background-refresh follow-up registers
+`com.danaakesen.jarvis.task-activity-refresh` at launch and declares the permitted
+identifier and `fetch` background mode. It requests a short `BGAppRefreshTask`
+on backgrounding and after each run; the 15-minute earliest date is not a
+guaranteed interval. Refresh only reconciles existing activities from authenticated
+server state, with bounded requests and expiry/deadline cancellation. It cannot
+start or cancel server jobs, prompt for sign-in, or replace APNs. Exercise scheduler
+launch/expiry on a signed device as well as lock/resume. Background URLSession
+supports file transfers, not persistent SSE; this workflow needs no file transfer.
+Apple documentation: [choosing background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app),
+[BGTaskScheduler](https://developer.apple.com/documentation/backgroundtasks/bgtaskscheduler),
+[BGAppRefreshTaskRequest](https://developer.apple.com/documentation/backgroundtasks/bgapprefreshtaskrequest),
+[background downloads](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background)
+and [ActivityKit push updates](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications).
+
 Run the existing Core tests and metadata step above. Focused coverage is
 `swift test --filter 'JarvisNowFeedClientTests|JarvisWorkspaceClientTests|JarvisFactoryClientTests|JarvisChatClientTests'`.
 Linux can parse but cannot type-check ActivityKit/SwiftUI or render system
@@ -6530,8 +6545,12 @@ The latter preserves the synchronous forecast contract but allows a saved
 `html_app:` result link to survive a lost Workspace acknowledgement. Saved results
 and display delivery are separate states; rollback refuses to discard those links.
 Local validation passes the 202-test Core suite, project/plist metadata and focused
-backend/contracts checks with backend lint/build. SQL integration is blocked by
-the required isolated loopback configuration. CodeQL Actions reports no alerts;
+backend/contracts checks with backend lint/build. SQL integration is blocked
+locally by the required isolated loopback configuration; migrations/database
+contracts passed CI on `faaf896`, but its iOS Simulator build was skipped.
+The follow-up fixes CI's missing log-event registration with 188 focused backend
+tests and lint/build passing locally. New-head CI remains pending.
+CodeQL Actions reports no alerts;
 Swift database creation failed and JavaScript analysis was skipped for database
 size, so neither analysis is claimed as passed. Source review and secret scans
 are separate checks, not substitutes for the pending Apple/device acceptance.
