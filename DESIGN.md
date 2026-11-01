@@ -2818,9 +2818,20 @@ composition, not literal values. The iPhone shell keeps a plain system
 background sidebar fixed behind the screen; a right-side drag tracks the
 screen's leftward movement, dimming and blur, and a tap or reverse drag closes
 it. The sidebar header places Jarvis left and an icon-only Settings control
-right. Areas are ordered bottom-to-top from Proactive through Chat; Banking is
-disabled and labeled Later. Selection, keyboard focus, pointer hover and press
-change row text/icon styling only, without a row surface or border.
+right, separated from the list by a neutral rule. Its title, settings hit target,
+and row geometry follow the board through `JarvisDesignTokens`. The list follows
+the board's top-to-bottom order from Proactive through Chat and sits at the thumb
+end; Workspaces remains routable but is not a sidebar item. Banking is disabled
+and labeled Later.
+Selection, keyboard focus, pointer hover and press change row text/icon styling
+only, without a row surface or border; the selected destination uses the shared
+orange accent, while the Settings icon uses the same accent on focus/hover. The
+sidebar clears the device's actual top safe area and uses the board's light/dark
+page and ambient color treatment. The revealed-screen tap-to-close surface moves
+with the screen so it cannot intercept sidebar buttons. The right-edge drag is
+simultaneous with screen gestures and its pure-Swift recognition policy is unit
+tested. The simulator artifact includes open-sidebar screenshots in both
+appearances beside the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
