@@ -2813,10 +2813,9 @@ plain; the native toolbar owns the single system glass surface. Do not add a
 button glass effect, fill or stroke inside that surface. The count badge remains
 a separate semantic indicator (P15-29 / #1459).
 
-All concept board screens are approved. P15-36 approves only the Lock Screen
-tasks and decisions surface on `docs/ios/design/surfaces.html`; the Lock Screen
-hands-free session, Dynamic Island and Connection lost surfaces remain marked
-To agree.
+All concept board screens are approved. P15-36 approves the Lock Screen tasks
+and decisions surface, and P15-37 approves Connection lost. The Lock Screen
+hands-free session and Dynamic Island remain marked To agree.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -2870,6 +2869,12 @@ progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
+
+After a real realtime drop, Voice replaces its controls with the muted orb,
+“Connection lost” title, and two glass actions. Retry now uses the bounded
+session retry path; End closes the session and returns to Chat. Orange is the
+primary action accent, stone is secondary, and the surface has no explanatory
+copy.
 
 P15-40 (#1482) keeps the cyan-rimmed dark sphere stationary and animates only the
 tangled orange/amber centre. Listening and speaking use stronger centre motion

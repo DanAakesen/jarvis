@@ -214,6 +214,45 @@ final class VoiceProtocolTests: XCTestCase {
     }
 }
 
+final class VoiceConnectionPresentationTests: XCTestCase {
+    func testConnectionLossRetryRecoveryAndEndTransitions() {
+        var machine = VoiceConnectionPresentationStateMachine()
+        XCTAssertEqual(machine.state, .connected)
+
+        XCTAssertEqual(machine.apply(.connectionDropped), .lost)
+        XCTAssertEqual(machine.apply(.retryRequested), .retrying)
+        XCTAssertEqual(machine.apply(.connected), .connected)
+        XCTAssertEqual(machine.apply(.connectionDropped), .lost)
+        XCTAssertEqual(machine.apply(.retryRequested), .retrying)
+        XCTAssertEqual(machine.apply(.retryFailed), .lost)
+        XCTAssertEqual(machine.apply(.ended), .ended)
+    }
+
+    func testInitialFailureDoesNotShowConnectionLost() {
+        var machine = VoiceConnectionPresentationStateMachine()
+
+        XCTAssertEqual(machine.apply(.retryFailed), .connected)
+        XCTAssertEqual(machine.state, .connected)
+    }
+
+    func testConnectionLostActionsAndStatusAreLocalized() {
+        XCTAssertEqual(
+            JarvisNotesLocalization.string(.voiceConnectionLost, language: .da),
+            "Forbindelsen blev afbrudt"
+        )
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceRetryNow, language: .da), "Prøv igen nu")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceRetrying, language: .da), "Forbinder igen")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceConnectionEnd, language: .da), "Afslut")
+        XCTAssertEqual(
+            JarvisNotesLocalization.string(.voiceConnectionLost, language: .en),
+            "Connection lost"
+        )
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceRetryNow, language: .en), "Retry now")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceRetrying, language: .en), "Reconnecting")
+        XCTAssertEqual(JarvisNotesLocalization.string(.voiceConnectionEnd, language: .en), "End")
+    }
+}
+
 final class VoiceSessionClientTests: XCTestCase {
     func testFakeSocketSessionHandlesMuteInterruptEndAndReconnect() async throws {
         let first = AsyncThrowingStream<String, any Error> { continuation in

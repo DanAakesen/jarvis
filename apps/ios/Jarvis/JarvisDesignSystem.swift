@@ -213,6 +213,7 @@ enum JarvisDesignTokens {
     static let healthPanelRadius: CGFloat = 22
     static let healthAccent = primaryAccent
     static let healthAccentForeground = primaryAccentForeground
+    static let accentSecondary = secondaryAccent
     static let healthAccentSecondary = secondaryAccent
     static let factoryHorizontalInset: CGFloat = 16
     static let factorySectionSpacing: CGFloat = 12

@@ -15,6 +15,46 @@ public enum VoiceSessionState: Equatable, Sendable {
     }
 }
 
+public enum VoiceConnectionPresentationState: Equatable, Sendable {
+    case connected
+    case lost
+    case retrying
+    case ended
+}
+
+public enum VoiceConnectionPresentationEvent: Equatable, Sendable {
+    case connected
+    case connectionDropped
+    case retryRequested
+    case retryFailed
+    case ended
+}
+
+public struct VoiceConnectionPresentationStateMachine: Sendable {
+    public private(set) var state: VoiceConnectionPresentationState = .connected
+
+    public init() {}
+
+    @discardableResult
+    public mutating func apply(_ event: VoiceConnectionPresentationEvent) -> VoiceConnectionPresentationState {
+        switch event {
+        case .connected:
+            state = .connected
+        case .connectionDropped where state == .connected || state == .retrying:
+            state = .lost
+        case .retryRequested where state == .lost:
+            state = .retrying
+        case .retryFailed where state == .retrying:
+            state = .lost
+        case .ended:
+            state = .ended
+        default:
+            break
+        }
+        return state
+    }
+}
+
 public enum VoiceSessionAction: Equatable, Sendable {
     case interruptPlayback(responseID: String)
 }

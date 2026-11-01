@@ -156,6 +156,14 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          for language in da en; do
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-voice-connection-lost \
+              "--screenshot-voice-language=$language"
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot \
+              "$SCREENSHOT_DIR/voice-connection-lost-${language}-dark.png"
+          done
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
@@ -286,6 +294,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+          BOARD_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/ios/design/surfaces.html
         run: |
           set -euo pipefail
           marker='<!-- ios-screenshot-review -->'
@@ -305,7 +314,9 @@ jobs:
           and [approved surfaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/surfaces.html).
           Extract the artifact and open \`comparisons.html\` for Chat, Voice, Notifications
           (Needs you sheet), Factory, Settings, Notes, Health, and sidebar in both appearances.
-          Each synthetic simulator capture sits next to the checked-in interactive board render.
+          The artifact also includes Danish/English Voice connection-loss captures;
+          compare them with the approved Connection lost surface on the board:
+          [$BOARD_URL]($BOARD_URL). Each simulator capture sits next to its checked-in board render.
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
