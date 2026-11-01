@@ -62,23 +62,52 @@ final class NativeChatLayoutTests: XCTestCase {
 
     func testSidebarInteractionsDoNotInterceptChatActions() throws {
         let contentView = try source("apps/ios/Jarvis/ContentView.swift")
-        let dimmingOverlay = try section(
-            #"\.overlay \{\s*Color\.black(.*?)\n\s*\}"#,
+        let dimmingLayer = try section(
+            #"(private struct SidebarDimmingLayer: View \{.*?)(?=\nprivate struct SidebarDismissGestureLayer)"#,
             in: contentView
         )
-        XCTAssertTrue(dimmingOverlay.contains(".allowsHitTesting(false)"))
+        XCTAssertTrue(dimmingLayer.contains(".allowsHitTesting(false)"))
 
-        let navigationSurface = try section(
-            #"(\.offset\(x: -drawerWidth \* progress\).*?\.accessibilityHidden\(navigation\.isSidebarOpen\))"#,
+        let foregroundLayer = try section(
+            #"(private struct ContentForegroundLayer<.*?)(?=\nprivate struct SidebarDimmingLayer)"#,
             in: contentView
         )
-        XCTAssertFalse(navigationSurface.contains(".simultaneousGesture(sidebarDragGesture("))
-        XCTAssertTrue(contentView.contains(".frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)"))
+        XCTAssertFalse(foregroundLayer.contains(".simultaneousGesture("))
+
+        let edgeGestureLayer = try section(
+            #"(private struct SidebarEdgeGestureLayer<.*?)(?=\nprivate struct SidebarDrag)"#,
+            in: contentView
+        )
+        XCTAssertTrue(edgeGestureLayer.contains(".gesture(gesture)"))
+        XCTAssertTrue(edgeGestureLayer.contains("let edgeWidth: CGFloat = JarvisDesignTokens.sidebarEdgeGestureWidth"))
+    }
+
+    func testContentViewUsesSmallTypedViewComponents() throws {
+        let contentView = try source("apps/ios/Jarvis/ContentView.swift")
+        let body = try section(
+            #"var body: some View \{(.*?)(?=\n    private func rootLayout)"#,
+            in: contentView
+        )
+        XCTAssertTrue(body.contains("GeometryReader { (geometry: GeometryProxy) in"))
+        XCTAssertFalse(body.contains("ZStack("))
+        XCTAssertFalse(body.contains("NavigationStack("))
+
+        let rootLayout = try section(
+            #"(private func rootLayout\(in geometry: GeometryProxy\) -> some View \{.*?)(?=\n    private func sidebarProgress)"#,
+            in: contentView
+        )
+        XCTAssertTrue(rootLayout.contains("let screenSize: CGSize = geometry.size"))
+        XCTAssertTrue(rootLayout.contains("let drawerWidth: CGFloat = min(requestedDrawerWidth, maximumDrawerWidth)"))
+        XCTAssertTrue(rootLayout.contains("let dimmingOpacity: CGFloat = progress * JarvisDesignTokens.screenDimOpacity"))
+        XCTAssertTrue(contentView.contains("private struct ContentNavigationSurface: View"))
+        XCTAssertTrue(contentView.contains("private struct ContentSidebarLayout<"))
+        XCTAssertTrue(contentView.contains("private struct ContentForegroundLayer<"))
     }
 
     func testVoiceStateChangeIsFactoredOutOfNavigationViewBuilder() throws {
         let contentView = try source("apps/ios/Jarvis/ContentView.swift")
-        XCTAssertTrue(contentView.contains("handleVoiceStateChange(state)"))
+        XCTAssertTrue(contentView.contains("onVoiceStateChange(voiceState)"))
+        XCTAssertTrue(contentView.contains("onVoiceStateChange: handleVoiceStateChange"))
         XCTAssertTrue(contentView.contains("private func handleVoiceStateChange(_ state: VoiceSessionState)"))
         XCTAssertTrue(contentView.contains("let endedState: VoiceSessionState = .ended"))
         XCTAssertTrue(contentView.contains("let shouldCloseSidebar: Bool = state == endedState"))
@@ -89,7 +118,8 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(contentView.contains("Binding<PresentedWorkspaceView?>("))
         XCTAssertTrue(contentView.contains("get: workspaceRuntimePresentedView"))
         XCTAssertTrue(contentView.contains("set: setPresentedWorkspaceView"))
-        XCTAssertTrue(contentView.contains(".sheet(item: presentedWorkspaceViewBinding)"))
+        XCTAssertTrue(contentView.contains("presentedView: presentedWorkspaceViewBinding"))
+        XCTAssertTrue(contentView.contains(".sheet(item: presentedView)"))
         XCTAssertTrue(contentView.contains("(presented: PresentedWorkspaceView)"))
         XCTAssertFalse(contentView.contains("set: { if $0 == nil"))
     }
