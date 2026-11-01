@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+extension View {
+    func jarvisToolbarButtonStyle() -> some View {
+        // The system toolbar owns the glass surface; the button adds no second fill.
+        buttonStyle(.plain)
+    }
+}
+
 enum JarvisDesignTokens {
     static let primaryAccent = adaptiveColor(
         light: UIColor(red: 180.0 / 255, green: 95.0 / 255, blue: 6.0 / 255, alpha: 1),

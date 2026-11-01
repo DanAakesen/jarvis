@@ -3455,6 +3455,13 @@ cancel recovery; `swift build` and all 163 Core tests also pass. Mac compile and
 real-device sheet visibility, successful unlock
 and usable cancellation remain to verify; no TestFlight upload is authorized here.
 
+P15-29 / [#1459](https://github.com/DanAakesen/jarvis/issues/1459) removes the
+extra glass style from Done and notification toolbar buttons through a shared
+plain-label modifier. Focused source/CI checks cover that contract and the real
+fixture sheet's light/dark capture hook. Next: existing Mac compile and simulator
+review. Before/after screenshots remain pending: #1448's light Chat image is
+gate-obscured and its artifact contains no open-sheet baseline.
+
 P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) retains the
 working automatic signing and existing secrets; the rejected manual P12/profile
 approach is removed. An always-run main-only API cleanup revokes only visible

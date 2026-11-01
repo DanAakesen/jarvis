@@ -2796,6 +2796,12 @@ only the user bubble has a background, a soft orange-tinted glass pill with a
 up are unboxed plain text. Phone screens carry no explainer, helper or hint
 text.
 
+The notification launcher and activity-sheet Done action use
+`jarvisToolbarButtonStyle()` from `JarvisDesignSystem.swift`. Their labels are
+plain; the native toolbar owns the single system glass surface. Do not add a
+button glass effect, fill or stroke inside that surface. The count badge remains
+a separate semantic indicator (P15-29 / #1459).
+
 All concept board screens and the Lock Screen hands-free session on
 `docs/ios/design/surfaces.html` are approved. P15-34 implements the latter with
 the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
