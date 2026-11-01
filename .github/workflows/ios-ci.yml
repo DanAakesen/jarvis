@@ -151,6 +151,10 @@ jobs:
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-chat-fixture --screenshot-notifications-open
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
               for state in track newlift empty; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
@@ -194,7 +198,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, Chat plus menu, sidebar, Factory, and Health screenshots]($ARTIFACT_URL)
+          [Download the light, dark, Chat plus menu, sidebar, notifications, Factory, and Health screenshots]($ARTIFACT_URL)
 
           Compare Health Track workout, New lift, and empty states (Danish/English, light/dark)
           with the [approved Health board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_HEAD_REF/docs/ios/design/board.html).
