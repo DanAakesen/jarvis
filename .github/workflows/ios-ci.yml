@@ -119,7 +119,30 @@ jobs:
           key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift') }}
       - name: Generate project and build for Simulator
         working-directory: apps/ios
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          set -euo pipefail
+          CHAT_SCREEN="$GITHUB_WORKSPACE/apps/ios/Jarvis/JarvisChatScreen.swift"
+          AFTER_SCREEN="$RUNNER_TEMP/JarvisChatScreen.after.swift"
+          cp "$CHAT_SCREEN" "$AFTER_SCREEN"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git show "$BASE_SHA:apps/ios/Jarvis/JarvisChatScreen.swift" > "$RUNNER_TEMP/JarvisChatScreen.before.swift"
+          cp "$RUNNER_TEMP/JarvisChatScreen.before.swift" "$CHAT_SCREEN"
+          restore_chat_screen() { cp "$AFTER_SCREEN" "$CHAT_SCREEN"; }
+          trap restore_chat_screen EXIT
+          xcodegen generate
+          xcodebuild \
+            -project Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+          cp -R "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app" \
+            "$RUNNER_TEMP/JarvisBefore.app"
+          restore_chat_screen
+          trap - EXIT
           xcodegen generate
           xcodebuild \
             -project Jarvis.xcodeproj \
@@ -138,8 +161,13 @@ jobs:
             exit 1
           fi
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          BASE_APP_PATH="$RUNNER_TEMP/JarvisBefore.app"
           if [[ ! -d "$APP_PATH" ]]; then
             echo "::error::The unsigned Simulator app was not produced."
+            exit 1
+          fi
+          if [[ ! -d "$BASE_APP_PATH" ]]; then
+            echo "::error::The baseline Simulator app was not produced."
             exit 1
           fi
           SCREENSHOT_DIR="$RUNNER_TEMP/ios-screenshots"
@@ -149,6 +177,13 @@ jobs:
           xcrun simctl boot "$DEVICE_ID"
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcrun simctl install "$DEVICE_ID" "$BASE_APP_PATH"
+          for appearance in light dark; do
+            xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-before-${appearance}.png"
+          done
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
@@ -279,6 +314,17 @@ jobs:
                     <figure><figcaption>Approved concept board · not the running app</figcaption>
                       <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
                     </div></section>''')
+              before = f"chat-before-{appearance}.png"
+              after = f"main-{appearance}.png"
+              for image in (before, after):
+                  if not (root / image).is_file():
+                      raise SystemExit(f"Missing before/after simulator capture: {image}")
+              sections.append(f'''<section><h2>Chat before and after · {appearance}</h2><div class="pair">
+                <figure><figcaption>Before · base revision</figcaption>
+                    <img src="{before}" alt="Chat before the composer and header update, {appearance} appearance"></figure>
+                <figure><figcaption>After · updated app</figcaption>
+                    <img src="{after}" alt="Chat after the composer and header update, {appearance} appearance"></figure>
+                </div></section>''')
               for state in ("listening", "thinking", "speaking"):
                   image = f"voice-{state}-{appearance}.png"
                   if not (root / image).is_file():
@@ -329,7 +375,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+          [Download before/after Chat screenshots in light and dark, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.
@@ -342,7 +388,8 @@ jobs:
           (six PNGs: light and dark), not a live microphone or transport session.
           Compare beside the [approved Voice board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html)
           and [approved surfaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/surfaces.html).
-          Extract the artifact and open \`comparisons.html\` for Chat, Voice, Notifications
+          Extract the artifact and open \`comparisons.html\` for before/after Chat, Chat,
+          Voice, Notifications
           (Needs you sheet), Factory, Settings, Notes, Health, and sidebar in both appearances.
           The artifact also includes Danish/English Voice connection-loss captures;
           compare them with the approved Connection lost surface on the board:

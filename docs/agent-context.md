@@ -6432,6 +6432,15 @@ There is no backend route specific to iOS. Run `swift build` and `swift test` fr
 `apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
 SwiftUI compile check.
 
+P15-42 keeps the native Chat input above its compact action row and uses a clear
+navigation bar with a soft top scroll-edge fade. `NativeChatLayoutTests` checks
+the source contract on Linux. The ready-PR Mac job builds the base-revision Chat
+screen and the updated screen in one Simulator build tree, captures both in light
+and dark, and includes the pairs in `comparisons.html` and the iOS screenshot
+artifact. Run `swift test --filter NativeChatLayoutTests` from
+`apps/ios/Packages/JarvisCore`; the Mac Simulator job is required to verify
+rendered SwiftUI and screenshots.
+
 P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
 reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
 The app-owned language preference selects the complete Notes localization catalog

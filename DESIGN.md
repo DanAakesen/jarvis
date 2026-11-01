@@ -2928,7 +2928,14 @@ confirmation decisions. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
-The composer Chat/Voice switch navigates to the native Voice screen. The plus
+P15-42 restores the board's two-row composer with the input first and smaller
+plain action icons below it, retaining 44-point hit targets. Composer and Now
+surfaces use transparent glass without an opaque backing panel. The navigation
+bar has no fixed material or divider; `.scrollEdgeEffectStyle(.soft, for: .top)`
+fades messages beneath the clear header. Keep the existing user-only message
+surface and Danish/English copy; do not add on-screen helper text.
+
+The composer Voice action navigates to the native Voice screen. The plus
 button opens a native popover above its own hit target with Camera, Attach,
 Enable video, Share screen and Voice language, in the board's bottom-up order.
 The menu reuses the shared glass and geometry tokens and the JarvisCore Danish

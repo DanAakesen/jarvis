@@ -4,11 +4,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
-private enum ChatComposerMode: String, CaseIterable {
-    case chat = "Chat"
-    case voice = "Voice"
-}
-
 enum ActivitySheetKind: String, Identifiable {
     case background
     case needsYou
@@ -45,7 +40,6 @@ struct JarvisChatScreen: View {
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
-    @State private var composerMode: ChatComposerMode = .chat
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
@@ -112,6 +106,7 @@ struct JarvisChatScreen: View {
         }
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -209,11 +204,6 @@ struct JarvisChatScreen: View {
     var body: some View {
         attachmentPickers
         .jarvisAmbientBackground()
-        .onChange(of: composerMode) { _, mode in
-            guard mode == .voice else { return }
-            composerMode = .chat
-            onNavigate(.voice)
-        }
         .onAppear(perform: refreshScreenSharing)
         .onDisappear {
             stopVideo()
@@ -293,6 +283,7 @@ struct JarvisChatScreen: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(.bottom)
+                .scrollEdgeEffectStyle(.soft, for: .top)
                 .onChange(of: model.messages.count) { _, _ in
                     guard !reduceMotion else { return }
                     withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
@@ -470,29 +461,7 @@ struct JarvisChatScreen: View {
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
             }
-            HStack(alignment: .bottom, spacing: JarvisDesignTokens.chatComposerSpacing) {
-                Button {
-                    isPlusMenuPresented.toggle()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
-                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                }
-                .buttonStyle(.glass)
-                .disabled(model.isSending || isPreparingCamera)
-                .accessibilityLabel(copy(.plusMenuLabel))
-                .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
-                .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
-                .popover(
-                    isPresented: $isPlusMenuPresented,
-                    attachmentAnchor: .rect(.bounds),
-                    arrowEdge: .bottom
-                ) {
-                    plusMenu
-                        .presentationCompactAdaptation(.popover)
-                        .presentationBackground(.clear)
-                }
-
+            VStack(spacing: 0) {
                 TextField("Ask Jarvis", text: $model.draft, axis: .vertical)
                     .font(.body)
                     .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
@@ -503,48 +472,80 @@ struct JarvisChatScreen: View {
                     .accessibilityLabel("Message Jarvis")
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
 
-                Picker("Mode", selection: $composerMode) {
-                    Image(systemName: "bubble.left")
-                        .accessibilityLabel("Chat")
-                        .tag(ChatComposerMode.chat)
-                    Image(systemName: "waveform")
-                        .accessibilityLabel("Voice")
-                        .tag(ChatComposerMode.voice)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: JarvisDesignTokens.chatMessageMaximumWidth * JarvisDesignTokens.chatModeWidthFraction)
-                .labelsHidden()
-                .accessibilityLabel("Chat or voice")
-
-                if model.isSending {
+                HStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
                     Button {
-                        Task { await model.cancel() }
+                        isPlusMenuPresented.toggle()
                     } label: {
-                        if model.isCancelling {
-                            ProgressView()
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        } else {
-                            Image(systemName: "stop.fill")
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                        Image(systemName: "plus")
+                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
+                            .frame(width: 36, height: 36)
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(model.isSending || isPreparingCamera)
+                    .accessibilityLabel(copy(.plusMenuLabel))
+                    .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
+                    .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
+                    .popover(
+                        isPresented: $isPlusMenuPresented,
+                        attachmentAnchor: .rect(.bounds),
+                        arrowEdge: .bottom
+                    ) {
+                        plusMenu
+                            .presentationCompactAdaptation(.popover)
+                            .presentationBackground(.clear)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button {
+                        onNavigate(.voice)
+                    } label: {
+                        Image(systemName: "waveform")
+                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
+                            .frame(width: 36, height: 36)
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Voice")
+
+                    if model.isSending {
+                        Button {
+                            Task { await model.cancel() }
+                        } label: {
+                            if model.isCancelling {
+                                ProgressView()
+                                    .frame(width: 36, height: 36)
+                                    .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            } else {
+                                Image(systemName: "stop.fill")
+                                    .frame(width: 36, height: 36)
+                                    .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            }
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
+                        .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
+                        .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
+                    } else {
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .semibold))
+                                .frame(width: 36, height: 36)
+                                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                        .disabled(!model.canSend)
+                        .accessibilityLabel("Send message")
+                        .accessibilityHint(sendHint)
                     }
-                    .buttonStyle(.glass)
-                    .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
-                    .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
-                    .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
-                } else {
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .semibold))
-                            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(!model.canSend)
-                    .accessibilityLabel("Send message")
-                    .accessibilityHint(sendHint)
                 }
             }
-            .padding(JarvisDesignTokens.chatComposerSpacing)
+            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
+            .padding(.top, JarvisDesignTokens.chatComposerSpacing)
+            .padding(.bottom, JarvisDesignTokens.compactSpacing)
             .background {
                 RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
                     .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
@@ -553,7 +554,6 @@ struct JarvisChatScreen: View {
             .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
         }
-        .background(.bar)
     }
 
     private var plusMenu: some View {
@@ -897,7 +897,8 @@ struct JarvisChatScreen: View {
                 .padding(.horizontal, JarvisDesignTokens.chatGlassInset)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
+            .glassEffect(.regular, in: .capsule)
             .accessibilityLabel("Background activity, \(model.nowTitle)")
 
             if let confirmation = model.activeConfirmation {

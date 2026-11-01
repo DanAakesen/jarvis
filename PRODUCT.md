@@ -219,6 +219,13 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
+The approved Chat board sets the native layout: the text field leads the
+two-row glass composer, compact actions sit below it, and the Now bar floats
+above without a backing panel. The navigation header stays transparent and
+borderless while messages fade softly as they scroll beneath it. Only the
+user's message bubble has a background; keep existing Danish and English copy
+and do not add helper text to the screen.
+
 The composer offers Chat and Voice navigation and a plus menu anchored above its
 trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
 language. Camera uses an in-app viewfinder and still-photo capture; video and
