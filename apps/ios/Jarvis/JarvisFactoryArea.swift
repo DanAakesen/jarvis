@@ -168,7 +168,7 @@ struct JarvisFactoryArea: View {
                 boardContent
             }
         }
-        .background(JarvisScreenBackground())
+        .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomDock

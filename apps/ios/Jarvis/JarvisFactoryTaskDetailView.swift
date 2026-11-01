@@ -46,7 +46,7 @@ struct JarvisFactoryTaskDetailView: View {
                 FactoryStateMessage(title: copy.text(.taskDetail))
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .jarvisAmbientBackground()
         .navigationTitle(task?.title ?? copy.text(.taskDetail))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -96,7 +96,7 @@ struct JarvisFactoryTaskDetailView: View {
 
     @ViewBuilder
     private func detailContent(_ task: FactoryTaskRecord) -> some View {
-        List {
+        JarvisList {
             Section(copy.text(.actions)) {
                 if JarvisFactoryPresentation.availableControls(
                     state: task.state,
@@ -617,7 +617,7 @@ private struct JarvisFactorySteerSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            JarvisForm {
                 Section {
                     TextField(copy.text(.steeringMessage), text: $message, axis: .vertical)
                         .lineLimit(JarvisDesignTokens.factoryMultilineMinimumLines...JarvisDesignTokens.factoryMultilineMaximumLines)
