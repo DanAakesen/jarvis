@@ -1,5 +1,14 @@
 ## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
 
+Run 41301282280's failure-time hierarchy confirms a second login-failure window
+over Danish Chat. Initialize the simulator-only send fixture without real auth
+clients before rendering; require both fixture flags and preserve device
+authorization/background privacy. Reuse PR #1485's accessibility containment
+and scoped drawer-gesture boundaries, not another full-screen input workaround.
+Keep assertions, deadlines and simulator evidence export unchanged. English's
+single-window readiness failure is not proven resolved until the Mac gate runs;
+the wider navigation state-machine fix remains owned by PR #1485.
+
 Run 41294540199 still fails before typing. Its retained hierarchy places an
 enabled composer inside the screen below the Now bar, with no keyboard or
 second window. One element snapshot has invalid bounds for the Main window

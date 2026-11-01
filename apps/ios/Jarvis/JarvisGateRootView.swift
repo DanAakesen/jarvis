@@ -53,6 +53,7 @@ private final class JarvisGateOverlay {
 
     func update(visible: Bool, model: JarvisGateModel) {
         guard visible else {
+            window?.isUserInteractionEnabled = false
             window?.isHidden = true
             window = nil
             return
@@ -90,11 +91,29 @@ private final class JarvisGateModel: ObservableObject {
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
 
+    private static var isChatVisibilityFixture: Bool {
+#if targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--screenshot-chat-fixture") &&
+            arguments.contains("--ui-test-chat-send")
+#else
+        false
+#endif
+    }
+
     var shouldCoverContent: Bool {
         presentation != .unlocked || isPrivacyCoverVisible
     }
 
     init() {
+        if Self.isChatVisibilityFixture {
+            tokenStore = nil
+            provider = nil
+            client = nil
+            presentation = .unlocked
+            isPrivacyCoverVisible = false
+            return
+        }
         tokenStore = try? KeychainTokenStore()
         if let provider = try? MicrosoftAccessTokenProvider(),
            let client = try? JarvisComposition.makeClient(accessTokenProvider: provider) {
@@ -167,12 +186,12 @@ private final class JarvisGateModel: ObservableObject {
         case .active:
             let requiresLock = policy.shouldLock(lastBackgroundedAt: backgroundedAt, now: Date())
             backgroundedAt = nil
-            if requiresLock, presentation == .unlocked {
+            if requiresLock, presentation == .unlocked, !Self.isChatVisibilityFixture {
                 presentation = .lock(.waiting)
                 Task { await authenticate() }
             } else {
                 isPrivacyCoverVisible = false
-                if presentation == .unlocked {
+                if presentation == .unlocked, !Self.isChatVisibilityFixture {
                     Task {
                         await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
                     }
@@ -211,6 +230,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signOut() async {
+        guard !Self.isChatVisibilityFixture else { return }
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
@@ -250,6 +270,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func clientRequestedSignIn() {
+        guard !Self.isChatVisibilityFixture else { return }
         switch presentation {
         case .unlocked, .lock:
             sessionExpired()
@@ -327,10 +348,12 @@ struct JarvisGateRootView: View {
             .id(model.contentEpoch)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
+            .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
             .task {
                 model.refreshOverlay()
                 await model.load()
+                model.refreshOverlay()
             }
             .onChange(of: model.shouldCoverContent) { _, _ in
                 model.refreshOverlay()

@@ -1530,6 +1530,17 @@ retaining system keyboard avoidance. The existing Now bar, composer styling,
 localization and strict UI assertions are unchanged; the updated simulator
 gate must establish whether this resolves activation-point failures.
 
+Run 41301282280 confirms a foreground login-failure window over Danish Chat;
+English/failure-recovery still time out on composer readiness. The simulator-only
+send fixture now initializes the gate unlocked without auth/notification clients
+and ignores real-session notifications, rather than unlocking after constructing
+those clients. Both fixture flags are required; device authorization is unchanged.
+Background privacy covers remain active. Gate/navigation accessibility containment
+preserves child hiding, and the drawer recognizer is restricted to the closed
+right edge or open dismissal surface, not attached to Chat controls. These reuse
+PR #1485's boundary mechanisms; its broader state-machine fix remains separate.
+Native UI assertions and failure-time hierarchy capture remain unchanged.
+
 `JarvisNowFeedClient` decodes the existing authenticated `GET /now` response,
 dismisses through `POST /now/activity/:id/dismiss`, and delegates confirmation
 decisions to `JarvisApprovalsClient`. The existing `/now/events` stream's

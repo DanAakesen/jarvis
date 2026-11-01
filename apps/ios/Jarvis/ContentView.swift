@@ -277,15 +277,27 @@ struct ContentView: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture(perform: closeSidebar)
+                            .gesture(sidebarDragGesture(
+                                screenWidth: geometry.size.width,
+                                drawerWidth: drawerWidth
+                            ))
                             .accessibilityHidden(true)
                     }
                 }
                 .offset(x: -drawerWidth * progress)
-                .contentShape(Rectangle())
-                .simultaneousGesture(sidebarDragGesture(
-                    screenWidth: geometry.size.width,
-                    drawerWidth: drawerWidth
-                ))
+                .overlay(alignment: .trailing) {
+                    if !navigation.isSidebarOpen {
+                        Color.clear
+                            .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
+                            .contentShape(Rectangle())
+                            .gesture(sidebarDragGesture(
+                                screenWidth: geometry.size.width,
+                                drawerWidth: drawerWidth
+                            ))
+                            .accessibilityHidden(true)
+                    }
+                }
+                .accessibilityElement(children: .contain)
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {

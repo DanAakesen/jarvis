@@ -6524,6 +6524,27 @@ still open during this correction; merge main after it lands and verify the
 combined shell in simulator CI. Official `allowsHitTesting(_:)` documentation
 and HIG Gestures retrieval still failed DNS resolution in this sandbox; no
 rendered hit-testing verification is claimed locally.
+
+After merging PR #1493's Markdown/HTML changes, run 41301282280's exact failures
+remain transcript existence (Danish, line 59) and composer readiness timeout
+(English/failure-recovery, line 69). Both already print the hierarchy before
+asserting. The Danish tree shows a second foreground `Login mislykkedes` window;
+the other trees show an enabled composer and one window. Both
+`--screenshot-chat-fixture` and `--ui-test-chat-send` now select simulator-only
+offline gate initialization before rendering, with no real auth/notification
+clients. Session notifications cannot re-cover that fixture; production gate
+behavior and background privacy covers remain intact. Gate/navigation accessibility
+containers preserve child hiding, and drawer drags use the right-edge/open
+dismissal surfaces rather than Chat's full-screen gesture. These reuse PR #1485's
+existing boundary approach; coordination is on its comment 6557555674.
+Apple [accessibilityElement(children:)](https://developer.apple.com/documentation/swiftui/view/accessibilityelement(children:)),
+[gesture(_:including:)](https://developer.apple.com/documentation/swiftui/view/gesture(_:including:))
+and [HIG Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures)
+retrieval still failed DNS before editing. No claim those pages were read;
+no custom text-input, keyboard observer, or design change was added. This Linux
+environment has no `xcodebuild` or simulator; the existing ready-PR Mac gate
+must verify the updated app, keyboard, optimistic bubble and exported screenshots.
+
 The synthetic
 `--ui-test-chat-send` scenario delays server acknowledgment five seconds and
 the first reply another five seconds. Both language tests explicitly assert one

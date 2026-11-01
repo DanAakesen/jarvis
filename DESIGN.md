@@ -2855,6 +2855,11 @@ simultaneous with screen gestures and its pure-Swift recognition policy is unit
 tested. The simulator artifact includes open-sidebar screenshots in both
 appearances beside the chat captures.
 
+P15-44's input-boundary follow-up attaches opening drags only to the right-edge
+strip and closing drags to the open dismissal surface, reusing PR #1485's
+approach. Chat controls no longer share a full-screen drawer recognizer.
+The sidebar composition, dimming, blur and settling motion are unchanged.
+
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry

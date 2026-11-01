@@ -738,6 +738,29 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".ignoresSafeArea(.container)", content)
         self.assertNotIn(".ignoresSafeArea()", content)
 
+    def test_ios_chat_visibility_fixture_isolates_auth_before_first_render(self):
+        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        fixture = gate.split("private static var isChatVisibilityFixture", 1)[1].split("var shouldCoverContent", 1)[0]
+        self.assertIn("#if targetEnvironment(simulator)", fixture)
+        self.assertIn('arguments.contains("--screenshot-chat-fixture")', fixture)
+        self.assertIn('arguments.contains("--ui-test-chat-send")', fixture)
+        self.assertIn("#else\n        false", fixture)
+        initialization = gate.split("init() {", 1)[1].split("func load()", 1)[0]
+        offline = initialization.split("tokenStore = try?", 1)[0]
+        for value in ("tokenStore = nil", "provider = nil", "client = nil",
+                      "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
+            self.assertIn(value, offline)
+        self.assertIn("guard !Self.isChatVisibilityFixture else { return }", gate)
+        self.assertIn("await model.load()\n                model.refreshOverlay()", gate)
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertNotIn(".simultaneousGesture(sidebarDragGesture(", content)
+        self.assertIn(".frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)", content)
+        self.assertIn("if !navigation.isSidebarOpen", content)
+        self.assertLess(content.index(".accessibilityElement(children: .contain)"),
+                        content.index(".accessibilityHidden(navigation.isSidebarOpen)"))
+        self.assertLess(gate.index(".accessibilityElement(children: .contain)"),
+                        gate.index(".accessibilityHidden(model.shouldCoverContent)"))
+
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
         area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
         header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]

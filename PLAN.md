@@ -3467,6 +3467,15 @@ before failed transcript/readiness assertions, retaining deadlines and behavior
 checks. Next integrate the shared correction when available and rerun native
 Chat CI; the app fix and successful screenshots remain outstanding.
 
+Run 41301282280 still fails at transcript existence (Danish) and composer readiness
+(English/failure-recovery); exact failure-time hierarchies are already printed.
+Merged formatting main, retaining both UI suites and optimistic IDs. The send
+fixture now initializes offline before rendering to avoid the observed login
+gate. Reused PR #1485's contained accessibility and scoped drawer-input surfaces,
+with coordination on that PR; its broader navigation state remains separate.
+Next verify the real simulator gate and bilingual screenshots. Local Linux has
+no simulator; single-window composer recovery and iPhone acceptance are unverified.
+
 P15-44 / [#1490](https://github.com/DanAakesen/jarvis/issues/1490) adds immediate
 local sent-message insertion, server-ID reconciliation, pre-acknowledgment draft
 recovery and latest-row scrolling that still runs with Reduce Motion. The native
