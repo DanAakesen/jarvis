@@ -92,7 +92,7 @@ final class NavigationReliabilityTests: XCTestCase {
                 closeByTap()
 
                 tap(app.buttons["chat.plus"])
-                let plusMenu = app.otherElements["chat.plusMenu"]
+                let plusMenu = app.descendants(matching: .any)["chat.plus.camera"]
                 waitFor(plusMenu, key: "exists", value: true)
                 app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
                 waitFor(plusMenu, key: "exists", value: false)
@@ -163,7 +163,13 @@ final class NavigationReliabilityTests: XCTestCase {
     }
 
     private func startVoice() {
-        tap(app.segmentedControls["chat.mode"].buttons.element(boundBy: 1))
+        if !app.buttons["chat.mode"].exists {
+            let input = app.descendants(matching: .any)["chat.input"]
+            tap(input)
+            let length = (input.value as? String)?.count ?? 0
+            input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: length))
+        }
+        tap(app.buttons["chat.mode"])
         waitFor(app.buttons["voice.mic"], key: "isHittable", value: true)
     }
 

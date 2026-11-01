@@ -21,6 +21,16 @@ struct JarvisChatRow: Identifiable, Equatable {
         attachments = message.attachments
     }
 
+    init(id: String, role: ConversationRole, text: String, at: String) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.at = at
+        interrupted = false
+        toolCalls = []
+        attachments = []
+    }
+
     init(_ message: ChatMessage) {
         id = message.id
         role = message.role
@@ -58,6 +68,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var isLoading = true
     @Published var isLoadingOlder = false
     @Published var isSending = false
+    private var optimisticMessageID: String?
     @Published var isCancelling = false
     @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
     @Published var dismissingActivityIDs = Set<String>()
@@ -257,6 +268,15 @@ final class JarvisChatModel: ObservableObject {
         streamingText = ""
         let text = draft
         let attachments = pendingAttachments
+        let optimisticID = "local-\(UUID().uuidString)"
+        optimisticMessageID = optimisticID
+        addOrReplace(JarvisChatRow(
+            id: optimisticID,
+            role: .dan,
+            text: text,
+            at: ISO8601DateFormatter().string(from: Date())
+        ))
+        draft = ""
         sendTask = Task { await sendTurn(text: text, attachments: attachments) }
     }
 
@@ -437,6 +457,7 @@ final class JarvisChatModel: ObservableObject {
     private func sendTurn(text: String, attachments: [PendingChatAttachment]) async {
         guard let client else {
             isSending = false
+            discardOptimisticMessage(restoring: text)
             actionError = startupError ?? "Chat is unavailable."
             return
         }
@@ -466,10 +487,10 @@ final class JarvisChatModel: ObservableObject {
                 text: text,
                 attachmentIds: attachmentIDs
             )
-            draft = ""
             pendingAttachments = []
             uploadedAttachmentIDs = [:]
             try await consume(events)
+            discardOptimisticMessage()
             await refreshHistory()
             isSending = false
         } catch is CancellationError {
@@ -477,14 +498,25 @@ final class JarvisChatModel: ObservableObject {
             activeMessageID = nil
             statusLine = nil
             streamingText = ""
+            discardOptimisticMessage(restoring: text)
         } catch {
             isSending = false
             activeMessageID = nil
             statusLine = nil
+            discardOptimisticMessage(restoring: text)
             if !Task.isCancelled { actionError = message(for: error) }
             streamingText = ""
         }
         sendTask = nil
+    }
+
+    /// Removes the local placeholder once the server's copy arrived or the turn failed.
+    /// The draft is restored only when the server never acknowledged the message.
+    private func discardOptimisticMessage(restoring text: String? = nil) {
+        guard let id = optimisticMessageID else { return }
+        optimisticMessageID = nil
+        messages.removeAll { $0.id == id }
+        if let text, draft.isEmpty { draft = text }
     }
 
     private func loadVoiceLanguage() async {
@@ -559,6 +591,7 @@ final class JarvisChatModel: ObservableObject {
             case .user(let message):
                 activeMessageID = message.id
                 sessionID = message.sessionId
+                discardOptimisticMessage()
                 addOrReplace(JarvisChatRow(message))
             case .delta(let text):
                 streamingText += text
