@@ -138,6 +138,21 @@ failed attempt to its one retry. Existing jobs without retry input are not
 retryable, and reverting migration 0034 drops both retry columns and their
 metadata.
 
+`0072_weather_job_results.sql` extends the existing background-job result
+constraint to completed `html_app` weather jobs with a saved `html_app:` UUID
+Workspace-item reference. Computation completion remains independent of
+`pending|unknown|failed|delivered` display delivery. The paired down batch refuses
+rollback while weather result references exist; it never drops those saved results.
+
+P15-49 adds `dbo.activitykit_registrations` in
+`0071_activitykit_registrations.sql`. Each owner/activity ID maps to one existing
+Factory task or background-job resource, an ActivityKit update token and da/en
+language. Registration validates the resource and caps each owner at 20 entries;
+entries expire after eight hours. Tokens rotate by activity ID, and accepted
+terminal pushes or invalid-token responses remove registrations. These are
+server-held delivery credentials, not device sign-in tokens or task execution
+ownership. The paired down batch removes only registrations.
+
 ## Overview
 
 Twelve groups. Arrows show the main references between groups.
@@ -151,6 +166,7 @@ flowchart LR
         tool_calls
         activity
         conversation_summaries
+        activitykit_registrations
     end
     subgraph PROJ["2 · Projects"]
         projects

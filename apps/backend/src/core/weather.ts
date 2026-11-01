@@ -3,12 +3,15 @@ import type { FastifyRequest } from 'fastify';
 import { isHtmlArtifact, isWorkspaceCommand, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import type { WorkspaceHtmlArtifactStore, WorkspaceHtmlSource } from '../database/workspace-html-artifact-store.js';
+import type { WorkspaceItemsStore } from '../database/workspace-items-store.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { validateHtmlApp } from './html-artifact-validation.js';
 import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { workspaceResultDelivery } from './jobs.js';
 
 const requestTimeoutMs = 8_000;
+const progressTimeoutMs = 1_000;
 const geocodingResponseLimit = 64 * 1024;
 const forecastResponseLimit = 128 * 1024;
 const maxForecastDays = 7;
@@ -254,7 +257,9 @@ function artifactSources(place: WeatherPlace, days: number): WorkspaceHtmlSource
 export function createWeatherModule(
   artifacts: Pick<WorkspaceHtmlArtifactStore, 'create'>,
   fetcher?: typeof fetch,
+  workspaceItems?: WorkspaceItemsStore,
 ): BackendModule {
+  const jobs = new Map<AbortController, Promise<void>>();
   async function requestJson(url: URL, signal: AbortSignal, maxBytes: number): Promise<unknown> {
     const response = await (fetcher ?? fetch)(url, {
       headers: { Accept: 'application/json' },
@@ -301,18 +306,18 @@ export function createWeatherModule(
     async execute(input: unknown, request: FastifyRequest, signal: AbortSignal) {
       if (!validInput(input)) throw new ToolRefusal('Provide a place name and a forecast length from 1 to 7 days.');
       const ownerId = request.server.ownerObjectId;
-      if (!request.server.workspaceCommands.isConnected(ownerId)) {
-        throw new ToolRefusal('Open the signed-in conversation workspace before asking for weather.');
-      }
+      if (!workspaceItems) throw new ToolFailure('Weather result storage is unavailable.');
+      signal.throwIfAborted();
       const days = input.days ?? 3;
       const location = input.location?.trim();
       const title = (location ? `Weather in ${location}` : 'Home weather forecast').slice(0, 80);
       const viewId = `weather-${randomUUID().replaceAll('-', '')}`;
       const controller = new AbortController();
-      const requestSignal = AbortSignal.any([signal, controller.signal, AbortSignal.timeout(requestTimeoutMs)]);
       const tracker = await request.server.backgroundJobs.start(
         'html_app', title, 3, () => controller.abort(), 'Getting current weather',
       );
+      let finish!: () => void;
+      jobs.set(controller, new Promise<void>((resolve) => { finish = resolve; }));
       const command = (operation: 'create' | 'update', view: GeneratedView): WorkspaceCommand => ({
         commandId: randomUUID(),
         operation,
@@ -324,10 +329,14 @@ export function createWeatherModule(
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
           throw new ToolFailure('Weather progress did not pass workspace validation.');
         }
-        await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
+        // Presentation is optional once the persisted job owns the work.
+        const progressSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(progressTimeoutMs)]);
+        await request.server.workspaceCommands.execute(ownerId, initialCommand, progressSignal).catch(() => undefined);
+        controller.signal.throwIfAborted();
+        const jobSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(requestTimeoutMs)]);
         await tracker.progress(1, 'Getting current weather');
-        const place = await placeFor(location, request, requestSignal);
-        const value = await requestJson(forecastUrl(place, days), requestSignal, forecastResponseLimit);
+        const place = await placeFor(location, request, jobSignal);
+        const value = await requestJson(forecastUrl(place, days), jobSignal, forecastResponseLimit);
         const report = forecastFrom(value, place, days);
         if (!report) throw new ToolFailure('Open-Meteo returned an invalid weather forecast.');
         await tracker.progress(2, 'Saving weather report');
@@ -336,30 +345,47 @@ export function createWeatherModule(
         if (!validateHtmlApp(title, html, sources)) {
           throw new ToolFailure('The weather report failed workspace validation.');
         }
-        const artifact = await artifacts.create(ownerId, title, html, sources, requestSignal);
+        const artifact = await artifacts.create(ownerId, title, html, sources, jobSignal);
         if (!isHtmlArtifact(artifact)) throw new ToolFailure('The weather report failed artifact validation.');
+        const workspaceItem = await workspaceItems.record(ownerId, {
+          id: `html_app:${artifact.id}`,
+          kind: 'html_app',
+          sourceId: artifact.id,
+          title: artifact.title,
+          promptSummary: title,
+          createdAt: artifact.createdAt,
+        }, jobSignal);
         const finalCommand = command('update', reportView(title, artifact.id));
         if (!isWorkspaceCommand(finalCommand, generatedViewValidationOptions(request.server))) {
           throw new ToolFailure('The weather report did not pass workspace validation.');
         }
+        jobSignal.throwIfAborted();
+        await tracker.done(viewId, 'Weather report saved', {
+          resultId: workspaceItem.id, resultDelivery: 'pending',
+        });
+        let deliveryError: unknown;
         try {
           try {
-            await request.server.workspaceCommands.execute(ownerId, finalCommand, requestSignal);
+            await request.server.workspaceCommands.execute(ownerId, finalCommand, jobSignal);
           } catch (error) {
-            if (!(error instanceof ToolRefusal)) throw error;
+            if (!(error instanceof ToolRefusal) || !request.server.workspaceCommands.isConnected(ownerId)) throw error;
             await request.server.workspaceCommands.execute(
-              ownerId, command('create', reportView(title, artifact.id)), requestSignal,
+              ownerId, command('create', reportView(title, artifact.id)), jobSignal,
             );
           }
-        } catch {
-          throw new ToolFailure(`Weather report ${artifact.id} was saved, but the workspace could not display it.`);
+        } catch (error) {
+          deliveryError = error;
         }
-        await tracker.done(viewId, 'Weather report ready');
+        await tracker.setResultDelivery(
+          deliveryError === undefined ? 'delivered' : workspaceResultDelivery(deliveryError),
+        ).catch(() => undefined);
         return {
           jobId: tracker.jobId,
           artifactId: artifact.id,
           ...report,
-          confirmation: 'Weather report opened in the workspace.',
+          confirmation: deliveryError === undefined
+            ? 'Weather report opened in the workspace.'
+            : 'Weather report saved, but workspace delivery was not confirmed. Open it from Background work.',
         };
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -375,12 +401,20 @@ export function createWeatherModule(
         throw new ToolFailure(controller.signal.aborted
           ? 'Weather report was cancelled.'
           : 'Weather report could not be completed.');
+      } finally {
+        jobs.delete(controller);
+        finish();
       }
     },
   };
   return {
     id: 'weather',
     tools: [weatherTool],
-    registerRoutes: async () => {},
+    registerRoutes: async (app) => {
+      app.addHook('onClose', async () => {
+        for (const controller of jobs.keys()) controller.abort();
+        await Promise.all(jobs.values());
+      });
+    },
   };
 }

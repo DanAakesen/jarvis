@@ -1667,12 +1667,37 @@ without changing these routes.
 ### iOS Lock Screen Factory task and approval surfaces (P15-36)
 
 The app's `JarvisFactoryLiveActivityController` starts and updates ActivityKit
-activities from the existing `/now` running-task snapshot and authenticated
-Factory task SSE events, limited to the five newest running tasks. The WidgetKit extension renders the state and activity
+activities from the existing `/now` running-task snapshot, `/jobs` durable
+background-job snapshot and authenticated task/job events, limited to five
+concurrent activities. The WidgetKit extension renders the state and activity
 text, a timer based on the server's `startedAt`, and an indeterminate progress
-track because no numeric progress contract exists. Activities end when the task
-leaves the running snapshot or reaches a non-running state. Activities use no
-push token, so suspended-app updates are not guaranteed.
+track because no numeric progress contract exists. Waiting tasks remain visible;
+terminal state ends the activity with a short retention period. Absence from
+the running snapshot triggers a Factory detail read, never an inferred failure.
+P15-49 adds task Dynamic Island states and ActivityKit push-to-update token
+registration. The owner-only backend stores bounded registrations in SQL and
+publishes APNs update/end payloads from committed job/task state. A protected
+ES256 provider key and explicit APNs environment are required. Local activity
+updates work without the sender; the app exposes that limitation and stale state.
+`NSSupportsLiveActivities` and the embedded widget target already existed;
+the app now declares development/production APNs entitlements. Chat observation
+detaches on backgrounding and resumes from history, `/jobs` and active-turn replay;
+it never invokes server cancellation for suspension.
+
+An app-launch-registered `BGAppRefreshTask` reconciles existing task activities
+using authenticated snapshots during a bounded execution window. Backgrounding
+and each scheduled run request the next refresh; iOS controls whether and when
+it runs. Expiration cancels only the refresh, not server work. ActivityKit APNs
+updates remain the suspended-client delivery path. Background URLSession is for
+file uploads/downloads, not the task SSE stream; no such transfer is required here.
+
+`POST /ios/task-activities` accepts `{taskID, activityID, pushToken, language}`;
+resource lookup and registration are authenticated owner-only. Migration 0071
+stores registrations in the existing SQL pool. `JARVIS_ACTIVITYKIT_ENABLED`
+defaults off; enabled startup validates the protected `APNS_TEAM_ID`,
+`APNS_KEY_ID`, ES256 PKCS8 `APNS_SIGNING_KEY`, and explicit sandbox/production
+`APNS_ENVIRONMENT`. Pushes carry fixed localized state, never provider errors
+or private task descriptions. Remote approval notifications are not added.
 
 `JarvisApprovalNotificationCoordinator` mirrors validated pending confirmations
 from the existing `/now` snapshot into local notifications while the app is
@@ -2172,9 +2197,17 @@ remains omitted from the Dashboard; no iOS-specific route or payload is added.
   transitions, a failure reason and result-window ID. `retry_job` accepts only a
   failed research job with saved input and atomically allows one new attempt from
   each failed attempt; it never resumes work automatically. Research progress
-  windows are best effort, so a missed update no longer stops the job, and the
+  windows, including the initial acknowledgement (P15-49), are best effort,
+  so a missed update or client disconnect no longer stops the job, and the
   final report falls back to `create` when no open tab still has the progress
   window.
+- P15-49 applies the same ownership rule to tracked weather work while preserving
+  its synchronous tool reply. Forecast work owns its timeout/cancel controller;
+  presentation is optional. It saves an HTML artifact and Workspace item before
+  marking the job done, then records display acknowledgement separately.
+  Migration 0072 permits `html_app:` result references; the existing job-result
+  open route can reopen them after disconnect. Rollback refuses to remove saved
+  weather result references.
 - P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per

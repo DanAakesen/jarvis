@@ -44,6 +44,8 @@ jobs:
             abort "unexpected bundle identifier" unless project.dig("targets", "Jarvis", "settings", "base", "PRODUCT_BUNDLE_IDENTIFIER") == "com.danaakesen.jarvis"
             abort "iPhone-only device family is required" unless project.dig("targets", "Jarvis", "settings", "base", "TARGETED_DEVICE_FAMILY") == "1"
             abort "Swift 5 language mode is required" unless project.dig("targets", "Jarvis", "settings", "base", "SWIFT_VERSION") == "5.0"
+            abort "development APNs entitlement is required" unless project.dig("targets", "Jarvis", "settings", "configs", "Debug", "APS_ENVIRONMENT") == "development"
+            abort "production APNs entitlement is required" unless project.dig("targets", "Jarvis", "settings", "configs", "Release", "APS_ENVIRONMENT") == "production"
             abort "local JarvisCore dependency is required" unless project.dig("packages", "JarvisCore", "path") == "Packages/JarvisCore"
           '
           python3 - <<'PY'
@@ -68,6 +70,7 @@ jobs:
           assert widget_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
           app_group = ["group.com.danaakesen.jarvis"]
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
+          assert entitlements["aps-environment"] == "$(APS_ENVIRONMENT)"
           assert entitlements["com.apple.security.application-groups"] == app_group
           assert entitlements["keychain-access-groups"] == ["$(AppIdentifierPrefix)com.microsoft.adalcache"]
           assert info["LSApplicationQueriesSchemes"] == ["msauthv2", "msauthv3"]

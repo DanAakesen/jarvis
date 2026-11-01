@@ -168,6 +168,9 @@ struct JarvisFactoryArea: View {
                 boardContent
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            JarvisTaskActivityNotice(language: language)
+        }
         .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {

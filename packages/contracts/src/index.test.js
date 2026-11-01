@@ -1161,6 +1161,12 @@ test('background jobs are bounded and typed', () => {
     resultId: 'research:11111111-1111-4111-8111-111111111111', resultDelivery: 'pending',
   };
   assert.equal(isBackgroundJob(savedResearch), true);
+  const savedWeather = { ...savedResearch, kind: 'html_app', resultId: `html_app:${job.jobId}` };
+  assert.equal(isBackgroundJob(savedWeather), true);
+  assert.equal(isBackgroundJob({ ...savedWeather, status: 'running' }), false);
+  assert.equal(isBackgroundJob({ ...savedWeather, resultId: savedResearch.resultId }), false);
+  assert.equal(isBackgroundJob({ ...savedWeather, resultDelivery: 'displayed' }), false);
+  assert.equal(isBackgroundJob({ ...savedWeather, kind: 'image' }), false);
   assert.equal(isBackgroundJob({ ...savedResearch, resultDelivery: 'displayed' }), false);
   assert.equal(isBackgroundJob({ ...savedResearch, kind: 'image' }), false);
   assert.equal(isBackgroundJob({ ...savedResearch, resultId: 'research:not-a-uuid' }), false);

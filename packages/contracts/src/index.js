@@ -1673,7 +1673,8 @@ export function isBackgroundJob(value) {
     (value.detail === undefined || boundedText(value.detail, 120)) &&
     (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
     (value.resultId === undefined && value.resultDelivery === undefined ||
-      value.kind === 'research' && value.status === 'done' &&
+      (value.kind === 'research' || value.kind === 'html_app' && typeof value.resultId === 'string' &&
+        value.resultId.startsWith('html_app:')) && value.status === 'done' &&
       typeof value.resultId === 'string' && workspaceItemIdRegex.test(value.resultId) &&
       value.resultDelivery !== undefined && ['pending', 'unknown', 'failed', 'delivered'].includes(value.resultDelivery)) &&
     isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
