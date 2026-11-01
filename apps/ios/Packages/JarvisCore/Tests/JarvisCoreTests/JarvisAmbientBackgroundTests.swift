@@ -149,12 +149,13 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
         XCTAssertTrue(voice.contains("VoiceOrbView("))
         XCTAssertTrue(voice.contains("status: connectionTitle ?? model.statusText"))
         XCTAssertTrue(voice.contains("isMuted: model.showsConnectionRecovery || model.isMuted"))
+        XCTAssertTrue(voice.contains("diameter: min("))
         XCTAssertTrue(voice.contains("@State private var captionsHidden = false"))
         let gate = try source("apps/ios/Jarvis/JarvisGateRootView.swift")
         XCTAssertTrue(gate.contains("private struct JarvisGateAmbientBackground: View"))
         XCTAssertTrue(gate.contains("JarvisScreenBackground()"))
         XCTAssertTrue(gate.contains("JarvisDesignTokens.pageBackground"))
-        XCTAssertTrue(voice.contains("if !fixtureMode, model.voiceState == .idle"))
+        XCTAssertTrue(voice.contains("if !fixtureMode, model.voiceState.canStartSession"))
         XCTAssertTrue(voice.contains(".disabled(fixtureMode)"))
     }
 

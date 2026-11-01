@@ -25,6 +25,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case voiceRetryNow = "voice.retryNow"
     case voiceRetrying = "voice.retrying"
     case voiceEnd = "voice.end"
+    case voiceConnectionEnd = "voice.connectionEnd"
     case workspacesTitle = "navigation.workspaces"
     case healthTitle = "navigation.health"
     case softwareFactoryTitle = "navigation.softwareFactory"

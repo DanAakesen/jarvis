@@ -70,7 +70,7 @@ jobs:
     needs: linux
     if: needs.linux.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       issues: write
@@ -162,6 +162,14 @@ jobs:
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            for state in listening thinking speaking; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-chat-fixture --screenshot-voice-fixture \
+                "--screenshot-voice-state=$state"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot \
+                "$SCREENSHOT_DIR/voice-${state}-${appearance}.png"
+            done
             for screen in chat voice notifications settings notes health sidebar; do
               extra_args=("--screenshot-screen=$screen")
               if [[ "$screen" == sidebar ]]; then
@@ -177,6 +185,15 @@ jobs:
             sleep 2
             xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
+              for state in track newlift empty; do
+                xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-health-fixture \
+                  "--screenshot-health-state=$state" \
+                  "--screenshot-health-language=$language"
+                sleep 2
+                xcrun simctl io "$DEVICE_ID" screenshot \
+                  "$SCREENSHOT_DIR/health-${state}-${appearance}-${language}.png"
+              done
               for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                   --screenshot-chat-fixture \
@@ -212,6 +229,21 @@ jobs:
                       query["sheet" if screen == "notifications" else "sidebar"] = "activity" if screen == "notifications" else "open"
                   board = html.escape("board/board.html?" + urlencode(query), quote=True)
                   title = f"{screen.title()} · {appearance}"
+                  sections.append(f'''<section><h2>{title}</h2><div class="pair">
+                    <figure><figcaption>iPhone simulator · synthetic fixture</figcaption>
+                      <img src="{image}" alt="{title} simulator screenshot"></figure>
+                    <figure><figcaption>Approved concept board · not the running app</figcaption>
+                      <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
+                    </div></section>''')
+              for state in ("listening", "thinking", "speaking"):
+                  image = f"voice-{state}-{appearance}.png"
+                  if not (root / image).is_file():
+                      raise SystemExit(f"Missing simulator capture: {image}")
+                  board = html.escape("board/board.html?" + urlencode({
+                      "screen": "voice", "voice": state, "theme": appearance,
+                      "bare": "screen", "zoom": "fit",
+                  }), quote=True)
+                  title = f"Voice {state} · {appearance}"
                   sections.append(f'''<section><h2>{title}</h2><div class="pair">
                     <figure><figcaption>iPhone simulator · synthetic fixture</figcaption>
                       <img src="{image}" alt="{title} simulator screenshot"></figure>
@@ -254,8 +286,14 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, and board comparisons]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, and board comparisons]($ARTIFACT_URL)
 
+          Compare Health Track workout, New lift, and empty states (Danish/English, light/dark)
+          with the [approved Health board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_HEAD_REF/docs/ios/design/board.html).
+          Voice uses explicitly synthetic listening, thinking, and speaking states
+          (six PNGs: light and dark), not a live microphone or transport session.
+          Compare beside the [approved Voice board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html)
+          and [approved surfaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/surfaces.html).
           Extract the artifact and open \`comparisons.html\` for Chat, Voice, Notifications
           (Needs you sheet), Factory, Settings, Notes, Health, and sidebar in both appearances.
           The artifact also includes Danish/English Voice connection-loss captures;

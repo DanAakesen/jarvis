@@ -632,7 +632,7 @@ class SafeFailureTests(unittest.TestCase):
             source,
         )
         self.assertIn("    runs-on: macos-26", source)
-        self.assertIn("    timeout-minutes: 20", source)
+        self.assertIn("    timeout-minutes: 30", source)
         self.assertIn("      cancel-in-progress: true", source)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
@@ -675,6 +675,33 @@ class SafeFailureTests(unittest.TestCase):
             "--screenshot-chat-plus-menu",
             (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
         )
+        capture = next(step for step in job["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("for state in track newlift empty;", capture["run"])
+        self.assertIn("--screenshot-health-fixture", capture["run"])
+        self.assertIn("--screenshot-health-language=$language", capture["run"])
+        self.assertIn("health-${state}-${appearance}-${language}.png", capture["run"])
+        self.assertEqual(capture["run"].count("xcrun simctl boot "), 1)
+        self.assertIn("approved Health board", comment["run"])
+
+    def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
+        area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
+        header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]
+        self.assertNotIn("segmentSwitcher", header_body)
+        bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
+        self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
+        self.assertIn(".pickerStyle(.segmented)", area)
+        self.assertIn("guard !more || !liftsLoading", area)
+        self.assertIn("guard liftLoadID == loadID else { return }", area)
+        log = (ROOT / "apps/ios/Jarvis/JarvisHealthLiftLog.swift").read_text()
+        lists, sheet = log.split("struct JarvisHealthNewLiftSheet", 1)
+        self.assertNotIn("TextField(", lists)
+        self.assertNotIn("copy.text(.save)", lists)
+        self.assertIn("copy.text(.exercises)", lists)
+        self.assertIn("copy.text(.history)", lists)
+        self.assertIn("copy.text(.noLifts)", lists)
+        self.assertIn("copy.text(.pastExercises)", sheet)
+        self.assertIn("client.createLift(submittedDraft)", sheet)
 
     def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -696,15 +723,29 @@ class SafeFailureTests(unittest.TestCase):
                     image = root / name
                     image.touch()  # File-presence fixtures; these are not simulator screenshots.
                     images.append(image)
+                for state in ("listening", "thinking", "speaking"):
+                    image = root / f"voice-{state}-{appearance}.png"
+                    image.touch()
+                    images.append(image)
             env = {**os.environ, "RUNNER_TEMP": directory}
             subprocess.run(["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env, check=True)
             gallery = (root / "comparisons.html").read_text()
-            self.assertEqual(gallery.count("<iframe "), 16)
+            self.assertEqual(gallery.count("<iframe "), 22)
             for image in images:
                 self.assertIn(f'src="{image.name}"', gallery)
             self.assertIn("sheet=activity", gallery)
             self.assertIn("sidebar=open", gallery)
+            for state in ("listening", "thinking", "speaking"):
+                self.assertIn(f"voice={state}", gallery)
             self.assertTrue((root / "board/board.html").is_file())
+            images[-1].unlink()
+            result = subprocess.run(
+                ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"Missing simulator capture: {images[-1].name}", result.stderr)
+            images[-1].touch()
             images[0].unlink()
             result = subprocess.run(
                 ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
@@ -742,6 +783,20 @@ class SafeFailureTests(unittest.TestCase):
         self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
         self.assertIn(".sheet(item: $presentedSheet", chat)
         self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
+
+    def test_ios_voice_states_have_captures_and_board_comparisons(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        capture = next(step["run"] for step in steps
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        comparison = next(step["run"] for step in steps
+                          if step.get("name") == "Pair simulator captures with approved board renders")
+        self.assertIn("for state in listening thinking speaking", capture)
+        self.assertIn("--screenshot-voice-fixture", capture)
+        self.assertIn("voice-${state}-${appearance}.png", capture)
+        self.assertIn('for state in ("listening", "thinking", "speaking")', comparison)
+        self.assertIn('f"voice-{state}-{appearance}.png"', comparison)
+        self.assertIn('"screen": "voice", "voice": state, "theme": appearance', comparison)
 
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
