@@ -218,6 +218,21 @@ jobs:
                     <figure><figcaption>Approved concept board · not the running app</figcaption>
                       <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
                     </div></section>''')
+              for state in ("listening", "thinking", "speaking"):
+                  image = f"voice-{state}-{appearance}.png"
+                  if not (root / image).is_file():
+                      raise SystemExit(f"Missing simulator capture: {image}")
+                  board = html.escape("board/board.html?" + urlencode({
+                      "screen": "voice", "voice": state, "theme": appearance,
+                      "bare": "screen", "zoom": "fit",
+                  }), quote=True)
+                  title = f"Voice {state} · {appearance}"
+                  sections.append(f'''<section><h2>{title}</h2><div class="pair">
+                    <figure><figcaption>iPhone simulator · synthetic fixture</figcaption>
+                      <img src="{image}" alt="{title} simulator screenshot"></figure>
+                    <figure><figcaption>Approved concept board · not the running app</figcaption>
+                      <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
+                    </div></section>''')
           (root / "comparisons.html").write_text('''<!doctype html><html lang="en">
           <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
           <title>Shared iPhone background comparisons</title>

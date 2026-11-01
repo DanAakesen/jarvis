@@ -6524,7 +6524,10 @@ Voice` in `apps/ios/Packages/JarvisCore` to include both protocol and async
 session-client tests (filtering only `VoiceProtocolTests` excludes lifecycle
 tests). The existing ready-PR Mac capture now includes six synthetic Voice PNGs:
 listening, thinking and speaking in light/dark, with board/surfaces links in its
-PR comment. Simulator-only `--screenshot-voice-fixture` and
+PR comment and state-specific pairs in `comparisons.html`. `JarvisOrbRenderingTests`
+checks transparent blur margins, radial alpha feathering and opacity-only core
+animation; this source check does not replace inspecting the captured pixels.
+Simulator-only `--screenshot-voice-fixture` and
 `--screenshot-voice-state=listening|thinking|speaking`, together with the existing
 `--screenshot-chat-fixture`, select the rendered Voice screen without starting
 microphone capture or a voice transport. These images do not verify live audio.

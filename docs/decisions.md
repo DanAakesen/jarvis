@@ -9759,6 +9759,12 @@ or real-device interaction.
 
 ## 1 November 2026 — native Voice restart and stationary orb (P15-40; #1482)
 
+Follow-up after ambient main (#1479): preserve the tangle's geometry while
+expanding its Canvas for blur margins, feather the entire centre to zero alpha
+before its bounds, and animate opacity rather than rectangular-layer brightness.
+The screenshot artifact pairs all three Voice states in both themes with the
+approved board. Fresh pixel inspection remains required before visual acceptance.
+
 Build-14 feedback requires fresh Voice to connect after End without Refresh.
 Invalidate the screen generation before teardown, close the old transport,
 release capture/playback and activate a fresh audio session before reading its

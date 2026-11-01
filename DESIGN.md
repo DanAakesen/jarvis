@@ -2873,7 +2873,10 @@ physical-device behavior require separate verification.
 
 P15-40 (#1482) keeps the cyan-rimmed dark sphere stationary and animates only the
 tangled orange/amber centre. Listening and speaking use stronger centre motion
-than thinking; Reduced Motion and an inactive scene pause it. Voice reserves the
+than thinking. The filament canvas includes transparent blur margins, and the
+centre fades radially to zero alpha before its bounds; animation changes opacity,
+not rectangular-layer brightness. No square edge may appear inside the sphere.
+Reduced Motion and an inactive scene pause it. Voice reserves the
 orb halo and a separate bottom caption/share/control region, including when
 captions are hidden, so status and caption changes cannot move the orb. Short
 screens reduce its diameter. End uses the shared red action tint with a white

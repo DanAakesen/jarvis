@@ -109,34 +109,39 @@ struct JarvisOrbView: View {
                         height: size * 0.56
                     )
                 Canvas { context, canvasSize in
+                    let filamentSize = CGSize(width: size * 0.42, height: size * 0.42)
+                    context.translateBy(
+                        x: (canvasSize.width - filamentSize.width) / 2,
+                        y: (canvasSize.height - filamentSize.height) / 2
+                    )
                     var glowContext = context
-                    glowContext.addFilter(.blur(radius: canvasSize.width * 0.08))
+                    glowContext.addFilter(.blur(radius: filamentSize.width * 0.08))
 
                     for (index, points) in self.filamentCurves.enumerated() {
-                        let path = self.filamentPath(points, size: canvasSize)
+                        let path = self.filamentPath(points, size: filamentSize)
                         let color = self.filamentColors[index % self.filamentColors.count]
                         glowContext.stroke(
                             path,
                             with: .color(color.opacity(0.9)),
-                            lineWidth: canvasSize.width * 0.065
+                            lineWidth: filamentSize.width * 0.065
                         )
                         context.stroke(
                             path,
                             with: .color(color.opacity(0.9)),
-                            lineWidth: canvasSize.width * 0.022
+                            lineWidth: filamentSize.width * 0.022
                         )
                         context.stroke(
                             path,
                             with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.82)),
-                            lineWidth: canvasSize.width * 0.006
+                            lineWidth: filamentSize.width * 0.006
                         )
                     }
 
                     for (index, point) in self.filamentSparks.enumerated() {
-                        let diameter = canvasSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
+                        let diameter = filamentSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
                         let rect = CGRect(
-                            x: point.x * canvasSize.width - diameter / 2,
-                            y: point.y * canvasSize.height - diameter / 2,
+                            x: point.x * filamentSize.width - diameter / 2,
+                            y: point.y * filamentSize.height - diameter / 2,
                             width: diameter,
                             height: diameter
                         )
@@ -146,7 +151,7 @@ struct JarvisOrbView: View {
                         )
                     }
                 }
-                .frame(width: size * 0.42, height: size * 0.42)
+                .frame(width: size * 0.7, height: size * 0.7)
                 Circle()
                     .fill(
                         RadialGradient(
@@ -165,9 +170,17 @@ struct JarvisOrbView: View {
                         radius: size * JarvisDesignTokens.orbCenterGlowRadiusScale
                     )
                 }
+                .opacity(animatesCore ? 0.82 + (sin(phase) + 1) * 0.09 : 1)
+                .mask {
+                    RadialGradient(
+                        stops: [.init(color: .white, location: 0.6), .init(color: .clear, location: 1)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.35
+                    )
+                }
                 .scaleEffect(x: 1 + energy, y: 1 - energy * 0.5)
                 .rotationEffect(.degrees(animatesCore ? sin(phase * 0.7) * 12 : 0))
-                .brightness(animatesCore ? (Double(energy) + Double(amplitude)) * 0.3 : 0)
             }
             .frame(width: size, height: size)
             .scaleEffect(scale)
