@@ -6362,9 +6362,9 @@ only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
 and captures the Chat screen in light and dark appearance plus the open sidebar
-in light appearance. It also captures the anchored plus menu using
+in light and dark appearance. It also captures the anchored plus menu using
 `--screenshot-chat-plus-menu`. Chat captures use `--screenshot-chat-fixture` to
-select clearly marked synthetic data without a backend; the sidebar capture also uses
+select clearly marked synthetic data without a backend; sidebar captures also use
 `--screenshot-sidebar-open` to initialize the real navigation shell in its open
 state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
 one pull request comment with the artifact link. GitHub comments cannot display

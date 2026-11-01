@@ -9706,6 +9706,16 @@ around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
 
+## 31 October 2026 — P15-31 iOS sidebar follows the approved board
+
+Owner feedback on TestFlight build 12 requires the native sidebar to match
+`docs/ios/design/board.html`: show the Jarvis title and icon-only Settings
+control, then list Proactive, Status, Usage, Banking, Software Factory, Health,
+Notes and Chat in that top-to-bottom order. Banking remains disabled and labeled
+Later as shown on the board; Workspaces remains routable but is not a sidebar
+entry. The VoiceOver open action remains available, and right-edge drag
+recognition must not block screen controls or the sidebar's navigation buttons.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in
