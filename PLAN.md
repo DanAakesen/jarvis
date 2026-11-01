@@ -3472,6 +3472,10 @@ reads navigation in `ContentView.body` before its deferred geometry closure and
 uses that snapshot for all shell rendering. Native confirmation remains pending.
 The final input correction removes the drag-progress tap-catcher fallback and
 uses `withAnimation` for committed sidebar commands; UI tests remain unchanged.
+Run 41313041566 still fails the first menu tap in both languages, before any
+drag: the open command fires but Chat stays unshifted. The next correction
+captures all shell inputs before deferred geometry and removes transient
+starting progress. Full native confirmation remains pending.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

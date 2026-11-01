@@ -145,16 +145,19 @@ struct ContentView: View {
 
     var body: some View {
         let currentNavigation = navigation
+        let currentDrag = sidebarDrag
+        let gestureGeneration = sidebarGestureGeneration
+        let committedProgress: CGFloat = currentNavigation.isSidebarOpen ? 1 : 0
+        let isDragging = currentDrag.isActive && currentDrag.generation == gestureGeneration
         GeometryReader { geometry in
             let safeAreaInsets = Self.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets)
             let drawerWidth = min(
                 geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
                 JarvisDesignTokens.sidebarMaximumWidth
             )
-            let isDragging = sidebarDrag.isActive && sidebarDrag.generation == sidebarGestureGeneration
             let progress = isDragging
-                ? min(max(sidebarDrag.startProgress - sidebarDrag.translation / max(drawerWidth, 1), 0), 1)
-                : currentNavigation.isSidebarOpen ? CGFloat(1) : CGFloat(0)
+                ? min(max(committedProgress - currentDrag.translation / max(drawerWidth, 1), 0), 1)
+                : committedProgress
 
             ZStack(alignment: .trailing) {
                 JarvisSidebar(
@@ -290,9 +293,10 @@ struct ContentView: View {
                             .contentShape(Rectangle())
                             .onTapGesture(perform: closeSidebar)
                             .simultaneousGesture(sidebarDragGesture(
-                                screenWidth: geometry.size.width, drawerWidth: drawerWidth
+                                screenWidth: geometry.size.width, drawerWidth: drawerWidth,
+                                generation: gestureGeneration, startProgress: committedProgress
                             ))
-                            .id(sidebarGestureGeneration)
+                            .id(gestureGeneration)
                             .accessibilityHidden(true)
                     }
                 }
@@ -310,9 +314,10 @@ struct ContentView: View {
                         .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
                         .contentShape(Rectangle())
                         .gesture(sidebarDragGesture(
-                            screenWidth: geometry.size.width, drawerWidth: drawerWidth
+                            screenWidth: geometry.size.width, drawerWidth: drawerWidth,
+                            generation: gestureGeneration, startProgress: committedProgress
                         ))
-                        .id(sidebarGestureGeneration)
+                        .id(gestureGeneration)
                         .accessibilityHidden(true)
                 }
 
@@ -369,10 +374,10 @@ struct ContentView: View {
 
     private func sidebarDragGesture(
         screenWidth: CGFloat,
-        drawerWidth: CGFloat
+        drawerWidth: CGFloat,
+        generation: Int,
+        startProgress: CGFloat
     ) -> some Gesture {
-        let generation = sidebarGestureGeneration
-        let startProgress: CGFloat = navigation.isSidebarOpen ? 1 : 0
         return DragGesture(
             minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance,
             coordinateSpace: .named("sidebar")
@@ -388,7 +393,6 @@ struct ContentView: View {
                 guard canBeginSidebarDrag(value, screenWidth: screenWidth,
                                          drawerWidth: drawerWidth, startProgress: startProgress) else { return }
                 state = SidebarDrag(
-                    startProgress: startProgress,
                     translation: value.translation.width,
                     isActive: true,
                     generation: sidebarGestureGeneration
@@ -516,7 +520,6 @@ struct ContentView: View {
 }
 
 private struct SidebarDrag: Equatable {
-    var startProgress: CGFloat = 0
     var translation: CGFloat = 0
     var isActive = false
     var generation = 0

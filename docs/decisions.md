@@ -9978,6 +9978,13 @@ animation. Keep `@GestureState` automatic cancellation reset, existing visual
 tokens and all UI tests; add no diagnostics. Indexed Apple GestureState,
 updating and withAnimation guidance was reviewed; native acceptance is pending.
 
+Run 41313041566 records first-menu open commands in both failing launches,
+unshifted Chat, no covering gate window, and startup AttributeGraph cycles.
+Capture navigation, live drag and generation before deferred geometry, and
+derive reveal from committed state plus translation without stored start
+progress. This targets stale shell evaluation, not test timing; causality and
+native recovery are not yet confirmed. No UI test or diagnostics are changed.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

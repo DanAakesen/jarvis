@@ -726,7 +726,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("generation == sidebarGestureGeneration", ended)
         self.assertIn("canBeginSidebarDrag(value", ended)
         self.assertIn("value.predictedEndTranslation.width", ended)
-        self.assertIn(".id(sidebarGestureGeneration)", source)
+        self.assertIn(".id(gestureGeneration)", source)
         binding_setter = source.split("get: { navigation.path },", 1)[1].split(
             "navigation.closeSidebar()", 1
         )[0]
@@ -739,6 +739,13 @@ class SafeFailureTests(unittest.TestCase):
         )[0]
         self.assertLess(body.index("let currentNavigation = navigation"),
                         body.index("GeometryReader"))
+        for snapshot in ("let currentDrag = sidebarDrag",
+                         "let gestureGeneration = sidebarGestureGeneration",
+                         "let committedProgress: CGFloat = currentNavigation.isSidebarOpen ? 1 : 0"):
+            self.assertLess(body.index(snapshot), body.index("GeometryReader"))
+        geometry = body.split("GeometryReader", 1)[1]
+        self.assertNotIn("sidebarDrag.", geometry)
+        self.assertIn("committedProgress - currentDrag.translation", geometry)
         self.assertNotIn("navigation.isSidebarOpen", body)
         self.assertNotIn(".animation(sidebarAnimation", body)
         tap_catcher = body.split(".onTapGesture(perform: closeSidebar)", 1)[0].rsplit(
