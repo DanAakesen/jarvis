@@ -2,12 +2,15 @@ import Foundation
 import JarvisCore
 
 enum JarvisFixtureScenario {
-    static func makeClient(sendVisibilityFixture: Bool = false) throws -> JarvisClient {
+    static func makeClient(emptyActivity: Bool = false, sendVisibilityFixture: Bool = false) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: FixtureTransport(scenario: sendVisibilityFixture ? sendVisibilityScenario() : Data(scenario.utf8)),
+            transport: FixtureTransport(scenario: try fixtureScenarioData(
+                emptyActivity: emptyActivity,
+                sendVisibilityFixture: sendVisibilityFixture
+            )),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
@@ -59,6 +62,30 @@ enum JarvisFixtureScenario {
         interactions[4]["response"] = response
         fixture["interactions"] = interactions
         return try JSONSerialization.data(withJSONObject: fixture)
+    }
+
+    private static func fixtureScenarioData(emptyActivity: Bool, sendVisibilityFixture: Bool) throws -> Data {
+        let data = try sendVisibilityFixture ? sendVisibilityScenario() : Data(scenario.utf8)
+        guard emptyActivity else { return data }
+        guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var interactions = root["interactions"] as? [[String: Any]],
+              let index = interactions.firstIndex(where: { $0["path"] as? String == "/api/now" }),
+              var response = interactions[index]["response"] as? [String: Any] else {
+            throw FixtureTransportError.invalidScenario
+        }
+
+        response["body"] = [
+            "running": [],
+            "items": [],
+            "updatedAt": "2026-10-30T09:34:00Z",
+            "awayMode": false,
+            "confirmations": [],
+        ]
+        var interaction = interactions[index]
+        interaction["response"] = response
+        interactions[index] = interaction
+        root["interactions"] = interactions
+        return try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
     }
 
     static func makeSettingsClient() throws -> JarvisSettingsClient {

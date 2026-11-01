@@ -125,6 +125,14 @@ final class JarvisChatModel: ObservableObject {
         nowFeed?.confirmations.first
     }
 
+    var shouldShowNowBar: Bool {
+        isSending || nowFeed.map {
+            !$0.confirmations.isEmpty ||
+                !$0.running.isEmpty ||
+                !$0.items.isEmpty
+        } == true
+    }
+
     var needsYouCount: Int {
         guard let nowFeed else { return 0 }
         return nowFeed.confirmations.count + nowFeed.items.filter {
