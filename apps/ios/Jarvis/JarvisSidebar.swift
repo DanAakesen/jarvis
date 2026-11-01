@@ -92,7 +92,7 @@ struct JarvisSidebar: View {
                     .scrollIndicators(.hidden)
                     .onChange(of: isOpen, initial: true) { _, isOpen in
                         if isOpen {
-                            scrollProxy.scrollTo(currentDestination, anchor: .bottom)
+                            scrollProxy.scrollTo(currentDestination, anchor: .center)
                         }
                     }
                 }

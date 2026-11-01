@@ -158,13 +158,16 @@ final class JarvisSmokeUITests: XCTestCase {
         let banking = app.buttons["sidebar.banking"]
         XCTAssertTrue(banking.exists)
         XCTAssertFalse(banking.isEnabled)
-        app.buttons["sidebar.chat"].tap()
+        let chat = app.buttons["sidebar.chat"]
+        XCTAssertTrue(chat.isHittable)
+        chat.tap()
 
         let openButton = app.buttons["navigation.openSidebar"]
         XCTAssertTrue(openButton.waitForExistence(timeout: 10))
         openButton.tap()
-        XCTAssertTrue(app.buttons["sidebar.chat"].waitForExistence(timeout: 10))
-        app.buttons["sidebar.chat"].tap()
+        XCTAssertTrue(chat.waitForExistence(timeout: 10))
+        XCTAssertTrue(chat.isHittable)
+        chat.tap()
     }
 
     private func dragOpenSidebar() {
