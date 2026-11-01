@@ -50,7 +50,8 @@ Owner decision, 30 October 2026: everything built for the iPhone follows the iOS
 2. Scrolling is the system behaviour: native `ScrollView` and `List`, system momentum and rubber-band bounce, overlay indicators, the iOS 26 scroll edge effects under glass bars, interactive keyboard dismissal, and scroll position and pull to refresh through system APIs. No custom scroll implementations and no fake scrollbars. The scrolling on the concept board is only an approximation.
 3. One shared layer for anything custom: a design-token and reusable-component layer is the single place for colours, spacing, radii, typography, glass modifiers, button styles and icons. No per-screen hardcoded values and no one-off styling.
 4. A custom component needs a stated reason why no system component fits. The reason goes in the screen issue and the pull request.
-5. Every screen issue and pull request is checked against this section as part of its acceptance.
+5. Before implementation, read the relevant Apple Developer documentation and Human Interface Guidelines for the APIs and interactions being changed. Prefer documented system APIs and components over hand-rolled behavior. Link the pages reviewed in the pull request description and explain any deliberate deviation from Apple's documented guidance and why it is needed.
+6. Every screen issue and pull request is checked against this section as part of its acceptance.
 
 ## Cost guard
 

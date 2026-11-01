@@ -11,6 +11,7 @@ final class ChatComposerVoiceUITests: XCTestCase {
 
         let voiceAction = app.buttons["chat.voiceOrSend"]
         XCTAssertTrue(voiceAction.exists)
+        XCTAssertTrue(voiceAction.isHittable, "Voice action must have a hittable button target")
         voiceAction.tap()
 
         let voiceOrb = app.descendants(matching: .any)

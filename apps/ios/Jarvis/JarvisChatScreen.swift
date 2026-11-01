@@ -499,6 +499,7 @@ struct JarvisChatScreen: View {
                             .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
                             .frame(width: 36, height: 36)
                             .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
@@ -524,6 +525,7 @@ struct JarvisChatScreen: View {
                             .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 2, weight: .medium))
                             .frame(width: 36, height: 36)
                             .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(dictation.isRecording ? .red : .secondary)
@@ -565,6 +567,7 @@ struct JarvisChatScreen: View {
                                 .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
                                 .frame(width: 36, height: 36)
                                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(hasDraftContent ? JarvisDesignTokens.primaryAccent : .secondary)
