@@ -680,12 +680,15 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
         self.assertIn("lockscreen-tasks-${appearance}-${language}.png", ios_workflow)
         capture = next(step for step in job["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+                       if "for state in track newlift empty;" in step.get("run", ""))
         self.assertIn("for state in track newlift empty;", capture["run"])
         self.assertIn("--screenshot-health-fixture", capture["run"])
         self.assertIn("--screenshot-health-language=$language", capture["run"])
         self.assertIn("health-${state}-${appearance}-${language}.png", capture["run"])
-        self.assertEqual(capture["run"].count("xcrun simctl boot "), 1)
+        self.assertEqual(
+            sum(step.get("run", "").count("xcrun simctl boot ") for step in job["steps"]),
+            1,
+        )
         self.assertIn("approved Health board", comment["run"])
 
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
@@ -718,9 +721,12 @@ class SafeFailureTests(unittest.TestCase):
             project["targets"]["Jarvis"]["dependencies"],
         )
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
+        steps = workflow["jobs"]["macos"]["steps"]
+        boot = next(step for step in steps
+                    if step.get("name") == "Boot iPhone Simulator and run UI tests")
+        capture = next(step for step in steps
+                       if step.get("name") == "Capture simulator review screenshots")
+        self.assertEqual(boot["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
         self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
         self.assertIn("for state in listening speaking muted", capture["run"])
         self.assertIn("voice-lock-${state}-${language}.png", capture["run"])
@@ -732,7 +738,7 @@ class SafeFailureTests(unittest.TestCase):
     def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         steps = workflow["jobs"]["macos"]["steps"]
-        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        capture = next(step for step in steps if "--screenshot-screen=" in step.get("run", ""))
         subprocess.run(["bash", "-n"], input=capture["run"], text=True, check=True)
         compare = next(step for step in steps if step.get("name") == "Pair simulator captures with approved board renders")
         artifact = next(step for step in steps if step.get("name") == "Upload iOS screenshots")
@@ -788,7 +794,7 @@ class SafeFailureTests(unittest.TestCase):
             self.assertNotIn(surface, style)
         for filename in ("JarvisChatScreen.swift", "JarvisActivitySheet.swift"):
             source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
-            toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
+            toolbar = source.rsplit("ToolbarItem(", 1)[1].split("\n            }", 1)[0]
             with self.subTest(filename=filename):
                 self.assertIn(".jarvisToolbarButtonStyle()", toolbar)
                 self.assertNotIn(".buttonStyle(.glass)", toolbar)
@@ -798,7 +804,7 @@ class SafeFailureTests(unittest.TestCase):
     def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+                       if "--screenshot-notifications-open" in step.get("run", ""))
         self.assertIn("for appearance in light dark", capture["run"])
         self.assertIn("--screenshot-chat-fixture --screenshot-notifications-open", capture["run"])
         self.assertIn("notifications-${appearance}.png", capture["run"])
@@ -814,7 +820,7 @@ class SafeFailureTests(unittest.TestCase):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         steps = workflow["jobs"]["macos"]["steps"]
         capture = next(step["run"] for step in steps
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+                       if "for state in listening thinking speaking" in step.get("run", ""))
         comparison = next(step["run"] for step in steps
                           if step.get("name") == "Pair simulator captures with approved board renders")
         self.assertIn("for state in listening thinking speaking", capture)
@@ -835,9 +841,12 @@ class SafeFailureTests(unittest.TestCase):
             project["targets"]["Jarvis"]["dependencies"],
         )
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
+        steps = workflow["jobs"]["macos"]["steps"]
+        boot = next(step for step in steps
+                    if step.get("name") == "Boot iPhone Simulator and run UI tests")
+        capture = next(step for step in steps
+                       if step.get("name") == "Capture simulator review screenshots")
+        self.assertEqual(boot["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
         self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
         self.assertIn("for state in listening speaking muted", capture["run"])
         self.assertIn("voice-lock-${state}-${language}.png", capture["run"])

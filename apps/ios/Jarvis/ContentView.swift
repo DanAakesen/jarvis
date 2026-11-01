@@ -69,7 +69,7 @@ struct ContentView: View {
                                      "settings": .settings][String(screen)] {
             initialNavigation.navigate(to: destination)
         }
-        if factoryScreenshot != nil {
+        if factoryScreenshot != nil && !JarvisUITestConfiguration.isEnabled {
             initialNavigation.navigate(to: .softwareFactory)
         }
         if healthFixtureMode { initialNavigation.navigate(to: .health) }
@@ -163,11 +163,13 @@ struct ContentView: View {
                     JarvisChatScreen(
                         client: chatClient,
                         fixtureMode: fixtureMode,
+                        allowsFixtureAttachments: JarvisUITestConfiguration.isEnabled,
                         initialActivitySheet: fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
                             || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
                             ? .needsYou : nil,
                         startupError: startupError,
-                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
+                        onOpenSidebar: { setSidebarOpen(true) }
                     )
                         .navigationDestination(for: JarvisDestination.self) { destination in
                             if destination == .workspaces {
@@ -184,8 +186,10 @@ struct ContentView: View {
                                 JarvisChatScreen(
                                     client: chatClient,
                                     fixtureMode: fixtureMode,
+                                    allowsFixtureAttachments: JarvisUITestConfiguration.isEnabled,
                                     startupError: startupError,
-                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
+                                    onOpenSidebar: { setSidebarOpen(true) }
                                 )
                             } else if destination == .notes {
                                 JarvisNotesArea(
@@ -269,10 +273,6 @@ struct ContentView: View {
                 }
                 .offset(x: -drawerWidth * progress)
                 .contentShape(Rectangle())
-                .simultaneousGesture(sidebarDragGesture(
-                    screenWidth: geometry.size.width,
-                    drawerWidth: drawerWidth
-                ))
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {
@@ -303,6 +303,10 @@ struct ContentView: View {
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)
+            .simultaneousGesture(sidebarDragGesture(
+                screenWidth: geometry.size.width,
+                drawerWidth: drawerWidth
+            ))
             .onAppear {
                 if JarvisAppLanguage(rawValue: storedLanguage) == nil {
                     storedLanguage = JarvisAppLanguage.default.rawValue

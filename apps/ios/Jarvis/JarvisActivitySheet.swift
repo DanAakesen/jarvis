@@ -69,6 +69,7 @@ struct JarvisActivitySheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                         .jarvisToolbarButtonStyle()
+                        .accessibilityIdentifier("activity.done")
                 }
             }
         }

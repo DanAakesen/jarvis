@@ -106,3 +106,24 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
+  JarvisUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Jarvis
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_TARGET_NAME: Jarvis
+schemes:
+  Jarvis:
+    build:
+      targets:
+        Jarvis: all
+        JarvisUITests: [test]
+    test:
+      targets:
+        - JarvisUITests

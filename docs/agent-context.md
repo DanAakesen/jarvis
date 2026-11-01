@@ -6292,8 +6292,8 @@ the screen with `--screenshot-factory-fixture`,
 `--screenshot-factory-language=da|en`. Supported states are board, needs,
 releases, detail, release, steer, newtask, empty, loading, error, offline,
 stale, reconnecting and search. Capture all those states in light/dark and both
-languages through the existing `ios-ci.yml` simulator boot; do not add a Mac
-job, simulator boot or UI-test target.
+languages through the existing `ios-ci.yml` simulator boot, after its XCUITest
+smoke flow; keep these captures in the same job and boot.
 
 The app's Factory project menu selects one project at a time. Needs Dan is
 limited to that project's board; do not add a cross-project query or fan-out.
@@ -6359,20 +6359,31 @@ at the end so an incomplete workflow cannot pass unnoticed.
 The SwiftUI app is generated from `apps/ios/project.yml` with XcodeGen 2.46.0.
 The aggregate CI selects iOS for `apps/ios/` and shared inputs. Its Linux job
 builds/tests the core and validates project, plist and entitlement metadata;
-the macOS job builds for the generic iOS Simulator only after Linux passes, and
-only for a ready pull request. Manual dispatch runs the Linux checks without
-starting a Mac build. The Mac job uses Xcode 26.6 and
-`CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
-and captures the Chat screen in light and dark appearance plus the open sidebar
-in light and dark appearance. It also captures the anchored plus menu using
-`--screenshot-chat-plus-menu`. Chat captures use `--screenshot-chat-fixture` to
-select clearly marked synthetic data without a backend; sidebar captures also use
-`--screenshot-sidebar-open` to initialize the real navigation shell in its open
-state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
-one pull request comment with the artifact link. GitHub comments cannot display
-files directly from workflow artifacts, so the images are not inline previews;
-open the artifact to view them. This job does not sign, use secrets, or upload
-to TestFlight.
+the macOS job generates the Xcode project and runs the XCUITest target only after
+Linux passes and only for a ready pull request. Manual dispatch runs Linux checks
+without starting a Mac build. The Mac job uses Xcode 26.6 and
+`CODE_SIGNING_ALLOWED=NO`, boots one available iPhone simulator, and runs a
+deterministic smoke flow against a DEBUG-only sign-in and voice fixture. The flow
+checks the sidebar drag and button, every navigable destination, each Chat
+attachment-menu entry, ending voice back to Chat, and opening Needs you and
+pressing Done. It attaches every screen in light and dark appearance and Danish
+and English app language.
+
+`scripts/ios/board-compare.swift` renders the corresponding frames from
+`docs/ios/design/board.html` and `workspaces.html` with macOS WebKit, then compares
+the app and board captures on a 22×48 coarse grid. Mean RGB drift and the fraction
+of cells with large luminance changes must each stay at or below 0.38. The
+comparison is structural, not pixel-perfect. The established Factory screenshot
+matrix still runs in this same simulator boot. The workflow uploads app captures,
+paired board renders and comparison output as a 14-day artifact; its single
+pull-request comment maps each capture to its board reference. Open the artifact
+to view the images. The same boot also captures the anchored Chat plus menu using
+`--screenshot-chat-plus-menu`, alongside the established Chat, sidebar and Factory
+captures; Chat captures use `--screenshot-chat-fixture` and the sidebar uses
+`--screenshot-sidebar-open`. Each launch explicitly requests its appearance, and
+the comparator checks background luminance against every theme-named image.
+GitHub comments link to the artifact rather than displaying its images inline.
+The job does not sign, use secrets or upload to TestFlight.
 
 P15-38 adds light/dark Chat, Voice, Notifications (the existing Needs you sheet),
 Factory, Settings, Notes, Health and sidebar comparisons in the same simulator
@@ -6405,9 +6416,9 @@ and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
 SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice
 and Notes are native screens; Settings is the native grouped-list area described
 below. Other enabled destinations remain title-only pages. Banking remains
-disabled and labeled Later. The fixed-behind sidebar opens through a right-side
-drag or the localized VoiceOver action; its shared styling and gesture tokens
-are in `JarvisSidebar.swift`.
+disabled and labeled Later. The fixed-behind sidebar opens through the Chat
+toolbar button, a right-side drag, or the localized VoiceOver action; its shared
+styling and gesture tokens are in `JarvisSidebar.swift`.
 P15-28 returns ended voice sessions to Chat, including when minimized, and resets
 sidebar progress. Focused `JarvisCoreTests` cover the cleared stack, reopened
 sidebar navigation and unchanged navigation for other voice states. SwiftUI
@@ -6423,14 +6434,16 @@ when the Now stream reconnects. `ChatHistoryPagingState` preserves the oldest
 loaded cursor across refreshes of the latest page. The web
 limits are five attachments, up to 20 MB for documents and
 10 MB for images. Local camera/photo data is uploaded only on send. Synthetic
-fixtures are selected only in previews and screenshot mode. The app has no
-native Entra sign-in provider, so its unavailable provider fails closed without
-an existing Keychain session. ReplayKit remains disabled until its Broadcast
-Upload Extension and Stop lifecycle exist. Fixture mode supports one sample
-text turn; attachment uploads and feed writes are disabled rather than faked.
-There is no backend route specific to iOS. Run `swift build` and `swift test` from
-`apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
-SwiftUI compile check.
+fixtures are selected only in previews, screenshot mode and the DEBUG-only
+UI-test launch configuration. Native Entra sign-in uses the app's MSAL provider
+and existing owner-session route; no iOS-specific backend route is added. The
+UI-test sign-in fixture does not create a token or call MSAL. ReplayKit remains
+disabled until its Broadcast Upload Extension and Stop lifecycle exist. The Chat
+fixture supports one sample text turn; attachment uploads and feed writes are
+disabled except that UI tests may open the attachment picker to verify entries
+without sending data. Run `swift build` and `swift test` from
+`apps/ios/Packages/JarvisCore` for Linux validation; only the ready-PR Mac job
+compiles SwiftUI and runs the UI tests.
 
 P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
 reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
@@ -6439,11 +6452,10 @@ and date locale; do not derive it from `GET /settings` or voice language. Keep t
 web/backend source files there authoritative and do not add iOS routes.
 Synthetic note/task/graph fixture scenarios and Linux tests live in
 `JarvisCoreTests`. The SwiftUI area provides Notes, Tasks, List and Graph tabs,
-creation sheets, conditional note saves and conflict recovery. It depends on an
-existing stored owner session: no native Entra sign-in provider exists yet, and
-the app must show an error instead of using fixture content when sign-in is
-unavailable. No standalone folder creation, destructive note/task action,
-task-create priority or offline cache is implemented.
+creation sheets, conditional note saves and conflict recovery. Normal app use
+requires an owner session; unavailable sign-in must show an error instead of
+using fixture content. No standalone folder creation, destructive note/task
+action, task-create priority or offline cache is implemented.
 
 P15-20 mounts the approved Settings area at the existing Settings destination.
 `JarvisSettingsClient` wraps the shared `JarvisClient`; Settings views reuse only
@@ -6456,14 +6468,18 @@ P15-36 separately adds local approval notifications while active. Health upload
 credential creation stays disabled because the backend rejects owner-session
 credential creation.
 Advanced voice tuning, retrieval thresholds, timeouts and project administration
-remain web-only. Use `--screenshot-settings-fixture` to start the screen with a synthetic Settings
-response. The existing CI workflow retains one simulator boot and adds one
-Lock Screen task/approval fixture capture.
+remain web-only. Use `--screenshot-settings-fixture` to start the screen with a
+synthetic Settings response. The XCUITest screenshot matrix also reaches Settings
+through the real sidebar route in all four appearance/language combinations.
 
-Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
-checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
-check and is gated on a ready pull request; keep the single simulator boot and do
-not add UI tests. Notes-tab/state screenshots are not produced by CI.
+Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`; these
+checks do not compile SwiftUI. On ready pull requests, the existing Mac job is
+the only SwiftUI compile check and runs `JarvisUITests`, captures every
+navigable screen plus sign-in, Chat menus, notifications and Voice in Danish and
+English and light and dark, compares each capture with its rendered board frame,
+and uploads the paired result. It uses one simulator boot and no signing
+secrets. A UI pull request without the artifact and comparison comment is not
+ready for review.
 
 ## P15-36 Lock Screen task and approval surfaces
 
@@ -6547,8 +6563,7 @@ outcomes. Native generated-view previews cover each contracted renderer and
 unknown-version fallback with synthetic data; Core fixture tests cover the
 existing routes and command acknowledgement. Run `swift build` and `swift test`
 from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
-require the existing Mac compile check; no simulator boot or UI-test job was
-added.
+compile in the existing ready-PR Mac job, which also runs the simulator UI tests.
 
 The screen follows the checked-in Workspaces frame's fixed-bottom search. Its
 app and VoiceOver strings use `JarvisWorkspaceLocalization` resources in Danish

@@ -2839,21 +2839,22 @@ The approved `docs/ios/design/board.html?sidebar=open` frame informs the
 composition, not literal values. The iPhone shell keeps a plain system
 background sidebar fixed behind the screen; a right-side drag tracks the
 screen's leftward movement, dimming and blur, and a tap or reverse drag closes
-it. The sidebar header places Jarvis left and an icon-only Settings control
-right, separated from the list by a neutral rule. Its title, settings hit target,
-and row geometry follow the board through `JarvisDesignTokens`. The list follows
-the board's top-to-bottom order from Proactive through Chat and sits at the thumb
-end; Workspaces remains routable but is not a sidebar item. Banking is disabled
-and labeled Later.
-Selection, keyboard focus, pointer hover and press change row text/icon styling
-only, without a row surface or border; the selected destination uses the shared
-orange accent, while the Settings icon uses the same accent on focus/hover. The
-sidebar clears the device's actual top safe area and uses the board's light/dark
-page and ambient color treatment. The revealed-screen tap-to-close surface moves
-with the screen so it cannot intercept sidebar buttons. The right-edge drag is
-simultaneous with screen gestures and its pure-Swift recognition policy is unit
-tested. The simulator artifact includes open-sidebar screenshots in both
-appearances beside the chat captures.
+it. Chat also provides a localized, icon-only toolbar button that opens the same
+sidebar without a gesture. The sidebar header places Jarvis left and an icon-only
+Settings control right, separated from the list by a neutral rule. Its title,
+settings hit target, and row geometry follow the board through
+`JarvisDesignTokens`. The list follows the board's top-to-bottom order from
+Proactive through Chat and sits at the thumb end; Workspaces remains routable but
+is not a sidebar item. Banking is disabled and labeled Later. Selection,
+keyboard focus, pointer hover and press change row text/icon styling only, without
+a row surface or border; the selected destination uses the shared orange accent,
+while the Settings icon uses the same accent on focus/hover. The sidebar clears
+the device's actual top safe area and uses the board's light/dark page and ambient
+color treatment. The revealed-screen tap-to-close surface moves with the screen
+so it cannot intercept sidebar buttons. The right-edge drag is simultaneous with
+screen gestures and its pure-Swift recognition policy is unit tested. The
+simulator artifact includes open-sidebar screenshots in both appearances beside
+the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
@@ -2869,6 +2870,8 @@ The approved `docs/ios/design/board.html?voice=idle` frame informs the
 composition, not literal values. Voice has no top bar: one orb and one short
 status line occupy the central field, with mute, add, captions and end controls
 anchored at the bottom. A downward swipe minimizes to a persistent voice bar.
+End voice closes the session and returns to Chat; minimizing keeps the session
+active and returns to Chat with the mini bar.
 During screen sharing, a full-width status bar with Stop stays above the controls;
 the camera tile remains draggable in the thumb zone.
 

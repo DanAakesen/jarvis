@@ -1,3 +1,37 @@
+## 31 October 2026 — iOS simulator visual and behavior gate (P15-32 / #1466)
+
+Extend the existing ready-PR Mac job and single iPhone simulator boot with a
+`JarvisUITests` smoke flow. Use DEBUG-only synthetic sign-in and voice fixtures,
+never a real account, token, microphone session, backend or voice service. Check
+sidebar drag/button, every enabled navigation route, Chat attachment-menu
+entries (the UI fixture verifies each picker action without launching an OS
+picker), ending Voice back to Chat, and opening Needs you then pressing Done.
+Attach every screen in light/dark and Danish/English.
+
+Render the matching frames from the checked-in iOS board HTML with macOS WebKit.
+Compare 22×48 cell means for RGB color and luminance structure with a 0.38
+tolerance; this is a broad drift gate, not pixel-perfect equality. Missing
+screens/references and out-of-tolerance drift fail CI. Upload paired simulator
+and board images plus comparison results as a 14-day artifact, and update one PR
+comment with a table mapping screens to board renders. A UI PR without these
+attachments is not ready for review; do not commit generated screenshots or add
+a second Mac job or simulator boot.
+
+The approved navigation shell gains a localized Chat toolbar button to open the
+sidebar alongside the existing edge drag. Ending Voice ends the session before
+returning to Chat; minimizing remains a separate active-session action. The
+DEBUG-only fixture keeps screenshot and interaction checks independent of live
+sign-in and voice setup. Xcode simulator, artifact and PR-comment execution
+remain unverified until a ready iOS pull request runs on GitHub Actions.
+
+## 1 November 2026 — verify requested iOS screenshot appearance (P15-32)
+
+Every simulator screenshot launch explicitly sets the app's requested light or
+dark theme, rather than relying on simulator appearance or persisted app
+preferences. The screenshot gate samples edge-background luminance for every
+theme-named app and board PNG and fails when it contradicts the filename. This
+closes the audit finding where `main-dark.png` showed the light surface.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

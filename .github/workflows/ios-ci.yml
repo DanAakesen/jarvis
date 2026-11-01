@@ -27,9 +27,11 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys.sort == %w[Jarvis JarvisBroadcast JarvisUITests JarvisVoiceActivity JarvisWidgets].sort
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
+            abort "UI-test target is required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
+            abort "Jarvis UI-test scheme is required" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
             abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
@@ -117,18 +119,10 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
             ~/Library/Developer/Xcode/DerivedData/SourcePackages
           key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift') }}
-      - name: Generate project and build for Simulator
+      - name: Generate Xcode project
         working-directory: apps/ios
-        run: |
-          xcodegen generate
-          xcodebuild \
-            -project Jarvis.xcodeproj \
-            -scheme Jarvis \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-      - name: Boot iPhone Simulator and capture screenshots
+        run: xcodegen generate
+      - name: Boot iPhone Simulator and run UI tests
         run: |
           set -euo pipefail
           DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
@@ -137,43 +131,76 @@ jobs:
             echo "::error::No available iPhone Simulator device was found."
             exit 1
           fi
+          SCREENSHOT_DIR="$RUNNER_TEMP/ios-screenshots"
+          RESULT_BUNDLE="$RUNNER_TEMP/ios-ui-tests.xcresult"
+          mkdir -p "$SCREENSHOT_DIR/ui-tests"
+          echo "IOS_SIMULATOR_UDID=$DEVICE_ID" >> "$GITHUB_ENV"
+          echo "IOS_SIMULATOR_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
+          echo "IOS_SCREENSHOT_DIR=$SCREENSHOT_DIR" >> "$GITHUB_ENV"
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          echo "IOS_APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          echo "IOS_RESULT_BUNDLE=$RESULT_BUNDLE" >> "$GITHUB_ENV"
+          xcrun simctl boot "$DEVICE_ID"
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcodebuild \
+            -project apps/ios/Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RESULT_BUNDLE" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - name: Export XCUITest screenshots
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -d "$IOS_RESULT_BUNDLE" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$IOS_RESULT_BUNDLE" \
+              --output-path "$IOS_SCREENSHOT_DIR/ui-tests"
+          else
+            echo "::warning::The XCUITest result bundle was not created."
+          fi
+      - name: Capture simulator review screenshots
+        run: |
+          set -euo pipefail
+          DEVICE_ID="$IOS_SIMULATOR_UDID"
+          APP_PATH="$IOS_APP_PATH"
+          SCREENSHOT_DIR="$IOS_SCREENSHOT_DIR"
           if [[ ! -d "$APP_PATH" ]]; then
             echo "::error::The unsigned Simulator app was not produced."
             exit 1
           fi
-          SCREENSHOT_DIR="$RUNNER_TEMP/ios-screenshots"
-          mkdir -p "$SCREENSHOT_DIR"
-          echo "IOS_SIMULATOR_UDID=$DEVICE_ID" >> "$GITHUB_ENV"
-          echo "IOS_SIMULATOR_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
-          xcrun simctl boot "$DEVICE_ID"
-          xcrun simctl bootstatus "$DEVICE_ID" -b
-          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          xcrun simctl spawn "$DEVICE_ID" defaults delete com.danaakesen.jarvis || true
           xcrun simctl ui "$DEVICE_ID" appearance light
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
-            --screenshot-chat-fixture --screenshot-chat-plus-menu
+            --screenshot-chat-fixture --screenshot-chat-plus-menu --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-plus-menu-light.png"
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-sidebar-open --screenshot-chat-fixture --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"
           xcrun simctl ui "$DEVICE_ID" appearance dark
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture --screenshot-theme=dark
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-sidebar-open --screenshot-chat-fixture --screenshot-theme=dark
           for language in da en; do
             xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
               --screenshot-voice-connection-lost \
-              "--screenshot-voice-language=$language"
+              "--screenshot-voice-language=$language" --screenshot-theme=dark
             sleep 2
             xcrun simctl io "$DEVICE_ID" screenshot \
               "$SCREENSHOT_DIR/voice-connection-lost-${language}-dark.png"
           done
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
@@ -192,12 +219,12 @@ jobs:
                 extra_args=("--screenshot-sidebar-open")
               fi
               xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
-                --screenshot-chat-fixture "${extra_args[@]}"
+                --screenshot-chat-fixture "${extra_args[@]}" "--screenshot-theme=$appearance"
               sleep 2
               xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/ambient-${screen}-${appearance}.png"
             done
             xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
-              --screenshot-chat-fixture --screenshot-notifications-open
+              --screenshot-chat-fixture --screenshot-notifications-open "--screenshot-theme=$appearance"
             sleep 2
             xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
@@ -215,7 +242,8 @@ jobs:
                   --screenshot-chat-fixture \
                   --screenshot-factory-fixture \
                   "--screenshot-factory-state=$state" \
-                  "--screenshot-factory-language=$language"
+                  "--screenshot-factory-language=$language" \
+                  "--screenshot-theme=$appearance"
                 sleep 2
                 xcrun simctl io "$DEVICE_ID" screenshot \
                   "$SCREENSHOT_DIR/factory-${state}-${appearance}-${language}.png"
@@ -250,6 +278,12 @@ jobs:
                 "$SCREENSHOT_DIR/lockscreen-tasks-${appearance}-${language}.png"
             done
           done
+      - name: Compare simulator screenshots with board renders and verify appearance
+        run: |
+          set -euo pipefail
+          swift scripts/ios/board-compare.swift \
+            "$IOS_SCREENSHOT_DIR" \
+            "$IOS_SCREENSHOT_DIR/board-renders"
       - name: Pair simulator captures with approved board renders
         run: |
           cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"
@@ -306,8 +340,10 @@ jobs:
           <p>Simulator captures are on the left; the checked-in board renders on the right.
           Open this file after extracting the complete artifact. The board is interactive;
           its optional web orb renderer needs network access.</p>''' + "".join(sections) + "</html>")
+          PY
       - name: Upload iOS screenshots
         id: screenshots
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
@@ -315,21 +351,29 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+          GATE_RESULT: ${{ job.status }}
           BOARD_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/ios/design/surfaces.html
         run: |
           set -euo pipefail
           marker='<!-- ios-screenshot-review -->'
           comment_file="$RUNNER_TEMP/ios-screenshot-comment.md"
           payload_file="$RUNNER_TEMP/ios-screenshot-comment.json"
+          board_url="https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html"
+          if [[ -n "${ARTIFACT_URL:-}" ]]; then
+            artifact_link="[Download the simulator screenshots, Lock Screen previews, paired board renders, and comparison results]($ARTIFACT_URL)"
+          else
+            artifact_link="Screenshot artifact upload was unavailable."
+          fi
           cat > "$comment_file" <<EOF
           $marker
-          ### iOS simulator screenshots
+          ### iOS simulator review — $GATE_RESULT
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+          $artifact_link
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.
@@ -348,7 +392,26 @@ jobs:
           compare them with the approved Connection lost surface on the board:
           [$BOARD_URL]($BOARD_URL). Each simulator capture sits next to its checked-in board render.
 
-          Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
+          Captured on ${IOS_SIMULATOR_NAME:-an iPhone simulator}. The artifact is retained for 14 days.
+
+          Each <code>ios-&lt;screen&gt;-&lt;appearance&gt;-&lt;language&gt;.png</code> is paired with <code>board-&lt;screen&gt;-&lt;appearance&gt;-&lt;language&gt;.png</code>.
+
+          | Screen | Approved board reference | Artifact screenshots |
+          | --- | --- | --- |
+          | Sign-in | [Sign-in]($board_url?screen=signin&state=idle) | <code>ios-sign-in-{light,dark}-{da,en}</code> · <code>board-sign-in-{light,dark}-{da,en}</code> |
+          | Chat | [Chat]($board_url?screen=chat) | <code>ios-chat-{light,dark}-{da,en}</code> · <code>ios-screen-chat-{light,dark}-{da,en}</code> · matching <code>board-*.png</code> |
+          | Sidebar | [Sidebar]($board_url?screen=chat&sidebar=open) | <code>ios-sidebar-{light,dark}-{da,en}</code> · <code>board-sidebar-{light,dark}-{da,en}</code> |
+          | Plus menu | [Attachments]($board_url?screen=chat&plus=open) | <code>ios-plus-menu-{light,dark}-{da,en}</code> · <code>board-plus-menu-{light,dark}-{da,en}</code> |
+          | Notifications | [Needs you]($board_url?screen=chat&needs=open) | <code>ios-notifications-{light,dark}-{da,en}</code> · <code>board-notifications-{light,dark}-{da,en}</code> |
+          | Voice | [Voice]($board_url?screen=voice&voice=listening) | <code>ios-screen-voice-{light,dark}-{da,en}</code> · <code>board-screen-voice-{light,dark}-{da,en}</code> |
+          | Notes | [Notes]($board_url?screen=notes&tab=notes) | <code>ios-screen-notes-{light,dark}-{da,en}</code> · <code>board-screen-notes-{light,dark}-{da,en}</code> |
+          | Health | [Health]($board_url?screen=health&tab=dashboard) | <code>ios-screen-health-{light,dark}-{da,en}</code> · <code>board-screen-health-{light,dark}-{da,en}</code> |
+          | Software Factory | [Factory]($board_url?screen=factory&tab=board) | <code>ios-screen-softwareFactory-{light,dark}-{da,en}</code> · <code>board-screen-softwareFactory-{light,dark}-{da,en}</code> |
+          | Settings | [Settings]($board_url?screen=settings&tab=general) | <code>ios-screen-settings-{light,dark}-{da,en}</code> · <code>board-screen-settings-{light,dark}-{da,en}</code> |
+          | Status | [Status]($board_url?screen=status) | <code>ios-screen-status-{light,dark}-{da,en}</code> · <code>board-screen-status-{light,dark}-{da,en}</code> |
+          | Usage | [Usage]($board_url?screen=usage) | <code>ios-screen-usage-{light,dark}-{da,en}</code> · <code>board-screen-usage-{light,dark}-{da,en}</code> |
+          | Proactive | [Proactive]($board_url?screen=proactive) | <code>ios-screen-proactive-{light,dark}-{da,en}</code> · <code>board-screen-proactive-{light,dark}-{da,en}</code> |
+          | Workspaces | [Workspaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/workspaces.html) | <code>ios-screen-workspaces-{light,dark}-{da,en}</code> · <code>board-screen-workspaces-{light,dark}-{da,en}</code> |
           EOF
           jq -n --rawfile body "$comment_file" '{body: $body}' > "$payload_file"
           comment_id="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \

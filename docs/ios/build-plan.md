@@ -19,7 +19,7 @@ Basis labels: **Checked** means the official GitHub or Apple page was read. **No
 | Export compliance | `ITSAppUsesNonExemptEncryption` set to NO in the app's Info.plist: standard HTTPS only. It is the owner's declaration to Apple. | Checked: Apple says to set NO when the app, including the libraries it links, uses no encryption or only exempt forms, and that encryption built into the operating system, such as HTTPS through `URLSession`, is typically exempt. The same page says exempt encryption might still call for a year-end self-classification report to the US government. Whether that applies is the owner's call and is not researched here. |
 | Code split | A pure-Swift `JarvisCore` package with no Apple-framework imports, and a thin SwiftUI app layer. | Checked: Linux limit. My call: design. |
 | Test data | A fixture transport that replays recorded sample conversations. | My call |
-| Screenshots | The existing ready-PR iOS screenshot hook captures synthetic UI states in its single simulator boot and attaches a 14-day artifact for owner review. Issue-approved states may extend that hook without another job or boot. | Existing `ios-ci.yml` behavior; P15-19 adds the Factory states and P15-30 adds the Chat plus menu. |
+| Screenshots and UI gate | Ready iOS pull requests run the simulator smoke flow and capture every screen in light/dark and Danish/English, including the anchored Chat plus menu and established Factory states. CI compares captures with rendered board references and publishes the paired images and results as a 14-day artifact and PR comment. | P15-32 extends the existing one-job, one-simulator-boot hook; P15-19 adds the Factory states and P15-30 adds the Chat plus menu. |
 | Swift mode | Swift 6 compiler in Swift 5 language mode. | My call |
 | Minimum iOS | 26 (native Liquid Glass). | Checkbox in the checklist |
 | Devices | iPhone 16 Pro Max on iOS 27.2, plus an Apple Watch. The phone has the Action Button and the Dynamic Island. Builds stay on Xcode 26.x although the phone runs a newer iOS: an app built with an older SDK runs on a newer system, Apple has announced no iOS 27 SDK requirement for uploads, and the Xcode 27 image still has open problems (Gotcha 2). | Owner answer. Checked: no iOS 27 SDK upload requirement is announced as of 29 October 2026. Not re-read: older SDK on a newer iOS. |
@@ -39,6 +39,7 @@ Owner decision, 30 October 2026: the owner approves every screen before it is de
 3. Code gate: the owner approves the screen's pull request before it merges.
 4. Ship gate: the TestFlight upload workflow runs by manual dispatch only, started by the owner, so nothing reaches the owner's phone unapproved.
 5. A screen that has not been approved is never built, merged or shipped.
+6. A UI pull request is not ready for review without the XCUITest screenshots, matching board renders and comparison result attached to its PR comment and artifact.
 
 Phase 1a has no real screens (only an empty shell), so the gate does not apply to it.
 
@@ -62,7 +63,7 @@ Rules:
 
 1. Keep logic in the pure-Swift `JarvisCore` package, which builds and tests on cheap Linux on every push. Cloud agents get the toolchain through `copilot-setup-steps`. The SwiftUI layer stays thin.
 2. `ios-ci.yml` has a Linux job (`JarvisCore` build and tests, plus sanity checks of `project.yml`, the app/extension plists and their entitlements) and one Mac job that needs Linux to pass first. P15-11's ReplayKit extension and App Group are covered by those metadata checks; screen work adds no Mac job.
-3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds the app, Broadcast and WidgetKit extensions for the simulator with `CODE_SIGNING_ALLOWED=NO`, then the existing screenshot hook boots one iPhone simulator once and captures the Chat, anchored plus menu, sidebar, approved Factory states and Lock Screen tasks/approval preview from synthetic fixtures. It runs no UI tests and adds no simulator boot or job.
+3. The Mac job runs only for ready pull requests that touch `apps/ios/` or shared inputs, never for drafts or pushes to main (`ci.yml` already behaves this way). It uses `concurrency` with cancel-in-progress per pull request, `timeout-minutes: 20` and a SwiftPM cache. It builds the app, Broadcast and WidgetKit extensions and runs `JarvisUITests` on one iPhone simulator boot with `CODE_SIGNING_ALLOWED=NO`. A debug-only fixture exercises sign-in, sidebar drag/button, every navigable destination, every Chat plus-menu entry, Voice start/end and the Needs you Done action. The anchored plus menu and established Chat/sidebar, Factory, Health and Lock Screen task/approval states are also captured from synthetic fixtures; each relevant launch forces the requested appearance. UI tests attach every screen in light/dark and Danish/English; a structural/color comparison against rendered `docs/ios/design` board references fails above tolerance 0.38 or when sampled background luminance disagrees with a theme-named capture. Paired images/results are uploaded as a 14-day artifact and mapped in a PR comment. The test target, reference renderer and fixture captures add no job or simulator boot.
 4. The TestFlight workflow builds, archives and uploads in one job, started by the owner by manual dispatch, so the ship run is also the only compile run for that upload. Uploads happen only when the owner starts them, which also lowers Mac minutes.
 5. Authors keep pull requests in draft until the Linux checks pass and the change is final, and batch related changes. The expectation is one Mac run per pull request.
 6. Owner safety net: set a GitHub Actions budget in Billing, so usage stops at the limit if the repository ever becomes private.
@@ -103,7 +104,7 @@ Read from the current main branch. The offline tests enforce most of it, so a mi
 4. Documents: `docs/agent-context.md` (commands, CI), `docs/architecture.md` (the new area), `docs/decisions.md` (confirmed choices), `PLAN.md` (an iOS phase).
 5. Conventions to copy from the existing workflows: every third-party action pinned by full commit SHA with a version comment, `permissions: contents: read` at the top, a `timeout-minutes` on every job.
 
-Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are only spent on ready pull requests. A selected `ios` check that fails blocks `CI result`, which is why the screenshot step must never fail the job.
+Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are only spent on ready pull requests. A selected `ios` check that fails blocks `CI result`: UI behavior failures, missing screenshots and board drift beyond tolerance fail the check. Artifact upload and the PR comment still run after a failure when screenshots were produced.
 
 ### `ios-ci.yml`
 
@@ -112,8 +113,10 @@ Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are
 - Mac job: `needs` the Linux job, `runs-on: macos-26`, `timeout-minutes: 20`, `concurrency` with cancel-in-progress per pull request and a SwiftPM cache.
 - Pin the Xcode version with `xcode-select` after listing what the image provides.
 - Install XcodeGen at a pinned release, run `xcodegen generate`.
-- Build the app for the iOS Simulator with `CODE_SIGNING_ALLOWED=NO`. Do not boot a simulator, run UI tests or take screenshots in this job.
-- Existing ready-PR screenshot hook: one simulator boot within the existing Mac job, synthetic app fixtures, a 14-day artifact, and a single PR comment updated with the download link. P15-19 captures each Factory segment, task/release detail, key state, language and appearance in that same boot.
+- Build and run the `JarvisUITests` target on the selected iPhone simulator with `CODE_SIGNING_ALLOWED=NO` and parallel testing disabled. Use only the debug UI-test fixture; no live account, backend or voice service is required.
+- Keep screenshot capture, comparison and the established P15-19 Factory-state matrix in the same one-boot Mac job. Pair each app capture with the matching board render, upload both plus results as a 14-day artifact, and create/update the PR comment with the reference/capture map.
+- The screenshot harness forces the requested light/dark theme through an explicit Debug launch argument, independent of the simulator's remembered app preference. The comparator samples background luminance for every theme-named app and board capture; a light background in a dark capture (or the reverse) fails the gate.
+- Structural comparison downsamples the 440×956 point frames into a 22×48 grid and checks mean RGB drift and luminance structure. The 0.38 tolerance is a broad structural gate, not pixel-perfect acceptance; missing references, captures, or requested-theme backgrounds fail.
 - No signing secrets or reference to the signing environment.
 
 ### 1b: `ios-testflight.yml`
@@ -185,7 +188,7 @@ Music
 
 ## Gotchas
 
-1. Simulator screenshots fail about half the time on the current images ("Timeout waiting for screen surfaces"). Best effort only.
+1. A simulator screenshot timeout ("Timeout waiting for screen surfaces") is a visual-gate failure, not a best-effort pass. Recheck this runner issue when updating the pinned Xcode/image.
 2. Xcode 27 has its own runner image (`xcode-27` and `xcode-27-xlarge`, arm64 only, generally available since 15 October 2026) and it still has open problems. Checked on 29 October 2026: the keychain can fail to unlock, which matters for signing (https://github.com/actions/runner-images/issues/14837), the watchOS 27.0 simulator runtime is registered twice (https://github.com/actions/runner-images/issues/14946), downloads can stall, and the Metal toolchain is missing. Stay on `macos-26` with Xcode 26.6 and revisit before Apple's next SDK deadline.
 3. The ARM runners have 7 GB of memory (Checked: GitHub's runners reference lists 3 vCPUs and 7 GB for the standard arm64 macOS runner). Build one scheme at a time.
 4. `macos-14` retires on 2 November 2026 (Checked: the announcements in the `macos-26` image readme). Do not use it.

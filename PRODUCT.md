@@ -73,9 +73,18 @@ Follow-ups to file separately: background audio; Bluetooth; audio route changes;
 call interruption handling; microphone recovery after device lock; microphone
 recovery after a phone call; CarPlay; and Action Button. P15-34 adds the separately
 approved local Lock Screen voice Live Activity below.
-The screen requires an existing Keychain owner-session token; native sign-in is
-not included, so first-install voice remains unavailable until that separate work.
+Voice requires a valid owner-session token from the native MSAL sign-in flow.
+Native sign-in and first-install token acquisition remain separate work; without
+an existing Keychain owner-session token, first-install voice is unavailable.
+Signed configuration and real-device voice behavior still require separate
+acceptance.
 
+## Native iPhone navigation and Voice exit (#1466; 31 October 2026)
+
+The Chat toolbar provides a labeled sidebar button as an alternative to the
+right-edge drag. Both open the same navigation drawer. Ending Voice closes the
+session and returns to Chat; minimizing keeps the session active and returns to
+Chat with the minimized voice bar.
 ## Native voice Lock Screen Live Activity (P15-34 / #1470)
 
 An active native voice session starts a local ActivityKit Live Activity after

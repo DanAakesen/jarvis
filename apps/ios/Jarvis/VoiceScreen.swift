@@ -380,6 +380,7 @@ struct VoiceScreenView: View {
                     onEnd()
                 }
             }
+            .accessibilityIdentifier("voice.end")
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)

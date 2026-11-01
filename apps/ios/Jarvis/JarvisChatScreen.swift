@@ -31,6 +31,20 @@ private enum ChatSheet: Identifiable {
     }
 }
 
+private enum FixtureAttachmentPicker: String, Identifiable {
+    case files
+    case photos
+
+    var id: String { rawValue }
+
+    var localizationKey: JarvisChatLocalizationKey {
+        switch self {
+        case .files: .chooseFiles
+        case .photos: .photoLibrary
+        }
+    }
+}
+
 private struct RenderedChatRow: Identifiable {
     let message: JarvisChatRow
     let showsTimestamp: Bool
@@ -49,6 +63,7 @@ struct JarvisChatScreen: View {
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
+    @State private var fixtureAttachmentPicker: FixtureAttachmentPicker?
     @State private var isPlusMenuPresented = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-plus-menu")
     @State private var cameraCapture: VoiceCameraCapture?
     @State private var isVideoEnabled = false
@@ -63,13 +78,17 @@ struct JarvisChatScreen: View {
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
+    let onOpenSidebar: () -> Void
+    let allowsFixtureAttachments: Bool
 
     init(
         client: JarvisClient?,
         fixtureMode: Bool = false,
+        allowsFixtureAttachments: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
-        onNavigate: @escaping (JarvisDestination) -> Void
+        onNavigate: @escaping (JarvisDestination) -> Void,
+        onOpenSidebar: @escaping () -> Void = {}
     ) {
         _model = StateObject(wrappedValue: JarvisChatModel(
             client: client,
@@ -78,6 +97,8 @@ struct JarvisChatScreen: View {
         ))
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
+        self.onOpenSidebar = onOpenSidebar
+        self.allowsFixtureAttachments = allowsFixtureAttachments
     }
 
     private var renderedRows: [RenderedChatRow] {
@@ -113,6 +134,18 @@ struct JarvisChatScreen: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: onOpenSidebar) {
+                    Image(systemName: "line.3.horizontal")
+                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel(JarvisNotesLocalization.string(
+                    .openSidebar,
+                    language: JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+                ))
+                .accessibilityIdentifier("navigation.openSidebar")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     presentedSheet = .activity(.needsYou)
@@ -134,6 +167,7 @@ struct JarvisChatScreen: View {
                 }
                 .jarvisToolbarButtonStyle()
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
+                .accessibilityIdentifier("chat.notifications")
             }
         }
         .task {
@@ -148,8 +182,20 @@ struct JarvisChatScreen: View {
     private var attachmentPickers: some View {
         layout
         .confirmationDialog(copy(.addToMessage), isPresented: $attachmentDialog, titleVisibility: .visible) {
-            Button(copy(.chooseFiles)) { fileImporterPresented = true }
-            Button(copy(.photoLibrary)) { photosPickerPresented = true }
+            Button(copy(.chooseFiles)) {
+                if model.fixtureMode && allowsFixtureAttachments {
+                    fixtureAttachmentPicker = .files
+                } else {
+                    fileImporterPresented = true
+                }
+            }
+            Button(copy(.photoLibrary)) {
+                if model.fixtureMode && allowsFixtureAttachments {
+                    fixtureAttachmentPicker = .photos
+                } else {
+                    photosPickerPresented = true
+                }
+            }
             Button(copy(.cancel), role: .cancel) {}
         }
         .fileImporter(
@@ -196,6 +242,13 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             }
+        }
+        .alert(item: $fixtureAttachmentPicker) { picker in
+            Alert(
+                title: Text(copy(picker.localizationKey)),
+                message: Text("The system picker is suppressed in UI tests."),
+                dismissButton: .default(Text(copy(.cancel)))
+            )
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase != .active else {
@@ -483,6 +536,7 @@ struct JarvisChatScreen: View {
                 .accessibilityLabel(copy(.plusMenuLabel))
                 .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
                 .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
+                .accessibilityIdentifier("chat.addAttachment")
                 .popover(
                     isPresented: $isPlusMenuPresented,
                     attachmentAnchor: .rect(.bounds),
@@ -515,6 +569,7 @@ struct JarvisChatScreen: View {
                 .frame(width: JarvisDesignTokens.chatMessageMaximumWidth * JarvisDesignTokens.chatModeWidthFraction)
                 .labelsHidden()
                 .accessibilityLabel("Chat or voice")
+                .accessibilityIdentifier("chat.mode")
 
                 if model.isSending {
                     Button {
@@ -578,7 +633,8 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 copy(.attach),
                 symbol: "paperclip",
-                disabled: model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
+                disabled: (model.fixtureMode && !allowsFixtureAttachments) ||
+                    model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
                 hint: addAttachmentHint,
                 action: { attachmentDialog = true }
             )
@@ -621,6 +677,7 @@ struct JarvisChatScreen: View {
         .disabled(model.fixtureMode || model.isSending || isPreparingCamera)
         .accessibilityLabel(copy(.voiceLanguage))
         .accessibilityValue(copy(model.voiceLanguage == .da ? .danish : .english))
+        .accessibilityIdentifier("chat.voiceLanguage")
         .accessibilityHint(
             isPreparingCamera ? copy(.cameraStarting) :
                 (model.fixtureMode ? copy(.voiceSettingsUnavailable) :
@@ -855,7 +912,7 @@ struct JarvisChatScreen: View {
     }
 
     private var addAttachmentHint: String {
-        if model.fixtureMode { return copy(.attachmentsUnavailable) }
+        if model.fixtureMode && !allowsFixtureAttachments { return copy(.attachmentsUnavailable) }
         if model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount {
             return copy(.removeAttachmentHint)
         }

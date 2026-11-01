@@ -116,6 +116,10 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
+        if JarvisUITestConfiguration.isEnabled {
+            presentation = .signIn(.idle)
+            return
+        }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-health-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
@@ -233,6 +237,13 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func performPrimaryAction() {
+        if JarvisUITestConfiguration.isEnabled {
+            if case .signIn = presentation {
+                presentation = .unlocked
+                isPrivacyCoverVisible = false
+            }
+            return
+        }
         switch presentation {
         case .signIn(.denied):
             Task { await signOut() }
@@ -350,9 +361,18 @@ struct JarvisGateRootView: View {
 private struct JarvisGateOverlayView: View {
     @ObservedObject var model: JarvisGateModel
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
+    @AppStorage("jarvis.appTheme") private var storedTheme = "system"
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
+    private var themeColorScheme: ColorScheme? {
+        switch storedTheme {
+        case "light": .light
+        case "dark": .dark
+        default: nil
+        }
     }
 
     var body: some View {
@@ -370,6 +390,7 @@ private struct JarvisGateOverlayView: View {
             }
         }
         .accessibilityAddTraits(.isModal)
+        .preferredColorScheme(themeColorScheme)
     }
 }
 
@@ -514,6 +535,7 @@ private struct JarvisGateSurface: View {
             }
             .buttonStyle(JarvisGateButtonStyle())
             .disabled(isSigningIn)
+            .accessibilityIdentifier("gate.primaryAction")
         }
     }
 }

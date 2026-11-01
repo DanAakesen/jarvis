@@ -52,6 +52,7 @@ struct JarvisSidebar: View {
                         : Color.primary
                 )
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
+                .accessibilityIdentifier("sidebar.settings")
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
             }
@@ -65,22 +66,30 @@ struct JarvisSidebar: View {
                 .padding(.vertical, JarvisDesignTokens.sidebarHeaderRuleVerticalInset)
 
             GeometryReader { scrollGeometry in
-                ScrollView {
-                    VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
-                        ForEach(JarvisDestination.sidebarItems) { destination in
-                            sidebarRow(destination)
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
+                            ForEach(JarvisDestination.sidebarItems) { destination in
+                                sidebarRow(destination)
+                                    .id(destination)
+                            }
+                        }
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: scrollGeometry.size.height,
+                            alignment: .bottom
+                        )
+                        .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
+                    }
+                    .scrollIndicators(.hidden)
+                    .onChange(of: isOpen, initial: true) { _, isOpen in
+                        if isOpen {
+                            scrollProxy.scrollTo(currentDestination, anchor: .center)
                         }
                     }
-                    .frame(
-                        maxWidth: .infinity,
-                        minHeight: scrollGeometry.size.height,
-                        alignment: .bottom
-                    )
-                    .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
-                    .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.sidebarVerticalInset)
                 }
-                .scrollIndicators(.hidden)
             }
+            .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.sidebarVerticalInset)
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
@@ -118,6 +127,7 @@ struct JarvisSidebar: View {
         .buttonStyle(JarvisSidebarButtonStyle())
         .disabled(!destination.isNavigable)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("sidebar.\(destination.rawValue)")
         .focused($focusedDestination, equals: destination)
         .onHover { hoveredDestination = $0 ? destination : nil }
     }
