@@ -364,7 +364,8 @@ struct JarvisChatScreen: View {
                             messageBubble(
                                 text: model.streamingText,
                                 role: .jarvis,
-                                interrupted: false
+                                interrupted: false,
+                                messageID: "streaming"
                             )
                                 .id("streaming-message")
                         }
