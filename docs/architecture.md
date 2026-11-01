@@ -1425,6 +1425,10 @@ reported separately. Fixture switches cannot activate in device/release builds;
 authentication and privacy-cover windows remain active during the bisect.
 The fixture variant enum lives in `apps/ios/Shared/NavigationBisectVariant.swift`,
 included by both the app and Voice Activity extension's shared decorative views.
+Round-three fixture controls sit inside and outside the gate input boundary to
+compare launch-wide interaction against gated content. Root probes include bounded
+native presented-controller/window metadata; AX full-screen frames alone do not
+establish stacking or interception. Production gates and composition are unchanged.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes

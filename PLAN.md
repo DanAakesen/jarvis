@@ -3536,7 +3536,12 @@ compares element and coordinate taps with requested 0/0.5/2-second snapshots.
 Actual sampling times are printed because accessibility queries can take time.
 Round-two CI initially fails compilation: the Voice Activity extension shares
 orb/design-system sources but not ContentView. Move the variant enum into Shared
-to restore target visibility; G–K results and build-20 device recovery are pending.
+to restore target visibility. Run 41327428995 compiles but fails navigation.
+G logs in both languages record menu prewrite/postwrite false→true despite stale
+closed render probes; this contradicts the reported init-only history.
+Round three adds root counter controls inside/outside the gate, modal/window
+evidence and permission interruption handling. The initial scheme invocation is
+temporarily bisect-only; restore the full gate before final delivery.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

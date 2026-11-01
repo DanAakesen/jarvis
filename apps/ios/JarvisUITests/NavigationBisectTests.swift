@@ -2,9 +2,21 @@ import XCTest
 
 final class NavigationBisectTests: XCTestCase {
     private let app = XCUIApplication()
+    private var interruptions: [String] = []
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        addUIInterruptionMonitor(withDescription: "Navigation fixture system permissions") { [weak self] alert in
+            self?.interruptions.append(alert.debugDescription)
+            for title in ["Don’t Allow", "Don't Allow", "Tillad ikke", "Not Now", "Ikke nu", "OK"] {
+                let button = alert.buttons[title]
+                if button.exists {
+                    button.tap()
+                    return true
+                }
+            }
+            return false
+        }
     }
 
     func testA_BaselineDanish() { exercise("A", language: "da") }
@@ -31,6 +43,40 @@ final class NavigationBisectTests: XCTestCase {
     func testJ_ElementTapEnglish() { exercise("J", language: "en", elementTap: true) }
     func testK_NoNavigationEffectsDanish() { exercise("K", language: "da") }
     func testK_NoNavigationEffectsEnglish() { exercise("K", language: "en") }
+    func testL_RootInsideGateDanish() { exerciseControl("navigation.controlInsideGate", language: "da") }
+    func testL_RootInsideGateEnglish() { exerciseControl("navigation.controlInsideGate", language: "en") }
+    func testL_RootOutsideGateDanish() { exerciseControl("navigation.controlOutsideGate", language: "da") }
+    func testL_RootOutsideGateEnglish() { exerciseControl("navigation.controlOutsideGate", language: "en") }
+
+    private func exerciseControl(_ identifier: String, language: String) {
+        app.launchArguments = [
+            "--ui-test-navigation", "--ui-test-navigation-variant=G",
+            "-jarvis.appLanguage", language, "-AppleLanguages", "(\(language))",
+            "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+        ]
+        app.launch()
+        defer { app.terminate() }
+        print("NAVIGATION CONTROL before tap: \(hypotheses)")
+        let control = app.buttons[identifier]
+        guard control.waitForExistence(timeout: 10) else {
+            fail("\(identifier) missing", file: #filePath, line: #line)
+            return
+        }
+        // XCTest invokes interruption monitors only while attempting an interaction.
+        app.tap()
+        control.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let increment = NSPredicate { _, _ in
+            String(describing: control.value ?? "").contains("count=1;")
+        }
+        let outcome = XCTWaiter.wait(
+            for: [XCTNSPredicateExpectation(predicate: increment, object: control)], timeout: 10
+        )
+        print("NAVIGATION CONTROL \(identifier) \(language): \(outcome); \(hypotheses)")
+        guard outcome == .completed else {
+            fail("\(identifier) counter did not increment", file: #filePath, line: #line)
+            return
+        }
+    }
 
     private func exercise(
         _ variant: String, language: String, elementTap: Bool = false,
@@ -46,6 +92,9 @@ final class NavigationBisectTests: XCTestCase {
         var result = "FAIL: launcher"
         defer {
             print("NAVIGATION BISECT \(variant) \(language): \(result); \(state)")
+            if result.hasPrefix("FAIL") {
+                print("NAVIGATION LAUNCH HYPOTHESES: \(hypotheses)\n\(app.debugDescription)")
+            }
             app.terminate()
         }
 
@@ -113,7 +162,8 @@ final class NavigationBisectTests: XCTestCase {
     }
 
     private func fail(_ message: String, file: StaticString, line: UInt) {
-        let evidence = "\(message); \(state)\n\(app.debugDescription)"
+        let findings = hypotheses
+        let evidence = "\(message); \(state); \(findings)\n\(app.debugDescription)"
         print(evidence)
         let hierarchy = XCTAttachment(string: evidence)
         hierarchy.name = message
@@ -123,6 +173,29 @@ final class NavigationBisectTests: XCTestCase {
         screenshot.name = message
         screenshot.lifetime = .keepAlways
         add(screenshot)
-        XCTFail("\(message); \(state)", file: file, line: line)
+        XCTFail("\(message); \(state); \(findings)", file: file, line: line)
+    }
+
+    private var hypotheses: String {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let modal = app.otherElements.matching(NSPredicate(
+            format: "label CONTAINS[c] 'modal' OR identifier CONTAINS[c] 'modal' "
+                + "OR identifier CONTAINS[c] 'presentation' OR label CONTAINS[c] 'dialog' "
+                + "OR identifier CONTAINS[c] 'sheet' OR identifier CONTAINS[c] 'popover'"
+        )).allElementsBoundByIndex.prefix(12).map { $0.debugDescription }
+        let fullScreen = app.otherElements.allElementsBoundByIndex.prefix(100).filter {
+            $0.frame.width >= app.frame.width * 0.9 && $0.frame.height >= app.frame.height * 0.9
+        }.prefix(12).map { $0.debugDescription }
+        let controls = ["navigation.controlInsideGate", "navigation.controlOutsideGate"].map {
+            let control = app.buttons[$0]
+            return "\($0):exists=\(control.exists),enabled=\(control.exists && control.isEnabled),"
+                + "hittable=\(control.exists && control.isHittable),"
+                + "value=\(control.exists ? String(describing: control.value ?? "") : "unavailable")"
+        }
+        return "modalHypothesis:alerts=\(app.alerts.count),sheets=\(app.sheets.count),"
+            + "candidates=\(modal);permissionHypothesis:springboardAlerts=\(springboard.alerts.count),"
+            + "interruptions=\(interruptions),systemTree=\(springboard.alerts.debugDescription);"
+            + "fullScreenCandidates=\(fullScreen) (AX frames cannot prove touch interception or stacking);"
+            + "gateHypothesis:\(state);controlHypothesis:\(controls)"
     }
 }

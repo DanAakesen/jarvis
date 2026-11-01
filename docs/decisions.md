@@ -9934,6 +9934,19 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Round-three diagnostic scope (owner-authorized): temporarily filter the initial
+scheme test to NavigationBisectTests and restore it before final delivery.
+Run 41327428995's G Danish/English histories include menu writes false→true while
+render probes remain closed, contrary to the reported init-only result. No root
+cause is confirmed. Compare root counters inside/outside the gate, bounded native
+presentation/window metadata, AX modal candidates and system-alert interruption
+handling without bypassing authentication/privacy protection.
+Apple references: [XCTest interruption monitor](https://developer.apple.com/documentation/xctest/xctestcase/adduiinterruptionmonitor(withdescription:handler:))
+and [SwiftUI disabled](https://developer.apple.com/documentation/swiftui/view/disabled(_:)).
+Indexed guidance consulted; direct native execution is unavailable on Linux.
+XCTest interactions trigger the monitor; only known permission dismissal buttons
+are handled. No custom replacement for a platform presentation API is introduced.
+
 The product owner requires Apple API documentation and HIG review before every
 iOS implementation, platform APIs over hand-rolled equivalents, and a PR list of
 consulted pages and justified deviations. Record this contributor-wide requirement

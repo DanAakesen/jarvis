@@ -341,11 +341,36 @@ struct JarvisGateRootView: View {
                 NavigationBisectProbe(identifier: "navigation.bisectRoot") { isEnabled in
                     "shouldCoverContent=\(model.shouldCoverContent);"
                         + "rootDisabled=\(model.shouldCoverContent || !isEnabled)"
+                        + ";contentEpoch=\(model.contentEpoch)"
+                        + ";presentations=\(navigationBisectPresentations)"
                 }
+                NavigationBisectRootControl(identifier: "navigation.controlOutsideGate")
+                    .padding(.top, 210)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
         } else {
             gatedContent
         }
+    }
+
+    private var navigationBisectPresentations: String {
+        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows).filter { !$0.isHidden }
+        return windows.prefix(8).map { window in
+            var pending = window.rootViewController.map { [$0] } ?? []
+            var presented: [String] = []
+            var visited = Set<ObjectIdentifier>()
+            while let controller = pending.popLast(), visited.count < 32 {
+                guard visited.insert(ObjectIdentifier(controller)).inserted else { continue }
+                pending.append(contentsOf: controller.children)
+                if let modal = controller.presentedViewController {
+                    presented.append("\(type(of: modal)):style=\(modal.modalPresentationStyle.rawValue)")
+                    pending.append(modal)
+                }
+            }
+            return "level=\(window.windowLevel.rawValue),key=\(window.isKeyWindow),"
+                + "interactive=\(window.isUserInteractionEnabled),frame=\(window.frame),modals=\(presented)"
+        }.joined(separator: "|")
     }
 
     private var gatedContent: some View {
@@ -362,6 +387,12 @@ struct JarvisGateRootView: View {
                 ContentView()
             }
         }
+            .overlay(alignment: .topTrailing) {
+                if NavigationBisectVariant.current != nil {
+                    NavigationBisectRootControl(identifier: "navigation.controlInsideGate")
+                        .padding(.top, 140)
+                }
+            }
             .id(model.contentEpoch)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .navigationBisectGateHitTesting(!model.shouldCoverContent)
@@ -384,6 +415,22 @@ struct JarvisGateRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
                 Task { await model.signOut() }
             }
+    }
+}
+
+private struct NavigationBisectRootControl: View {
+    let identifier: String
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var count = 0
+
+    var body: some View {
+        Button(JarvisAppLanguage.current == .da ? "Testtryk" : "Test tap") {
+            count += 1
+        }
+        .frame(width: 100, height: 44)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier(identifier)
+        .accessibilityValue("count=\(count);isEnabled=\(isEnabled)")
     }
 }
 

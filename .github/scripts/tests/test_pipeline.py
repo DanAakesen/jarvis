@@ -697,12 +697,22 @@ class SafeFailureTests(unittest.TestCase):
                          "navigation.bisectRoot", "NAVIGATION BISECT", "isHittable == true",
                          "XCTFail", "app.debugDescription"):
             self.assertIn(required, source)
-        self.assertEqual(source.count("timeout: 10"), 2)
+        self.assertEqual(source.count("timeout: 10"), 4)
+        for required in ("addUIInterruptionMonitor", "app.tap()", "app.alerts.count",
+                         "app.sheets.count", "springboard.alerts.count",
+                         "fullScreenCandidates", "counter did not increment",
+                         "navigation.controlInsideGate", "navigation.controlOutsideGate"):
+            self.assertIn(required, source)
+        root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        self.assertIn("NavigationBisectVariant.current != nil", root)
+        self.assertIn("count += 1", root)
+        self.assertIn("controller.presentedViewController", root)
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         capture = next(step for step in workflow["jobs"]["macos"]["steps"]
                        if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         self.assertIn("xcodebuild test", capture["run"])
-        self.assertNotIn("-only-testing", capture["run"])
+        # Temporary owner-authorized round-three diagnostic filter; restore the full gate before final delivery.
+        self.assertIn("-only-testing:JarvisUITests/NavigationBisectTests", capture["run"])
         self.assertNotIn("-skip-testing", capture["run"])
         regression = next(step for step in workflow["jobs"]["macos"]["steps"]
                           if step.get("name") == "Run iPhone navigation regression")
