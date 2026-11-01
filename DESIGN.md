@@ -2872,9 +2872,16 @@ confirmation decisions. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
-The composer Chat/Voice switch navigates to the native Voice screen. In Chat,
-Share screen stays visibly disabled with an accessibility explanation; screen
-sharing belongs to the Voice screen's broadcast flow.
+The composer Chat/Voice switch navigates to the native Voice screen. The plus
+button opens a native popover above its own hit target with Camera, Attach,
+Enable video, Share screen and Voice language, in the board's bottom-up order.
+The menu reuses the shared glass and geometry tokens and the JarvisCore Danish
+and English Chat catalog. Camera opens a SwiftUI in-app viewfinder with
+AVCapturePhotoOutput; video shows the existing AVCaptureSession preview. ReplayKit
+uses the existing broadcast picker and extension. Camera, video and screen frames
+remain local until a Chat turn includes the image attachment. Voice language
+reads and updates the existing `voice.defaultLanguage` setting and applies to
+the next Chat session; it does not change an active Voice session.
 Synthetic preview and screenshot mode allows one fixture text turn; attachment
 uploads and activity writes are disabled with accessibility explanations, never
 simulated as successful backend actions.
