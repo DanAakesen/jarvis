@@ -10300,6 +10300,29 @@ and embedding them can be ungrammatical; Date.FormatStyle supports localized
 absolute date/time components. No deliberate platform deviation or custom
 formatter is introduced. New local regressions pass; Mac rendering and live
 acceptance remain unverified.
+## 1 November 2026 — screen sharing start and Needs you cleanup (P15-53, #1514)
+
+Share screen no longer opens a dead sheet. The Chat and Voice screens host a
+hidden `RPSystemBroadcastPickerView` for `com.danaakesen.jarvis.broadcast` and
+trigger its system Start Broadcast sheet on tap; the system view exposes no
+programmatic API, so the app sends `touchUpInside` to its inner button (a
+documented-by-practice deviation). A pure `ScreenShareSession` in JarvisCore
+reports starting, live, stopped and failed from the extension's heartbeat
+(20 s start timeout), and reports an installed-extension check failure plainly
+instead of presenting a sheet. Chat shows the state in the composer.
+
+"Needs you" now lists only approvals, activity items and failed research jobs
+(retryable). Finished routine jobs (proactive checks, images, apps) never
+appear; other failures (such as the weather forecast) form one collapsed,
+dismissible "Other failed checks" group, dismissed through the existing
+`POST /jobs/:id/dismiss`. Background activity still lists every job. New
+strings are in Danish and English. Linux tests cover the state machine, job
+grouping, dismissal route and localization; Apple-target compilation and
+on-device broadcast acceptance remain unverified.
+
+Apple docs read: RPSystemBroadcastPickerView, ReplayKit broadcasting,
+Human Interface Guidelines (Alerts, Disclosure controls, Feedback), SwiftUI
+DisclosureGroup and UIViewRepresentable.
 
 ## 1 November 2026 — Chat polish batch (P15-52, #1506)
 
@@ -10440,11 +10463,11 @@ waits for `factory.segment.board` (always rendered) and puts the temporary on-sc
 navigation trace (`debug.navigation.trace`) in its failure message. The cause of the
 non-navigating item is still unconfirmed.
 
-<<<<<<< HEAD
 ## 2026-11-01: Merged navigation 062ef8b; camera-sheet test runs in English only
 
 The navigation branch now runs its UI classes once in the screenshot step with 60/90 second per-test limits, and ChatComposerUITests is listed there. The camera-sheet test looped over two languages (about 30 seconds each) and would hit that limit, so it now covers English only; the Danish menu title is still matched by the other tests.
-=======
+
+
 ## 2026-11-01: Sidebar drawer above the page, clipped to the revealed strip (P15-41)
 
 CI run 41351802814 showed the drawer never became hittable after a menu tap and
@@ -10456,4 +10479,3 @@ element is queried without a type, the container is no longer required to be
 hittable (its rows are), and per-test time allowances are 120/150 s because a
 cold simulator launch took 38 s. Unconfirmed on device until the next preview
 build; the temporary debug line stays until Dan confirms.
->>>>>>> origin/copilot/p15-41-fix-unreliable-ios-navigation
