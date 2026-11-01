@@ -1610,8 +1610,30 @@ No simulator-runtime, physical-phone, audio route, call interruption, Bluetooth,
 AirPods or background-audio behavior is inferred from those tests; these need
 owner verification on an iPhone. Separate follow-ups are background audio,
 Bluetooth, audio route changes, call interruption handling, microphone recovery
-after device lock, microphone recovery after a phone call, CarPlay, a voice-session Live Activity
-and Action Button.
+after device lock, microphone recovery after a phone call, CarPlay and Action
+Button. P15-34 implements the local Live Activity boundary below; real background
+audio remains unverified.
+
+### Local voice Lock Screen Live Activity (P15-34)
+
+The app embeds `JarvisVoiceActivity`, a WidgetKit extension. Shared
+`VoiceActivityAttributes` contain only an opaque local session UUID, start time,
+app language, state, mute flag and 26 normalized audio levels: no credentials,
+transcripts or server session IDs. `VoiceScreenModel` owns
+`VoiceLiveActivityController`; it requests locally with `pushType: nil` after
+capture starts, serializes state/waveform updates (waveform at most once a second),
+and immediately dismisses on end/failure. A cold launch dismisses orphaned
+activities because sockets are not persisted. ActivityKit may throttle delivery.
+
+Shared `LiveActivityIntent` implementations run in the app process and route
+through a weak, MainActor, session-scoped Core control boundary. Only the existing
+session can be muted/unmuted or ended; no Keychain access, cold-start session,
+APNs registration or backend route is involved. Muting gates local capture before
+the asynchronous socket write, and the Core client also suppresses muted frames.
+The app declares audio background mode for the existing play-and-record session;
+route/interruption recovery and real locked-device behavior remain unverified.
+The extension supplies the Lock Screen UI; WidgetKit's mandatory Dynamic Island
+builder returns empty views, with no Island layout or controls.
 
 ### iOS approvals and workspace commands (P15-05)
 

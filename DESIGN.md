@@ -2813,9 +2813,15 @@ plain; the native toolbar owns the single system glass surface. Do not add a
 button glass effect, fill or stroke inside that surface. The count badge remains
 a separate semantic indicator (P15-29 / #1459).
 
-All concept board screens are approved. P15-36 approves the Lock Screen tasks
-and decisions surface, and P15-37 approves Connection lost. The Lock Screen
-hands-free session and Dynamic Island remain marked To agree.
+All concept board screens and the Lock Screen hands-free session on
+`docs/ios/design/surfaces.html` are approved. P15-34 implements the latter with
+the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
+elapsed timer, measured waveform and Mute/End controls. Stone is secondary;
+only End has a small orange tint, never a large solid fill. System timer updates
+and audio-derived waveform snapshots need no perpetual decorative animation.
+P15-36 approves the Lock Screen tasks and decisions surface.
+The Dynamic Island remains unapproved.
+Connection lost is approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 

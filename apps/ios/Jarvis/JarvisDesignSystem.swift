@@ -47,6 +47,12 @@ enum JarvisDesignTokens {
     )
 
     static let controlMinimumHeight: CGFloat = 44
+    static let liveActivityOrbSize: CGFloat = 46
+    static let liveActivityWaveformHeight: CGFloat = 28
+    static let liveActivityInset: CGFloat = 12
+    static let liveActivitySpacing: CGFloat = 8
+    static let liveActivityAccent = Color(red: 1, green: 180 / 255, blue: 92 / 255)
+    static let liveActivityStone = Color(red: 201 / 255, green: 191 / 255, blue: 174 / 255)
     static let contentInset: CGFloat = 20
     static let contentSpacing: CGFloat = 16
     static let rowSpacing: CGFloat = 12

@@ -254,6 +254,53 @@ final class VoiceConnectionPresentationTests: XCTestCase {
 }
 
 final class VoiceSessionClientTests: XCTestCase {
+    func testMuteStillBlocksCaptureWhenSocketNotificationFails() async throws {
+        let (stream, continuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        defer { continuation.finish() }
+        let transport = FakeWebSocketTransport(streams: [stream], failMutedMessages: true)
+        let client = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!, transport: transport
+        )
+        try await client.start(accessToken: "fixture.token_1", language: .da)
+        do {
+            try await client.setMuted(true)
+            XCTFail("The transport failure must remain visible")
+        } catch {
+            XCTAssertTrue(error is FakeVoiceSocketError)
+        }
+        try await client.sendAudio(Data([1, 2]))
+        var sent = await transport.sentTexts()
+        XCTAssertFalse(sent.contains { $0.contains("input_audio_buffer.append") })
+        try await client.setMuted(false)
+        try await client.sendAudio(Data([1, 2]))
+        sent = await transport.sentTexts()
+        XCTAssertEqual(sent.filter { $0.contains("input_audio_buffer.append") }.count, 1)
+        try await client.end()
+    }
+
+    func testMutedMicrophoneSuppressesAudioUntilUnmuted() async throws {
+        let (stream, continuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        defer { continuation.finish() }
+        let transport = FakeWebSocketTransport(streams: [stream])
+        let client = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!, transport: transport
+        )
+        try await client.start(accessToken: "fixture.token_1", language: .da)
+        try await client.setMuted(true)
+        try await client.sendAudio(Data([1, 2]))
+        try await client.setMuted(true)
+        var sent = await transport.sentTexts()
+        XCTAssertEqual(sent.filter { $0.contains("jarvis.microphone.muted") }.count, 1)
+        XCTAssertFalse(sent.contains { $0.contains("input_audio_buffer.append") })
+        try await client.setMuted(false)
+        try await client.sendAudio(Data([1, 2]))
+        sent = await transport.sentTexts()
+        XCTAssertEqual(sent.filter { $0.contains("input_audio_buffer.append") }.count, 1)
+        try await client.end()
+        let state = await client.state()
+        XCTAssertEqual(state, .ended)
+    }
+
     func testFakeSocketSessionHandlesMuteInterruptEndAndReconnect() async throws {
         let first = AsyncThrowingStream<String, any Error> { continuation in
             continuation.yield(#"{"type":"jarvis.session.ready","sessionId":41}"#)
@@ -496,15 +543,21 @@ private actor FakeWebSocketTransport: WebSocketTransport {
 
     private var streams: [AsyncThrowingStream<String, any Error>]
     private var remainingFailures: Int
+    private let failMutedMessages: Bool
     private var attempts = 0
     private var recordedConnections: [Connection] = []
     private var messages: [String] = []
     private var closeCodes: [UInt16] = []
     private var activeContinuation: AsyncThrowingStream<String, any Error>.Continuation?
 
-    init(streams: [AsyncThrowingStream<String, any Error>], failuresAfterInitialConnect: Int = 0) {
+    init(
+        streams: [AsyncThrowingStream<String, any Error>],
+        failuresAfterInitialConnect: Int = 0,
+        failMutedMessages: Bool = false
+    ) {
         self.streams = streams
         self.remainingFailures = failuresAfterInitialConnect
+        self.failMutedMessages = failMutedMessages
     }
 
     func connect(url: URL, subprotocols: [String]) async throws {
@@ -517,6 +570,9 @@ private actor FakeWebSocketTransport: WebSocketTransport {
     }
 
     func send(text: String) async throws {
+        if failMutedMessages, text.contains("jarvis.microphone.muted") {
+            throw FakeVoiceSocketError.dropped
+        }
         messages.append(text)
     }
 

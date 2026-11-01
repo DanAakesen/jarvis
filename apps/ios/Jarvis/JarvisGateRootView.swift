@@ -215,6 +215,9 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signOut() async {
+        if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
+            try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
+        }
         do {
             try await tokenStore?.delete()
             try provider?.signOut()

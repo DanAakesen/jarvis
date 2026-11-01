@@ -6579,6 +6579,33 @@ existing Keychain session and configured `JARVIS_API_BASE_URL`; no iOS-specific
 backend route is added. Active-client choice and command replay after reconnect
 remain unverified.
 
+### Local voice Live Activity (P15-34)
+
+`JarvisVoiceActivity` is the embedded WidgetKit extension. The app and extension
+compile the same attributes, intents and Danish/English intent metadata from
+`apps/ios/Shared`; view copy lives in the `VoiceLiveActivity` Core resources.
+The extension reuses `JarvisOrbView` and `JarvisDesignSystem`. No App Group,
+push entitlement, push token or backend registration is required. Signed builds
+need provisioning for `com.danaakesen.jarvis.voiceactivity`; the existing
+owner-started automatic signing workflow is unchanged.
+
+Run `swift test --filter 'VoiceLiveActivityTests|VoiceSessionClientTests'` from
+`apps/ios/Packages/JarvisCore`, then the existing build/full package tests.
+These cover state projection, localized copy, PCM levels, stale/ended session
+controls, command errors and muted capture, not Apple frameworks.
+The existing ready-PR Mac job builds the extension and captures six synthetic
+Lock Screen states within the current 30-minute job deadline. The expanded notification,
+Factory and voice captures reached the previous 20-minute limit in run
+41259067682 after compilation succeeded; retain all captures and one boot.
+The states (Danish/English Listening, Speaking, Muted) use the same
+Simulator boot. `--screenshot-voice-activity-fixture` is Simulator-only and uses
+no real microphone, credentials or network. Capture uses Simulator's Lock/Home
+keyboard shortcuts, which require macOS UI automation permission. Compare
+`voice-lock-listening-en.png` with the included `voice-approved-board.png` in the
+PR artifact. Native dispatch and background audio still need locked-device checks:
+mute/unmute must gate in-app capture, End must dismiss and stop audio, and old
+controls must not affect a replacement session.
+
 ### Native voice screen and audio (P15-11)
 
 P15-40 (#1482) adds End → reopen regression coverage. Run `swift test --filter
@@ -6642,8 +6669,9 @@ ReplayKit or camera code. Physical iPhone checks are still required for
 permission recovery, full-duplex audio, immediate barge-in, camera preview/photo,
 and starting/stopping screen share. Follow-ups to file separately: background
 audio; Bluetooth; audio route changes; call interruption handling; microphone
-recovery after device lock; microphone recovery after a phone call; CarPlay; Live
-Activity; and Action Button. These remain unverified. The extension App ID and
+recovery after device lock; microphone recovery after a phone call; CarPlay;
+and Action Button. P15-34 implements local Live Activity support above; actual
+background audio remains unverified. The extension App ID and
 its App Group provisioning also need the owner's portal check before signed
 device testing.
 

@@ -276,6 +276,7 @@ public actor VoiceSessionClient {
     }
 
     public func sendAudio(_ pcm16: Data) async throws {
+        guard !isMuted else { return }
         try await send(.appendAudio(VoiceAudioCodec.encodePCM16(pcm16)))
     }
 
