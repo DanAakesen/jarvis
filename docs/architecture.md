@@ -1370,7 +1370,11 @@ closes the sidebar. Other voice states leave navigation unchanged.
 P15-41 derives settled reveal progress and hit testing from
 `JarvisNavigationState.isSidebarOpen`. A transient `@GestureState` tracks only the
 current drag; commands invalidate its generation and cancellation resets it
-automatically. No animation callback writes navigation or presentation state.
+automatically. Completion uses the final gesture value and captured committed
+state, not the transient gesture state that may already have reset. Commands
+also replace the edge/close recognizers without replacing the navigation host.
+Unchanged path binding writes do not close the drawer.
+No animation callback writes navigation or presentation state.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes
@@ -1380,7 +1384,7 @@ Navigation fixtures initialize the gate as unlocked before its first render and
 do not construct real authentication/notification clients. Background privacy
 cover handling remains active. Gate teardown disables window input before hiding
 it, and loading explicitly synchronizes the overlay with the committed gate state.
-Gate and navigation accessibility containers preserve their children's hidden
+Gate, sidebar and navigation accessibility containers preserve their children's hidden
 states, rather than re-exposing decorative layers and the closed sidebar.
 The navigation host accepts input only when the committed sidebar state is closed;
 the tap-to-close overlay remains independently interactive. The shell ignores
@@ -1388,6 +1392,8 @@ container safe areas, not the keyboard region, and composer glass is noninteract
 Navigation fixtures log bounded, text-free native hit-test/input ancestry reports
 alongside retained XCUITest hierarchy dumps to distinguish UIKit occlusion from
 accessibility or geometry failures.
+Simulator startup logs record only gate fixture selection; fixture navigation
+commands record only Boolean state/request values, not arguments or content.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

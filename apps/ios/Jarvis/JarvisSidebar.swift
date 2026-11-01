@@ -84,6 +84,7 @@ struct JarvisSidebar: View {
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
+        .accessibilityElement(children: .contain)
         .accessibilityHidden(!isOpen)
         .allowsHitTesting(isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {

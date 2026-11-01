@@ -9877,6 +9877,26 @@ the complete failing XCUITest hierarchy in both logs and result attachments.
 These boundary corrections need native verification; do not call the shared
 touch-blocking root cause established until the simulator evidence supports it.
 
+Run [41298280795](https://github.com/DanAakesen/jarvis/actions/runs/41298280795)
+passes the English/short-drag launch-input checks. Danish still shows a login
+failure window over unconfigured Chat; after the English menu tap Chat remains
+unshifted and the closed-state edge strip is present, with no sidebar row buttons.
+The short-drag failure leaves Chat and its
+keyboard visible after the opening swipe. Do not attribute these to translated
+labels or close-animation timing: the English failure is the first menu tap.
+Remove `.onEnded`'s dependency on `@GestureState`: Apple documents automatic
+reset when gestures end or become inactive. Commit the final drag value using
+captured committed state and generation, validate the start policy, and replace
+recognizers on navigation commands. Add the sidebar's own `.contain` boundary
+before hiding/action modifiers. Ignore unchanged navigation-path binding writes
+so SwiftUI synchronization cannot close a drawer without a navigation change.
+Log simulator gate fixture selection and fixture sidebar commands, without
+arguments, credentials or content, to distinguish startup from command delivery.
+Keep every UI test action, timeout and assertion.
+Indexed GestureState, updating/onEnded and accessibility-container guidance was
+reviewed before these edits; direct Apple retrieval remains blocked.
+The Danish startup path and missing-row fix still require native evidence.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

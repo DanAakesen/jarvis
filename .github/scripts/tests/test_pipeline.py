@@ -690,6 +690,9 @@ class SafeFailureTests(unittest.TestCase):
                                (gate, ".accessibilityHidden(model.shouldCoverContent)")):
             self.assertLess(source.index(".accessibilityElement(children: .contain)"),
                             source.index(hidden))
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        self.assertLess(sidebar.index(".accessibilityElement(children: .contain)"),
+                        sidebar.index(".accessibilityHidden(!isOpen)"))
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
         composer_background = chat.split(".fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)", 1)[1].split("            }", 1)[0]
         self.assertIn(".allowsHitTesting(false)", composer_background)
@@ -699,6 +702,22 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("candidate.hitTest(converted, with: nil)", probe)
         self.assertIn("reportCount < 20", probe)
         self.assertNotIn(".text", probe)
+
+    def test_ios_sidebar_completion_does_not_read_reset_gesture_state(self):
+        source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        gesture = source.split("    private func sidebarDragGesture(", 1)[1].split(
+            "    private func canBeginSidebarDrag(", 1
+        )[0]
+        ended = gesture.split(".onEnded { value in", 1)[1]
+        self.assertNotIn("sidebarDrag.", ended)
+        self.assertIn("generation == sidebarGestureGeneration", ended)
+        self.assertIn("canBeginSidebarDrag(value", ended)
+        self.assertIn("value.predictedEndTranslation.width", ended)
+        self.assertIn(".id(sidebarGestureGeneration)", source)
+        binding_setter = source.split("get: { navigation.path },", 1)[1].split(
+            "navigation.closeSidebar()", 1
+        )[0]
+        self.assertIn("guard $0 != navigation.path else { return }", binding_setter)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

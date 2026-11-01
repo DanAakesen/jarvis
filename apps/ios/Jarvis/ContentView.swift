@@ -171,6 +171,7 @@ struct ContentView: View {
                     path: Binding(
                         get: { navigation.path },
                         set: {
+                            guard $0 != navigation.path else { return }
                             sidebarGestureGeneration += 1
                             navigation.setPath($0)
                             navigation.closeSidebar()
@@ -290,6 +291,7 @@ struct ContentView: View {
                             .simultaneousGesture(sidebarDragGesture(
                                 screenWidth: geometry.size.width, drawerWidth: drawerWidth
                             ))
+                            .id(sidebarGestureGeneration)
                             .accessibilityHidden(true)
                     }
                 }
@@ -310,6 +312,7 @@ struct ContentView: View {
                         .gesture(sidebarDragGesture(
                             screenWidth: geometry.size.width, drawerWidth: drawerWidth
                         ))
+                        .id(sidebarGestureGeneration)
                         .accessibilityHidden(true)
                 }
 
@@ -368,18 +371,20 @@ struct ContentView: View {
         screenWidth: CGFloat,
         drawerWidth: CGFloat
     ) -> some Gesture {
-        DragGesture(
+        let generation = sidebarGestureGeneration
+        let startProgress: CGFloat = navigation.isSidebarOpen ? 1 : 0
+        return DragGesture(
             minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance,
             coordinateSpace: .named("sidebar")
         )
             .updating($sidebarDrag) { value, state, transaction in
+                guard generation == sidebarGestureGeneration else { return }
                 if state.isActive {
                     guard state.generation == sidebarGestureGeneration else { return }
                     state.translation = value.translation.width
                     transaction.disablesAnimations = true
                     return
                 }
-                let startProgress: CGFloat = navigation.isSidebarOpen ? 1 : 0
                 guard canBeginSidebarDrag(value, screenWidth: screenWidth,
                                          drawerWidth: drawerWidth, startProgress: startProgress) else { return }
                 state = SidebarDrag(
@@ -391,9 +396,10 @@ struct ContentView: View {
                 transaction.disablesAnimations = true
             }
             .onEnded { value in
-                guard sidebarDrag.isActive,
-                      sidebarDrag.generation == sidebarGestureGeneration else { return }
-                let projectedProgress = sidebarDrag.startProgress -
+                guard generation == sidebarGestureGeneration,
+                      canBeginSidebarDrag(value, screenWidth: screenWidth,
+                                          drawerWidth: drawerWidth, startProgress: startProgress) else { return }
+                let projectedProgress = startProgress -
                     value.predictedEndTranslation.width / max(drawerWidth, 1)
                 setSidebarOpen(projectedProgress > JarvisDesignTokens.sidebarOpenThreshold)
             }
@@ -424,6 +430,11 @@ struct ContentView: View {
     }
 
     private func setSidebarOpen(_ open: Bool) {
+#if targetEnvironment(simulator)
+        if navigationFixtureMode {
+            print("Jarvis navigation command: sidebar=\(navigation.isSidebarOpen) requested=\(open)")
+        }
+#endif
         sidebarGestureGeneration += 1
         if open {
             UIApplication.shared.sendAction(

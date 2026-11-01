@@ -6305,6 +6305,15 @@ handling. Tests are not loosened. Navigation fixtures now emit `Jarvis input hit
 test` reports of native UIKit hit/input ancestry without message text; failed
 XCUITest hierarchies are printed as well as attached. Inspect these reports in
 the retained result bundle if activation points still fail.
+Run 41298280795 passes English/short-drag launch-input checks, but Danish still
+shows the login gate and the sidebar row waits fail. Gesture completion now
+uses final drag values rather than resettable `@GestureState`, and commands
+replace only gesture recognizers. Unchanged path binding writes no longer close
+the drawer. Simulator gate startup logs record fixture selection, and fixture
+sidebar command logs record Boolean state/request values. Inspect these in the
+retained result bundle to trace startup and button delivery.
+The sidebar has its own accessibility
+container. These changes need native confirmation; the UI tests are unchanged.
 Indexed Apple
 [accessibilityElement(children:)](https://developer.apple.com/documentation/swiftui/view/accessibilityelement(children:)),
 [contain](https://developer.apple.com/documentation/swiftui/accessibilitychildbehavior/contain),

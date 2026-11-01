@@ -104,6 +104,9 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     init() {
+#if targetEnvironment(simulator)
+        print("Jarvis gate startup: navigationFixture=\(Self.isNavigationFixture)")
+#endif
         if Self.isNavigationFixture {
             tokenStore = nil
             provider = nil

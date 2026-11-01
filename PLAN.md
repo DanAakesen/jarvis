@@ -3430,7 +3430,14 @@ unlocked before rendering and explicitly synchronizes gate-window dismissal.
 Run 41294736529 still fails launch input hittability, also seen on PR #1491.
 The next correction isolates accessibility/input boundaries and restores keyboard
 safe-area handling, with native fixture hit-test diagnostics. Repeated input
-assertions remain intact; the shared touch blocker is not yet proven. Next: verify the revised
+assertions remain intact; the shared touch blocker is not yet proven.
+Run 41298280795 advances past English/short-drag input checks, but Danish still
+shows a login gate at launch and sidebar waits fail with missing row elements.
+The follow-up removes the gesture completion dependency on resettable
+`@GestureState` and gives the sidebar its own accessibility container.
+Unchanged path-binding writes no longer close the drawer; bounded-content
+startup/command diagnostics distinguish the remaining launch and activation paths.
+These corrections are not yet native-verified. Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
 unverified.
