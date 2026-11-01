@@ -39,6 +39,7 @@ struct JarvisChatScreen: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
+    @StateObject private var dictation = ChatDictationController()
     @State private var presentedSheet: ChatSheet?
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
@@ -208,6 +209,23 @@ struct JarvisChatScreen: View {
         .onDisappear {
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
+            dictation.stop()
+        }
+        .onChange(of: dictation.draft) { _, draft in
+            model.draft = draft
+        }
+        .onChange(of: dictation.failure) { _, failure in
+            guard let failure else { return }
+            switch failure {
+            case .speechPermission, .microphonePermission:
+                model.actionError = copy(.dictationPermissionDenied)
+            case .unavailable:
+                model.actionError = copy(.dictationUnavailable)
+            case .audioSession, .recognition:
+                model.actionError = copy(.dictationFailed)
+            case .cancelled:
+                break
+            }
         }
         .animation(
             reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
@@ -469,6 +487,7 @@ struct JarvisChatScreen: View {
                     .submitLabel(.send)
                     .onSubmit(sendMessage)
                     .disabled(model.isSending || model.fixtureTurnUnavailable)
+                    .accessibilityIdentifier("chat.input")
                     .accessibilityLabel("Message Jarvis")
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
 
@@ -482,7 +501,9 @@ struct JarvisChatScreen: View {
                             .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                     }
                     .buttonStyle(.plain)
-                    .disabled(model.isSending || isPreparingCamera)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("chat.plus")
+                    .disabled(model.isSending || isPreparingCamera || dictation.isPreparing || dictation.isRecording)
                     .accessibilityLabel(copy(.plusMenuLabel))
                     .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
                     .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
@@ -496,18 +517,21 @@ struct JarvisChatScreen: View {
                             .presentationBackground(.clear)
                     }
 
-                    Spacer(minLength: 0)
-
                     Button {
-                        onNavigate(.voice)
+                        toggleDictation()
                     } label: {
-                        Image(systemName: "waveform")
-                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
+                        Image(systemName: dictation.isRecording ? "stop.fill" : "mic")
+                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 2, weight: .medium))
                             .frame(width: 36, height: 36)
                             .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Voice")
+                    .foregroundStyle(dictation.isRecording ? .red : .secondary)
+                    .disabled(model.isSending || dictation.isPreparing)
+                    .accessibilityIdentifier("chat.dictate")
+                    .accessibilityLabel(copy(dictation.isRecording ? .stopDictation : .dictate))
+
+                    Spacer(minLength: 0)
 
                     if model.isSending {
                         Button {
@@ -529,17 +553,26 @@ struct JarvisChatScreen: View {
                         .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
                         .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
                     } else {
-                        Button(action: sendMessage) {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .semibold))
+                        Button {
+                            if dictation.isRecording { dictation.stop() }
+                            if hasDraftContent {
+                                sendMessage()
+                            } else {
+                                onNavigate(.voice)
+                            }
+                        } label: {
+                            Image(systemName: hasDraftContent ? "arrow.up" : "waveform")
+                                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
                                 .frame(width: 36, height: 36)
                                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                        .disabled(!model.canSend)
-                        .accessibilityLabel("Send message")
-                        .accessibilityHint(sendHint)
+                        .foregroundStyle(hasDraftContent ? JarvisDesignTokens.primaryAccent : .secondary)
+                        .disabled((hasDraftContent && !model.canSend) || dictation.isPreparing)
+                        .accessibilityIdentifier("chat.voiceOrSend")
+                        .accessibilityLabel(copy(hasDraftContent ? .sendMessage : .startVoice))
+                        .accessibilityValue(copy(hasDraftContent ? .sendMessage : .startVoice))
+                        .accessibilityHint(hasDraftContent ? sendHint : "")
                     }
                 }
             }
@@ -830,6 +863,7 @@ struct JarvisChatScreen: View {
 
     private func sendMessage() {
         guard !model.isSending, model.canSend else { return }
+        dictation.stop()
         let hasPendingVisualCapture = model.pendingAttachments.contains {
             $0.name == "Video.jpg" || $0.name == "Screen.jpg"
         }
@@ -869,6 +903,28 @@ struct JarvisChatScreen: View {
             return "Enter a message to send these attachments."
         }
         return ""
+    }
+
+    private var hasDraftContent: Bool {
+        !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func toggleDictation() {
+        guard !model.isSending else { return }
+        if dictation.isRecording {
+            dictation.stop()
+            return
+        }
+        model.actionError = nil
+        Task {
+            do {
+                try await dictation.start(language: appLanguage, initialDraft: model.draft)
+            } catch let failure as ChatDictationFailure {
+                dictation.failure = failure
+            } catch {
+                dictation.failure = .recognition
+            }
+        }
     }
 
     private var nowBar: some View {

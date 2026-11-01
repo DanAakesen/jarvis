@@ -2,6 +2,13 @@ import Foundation
 
 public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case plusMenuLabel = "chat.plus.menuLabel"
+    case dictate = "chat.composer.dictate"
+    case stopDictation = "chat.composer.stopDictation"
+    case sendMessage = "chat.composer.sendMessage"
+    case startVoice = "chat.composer.startVoice"
+    case dictationPermissionDenied = "chat.composer.dictationPermissionDenied"
+    case dictationUnavailable = "chat.composer.dictationUnavailable"
+    case dictationFailed = "chat.composer.dictationFailed"
     case menuExpanded = "chat.plus.menuExpanded"
     case menuCollapsed = "chat.plus.menuCollapsed"
     case addToMessage = "chat.plus.addToMessage"

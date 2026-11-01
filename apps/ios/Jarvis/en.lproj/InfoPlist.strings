@@ -1,1 +1,3 @@
 "NSFaceIDUsageDescription" = "Unlock Jarvis with Face ID.";
+"NSMicrophoneUsageDescription" = "Jarvis uses the microphone for voice conversations and to dictate messages.";
+"NSSpeechRecognitionUsageDescription" = "Jarvis uses Apple speech recognition to turn your speech into a message draft.";

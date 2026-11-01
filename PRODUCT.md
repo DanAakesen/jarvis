@@ -226,15 +226,19 @@ borderless while messages fade softly as they scroll beneath it. Only the
 user's message bubble has a background; keep existing Danish and English copy
 and do not add helper text to the screen.
 
-The composer offers Chat and Voice navigation and a plus menu anchored above its
-trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
-language. Camera uses an in-app viewfinder and still-photo capture; video and
-ReplayKit screen sharing keep frames local until a Chat turn sends them as image
-attachments. Voice language reads and saves the existing shared setting and
-applies to the next Chat session. The existing web contract allows documents up
-to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
-marked and used only in previews and CI screenshots. Native Entra sign-in remains
-a separate concern; no fake conversation or successful live sign-in is implied.
+The composer puts its input on the first row and a small plus, dictate and
+voice/send action on the second. With an empty draft the right action opens the
+Voice screen; with text it sends. Dictation uses the system speech recognition
+and microphone permissions to put a Danish or English transcript into the draft;
+it stops when Chat leaves or sends. The plus menu includes Camera, Attach, Enable
+video, Share screen and Voice language. Camera uses an in-app viewfinder and
+still-photo capture; video and ReplayKit screen sharing keep frames local until
+a Chat turn sends them as image attachments. Voice language reads and saves the
+existing shared setting and applies to the next Chat session. The existing web
+contract allows documents up to 20 MB and images up to 10 MB per attachment.
+Synthetic fixtures are clearly marked and used only in previews and CI
+screenshots. Native Entra sign-in remains a separate concern; no fake
+conversation or successful live sign-in is implied.
 
 The notifications toolbar button and its sheet's Done button use one shared
 system-style surface, without stacked button fills or strokes (P15-29 / #1459).

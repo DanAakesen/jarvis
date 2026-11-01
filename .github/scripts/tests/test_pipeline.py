@@ -784,7 +784,7 @@ class SafeFailureTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Missing simulator capture:", result.stderr)
             images[0].touch()
-            for name in ("chat-before-light.png", "main-light.png"):
+            for name in ("chat-before-light.png", "main-light.png", "chat-before-dark.png", "main-dark.png"):
                 image = root / name
                 image.unlink()
                 result = subprocess.run(

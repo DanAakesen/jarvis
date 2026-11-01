@@ -14,6 +14,16 @@ packages:
   MSAL:
     url: https://github.com/AzureAD/microsoft-authentication-library-for-objc
     exactVersion: 2.17.0
+schemes:
+  Jarvis:
+    build:
+      targets:
+        Jarvis: all
+        JarvisUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - JarvisUITests
 targets:
   Jarvis:
     type: application
@@ -45,6 +55,19 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         CODE_SIGN_ENTITLEMENTS: Jarvis/Jarvis.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  JarvisUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: JarvisUITests
+    dependencies:
+      - target: Jarvis
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.uitests
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: "YES"
   JarvisBroadcast:
     type: app-extension
     platform: iOS

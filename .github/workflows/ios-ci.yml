@@ -27,8 +27,9 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
+            abort "Chat voice navigation UI tests are required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
@@ -177,6 +178,13 @@ jobs:
           xcrun simctl boot "$DEVICE_ID"
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcodebuild test \
+            -project apps/ios/Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -only-testing:JarvisUITests/ChatComposerVoiceUITests \
+            CODE_SIGNING_ALLOWED=NO
           xcrun simctl install "$DEVICE_ID" "$BASE_APP_PATH"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"

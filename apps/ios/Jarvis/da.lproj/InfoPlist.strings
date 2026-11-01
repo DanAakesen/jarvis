@@ -1,1 +1,3 @@
 "NSFaceIDUsageDescription" = "Lås Jarvis op med Face ID.";
+"NSMicrophoneUsageDescription" = "Jarvis bruger mikrofonen til stemmesamtaler og til at diktere beskeder.";
+"NSSpeechRecognitionUsageDescription" = "Jarvis bruger Apples talegenkendelse til at omsætte din tale til en beskedkladde.";

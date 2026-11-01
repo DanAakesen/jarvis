@@ -2928,15 +2928,20 @@ confirmation decisions. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
-P15-42 restores the board's two-row composer with the input first and smaller
-plain action icons below it, retaining 44-point hit targets. Composer and Now
-surfaces use transparent glass without an opaque backing panel. The navigation
-bar has no fixed material or divider; `.scrollEdgeEffectStyle(.soft, for: .top)`
-fades messages beneath the clear header. Keep the existing user-only message
-surface and Danish/English copy; do not add on-screen helper text.
+P15-42 keeps the board's two-row composer with input first, followed by small
+plus, dictate, and voice/send actions. They use 36-point icons in 44-point hit
+targets; the right action starts Voice for an empty draft and sends a nonempty
+draft. Composer and Now surfaces use transparent glass without an opaque backing
+panel. The navigation bar has no fixed material or divider;
+`.scrollEdgeEffectStyle(.soft, for: .top)` fades messages beneath the clear
+header. Keep the existing user-only message surface and Danish/English copy; do
+not add on-screen helper text.
 
-The composer Voice action navigates to the native Voice screen. The plus
-button opens a native popover above its own hit target with Camera, Attach,
+Dictation uses the system speech recognizer with localized permissions and
+reports unavailable/denied recognition through the existing composer error row.
+It stops when Chat leaves or sends. The Voice action navigates to the native
+Voice screen and is covered by a Simulator UI test. The plus button opens a
+native popover above its own hit target with Camera, Attach,
 Enable video, Share screen and Voice language, in the board's bottom-up order.
 The menu reuses the shared glass and geometry tokens and the JarvisCore Danish
 and English Chat catalog. Camera opens a SwiftUI in-app viewfinder with

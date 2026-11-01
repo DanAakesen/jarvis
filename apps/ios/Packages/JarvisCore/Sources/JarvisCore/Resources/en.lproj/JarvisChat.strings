@@ -1,4 +1,11 @@
 "chat.plus.menuLabel" = "Add to message";
+"chat.composer.dictate" = "Dictate";
+"chat.composer.stopDictation" = "Stop dictation";
+"chat.composer.sendMessage" = "Send message";
+"chat.composer.startVoice" = "Start voice";
+"chat.composer.dictationPermissionDenied" = "Allow Jarvis to use speech recognition and the microphone in Settings.";
+"chat.composer.dictationUnavailable" = "Speech recognition is unavailable on this device.";
+"chat.composer.dictationFailed" = "The message could not be dictated. Try again.";
 "chat.plus.menuExpanded" = "Expanded";
 "chat.plus.menuCollapsed" = "Collapsed";
 "chat.plus.addToMessage" = "Attach";

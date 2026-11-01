@@ -553,6 +553,7 @@ private struct VoiceOrbView: View {
             )
             .accessibilityElement()
             .accessibilityLabel("\(JarvisVoiceLocalization.string(.orb)). \(status)")
+            .accessibilityIdentifier("voice.orb")
             .modifier(VoiceOrbMinimizeAction(isEnabled: canMinimize, action: onMinimize))
     }
 }

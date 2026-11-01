@@ -31,6 +31,11 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(composer.contains(".frame(width: 36, height: 36)"))
         XCTAssertTrue(composer.contains(".frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)"))
         XCTAssertTrue(composer.contains(".glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatComposerRadius))"))
+        XCTAssertTrue(composer.contains(#"Image(systemName: dictation.isRecording ? "stop.fill" : "mic")"#))
+        XCTAssertTrue(composer.contains("if hasDraftContent"))
+        XCTAssertTrue(composer.contains("onNavigate(.voice)"))
+        XCTAssertTrue(composer.contains(#"accessibilityIdentifier("chat.voiceOrSend")"#))
+        XCTAssertFalse(composer.contains("Picker("))
         XCTAssertFalse(screen.contains(".background(.bar)"))
 
         let nowBar = try section(
@@ -60,5 +65,11 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(workflow.contains(#"chat-before-${appearance}.png"#))
         XCTAssertTrue(workflow.contains("Chat before and after"))
         XCTAssertTrue(workflow.contains("Missing before/after simulator capture:"))
+        XCTAssertTrue(workflow.contains("-only-testing:JarvisUITests/ChatComposerVoiceUITests"))
+        let project = try source("apps/ios/project.yml")
+        XCTAssertTrue(project.contains("type: bundle.ui-testing"))
+        let uiTests = try source("apps/ios/JarvisUITests/ChatComposerVoiceUITests.swift")
+        XCTAssertTrue(uiTests.contains("testVoiceActionOpensVoiceScreen"))
+        XCTAssertTrue(uiTests.contains("testVoiceActionBecomesSendForNonemptyDraft"))
     }
 }

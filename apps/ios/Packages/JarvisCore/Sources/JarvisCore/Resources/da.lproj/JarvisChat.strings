@@ -1,4 +1,11 @@
 "chat.plus.menuLabel" = "Tilføj til besked";
+"chat.composer.dictate" = "Dikter";
+"chat.composer.stopDictation" = "Stop diktering";
+"chat.composer.sendMessage" = "Send besked";
+"chat.composer.startVoice" = "Start stemme";
+"chat.composer.dictationPermissionDenied" = "Giv Jarvis adgang til talegenkendelse og mikrofon i Indstillinger.";
+"chat.composer.dictationUnavailable" = "Talegenkendelse er ikke tilgængelig på denne enhed.";
+"chat.composer.dictationFailed" = "Beskeden kunne ikke dikteres. Prøv igen.";
 "chat.plus.menuExpanded" = "Åben";
 "chat.plus.menuCollapsed" = "Lukket";
 "chat.plus.addToMessage" = "Vedhæft";

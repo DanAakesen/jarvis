@@ -9849,3 +9849,15 @@ sphere, with Reduced Motion and inactive-scene pauses. Keep all Voice copy in
 Danish/English resources. Extend the existing ready-PR simulator capture rather
 than adding another Mac job. Synthetic screenshots, Apple compilation and live
 device acceptance remain separate checks; none is established by Linux tests.
+
+## 1 November 2026 — native Chat voice/send composer (P15-42; #1486)
+
+Keep Chat input first, with compact plus, dictate and voice/send actions on the
+second row. An empty draft opens native Voice; a nonempty draft sends. Dictation
+uses the system speech recognizer and microphone, writes only into the current
+draft, and stops when Chat exits or sends. Keep the approved transparent glass
+composer and Now bar, clear header with a soft transcript fade, user-only message
+surface and Danish/English copy. The ready-PR Mac Simulator job tests Voice
+navigation and the action change, and captures before/after states in light and
+dark. Linux checks do not establish SwiftUI rendering, Apple-target compilation,
+or real microphone/speech behavior.
