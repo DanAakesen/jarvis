@@ -76,6 +76,7 @@ enum JarvisDesignTokens {
     static let sidebarMaximumWidth: CGFloat = 320
     static let sidebarGestureStartFraction: CGFloat = 0.62
     static let sidebarGestureMinimumDistance: CGFloat = 8
+    static let sidebarEdgeGestureWidth: CGFloat = 24
     static let sidebarOpenThreshold: CGFloat = 0.5
     static let sidebarBrandFontSize: CGFloat = 22
     static let sidebarSettingsButtonSize: CGFloat = 44

@@ -897,7 +897,9 @@ private struct ContentForegroundLayer<Content: View, DragGesture: Gesture>: View
                 }
             }
             .offset(x: horizontalOffset)
-            .accessibilityAction(named: Text(openSidebarLabel), perform: onOpenSidebar)
+            .accessibilityAction(named: Text(openSidebarLabel)) {
+                onOpenSidebar()
+            }
             .accessibilityHidden(isSidebarOpen)
     }
 }

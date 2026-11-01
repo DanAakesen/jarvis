@@ -80,6 +80,8 @@ final class NativeChatLayoutTests: XCTestCase {
         )
         XCTAssertTrue(edgeGestureLayer.contains(".gesture(gesture)"))
         XCTAssertTrue(edgeGestureLayer.contains("let edgeWidth: CGFloat = JarvisDesignTokens.sidebarEdgeGestureWidth"))
+        let designSystem = try source("apps/ios/Jarvis/JarvisDesignSystem.swift")
+        XCTAssertTrue(designSystem.contains("static let sidebarEdgeGestureWidth: CGFloat = 24"))
     }
 
     func testContentViewUsesSmallTypedViewComponents() throws {
