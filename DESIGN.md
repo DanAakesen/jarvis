@@ -2796,6 +2796,12 @@ only the user bubble has a background, a soft orange-tinted glass pill with a
 up are unboxed plain text. Phone screens carry no explainer, helper or hint
 text.
 
+The notification launcher and activity-sheet Done action use
+`jarvisToolbarButtonStyle()` from `JarvisDesignSystem.swift`. Their labels are
+plain; the native toolbar owns the single system glass surface. Do not add a
+button glass effect, fill or stroke inside that surface. The count badge remains
+a separate semantic indicator (P15-29 / #1459).
+
 All concept board screens are approved. The five surfaces on
 `docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free
 session, the Dynamic Island, Lock Screen tasks and decisions, and Connection
@@ -2807,12 +2813,22 @@ The approved `docs/ios/design/board.html?sidebar=open` frame informs the
 composition, not literal values. The iPhone shell keeps a plain system
 background sidebar fixed behind the screen; a right-side drag tracks the
 screen's leftward movement, dimming and blur, and a tap or reverse drag closes
-it. Chat also provides a localized, icon-only toolbar button that opens the
-same sidebar without a gesture. The sidebar header places Jarvis left and an
-icon-only Settings control right. Areas are ordered bottom-to-top from Proactive
-through Chat; Banking is disabled and labeled Later. Selection, keyboard focus,
-pointer hover and press change row text/icon styling only, without a row surface
-or border.
+it. Chat also provides a localized, icon-only toolbar button that opens the same
+sidebar without a gesture. The sidebar header places Jarvis left and an icon-only
+Settings control right, separated from the list by a neutral rule. Its title,
+settings hit target, and row geometry follow the board through
+`JarvisDesignTokens`. The list follows the board's top-to-bottom order from
+Proactive through Chat and sits at the thumb end; Workspaces remains routable but
+is not a sidebar item. Banking is disabled and labeled Later. Selection,
+keyboard focus, pointer hover and press change row text/icon styling only, without
+a row surface or border; the selected destination uses the shared orange accent,
+while the Settings icon uses the same accent on focus/hover. The sidebar clears
+the device's actual top safe area and uses the board's light/dark page and ambient
+color treatment. The revealed-screen tap-to-close surface moves with the screen
+so it cannot intercept sidebar buttons. The right-edge drag is simultaneous with
+screen gestures and its pure-Swift recognition policy is unit tested. The
+simulator artifact includes open-sidebar screenshots in both appearances beside
+the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because

@@ -60,6 +60,7 @@ struct JarvisChatScreen: View {
     @State private var isScreenSharing = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
+    private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
     let onOpenSidebar: () -> Void
@@ -69,6 +70,7 @@ struct JarvisChatScreen: View {
         client: JarvisClient?,
         fixtureMode: Bool = false,
         allowsFixtureAttachments: Bool = false,
+        initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
         onNavigate: @escaping (JarvisDestination) -> Void,
         onOpenSidebar: @escaping () -> Void = {}
@@ -78,6 +80,7 @@ struct JarvisChatScreen: View {
             fixtureMode: fixtureMode,
             startupError: startupError
         ))
+        self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
         self.onOpenSidebar = onOpenSidebar
         self.allowsFixtureAttachments = allowsFixtureAttachments
@@ -147,13 +150,16 @@ struct JarvisChatScreen: View {
                         }
                         .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                 }
-                .buttonStyle(JarvisQuietToolbarIconButtonStyle())
+                .jarvisToolbarButtonStyle()
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
                 .accessibilityIdentifier("chat.notifications")
             }
         }
         .task {
             await model.load()
+            if let initialActivitySheet {
+                presentedSheet = .activity(initialActivitySheet)
+            }
             await model.watchActivity()
         }
     }

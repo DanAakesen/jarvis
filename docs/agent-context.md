@@ -6366,6 +6366,16 @@ the comparator checks background luminance against every theme-named image.
 GitHub comments link to the artifact rather than displaying its images inline.
 The job does not sign, use secrets or upload to TestFlight.
 
+For P15-29 / #1459, the same boot also captures `notifications-light.png` and
+`notifications-dark.png` using `--screenshot-chat-fixture
+--screenshot-notifications-open`. Compare the Chat bell and the sheet's Done
+button; both use the shared plain toolbar-label style, without an extra glass
+fill. Linux checks cannot verify the rendered toolbar. The #1448 artifact
+([run 41241917037](https://github.com/DanAakesen/jarvis/actions/runs/41241917037))
+has no open-sheet baseline; its light Chat capture is obscured by the gate.
+Usable before/after simulator comparison remains pending; do not treat that
+capture as visual acceptance.
+
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
 SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice
