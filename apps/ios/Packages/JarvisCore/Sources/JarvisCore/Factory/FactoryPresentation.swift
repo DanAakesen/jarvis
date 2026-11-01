@@ -37,6 +37,7 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case backlog = "factory.backlog"
     case done = "factory.done"
     case running = "factory.running"
+    case activityProgress = "factory.activityProgress"
     case open = "factory.open"
     case closed = "factory.closed"
     case pauseRequested = "factory.pauseRequested"

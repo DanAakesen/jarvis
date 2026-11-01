@@ -6463,8 +6463,10 @@ the routes listed in section 12 of `docs/ios/integration-contract.md`. Pure
 validation, target bounds, memory paging/filtering, dirty tracking and account
 revocation remain in JarvisCore. The app-owned Danish/English language defaults
 to Danish; the shared appearance theme is propagated to the app color scheme.
-Notifications and Health upload credential creation stay disabled because the
-backend lacks APNs support and rejects owner-session credential creation.
+Remote notifications remain unavailable because APNs support is not implemented;
+P15-36 separately adds local approval notifications while active. Health upload
+credential creation stays disabled because the backend rejects owner-session
+credential creation.
 Advanced voice tuning, retrieval thresholds, timeouts and project administration
 remain web-only. Use `--screenshot-settings-fixture` to start the screen with a
 synthetic Settings response. The XCUITest screenshot matrix also reaches Settings
@@ -6478,6 +6480,33 @@ English and light and dark, compares each capture with its rendered board frame,
 and uploads the paired result. It uses one simulator boot and no signing
 secrets. A UI pull request without the artifact and comparison comment is not
 ready for review.
+
+## P15-36 Lock Screen task and approval surfaces
+
+The app's ActivityKit controller follows real running tasks from the existing
+`/now` feed and Factory task SSE; WidgetKit renders the shared
+`FactoryTaskActivitySurface`. No backend progress fraction exists, so the linear
+track is indeterminate. Local approval notifications sync real `/now`
+confirmations while active, require device authentication for actions and call
+the existing confirmation endpoint. Successful/failed results appear in the Now
+activity sheet. If notification previews are disabled, the category has no
+Approve/Decline actions.
+
+The `--screenshot-lockscreen-task-fixture` plus
+`--screenshot-lockscreen-language=da|en` launch arguments render synthetic
+visual content only. CI captures this shared SwiftUI composition in light/dark
+and Danish/English in the existing single simulator boot; it does not prove the
+system Lock Screen or notification action behavior. The Linux checks are
+`swift build` and `swift test` from `apps/ios/Packages/JarvisCore`, plus the iOS
+project/plist metadata checks in `.github/workflows/ios-ci.yml`; only the Mac
+job compiles the ActivityKit/WidgetKit targets.
+
+Still required for remote updates: an owner-authorized device-registration route
+and storage for APNs/ActivityKit push tokens; a backend APNs sender with a
+protected provider key; pushes on confirmation creation, resolution and expiry;
+Factory task state/activity updates and terminal ActivityKit updates; stale
+notification reconciliation while suspended; and deployed/physical-device
+verification. Do not claim remote updates before those pieces exist.
 
 P15-16 adds `JarvisGatePolicy` to pure-Swift `JarvisCore`; its Linux tests cover
 cold start, the 60-second background threshold, missing/expired sessions, denied

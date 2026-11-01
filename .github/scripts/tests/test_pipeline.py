@@ -660,6 +660,7 @@ class SafeFailureTests(unittest.TestCase):
         )
         self.assertEqual(artifact["with"]["retention-days"], 14)
         self.assertEqual(artifact["with"]["if-no-files-found"], "error")
+        self.assertEqual(artifact["with"]["path"], "${{ runner.temp }}/ios-screenshots/")
         comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
         self.assertEqual(comment["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertIn("ARTIFACT_URL", comment["env"])
@@ -675,6 +676,9 @@ class SafeFailureTests(unittest.TestCase):
             "--screenshot-chat-plus-menu",
             (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
         )
+        ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
+        self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
+        self.assertIn("lockscreen-tasks-${appearance}-${language}.png", ios_workflow)
         capture = next(step for step in job["steps"]
                        if "for state in track newlift empty;" in step.get("run", ""))
         self.assertIn("for state in track newlift empty;", capture["run"])

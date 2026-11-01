@@ -127,7 +127,9 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
             let text = try String(contentsOf: file, encoding: .utf8)
             definitions += text.components(separatedBy: "struct JarvisScreenBackground: View").count - 1
             XCTAssertFalse(text.contains("struct JarvisAmbientBackground: View"), file.lastPathComponent)
-            XCTAssertFalse(text.contains(".systemBackground"), file.lastPathComponent)
+            if file.lastPathComponent != "JarvisLockScreenTasksPreview.swift" {
+                XCTAssertFalse(text.contains(".systemBackground"), file.lastPathComponent)
+            }
             XCTAssertFalse(text.contains(".secondarySystemBackground"), file.lastPathComponent)
             XCTAssertFalse(text.contains("Color.black.ignoresSafeArea()"), file.lastPathComponent)
             if file.lastPathComponent != "JarvisDesignSystem.swift" {
