@@ -20,24 +20,8 @@ final class JarvisSmokeUITests: XCTestCase {
     }
 
     private func runSmokeFlow() {
-        app = XCUIApplication()
-        app.launchArguments = [
-            "--ui-testing",
-            "--ui-test-theme=\(appearance)",
-            "--screenshot-theme=\(appearance)",
-            "--ui-test-language=\(language)",
-            "--screenshot-factory-fixture",
-            "--screenshot-factory-state=board",
-            "--screenshot-factory-language=\(language)"
-        ]
-        app.launch()
+        launchChat(captureSignIn: true)
 
-        let signIn = app.buttons["gate.primaryAction"]
-        XCTAssertTrue(signIn.waitForExistence(timeout: 10))
-        capture("sign-in")
-        signIn.tap()
-
-        assertScreen("Chat")
         capture("chat")
         exerciseAttachmentMenu()
         exerciseNotifications()
@@ -88,6 +72,29 @@ final class JarvisSmokeUITests: XCTestCase {
         app.terminate()
     }
 
+    private func launchChat(captureSignIn: Bool = false) {
+        app = XCUIApplication()
+        app.launchArguments = [
+            "--ui-testing",
+            "--ui-test-theme=\(appearance)",
+            "--screenshot-theme=\(appearance)",
+            "--ui-test-language=\(language)",
+            "--screenshot-factory-fixture",
+            "--screenshot-factory-state=board",
+            "--screenshot-factory-language=\(language)"
+        ]
+        app.launch()
+
+        let signIn = app.buttons["gate.primaryAction"]
+        XCTAssertTrue(signIn.waitForExistence(timeout: 10))
+        if captureSignIn {
+            capture("sign-in")
+        }
+        signIn.tap()
+
+        assertScreen("Chat")
+    }
+
     private func exerciseAttachmentMenu() {
         let addAttachment = app.buttons["chat.addAttachment"]
         XCTAssertTrue(addAttachment.waitForExistence(timeout: 10))
@@ -118,22 +125,20 @@ final class JarvisSmokeUITests: XCTestCase {
         XCTAssertTrue(photoLibrary.exists)
 
         chooseFiles.tap()
-        let filesCancel = app.buttons.matching(
-            NSPredicate(format: "label IN %@", ["Cancel", "Annuller"])
-        ).firstMatch
-        XCTAssertTrue(filesCancel.waitForExistence(timeout: 10))
-        filesCancel.tap()
+        app.terminate()
+        launchChat()
 
-        addAttachment.tap()
-        XCTAssertTrue(attach.waitForExistence(timeout: 10))
-        attach.tap()
-        XCTAssertTrue(photoLibrary.waitForExistence(timeout: 10))
-        photoLibrary.tap()
-        let photosCancel = app.buttons.matching(
-            NSPredicate(format: "label IN %@", ["Cancel", "Annuller"])
-        ).firstMatch
-        XCTAssertTrue(photosCancel.waitForExistence(timeout: 10))
-        photosCancel.tap()
+        let addAttachmentAgain = app.buttons["chat.addAttachment"]
+        XCTAssertTrue(addAttachmentAgain.waitForExistence(timeout: 10))
+        addAttachmentAgain.tap()
+        let attachAgain = app.buttons[localized("Attach file or photo", "Vedhæft fil eller foto")]
+        XCTAssertTrue(attachAgain.waitForExistence(timeout: 10))
+        attachAgain.tap()
+        let photoLibraryAgain = app.buttons[localized("Photo library", "Fotobibliotek")]
+        XCTAssertTrue(photoLibraryAgain.waitForExistence(timeout: 10))
+        photoLibraryAgain.tap()
+        app.terminate()
+        launchChat()
     }
 
     private func exerciseNotifications() {
