@@ -109,6 +109,9 @@ struct VoiceScreenView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task {
             if !fixtureMode, model.voiceState.canStartSession, !model.skipsAutomaticStart {
+                #if targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-activity-fixture") { return }
+                #endif
                 await model.start()
             }
         }

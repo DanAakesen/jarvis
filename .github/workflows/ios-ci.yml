@@ -27,12 +27,16 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
             abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
+            abort "voice activity extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisVoiceActivity" && dependency["embed"] == true }
+            abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
+            abort "voice activity must share attributes and intents" unless project.dig("targets", "JarvisVoiceActivity", "sources").any? { |source| source["path"] == "Shared" }
+            abort "Danish must be the development language" unless project.dig("options", "developmentLanguage") == "da"
             abort "WidgetKit extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWidgets" && dependency["embed"] == true }
             bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
             abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
@@ -53,6 +57,11 @@ jobs:
           info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
           assert info["ITSAppUsesNonExemptEncryption"] is False
           assert info["NSSupportsLiveActivities"] is True
+          assert info["CFBundleDevelopmentRegion"] == "da"
+          assert "audio" in info["UIBackgroundModes"]
+          activity_info = plistlib.loads(Path("apps/ios/VoiceActivity/Info.plist").read_bytes())
+          assert activity_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
+          assert activity_info["CFBundleDevelopmentRegion"] == "da"
           widget_info = plistlib.loads(Path("apps/ios/Widgets/Info.plist").read_bytes())
           assert widget_info["CFBundlePackageType"] == "XPC!"
           assert widget_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
@@ -213,6 +222,23 @@ jobs:
               done
             done
           done
+          open -a Simulator
+          xcrun simctl ui "$DEVICE_ID" appearance dark
+          for language in da en; do
+            for state in listening speaking muted; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-voice-activity-fixture \
+                "--voice-activity-language=$language" "--voice-activity-state=$state"
+              sleep 3
+              osascript -e 'tell application "Simulator" to activate' \
+                -e 'tell application "System Events" to keystroke "l" using command down'
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/voice-lock-${state}-${language}.png"
+              osascript -e 'tell application "Simulator" to activate' \
+                -e 'tell application "System Events" to keystroke "h" using {command down, shift down}'
+            done
+          done
+          cp docs/ios/design/hands-free-board.png "$SCREENSHOT_DIR/voice-approved-board.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
             for language in da en; do
@@ -304,7 +330,12 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+
+          Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
+          Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.
+          Danish/English Listening, Speaking and Muted states are included. Screenshot capture
+          does not verify Lock Screen button dispatch or real background audio.
 
           Compare Health Track workout, New lift, and empty states (Danish/English, light/dark)
           with the [approved Health board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_HEAD_REF/docs/ios/design/board.html).

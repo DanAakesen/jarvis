@@ -1,6 +1,7 @@
 name: Jarvis
 options:
   bundleIdPrefix: com.danaakesen
+  developmentLanguage: da
   deploymentTarget:
     iOS: "26.0"
 settings:
@@ -22,15 +23,15 @@ targets:
       - path: Jarvis
         excludes:
           - "Broadcast/**"
-      - path: Shared/VoiceScreenShareContract.swift
-      - path: Shared/FactoryTaskActivityAttributes.swift
-      - path: Shared/FactoryTaskActivitySurface.swift
+      - path: Shared
     dependencies:
       - package: JarvisCore
         product: JarvisCore
       - package: MSAL
         product: MSAL
       - target: JarvisBroadcast
+        embed: true
+      - target: JarvisVoiceActivity
         embed: true
       - target: JarvisWidgets
         embed: true
@@ -61,6 +62,27 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         CODE_SIGN_ENTITLEMENTS: Jarvis/Broadcast/JarvisBroadcast.entitlements
         SWIFT_OBJC_BRIDGING_HEADER: Jarvis/Broadcast/ReplayKitStop.h
+        SKIP_INSTALL: "YES"
+        APPLICATION_EXTENSION_API_ONLY: "YES"
+  JarvisVoiceActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: VoiceActivity
+      - path: Shared
+      - path: Jarvis/JarvisOrbView.swift
+      - path: Jarvis/JarvisDesignSystem.swift
+    dependencies:
+      - package: JarvisCore
+        product: JarvisCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.voiceactivity
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_FILE: VoiceActivity/Info.plist
+        GENERATE_INFOPLIST_FILE: "NO"
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
   JarvisWidgets:

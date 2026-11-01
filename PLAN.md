@@ -2132,6 +2132,17 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-34 / #1470:** local voice Live Activity and session-scoped Lock Screen
+  Mute/End are implemented with Danish/English copy, measured waveform, native
+  widget extension and audio background declaration. Core build, focused tests,
+  all 170 package tests (after an existing reconnect polling flake), iOS metadata
+  and 50 pipeline checks pass locally; secret scanning is clean. Actions CodeQL
+  reports no alerts; Swift database creation is unavailable here.
+  Next: the existing ready-PR Mac build, Simulator/approved-board artifact
+  comparison and locked-device controls.
+  Apple compilation, screenshot capture and real background audio remain blockers
+  to acceptance; no APNs or Dynamic Island work is included.
+
 - **Active phase:** P15, iOS Phase 1c. The Phase 1a shell/CI and Phase 1b manual TestFlight workflow are implemented; P15-10 adds Chat, P15-11 Voice, P15-12 Notes, P15-13 the sidebar, P15-14 Workspaces, and P15-16 sign-in/Face ID. Existing `JarvisCore` clients and synthetic fixtures reuse web routes; Linux tests cover the pure-Swift package. The app preview and P15-15 simulator screenshots use an explicitly labelled synthetic fixture. Next: complete Linux checks, then use the existing ready-PR Mac compile for SwiftUI verification and owner review. The first owner-started TestFlight archive/export/upload remains unproven; no later screen is authorized without the owner's approval.
 - **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
 - **P15-40 (#1482):** End → fresh Voice now auto-starts, invalidates stale callbacks and releases the old audio/transport. The red End control, stationary cyan-rimmed glass orb with animated amber centre, Reduced Motion and Danish/English Voice copy are implemented. Previous merged-head CI passed Apple compilation and six synthetic Voice captures. Ambient main (#1479) is merged; the core now has transparent blur margins and a feathered alpha mask to remove square edges. Fresh listening/thinking/speaking light/dark captures with board comparisons are pending this revision's CI; live iPhone End/start and motion acceptance remain unverified.

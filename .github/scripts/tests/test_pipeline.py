@@ -707,6 +707,28 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("copy.text(.pastExercises)", sheet)
         self.assertIn("client.createLift(submittedDraft)", sheet)
 
+    def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        self.assertEqual(project["options"]["developmentLanguage"], "da")
+        target = project["targets"]["JarvisVoiceActivity"]
+        self.assertEqual(target["type"], "app-extension")
+        self.assertIn({"path": "Shared"}, target["sources"])
+        self.assertIn(
+            {"target": "JarvisVoiceActivity", "embed": True},
+            project["targets"]["Jarvis"]["dependencies"],
+        )
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
+        self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
+        self.assertIn("for state in listening speaking muted", capture["run"])
+        self.assertIn("voice-lock-${state}-${language}.png", capture["run"])
+        self.assertIn("voice-approved-board.png", capture["run"])
+        self.assertTrue((ROOT / "docs/ios/design/hands-free-board.png").is_file())
+        fixture = (ROOT / "apps/ios/Jarvis/VoiceActivityScreenshot.swift").read_text()
+        self.assertTrue(fixture.startswith("#if targetEnvironment(simulator)"))
+
     def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         steps = workflow["jobs"]["macos"]["steps"]

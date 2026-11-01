@@ -1,3 +1,30 @@
+## 31 October 2026 — local hands-free Lock Screen Live Activity (P15-34 / #1470)
+
+Dan approved the hands-free Lock Screen card on the system surfaces board,
+as recorded in #1470 (ref #1456). This supersedes the earlier To agree status
+for this card only; Dynamic Island, task/decision push surfaces and Connection
+lost remain outside this approval.
+
+Use a locally requested ActivityKit activity and an embedded WidgetKit extension,
+not APNs or push tokens. Start after audio capture is ready and dismiss on
+end/failure; dismiss orphaned activities on cold launch. Keep only a local session
+UUID, time, language, phase/mute flag and bounded audio levels in activity data.
+LiveActivityIntent Mute/Unmute uses explicit desired state (repeat-safe); End
+targets the same weak in-memory voice owner. Reject stale controls without
+reading credentials or starting a session. Preserve local mute even if the socket
+write fails. Declare background audio for this existing audio session; call/route
+recovery is not added.
+
+Reuse the orb geometry with static SwiftUI paths in the widget rather than
+depending on Canvas archiving; the app's existing Canvas renderer is unchanged.
+Keep the approved composition, with Danish-default/English copy, stone
+secondary and a restrained orange End tint. The system timer runs without
+app-driven ticking; waveform updates use real PCM levels, at most once a second.
+Thinking/reconnecting are truthful additional statuses. Simulator fixtures are
+synthetic and compiled out of device builds. Linux Core tests are local evidence;
+Apple compilation, actual Lock Screen controls/background audio and the
+Simulator/board screenshot comparison remain pending native acceptance.
+
 ## 31 October 2026 — Factory review status uses stone (P15-33 / #1468)
 
 Use the shared stone secondary tone for the Factory In review status in the web
@@ -7777,6 +7804,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-31 | The iPhone app uses orange as the primary accent and cyan as the secondary accent. Primary orange is `#ffb45c` with dark text `#1d1200` in dark mode and `#b45f06` with white text in light mode. The secondary cyan is the token `accent-2`: `#52dcfa` in dark mode and `#14768d` in light mode. Dan wants the cyan replaced by a better colour later, so builders use only the token and never the literal value. The orb is unchanged: the real web orb with a dark glass sphere, a cyan rim, an orange and amber glowing tangled centre, and no orbit ellipses or tilted circles. | Dan: orange as the primary colour and the current cyan as the secondary, to be improved in time. The web app is not changed by this decision and keeps its own palette. The concept board and the system surfaces page are republished as `docs/ios/design/board.html` and `docs/ios/design/surfaces.html` with this palette. | Superseded by the stone secondary above |
 | 2026-10-31 | The web app shares the orange primary and stone secondary palette: `#ffb45c` with `#1d1200` control text in dark mode and `#b45f06` with white text in light mode; stone is `#c9bfae` in dark mode and `#6f6551` in light mode. Light-theme focus and link text use a deeper orange for 4.5:1 contrast. Existing per-user `--theme-accent` overrides remain supported. The orb's cyan glass edge and listening/voice colors stay unchanged; orange fills remain limited to primary controls and soft tints. | Dan's P15-21 decision on 31 October 2026 aligns web interaction, selection, progress and quiet secondary roles with the approved palette while retaining the separately owned orb and voice appearance. | Confirmed by Dan |
 | 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
+| 2026-10-31 | P15-34 / #1470 approves the local Lock Screen hands-free session. Dynamic Island remains To agree. Connection lost was approved separately in P15-37, and local Lock Screen tasks and decisions in P15-36. | The hands-free card's approval does not authorize other system surfaces or APNs. APNs push remains a separate backend gap and decision. | Hands-free agreed; APNs out of scope |
 | 2026-10-31 | The Lock Screen tasks and decisions surface is approved for P15-36. Use real running Factory task data and pending confirmations, local ActivityKit updates, and local approval notifications with authenticated Approve/Decline actions; keep measured progress indeterminate because the backend has no numeric progress contract. | Dan's P15-36 issue explicitly approves the Lock Screen tasks card. APNs registration, server delivery, and task/approval lifecycle pushes are not part of this approval and remain required for updates while the app is suspended. | Confirmed by Dan |
 | 2026-10-31 | Build the approved native Voice connection-loss state (P15-37 / #1476): only a real dropped connection shows the muted orb, “Connection lost”, Retry now and End. Retry starts a fresh session using the existing bounded reconnect policy; End closes the session and returns to Chat. Use orange primary and stone secondary glass actions, with Danish-default app-language copy and no helper text. | The existing `VoiceSessionClient` caps automatic reconnects at eight attempts. A user-requested retry starts another bounded session; the pure-Swift presentation state machine tests connected, lost, retrying and ended, including that initial failures are not mislabeled as drops. The iOS simulator PR artifact captures the synthetic state in Danish and English. | Confirmed by issue P15-37 |
 | 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |

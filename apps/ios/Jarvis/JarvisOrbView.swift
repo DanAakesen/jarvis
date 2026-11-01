@@ -19,6 +19,7 @@ struct JarvisOrbView: View {
 
     let activity: JarvisOrbActivity
     var diameter: CGFloat = JarvisDesignTokens.gateOrbSize
+    var usesStaticFilaments = false
 
     private var amplitude: CGFloat {
         switch activity {
@@ -43,11 +44,15 @@ struct JarvisOrbView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animatesCore)) { timeline in
+            if usesStaticFilaments {
+                sphere(size: geometry.size.width, phase: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animatesCore)) { timeline in
                 let phase = animatesCore
                     ? timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / animationDuration
                     : 0
                 sphere(size: geometry.size.width, phase: phase)
+                }
             }
         }
         .frame(width: diameter, height: diameter)
@@ -108,6 +113,11 @@ struct JarvisOrbView: View {
                         width: size * 0.56,
                         height: size * 0.56
                     )
+                Group {
+                    if usesStaticFilaments {
+                        staticFilaments
+                            .frame(width: size * 0.42, height: size * 0.42)
+                    } else {
                 Canvas { context, canvasSize in
                     let filamentSize = CGSize(width: size * 0.42, height: size * 0.42)
                     context.translateBy(
@@ -150,6 +160,8 @@ struct JarvisOrbView: View {
                             with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
                         )
                     }
+                    }
+                }
                 }
                 .frame(width: size * 0.7, height: size * 0.7)
                 Circle()
@@ -216,6 +228,32 @@ struct JarvisOrbView: View {
             Color(red: 1, green: 0.48, blue: 0.16),
             Color(red: 1, green: 0.78, blue: 0.38),
         ]
+    }
+
+    private var staticFilaments: some View {
+        GeometryReader { geometry in
+            ZStack {
+                ForEach(filamentCurves.indices, id: \.self) { index in
+                    let path = filamentPath(filamentCurves[index], size: geometry.size)
+                    let color = filamentColors[index % filamentColors.count]
+                    path.stroke(color.opacity(0.9), lineWidth: geometry.size.width * 0.065)
+                        .blur(radius: geometry.size.width * 0.08)
+                    path.stroke(color.opacity(0.9), lineWidth: geometry.size.width * 0.022)
+                    path.stroke(
+                        JarvisDesignTokens.orbCoreHighlight.opacity(0.82),
+                        lineWidth: geometry.size.width * 0.006
+                    )
+                }
+                ForEach(filamentSparks.indices, id: \.self) { index in
+                    let point = filamentSparks[index]
+                    let diameter = geometry.size.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
+                    Circle()
+                        .fill(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
+                        .frame(width: diameter, height: diameter)
+                        .position(x: point.x * geometry.size.width, y: point.y * geometry.size.height)
+                }
+            }
+        }
     }
 
     private var filamentCurves: [[CGPoint]] {
@@ -290,7 +328,7 @@ struct JarvisOrbView: View {
     }
 
     private var animatesCore: Bool {
-        !reduceMotion && scenePhase == .active &&
+        !usesStaticFilaments && !reduceMotion && scenePhase == .active &&
             (activity == .listening || activity == .thinking || activity == .speaking)
     }
 }

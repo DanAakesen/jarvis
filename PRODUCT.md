@@ -71,11 +71,25 @@ Face ID locking is separate; background audio, Bluetooth and route changes, call
 interruption and lock/call microphone recovery are not part of this screen.
 Follow-ups to file separately: background audio; Bluetooth; audio route changes;
 call interruption handling; microphone recovery after device lock; microphone
-recovery after a phone call; CarPlay; a voice-session Live Activity; and Action Button.
+recovery after a phone call; CarPlay; and Action Button. P15-34 adds the separately
+approved local Lock Screen voice Live Activity below.
 The screen requires an existing Keychain owner-session token; native sign-in is
 not included, so first-install voice remains unavailable until that separate work.
 
-### Connection loss (#1476; 31 October 2026)
+## Native voice Lock Screen Live Activity (P15-34 / #1470)
+
+An active native voice session starts a local ActivityKit Live Activity after
+microphone capture is ready and removes it on end or terminal failure. It shows
+the approved Jarvis orb, title, Listening/Speaking/Muted state, elapsed timer and
+audio-derived waveform. Thinking and reconnecting remain visible rather than
+misreporting listening. Mute/Unmute and End operate on the existing in-app session
+while locked, without opening the app or signing in. Stale controls cannot affect
+a replacement session. Copy follows the app language, Danish by default, with
+English resources. Activities disabled by the system do not prevent voice.
+No APNs, push tokens, backend changes or Dynamic Island layout are included.
+Native button dispatch, background audio and the Simulator/board comparison
+remain acceptance checks, not claims established by Linux tests.
+## Native voice connection loss (#1476; 31 October 2026)
 
 After an established realtime connection drops, Voice shows a muted orb, the
 “Connection lost” title, and Retry now and End actions. Retry now starts another
