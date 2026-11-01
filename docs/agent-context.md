@@ -6594,17 +6594,19 @@ Run `swift test --filter 'VoiceLiveActivityTests|VoiceSessionClientTests'` from
 These cover state projection, localized copy, PCM levels, stale/ended session
 controls, command errors and muted capture, not Apple frameworks.
 The existing ready-PR Mac job builds the extension and captures six synthetic
-Lock Screen states within the current 30-minute job deadline. The expanded notification,
-Factory and voice captures reached the previous 20-minute limit in run
-41259067682 after compilation succeeded; retain all captures and one boot.
-The states (Danish/English Listening, Speaking, Muted) use the same
-Simulator boot. `--screenshot-voice-activity-fixture` is Simulator-only and uses
+Lock Screen states in the same Simulator boot within the 30-minute job deadline.
+Expanded notification, Factory and voice captures exceeded the previous 20-minute
+limit in run 41259067682 after compilation succeeded; retain all captures and one
+boot. The Live Activity states are Danish/English Listening, Speaking and Muted.
+`--screenshot-voice-activity-fixture` is Simulator-only and uses
 no real microphone, credentials or network. Capture uses Simulator's Lock/Home
 keyboard shortcuts, which require macOS UI automation permission. Compare
 `voice-lock-listening-en.png` with the included `voice-approved-board.png` in the
-PR artifact. Native dispatch and background audio still need locked-device checks:
-mute/unmute must gate in-app capture, End must dismiss and stop audio, and old
-controls must not affect a replacement session.
+PR artifact. P15-35 still requires actual compact, minimal and expanded Island
+screenshots beside the board; the current fixture does not capture those states.
+Native dispatch and background audio still need locked-device checks: mute/unmute
+must gate in-app capture, End must dismiss and stop audio, and old controls must
+not affect a replacement session.
 
 ### Native voice screen and audio (P15-11)
 
