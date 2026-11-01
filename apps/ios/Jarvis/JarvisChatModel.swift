@@ -376,11 +376,15 @@ final class JarvisChatModel: ObservableObject {
         defer { resolvingConfirmationDecisions.removeValue(forKey: confirmation.id) }
         do {
             try await nowClient.resolveConfirmation(id: confirmation.id, decision: decision)
-            activityMessage = decision == .approve ? "Approval recorded." : "Request declined."
+            let result: JarvisApprovalLocalizationKey = decision == .approve ? .recorded : .declinedInApp
+            activityMessage = JarvisApprovalLocalization.string(result, language: appLanguage)
             nowFeed = try await nowClient.load()
             activityError = nil
+            await JarvisApprovalNotificationCoordinator.shared.dismissNotification(
+                confirmationID: confirmation.id
+            )
         } catch {
-            activityError = message(for: error)
+            activityError = JarvisApprovalLocalization.string(.resolutionFailed, language: appLanguage)
         }
     }
 

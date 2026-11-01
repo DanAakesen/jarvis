@@ -32,6 +32,7 @@ interface PendingAction {
 
 export class PendingGoogleActions {
   onChanged: () => void = () => {};
+  onConfirmationPending: (confirmation: BrowserConfirmation) => void = () => {};
   private readonly actions = new Map<string, PendingAction>();
   private calendarProposal: PendingAction | undefined;
   private calendarReceipt: {
@@ -85,6 +86,14 @@ export class PendingGoogleActions {
       this.calendarReceipt = undefined;
     }
     this.onChanged();
+    if (input.scope === 'calendar') {
+      this.onConfirmationPending({
+        id: action.browserId,
+        actionKind: 'calendar_change',
+        summary: action.summary,
+        expiresAt: action.confirmation.presentation.expiresAt,
+      });
+    }
     return {
       ...confirmation.presentation,
       confirmationCode: code,

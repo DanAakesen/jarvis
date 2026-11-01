@@ -1,5 +1,6 @@
 import JarvisCore
 import UserNotifications
+import UIKit
 
 extension Notification.Name {
     static let jarvisApprovalActionCompleted = Notification.Name("JarvisApprovalActionCompleted")
@@ -18,6 +19,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
 
     private let center = UNUserNotificationCenter.current()
     private var approvalsClient: JarvisApprovalsClient?
+    private var deviceToken: String?
 
     private override init() {
         super.init()
@@ -58,91 +60,89 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     }
 
     func refresh(language: JarvisAppLanguage) async {
-        guard let approvalsClient else { return }
+        registerCategory(language: language)
+        guard let approvalsClient else {
+            await synchronize([], language: language)
+            return
+        }
         do {
             let pending = try await approvalsClient.pendingConfirmations()
             await synchronize(pending.confirmations, language: language)
         } catch {
+            await removeLegacyPendingNotifications()
+        }
+        guard let deviceToken else { return }
+        let settings = await center.notificationSettings()
+        guard Self.notificationsAllowed(settings.authorizationStatus) else {
+            try? await approvalsClient.unregisterDeviceToken(deviceToken)
             return
         }
+        try? await approvalsClient.registerDeviceToken(
+            deviceToken,
+            language: language,
+            showActions: settings.showPreviewsSetting != .never
+        )
     }
 
     func synchronize(_ confirmations: [PendingConfirmation], language: JarvisAppLanguage) async {
         registerCategory(language: language)
-        let now = Date()
-        let validConfirmations = confirmations.compactMap { confirmation -> (PendingConfirmation, Date)? in
-            guard let expiresAt = Self.date(from: confirmation.expiresAt), expiresAt > now else {
-                return nil
-            }
-            return (confirmation, expiresAt)
-        }
-        let currentIDs = Set(validConfirmations.map { $0.0.id })
-        let pendingRequests = await center.pendingNotificationRequests()
-        let deliveredNotifications = await center.deliveredNotifications()
-        let approvalPending = pendingRequests.filter {
-            $0.content.categoryIdentifier == Self.categoryID ||
-                $0.content.categoryIdentifier == Self.privateCategoryID
-        }
-        let approvalDelivered = deliveredNotifications.filter {
+        let currentIDs = Set(confirmations.map(\.id))
+        await removeLegacyPendingNotifications()
+        let delivered = await center.deliveredNotifications().filter {
             $0.request.content.categoryIdentifier == Self.categoryID ||
                 $0.request.content.categoryIdentifier == Self.privateCategoryID
         }
-
-        let stalePendingIDs = approvalPending.map(\.identifier).filter { !currentIDs.contains($0) }
-        let staleDeliveredIDs = approvalDelivered.map(\.request.identifier).filter { !currentIDs.contains($0) }
-        center.removePendingNotificationRequests(withIdentifiers: stalePendingIDs)
-        center.removeDeliveredNotifications(withIdentifiers: staleDeliveredIDs)
-
-        var existingNotifications = [String: (body: String, category: String)]()
-        for request in approvalPending {
-            existingNotifications[request.identifier] = (
-                request.content.body,
-                request.content.categoryIdentifier
-            )
+        let staleIDs = delivered.compactMap { notification -> String? in
+            let content = notification.request.content
+            let confirmationID = content.userInfo["confirmationID"] as? String
+            guard let confirmationID,
+                  currentIDs.contains(confirmationID),
+                  notification.request.identifier != confirmationID else {
+                return notification.request.identifier
+            }
+            return nil
         }
-        for notification in approvalDelivered {
-            existingNotifications[notification.request.identifier] = (
-                notification.request.content.body,
-                notification.request.content.categoryIdentifier
-            )
-        }
+        center.removeDeliveredNotifications(withIdentifiers: staleIDs)
+    }
 
-        guard !validConfirmations.isEmpty else { return }
+    func requestAuthorizationIfNeeded() async -> Bool {
         let settings = await center.notificationSettings()
-        if settings.authorizationStatus == .notDetermined {
-            guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else {
-                return
-            }
-        } else if settings.authorizationStatus == .denied {
-            return
+        guard settings.authorizationStatus == .notDetermined else {
+            return Self.notificationsAllowed(settings.authorizationStatus)
         }
-        let showActions = (await center.notificationSettings()).showPreviewsSetting != .never
+        return (try? await center.requestAuthorization(options: [.alert, .sound, .badge])) == true
+    }
 
-        for (confirmation, expiresAt) in validConfirmations {
-            let content = Self.notificationContent(
-                for: confirmation,
-                expiresAt: expiresAt,
-                language: language,
-                showActions: showActions
-            )
-            if existingNotifications[confirmation.id]?.body == content.body,
-               existingNotifications[confirmation.id]?.category == content.categoryIdentifier {
-                continue
-            }
-            center.removePendingNotificationRequests(withIdentifiers: [confirmation.id])
-            center.removeDeliveredNotifications(withIdentifiers: [confirmation.id])
-            do {
-                try await center.add(
-                    UNNotificationRequest(
-                        identifier: confirmation.id,
-                        content: content,
-                        trigger: nil
-                    )
-                )
-            } catch {
-                continue
-            }
+    func registerForRemoteNotificationsIfAuthorized() async {
+        let settings = await center.notificationSettings()
+        guard Self.notificationsAllowed(settings.authorizationStatus) else { return }
+        UIApplication.shared.registerForRemoteNotifications()
+    }
+
+    func didRegisterForRemoteNotifications(deviceToken data: Data) async {
+        deviceToken = data.map { String(format: "%02x", $0) }.joined()
+        await refresh(language: Self.currentLanguage)
+    }
+
+    func unregisterDeviceToken() async {
+        guard let deviceToken else { return }
+        try? await approvalsClient?.unregisterDeviceToken(deviceToken)
+    }
+
+    func dismissNotification(confirmationID: String) async {
+        let delivered = await center.deliveredNotifications().filter {
+            ($0.request.content.userInfo["confirmationID"] as? String) == confirmationID
         }
+        center.removeDeliveredNotifications(withIdentifiers: delivered.map(\.request.identifier))
+    }
+
+    private func removeLegacyPendingNotifications() async {
+        let pendingRequests = await center.pendingNotificationRequests()
+        let pendingIDs = pendingRequests.filter {
+            $0.content.categoryIdentifier == Self.categoryID ||
+                $0.content.categoryIdentifier == Self.privateCategoryID
+        }.map(\.identifier)
+        center.removePendingNotificationRequests(withIdentifiers: pendingIDs)
     }
 
     func userNotificationCenter(
@@ -150,6 +150,11 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        if notification.request.content.categoryIdentifier == Self.categoryID ||
+            notification.request.content.categoryIdentifier == Self.privateCategoryID {
+            completionHandler([])
+            return
+        }
         completionHandler([.banner, .list, .sound])
     }
 
@@ -172,7 +177,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
             do {
                 try await approvalsClient.resolveConfirmation(id: id, decision: decision)
                 UserDefaults.standard.set(decision.rawValue, forKey: Self.actionResultKey)
-                center.removeDeliveredNotifications(withIdentifiers: [id])
+                await dismissNotification(confirmationID: id)
                 NotificationCenter.default.post(name: .jarvisApprovalActionCompleted, object: nil)
             } catch {
                 await recordActionFailure()
@@ -200,33 +205,6 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
         }
     }
 
-    private static func notificationContent(
-        for confirmation: PendingConfirmation,
-        expiresAt: Date,
-        language: JarvisAppLanguage,
-        showActions: Bool
-    ) -> UNMutableNotificationContent {
-        let content = UNMutableNotificationContent()
-        content.title = "Jarvis"
-        let singleLineSummary = confirmation.summary
-            .replacingOccurrences(of: "\r", with: " ")
-            .replacingOccurrences(of: "\n", with: " ")
-        let summary = singleLineSummary.count > 240
-            ? String(singleLineSummary.prefix(239)) + "…"
-            : singleLineSummary
-        let expiryTime = expiresAt.formatted(
-            .dateTime.hour().minute().locale(language.locale)
-        )
-        let expiryTemplate = JarvisApprovalLocalization.string(.expires, language: language)
-        let expiry = String(format: expiryTemplate, locale: language.locale, arguments: [expiryTime])
-        content.body = "\(summary)\n\(expiry)"
-        content.categoryIdentifier = showActions ? categoryID : privateCategoryID
-        content.threadIdentifier = categoryID
-        content.userInfo = ["confirmationID": confirmation.id]
-        content.sound = .default
-        return content
-    }
-
     private static func decision(for actionID: String) -> ConfirmationDecision? {
         switch actionID {
         case approveActionID: .approve
@@ -241,10 +219,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
         ) ?? .default
     }
 
-    private static func date(from value: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        if let date = formatter.date(from: value) { return date }
-        formatter.formatOptions.insert(.withFractionalSeconds)
-        return formatter.date(from: value)
+    private static func notificationsAllowed(_ status: UNAuthorizationStatus) -> Bool {
+        status == .authorized || status == .provisional || status == .ephemeral
     }
 }

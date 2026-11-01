@@ -1,6 +1,9 @@
 "approval.approve" = "Approve";
 "approval.decline" = "Decline";
 "approval.sending" = "Sending…";
+"approval.recorded" = "Approval recorded.";
+"approval.declinedInApp" = "Request declined.";
+"approval.resolutionFailed" = "The action wasn't completed. Try again.";
 "approval.expires" = "Expires at %@";
 "approval.approvedFromLockScreen" = "Approved from the Lock Screen.";
 "approval.declinedFromLockScreen" = "Declined from the Lock Screen.";
