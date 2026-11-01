@@ -1,31 +1,89 @@
 import ActivityKit
 import Foundation
 import JarvisCore
+import SwiftUI
+import UIKit
 
 @MainActor
-enum JarvisFactoryLiveActivityController {
+final class JarvisFactoryLiveActivityController: ObservableObject {
+    static let shared = JarvisFactoryLiveActivityController()
     private static let maximumConcurrentActivities = 5
+    @Published private(set) var notice: JarvisFactoryLocalizationKey?
+    private var tokenObservers: [String: Task<Void, Never>] = [:]
+    private var registeredTokens = Set<String>()
+    private var client: JarvisNowFeedClient?
+
+    static func configure(client: JarvisClient) {
+        shared.client = JarvisNowFeedClient(client: client)
+    }
 
     static func update(
         task: FactoryTaskRecord,
         activityText: String? = nil,
-        language: JarvisAppLanguage
+        language: JarvisAppLanguage,
+        reconciliationOnly: Bool = false
     ) async {
-        let isActive = task.state == .running
+        let phase = task.state.activityPhase(latestSessionEndReason: task.latestSessionEndReason)
         await update(
             taskID: task.id,
             title: task.title,
-            state: JarvisFactoryLocalization.string(stateKey(for: task.state), language: language),
+            state: JarvisFactoryLocalization.string(
+                phase == "failed" ? .failed : phase == "waiting" ? .waiting : stateKey(for: task.state),
+                language: language
+            ),
             activityText: activityText ?? task.activity,
             startedAt: task.startedAt.flatMap(Self.date(from:)),
             language: language,
-            isActive: isActive
+            phase: phase,
+            reconciliationOnly: reconciliationOnly
         )
     }
 
-    static func synchronize(_ tasks: [NowFeedRunningTask], language: JarvisAppLanguage) async {
+    static func refreshExisting(client: JarvisClient) async throws {
+        let activities = Array(
+            Activity<FactoryTaskActivityAttributes>.activities.prefix(maximumConcurrentActivities)
+        )
+        guard !activities.isEmpty else { return }
+        let nowClient = JarvisNowFeedClient(client: client)
+        async let feed = nowClient.load()
+        async let jobs = nowClient.backgroundTasks()
+        let (now, backgroundTasks) = try await (feed, jobs)
+        let factoryClient = JarvisFactoryClient(client: client)
+
+        for activity in activities {
+            try Task.checkCancellation()
+            let id = activity.attributes.taskID
+            let language = JarvisAppLanguage(rawValue: activity.attributes.language) ?? .default
+            if let task = backgroundTasks.first(where: { $0.id == id }) {
+                await update(
+                    taskID: id, title: task.title,
+                    state: JarvisFactoryLocalization.string(task.status.localizationKey, language: language),
+                    activityText: task.detail, startedAt: date(from: task.startedAt),
+                    language: language, phase: task.status.rawValue, reconciliationOnly: true
+                )
+            } else if let task = now.running.first(where: { $0.id == id }) {
+                await update(
+                    taskID: id, title: task.title,
+                    state: JarvisFactoryLocalization.string(.running, language: language),
+                    activityText: task.activity, startedAt: date(from: task.startedAt),
+                    language: language, phase: "running", reconciliationOnly: true
+                )
+            } else if UUID(uuidString: id) == nil {
+                let detail = try await factoryClient.task(id: id, eventLimit: 1)
+                try Task.checkCancellation()
+                await update(task: detail.task, language: language, reconciliationOnly: true)
+            }
+            // Missing jobs are not terminal evidence; retain their stale activity.
+        }
+    }
+
+    static func synchronize(
+        _ tasks: [NowFeedRunningTask], backgroundTasks: [BackgroundTaskRecord] = [],
+        factoryClient: JarvisFactoryClient? = nil, language: JarvisAppLanguage
+    ) async {
         let visibleTasks = tasks.prefix(maximumConcurrentActivities)
         let activeIDs = Set(visibleTasks.map(\.id))
+        shared.notice = nil
         for task in visibleTasks {
             await update(
                 taskID: task.id,
@@ -34,12 +92,28 @@ enum JarvisFactoryLiveActivityController {
                 activityText: task.activity,
                 startedAt: date(from: task.startedAt),
                 language: language,
-                isActive: true
+                phase: "running"
             )
         }
+        for task in backgroundTasks.sorted(by: { $0.status == .running && $1.status != .running }) {
+            let phase = task.status.rawValue
+            await update(
+                taskID: task.id, title: task.title,
+                state: JarvisFactoryLocalization.string(task.status.localizationKey, language: language),
+                activityText: task.detail, startedAt: date(from: task.startedAt),
+                language: language, phase: phase,
+                factoryTitle: JarvisFactoryLocalization.string(.backgroundTask, language: language)
+            )
+        }
+
         for activity in Activity<FactoryTaskActivityAttributes>.activities
-            where !activeIDs.contains(activity.attributes.taskID) {
-            await activity.end(nil, dismissalPolicy: .immediate)
+            where !activeIDs.contains(activity.attributes.taskID) &&
+                UUID(uuidString: activity.attributes.taskID) == nil {
+            // Absence from the running-only feed is not a terminal state.
+            if let factoryClient,
+               let detail = try? await factoryClient.task(id: activity.attributes.taskID) {
+                await update(task: detail.task, language: language)
+            }
         }
     }
 
@@ -50,35 +124,49 @@ enum JarvisFactoryLiveActivityController {
         activityText: String?,
         startedAt: Date?,
         language: JarvisAppLanguage,
-        isActive: Bool
+        phase: String,
+        factoryTitle: String? = nil,
+        reconciliationOnly: Bool = false
     ) async {
         let matching = Activity<FactoryTaskActivityAttributes>.activities.filter {
             $0.attributes.taskID == taskID
         }
 
-        guard isActive else {
+        let state = Activity<FactoryTaskActivityAttributes>.ContentState(
+            state: state,
+            activity: sanitizedActivity(activityText),
+            phase: phase
+        )
+        let content = ActivityContent(
+            state: state,
+            staleDate: phase == "running" || phase == "waiting" ? Date().addingTimeInterval(60) : nil
+        )
+        guard phase == "running" || phase == "waiting" else {
             for activity in matching {
-                await activity.end(nil, dismissalPolicy: .immediate)
+                await activity.end(content, dismissalPolicy: .after(Date().addingTimeInterval(300)))
+                shared.tokenObservers.removeValue(forKey: activity.id)?.cancel()
             }
             return
         }
 
-        let state = Activity<FactoryTaskActivityAttributes>.ContentState(
-            state: state,
-            activity: sanitizedActivity(activityText)
-        )
-        let content = ActivityContent(state: state, staleDate: nil)
-
         if let activity = matching.first {
             await activity.update(content)
+            if !reconciliationOnly {
+                observePushToken(activity, language: language)
+            }
             for duplicate in matching.dropFirst() {
                 await duplicate.end(nil, dismissalPolicy: .immediate)
             }
             return
         }
 
-        guard ActivityAuthorizationInfo().areActivitiesEnabled,
-              Activity<FactoryTaskActivityAttributes>.activities.count < maximumConcurrentActivities else {
+        guard !reconciliationOnly else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            shared.notice = .liveActivitiesDisabled
+            return
+        }
+        guard Activity<FactoryTaskActivityAttributes>.activities.count < maximumConcurrentActivities else {
+            shared.notice = .liveActivityUnavailable
             return
         }
         let attributes = FactoryTaskActivityAttributes(
@@ -86,16 +174,50 @@ enum JarvisFactoryLiveActivityController {
             title: title,
             startedAt: startedAt,
             language: language.rawValue,
-            factoryTitle: JarvisFactoryLocalization.string(.title, language: language)
+            factoryTitle: factoryTitle ?? JarvisFactoryLocalization.string(.title, language: language)
         )
         do {
-            _ = try Activity.request(
+            let activity = try Activity.request(
                 attributes: attributes,
                 content: content,
-                pushType: nil
+                pushType: .token
             )
+            observePushToken(activity, language: language)
         } catch {
-            return
+            shared.notice = .liveActivityUnavailable
+        }
+    }
+
+    private static func observePushToken(
+        _ activity: Activity<FactoryTaskActivityAttributes>, language: JarvisAppLanguage
+    ) {
+        if let token = activity.pushToken {
+            Task { await register(token, activity: activity, language: language) }
+        }
+        guard shared.tokenObservers[activity.id] == nil else { return }
+        shared.tokenObservers[activity.id] = Task {
+            for await token in activity.pushTokenUpdates {
+                guard !Task.isCancelled else { return }
+                await register(token, activity: activity, language: language)
+            }
+            shared.tokenObservers[activity.id] = nil
+        }
+    }
+
+    private static func register(
+        _ token: Data, activity: Activity<FactoryTaskActivityAttributes>, language: JarvisAppLanguage
+    ) async {
+        let hex = token.map { String(format: "%02x", $0) }.joined()
+        let key = "\(activity.id):\(hex):\(language.rawValue)"
+        guard !shared.registeredTokens.contains(key), let client = shared.client else { return }
+        do {
+            try await client.registerTaskActivity(
+                taskID: activity.attributes.taskID, activityID: activity.id,
+                pushToken: hex, language: language
+            )
+            shared.registeredTokens.insert(key)
+        } catch {
+            shared.notice = .liveActivityLocalOnly
         }
     }
 
@@ -122,5 +244,28 @@ enum JarvisFactoryLiveActivityController {
         if let date = formatter.date(from: value) { return date }
         formatter.formatOptions.insert(.withFractionalSeconds)
         return formatter.date(from: value)
+    }
+}
+
+struct JarvisTaskActivityNotice: View {
+    let language: JarvisAppLanguage
+    @ObservedObject private var activity = JarvisFactoryLiveActivityController.shared
+
+    var body: some View {
+        if let notice = activity.notice {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(JarvisFactoryLocalization.string(notice, language: language))
+                    .font(.callout)
+                if notice == .liveActivitiesDisabled,
+                   let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                    Link(
+                        JarvisFactoryLocalization.string(.openSettings, language: language),
+                        destination: settingsURL
+                    )
+                    .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget, alignment: .leading)
+                }
+            }
+            .padding()
+        }
     }
 }

@@ -46,6 +46,9 @@ struct JarvisFactoryTaskDetailView: View {
                 FactoryStateMessage(title: copy.text(.taskDetail))
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            JarvisTaskActivityNotice(language: language)
+        }
         .jarvisAmbientBackground()
         .navigationTitle(task?.title ?? copy.text(.taskDetail))
         .navigationBarTitleDisplayMode(.inline)

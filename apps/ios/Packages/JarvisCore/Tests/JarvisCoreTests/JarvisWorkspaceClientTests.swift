@@ -3,6 +3,18 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisWorkspaceClientTests: XCTestCase {
+    func testJobEventTriggersActivitySnapshotRefresh() async throws {
+        let transport = FakeWorkspaceTransport(
+            streams: [.stream(sseResponse("job", ["jobId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "running"], staysOpen: true))],
+            responses: []
+        )
+        let workspace = makeWorkspaceClient(transport: transport)
+        for try await event in workspace.events() {
+            XCTAssertEqual(event, .activityChanged)
+            break
+        }
+    }
+
     func testRegistersFlatSnapshotAndRejectsOversizedSnapshotsLocally() async throws {
         let sessionId = "12345678-1234-4234-8234-123456789abc"
         let transport = FakeWorkspaceTransport(

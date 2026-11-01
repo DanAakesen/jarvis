@@ -13,6 +13,16 @@ public enum FactoryTaskState: String, Codable, CaseIterable, Sendable {
     case needsAttention = "NeedsAttention"
     case done = "Done"
     case cancelled = "Cancelled"
+
+    public func activityPhase(latestSessionEndReason: FactorySessionEndReason?) -> String {
+        switch self {
+        case .running, .pauseRequested: "running"
+        case .ready, .paused: "waiting"
+        case .needsAttention: latestSessionEndReason == .crashed ? "failed" : "waiting"
+        case .done: "done"
+        case .cancelled: "cancelled"
+        }
+    }
 }
 
 public enum FactoryProjectPolicy: String, Codable, CaseIterable, Sendable {

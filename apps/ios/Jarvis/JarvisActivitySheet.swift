@@ -31,7 +31,8 @@ struct JarvisActivitySheet: View {
                                 .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                         }
                     } else if let feed = model.nowFeed {
-                        let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty || !feed.items.isEmpty
+                        let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty ||
+                            !feed.items.isEmpty || !model.backgroundTasks.isEmpty
                         if let error = model.activityError {
                             HStack {
                                 Text(error)
@@ -58,6 +59,9 @@ struct JarvisActivitySheet: View {
                         }
                         if !feed.running.isEmpty {
                             runningSection(feed.running)
+                        }
+                        if !model.backgroundTasks.isEmpty {
+                            backgroundTaskSection
                         }
                         ForEach(NowFeedActivityCategory.allCases, id: \.self) { category in
                             let items = feed.items.filter { $0.category == category }
@@ -98,6 +102,27 @@ struct JarvisActivitySheet: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .jarvisApprovalActionCompleted)) { _ in
             Task { await model.refreshActivity() }
+        }
+    }
+
+    private var backgroundTaskSection: some View {
+        let language = appLanguage
+        return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+            Text(JarvisFactoryLocalization.string(.backgroundTask, language: language))
+                .font(.headline)
+            ForEach(model.backgroundTasks) { task in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(task.title).font(.body)
+                    Text(JarvisFactoryLocalization.string(task.status.localizationKey, language: language))
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                    if let detail = task.detail {
+                        Text(detail).font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Divider()
+            }
         }
     }
 
