@@ -7,8 +7,9 @@ Device registration is owner-scoped and opt-in through the existing protected
 APNs configuration; duplicate local and foreground banners are removed. Focused
 backend/Core tests and builds pass. Approval Live Activities and lifecycle
 pushes for approvals resolved elsewhere are deliberately not implemented. Mac
-SwiftUI compilation, rendered iOS states, live APNs delivery and production
-configuration remain unverified; no deployment is included.
+SwiftUI compilation and Simulator captures passed on the preceding PR head;
+fresh post-merge CI, live APNs delivery and production configuration remain
+unverified; no deployment is included.
 
 Apple documentation referenced: [Declaring Your Actionable Notification Types](https://developer.apple.com/documentation/usernotifications/declaring-your-actionable-notification-types),
 [Generating a Remote Notification](https://developer.apple.com/documentation/usernotifications/generating-a-remote-notification),
@@ -16,6 +17,18 @@ and [Starting and Updating Live Activities with ActivityKit Push Notifications](
 The direct Apple documentation page fetch was blocked in this environment;
 the implementation uses actionable alert notifications rather than an approval
 Live Activity, while existing task Live Activities remain separate.
+
+## P15-50 — preview builds, non-blocking UI tests and release train (#1502)
+
+Implemented manual TestFlight previews from environment-approved PR branches
+through a validated matching branch input, with preview build notes and no
+release tags. PR XCUITests still run, retain
+screenshots and warn in the existing comment without failing `CI result`;
+nightly `main` failures update one tracking issue. The release train is one
+build per 15-minute test window, ship at the window boundary even if partly
+done, and preview before merge. Focused workflow-contract tests pass locally;
+hosted macOS execution, environment branch rules and a real TestFlight upload
+remain unverified.
 
 ## P15-46 — suggestions create approvals (#1494)
 
@@ -2242,7 +2255,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   intent boundary; native WidgetKit compilation and compact/minimal/expanded
   Simulator captures beside the approved board remain pending.
 
-- **Active phase:** P15, iOS Phase 1c. The Phase 1a shell/CI and Phase 1b manual TestFlight workflow are implemented; P15-10 adds Chat, P15-11 Voice, P15-12 Notes, P15-13 the sidebar, P15-14 Workspaces, and P15-16 sign-in/Face ID. P15-45 improves Chat Markdown and tool alignment, adds isolated HTML-app rendering via the existing artifact route, and introduces a focused UI test with calendar screenshots. Core tests pass locally; SwiftUI compilation, simulator UI test and screenshot artifact remain pending the ready-PR Mac job. The first owner-started TestFlight archive/export/upload remains unproven.
+- **Active phase:** P15, iOS Phase 1c. The Phase 1a shell/CI and Phase 1b manual TestFlight workflow are implemented; P15-50 adds PR-branch preview dispatches, non-blocking PR UI-test failures, nightly failure tracking and the agreed release train. P15-10 adds Chat, P15-11 Voice, P15-12 Notes, P15-13 the sidebar, P15-14 Workspaces, and P15-16 sign-in/Face ID. P15-45 improves Chat Markdown and tool alignment, adds isolated HTML-app rendering via the existing artifact route, and introduces a focused UI test with calendar screenshots. Core tests pass locally; SwiftUI compilation, simulator UI test and screenshot artifact remain pending the ready-PR Mac job. The first owner-started TestFlight archive/export/upload remains unproven.
 - **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
 - **P15-40 (#1482):** End → fresh Voice now auto-starts, invalidates stale callbacks and releases the old audio/transport. The red End control, stationary cyan-rimmed glass orb with animated amber centre, Reduced Motion and Danish/English Voice copy are implemented. Previous merged-head CI passed Apple compilation and six synthetic Voice captures. Ambient main (#1479) is merged; the core now has transparent blur margins and a feathered alpha mask to remove square edges. Fresh listening/thinking/speaking light/dark captures with board comparisons are pending this revision's CI; live iPhone End/start and motion acceptance remain unverified.
 
@@ -3520,7 +3533,8 @@ no per-screen hardcoded values, and a stated reason for each custom component.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P15-01 | [#1370](https://github.com/DanAakesen/jarvis/issues/1370) | iOS skeleton and checks (Phase 1a) | `apps/ios/` holds `project.yml`, the `JarvisCore` package with a passing test and the SwiftUI app target; `ios-ci.yml` runs from `ci.yml` only when `apps/ios/` or shared inputs change and `CI result` passes with `ios` selected; the offline pipeline tests pass and an iOS-only change leaves every production deployment fingerprint unchanged; the listed documents are updated. | None | Complete |
-| P15-02 | [#1387](https://github.com/DanAakesen/jarvis/issues/1387) | Manual TestFlight upload workflow (Phase 1b) | Standalone `workflow_dispatch` workflow, main-only signing environment, one pinned-Xcode/XcodeGen `macos-26` archive/upload job, secure temporary key cleanup, no CI call or production deployment selection, offline workflow tests, owner setup/dispatch instructions and updated documents. First archive/export/upload remains unproven until the owner runs it after merging. | P15-01 | Complete |
+| P15-02 | [#1387](https://github.com/DanAakesen/jarvis/issues/1387) | Manual TestFlight upload workflow (Phase 1b) | Standalone `workflow_dispatch` workflow with an explicit branch input matching the selected workflow ref, environment-protected signing for `main` and approved preview branches, one pinned-Xcode/XcodeGen `macos-26` archive/upload job, secure temporary key cleanup, no CI call or production deployment selection, offline workflow tests, owner setup/dispatch instructions and updated documents. First archive/export/upload remains unproven until a run completes. | P15-01 | Complete |
+| P15-50 | [#1502](https://github.com/DanAakesen/jarvis/issues/1502) | iOS preview builds, non-blocking UI tests and release train | Write-authorized manual preview dispatch from approved PR branches; preview notes and no release tags; keep simulator/core/Python/source-contract/CodeQL gates, warn on non-blocking PR UI-test failures, nightly main issue tracking, and document the 15-minute train. Local workflow-contract tests pass; hosted and TestFlight behavior remain unverified. | P15-02 | In progress |
 | P15-03 | [#1388](https://github.com/DanAakesen/jarvis/issues/1388) | JarvisCore networking and auth client layer (Phase 1c) | `JarvisCore` provides a fakeable HTTP transport, token storage and access-token seams; implements bearer-authenticated owner-session lifecycle and `/tools` calls with typed status/network errors and bounded retries only for idempotent requests; Linux tests cover cancellation, error mapping and tolerant Codable responses; no Apple-only framework or third-party dependency is introduced. | P15-01 | Complete |
 | P15-04 | [#1389](https://github.com/DanAakesen/jarvis/issues/1389) | JarvisCore SSE parser and chat client (Phase 1c) | Byte-oriented SSE parsing and a fake-compatible cancellable stream seam; authenticated chat session/turn/active/reattach/cancel/history/attachment APIs reuse web routes; typed known and unknown events, typed stream failures, local text/attachment validation, multipart upload capped at 20 MB, history `toolCalls`, and fake-clock reattach retries; Linux tests pass without Apple frameworks or third-party dependencies. | P15-03 | Complete |
 | P15-09 | [#1394](https://github.com/DanAakesen/jarvis/issues/1394) | Apple URLSession and Keychain adapters (Phase 1c) | The app target implements the HTTP and byte-stream seam with per-request timeouts and cancellation, stores tokens in a non-synchronizing Keychain item using `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, and composes `JarvisClient` from the configured base URL. No route, host, or dependency is added. WebSocket is deferred until the #1391 seam exists; Mac validation compiles the adapters without simulator tests. | P15-03, P15-04, #1391 | Complete |

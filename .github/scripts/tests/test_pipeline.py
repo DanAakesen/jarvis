@@ -623,13 +623,14 @@ class SafeFailureTests(unittest.TestCase):
         ])
 
     def test_ios_macos_build_is_cost_guarded(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         source = (ROOT / ".github/workflows/ios-ci.yml").read_text()
-        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:", source)
+        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:\n  schedule:", source)
+        self.assertEqual(workflow["on"]["schedule"], [{"cron": "17 3 * * *"}])
         self.assertIn("    needs: linux", source)
         self.assertIn(
-            "    if: needs.linux.result == 'success' && github.event_name == 'pull_request' "
-            "&& github.event.pull_request.draft == false",
-            source,
+            "github.event_name == 'schedule' && github.ref == 'refs/heads/main'",
+            workflow["jobs"]["macos"]["if"],
         )
         self.assertIn("    runs-on: macos-26", source)
         self.assertIn("    timeout-minutes: 30", source)
@@ -646,6 +647,29 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
         self.assertIn("sidebar-open-dark.png", source)
+
+    def test_ios_ui_test_failure_is_nonblocking_but_reported(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        job = workflow["jobs"]["macos"]
+        capture = next(step for step in job["steps"] if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertEqual(capture["id"], "capture")
+        self.assertIn("if xcodebuild test", capture["run"])
+        self.assertIn('echo "result=failure" >> "$GITHUB_OUTPUT"', capture["run"])
+        self.assertIn("xcrun xcresulttool export attachments", capture["run"])
+
+        comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
+        self.assertEqual(comment["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(comment["env"]["UI_TEST_RESULT"], "${{ steps.capture.outputs.result }}")
+        self.assertIn("Warning: iOS UI tests failed.", comment["run"])
+
+        tracker = next(step for step in job["steps"] if step.get("name") == "Open or update the nightly UI test issue")
+        self.assertIn("steps.capture.outputs.result == 'failure'", tracker["if"])
+        self.assertIn("search/issues", tracker["run"])
+        self.assertIn("gh api --method PATCH", tracker["run"])
+        self.assertIn("gh api --method POST", tracker["run"])
+        self.assertIn("state: \"open\"", tracker["run"])
+        nightly_failure = next(step for step in job["steps"] if step.get("name") == "Fail the nightly run when UI tests fail")
+        self.assertIn("steps.capture.outputs.result == 'failure'", nightly_failure["if"])
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -971,6 +995,10 @@ class SafeFailureTests(unittest.TestCase):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
         workflow = load_workflow(workflow_path)
         self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["branch"], {
+            "description": "Branch to build; must match the selected workflow branch",
+            "required": True, "default": "main", "type": "string",
+        })
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         self.assertEqual(workflow["concurrency"], {
             "group": "ios-testflight", "cancel-in-progress": False,
@@ -994,9 +1022,19 @@ class SafeFailureTests(unittest.TestCase):
         for line in raw_workflow.splitlines():
             if "uses:" in line:
                 self.assertRegex(line, r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v\S+")
-        guard = next(step for step in job["steps"] if step.get("name") == "Require main branch")
-        self.assertEqual(guard["if"], "github.ref != 'refs/heads/main'")
+        guard = next(step for step in job["steps"] if step.get("name") == "Validate dispatch branch")
+        self.assertEqual(guard["env"]["INPUT_BRANCH"], "${{ inputs.branch }}")
+        self.assertIn("git check-ref-format --branch", guard["run"])
+        self.assertIn('"$GITHUB_REF" != "refs/heads/$INPUT_BRANCH"', guard["run"])
         self.assertIn("exit 1", guard["run"])
+        checkout = next(step for step in job["steps"]
+                        if step.get("uses", "").startswith("actions/checkout@"))
+        self.assertEqual(checkout["with"]["ref"], "${{ inputs.branch }}")
+        preview_notes = next(step for step in job["steps"] if step.get("name") == "Add preview build notes")
+        self.assertEqual(preview_notes["if"], "github.ref != 'refs/heads/main'")
+        self.assertIn("Preview build", preview_notes["run"])
+        self.assertIn("does not create a release tag", preview_notes["run"])
+        self.assertFalse(any("git tag" in step.get("run", "") for step in job["steps"]))
         preflight = next(step for step in job["steps"] if step.get("name") == "Check signing configuration")
         self.assertTrue({
             "APP_STORE_CONNECT_KEY_P8", "APP_STORE_CONNECT_KEY_ID",
