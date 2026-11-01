@@ -95,6 +95,28 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         return AVCaptureDevice.default(for: .video)
     }
 
+    /// Flash used for still photos (auto, on or off); remembered for the session.
+    var flashMode: AVCaptureDevice.FlashMode {
+        get { lock.lock(); defer { lock.unlock() }; return storedFlashMode }
+        set { lock.lock(); storedFlashMode = newValue; lock.unlock() }
+    }
+    private var storedFlashMode: AVCaptureDevice.FlashMode = .auto
+
+    var hasFlash: Bool { session.inputs.contains { ($0 as? AVCaptureDeviceInput)?.device.hasFlash == true } }
+    var hasTorch: Bool { session.inputs.contains { ($0 as? AVCaptureDeviceInput)?.device.hasTorch == true } }
+
+    /// Continuous light for the live video preview.
+    func setTorch(_ on: Bool) {
+        queue.sync {
+            guard let device = (session.inputs.first as? AVCaptureDeviceInput)?.device, device.hasTorch else { return }
+            do {
+                try device.lockForConfiguration()
+                device.torchMode = on ? .on : .off
+                device.unlockForConfiguration()
+            } catch {}
+        }
+    }
+
     private(set) var position: AVCaptureDevice.Position = .back
     private(set) var lens: VoiceCameraLens = .wide
 
@@ -149,6 +171,11 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                     throw VoiceCameraError.unavailable
                 }
                 let input = try AVCaptureDeviceInput(device: device)
+                if let old = (session.inputs.first as? AVCaptureDeviceInput)?.device, old.hasTorch,
+                   (try? old.lockForConfiguration()) != nil {
+                    old.torchMode = .off
+                    old.unlockForConfiguration()
+                }
                 let previous = session.inputs
                 previous.forEach { session.removeInput($0) }
                 guard session.canAddInput(input) else {
@@ -209,10 +236,11 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                 }
                 self.photoContinuation = continuation
                 self.lock.unlock()
-                self.stillPhotoOutput.capturePhoto(
-                    with: AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg]),
-                    delegate: self
-                )
+                let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+                if self.stillPhotoOutput.supportedFlashModes.contains(self.flashMode) {
+                    settings.flashMode = self.flashMode
+                }
+                self.stillPhotoOutput.capturePhoto(with: settings, delegate: self)
             }
         }
     }

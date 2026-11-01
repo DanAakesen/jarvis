@@ -163,6 +163,12 @@ final class NavigationReliabilityTests: XCTestCase {
     }
 
     private func startVoice() {
+        if !app.buttons["chat.mode"].exists {
+            let input = app.descendants(matching: .any)["chat.input"]
+            tap(input)
+            let length = (input.value as? String)?.count ?? 0
+            input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: length))
+        }
         tap(app.buttons["chat.mode"])
         waitFor(app.buttons["voice.mic"], key: "isHittable", value: true)
     }

@@ -107,7 +107,7 @@ struct JarvisChatScreen: View {
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
-    @State private var attachmentDialog = false
+    @StateObject private var dictation = ChatDictation()
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
     @State private var cameraCapture: VoiceCameraCapture?
@@ -182,7 +182,7 @@ struct JarvisChatScreen: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             composer
         }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: .topTrailing) {
             videoTile
         }
         .navigationTitle("Chat")
@@ -235,11 +235,6 @@ struct JarvisChatScreen: View {
 
     private var attachmentPickers: some View {
         layout
-        .confirmationDialog(copy(.addToMessage), isPresented: $attachmentDialog, titleVisibility: .visible) {
-            Button(copy(.chooseFiles)) { fileImporterPresented = true }
-            Button(copy(.photoLibrary)) { photosPickerPresented = true }
-            Button(copy(.cancel), role: .cancel) {}
-        }
         .fileImporter(
             isPresented: $fileImporterPresented,
             allowedContentTypes: [.item],
@@ -271,12 +266,14 @@ struct JarvisChatScreen: View {
                     JarvisChatCameraSheet(
                         camera: cameraCapture,
                         language: appLanguage,
+                        copyText: copy,
                         closeTitle: copy(.close),
                         takePhotoTitle: copy(.takePhoto),
                         takingPhotoTitle: copy(.takingPhoto),
                         isCapturingPhoto: isCapturingPhoto,
                         onCapture: captureCameraPhoto,
-                        onCancel: cancelCameraPhoto
+                        onCancel: cancelCameraPhoto,
+                        onVideo: switchCameraSheetToVideo
                     )
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -305,6 +302,7 @@ struct JarvisChatScreen: View {
         .jarvisAmbientBackground()
         .onAppear(perform: refreshScreenSharing)
         .onDisappear {
+            dictation.stop()
             model.suspendObservation()
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
@@ -652,22 +650,8 @@ struct JarvisChatScreen: View {
                 HStack(spacing: 0) {
                     plusMenu
                     Spacer(minLength: 0)
-                    Button {
-                        onNavigate(.voice)
-                    } label: {
-                        Image(systemName: "waveform")
-                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
-                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                            .frame(
-                                width: JarvisDesignTokens.chatMinimumTapTarget,
-                                height: JarvisDesignTokens.chatMinimumTapTarget
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(copy(.voiceMode))
-                    .accessibilityIdentifier("chat.mode")
-                    sendOrStopButton
+                    dictateButton
+                    trailingButton
                 }
             }
             .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
@@ -684,8 +668,50 @@ struct JarvisChatScreen: View {
         }
     }
 
+    private var dictateButton: some View {
+        Button(action: toggleDictation) {
+            Image(systemName: dictation.isListening ? "stop.circle.fill" : "mic")
+                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
+                .foregroundStyle(
+                    dictation.isListening ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent
+                )
+                .frame(
+                    width: JarvisDesignTokens.chatMinimumTapTarget,
+                    height: JarvisDesignTokens.chatMinimumTapTarget
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isSending || model.fixtureMode)
+        .accessibilityLabel(copy(dictation.isListening ? .stopDictation : .dictate))
+        .accessibilityIdentifier("chat.dictate")
+    }
+
+    private func toggleDictation() {
+        if dictation.isListening {
+            dictation.stop()
+            return
+        }
+        Task {
+            guard await ChatDictation.requestAccess() else {
+                model.actionError = copy(.dictationUnavailable)
+                return
+            }
+            do {
+                try dictation.start(
+                    locale: Locale(identifier: model.voiceLanguage == .da ? "da-DK" : "en-GB"),
+                    base: model.draft
+                ) { model.draft = $0 }
+                model.actionError = nil
+            } catch {
+                model.actionError = copy(.dictationUnavailable)
+            }
+        }
+    }
+
+    /// One slot, one size: Voice while the field is empty, Send once there is text, Stop while Jarvis answers.
     @ViewBuilder
-    private var sendOrStopButton: some View {
+    private var trailingButton: some View {
         if model.isSending {
             Button {
                 Task { await model.cancel() }
@@ -708,36 +734,48 @@ struct JarvisChatScreen: View {
             .buttonStyle(.plain)
             .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
             .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
+            .accessibilityIdentifier("chat.stop")
             .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
-        } else {
-            Button(action: sendMessage) {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 4, weight: .bold))
-                    .foregroundStyle(
-                        model.canSend
-                            ? JarvisDesignTokens.primaryAccentForeground
-                            : JarvisDesignTokens.secondaryAccent
-                    )
-                    .frame(
-                        width: JarvisDesignTokens.chatComposerSendDiameter,
-                        height: JarvisDesignTokens.chatComposerSendDiameter
-                    )
-                    .background(
-                        model.canSend ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent.opacity(0.16),
-                        in: Circle()
-                    )
-                    .frame(
-                        width: JarvisDesignTokens.chatMinimumTapTarget,
-                        height: JarvisDesignTokens.chatMinimumTapTarget
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(!model.canSend)
-            .accessibilityLabel("Send message")
+        } else if model.canSend {
+            trailingDisc(symbol: "arrow.up", isSend: true, action: {
+                dictation.stop()
+                sendMessage()
+            })
+            .accessibilityLabel(copy(.sendMessage))
             .accessibilityIdentifier("chat.send")
             .accessibilityHint(sendHint)
+        } else {
+            trailingDisc(symbol: "waveform", isSend: false, action: {
+                dictation.stop()
+                onNavigate(.voice)
+            })
+            .accessibilityLabel(copy(.voiceMode))
+            .accessibilityIdentifier("chat.mode")
         }
+    }
+
+    private func trailingDisc(symbol: String, isSend: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 4, weight: .bold))
+                .foregroundStyle(
+                    isSend ? JarvisDesignTokens.primaryAccentForeground : JarvisDesignTokens.secondaryAccent
+                )
+                .frame(
+                    width: JarvisDesignTokens.chatComposerSendDiameter,
+                    height: JarvisDesignTokens.chatComposerSendDiameter
+                )
+                .background(
+                    isSend ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent.opacity(0.16),
+                    in: Circle()
+                )
+                .frame(
+                    width: JarvisDesignTokens.chatMinimumTapTarget,
+                    height: JarvisDesignTokens.chatMinimumTapTarget
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -763,7 +801,7 @@ struct JarvisChatScreen: View {
                 .accessibilityIdentifier("video.stop")
                 VStack {
                     Spacer()
-                    JarvisCameraControls(camera: cameraCapture, language: appLanguage)
+                    JarvisCameraControls(camera: cameraCapture, language: appLanguage, usesTorch: true)
                         .padding(.bottom, 6)
                 }
                 .frame(maxWidth: .infinity)
@@ -774,7 +812,7 @@ struct JarvisChatScreen: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.chatVideoTileRadius, style: .continuous))
             .padding(.trailing, JarvisDesignTokens.chatHorizontalInset)
-            .padding(.bottom, JarvisDesignTokens.chatVideoTileBottomInset)
+            .padding(.top, JarvisDesignTokens.chatMessageSpacing)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("chat.videoTile")
         }
@@ -807,8 +845,15 @@ struct JarvisChatScreen: View {
             }
             .accessibilityIdentifier("chat.plus.video")
             .disabled(model.fixtureMode)
-            Button(copy(.attach), systemImage: "paperclip") {
-                deferred { attachmentDialog = true }
+            Menu {
+                Button(copy(.chooseFiles), systemImage: "doc") {
+                    deferred { fileImporterPresented = true }
+                }
+                Button(copy(.photoLibrary), systemImage: "photo.on.rectangle") {
+                    deferred { photosPickerPresented = true }
+                }
+            } label: {
+                Label(copy(.attach), systemImage: "paperclip")
             }
             .accessibilityIdentifier("chat.plus.attach")
             .disabled(model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount)
@@ -998,6 +1043,14 @@ struct JarvisChatScreen: View {
             cameraCapture = nil
         }
         stopCameraAfterPhoto = false
+    }
+
+    private func switchCameraSheetToVideo() {
+        guard cameraCapture != nil else { return }
+        stopCameraAfterPhoto = false
+        isCapturingPhoto = false
+        presentedSheet = nil
+        isVideoEnabled = true
     }
 
     private func cancelCameraPhoto() {
@@ -1251,13 +1304,18 @@ struct JarvisChatScreen: View {
 private struct JarvisCameraControls: View {
     let camera: VoiceCameraCapture
     let language: JarvisAppLanguage
+    var usesTorch = false
+    @State private var flash: AVCaptureDevice.FlashMode = .auto
+    @State private var torchOn = false
     @State private var position: AVCaptureDevice.Position
     @State private var lens: VoiceCameraLens
     @State private var lenses: [VoiceCameraLens]
 
-    init(camera: VoiceCameraCapture, language: JarvisAppLanguage) {
+    init(camera: VoiceCameraCapture, language: JarvisAppLanguage, usesTorch: Bool = false) {
         self.camera = camera
         self.language = language
+        self.usesTorch = usesTorch
+        _flash = State(initialValue: camera.flashMode)
         _position = State(initialValue: camera.position)
         _lens = State(initialValue: camera.lens)
         _lenses = State(initialValue: VoiceCameraCapture.availableLenses(position: camera.position))
@@ -1267,10 +1325,46 @@ private struct JarvisCameraControls: View {
         JarvisChatLocalization.string(key, language: language)
     }
 
+    private var lightSymbol: String {
+        if usesTorch { return torchOn ? "bolt.fill" : "bolt.slash" }
+        switch flash {
+        case .on: return "bolt.fill"
+        case .off: return "bolt.slash"
+        default: return "bolt.badge.automatic"
+        }
+    }
+
+    private var lightLabel: String {
+        if usesTorch { return copy(torchOn ? .torchOff : .torchOn) }
+        switch flash {
+        case .on: return copy(.flashOn)
+        case .off: return copy(.flashOff)
+        default: return copy(.flashAuto)
+        }
+    }
+
+    private func toggleLight() {
+        if usesTorch {
+            torchOn.toggle()
+            camera.setTorch(torchOn)
+        } else {
+            flash = flash == .auto ? .on : (flash == .on ? .off : .auto)
+            camera.flashMode = flash
+        }
+    }
+
     private var flipTarget: AVCaptureDevice.Position { position == .front ? .back : .front }
 
     var body: some View {
         HStack(spacing: 6) {
+            if usesTorch ? camera.hasTorch : camera.hasFlash {
+                Button(action: toggleLight) {
+                    control { Image(systemName: lightSymbol) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(lightLabel)
+                .accessibilityIdentifier("camera.flash")
+            }
             if VoiceCameraCapture.hasCamera(position: flipTarget) {
                 Button(action: flip) {
                     control { Image(systemName: "camera.rotate") }
@@ -1332,6 +1426,7 @@ private struct JarvisCameraControls: View {
             position = camera.position
             lens = camera.lens
             lenses = VoiceCameraCapture.availableLenses(position: position)
+            torchOn = false
         } catch {
             position = camera.position
             lens = camera.lens
@@ -1339,15 +1434,20 @@ private struct JarvisCameraControls: View {
     }
 }
 
+private enum CameraSheetMode { case photo, video }
+
 private struct JarvisChatCameraSheet: View {
     let camera: VoiceCameraCapture
     let language: JarvisAppLanguage
+    let copyText: (JarvisChatLocalizationKey) -> String
     let closeTitle: String
     let takePhotoTitle: String
     let takingPhotoTitle: String
     let isCapturingPhoto: Bool
     let onCapture: () -> Void
     let onCancel: () -> Void
+    let onVideo: () -> Void
+    @State private var mode = CameraSheetMode.photo
 
     var body: some View {
         ZStack {
@@ -1363,6 +1463,16 @@ private struct JarvisChatCameraSheet: View {
                     JarvisCameraControls(camera: camera, language: language)
                 }
                 Spacer()
+                Picker(copyText(.cameraMode), selection: $mode) {
+                    Text(copyText(.modePhoto)).tag(CameraSheetMode.photo)
+                    Text(copyText(.modeVideo)).tag(CameraSheetMode.video)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+                .accessibilityIdentifier("camera.mode")
+                .onChange(of: mode) { _, newMode in
+                    if newMode == .video { onVideo() }
+                }
                 Button(action: onCapture) {
                     if isCapturingPhoto {
                         ProgressView()

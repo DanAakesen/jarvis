@@ -47,6 +47,18 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case lensTelephoto = "chat.camera.lens.telephoto"
     case messagePlaceholder = "chat.composer.placeholder"
     case voiceMode = "chat.composer.voice"
+    case flashAuto = "chat.camera.flash.auto"
+    case flashOn = "chat.camera.flash.on"
+    case flashOff = "chat.camera.flash.off"
+    case torchOn = "chat.camera.torch.on"
+    case torchOff = "chat.camera.torch.off"
+    case cameraMode = "chat.camera.mode"
+    case modePhoto = "chat.camera.mode.photo"
+    case modeVideo = "chat.camera.mode.video"
+    case dictate = "chat.composer.dictate"
+    case stopDictation = "chat.composer.stopDictate"
+    case dictationUnavailable = "chat.composer.dictateUnavailable"
+    case sendMessage = "chat.composer.send"
     case done = "chat.done"
 }
 

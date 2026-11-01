@@ -45,3 +45,15 @@
 "chat.camera.lens.telephoto" = "Tele";
 "chat.composer.placeholder" = "Spørg Jarvis";
 "chat.composer.voice" = "Tale";
+"chat.camera.flash.auto" = "Blitz: automatisk";
+"chat.camera.flash.on" = "Blitz: til";
+"chat.camera.flash.off" = "Blitz: fra";
+"chat.camera.torch.on" = "Tænd lys";
+"chat.camera.torch.off" = "Sluk lys";
+"chat.camera.mode" = "Kameratilstand";
+"chat.camera.mode.photo" = "Foto";
+"chat.camera.mode.video" = "Video";
+"chat.composer.dictate" = "Diktér";
+"chat.composer.stopDictate" = "Stop diktering";
+"chat.composer.dictateUnavailable" = "Diktering er ikke tilgængelig. Tjek tilladelser til mikrofon og talegenkendelse.";
+"chat.composer.send" = "Send besked";

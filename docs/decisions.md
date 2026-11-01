@@ -10261,3 +10261,27 @@ Deviations: the Send disc is the only filled control; lens labels use the
 0.5×/1×/2× shorthand on the button with full names in the menu. Nothing was
 compiled or run here (no Xcode on this runner); Mac CI and device acceptance
 remain pending.
+
+### P15-52 follow-up — Dan's device checklist (build 28)
+
+- **Composer:** two rows only. Row one is the text field. Row two is plus, Dictate and
+  one trailing slot: Voice (stone disc) while the field is empty, Send (small orange
+  disc) once there is text, Stop while Jarvis answers. Same slot and size; no mode
+  toggle. Identifiers: `chat.mode` (voice), `chat.send`, `chat.stop`, `chat.dictate`.
+- **Dictate:** `ChatDictation` uses `SFSpeechRecognizer` (on-device when supported) with
+  `AVAudioEngine`; `NSSpeechRecognitionUsageDescription` added to Info.plist.
+- **Attach:** Files and Photo library are items of an Attach submenu inside the native
+  plus menu; the separate confirmation dialog that jumped is gone.
+- **Camera:** sheet adds flash (auto/on/off via `AVCapturePhotoSettings.flashMode`) and a
+  Photo/Video switch; Video closes the sheet and starts the live video preview.
+  Lens and front/back were already in. Recording video clips to a file is not built;
+  Video means the live preview Jarvis sees.
+- **Video preview:** small tile in the top right of the chat window (no strip above the
+  composer) with stop, torch (`AVCaptureDevice.torchMode`), flip and lens controls.
+- Apple docs: HIG [Menus](https://developer.apple.com/design/human-interface-guidelines/menus),
+  [Camera](https://developer.apple.com/design/human-interface-guidelines/camera),
+  [Dictation](https://developer.apple.com/design/human-interface-guidelines/dictation);
+  [SFSpeechRecognizer](https://developer.apple.com/documentation/speech/sfspeechrecognizer),
+  [AVCapturePhotoSettings.flashMode](https://developer.apple.com/documentation/avfoundation/avcapturephotosettings/flashmode),
+  [AVCaptureDevice.torchMode](https://developer.apple.com/documentation/avfoundation/avcapturedevice/torchmode).
+  Not compiled or run here; Mac CI and device check pending.
