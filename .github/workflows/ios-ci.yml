@@ -194,13 +194,9 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-<<<<<<< HEAD
-          [Download the light, dark, sidebar, Voice connection-loss, and Factory screenshots]($ARTIFACT_URL)
+          [Download the light, dark, Chat plus menu, sidebar, Voice connection-loss, and Factory screenshots]($ARTIFACT_URL)
 
           [Compare with the approved Connection lost surface]($BOARD_URL)
-=======
-          [Download the light, dark, Chat plus menu, sidebar, and Factory screenshots]($ARTIFACT_URL)
->>>>>>> origin/main
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
