@@ -23,6 +23,20 @@ struct JarvisSidebarDrawerLayer: View {
         )
     }
 
+    private func closeSwipe(drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance)
+            .onEnded { value in
+                guard JarvisSidebarGesturePolicy.shouldClose(
+                    translationX: Double(value.translation.width),
+                    translationY: Double(value.translation.height),
+                    velocityX: Double(value.velocity.width),
+                    drawerWidth: Double(drawerWidth),
+                    closeThreshold: Double(JarvisDesignTokens.sidebarCloseThreshold)
+                ) else { return }
+                navigation.closeSidebar()
+            }
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let drawerWidth = min(
@@ -33,8 +47,10 @@ struct JarvisSidebarDrawerLayer: View {
                 if navigation.isSidebarOpen {
                     Color.black.opacity(JarvisDesignTokens.screenDimOpacity)
                         .ignoresSafeArea()
+                        .padding(.trailing, drawerWidth)
                         .contentShape(Rectangle())
                         .onTapGesture { navigation.closeSidebar() }
+                        .gesture(closeSwipe(drawerWidth: drawerWidth))
                         .accessibilityHidden(true)
 
                     JarvisSidebar(
@@ -47,20 +63,6 @@ struct JarvisSidebarDrawerLayer: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance)
-                    .onEnded { value in
-                        guard JarvisSidebarGesturePolicy.shouldClose(
-                            translationX: Double(value.translation.width),
-                            translationY: Double(value.translation.height),
-                            velocityX: Double(value.velocity.width),
-                            drawerWidth: Double(drawerWidth),
-                            closeThreshold: Double(JarvisDesignTokens.sidebarCloseThreshold)
-                        ) else { return }
-                        navigation.closeSidebar()
-                    },
-                isEnabled: navigation.isSidebarOpen
-            )
         }
         .ignoresSafeArea(.container)
         .allowsHitTesting(navigation.isSidebarOpen)

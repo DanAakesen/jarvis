@@ -72,4 +72,35 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertTrue(sidebar.isHittable)
         XCTAssertTrue(app.buttons["navigation.chat"].isHittable)
     }
+
+    func testSidebarItemNavigatesToSoftwareFactoryInDanish() {
+        assertSidebarItemNavigates(language: "da")
+    }
+
+    func testSidebarItemNavigatesToSoftwareFactoryInEnglish() {
+        assertSidebarItemNavigates(language: "en")
+    }
+
+    private func assertSidebarItemNavigates(language: String) {
+        app.launchArguments = [
+            "--ui-test-navigation",
+            "-jarvis.appLanguage", language,
+            "-AppleLanguages", "(\(language))",
+            "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+        ]
+        app.launch()
+        defer { app.terminate() }
+        let menu = app.buttons["navigation.openSidebar"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 8))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let item = app.buttons["navigation.softwareFactory"]
+        XCTAssertTrue(item.waitForExistence(timeout: 2))
+        XCTAssertTrue(item.isHittable)
+        item.tap()
+        XCTAssertTrue(
+            app.buttons["factory.plus"].waitForExistence(timeout: 2),
+            "Tapping a sidebar item must show its screen"
+        )
+        XCTAssertFalse(app.buttons["navigation.chat"].exists, "Tapping a sidebar item must close the drawer")
+    }
 }
