@@ -2,15 +2,39 @@ import Foundation
 import JarvisCore
 
 enum JarvisFixtureScenario {
-    static func makeClient() throws -> JarvisClient {
+    static func makeClient(emptyActivity: Bool = false) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: FixtureTransport(scenario: Data(scenario.utf8)),
+            transport: FixtureTransport(scenario: try fixtureScenarioData(emptyActivity: emptyActivity)),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
+    }
+
+    private static func fixtureScenarioData(emptyActivity: Bool) throws -> Data {
+        let data = Data(scenario.utf8)
+        guard emptyActivity else { return data }
+        guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var interactions = root["interactions"] as? [[String: Any]],
+              let index = interactions.firstIndex(where: { $0["path"] as? String == "/api/now" }),
+              var response = interactions[index]["response"] as? [String: Any] else {
+            throw FixtureTransportError.invalidScenario
+        }
+
+        response["body"] = [
+            "running": [],
+            "items": [],
+            "updatedAt": "2026-10-30T09:34:00Z",
+            "awayMode": false,
+            "confirmations": [],
+        ]
+        var interaction = interactions[index]
+        interaction["response"] = response
+        interactions[index] = interaction
+        root["interactions"] = interactions
+        return try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
     }
 
     static func makeSettingsClient() throws -> JarvisSettingsClient {
@@ -120,8 +144,8 @@ enum JarvisFixtureScenario {
             "messages":[
               {"id":"410","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"Can you review the latest release?","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:32:00Z","toolCalls":[],"attachments":[]},
               {"id":"411","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"I checked the candidate and the available checks passed.","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:32:40Z","toolCalls":[{"id":"fixture-tool-1","tool":"list_release","outcome":"ok","taskId":null,"artifactId":null}],"attachments":[]},
-              {"id":"412","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"What still needs my attention?","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:00Z","toolCalls":[],"attachments":[]},
-              {"id":"413","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"One request is waiting for your decision.","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:20Z","toolCalls":[],"attachments":[]}
+              {"id":"412","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"Do I have anything important in my calendar the next 30 days?","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:00Z","toolCalls":[],"attachments":[]},
+              {"id":"413","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"## Calendar for the next 30 days\n\nYou have **3 important events**:\n\n- **Monday, 2 November · 09:00–09:30** — Product review\n- **Wednesday, 11 November · 14:00–15:00** — Dentist appointment\n- **Friday, 20 November · 10:00–11:00** — Quarterly planning","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:20Z","toolCalls":[{"id":"fixture-calendar-tool","tool":"get_calendar_events","outcome":"ok","taskId":null,"artifactId":null}],"attachments":[]}
             ],
             "nextCursor":null
           }}

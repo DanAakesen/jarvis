@@ -60,6 +60,8 @@
 "workspace.toolUnavailable" = "Værktøjshandlinger er ikke tilgængelige på iPhone.";
 "workspace.windowActionUnavailable" = "Denne vindueshandling er ikke tilgængelig på iPhone.";
 "workspace.htmlApp" = "HTML-app";
+"workspace.htmlAppLoading" = "Indlæser HTML-app";
+"workspace.htmlAppLoadFailed" = "HTML-appen kunne ikke indlæses.";
 "workspace.knowledgeGraph" = "Vidensgraf";
 "workspace.codeView" = "Kodevisning";
 "workspace.generatedView" = "Genereret visning";
