@@ -306,7 +306,6 @@ jobs:
           <p>Simulator captures are on the left; the checked-in board renders on the right.
           Open this file after extracting the complete artifact. The board is interactive;
           its optional web orb renderer needs network access.</p>''' + "".join(sections) + "</html>")
-          PY
       - name: Upload iOS screenshots
         id: screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

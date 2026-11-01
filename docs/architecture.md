@@ -1590,7 +1590,7 @@ after device lock, microphone recovery after a phone call, CarPlay and Action
 Button. P15-34 implements the local Live Activity boundary below; real background
 audio remains unverified.
 
-### Local voice Lock Screen Live Activity (P15-34)
+### Local voice Live Activity surfaces (P15-34/P15-35)
 
 The app embeds `JarvisVoiceActivity`, a WidgetKit extension. Shared
 `VoiceActivityAttributes` contain only an opaque local session UUID, start time,
@@ -1608,8 +1608,12 @@ APNs registration or backend route is involved. Muting gates local capture befor
 the asynchronous socket write, and the Core client also suppresses muted frames.
 The app declares audio background mode for the existing play-and-record session;
 route/interruption recovery and real locked-device behavior remain unverified.
-The extension supplies the Lock Screen UI; WidgetKit's mandatory Dynamic Island
-builder returns empty views, with no Island layout or controls.
+The same extension renders the Lock Screen and Dynamic Island from the same
+activity attributes and state. Compact shows a static orb and small waveform;
+minimal shows the orb; expanded shows the localized session state, timer,
+waveform, and session-scoped Mute/End intents. No second voice activity or APNs
+path is created. Simulator captures of all three Island presentations beside the
+approved board remain required acceptance evidence.
 
 ### iOS approvals and workspace commands (P15-05)
 

@@ -2807,6 +2807,17 @@ only the user bubble has a background, a soft orange-tinted glass pill with a
 up are unboxed plain text. Phone screens carry no explainer, helper or hint
 text.
 
+All concept board screens, the Lock Screen hands-free session, and the Dynamic
+Island on `docs/ios/design/surfaces.html` are approved. P15-34 implements the
+Lock Screen and P15-35 adds Island compact, minimal and expanded presentations
+to that same activity. Reuse the dark-glass/cyan-rim/tangled-amber orb. Compact
+has the orb and a small waveform; minimal has only the orb beside another
+activity; expanded has Jarvis, localized voice state, elapsed timer, waveform,
+and Mute/End controls. Stone is secondary; orange remains a restrained accent
+with no large solid fills. System timer updates and audio-derived waveform
+snapshots need no perpetual decorative animation. Lock Screen tasks and
+decisions and Connection lost are approved separately below.
+
 The notification launcher and activity-sheet Done action use
 `jarvisToolbarButtonStyle()` from `JarvisDesignSystem.swift`. Their labels are
 plain; the native toolbar owns the single system glass surface. Do not add a
@@ -2819,9 +2830,8 @@ the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
 elapsed timer, measured waveform and Mute/End controls. Stone is secondary;
 only End has a small orange tint, never a large solid fill. System timer updates
 and audio-derived waveform snapshots need no perpetual decorative animation.
-P15-36 approves the Lock Screen tasks and decisions surface.
-The Dynamic Island remains unapproved.
-Connection lost is approved and shown without helper text.
+P15-36 approves the Lock Screen tasks and decisions surface. Connection lost is
+approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -3113,5 +3123,5 @@ language comes from `JarvisAppLanguage`; notification action feedback is shown
 in the existing Now activity sheet. Local updates use the existing `/now`
 snapshot/events and Factory task event stream. No APNs delivery or update is
 claimed while the app is suspended; the device registration and backend push
-work remain open. No Dynamic Island presentation is configured; that system
-surface remains unapproved.
+work remain open. P15-35 separately approves and configures the voice Dynamic
+Island on the same activity; it does not add a task Island or authorize APNs.
