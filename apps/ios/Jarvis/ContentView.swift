@@ -231,6 +231,7 @@ struct ContentView: View {
                                     JarvisPlaceholderView(destination: destination, language: language)
                                 }
                             }
+                            .onAppear { navigation.debugDestinationShown(destination) }
                             .id(sessionEpoch)
                         }
                 }

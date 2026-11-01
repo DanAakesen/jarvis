@@ -365,6 +365,9 @@ struct JarvisGateRootView: View {
             .id(model.signOutGeneration)
         }
             .environmentObject(navigation)
+            .overlay(alignment: .bottom) {
+                JarvisNavigationDebugLine(navigation: navigation)
+            }
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
             .accessibilityElement(children: .contain)
@@ -390,6 +393,25 @@ struct JarvisGateRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
                 Task { await model.signOut() }
             }
+    }
+}
+
+/// TEMPORARY: always-visible navigation state for on-device diagnosis. Remove once item navigation works.
+private struct JarvisNavigationDebugLine: View {
+    @ObservedObject var navigation: JarvisNavigationModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))")
+            ForEach(Array(navigation.debugWrites.enumerated()), id: \.offset) { _, line in
+                Text(line)
+            }
+        }
+        .font(.system(size: 9, design: .monospaced))
+        .padding(4)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
