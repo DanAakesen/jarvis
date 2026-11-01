@@ -3464,7 +3464,7 @@ recovery and latest-row scrolling that still runs with Reduce Motion. The native
 UI behaviour gate covers scrolled-up send visibility, acknowledgment without
 duplication and failure recovery; kept Danish/English screenshots are exported
 into the existing simulator artifact. Design and copy are unchanged. Local Core
-build, all 197 Core tests, all 56 pipeline tests, Swift syntax parsing and fixture
+build, all 197 Core tests, all 59 pipeline tests, Swift syntax parsing and fixture
 typechecking pass. Next verify the ready-PR Mac UI gate and screenshots; physical-device acceptance remains
 unverified.
 
