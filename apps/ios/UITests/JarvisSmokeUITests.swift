@@ -24,6 +24,7 @@ final class JarvisSmokeUITests: XCTestCase {
         app.launchArguments = [
             "--ui-testing",
             "--ui-test-theme=\(appearance)",
+            "--screenshot-theme=\(appearance)",
             "--ui-test-language=\(language)",
             "--screenshot-factory-fixture",
             "--screenshot-factory-state=board",

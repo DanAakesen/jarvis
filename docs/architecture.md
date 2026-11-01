@@ -1372,8 +1372,11 @@ both app languages and appearances and are exported from the `.xcresult`.
 The macOS WebKit renderer captures matching screens from `board.html` and
 `workspaces.html`; the comparator downsamples 440×956 point frames to 22×48
 cells and checks mean RGB color and cell luminance drift, with a 0.38 tolerance
-for each. This is a coarse structural/color gate, not pixel-perfect equality.
-Missing test captures/references and out-of-tolerance drift fail CI. The artifact
+for each. Each screenshot launch forces its requested app theme, and sampled
+background luminance must agree with the `-light` or `-dark` capture name for app
+screenshots and board references; a mismatch fails CI. This is a coarse
+structural/color gate, not pixel-perfect equality. Missing test captures/references
+and out-of-tolerance drift fail CI. The artifact
 contains paired app/board PNGs and results; the single PR comment links the
 artifact and maps screens to the checked-in board references.
 

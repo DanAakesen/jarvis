@@ -115,7 +115,8 @@ Draft pull requests and pushes to main do not run `ci.yml`, so macOS minutes are
 - Install XcodeGen at a pinned release, run `xcodegen generate`.
 - Build and run the `JarvisUITests` target on the selected iPhone simulator with `CODE_SIGNING_ALLOWED=NO` and parallel testing disabled. Use only the debug UI-test fixture; no live account, backend or voice service is required.
 - Keep screenshot capture, comparison and the established P15-19 Factory-state matrix in the same one-boot Mac job. Pair each app capture with the matching board render, upload both plus results as a 14-day artifact, and create/update the PR comment with the reference/capture map.
-- Structural comparison downsamples the 440×956 point frames into a 22×48 grid and checks mean RGB drift and luminance structure. The 0.38 tolerance is a broad structural gate, not pixel-perfect acceptance; missing references or captures fail.
+- The screenshot harness forces the requested light/dark theme through an explicit Debug launch argument, independent of the simulator's remembered app preference. The comparator samples background luminance for every theme-named app and board capture; a light background in a dark capture (or the reverse) fails the gate.
+- Structural comparison downsamples the 440×956 point frames into a 22×48 grid and checks mean RGB drift and luminance structure. The 0.38 tolerance is a broad structural gate, not pixel-perfect acceptance; missing references, captures, or requested-theme backgrounds fail.
 - No signing secrets or reference to the signing environment.
 
 ### 1b: `ios-testflight.yml`

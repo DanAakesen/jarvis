@@ -23,6 +23,14 @@ DEBUG-only fixture keeps screenshot and interaction checks independent of live
 sign-in and voice setup. Xcode simulator, artifact and PR-comment execution
 remain unverified until a ready iOS pull request runs on GitHub Actions.
 
+## 1 November 2026 — verify requested iOS screenshot appearance (P15-32)
+
+Every simulator screenshot launch explicitly sets the app's requested light or
+dark theme, rather than relying on simulator appearance or persisted app
+preferences. The screenshot gate samples edge-background luminance for every
+theme-named app and board PNG and fails when it contradicts the filename. This
+closes the audit finding where `main-dark.png` showed the light surface.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry

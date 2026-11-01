@@ -11,14 +11,20 @@ enum JarvisUITestConfiguration {
     }
 
     static func configureDefaults() {
-        guard isEnabled else { return }
+        #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
-        if let language = argument("--ui-test-language="), ["da", "en"].contains(language) {
-            UserDefaults.standard.set(language, forKey: JarvisAppLanguage.preferenceKey)
+        if arguments.contains("--ui-testing") {
+            if let language = argument("--ui-test-language="), ["da", "en"].contains(language) {
+                UserDefaults.standard.set(language, forKey: JarvisAppLanguage.preferenceKey)
+            }
+            if let theme = argument("--ui-test-theme="), ["dark", "light"].contains(theme) {
+                UserDefaults.standard.set(theme, forKey: "jarvis.appTheme")
+            }
         }
-        if let theme = argument("--ui-test-theme="), ["dark", "light"].contains(theme) {
+        if let theme = argument("--screenshot-theme="), ["dark", "light"].contains(theme) {
             UserDefaults.standard.set(theme, forKey: "jarvis.appTheme")
         }
+        #endif
     }
 
     private static func argument(_ prefix: String) -> String? {

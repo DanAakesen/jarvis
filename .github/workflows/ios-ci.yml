@@ -147,12 +147,6 @@ jobs:
           else
             echo "::warning::The XCUITest result bundle was not created."
           fi
-      - name: Compare simulator screenshots with board renders
-        run: |
-          set -euo pipefail
-          swift scripts/ios/board-compare.swift \
-            "$IOS_SCREENSHOT_DIR/ui-tests" \
-            "$IOS_SCREENSHOT_DIR/board-renders"
       - name: Capture established Factory screenshots
         run: |
           set -euo pipefail
@@ -166,14 +160,14 @@ jobs:
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
           xcrun simctl spawn "$DEVICE_ID" defaults delete com.danaakesen.jarvis || true
           xcrun simctl ui "$DEVICE_ID" appearance light
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"
           xcrun simctl ui "$DEVICE_ID" appearance dark
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture --screenshot-theme=dark
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
           for appearance in light dark; do
@@ -183,13 +177,20 @@ jobs:
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                   --screenshot-factory-fixture \
                   "--screenshot-factory-state=$state" \
-                  "--screenshot-factory-language=$language"
+                  "--screenshot-factory-language=$language" \
+                  "--screenshot-theme=$appearance"
                 sleep 2
                 xcrun simctl io "$DEVICE_ID" screenshot \
                   "$SCREENSHOT_DIR/factory-${state}-${appearance}-${language}.png"
               done
             done
           done
+      - name: Compare simulator screenshots with board renders and verify appearance
+        run: |
+          set -euo pipefail
+          swift scripts/ios/board-compare.swift \
+            "$IOS_SCREENSHOT_DIR" \
+            "$IOS_SCREENSHOT_DIR/board-renders"
       - name: Upload iOS screenshots
         id: screenshots
         if: always()

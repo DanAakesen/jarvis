@@ -327,9 +327,18 @@ struct JarvisGateRootView: View {
 private struct JarvisGateOverlayView: View {
     @ObservedObject var model: JarvisGateModel
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
+    @AppStorage("jarvis.appTheme") private var storedTheme = "system"
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
+    private var themeColorScheme: ColorScheme? {
+        switch storedTheme {
+        case "light": .light
+        case "dark": .dark
+        default: nil
+        }
     }
 
     var body: some View {
@@ -347,6 +356,7 @@ private struct JarvisGateOverlayView: View {
             }
         }
         .accessibilityAddTraits(.isModal)
+        .preferredColorScheme(themeColorScheme)
     }
 }
 

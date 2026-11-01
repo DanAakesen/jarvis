@@ -121,7 +121,7 @@ private enum BoardCompareError: Error, CustomStringConvertible {
     case invalidBoardFrame
     case snapshotUnavailable
     case missingScreenshot(String)
-    case comparisonFailed(String)
+    case checksFailed(String)
 
     var description: String {
         switch self {
@@ -133,8 +133,8 @@ private enum BoardCompareError: Error, CustomStringConvertible {
             "WebKit could not capture or decode an image."
         case .missingScreenshot(let name):
             "Missing XCUITest screenshot attachment: \(name).png"
-        case .comparisonFailed(let report):
-            "Board comparison exceeded tolerance:\n\(report)"
+        case .checksFailed(let report):
+            "iOS screenshot checks failed:\n\(report)"
         }
     }
 }
@@ -224,13 +224,19 @@ private struct BoardCompare {
                     }
                 }
             }
+            let appearanceCheck = try verifyNamedScreenshotAppearances(in: screenshotDirectory)
+            for line in appearanceCheck.report {
+                print(line)
+                report.append(line)
+            }
+            failures.append(contentsOf: appearanceCheck.failures)
             try (report.joined(separator: "\n") + "\n").write(
                 to: outputDirectory.appendingPathComponent("comparison.txt"),
                 atomically: true,
                 encoding: .utf8
             )
             if !failures.isEmpty {
-                throw BoardCompareError.comparisonFailed(failures.joined(separator: "\n"))
+                throw BoardCompareError.checksFailed(failures.joined(separator: "\n"))
             }
             print("Compared \(references.count * 4) simulator screens to board renders (tolerance \(tolerance)).")
         } catch {
@@ -313,6 +319,72 @@ private struct BoardCompare {
         default:
             return nil
         }
+    }
+
+    private static func verifyNamedScreenshotAppearances(
+        in directory: URL
+    ) throws -> (report: [String], failures: [String]) {
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return ([], []) }
+
+        var report: [String] = []
+        var failures: [String] = []
+        while let url = enumerator.nextObject() as? URL {
+            guard url.pathExtension.lowercased() == "png" else { continue }
+            let components = url.deletingPathExtension().lastPathComponent.split(separator: "-")
+            guard let theme = components.first(where: { $0 == "light" || $0 == "dark" }) else {
+                continue
+            }
+            guard
+                let image = NSImage(contentsOf: url),
+                let imageCG = cgImage(image)
+            else {
+                throw BoardCompareError.snapshotUnavailable
+            }
+            let luminance = backgroundLuminance(pixels(imageCG))
+            let requestedTheme = String(theme)
+            let matchesTheme = requestedTheme == "dark"
+                ? luminance < 0.5
+                : luminance >= 0.5
+            let line = "\(url.lastPathComponent): \(requestedTheme) background luminance \(luminance)"
+            report.append(line)
+            if !matchesTheme {
+                failures.append(
+                    "Screenshot \(url.lastPathComponent) requests \(requestedTheme) appearance but its sampled background luminance is \(luminance)."
+                )
+            }
+        }
+        return (report, failures)
+    }
+
+    private static func backgroundLuminance(_ imagePixels: [UInt8]) -> Double {
+        let edgeSamples = [
+            (x: width / 40, y: height * 3 / 20),
+            (x: width * 39 / 40, y: height * 3 / 20),
+            (x: width / 40, y: height / 2),
+            (x: width * 39 / 40, y: height / 2),
+            (x: width / 40, y: height * 17 / 20),
+            (x: width * 39 / 40, y: height * 17 / 20)
+        ]
+        let patchRadius = 4
+        let patchLuminances = edgeSamples.map { sample in
+            var total = 0.0
+            var count = 0.0
+            for y in (sample.y - patchRadius)..<(sample.y + patchRadius) {
+                for x in (sample.x - patchRadius)..<(sample.x + patchRadius) {
+                    let offset = (y * width + x) * 4
+                    total += 0.2126 * Double(imagePixels[offset])
+                        + 0.7152 * Double(imagePixels[offset + 1])
+                        + 0.0722 * Double(imagePixels[offset + 2])
+                    count += 1
+                }
+            }
+            return total / count / 255
+        }.sorted()
+        return (patchLuminances[2] + patchLuminances[3]) / 2
     }
 
     private static func writePNG(_ image: CGImage, to url: URL) throws {
