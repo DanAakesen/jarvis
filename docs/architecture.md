@@ -1716,6 +1716,11 @@ It presents the real activity sheet after Chat finishes loading its fixture;
 live startup ignores the initial-sheet input. The existing single simulator
 boot captures the sheet in both appearances.
 
+P15-48 adds the fixture-only `--screenshot-needs-you-count=1|12` argument and
+captures the bell and activity sheet at default and accessibility-XXXL Dynamic
+Type in light and dark appearances. The override changes only the displayed
+badge count; the underlying activity fixture remains unchanged.
+
 `JarvisApprovalsClient` reuses `JarvisClient` authentication and error mapping
 for the existing `GET /now` confirmations and `POST /now/confirmations/:id`
 decision routes. The contract comes from `apps/backend/src/core/now.ts` and
