@@ -116,7 +116,9 @@ private final class JarvisGateModel: ObservableObject {
             return
         }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") {
+            ProcessInfo.processInfo.arguments.contains("--screenshot-health-fixture") ||
+            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
+            ProcessInfo.processInfo.arguments.contains("--screenshot-voice-connection-lost") {
             presentation = .unlocked
             isPrivacyCoverVisible = false
             return

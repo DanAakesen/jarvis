@@ -56,6 +56,12 @@ The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
 without ending the session. Ending voice, including from the minimized bar, returns
 to Chat with a cleared navigation stack and a usable sidebar.
+Reopening Voice after End connects automatically with a fresh transport and audio
+session. The red End control follows the approved board. The shared dark-glass,
+cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
+more actively when listening or speaking, without overlapping the status.
+Voice status, controls and recovery copy support Danish and English; Reduced
+Motion keeps the centre still.
 Language follows the existing `voice.default_language`
 setting, defaulting to Danish. Microphone capture and speaker playback use the
 existing voice socket contract; speaking over playback interrupts it immediately.
@@ -76,6 +82,14 @@ The Chat toolbar provides a labeled sidebar button as an alternative to the
 right-edge drag. Both open the same navigation drawer. Ending Voice closes the
 session and returns to Chat; minimizing keeps the session active and returns to
 Chat with the minimized voice bar.
+
+### Connection loss (#1476; 31 October 2026)
+
+After an established realtime connection drops, Voice shows a muted orb, the
+“Connection lost” title, and Retry now and End actions. Retry now starts another
+session with the existing bounded reconnect policy; End closes the session and
+returns to Chat. Initial connection failures do not use the lost state. Copy
+follows the app's Danish-default language preference.
 
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
@@ -1778,6 +1792,13 @@ and returns only bounded, sanitized titles. The source does not itself activate 
 scheduler, model call or proactive delivery, and this slice sets no proactive flag.
 
 ## Health migration (approved P12)
+
+Native iPhone Health logging (P15-39 / #1480) uses only the plus-button
+**New lift** sheet, with chips that prefill an exercise's last logged weight,
+reps and sets. **Track workout** contains Exercises and History, or the existing
+empty state, without an inline form, Save button or save-status line.
+The Dashboard/Track workout segmented pill sits in the fixed bottom bar above
+search and plus. Visible and accessibility copy follows Danish/English.
 
 Tool parity is an acceptance requirement for every retained Daily capability,
 not a later convenience. The page and Jarvis chat/voice must use the same

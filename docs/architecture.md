@@ -1585,6 +1585,14 @@ removes orb and minimization animation; system text styles and VoiceOver labels
 remain available. Ending a voice session returns to Chat; minimizing preserves
 the active session and also returns to Chat with the mini bar.
 
+End invalidates the screen-model generation before detaching the client, stopping
+capture/playback and deactivating AVAudioSession. Startup, socket, playback and
+permission callbacks from older generations cannot update the next session.
+Every fresh start creates a new audio engine and WebSocket transport; the screen
+auto-starts from idle, ended or failed states. AVAudioSession is activated before
+reading the microphone format. Voice copy uses `JarvisVoiceLocalization` with the
+existing Danish/English `JarvisNotes` resource table and app-language preference.
+
 Voice reads `settings.voice.defaultLanguage` from the existing authenticated
 `GET /settings` route for each new session. Camera frames use the existing
 `POST /screen/frames` handle mode and screen-share frames use its description
@@ -1713,10 +1721,15 @@ The small custom ring, material panel and trend sparkline share geometry and
 color tokens in `JarvisDesignTokens`: SwiftUI has no native labeled ring or
 sparkline, and a standard `List`/`Form` cannot compose the approved single
 scrolling surface with mixed Charts content. Navigation, refresh, menus,
-search, scrolling, charts and detail lists remain system controls. Track workout
-remains disabled and Last lifts and plus remain omitted in this Dashboard-only
-implementation, although the shared lift routes from #1423 are available on
-main; no iOS-specific backend path or payload is added.
+search, scrolling, charts and detail lists remain system controls. P15-39 adds
+the list-only Track workout tab and a plus-button New lift `Form` sheet.
+Capabilities negotiate version 6; periodless `daily.health.lifts` queries
+read bounded history and latest-per-exercise values. History exposes cursor
+paging; chips prefill those real latest values. `POST /daily/lifts` uses a
+validated `JarvisLiftDraft`; failed saves keep the same values and UUID for
+explicit idempotent retry, without automatic write retries. The segmented
+picker lives in the bottom safe-area inset above search and plus. Last lifts
+remains omitted from the Dashboard; no iOS-specific route or payload is added.
 
 ## Web skeleton and configuration
 

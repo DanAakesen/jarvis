@@ -18,6 +18,7 @@ struct JarvisOrbView: View {
     @State private var pulse = false
 
     let activity: JarvisOrbActivity
+    var diameter: CGFloat = JarvisDesignTokens.gateOrbSize
 
     private var amplitude: CGFloat {
         switch activity {
@@ -42,8 +43,20 @@ struct JarvisOrbView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let size = geometry.size.width
-            ZStack {
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animatesCore)) { timeline in
+                let phase = animatesCore
+                    ? timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / animationDuration
+                    : 0
+                sphere(size: geometry.size.width, phase: phase)
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .onAppear { pulse = true }
+    }
+
+    private func sphere(size: CGFloat, phase: Double) -> some View {
+        let energy = CGFloat(sin(phase)) * amplitude
+        return ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -77,6 +90,7 @@ struct JarvisOrbView: View {
                         radius: size * JarvisDesignTokens.orbGlassShadowRadiusScale
                     )
                     .shadow(color: JarvisDesignTokens.orbCyan.opacity(0.24), radius: size * 0.14)
+                ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -95,34 +109,39 @@ struct JarvisOrbView: View {
                         height: size * 0.56
                     )
                 Canvas { context, canvasSize in
+                    let filamentSize = CGSize(width: size * 0.42, height: size * 0.42)
+                    context.translateBy(
+                        x: (canvasSize.width - filamentSize.width) / 2,
+                        y: (canvasSize.height - filamentSize.height) / 2
+                    )
                     var glowContext = context
-                    glowContext.addFilter(.blur(radius: canvasSize.width * 0.08))
+                    glowContext.addFilter(.blur(radius: filamentSize.width * 0.08))
 
                     for (index, points) in self.filamentCurves.enumerated() {
-                        let path = self.filamentPath(points, size: canvasSize)
+                        let path = self.filamentPath(points, size: filamentSize)
                         let color = self.filamentColors[index % self.filamentColors.count]
                         glowContext.stroke(
                             path,
                             with: .color(color.opacity(0.9)),
-                            lineWidth: canvasSize.width * 0.065
+                            lineWidth: filamentSize.width * 0.065
                         )
                         context.stroke(
                             path,
                             with: .color(color.opacity(0.9)),
-                            lineWidth: canvasSize.width * 0.022
+                            lineWidth: filamentSize.width * 0.022
                         )
                         context.stroke(
                             path,
                             with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.82)),
-                            lineWidth: canvasSize.width * 0.006
+                            lineWidth: filamentSize.width * 0.006
                         )
                     }
 
                     for (index, point) in self.filamentSparks.enumerated() {
-                        let diameter = canvasSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
+                        let diameter = filamentSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
                         let rect = CGRect(
-                            x: point.x * canvasSize.width - diameter / 2,
-                            y: point.y * canvasSize.height - diameter / 2,
+                            x: point.x * filamentSize.width - diameter / 2,
+                            y: point.y * filamentSize.height - diameter / 2,
                             width: diameter,
                             height: diameter
                         )
@@ -132,7 +151,7 @@ struct JarvisOrbView: View {
                         )
                     }
                 }
-                .frame(width: size * 0.42, height: size * 0.42)
+                .frame(width: size * 0.7, height: size * 0.7)
                 Circle()
                     .fill(
                         RadialGradient(
@@ -150,6 +169,18 @@ struct JarvisOrbView: View {
                         color: JarvisDesignTokens.orbCore.opacity(JarvisDesignTokens.orbCenterGlowOpacity),
                         radius: size * JarvisDesignTokens.orbCenterGlowRadiusScale
                     )
+                }
+                .opacity(animatesCore ? 0.82 + (sin(phase) + 1) * 0.09 : 1)
+                .mask {
+                    RadialGradient(
+                        stops: [.init(color: .white, location: 0.6), .init(color: .clear, location: 1)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.35
+                    )
+                }
+                .scaleEffect(x: 1 + energy, y: 1 - energy * 0.5)
+                .rotationEffect(.degrees(animatesCore ? sin(phase * 0.7) * 12 : 0))
             }
             .frame(width: size, height: size)
             .scaleEffect(scale)
@@ -159,9 +190,6 @@ struct JarvisOrbView: View {
             .saturation(saturation)
             .grayscale(activity == .offline ? 1 : 0)
             .brightness(brightness)
-        }
-        .frame(width: JarvisDesignTokens.gateOrbSize, height: JarvisDesignTokens.gateOrbSize)
-        .onAppear { pulse = true }
     }
 
     private var saturation: Double {
@@ -250,12 +278,19 @@ struct JarvisOrbView: View {
     }
 
     private var scale: CGFloat {
-        guard !reduceMotion, scenePhase == .active, amplitude > 0 else { return 1 }
+        guard activity == .idle || activity == .signingIn,
+              !reduceMotion, scenePhase == .active, amplitude > 0 else { return 1 }
         return pulse ? 1 + amplitude : 1 - amplitude
     }
 
     private var pulseAnimation: Animation? {
-        guard !reduceMotion, scenePhase == .active, amplitude > 0 else { return nil }
+        guard activity == .idle || activity == .signingIn,
+              !reduceMotion, scenePhase == .active, amplitude > 0 else { return nil }
         return .easeInOut(duration: animationDuration).repeatForever(autoreverses: true)
+    }
+
+    private var animatesCore: Bool {
+        !reduceMotion && scenePhase == .active &&
+            (activity == .listening || activity == .thinking || activity == .speaking)
     }
 }

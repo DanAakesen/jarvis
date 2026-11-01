@@ -74,7 +74,12 @@ struct JarvisSidebar: View {
                     }
                     .frame(
                         maxWidth: .infinity,
-                        minHeight: scrollGeometry.size.height,
+                        minHeight: max(
+                            0,
+                            scrollGeometry.size.height -
+                                safeAreaInsets.bottom -
+                                JarvisDesignTokens.sidebarVerticalInset
+                        ),
                         alignment: .bottom
                     )
                     .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)

@@ -122,6 +122,20 @@ board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
 
+## 31 October 2026 — Health logging only in the plus sheet (P15-39 / #1480)
+
+The owner's issue supersedes the dashboard-only P15-18 limitation: enable
+Track workout as Exercises and History only, with the empty state and no inline
+form, Save button or save-status line. Plus opens New lift with chips that
+prefill actual last exercise values. Move the native segmented pill to the
+bottom bar above search and plus, with Danish/English copy.
+
+Reuse version-6 capabilities, the periodless shared lift query and existing
+POST route. Keep failed submissions unchanged for same-key explicit retry.
+Update the approved board and extend the existing one-boot simulator capture
+job, not a new Mac job. Local Linux and board checks cannot establish native
+rendering or owner acceptance; simulator screenshots remain pending CI.
+
 ## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
 
 The owner approved the Health concept on 31 October. Build the Dashboard first
@@ -7794,7 +7808,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-31 | The iPhone app uses orange as the primary accent and cyan as the secondary accent. Primary orange is `#ffb45c` with dark text `#1d1200` in dark mode and `#b45f06` with white text in light mode. The secondary cyan is the token `accent-2`: `#52dcfa` in dark mode and `#14768d` in light mode. Dan wants the cyan replaced by a better colour later, so builders use only the token and never the literal value. The orb is unchanged: the real web orb with a dark glass sphere, a cyan rim, an orange and amber glowing tangled centre, and no orbit ellipses or tilted circles. | Dan: orange as the primary colour and the current cyan as the secondary, to be improved in time. The web app is not changed by this decision and keeps its own palette. The concept board and the system surfaces page are republished as `docs/ios/design/board.html` and `docs/ios/design/surfaces.html` with this palette. | Superseded by the stone secondary above |
 | 2026-10-31 | The web app shares the orange primary and stone secondary palette: `#ffb45c` with `#1d1200` control text in dark mode and `#b45f06` with white text in light mode; stone is `#c9bfae` in dark mode and `#6f6551` in light mode. Light-theme focus and link text use a deeper orange for 4.5:1 contrast. Existing per-user `--theme-accent` overrides remain supported. The orb's cyan glass edge and listening/voice colors stay unchanged; orange fills remain limited to primary controls and soft tints. | Dan's P15-21 decision on 31 October 2026 aligns web interaction, selection, progress and quiet secondary roles with the approved palette while retaining the separately owned orb and voice appearance. | Confirmed by Dan |
 | 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
-| 2026-10-31 | The system surfaces page `docs/ios/design/surfaces.html` has five surfaces that are still marked To agree and are not approved: the Lock Screen hands-free session, the Dynamic Island, Lock Screen tasks and decisions that need APNs, and Connection lost. They must not be built until Dan approves them. | Approval of the board screens does not cover these surfaces. APNs push is a known backend gap and needs its own decision before any push surface is built. | Open, to agree with Dan |
+| 2026-10-31 | The system surfaces page `docs/ios/design/surfaces.html` has four surfaces still marked To agree: the Lock Screen hands-free session, the Dynamic Island, and Lock Screen tasks and decisions that need APNs. They must not be built until Dan approves them. | Approval of the board screens does not cover these surfaces. APNs push is a known backend gap and needs its own decision before any push surface is built. Connection lost was approved separately in P15-37. | Open, to agree with Dan |
+| 2026-10-31 | Build the approved native Voice connection-loss state (P15-37 / #1476): only a real dropped connection shows the muted orb, “Connection lost”, Retry now and End. Retry starts a fresh session using the existing bounded reconnect policy; End closes the session and returns to Chat. Use orange primary and stone secondary glass actions, with Danish-default app-language copy and no helper text. | The existing `VoiceSessionClient` caps automatic reconnects at eight attempts. A user-requested retry starts another bounded session; the pure-Swift presentation state machine tests connected, lost, retrying and ended, including that initial failures are not mislabeled as drops. The iOS simulator PR artifact captures the synthetic state in Danish and English. | Confirmed by issue P15-37 |
 | 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |
 | 2026-10-31 | The Chat look is unified. Only the user bubble has a background: a soft orange-tinted glass pill. Jarvis replies, tool rows and status lines such as Writing it up are unboxed plain text. No solid orange fills are used anywhere: large orange areas are too harsh on the eyes, so orange is used for small accents, tints and strokes. | Dan approved this final Chat look on 2026-10-31 after reviewing the board. It applies to every surface that shows conversation text. The build is tracked in #1400 and the rule is repeated in #1430, #1431 and #1432. | Confirmed by Dan |
 | 2026-10-31 | On the Factory board every column is collapsible. Each column header shows a chevron, the title, a count pill and a one-line status detail, and Done starts collapsed. The build is tracked in #1431. | Dan changed the concept board after the first publish. The header is a disclosure button with a VoiceOver label that includes the count and the expanded or collapsed state. | Confirmed by Dan |
@@ -9766,6 +9781,14 @@ around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
 
+## 1 November 2026 — Combined iOS screenshot job timeout
+
+Keep the one-boot simulator workflow and all screenshot/upload steps, with a
+30-minute job limit instead of 20. Run `41261737993` completed its build,
+captures, upload, and comment, but was marked cancelled at the 20-minute limit
+after adding the sidebar coverage alongside Health. The extra bounded time
+allows the complete evidence set and cleanup without reducing coverage.
+
 ## 31 October 2026 — P15-31 iOS sidebar follows the approved board
 
 Owner feedback on TestFlight build 12 requires the native sidebar to match
@@ -9795,3 +9818,25 @@ Reset sidebar progress through the existing shell helper so its overlay cannot
 keep intercepting input. Audio, camera and broadcast teardown remain owned by
 `VoiceScreenModel.end()`. Linux navigation tests do not verify SwiftUI rendering
 or real-device interaction.
+
+## 1 November 2026 — native Voice restart and stationary orb (P15-40; #1482)
+
+Follow-up after ambient main (#1479): preserve the tangle's geometry while
+expanding its Canvas for blur margins, feather the entire centre to zero alpha
+before its bounds, and animate opacity rather than rectangular-layer brightness.
+The screenshot artifact pairs all three Voice states in both themes with the
+approved board. Fresh pixel inspection remains required before visual acceptance.
+Run 41264871752 compiled the app successfully but timed out during the combined
+capture at the 20-minute job limit. Increase that existing job's bound to 30
+minutes without dropping upstream captures or adding another Mac job.
+
+Build-14 feedback requires fresh Voice to connect after End without Refresh.
+Invalidate the screen generation before teardown, close the old transport,
+release capture/playback and activate a fresh audio session before reading its
+input format. Reopening the screen auto-starts from ended as well as idle/failed.
+Use the approved board's red End fill and the existing shared cyan-rimmed,
+dark-glass orb with an orange/amber tangled centre; animate the centre, not the
+sphere, with Reduced Motion and inactive-scene pauses. Keep all Voice copy in
+Danish/English resources. Extend the existing ready-PR simulator capture rather
+than adding another Mac job. Synthetic screenshots, Apple compilation and live
+device acceptance remain separate checks; none is established by Linux tests.

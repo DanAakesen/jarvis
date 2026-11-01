@@ -9,7 +9,7 @@ struct ContentView: View {
     @GestureState private var sidebarDrag = SidebarDrag()
     @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
-    @StateObject private var voiceModel = VoiceScreenModel()
+    @StateObject private var voiceModel: VoiceScreenModel
     @State private var animationTargetProgress: CGFloat = 0
     @State private var presentedProgress: CGFloat = 0
     @State private var dragStartProgress: CGFloat?
@@ -17,11 +17,14 @@ struct ContentView: View {
     private let startupError: String?
     private let fixtureMode: Bool
     private let settingsClient: JarvisSettingsClient?
+    private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
     @State private var healthClient: JarvisHealthClient?
     @State private var factoryClient: JarvisFactoryClient?
     private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
     private let factoryFixtureMode: Bool
+    private let healthScreenshotState: String?
+    private let healthScreenshotLanguage: JarvisAppLanguage?
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -31,11 +34,25 @@ struct ContentView: View {
         let arguments = ProcessInfo.processInfo.arguments
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
+        let voiceConnectionScreenshot = arguments.contains("--screenshot-voice-connection-lost")
+        let voiceScreenshotLanguage = arguments
+            .first(where: { $0.hasPrefix("--screenshot-voice-language=") })
+            .map { String($0.dropFirst("--screenshot-voice-language=".count)) }
+            .flatMap(JarvisAppLanguage.init(rawValue:))
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
         let factoryFixtureMode = arguments.contains("--screenshot-factory-fixture")
+        let healthFixtureMode = arguments.contains("--screenshot-health-fixture")
+        let healthState = healthFixtureMode ? arguments.first(where: {
+            $0.hasPrefix("--screenshot-health-state=")
+        })?.components(separatedBy: "=").last : nil
+        let healthLanguage = healthFixtureMode ? arguments.first(where: {
+            $0.hasPrefix("--screenshot-health-language=")
+        })?.components(separatedBy: "=").last.flatMap(JarvisAppLanguage.init(rawValue:)) : nil
         let fixtureMode = settingsPreview
+            || voiceConnectionScreenshot
             || arguments.contains("--screenshot-chat-fixture")
             || factoryFixtureMode
+            || healthFixtureMode
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
@@ -43,19 +60,33 @@ struct ContentView: View {
         if settingsPreview {
             initialNavigation.navigate(to: .settings)
         }
-        if fixtureMode,
-           let screen = arguments.first(where: { $0.hasPrefix("--screenshot-screen=") })?
+        if voiceConnectionScreenshot {
+            initialNavigation.navigate(to: .voice)
+        } else if fixtureMode,
+                  let screen = arguments.first(where: { $0.hasPrefix("--screenshot-screen=") })?
             .split(separator: "=", maxSplits: 1).last,
-           let destination = ["voice": JarvisDestination.voice, "notes": .notes, "health": .health,
-                              "settings": .settings][String(screen)] {
+                  let destination = ["voice": JarvisDestination.voice, "notes": .notes, "health": .health,
+                                     "settings": .settings][String(screen)] {
             initialNavigation.navigate(to: destination)
         }
         if factoryScreenshot != nil && !JarvisUITestConfiguration.isEnabled {
             initialNavigation.navigate(to: .softwareFactory)
         }
+        if healthFixtureMode { initialNavigation.navigate(to: .health) }
+        healthScreenshotState = healthState
+        healthScreenshotLanguage = healthLanguage
+#if targetEnvironment(simulator)
+        if arguments.contains("--screenshot-voice-fixture") {
+            initialNavigation.navigate(to: .voice)
+        }
+#endif
         self.fixtureMode = fixtureMode
+        self.voiceScreenshotLanguage = voiceScreenshotLanguage
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
+        _voiceModel = StateObject(
+            wrappedValue: VoiceScreenModel(screenshotConnectionLost: voiceConnectionScreenshot)
+        )
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
@@ -92,7 +123,9 @@ struct ContentView: View {
         _animationTargetProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _presentedProgress = State(initialValue: sidebarInitiallyOpen ? 1 : 0)
         _notesClient = State(initialValue: Self.makeNotesClient(fixtureMode: fixtureMode))
-        _healthClient = State(initialValue: Self.makeHealthClient(fixtureMode: fixtureMode))
+        _healthClient = State(initialValue: healthFixtureMode
+            ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
+            : Self.makeHealthClient(fixtureMode: fixtureMode))
         _factoryClient = State(initialValue: Self.makeFactoryClient(
             previewState: factoryScreenshot?.state,
             fixtureMode: factoryFixtureMode
@@ -144,9 +177,10 @@ struct ContentView: View {
                             } else if destination == .voice {
                                 VoiceScreenView(
                                     model: voiceModel,
+                                    language: voiceScreenshotLanguage ?? language,
                                     fixtureMode: fixtureMode,
                                     onMinimize: { navigate(to: .chat, drawerWidth: drawerWidth) },
-                                    onReturnToChat: { navigate(to: .chat, drawerWidth: drawerWidth) }
+                                    onEnd: { navigate(to: .chat, drawerWidth: drawerWidth) }
                                 )
                             } else if destination == .chat {
                                 JarvisChatScreen(
@@ -166,10 +200,12 @@ struct ContentView: View {
                             } else if destination == .health {
                                 JarvisHealthArea(
                                     client: healthClient,
-                                    language: language,
+                                    language: healthScreenshotLanguage ?? language,
                                     observeRefreshEvents: !fixtureMode,
                                     onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
-                                    now: fixtureMode ? JarvisHealthPreview.now : Date()
+                                    now: fixtureMode ? JarvisHealthPreview.now : Date(),
+                                    workoutInitiallySelected: healthScreenshotState != nil,
+                                    presentNewLiftAfterLoading: healthScreenshotState == "newlift"
                                 )
                             } else if destination == .softwareFactory {
                                 JarvisFactoryArea(

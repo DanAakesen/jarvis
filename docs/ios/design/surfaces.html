@@ -458,13 +458,12 @@ body { margin: 0; min-height: 100vh; background: var(--board-bg); color: var(--b
     </figcaption>
   </figure>
 
-  <figure class="fig todo">
-    <div class="frame" role="img" aria-label="Concept: Jarvis voice screen after losing connection. A pill says Reconnecting, attempt 3 of 8, the orb is dimmed, and Retry now and End buttons are shown.">
+  <figure id="connection-lost" class="fig agreed">
+    <div class="frame" role="img" aria-label="Approved concept: Jarvis voice screen after a realtime connection drops. The orb is dimmed beneath the Connection lost title, with Retry now and End buttons.">
       <div class="screen" aria-hidden="true">
         <i class="island"></i>
         <div class="sbar"><span>17:42</span><span class="batt"></span></div>
         <div class="nav-title">Voice</div>
-        <div class="rc-pill glass"><svg class="ic"><use href="#i-wifi-off"/></svg>Reconnecting · attempt 3 of 8</div>
         <div class="centre">
           <span class="halo" data-state="lost" style="--c:#8d98a1;width:200px;height:200px"><span class="mo" data-state="lost" style="--d:200px"></span></span>
           <h3 style="font-size:26px">Connection lost</h3>
@@ -478,8 +477,8 @@ body { margin: 0; min-height: 100vh; background: var(--board-bg); color: var(--b
     </div>
     <figcaption>
       <h2>Connection lost</h2>
-      <p class="st ask">To agree</p>
-      <p>What Voice shows when the signal drops: dimmed orb, reconnect attempts, Retry and End. Decision: is this the wording and behaviour you want?</p>
+      <p class="st ok">Agreed</p>
+      <p>After a real connection drop: muted orb, title, Retry now and End. Automatic reconnects stay bounded.</p>
     </figcaption>
   </figure>
 

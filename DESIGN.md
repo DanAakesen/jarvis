@@ -2813,10 +2813,10 @@ plain; the native toolbar owns the single system glass surface. Do not add a
 button glass effect, fill or stroke inside that surface. The count badge remains
 a separate semantic indicator (P15-29 / #1459).
 
-All concept board screens are approved. The five surfaces on
+All concept board screens are approved. Four surfaces on
 `docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free
-session, the Dynamic Island, Lock Screen tasks and decisions, and Connection
-lost) are not approved yet.
+session, the Dynamic Island, and Lock Screen tasks and decisions) are not
+approved yet. Connection lost is approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -2873,6 +2873,23 @@ progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
+
+After a real realtime drop, Voice replaces its controls with the muted orb,
+“Connection lost” title, and two glass actions. Retry now uses the bounded
+session retry path; End closes the session and returns to Chat. Orange is the
+primary action accent, stone is secondary, and the surface has no explanatory
+copy.
+
+P15-40 (#1482) keeps the cyan-rimmed dark sphere stationary and animates only the
+tangled orange/amber centre. Listening and speaking use stronger centre motion
+than thinking. The filament canvas includes transparent blur margins, and the
+centre fades radially to zero alpha before its bounds; animation changes opacity,
+not rectangular-layer brightness. No square edge may appear inside the sphere.
+Reduced Motion and an inactive scene pause it. Voice reserves the
+orb halo and a separate bottom caption/share/control region, including when
+captions are hidden, so status and caption changes cannot move the orb. Short
+screens reduce its diameter. End uses the shared red action tint with a white
+symbol, not a white fill, in both full-screen and minimized controls.
 
 ## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
@@ -3022,8 +3039,9 @@ The Danish/English copy and gate composition remain unchanged.
 ## Native iOS Health dashboard (P15-18; owner-approved 31 October 2026)
 
 The approved composition is one native scroll beneath a Health/refresh title row,
-with a text-only Dashboard/Track workout switcher, a small period menu, and the
-fixed glass search bar above the bottom safe area. Dashboard blocks show Gym,
+with a small period menu and a fixed bottom bar above the bottom safe area.
+P15-39 places the native Dashboard/Track workout segmented pill directly above
+the glass search field and plus button for thumb reach. Dashboard blocks show Gym,
 Run and Steps rings; the selected-period protein, calorie and sleep summary;
 recent sessions; body metric sparklines; a protein chart with a target line; and
 one freshness status. Rows use native navigation for workout, sleep, meals and
@@ -3039,16 +3057,15 @@ Orange is a small primary accent; stone is the secondary token. All visible
 and VoiceOver copy and number/date formatting follow the app-owned Danish/English
 preference.
 
-The checked-in `docs/ios/design/board.html?screen=health&tab=dashboard&lang=en`
-currently renders a blank Health placeholder rather than the approved frames.
-The implementation follows the approved issue description and does not copy
-literal values from that stale local board. The workout segment is disabled,
-while Last lifts and plus are omitted; the shared lift routes from #1423 are
-available on main, but this Dashboard implementation does not expose them. No
-replacement API is implied. The existing iOS
-screenshot hook remains within its three-capture cost guard and does not traverse
-Health, so light/dark Health simulator images and key-state screenshots remain
-unverified for owner review.
+The checked-in `docs/ios/design/board.html?screen=health&tab=track&lang=da`
+shows Exercises and History only. Plus opens **New lift** with name, kg, reps
+and sets and past-exercise quick-add chips; no form or save status sits on the
+tab. Native logging reuses the shared lift routes from #1423. Last lifts remains
+omitted from the Dashboard. The existing one-boot simulator screenshot job now
+includes Track workout, New lift and empty states in both languages and themes,
+with a board link beside the artifact in its PR comment. Linux Chromium review
+covers the board, not native rendering; simulator compilation/captures and owner
+visual review remain pending.
 
 ## Native iOS Workspaces (P15-14; 30 October 2026)
 

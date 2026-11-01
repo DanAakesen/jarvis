@@ -9,6 +9,50 @@ public enum VoiceSessionState: Equatable, Sendable {
     case reconnecting(attempt: Int)
     case ended
     case failed
+
+    public var canStartSession: Bool {
+        self == .idle || self == .ended || self == .failed
+    }
+}
+
+public enum VoiceConnectionPresentationState: Equatable, Sendable {
+    case connected
+    case lost
+    case retrying
+    case ended
+}
+
+public enum VoiceConnectionPresentationEvent: Equatable, Sendable {
+    case connected
+    case connectionDropped
+    case retryRequested
+    case retryFailed
+    case ended
+}
+
+public struct VoiceConnectionPresentationStateMachine: Sendable {
+    public private(set) var state: VoiceConnectionPresentationState = .connected
+
+    public init() {}
+
+    @discardableResult
+    public mutating func apply(_ event: VoiceConnectionPresentationEvent) -> VoiceConnectionPresentationState {
+        switch event {
+        case .connected:
+            state = .connected
+        case .connectionDropped where state == .connected || state == .retrying:
+            state = .lost
+        case .retryRequested where state == .lost:
+            state = .retrying
+        case .retryFailed where state == .retrying:
+            state = .lost
+        case .ended:
+            state = .ended
+        default:
+            break
+        }
+        return state
+    }
 }
 
 public enum VoiceSessionAction: Equatable, Sendable {
@@ -271,7 +315,7 @@ public actor VoiceSessionClient {
     }
 
     public func end() async throws {
-        guard isLive else { return }
+        guard !userEnded else { return }
         userEnded = true
         apply(.endRequested)
         receiveTask?.cancel()
@@ -287,6 +331,10 @@ public actor VoiceSessionClient {
         isConnected = false
         await transport.close(code: 1000)
         clearCredentials()
+        endpoint = nil
+        isMuted = false
+        cameraState = nil
+        reconnectAttempts = 0
         if let sendError { throw sendError }
     }
 
