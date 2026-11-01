@@ -225,6 +225,16 @@ acknowledgment replaces the local bubble without duplication; a failure before
 acknowledgment restores the draft for retry. Danish/English copy and the visual
 design are unchanged.
 
+Jarvis replies render Markdown structure, including headings, emphasis, lists and
+event date/time lines. Persisted tool outcomes stay unboxed and start at the
+Jarvis reply's leading edge; only the user's message has a background. Generated
+workspace views continue to arrive over the existing workspace event contract.
+The native sheet also loads `html-app` artifacts from the existing authenticated
+HTML-artifact route and renders them in an isolated WebKit view with a restrictive
+content policy, no app bridge, and no persistent website data. The view can display
+local HTML/JavaScript but does not support web-only `window.jarvis` actions such as
+asking Jarvis, pinning, or opening links from inside the generated app.
+
 The composer offers Chat and Voice navigation and a plus menu anchored above its
 trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
 language. Camera uses an in-app viewfinder and still-photo capture; video and

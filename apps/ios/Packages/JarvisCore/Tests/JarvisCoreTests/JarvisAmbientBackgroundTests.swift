@@ -178,4 +178,15 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
         XCTAssertTrue(shell.contains("JarvisHealthPreview.makeClient()"))
         XCTAssertTrue(shell.contains("fixtureMode ? JarvisHealthPreview.now : Date()"))
     }
+
+    func testGeneratedHTMLAppUsesAnIsolatedWebKitSandbox() throws {
+        let view = try source("apps/ios/Jarvis/GeneratedHTMLAppView.swift")
+        XCTAssertTrue(view.contains("websiteDataStore = .nonPersistent()"))
+        XCTAssertTrue(view.contains("connect-src 'none'"))
+        XCTAssertTrue(view.contains("frame-src 'none'"))
+        XCTAssertTrue(view.contains("form-action 'none'"))
+        XCTAssertTrue(view.contains("baseURL: nil"))
+        XCTAssertTrue(view.contains("navigationAction.request.url?.scheme == \"about\""))
+        XCTAssertFalse(view.contains("WKScriptMessageHandler"))
+    }
 }

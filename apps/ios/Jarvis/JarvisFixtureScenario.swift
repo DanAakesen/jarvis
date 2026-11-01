@@ -195,8 +195,8 @@ enum JarvisFixtureScenario {
             "messages":[
               {"id":"410","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"Can you review the latest release?","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:32:00Z","toolCalls":[],"attachments":[]},
               {"id":"411","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"I checked the candidate and the available checks passed.","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:32:40Z","toolCalls":[{"id":"fixture-tool-1","tool":"list_release","outcome":"ok","taskId":null,"artifactId":null}],"attachments":[]},
-              {"id":"412","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"What still needs my attention?","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:00Z","toolCalls":[],"attachments":[]},
-              {"id":"413","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"One request is waiting for your decision.","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:20Z","toolCalls":[],"attachments":[]}
+              {"id":"412","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"Do I have anything important in my calendar the next 30 days?","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:00Z","toolCalls":[],"attachments":[]},
+              {"id":"413","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"## Calendar for the next 30 days\n\nYou have **3 important events**:\n\n- **Monday, 2 November · 09:00–09:30** — Product review\n- **Wednesday, 11 November · 14:00–15:00** — Dentist appointment\n- **Friday, 20 November · 10:00–11:00** — Quarterly planning","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:34:20Z","toolCalls":[{"id":"fixture-calendar-tool","tool":"get_calendar_events","outcome":"ok","taskId":null,"artifactId":null}],"attachments":[]}
             ],
             "nextCursor":null
           }}
