@@ -37,3 +37,4 @@
 "chat.plus.cameraFrameUnavailable" = "The camera frame is not available yet.";
 "chat.plus.screenFrameUnavailable" = "The screen frame is not available yet.";
 "chat.plus.menuHint" = "Open camera, file, video, screen sharing, and voice language tools.";
+"chat.done" = "Done";

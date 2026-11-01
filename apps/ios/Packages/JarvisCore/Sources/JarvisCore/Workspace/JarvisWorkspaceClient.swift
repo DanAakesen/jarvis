@@ -2,6 +2,7 @@ import Foundation
 
 public final class JarvisWorkspaceClient: Sendable {
     private static let maximumEventSize = 320 * 1024
+    private static let maximumHTMLArtifactResponseSize = GeneratedViewLimits.htmlArtifactBytes + 128 * 1024
 
     private let client: JarvisClient
     private let policy: WorkspaceReconnectPolicy
@@ -92,6 +93,24 @@ public final class JarvisWorkspaceClient: Sendable {
             }
             throw error
         }
+    }
+
+    public func htmlArtifact(id: String) async throws -> HtmlArtifact {
+        guard Self.validArtifactID(id) else {
+            throw JarvisWorkspaceClientError.invalidResponse
+        }
+        let response = try await client.performAuthenticatedRequest(
+            method: .get,
+            path: ["factory", "workspace-artifacts", "html", id],
+            idempotent: true
+        )
+        guard response.statusCode == 200,
+              response.body.count <= Self.maximumHTMLArtifactResponseSize,
+              let artifact = try? JSONDecoder().decode(HtmlArtifact.self, from: response.body),
+              artifact.id.caseInsensitiveCompare(id) == .orderedSame else {
+            throw JarvisWorkspaceClientError.invalidResponse
+        }
+        return artifact
     }
 
     public func acknowledge(
@@ -255,6 +274,10 @@ public final class JarvisWorkspaceClient: Sendable {
             of: #"^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$"#,
             options: .regularExpression
         ) != nil
+    }
+
+    private static func validArtifactID(_ value: String) -> Bool {
+        validSessionID(value)
     }
 
     private static func validTrustedBlobHost(_ value: String) -> Bool {

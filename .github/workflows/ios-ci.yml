@@ -27,7 +27,7 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
@@ -153,10 +153,20 @@ jobs:
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          xcodebuild test \
+            -project apps/ios/Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-calendar-answer-light.png"
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
             --screenshot-chat-fixture --screenshot-chat-plus-menu
           sleep 2
@@ -168,6 +178,9 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-calendar-answer-dark.png"
           for language in da en; do
             xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
               --screenshot-voice-connection-lost \
@@ -181,6 +194,31 @@ jobs:
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            for dynamic_type in default accessibility-xxx-large; do
+              if [[ "$dynamic_type" == default ]]; then
+                content_size=large
+              else
+                content_size=accessibility-extra-extra-extra-large
+              fi
+              xcrun simctl ui "$DEVICE_ID" content_size "$content_size"
+              for count in 1 12; do
+                xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-chat-fixture "--screenshot-needs-you-count=$count"
+                sleep 2
+                xcrun simctl io "$DEVICE_ID" screenshot \
+                  "$SCREENSHOT_DIR/bell-count-${count}-${dynamic_type}-${appearance}.png"
+              done
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-chat-fixture --screenshot-notifications-open
+              sleep 2
+              if [[ "$dynamic_type" == default ]]; then
+                sheet_screenshot="$SCREENSHOT_DIR/notifications-${appearance}.png"
+              else
+                sheet_screenshot="$SCREENSHOT_DIR/notifications-${dynamic_type}-${appearance}.png"
+              fi
+              xcrun simctl io "$DEVICE_ID" screenshot "$sheet_screenshot"
+            done
+            xcrun simctl ui "$DEVICE_ID" content_size large
             for state in listening thinking speaking; do
               xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                 --screenshot-chat-fixture --screenshot-voice-fixture \
@@ -199,10 +237,6 @@ jobs:
               sleep 2
               xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/ambient-${screen}-${appearance}.png"
             done
-            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
-              --screenshot-chat-fixture --screenshot-notifications-open
-            sleep 2
-            xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for state in empty active; do
               xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                 --screenshot-chat-fixture "--screenshot-activity-state=$state"
