@@ -2819,7 +2819,8 @@ the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
 elapsed timer, measured waveform and Mute/End controls. Stone is secondary;
 only End has a small orange tint, never a large solid fill. System timer updates
 and audio-derived waveform snapshots need no perpetual decorative animation.
-The Dynamic Island and Lock Screen tasks and decisions remain unapproved.
+P15-36 approves the Lock Screen tasks and decisions surface.
+The Dynamic Island remains unapproved.
 Connection lost is approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
@@ -3094,3 +3095,23 @@ never executed.
 The shared native sign-in orb uses a dark glass sphere and orange center without
 orbit or meridian ellipses. The approved Workspaces frame contains no orb, so the
 screen does not add one.
+
+## Native iOS Lock Screen tasks and decisions (P15-36; 31 October 2026)
+
+Follow the approved Lock Screen tasks card in
+`docs/ios/design/surfaces.html`: the Factory Live Activity presents the Factory
+symbol, localized state, actual task activity, elapsed time from `startedAt`,
+and a linear progress track. Since existing task routes provide no numeric
+progress, the track is indeterminate rather than showing an invented fraction.
+The approval notification uses the system Jarvis app icon (the dark glass orb
+with cyan rim and amber tangled centre), server-provided summary and expiry,
+and authentication-required Approve/Decline actions. Orange remains a small
+accent; stone is the secondary token.
+
+ActivityKit and WidgetKit provide the system Lock Screen presentation. App
+language comes from `JarvisAppLanguage`; notification action feedback is shown
+in the existing Now activity sheet. Local updates use the existing `/now`
+snapshot/events and Factory task event stream. No APNs delivery or update is
+claimed while the app is suspended; the device registration and backend push
+work remain open. No Dynamic Island presentation is configured; that system
+surface remains unapproved.

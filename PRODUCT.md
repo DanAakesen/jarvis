@@ -323,6 +323,22 @@ their native presentation is decided. No create action or new backend route is
 introduced. All native Workspaces UI and accessibility copy follows the persisted
 Danish/English app-language preference, defaulting to Danish.
 
+## iPhone Lock Screen tasks and decisions (P15-36)
+
+The approved Lock Screen surface shows an ActivityKit Live Activity for real
+running Factory tasks and an actionable Jarvis notification for real pending
+confirmations. The task surface uses its actual state, activity text and start
+time, tracking at most the five most recently started running tasks. Until the backend exposes measured task progress, the progress track stays
+indeterminate and never presents invented step counts. Approve and Decline use
+the existing authenticated confirmation endpoint, require device authentication,
+and report success or failure in the Now activity sheet. New labels and recovery
+copy follow the Danish-default, English-selectable app language.
+
+The app synchronizes tasks and confirmations from existing backend snapshots and
+events while active. Updates while the app is suspended are not promised: APNs
+device registration, backend delivery and task/approval update or removal pushes
+remain separate work.
+
 ## Conversational finding feedback (#1240)
 
 The owner can mark one proactive finding seen, dismiss it, snooze it, or rate it

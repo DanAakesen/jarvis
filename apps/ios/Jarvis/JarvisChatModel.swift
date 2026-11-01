@@ -269,6 +269,15 @@ final class JarvisChatModel: ObservableObject {
         do {
             nowFeed = try await nowClient.load()
             activityError = nil
+            let language = JarvisAppLanguage(
+                rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+            ) ?? .default
+            await JarvisFactoryLiveActivityController.synchronize(nowFeed?.running ?? [], language: language)
+            await JarvisApprovalNotificationCoordinator.shared.synchronize(
+                nowFeed?.confirmations ?? [],
+                language: language
+            )
+            consumeLockScreenApprovalResult()
         } catch {
             activityError = message(for: error)
         }
@@ -327,6 +336,27 @@ final class JarvisChatModel: ObservableObject {
         } catch {
             activityError = message(for: error)
         }
+    }
+
+    private func consumeLockScreenApprovalResult() {
+        guard let result = UserDefaults.standard.string(
+            forKey: JarvisApprovalNotificationCoordinator.actionResultKey
+        ) else { return }
+        let key: JarvisApprovalLocalizationKey
+        switch result {
+        case ConfirmationDecision.approve.rawValue: key = .approvedFromLockScreen
+        case ConfirmationDecision.reject.rawValue: key = .declinedFromLockScreen
+        default: key = .actionFailed
+        }
+        activityMessage = JarvisApprovalLocalization.string(
+            key,
+            language: JarvisAppLanguage(
+                rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+            ) ?? .default
+        )
+        UserDefaults.standard.removeObject(
+            forKey: JarvisApprovalNotificationCoordinator.actionResultKey
+        )
     }
 
     private func sendTurn(text: String, attachments: [PendingChatAttachment]) async {

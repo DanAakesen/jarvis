@@ -2,6 +2,17 @@ import Foundation
 import XCTest
 
 final class JarvisOrbRenderingTests: XCTestCase {
+    func testLockScreenNotificationFixtureUsesAnAppIconSizedOrb() throws {
+        var repository = URL(fileURLWithPath: #filePath)
+        for _ in 0..<7 { repository.deleteLastPathComponent() }
+        let source = try String(
+            contentsOf: repository.appendingPathComponent("apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("JarvisOrbView(activity: .calm, diameter: 38)"))
+        XCTAssertTrue(source.contains(".frame(width: 38, height: 38)"))
+    }
+
     func testCoreGlowHasTransparentMarginAndFadesBeforeItsBounds() throws {
         var repository = URL(fileURLWithPath: #filePath)
         for _ in 0..<7 { repository.deleteLastPathComponent() }

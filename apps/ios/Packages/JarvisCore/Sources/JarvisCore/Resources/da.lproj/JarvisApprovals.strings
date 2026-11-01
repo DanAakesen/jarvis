@@ -1,0 +1,8 @@
+"approval.approve" = "Godkend";
+"approval.decline" = "Afvis";
+"approval.expires" = "Udløber kl. %@";
+"approval.approvedFromLockScreen" = "Godkendt fra låseskærmen.";
+"approval.declinedFromLockScreen" = "Afvist fra låseskærmen.";
+"approval.actionFailed" = "Handlingen blev ikke gennemført. Åbn Jarvis for at prøve igen.";
+"approval.notificationNow" = "nu";
+"approval.previewSummary" = "Flet ændringerne ind i main?";
