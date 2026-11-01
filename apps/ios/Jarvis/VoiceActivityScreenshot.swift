@@ -6,7 +6,12 @@ struct VoiceActivityScreenshotView: View {
     @StateObject private var model = VoiceScreenModel()
 
     var body: some View {
-        VoiceScreenView(model: model, onMinimize: {})
+        VoiceScreenView(
+            model: model,
+            language: ProcessInfo.processInfo.arguments.contains("--voice-activity-language=en") ? .en : .da,
+            onMinimize: {},
+            onEnd: {}
+        )
             .task { await model.startActivityScreenshot() }
     }
 }
