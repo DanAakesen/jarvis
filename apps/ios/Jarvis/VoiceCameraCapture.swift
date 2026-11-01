@@ -362,7 +362,7 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
 
     private var availablePositions: [AVCaptureDevice.Position] {
         if simulatorFixtureMode { return [.back, .front] }
-        [AVCaptureDevice.Position.back, .front].filter { !cameraDevices(for: $0).isEmpty }
+        return [AVCaptureDevice.Position.back, .front].filter { !cameraDevices(for: $0).isEmpty }
     }
 
     private func availableLenses(for position: AVCaptureDevice.Position) -> [VoiceCameraLens] {

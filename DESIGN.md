@@ -2927,6 +2927,12 @@ opposite alignment and a 24-hour timestamp at each sender/minute group. Only the
 user message has a background, a soft orange-tinted glass pill (see the colour
 and Chat look section above); Jarvis replies and tool rows are unboxed text. The activity sheet reuses the web feed's activity
 categories and shows away mode separately from its persisted activity items.
+A Jarvis reply renders Markdown headings, paragraphs and list rows as separate
+SwiftUI blocks, preserving inline emphasis and date/time hierarchy. Persisted
+tool-status rows share the reply's leading edge instead of stretching their
+outcome label to the far side of the screen. The generated workspace sheet handles
+HTML-app artifacts in an isolated, nonpersistent
+WebKit view with a restrictive content policy and no native message bridge.
 A genuinely empty history leaves the transcript clear beside the pinned composer;
 the app does not add a generic empty panel or invent sample messages.
 

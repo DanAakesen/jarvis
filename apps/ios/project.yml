@@ -129,3 +129,12 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
+schemes:
+  Jarvis:
+    build:
+      targets:
+        Jarvis: all
+        JarvisUITests: [test]
+    test:
+      targets:
+        - JarvisUITests
