@@ -5,6 +5,7 @@ struct FactoryTaskActivityAttributes: ActivityAttributes {
     struct ContentState: Codable, Hashable {
         var state: String
         var activity: String?
+        var phase: String? = nil
     }
 
     var taskID: String
