@@ -31,6 +31,13 @@ struct ContentView: View {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
+    private var presentedWorkspaceViewBinding: Binding<PresentedWorkspaceView?> {
+        Binding<PresentedWorkspaceView?>(
+            get: workspaceRuntimePresentedView,
+            set: setPresentedWorkspaceView
+        )
+    }
+
     init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
         let arguments = ProcessInfo.processInfo.arguments
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
@@ -245,19 +252,10 @@ struct ContentView: View {
                     handleVoiceStateChange(state)
                 }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
-                    guard destination != nil,
-                          let destination = workspaceRuntime.consumeRequestedDestination() else {
-                        return
-                    }
-                    navigate(to: destination, drawerWidth: drawerWidth)
+                    handleRequestedDestinationChange(destination, drawerWidth: drawerWidth)
                 }
-                .sheet(
-                    item: Binding(
-                        get: { workspaceRuntime.presentedView },
-                        set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
-                    )
-                ) { presented in
-                    GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
+                .sheet(item: presentedWorkspaceViewBinding) { (presented: PresentedWorkspaceView) in
+                    workspaceSheet(presented)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background { JarvisScreenBackground() }
@@ -443,6 +441,30 @@ struct ContentView: View {
         }
         navigation.setSidebarOpen(open)
         animateSidebar(to: open ? 1 : 0)
+    }
+
+    private func workspaceRuntimePresentedView() -> PresentedWorkspaceView? {
+        let presentedView: PresentedWorkspaceView? = workspaceRuntime.presentedView
+        return presentedView
+    }
+
+    private func setPresentedWorkspaceView(_ presentedView: PresentedWorkspaceView?) {
+        let isDismissal: Bool = presentedView == nil
+        guard isDismissal else { return }
+        workspaceRuntime.userDismissedView()
+    }
+
+    private func workspaceSheet(_ presented: PresentedWorkspaceView) -> some View {
+        GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
+    }
+
+    private func handleRequestedDestinationChange(
+        _ requestedDestination: JarvisDestination?,
+        drawerWidth: CGFloat
+    ) {
+        guard requestedDestination != nil else { return }
+        guard let destination = workspaceRuntime.consumeRequestedDestination() else { return }
+        navigate(to: destination, drawerWidth: drawerWidth)
     }
 
     private func handleVoiceStateChange(_ state: VoiceSessionState) {

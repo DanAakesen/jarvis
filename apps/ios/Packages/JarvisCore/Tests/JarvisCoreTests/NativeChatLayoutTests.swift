@@ -84,6 +84,16 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(contentView.contains("let shouldCloseSidebar: Bool = state == endedState"))
     }
 
+    func testWorkspaceSheetBindingUsesExplicitTypedAccessors() throws {
+        let contentView = try source("apps/ios/Jarvis/ContentView.swift")
+        XCTAssertTrue(contentView.contains("Binding<PresentedWorkspaceView?>("))
+        XCTAssertTrue(contentView.contains("get: workspaceRuntimePresentedView"))
+        XCTAssertTrue(contentView.contains("set: setPresentedWorkspaceView"))
+        XCTAssertTrue(contentView.contains(".sheet(item: presentedWorkspaceViewBinding)"))
+        XCTAssertTrue(contentView.contains("(presented: PresentedWorkspaceView)"))
+        XCTAssertFalse(contentView.contains("set: { if $0 == nil"))
+    }
+
     func testSimulatorArtifactContainsBaseAndUpdatedChatCaptures() throws {
         let workflow = try source(".github/workflows/ios-ci.yml")
         XCTAssertTrue(workflow.contains(#"git show "$BASE_SHA:apps/ios/Jarvis/JarvisChatScreen.swift""#))
