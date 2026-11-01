@@ -10479,3 +10479,10 @@ element is queried without a type, the container is no longer required to be
 hittable (its rows are), and per-test time allowances are 120/150 s because a
 cold simulator launch took 38 s. Unconfirmed on device until the next preview
 build; the temporary debug line stays until Dan confirms.
+
+## 2026-11-02: Root screen chosen from the navigation model, not a NavigationStack path (P15-41)
+
+CI trace after tapping a sidebar item was `path=[softwareFactory] current=softwareFactory shown=-`: the model
+was correct but the stack never pushed the destination. The visible root screen is now selected directly from
+`navigation.currentDestination` inside a plain `NavigationStack` (kept only for nested pushes such as Factory task
+detail), so a root destination cannot be dropped by a path push. Unconfirmed on device until the next preview build.

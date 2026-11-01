@@ -152,91 +152,30 @@ struct ContentView: View {
                 JarvisDesignTokens.sidebarMaximumWidth
             )
             return ZStack(alignment: .trailing) {
-                NavigationStack(
-                    path: Binding(
-                        get: { navigation.path },
-                        set: {
-                            navigation.setPath($0)
-                        }
-                    )
-                ) {
-                    JarvisChatScreen(
-                        client: chatClient,
-                        fixtureMode: fixtureMode,
-                        initialActivitySheet: activityScreenshotState != nil
-                            ? .background
-                            : (fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
-                                || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
-                                ? .needsYou : nil),
-                        startupError: startupError,
-                        onNavigate: { navigate(to: $0) }
-                    )
-                        // Only session-owned screen data is discarded; the navigation host stays installed.
-                        .id(sessionEpoch)
-                        .navigationDestination(for: JarvisDestination.self) { destination in
-                            Group {
-                                if destination == .workspaces {
-                                    WorkspacesView(runtime: workspaceRuntime)
-                                } else if destination == .voice {
-                                    VoiceScreenView(
-                                        model: voiceModel,
-                                        language: voiceScreenshotLanguage ?? language,
-                                        fixtureMode: fixtureMode && !navigationFixtureMode,
-                                        onMinimize: { navigate(to: .chat) },
-                                        onEnd: { navigate(to: .chat) }
-                                    )
-                                } else if destination == .chat {
-                                    JarvisChatScreen(
-                                        client: chatClient,
-                                        fixtureMode: fixtureMode,
-                                        startupError: startupError,
-                                        onNavigate: { navigate(to: $0) }
-                                    )
-                                } else if destination == .notes {
-                                    JarvisNotesArea(
-                                        client: notesClient,
-                                        language: language,
-                                        onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) }
-                                    )
-                                } else if destination == .health {
-                                    JarvisHealthArea(
-                                        client: healthClient,
-                                        language: healthScreenshotLanguage ?? language,
-                                        observeRefreshEvents: !fixtureMode,
-                                        onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
-                                        now: fixtureMode ? JarvisHealthPreview.now : Date(),
-                                        workoutInitiallySelected: healthScreenshotState != nil,
-                                        presentNewLiftAfterLoading: healthScreenshotState == "newlift"
-                                    )
-                                } else if destination == .softwareFactory {
-                                    JarvisFactoryArea(
-                                        client: factoryClient,
-                                        language: factoryScreenshot?.language ?? language,
-                                        onRetryConfiguration: {
-                                            factoryClient = Self.makeFactoryClient(
-                                                previewState: factoryScreenshot?.state,
-                                                fixtureMode: factoryFixtureMode
-                                            )
-                                        },
-                                        previewState: factoryScreenshot?.state,
-                                        liveUpdatesEnabled: !factoryFixtureMode
-                                    )
-                                } else if destination == .settings {
-                                    JarvisSettingsArea(
-                                        storedLanguage: $storedLanguage,
-                                        storedTheme: $storedTheme,
-                                        client: settingsClient,
-                                        onSignedOut: {
-                                            NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
-                                        }
-                                    )
-                                } else {
-                                    JarvisPlaceholderView(destination: destination, language: language)
-                                }
-                            }
-                            .onAppear { navigation.debugDestinationShown(destination) }
+                // The stack hosts only nested pushes (Factory task detail, note editor). The visible root screen
+                // is chosen directly from the root-owned destination, so a root-level destination can never fail
+                // to appear because a path push was dropped.
+                NavigationStack {
+                    Group {
+                        if navigation.currentDestination == .chat {
+                            JarvisChatScreen(
+                                client: chatClient,
+                                fixtureMode: fixtureMode,
+                                initialActivitySheet: activityScreenshotState != nil
+                                    ? .background
+                                    : (fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
+                                        || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
+                                        ? .needsYou : nil),
+                                startupError: startupError,
+                                onNavigate: { navigate(to: $0) }
+                            )
                             .id(sessionEpoch)
+                            .onAppear { navigation.debugDestinationShown(.chat) }
+                        } else {
+                            destinationView(navigation.currentDestination)
+                                .id(sessionEpoch)
                         }
+                    }
                 }
                 .tint(JarvisDesignTokens.primaryAccent)
                 .task(id: sessionEpoch) {
@@ -306,6 +245,74 @@ struct ContentView: View {
                     withTransaction(transaction) { navigation.closeSidebar() }
                 }
             }
+    }
+
+    private func destinationView(_ destination: JarvisDestination) -> some View {
+        destinationContent(destination)
+            .id(destination)
+            .onAppear { navigation.debugDestinationShown(destination) }
+    }
+
+    @ViewBuilder
+    private func destinationContent(_ destination: JarvisDestination) -> some View {
+        if destination == .workspaces {
+            WorkspacesView(runtime: workspaceRuntime)
+        } else if destination == .voice {
+            VoiceScreenView(
+                model: voiceModel,
+                language: voiceScreenshotLanguage ?? language,
+                fixtureMode: fixtureMode && !navigationFixtureMode,
+                onMinimize: { navigate(to: .chat) },
+                onEnd: { navigate(to: .chat) }
+            )
+        } else if destination == .chat {
+            JarvisChatScreen(
+                client: chatClient,
+                fixtureMode: fixtureMode,
+                startupError: startupError,
+                onNavigate: { navigate(to: $0) }
+            )
+        } else if destination == .notes {
+            JarvisNotesArea(
+                client: notesClient,
+                language: language,
+                onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) }
+            )
+        } else if destination == .health {
+            JarvisHealthArea(
+                client: healthClient,
+                language: healthScreenshotLanguage ?? language,
+                observeRefreshEvents: !fixtureMode,
+                onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
+                now: fixtureMode ? JarvisHealthPreview.now : Date(),
+                workoutInitiallySelected: healthScreenshotState != nil,
+                presentNewLiftAfterLoading: healthScreenshotState == "newlift"
+            )
+        } else if destination == .softwareFactory {
+            JarvisFactoryArea(
+                client: factoryClient,
+                language: factoryScreenshot?.language ?? language,
+                onRetryConfiguration: {
+                    factoryClient = Self.makeFactoryClient(
+                        previewState: factoryScreenshot?.state,
+                        fixtureMode: factoryFixtureMode
+                    )
+                },
+                previewState: factoryScreenshot?.state,
+                liveUpdatesEnabled: !factoryFixtureMode
+            )
+        } else if destination == .settings {
+            JarvisSettingsArea(
+                storedLanguage: $storedLanguage,
+                storedTheme: $storedTheme,
+                client: settingsClient,
+                onSignedOut: {
+                    NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
+                }
+            )
+        } else {
+            JarvisPlaceholderView(destination: destination, language: language)
+        }
     }
 
     private var themeColorScheme: ColorScheme? {
