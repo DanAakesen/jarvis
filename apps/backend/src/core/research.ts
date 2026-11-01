@@ -410,7 +410,8 @@ export function createHtmlResearchModule(
           if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
             throw new ToolFailure('Research progress did not pass workspace validation.');
           }
-          await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
+          // The persisted job owns the research; losing its progress window must not stop it.
+          await request.server.workspaceCommands.execute(ownerId, initialCommand, signal).catch(() => undefined);
         } catch (error) {
           job.done = true;
           await tracker.fail('Research could not be started. Try again shortly.');

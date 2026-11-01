@@ -188,6 +188,7 @@ struct JarvisChatScreen: View {
 
     private var layout: some View {
         VStack(spacing: 0) {
+            JarvisTaskActivityNotice(language: appLanguage)
             conversation
             composer
         }
@@ -288,8 +289,10 @@ struct JarvisChatScreen: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase != .active else {
                 refreshScreenSharing()
+                Task { await model.resume() }
                 return
             }
+            if phase == .background { model.suspendObservation() }
             stopVideo()
         }
     }

@@ -15,18 +15,33 @@ struct JarvisFactoryLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: FactoryTaskActivityAttributes.self) { context in
             LockScreenFactoryTaskActivity(context: context)
-        } dynamicIsland: { _ in
+        } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) {
-                    EmptyView()
+                    LockScreenFactoryTaskActivity(context: context)
                 }
             } compactLeading: {
-                EmptyView()
+                Image(systemName: symbol(for: context.state.phase))
+                    .accessibilityLabel(context.attributes.title)
             } compactTrailing: {
-                EmptyView()
+                Text(context.state.state)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .accessibilityLabel(context.state.state)
             } minimal: {
-                EmptyView()
+                Image(systemName: symbol(for: context.state.phase))
+                    .accessibilityLabel("\(context.attributes.title), \(context.state.state)")
             }
+        }
+    }
+
+    private func symbol(for phase: String?) -> String {
+        switch phase {
+        case "waiting": "pause.circle"
+        case "done": "checkmark.circle"
+        case "failed": "exclamationmark.triangle"
+        case "cancelled": "xmark.circle"
+        default: "chevron.left.forwardslash.chevron.right"
         }
     }
 }
@@ -44,7 +59,10 @@ private struct LockScreenFactoryTaskActivity: View {
             state: context.state.state,
             activity: context.state.activity,
             startedAt: context.attributes.startedAt,
-            language: language
+            language: language,
+            taskTitle: context.attributes.title,
+            phase: context.state.phase,
+            isStale: context.isStale
         )
         .activityBackgroundTint(Color(uiColor: .secondarySystemBackground))
         .activitySystemActionForegroundColor(.orange)

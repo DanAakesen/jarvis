@@ -1,4 +1,10 @@
 "factory.title" = "Software Factory";
+"factory.liveActivitiesDisabled" = "Liveaktiviteter er slået fra. Åbn Indstillinger og tillad Liveaktiviteter for Jarvis. Opgaven fortsætter på serveren.";
+"factory.liveActivityUnavailable" = "Liveaktiviteten kunne ikke startes. Opgaven fortsætter på serveren.";
+"factory.liveActivityLocalOnly" = "Låseskærmen kan ikke opdateres, mens appen er suspenderet. Åbn Jarvis for at hente opgavens aktuelle status.";
+"factory.openSettings" = "Åbn Indstillinger";
+"factory.waiting" = "Venter";
+"factory.backgroundTask" = "Baggrundsopgave";
 "factory.refresh" = "Opdater";
 "factory.refreshing" = "Opdaterer";
 "factory.board" = "Board";

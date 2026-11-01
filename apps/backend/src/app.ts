@@ -67,8 +67,10 @@ import {
   type SystemStatusReader,
 } from './system-status.js';
 import { registerWebSocketPlugin } from './websocket.js';
+import { registerActivityKitRoutes, type ActivityKitServices } from './push/activitykit-routes.js';
 
 export interface BuildAppOptions {
+  readonly activityKit?: ActivityKitServices;
   readonly managedRuntime?: import('./core/managed-runtime-routes.js').ManagedRuntimeServices;
   /** Supplied only after managed definition, settings and application-policy verification. */
   readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
@@ -345,6 +347,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('backgroundJobs', backgroundJobs);
   app.decorate('onEmbeddingModelChanged', options.onEmbeddingModelChanged ?? null);
   app.addHook('onReady', async () => { await backgroundJobs.initialize(); });
+  registerActivityKitRoutes(app, options.activityKit);
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);

@@ -76,6 +76,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var statusLine: String?
     @Published var streamingText = ""
     @Published var nowFeed: JarvisNowFeed?
+    @Published private(set) var backgroundTasks: [BackgroundTaskRecord] = []
     @Published var activityError: String?
     @Published var activityMessage: String?
     @Published private(set) var voiceLanguage: ChatLanguage = .da
@@ -84,6 +85,7 @@ final class JarvisChatModel: ObservableObject {
     private let nowClient: JarvisNowFeedClient?
     private let updatesClient: JarvisWorkspaceClient?
     private let settingsClient: JarvisSettingsClient?
+    private let factoryClient: JarvisFactoryClient?
     private var historyPaging = ChatHistoryPagingState()
     private var sessionID: String?
     private var language: ChatLanguage
@@ -91,6 +93,7 @@ final class JarvisChatModel: ObservableObject {
     private var pendingMessageID: String?
     private var uploadedAttachmentIDs: [UUID: String] = [:]
     private var sendTask: Task<Void, Never>?
+    private var observationSuspended = false
     private var didLoad = false
     private var fixtureTurnUsed = false
     let fixtureMode: Bool
@@ -107,6 +110,8 @@ final class JarvisChatModel: ObservableObject {
         nowClient = client.map { JarvisNowFeedClient(client: $0) }
         updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
         settingsClient = client.map { JarvisSettingsClient(client: $0) }
+        factoryClient = client.map { JarvisFactoryClient(client: $0) }
+        if let client { JarvisFactoryLiveActivityController.configure(client: client) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
         language = .da
@@ -126,7 +131,7 @@ final class JarvisChatModel: ObservableObject {
     }
 
     var shouldShowNowBar: Bool {
-        isSending || nowFeed.map {
+        isSending || !backgroundTasks.isEmpty || nowFeed.map {
             !$0.confirmations.isEmpty ||
                 !$0.running.isEmpty ||
                 !$0.items.isEmpty
@@ -149,6 +154,9 @@ final class JarvisChatModel: ObservableObject {
         }
         if let task = nowFeed?.running.first {
             return task.activity.isEmpty ? task.title : task.activity
+        }
+        if let task = backgroundTasks.first(where: { $0.status == .running }) {
+            return task.detail ?? task.title
         }
         return nowFeed?.awayMode == true ? "Away mode" : "Background activity"
     }
@@ -295,7 +303,19 @@ final class JarvisChatModel: ObservableObject {
             let language = JarvisAppLanguage(
                 rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
             ) ?? .default
-            await JarvisFactoryLiveActivityController.synchronize(nowFeed?.running ?? [], language: language)
+            let liveBackgroundTasks: [BackgroundTaskRecord]
+            do {
+                liveBackgroundTasks = try await nowClient.backgroundTasks()
+                backgroundTasks = liveBackgroundTasks
+            } catch {
+                // Keep existing approvals and Factory updates independent of job storage.
+                liveBackgroundTasks = []
+                activityError = message(for: error)
+            }
+            await JarvisFactoryLiveActivityController.synchronize(
+                nowFeed?.running ?? [], backgroundTasks: liveBackgroundTasks,
+                factoryClient: factoryClient, language: language
+            )
             await JarvisApprovalNotificationCoordinator.shared.synchronize(
                 nowFeed?.confirmations ?? [],
                 language: language
@@ -304,6 +324,24 @@ final class JarvisChatModel: ObservableObject {
         } catch {
             activityError = message(for: error)
         }
+    }
+
+    func resume() async {
+        guard !fixtureMode else { return }
+        if observationSuspended {
+            await sendTask?.value
+            observationSuspended = false
+        }
+        await refreshHistory()
+        await refreshActivity()
+        await reattachActiveTurnIfNeeded()
+    }
+
+    func suspendObservation() {
+        guard isSending else { return }
+        observationSuspended = true
+        // This only detaches the transport; cancelTurn is an explicit user action.
+        sendTask?.cancel()
     }
 
     func watchActivity() async {
@@ -433,7 +471,7 @@ final class JarvisChatModel: ObservableObject {
             isSending = false
             activeMessageID = nil
             statusLine = nil
-            actionError = message(for: error)
+            if !Task.isCancelled { actionError = message(for: error) }
             streamingText = ""
         }
         sendTask = nil
@@ -485,13 +523,14 @@ final class JarvisChatModel: ObservableObject {
             statusLine = nil
         } catch {
             isSending = false
+            activeMessageID = nil
             statusLine = nil
-            actionError = message(for: error)
+            if !Task.isCancelled { actionError = message(for: error) }
         }
     }
 
     private func reattachActiveTurnIfNeeded() async {
-        guard let client, activeMessageID == nil else { return }
+        guard let client, activeMessageID == nil, !isSending else { return }
         do {
             let activeTurns = try await client.listActiveTurns()
             guard activeMessageID == nil,
@@ -536,6 +575,7 @@ final class JarvisChatModel: ObservableObject {
                 break
             }
         }
+        try Task.checkCancellation()
     }
 
     private func refreshHistory() async {
