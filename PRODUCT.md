@@ -10,6 +10,13 @@ Native calendar approval controls and review context are available in both
 languages. CI review evidence uses synthetic calendar confirmations, not live
 calendar writes.
 
+The iPhone approval bar shows only Approve and Decline immediately above Now.
+Each action shows its own pending state. Ask for the system notification
+permission after the owner unlocks the signed-in app, not when the first proposal
+arrives. Once APNs is configured, send one actionable notification when the
+confirmation is created; polling must not create a second local notification.
+Respect notification-preview privacy and the device's language/time zone.
+
 ## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
 
 Read-only diagnostic access covers Jarvis's backend, hosted AI agents, coding
@@ -216,6 +223,16 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
+screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.
+Chat, Health, Notes and Factory provide localized menu launchers as well as the right-edge swipe; tapping
+the dimmed screen closes the sidebar. Interrupted gestures must return to the
+committed open/closed state without an invisible input blocker. The iPhone UI gate
+requires the actual drawer to appear and be hittable within two seconds in Danish
+and English. The owner temporarily selects only this focused test class for
+preview CI; the retained Chat/Health/Notes/Factory controls and voice regression
+still requires verification before full issue acceptance.
+
 P15-38 / #1478 applies Chat's approved ambient background to every native
 screen and app-owned sheet: one light/dark definition and the same glow positions,
 with glass content surfaces above it. The 1 November reconciliation reuses main's
@@ -393,7 +410,8 @@ Remote updates require the protected APNs configuration, database migration and
 signed-device provisioning; absent configuration shows a local-only warning.
 Stale activities explain that Jarvis must be reopened for current state.
 Approval actions remain exclusive to actual pending confirmations in the existing
-authenticated notification flow; approval notification pushes remain separate work.
+authenticated notification flow. P15-51 sends one APNs notification when an
+approval is created; task Live Activity updates remain a separate channel.
 
 ## Conversational finding feedback (#1240)
 

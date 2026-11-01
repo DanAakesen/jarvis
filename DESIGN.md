@@ -579,6 +579,26 @@ approval notifications. Do not embed a relative phrase in an absolute template.
 
 ## Shared control geometry (16 October 2026; local candidate)
 
+Native iPhone destination headers (Notes, Health, Factory) use the shared
+44-point, no-fill sidebar menu action in the existing orange accent, with localized
+English/Danish labels. Chat uses separate native trailing ToolbarItems for the
+bell and menu, separated by a fixed ToolbarSpacer to prevent a shared glass
+capsule. The menu is outermost at the far right, matching the right-side drawer.
+All these launchers use SF Symbol `sidebar.trailing`, not a hamburger, with
+the existing `navigation.openSidebar` identifier and Danish/English labels.
+References: [Apple SF Symbols](https://developer.apple.com/sf-symbols/) and
+[HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
+Separation uses [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
+P15-41 renders that drawer at the gate root, above content modifiers, as a
+topmost conditional overlay with a dim tap-close
+region and trailing move transition (opacity for reduced motion), rather than
+shifting/blurring the foreground. Header geometry, drawer content and palette
+remain unchanged; rendered device acceptance is still pending.
+Comment 6562637427 adds a temporary noninteractive bottom diagnostics badge to
+device previews showing open/tap/writer metadata. This is investigative UI, not
+an approved permanent visual change; remove it before merge. Keep the
+authentication/privacy cover intact.
+
 Dan's three supplied screenshots identify inconsistent Refresh/Create action
 shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's
 existing glass room, typography, palette and layout; this is an app-wide control
@@ -2866,9 +2886,16 @@ only, without a row surface or border; the selected destination uses the shared
 orange accent, while the Settings icon uses the same accent on focus/hover. The
 sidebar clears the device's actual top safe area and uses the board's light/dark
 page and ambient color treatment. The revealed-screen tap-to-close surface moves
-with the screen so it cannot intercept sidebar buttons. The right-edge drag is
-simultaneous with screen gestures and its pure-Swift recognition policy is unit
-tested. The simulator artifact includes open-sidebar screenshots in both
+with the screen so it cannot intercept sidebar buttons. P15-41 confines opening
+drags to the right-edge strip and closing drags to the revealed screen; normal
+screen controls no longer share a full-screen drawer recognizer. Chat's native
+toolbar also exposes the localized menu action. The sidebar composition,
+settling spring, dimming, and blur are unchanged.
+The navigation shell retains keyboard safe-area avoidance; decorative composer
+glass never receives input. Accessibility containment keeps the closed drawer
+and decorations out of the exposed screen's control tree without changing layout.
+The pure-Swift recognition
+policy remains unit tested. The simulator artifact includes open-sidebar screenshots in both
 appearances beside the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
@@ -2946,7 +2973,11 @@ the system has no conversation bubble with distinct sender alignment and a
 tinted glass surface; the inline Now bar is custom because it combines live
 status and the pending confirmation's two actions in the composer stack; the
 activity sheet is custom because it groups the existing feed categories and
-confirmation decisions. Reduced Motion removes the message-arrival animation;
+confirmation decisions. A pending approval uses a buttons-only row directly above
+the Now bar: stone Decline first, orange Approve last, with the shared 44-point
+target and no repeated proposal text or explainer. Only the pressed action shows
+Sending; a failed action can be retried and its result is available in the Now
+activity sheet. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
@@ -3140,15 +3171,17 @@ symbol, localized state, actual task activity, elapsed time from `startedAt`,
 and a linear progress track. Since existing task routes provide no numeric
 progress, the track is indeterminate rather than showing an invented fraction.
 The approval notification uses the system Jarvis app icon (the dark glass orb
-with cyan rim and amber tangled centre), server-provided summary and expiry,
-and authentication-required Approve/Decline actions. Orange remains a small
-accent; stone is the secondary token.
+with cyan rim and amber tangled centre), server-provided summary and device-local
+absolute expiry, and authentication-required Approve/Decline actions. Orange
+remains a small accent; stone is the secondary token.
 
-ActivityKit and WidgetKit provide the system Lock Screen presentation. App
-language comes from `JarvisAppLanguage`; notification action feedback is shown
-in the existing Now activity sheet. Local updates use the existing `/now`
-snapshot/events and Factory task event stream. No APNs delivery or update is
-claimed by P15-36 alone. P15-49 (#1498) adds task Dynamic Island content:
+ActivityKit and WidgetKit provide the task Lock Screen presentation; approvals
+use one remote actionable notification, not a second local notification or an
+approval Live Activity. The app registers the actionable category before asking
+for standard notification permission after sign-in/unlock. App language and time
+zone come from the device; notification action feedback is shown in the existing
+Now activity sheet. Local task updates use the existing `/now` snapshot/events
+and Factory task event stream. P15-49 (#1498) adds task Dynamic Island content:
 expanded shows the same task surface; compact shows a state symbol and localized
 state; minimal shows the state symbol with a task/state accessibility label.
 Waiting and terminal states have no running progress animation or elapsed timer.

@@ -41,6 +41,7 @@ struct JarvisNewNoteSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(copy.cancel) { dismiss() }
+                        .accessibilityIdentifier("sheet.cancel")
                         .disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {

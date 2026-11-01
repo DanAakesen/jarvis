@@ -326,6 +326,7 @@ struct VoiceScreenView: View {
                 ) {
                     Task { await model.toggleMute() }
                 }
+                .accessibilityIdentifier("voice.mic")
             }
 
             Menu {
@@ -401,6 +402,7 @@ struct VoiceScreenView: View {
                     onEnd()
                 }
             }
+            .accessibilityIdentifier("voice.end")
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
@@ -687,6 +689,7 @@ struct VoiceMiniBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(JarvisVoiceLocalization.string(.restore)). \(model.statusText)")
+            .accessibilityIdentifier("voice.mini.restore")
 
             Button {
                 Task { await model.toggleMute() }
@@ -697,6 +700,8 @@ struct VoiceMiniBar: View {
             .buttonStyle(.glass)
             .disabled(!model.canUseControls)
             .accessibilityLabel(JarvisVoiceLocalization.string(model.isMuted ? .unmute : .mute))
+            .accessibilityIdentifier("voice.mini.mic")
+            .accessibilityAddTraits(model.isMuted ? .isSelected : [])
 
             Button {
                 Task { await model.end() }
@@ -708,6 +713,7 @@ struct VoiceMiniBar: View {
             .buttonStyle(.glassProminent)
             .tint(JarvisDesignTokens.voiceEndActionColor)
             .accessibilityLabel(JarvisVoiceLocalization.string(.end))
+            .accessibilityIdentifier("voice.mini.end")
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceScreenShareBarHeight / 2))

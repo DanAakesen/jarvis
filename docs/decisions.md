@@ -256,20 +256,40 @@ owner-session routes only and add no iOS-specific backend path.
 
 The app-owned language preference remains Danish by default and selects all
 Settings copy; the existing shared theme token owns accent/tint, and the saved
-appearance theme updates the app color scheme. Remote notifications remain disabled
-until APNs registration and test-send support exist. P15-36 separately authorizes
-local-only actionable approval notifications and local ActivityKit updates while
-active; no suspended-app delivery is claimed. Health credential status is
-read-only because the existing POST requires fresh Microsoft sign-in and
-rejects the stored owner-session token; do not invent a route or persist the
-one-time upload token. Advanced voice tuning, retrieval thresholds, timeouts and
-project administration remain web-only in v1.
+appearance theme updates the app color scheme. P15-51 adds optional remote
+actionable approval alerts; task ActivityKit updates remain separate. Health
+credential status is read-only because the existing POST requires fresh Microsoft
+sign-in and rejects the stored owner-session token; do not invent a route or persist
+the one-time upload token. Advanced voice tuning, retrieval thresholds, timeouts
+and project administration remain web-only in v1.
 
 The checked-in design board does not include the owner-approved Settings frames
 referenced by the issue. Follow the approved issue concept, do not copy literal
 board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
+
+## 1 November 2026 — approval flow polish and APNs delivery (P15-51 / #1504)
+
+Approval controls keep progress local to the selected decision, render only
+Approve and Decline directly above Now, and use the shared orange/stone treatment
+and Danish/English copy. Request the standard notification permission after sign-in
+and device unlock, before an approval exists. Send one APNs alert when a core
+confirmation is persisted or a calendar proposal is staged; do not create a
+local copy or a duplicate plain push. Keep task Live Activities separate.
+
+Use an actionable notification category for approval actions rather than an
+approval Live Activity. This follows Apple's actionable-notification and remote
+notification guidance, with ActivityKit push documentation reviewed for the
+separate task activity: [Declaring Your Actionable Notification Types](https://developer.apple.com/documentation/usernotifications/declaring-your-actionable-notification-types),
+[Generating a Remote Notification](https://developer.apple.com/documentation/usernotifications/generating-a-remote-notification),
+and [Starting and Updating Live Activities with ActivityKit Push Notifications](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications).
+The direct Apple page fetch was unavailable in this environment; web search
+provided the official documentation references. The explicit deviation is no
+approval Live Activity and no second push to remove an alert resolved on another
+device; stale alerts are rejected by the existing endpoint and removed on refresh.
+Delivery is best-effort, opt-in and requires protected APNs configuration.
+Mac compilation, rendered UI, and physical-device delivery remain unverified.
 
 ## 31 October 2026 — Health logging only in the plus sheet (P15-39 / #1480)
 
@@ -7958,7 +7978,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-31 | The web app shares the orange primary and stone secondary palette: `#ffb45c` with `#1d1200` control text in dark mode and `#b45f06` with white text in light mode; stone is `#c9bfae` in dark mode and `#6f6551` in light mode. Light-theme focus and link text use a deeper orange for 4.5:1 contrast. Existing per-user `--theme-accent` overrides remain supported. The orb's cyan glass edge and listening/voice colors stay unchanged; orange fills remain limited to primary controls and soft tints. | Dan's P15-21 decision on 31 October 2026 aligns web interaction, selection, progress and quiet secondary roles with the approved palette while retaining the separately owned orb and voice appearance. | Confirmed by Dan |
 | 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
 | 2026-10-31 | P15-34 / #1470 approves the local Lock Screen hands-free session. Dynamic Island is approved separately in P15-35. Connection lost was approved separately in P15-37, and local Lock Screen tasks and decisions in P15-36. | The hands-free card's approval does not authorize other system surfaces or APNs. APNs push remains a separate backend gap and decision. | Hands-free agreed; APNs out of scope |
-| 2026-10-31 | The Lock Screen tasks and decisions surface is approved for P15-36. Use real running Factory task data and pending confirmations, local ActivityKit updates, and local approval notifications with authenticated Approve/Decline actions; keep measured progress indeterminate because the backend has no numeric progress contract. | Dan's P15-36 issue explicitly approves the Lock Screen tasks card. APNs registration, server delivery, and task/approval lifecycle pushes are not part of this approval and remain required for updates while the app is suspended. | Confirmed by Dan |
+| 2026-10-31 | The Lock Screen task surface is approved for P15-36; pending confirmations may expose authenticated Approve/Decline actions. Keep task progress indeterminate because the backend has no numeric progress contract. | P15-51 separately authorizes creation-time APNs approval alerts; task Live Activities remain separate. | Confirmed by Dan; implementation updated in P15-51 |
+| 2026-11-01 | P15-51 uses one actionable APNs alert at approval creation, early standard permission, a buttons-only Chat action row above Now, and independent decision progress. Do not create approval Live Activities or duplicate local/plain-push notifications. | The backend sends the bounded summary/expiry alert through registered APNs devices. Apple actionable-notification and remote-notification docs guide this flow; ActivityKit push documentation remains applicable to task activities only. Other-device resolution does not send a second lifecycle push. | Confirmed by issue P15-51 |
 | 2026-10-31 | Build the approved native Voice connection-loss state (P15-37 / #1476): only a real dropped connection shows the muted orb, “Connection lost”, Retry now and End. Retry starts a fresh session using the existing bounded reconnect policy; End closes the session and returns to Chat. Use orange primary and stone secondary glass actions, with Danish-default app-language copy and no helper text. | The existing `VoiceSessionClient` caps automatic reconnects at eight attempts. A user-requested retry starts another bounded session; the pure-Swift presentation state machine tests connected, lost, retrying and ended, including that initial failures are not mislabeled as drops. The iOS simulator PR artifact captures the synthetic state in Danish and English. | Confirmed by issue P15-37 |
 | 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |
 | 2026-10-31 | The Chat look is unified. Only the user bubble has a background: a soft orange-tinted glass pill. Jarvis replies, tool rows and status lines such as Writing it up are unboxed plain text. No solid orange fills are used anywhere: large orange areas are too harsh on the eyes, so orange is used for small accents, tints and strokes. | Dan approved this final Chat look on 2026-10-31 after reviewing the board. It applies to every surface that shows conversation text. The build is tracked in #1400 and the rule is repeated in #1430, #1431 and #1432. | Confirmed by Dan |
@@ -9949,6 +9970,278 @@ Later as shown on the board; Workspaces remains routable but is not a sidebar
 entry. The VoiceOver open action remains available, and right-edge drag
 recognition must not block screen controls or the sidebar's navigation buttons.
 
+## 1 November 2026 — P15-41 sidebar input recovery (#1484)
+
+Concurrent dispatcher handover (`622dc0f`, superseded by the reconciliation below):
+that implementation moved the drawer to `JarvisSidebarDrawerLayer`, a
+`zIndex(1)` root layer driven by `JarvisNavigationModel`, and removed it from
+ContentView. Voice restore/minimize and fixture side effects used
+`onChange(of: navigation.currentDestination)`. Reading the code found no single
+proven cause: the drawer had been
+inside the content subtree that the gate blurs and hit-test-disables, and a toolbar
+action reaches it only through the shared model. Its temporary English debug badge
+showed an open flag, count of open requests and last three changed-state writes
+with call-site tags. Those fields and the duplicate wrapper/badge are superseded;
+they were not native recovery evidence. Focused CI still runs only `SidebarNavigationTests`
+(Danish/English). Apple references: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
+[zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)),
+[EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject),
+[onChange](https://developer.apple.com/documentation/swiftui/view/onchange(of:initial:_:)),
+[ToolbarItem](https://developer.apple.com/documentation/swiftui/toolbaritem) and
+[HIG Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars).
+Native/device behavior is unverified (no Xcode here).
+
+Comment 6562637427 tests a layering hypothesis after preview build 23 (cad7cd0)
+reportedly still fails to open visibly. Move the conditional drawer/dim layer to
+the gate root's last ZStack child at zIndex(1000), outside ContentView and content
+modifiers. Keep authentication/privacy windows and omit the drawer when covered;
+zIndex cannot elevate app content over a separate UIWindow.
+Temporarily show a screenshot-readable bottom badge in device releases with
+button-only tap count, sidebar Boolean, last static caller tag and last three
+before/after write requests, including no-ops. No private content is logged.
+Remove badge/recording before merge. Root layering is an authorized experiment,
+not verified recovery. References: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
+[zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)) and
+[UIWindow.windowLevel](https://developer.apple.com/documentation/uikit/uiwindow/windowlevel).
+Indexed excerpts were consulted; direct Apple retrieval remains unavailable.
+
+Reconciliation preserves `226a1ae` and `622dc0f` in branch history while retaining
+one drawer/badge implementation. The drawer is outside content modifiers,
+omitted when `shouldCoverContent` is true, and remains below the unchanged
+alert+1 privacy UIWindow. The badge is above the drawer and hidden from
+accessibility outside the existing simulator navigation-test fixture.
+Static caller enums replace file/line strings; every request, including no-op
+path binding and reset requests, enters the bounded three-entry trace. Only the
+actual menu Button uses the counted `menu` tag. A synchronous model navigation
+event preserves ContentView-owned side effects even when Voice is selected
+again; root theme preference and UIKit-window geometry refresh cover the
+drawer's sibling placement. Native/device recovery remains unverified.
+
+Comment 6562578040 separates Chat's bell/menu into individual trailing ToolbarItems
+with a fixed [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
+The sidebar launcher is outermost at the far right; the bell is to its left.
+Bilingual sidebar UI tests assert separated frames in that order. Native visual
+verification remains pending; no custom glass fill is added.
+
+Comment 6562283849 selects SF Symbol `sidebar.trailing` for the shared sidebar
+launcher on Chat, Health, Notes and Factory. Preserve its no-fill styling,
+44-point target, accessibility identifier and Danish/English labels.
+References: [Apple SF Symbols](https://developer.apple.com/sf-symbols/) and
+[HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
+
+Comment 6562281755 replaces further bisecting after preview build 22 reportedly
+keeps the menu visible but does not open. One reference navigation model is owned
+above ContentView and injected through SwiftUI's environment; menu controls invoke
+its open method directly. A conditional topmost dim layer and trailing drawer
+replace foreground offsets/blur and drag-generation machinery. The separate edge
+gesture commits only on completion. Delete bisect tests/probes and run the new
+bilingual visible-drawer test class alone in CI as requested; this focused gate
+does not establish broader controls/voice acceptance. Preserve ios-testflight.yml
+for the owner's revert. Device recovery and native execution remain unverified.
+Relevant platform references are [EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject),
+[StateObject](https://developer.apple.com/documentation/swiftui/stateobject),
+and [transition](https://developer.apple.com/documentation/swiftui/view/transition(_:)).
+Use these APIs rather than a custom state observer; the right-side drawer remains
+an explicit owner-approved deviation from leading/system split-view navigation.
+
+Owner correction: Chat's menu belongs at the top right beside the bell, matching
+the right-side drawer. Use native `ToolbarItemGroup(placement: .topBarTrailing)`,
+keeping both labels, the 44-point target and plain no-extra-fill style.
+[Apple ToolbarItemGroup](https://developer.apple.com/documentation/swiftui/toolbaritemgroup)
+and [topBarTrailing](https://developer.apple.com/documentation/swiftui/toolbaritemplacement/topbartrailing)
+were reviewed through indexed guidance; no custom toolbar layout is introduced.
+Run 41333021582 still fails navigation; all four root counters pass, with no
+alerts/sheets reported. Add an independently observed button-only action counter
+and expose write histories in every variant. This evidence is not a confirmed
+root-cause fix; native five-second placement/reliability results remain pending.
+
+The missing-button hypothesis describes main, not this PR: 8488515 added Chat's
+real toolbar Button; G CI logs report its existence and executed open writes.
+Available `git log -S` main history has no Chat launcher removal. Add matching
+no-fill, localized 44-point launchers to Notes/Health/Factory custom headers,
+passing the same committed open callback; this gap is not the demonstrated
+first-Chat-tap stale-render failure. Reuse SwiftUI Button and the existing plain
+toolbar style. [Apple Button](https://developer.apple.com/documentation/swiftui/button)
+and [HIG Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)
+are the applicable platform references; direct Apple fetch fails DNS here,
+so native/browser verification remains unavailable locally. No custom gesture
+replacement or new fill is introduced.
+
+Round-three diagnostic scope (owner-authorized): temporarily filter the initial
+scheme test to NavigationBisectTests and restore it before final delivery.
+Run 41327428995's G Danish/English histories include menu writes false→true while
+render probes remain closed, contrary to the reported init-only result. No root
+cause is confirmed. Compare root counters inside/outside the gate, bounded native
+presentation/window metadata, AX modal candidates and system-alert interruption
+handling without bypassing authentication/privacy protection.
+Apple references: [XCTest interruption monitor](https://developer.apple.com/documentation/xctest/xctestcase/adduiinterruptionmonitor(withdescription:handler:))
+and [SwiftUI disabled](https://developer.apple.com/documentation/swiftui/view/disabled(_:)).
+Indexed guidance consulted; direct native execution is unavailable on Linux.
+XCTest interactions trigger the monitor; only known permission dismissal buttons
+are handled. No custom replacement for a platform presentation API is introduced.
+
+The product owner requires Apple API documentation and HIG review before every
+iOS implementation, platform APIs over hand-rolled equivalents, and a PR list of
+consulted pages and justified deviations. Record this contributor-wide requirement
+in `docs/agent-context.md` under iOS Phase 1c. This PR's review is retrospective
+and limited to indexed Apple guidance because direct page access failed; it does
+not establish full-page review before the earlier commits. The same section lists
+references and the retained right-side drawer, test-only coordinate tapping, and
+offline fixture exceptions with their reasons.
+
+Remove the animation observer's asynchronous progress feedback: its `0.001`
+update tolerance can leave positive reveal progress while the closed drawer's
+tap catcher still intercepts input. Settled progress and accessibility derive
+from navigation's open flag; only the live drag is transient. Gesture
+cancellation needs no separate saved start value, and commands invalidate
+in-flight drags. Keep the existing reveal design and animation, isolate the
+opening gesture to the right edge, and add the requested localized Chat menu
+launcher, which was absent from this revision.
+
+Gate the existing Mac iOS job on repeated XCUITest sequences in both languages,
+retaining the result bundle even on failure. Offline simulator fixtures cover
+navigation, sheets, keyboard input, and full-screen/minimized voice controls;
+they do not prove microphone transport or device behavior. Linux checks are
+not UI reproduction. Baseline build-18 and after-fix simulator results remain
+pending until macOS execution; do not treat cycle screenshots as baseline evidence.
+
+Run [41286956749](https://github.com/DanAakesen/jarvis/actions/runs/41286956749)
+subsequently compiled both native targets but all three tests failed at the
+launcher's initial `isHittable` precondition, before any tap or repeated cycle.
+Its retained video shows Chat, while toolbar snapshots include both valid button
+frames and invalid window geometry. Do not infer a physical navigation failure
+from this precondition alone, or mask one by increasing the timeout. Use an
+enabled, finite, onscreen native-toolbar frame for a physical center tap and
+continue requiring the actual sidebar/sheet transition. Preserve edge-swipe,
+bottom-control and repeated-cycle checks. The test-only correction adds explicit
+failure screenshot/hierarchy evidence; physical input remains unverified until
+the revised simulator sequence runs.
+
+Run [41291487261](https://github.com/DanAakesen/jarvis/actions/runs/41291487261)
+fails at the initial Chat input check, before any sidebar action. Its retained
+Danish accessibility hierarchy contains a second full-screen login-failure gate
+window over Chat; English and interruption launches log unbalanced appearance
+transitions for the gate's hosting controller. These do not establish a residual
+sidebar blocker. Initialize simulator navigation fixtures unlocked before first
+render, without real authentication clients, rather than creating and immediately
+removing a loading window. Preserve background privacy covers and device
+authorization. Disable dismissed window input before hiding it and explicitly
+synchronize the overlay after gate loading. The single-window failures still
+require a fresh simulator run; this candidate fix is not device acceptance.
+
+Run [41294736529](https://github.com/DanAakesen/jarvis/actions/runs/41294736529)
+still fails at launch. Its English/interruption hierarchies show one window, no
+keyboard, and an enabled input at `{{104,796},{83.3,22}}`; the Now bar ends above
+it. PR #1491 run 41294540199 also fails composer hittability. Neither observation
+proves a Now-bar overlap. The closed sidebar and decorative ellipses remain in
+the accessibility tree: establish `.contain` boundaries before ancestor hiding
+modifiers so child hiding is preserved. Explicitly gate navigation-host input on
+the sidebar Boolean, exclude composer glass from hit testing, and stop opting
+the live navigation shell out of keyboard safe-area handling. Preserve visuals,
+copy, mounted navigation identity, and all test assertions.
+
+Accessibility snapshots do not identify the UIKit hit recipient. A simulator-only
+navigation-fixture probe therefore logs native hit ancestry, input bounds,
+clipping and interaction flags, never message text, with bounded output. Retain
+the complete failing XCUITest hierarchy in both logs and result attachments.
+These boundary corrections need native verification; do not call the shared
+touch-blocking root cause established until the simulator evidence supports it.
+
+Run [41298280795](https://github.com/DanAakesen/jarvis/actions/runs/41298280795)
+passes the English/short-drag launch-input checks. Danish still shows a login
+failure window over unconfigured Chat; after the English menu tap Chat remains
+unshifted and the closed-state edge strip is present, with no sidebar row buttons.
+The short-drag failure leaves Chat and its
+keyboard visible after the opening swipe. Do not attribute these to translated
+labels or close-animation timing: the English failure is the first menu tap.
+Remove `.onEnded`'s dependency on `@GestureState`: Apple documents automatic
+reset when gestures end or become inactive. Commit the final drag value using
+captured committed state and generation, validate the start policy, and replace
+recognizers on navigation commands. Add the sidebar's own `.contain` boundary
+before hiding/action modifiers. Ignore unchanged navigation-path binding writes
+so SwiftUI synchronization cannot close a drawer without a navigation change.
+Log simulator gate fixture selection and fixture sidebar commands, without
+arguments, credentials or content, to distinguish startup from command delivery.
+Keep every UI test action, timeout and assertion.
+Indexed GestureState, updating/onEnded and accessibility-container guidance was
+reviewed before these edits; direct Apple retrieval remains blocked.
+The Danish startup path and missing-row fix still require native evidence.
+
+Run [41304146202](https://github.com/DanAakesen/jarvis/actions/runs/41304146202)
+passes both launch-input checks and all three short-drag/background cycles.
+Both language repetition tests fail the first menu tap; their printed trees
+show Chat unshifted, the closed edge strip present, and no sidebar rows.
+The plain menu label only expands its frame, unlike the bell's explicit hit
+shape. Define `contentShape(Rectangle())` inside that existing 44-point label
+to make the whole target interactive without changing visuals or routing.
+Indexed Apple Button and ContentShapeKinds.interaction guidance was reviewed
+before editing; direct Apple retrieval remains DNS-blocked. This is a targeted
+hit-region correction, not proof that the complete native flow now passes.
+Retain `ios-scheme.xcresult` from the earlier full-scheme invocation: its failure
+currently stops the screenshot step before the dedicated navigation bundle is
+created. Keep both test invocations and every UI assertion and timeout intact.
+Build-18 before/after and physical-iPhone acceptance remain outstanding.
+
+Run [41308630589](https://github.com/DanAakesen/jarvis/actions/runs/41308630589)
+still fails the first menu tap in each language; interruption recovery passes.
+The retained full-scheme app console reports `navigationFixture=true` and
+`sidebar=false requested=true` for both failing launches, with no subsequent
+close command. The hit-shape correction did not resolve the failure.
+Navigation was read only inside the deferred GeometryReader content, not during
+the owning view's body evaluation. Read it once in `ContentView.body` before
+creating that closure, and use this per-evaluation snapshot for reveal, hit
+testing and accessibility. This registers the render dependency without a new
+state owner, copied persistent state, navigation-host identity reset or test
+workaround. Indexed Apple State/GeometryReader guidance was consulted; direct
+retrieval remains blocked. Native confirmation of this correction is pending.
+
+The dispatcher requires a committed-state-only tap-catcher. Remove its remaining
+active-drag/progress fallback: a closed drawer has no full-screen close surface.
+Use `withAnimation` on committed sidebar commands instead of the implicit shell
+animation. Keep `@GestureState` automatic cancellation reset, existing visual
+tokens and all UI tests; add no diagnostics. Indexed Apple GestureState,
+updating and withAnimation guidance was reviewed; native acceptance is pending.
+
+Run 41313041566 records first-menu open commands in both failing launches,
+unshifted Chat, no covering gate window, and startup AttributeGraph cycles.
+Capture navigation, live drag and generation before deferred geometry, and
+derive reveal from committed state plus translation without stored start
+progress. This targets stale shell evaluation, not test timing; causality and
+native recovery are not yet confirmed. No UI test or diagnostics are changed.
+
+The dispatcher authorizes a temporary simulator-fixture CI bisect instead of
+waiting for debugger access. A–F separately test baseline, no edge gesture,
+no tap-catcher, no animation, window-sized plain shell and an outside-toolbar
+launcher. Each has an independent Danish/English test; render and gate probes
+are visually transparent, accessible to automation and noninteractive. Preserve
+the production gates and strict regression tests. A passing variant is isolation
+evidence, not sufficient device acceptance; remove variants after confirming
+the culprit and retaining the fix.
+
+Round-one A–F probes remain closed, with root input available. The closed
+drawer's `sidebarDisabled` describes its expected hit-testing gate, not the
+toolbar button's enabled state. Round two separately reports launcher enablement
+and bounded tagged navigation writes, then isolates decoration, the legacy input
+probe/gate modifier and navigation effects. Independent J launches compare
+element versus coordinate taps; neither establishes VoiceOver activation.
+Native winning-variant selection and cleanup remain pending.
+
+Comment 6561353007 separates shell lifetime from session data lifetime. Sign-in
+keeps ContentView and its navigation host/state installed; only session-owned
+screen content resets, while workspace state/streams and prior voice resources
+are explicitly cleared. Retain the full shell reset only for real sign-out, with
+the privacy gate covering content before teardown. Do not inject the interactive
+Microsoft provider into background content: existing clients read the current
+Keychain session on each request, verified by a retained-client sign-in/revocation
+regression. Apple [StateObject](https://developer.apple.com/documentation/swiftui/stateobject)
+and [id(_:)](https://developer.apple.com/documentation/swiftui/view/id(_:))
+documentation were read through the browser. Launch logs/probes distinguish
+initializer evaluations from actual installed StateObject markers without
+publishing diagnostic changes during initialization. The five-second bilingual
+menu tests add strict hittability and real-sidebar assertions; existing waits
+and assertions remain. G's epoch-zero stale render is not attributed to session
+resets, and native acceptance remains pending.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in
@@ -10030,3 +10323,127 @@ on-device broadcast acceptance remain unverified.
 Apple docs read: RPSystemBroadcastPickerView, ReplayKit broadcasting,
 Human Interface Guidelines (Alerts, Disclosure controls, Feedback), SwiftUI
 DisclosureGroup and UIViewRepresentable.
+
+## 1 November 2026 — Chat polish batch (P15-52, #1506)
+
+Replaces #1486, #1490 and #1496. Composer and header follow `docs/ios/design/board.html`.
+
+- **Composer:** two-row glass card with the input on the first line and plain 44 pt
+  icon buttons below (plus menu, Voice, Send/Stop). Only Send has a small orange
+  disc (34 pt) when enabled; secondary controls use the stone accent. The `.bar`
+  material behind the composer and Now bar is removed. The mode segmented control
+  is now a single Voice button (`chat.mode`).
+- **Header:** no toolbar background or divider; the list uses
+  `scrollEdgeEffectStyle(.soft)` so messages fade under the header and composer.
+- **Send root cause:** the Dan message was inserted only when the server's `user`
+  event arrived, and the list scrolled to the bottom anchor in the same update
+  (skipped entirely with Reduce Motion). The model now inserts an optimistic row
+  and clears the draft at once, replaces it with the server row, and restores the
+  draft if the server never acknowledged it. The scroll runs after layout and
+  also on the last message id, sending state and streaming text.
+- **Plus menu:** native SwiftUI `Menu` anchored to the plus button (replaces the
+  popover). Native menus cannot be opened programmatically, so the
+  `--screenshot-chat-plus-menu` capture now shows the closed composer.
+- **Camera and video:** `AVCaptureDevice.DiscoverySession` lists only the lenses
+  the device has (ultra-wide, wide, telephoto) for the front or back camera. The
+  flip button and lens menu appear in the photo sheet and on the video tile; the
+  last choice is kept in memory for the app session. Video is a 132×176 tile
+  above the composer with stop, flip and lens controls.
+- **Tests:** `ChatComposerUITests` (send bubble visible, menu near the button,
+  camera sheet) runs with `SidebarNavigationTests` in iOS CI. The camera sheet
+  test uses `--ui-test-camera-sheet` because the simulator has no camera.
+
+Apple documents used: Human Interface Guidelines for
+[Menus](https://developer.apple.com/design/human-interface-guidelines/menus),
+[Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars),
+[Text fields](https://developer.apple.com/design/human-interface-guidelines/text-fields)
+and [Layout](https://developer.apple.com/design/human-interface-guidelines/layout);
+SwiftUI [Menu](https://developer.apple.com/documentation/swiftui/menu),
+[scrollEdgeEffectStyle](https://developer.apple.com/documentation/swiftui/view/scrolledgeeffectstyle(_:for:)),
+[ScrollViewProxy](https://developer.apple.com/documentation/swiftui/scrollviewproxy);
+AVFoundation [AVCaptureDevice.DiscoverySession](https://developer.apple.com/documentation/avfoundation/avcapturedevice/discoverysession)
+and [AVCaptureSession](https://developer.apple.com/documentation/avfoundation/avcapturesession).
+Deviations: the Send disc is the only filled control; lens labels use the
+0.5×/1×/2× shorthand on the button with full names in the menu. Nothing was
+compiled or run here (no Xcode on this runner); Mac CI and device acceptance
+remain pending.
+
+### P15-52 follow-up — Dan's device checklist (build 28)
+
+- **Composer:** two rows only. Row one is the text field. Row two is plus, Dictate and
+  one trailing slot: Voice (stone disc) while the field is empty, Send (small orange
+  disc) once there is text, Stop while Jarvis answers. Same slot and size; no mode
+  toggle. Identifiers: `chat.mode` (voice), `chat.send`, `chat.stop`, `chat.dictate`.
+- **Dictate:** `ChatDictation` uses `SFSpeechRecognizer` (on-device when supported) with
+  `AVAudioEngine`; `NSSpeechRecognitionUsageDescription` added to Info.plist.
+- **Attach:** Files and Photo library are items of an Attach submenu inside the native
+  plus menu; the separate confirmation dialog that jumped is gone.
+- **Camera:** sheet adds flash (auto/on/off via `AVCapturePhotoSettings.flashMode`) and a
+  Photo/Video switch; Video closes the sheet and starts the live video preview.
+  Lens and front/back were already in. Recording video clips to a file is not built;
+  Video means the live preview Jarvis sees.
+- **Video preview:** small tile in the top right of the chat window (no strip above the
+  composer) with stop, torch (`AVCaptureDevice.torchMode`), flip and lens controls.
+- Apple docs: HIG [Menus](https://developer.apple.com/design/human-interface-guidelines/menus),
+  [Camera](https://developer.apple.com/design/human-interface-guidelines/camera),
+  [Dictation](https://developer.apple.com/design/human-interface-guidelines/dictation);
+  [SFSpeechRecognizer](https://developer.apple.com/documentation/speech/sfspeechrecognizer),
+  [AVCapturePhotoSettings.flashMode](https://developer.apple.com/documentation/avfoundation/avcapturephotosettings/flashmode),
+  [AVCaptureDevice.torchMode](https://developer.apple.com/documentation/avfoundation/avcapturedevice/torchmode).
+  Not compiled or run here; Mac CI and device check pending.
+## 2026-11-01: iPhone sidebar edge swipe, plain toolbar icons (#1484)
+
+The drawer stays a root-owned, top-most layer. The edge swipe is a
+`UIScreenEdgePanGestureRecognizer` (`edges = .right`, the drawer side) installed
+on the window by `JarvisSidebarEdgeOpener`; it recognises simultaneously, never
+cancels touches, and commits state only when the pan ends and passes
+`JarvisSidebarGesturePolicy.shouldOpen`. The leading edge stays with the system
+back swipe. The drawer and scrim close by tap or by a trailing swipe
+(`shouldClose`). The Chat toolbar bell and `sidebar.trailing` button are
+separate items with `sharedBackgroundVisibility(.hidden)`; sidebar icons use the
+stone secondary accent. The temporary debug badge and write log are removed.
+Apple docs: UIScreenEdgePanGestureRecognizer, UIGestureRecognizerDelegate,
+SwiftUI ToolbarContent.sharedBackgroundVisibility, ToolbarSpacer, Human
+Interface Guidelines (Toolbars, Sidebars, Gestures). Device behaviour is
+unverified until the next preview build.
+
+## 2026-11-01: iPhone sidebar is a reveal, not an overlay (#1484)
+
+Dan's design requirement: the page slides sideways and the sidebar sits behind
+it. `JarvisSidebarReveal` (root, inside the gate's blur/hit-testing group)
+offsets the page by `-drawerWidth * progress`; the drawer renders only while
+progress > 0. Progress is the root model's committed state or, during a swipe,
+the transient `dragProgress` (cleared by every state write, by cancel/failed
+pans and by a gesture-state reset). While open the page is not hit-testable and
+a catcher over it closes on tap or trailing swipe; the toolbar button and edge
+pan are unchanged. Reduced motion disables the spring and live tracking
+animation. The earlier scrim is gone, which also removes any layer that could
+sit over the drawer rows (item taps: scrim no longer overlaps rows, rows carry
+no gestures). Device behaviour is unverified until the next preview build.
+
+## 2026-11-01: sidebar swipe fixes after build 28 (#1484)
+
+The window-level `UIScreenEdgePanGestureRecognizer` did nothing on device and is
+removed. Opening is now a SwiftUI `DragGesture` on a 20pt full-height trailing
+strip above the page inside `JarvisSidebarReveal` (`highPriorityGesture`); the
+close swipe is on the page catcher. Both read translation in the global space
+(the views move with the page, so a local space fed the offset back into the
+drag), set no animation while a finger is down, and animate with a spring on
+release. Programmatic `navigate(to:)` now marks a short window in which a
+shrinking path echoed through the `NavigationStack` binding is dropped as stale;
+this is a hypothesis for "items close the drawer but stay on Chat" and is not
+confirmed. A TEMPORARY on-screen debug line (path, current/shown destination,
+last writes) is in the root and must be removed once Dan confirms.
+
+## 2026-11-01: Merge of the base navigation branch and main
+
+Confirmed: merging `copilot/p15-41-fix-unreliable-navigation` (2530c471) and
+`origin/main` keeps the reveal, the 20pt open strip, plain stone icons and the
+temporary debug line, and drops the base's `JarvisSidebarDebugBadge`,
+`JarvisSidebarDiagnostics` and typed `caller:` tags. Kept from the base: the
+drawer is not gated by the page's blur, hit-testing or accessibility hiding
+(`JarvisSidebarReveal(isEnabled:)` makes it inert while the gate covers the
+app), the stored theme is applied at the root because the drawer sits outside
+`ContentView`, and `JarvisNavigationModel.navigationRequested` delivers voice
+and fixture side effects before the route changes. `ios-testflight.yml` equals
+`origin/main`.

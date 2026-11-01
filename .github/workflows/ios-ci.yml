@@ -30,6 +30,8 @@ jobs:
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
             abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "navigation UI test target is required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
+            abort "navigation UI tests must run in the app scheme" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
@@ -87,11 +89,11 @@ jobs:
           PY
 
   macos:
-    name: iOS Simulator build
+    name: iOS Simulator build and navigation tests
     needs: linux
     if: needs.linux.result == 'success' && ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'schedule' && github.ref == 'refs/heads/main'))
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       issues: write
@@ -161,7 +163,9 @@ jobs:
             -scheme Jarvis \
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/JarvisUITests.xcresult" \
+            -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
+            -only-testing:JarvisUITests/SidebarNavigationTests \
+            -only-testing:JarvisUITests/ChatComposerUITests \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO; then
             echo "result=success" >> "$GITHUB_OUTPUT"
@@ -169,9 +173,9 @@ jobs:
             echo "::warning::XCUITest failed; continuing screenshot capture and reporting the failure."
             echo "result=failure" >> "$GITHUB_OUTPUT"
           fi
-          if [[ -d "$RUNNER_TEMP/JarvisUITests.xcresult" ]]; then
+          if [[ -d "$RUNNER_TEMP/ios-scheme.xcresult" ]]; then
             xcrun xcresulttool export attachments \
-              --path "$RUNNER_TEMP/JarvisUITests.xcresult" \
+              --path "$RUNNER_TEMP/ios-scheme.xcresult" \
               --output-path "$SCREENSHOT_DIR/ui-test-attachments"
           else
             mkdir -p "$SCREENSHOT_DIR/ui-test-attachments"
@@ -318,6 +322,39 @@ jobs:
                 "$SCREENSHOT_DIR/lockscreen-tasks-${appearance}-${language}.png"
             done
           done
+      - name: Upload iPhone app scheme test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-scheme-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-scheme.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Run iPhone navigation regression
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcrun simctl ui "$IOS_SIMULATOR_UDID" appearance light
+          xcodebuild \
+            -project Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/ios-navigation.xcresult" \
+            -only-testing:JarvisUITests/SidebarNavigationTests \
+            -only-testing:JarvisUITests/ChatComposerUITests \
+            -parallel-testing-enabled NO \
+            -maximum-test-execution-time-allowance 600 \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - name: Upload iPhone navigation test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-navigation-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-navigation.xcresult
+          if-no-files-found: warn
+          retention-days: 14
       - name: Pair simulator captures with approved board renders
         run: |
           cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"

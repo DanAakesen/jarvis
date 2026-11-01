@@ -6247,9 +6247,141 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 
 ## iOS Phase 1c
 
+### Standing iOS documentation-first requirement
+
+P15-41 replaces the temporary bisect with one environment-injected navigation
+reference owned above ContentView and a conditional drawer at the gate root,
+outside content blur/identity/input modifiers. No bisect variants or native
+hit-test probes remain. Comment 6562637427 requests a temporary noninteractive
+device-visible bottom badge with open state, button-only tap count and three
+static tagged before/after writes. It is included in preview releases and must be
+removed before merge; it records no private content. Privacy/auth windows remain
+above the app and the drawer is not exposed while the gate covers content.
+The owner requests
+`SidebarNavigationTests` alone in both iOS CI invocations for preview qualification;
+the broader `NavigationReliabilityTests` remains available, but is not qualified
+by a passing focused run. `ios-testflight.yml` remains owner-managed and untouched.
+
+Before implementing any iOS change, read the relevant Apple API documentation
+and Human Interface Guidelines. Prefer the platform API, modifier, or component
+and documented best practice over hand-rolled behavior. Select documentation
+for the affected boundary: SwiftUI/UIKit navigation, gestures, toolbars and
+sheets; ActivityKit and Live Activities; or AVFoundation capture device discovery,
+as applicable. In each iOS PR description, list the Apple pages actually consulted
+and each deliberate deviation with its reason. If access is unavailable, disclose
+that limitation; indexed excerpts are not a full-page review and an unverified
+workaround is not an Apple recommendation.
+
+For P15-41, the following indexed Apple guidance was reviewed on 1 November 2026
+after the implementation; direct page retrieval failed in this environment:
+
+- [GestureState](https://developer.apple.com/documentation/swiftui/gesturestate):
+  the system resets transient gesture state when a gesture ends or is cancelled.
+- [NavigationStack](https://developer.apple.com/documentation/swiftui/navigationstack):
+  use the system stack and data-driven path for destinations.
+- [simultaneousGesture](https://developer.apple.com/documentation/swiftui/view/simultaneousgesture(_:including:)):
+  combine gestures only where simultaneous recognition is intentional.
+- [allowsHitTesting](https://developer.apple.com/documentation/swiftui/view/allowshittesting(_:)):
+  explicitly exclude decorative layers from hit testing.
+- [ToolbarItem](https://developer.apple.com/documentation/swiftui/toolbaritem):
+  use system toolbar items and placements for the Chat launcher.
+- HIG [Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures),
+  [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars),
+  [Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars)
+  and [Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets):
+  provide alternatives to gestures, keep navigation discoverable, use platform
+  toolbar conventions, and return to the parent when dismissing a sheet.
+
+Deliberate P15-41 deviations:
+
+- Retain the owner-approved right-side drawer rather than the HIG's leading
+  sidebar/system split-view composition. Render it above the content with native
+  transitions and a separate edge gesture; no progress observer or recognizer
+  generation machinery is retained.
+- The test-only toolbar helper sends a frame-center `XCUICoordinate` tap instead
+  of requiring `XCUIElement.isHittable` before `tap()`. Run 41286956749 showed
+  invalid activation-point/window snapshots before any interaction. This is an
+  evidence-driven test accommodation, not a documented Apple toolbar defect or
+  recommended production workaround. Real sidebar/sheet transitions remain
+  mandatory; fresh simulator verification is pending.
+- Simulator-only HTTP and voice fixtures replace external services/audio so the
+  repeated navigation sequence is deterministic. They are not device/live-voice
+  acceptance and do not replace production platform APIs.
+
 `apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
+
+P15-41 adds `JarvisUITests/SidebarNavigationTests` to the generated `Jarvis`
+scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
+`xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
+'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/SidebarNavigationTests
+CODE_SIGNING_ALLOWED=NO test`. The ready-PR iOS job runs this focused class
+on its already-booted iPhone and retains `ios-navigation.xcresult` for 14 days,
+including cycle screenshots and failures,
+along with `ios-scheme.xcresult` from the earlier focused scheme invocation.
+Both uploads run on failure; use the scheme bundle when screenshot-step tests
+stop the job before the dedicated navigation invocation.
+Run 41308630589 retains fired menu commands with a closed rendered shell.
+The earlier, now superseded follow-up read the shell's navigation dependency in `ContentView.body`
+before its GeometryReader closure; rendering uses that snapshot, while actions
+mutate the same persisted state. Full native navigation remains unverified.
+Its 45-minute limit accommodates
+both the existing captures and the new repeated UI sequence. The
+`--ui-test-navigation` fixture is simulator-only and needs no live credentials,
+audio device, or backend; device authorization is unchanged.
+Linux can parse Swift and run Core/pipeline tests, but cannot execute XCUITest.
+Run 41286956749 compiled successfully; all three UI tests failed before the first
+tap while querying the native toolbar launcher's `isHittable`. Retained video
+shows Chat onscreen, and snapshots include its finite button frame alongside
+occasional invalid window frames. Toolbar tests now wait for an enabled, finite,
+onscreen frame and physically tap its center; sidebar/sheet transitions and
+normal bottom-control hittability remain mandatory. Wait failures retain a
+screenshot and accessibility hierarchy, with the assertion caller's location.
+The revised sequence still needs a successful simulator run; the original
+failure does not establish whether physical navigation works.
+Run 41291487261 then failed at the initial Chat input check, before a sidebar
+action. Its retained failure hierarchy shows a login-failure gate window in
+Danish, and the other launches log gate-host appearance-transition warnings.
+Navigation fixtures now initialize unlocked before rendering and skip real
+authentication/notification clients; background privacy covers remain enabled.
+The input and repeated-navigation assertions are unchanged.
+Before this follow-up, indexed Apple guidance for
+[UIWindow](https://developer.apple.com/documentation/uikit/uiwindow),
+[isHidden](https://developer.apple.com/documentation/uikit/uiview/ishidden),
+[UIHostingController](https://developer.apple.com/documentation/swiftui/uihostingcontroller)
+and `allowsHitTesting` was consulted. Direct Apple retrieval still fails DNS.
+The separate gate window is retained to cover app-owned presentations, including
+sheets; replacing that privacy boundary is outside this navigation correction.
+Gate dismissal disables window input before hiding it, and loading explicitly
+resynchronizes the overlay. Successful simulator verification remains pending.
+Run 41294736529 still failed initial input hittability, as did composer tests in
+PR #1491. English/interruption dumps show one window, no keyboard or Now-bar
+overlap, but exposed closed-sidebar/decorative accessibility elements. The
+follow-up isolates accessibility containers, explicitly gates navigation-host
+input, excludes composer glass from hit testing, and preserves keyboard safe-area
+handling. Tests are not loosened. Navigation fixtures now emit `Jarvis input hit
+test` reports of native UIKit hit/input ancestry without message text; failed
+XCUITest hierarchies are printed as well as attached. Inspect these reports in
+the retained result bundle if activation points still fail.
+Run 41298280795 passes English/short-drag launch-input checks, but Danish still
+shows the login gate and the sidebar row waits fail. Gesture completion now
+uses final drag values rather than resettable `@GestureState`, and commands
+replace only gesture recognizers. Unchanged path binding writes no longer close
+the drawer. Simulator gate startup logs record fixture selection, and fixture
+sidebar command logs record Boolean state/request values. Inspect these in the
+retained result bundle to trace startup and button delivery.
+The sidebar has its own accessibility
+container. These changes need native confirmation; the UI tests are unchanged.
+Indexed Apple
+[accessibilityElement(children:)](https://developer.apple.com/documentation/swiftui/view/accessibilityelement(children:)),
+[contain](https://developer.apple.com/documentation/swiftui/accessibilitychildbehavior/contain),
+[safeAreaInset](https://developer.apple.com/documentation/swiftui/view/safeareainset(edge:alignment:spacing:content:))
+and [SafeAreaRegions](https://developer.apple.com/documentation/swiftui/safearearegions)
+guidance was consulted before this correction; direct retrieval still fails DNS.
+The native probe is fixture-only instrumentation, not a replacement input API.
+Build-18 reproduction, before/after simulator test results, and physical-iPhone
+acceptance remain pending; cycle screenshots are not baseline-build evidence.
 
 `JarvisCore` owns the cross-platform HTTP client and the `HTTPTransport`,
 `TokenStore` and `AccessTokenProvider` seams. It calls the existing owner-session
@@ -6508,8 +6640,9 @@ the routes listed in section 12 of `docs/ios/integration-contract.md`. Pure
 validation, target bounds, memory paging/filtering, dirty tracking and account
 revocation remain in JarvisCore. The app-owned Danish/English language defaults
 to Danish; the shared appearance theme is propagated to the app color scheme.
-Remote notifications remain unavailable because APNs support is not implemented;
-P15-36 separately adds local approval notifications while active. Health upload
+P15-51 adds optional remote approval notifications using APNs; delivery requires
+protected APNs configuration and `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED=true`.
+It removes local approval notification creation to avoid duplicate alerts. Health upload
 credential creation stays disabled because the backend rejects owner-session
 credential creation.
 Advanced voice tuning, retrieval thresholds, timeouts and project administration
@@ -6522,14 +6655,14 @@ checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
 check and is gated on a ready pull request; keep the single simulator boot and do
 not add UI tests. Notes-tab/state screenshots are not produced by CI.
 
-## P15-36 Lock Screen task and approval surfaces
+## P15-36 Lock Screen task and P15-51 approval surfaces
 
 The app's ActivityKit controller follows real running tasks from the existing
 `/now` feed and Factory task SSE; WidgetKit renders the shared
 `FactoryTaskActivitySurface`. No backend progress fraction exists, so the linear
-track is indeterminate. Local approval notifications sync real `/now`
-confirmations while active, require device authentication for actions and call
-the existing confirmation endpoint. Successful/failed results appear in the Now
+track is indeterminate. Approval alerts use P15-51's backend APNs notification;
+the registered category requires device authentication for actions and calls the
+existing confirmation endpoint. Successful/failed results appear in the Now
 activity sheet. If notification previews are disabled, the category has no
 Approve/Decline actions.
 
@@ -6576,7 +6709,47 @@ states, da/en disabled-activity guidance and its Settings link, explicit cancel,
 and real confirmation actions only. Provision Push Notifications on the app ID
 and the distribution profile; the widget needs no separate APNs entitlement.
 APNs key/configuration, migration and deployed delivery remain release prerequisites.
-Approval notification pushes and suspended expiry/removal remain separate work.
+## P15-51 approval flow polish
+
+The Chat approval row sits immediately above Now, contains only Approve and
+Decline, and shows progress only on the chosen action. The no-summary row uses
+the shared orange/stone control tokens and Danish/English labels. The standard
+system notification prompt is requested after the signed-in app unlocks, not
+when the first approval arrives.
+
+The app registers the APNs device token through owner-authenticated
+`POST /ios/approval-notifications`, including the app language, current time
+zone and whether previews permit actions. Sign-out calls `DELETE` for the
+registered token. Migration `0073_approval_notification_registrations.sql`
+stores up to five owner devices with a 30-day expiry. The backend sends one
+`apns-push-type: alert` payload when a core confirmation is persisted or a
+calendar proposal is staged. It includes a bounded summary/expiry alert, the
+registered `jarvis.approval` (or no-actions private) category, thread ID and
+confirmation ID; it does not send an additional plain web push or create a
+local notification. APNs config is shared with ActivityKit:
+`APNS_TEAM_ID`, `APNS_KEY_ID`, protected ES256 `APNS_SIGNING_KEY`, and
+`APNS_ENVIRONMENT=sandbox|production`; opt in with
+`JARVIS_APPROVAL_NOTIFICATIONS_ENABLED=true`. No approval Live Activity is
+created; ActivityKit remains the task-progress surface. APNs delivery is
+best-effort and stale alerts resolved by another device remain until the app
+refreshes.
+
+Run focused checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/push/approval-notifications.test.ts src/google/pending-actions.test.ts src/core/owner-interactions.test.ts src/database/migrations.test.ts
+npm run build --workspace @jarvis/backend
+```
+
+From `apps/ios/Packages/JarvisCore`, run:
+
+```sh
+swift test --filter 'JarvisApprovalLocalizationTests|JarvisApprovalsClientTests'
+swift build
+```
+
+Linux does not type-check the SwiftUI app; the ready-PR Mac job and signed-device
+APNs/Lock Screen behavior remain the platform checks.
 
 The task update endpoint is `POST /ios/task-activities` with
 `{taskID, activityID, pushToken, language}`; UUID task IDs select background jobs,
