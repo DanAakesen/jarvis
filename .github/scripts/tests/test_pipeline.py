@@ -861,7 +861,13 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('--screenshot-activity-state=', content)
         self.assertIn("private let activityScreenshotState: String?", content)
         self.assertIn("self.activityScreenshotState = activityScreenshotState", content)
-        self.assertIn("makeClient(emptyActivity: activityScreenshotState == \"empty\")", content)
+        self.assertIn(
+            'makeClient(\n'
+            '                emptyActivity: activityScreenshotState == "empty",\n'
+            '                sendVisibilityFixture: arguments.contains("--ui-test-chat-send")\n'
+            '            )',
+            content,
+        )
         self.assertIn('"awayMode": false', fixture)
 
     def test_ios_voice_states_have_captures_and_board_comparisons(self):
