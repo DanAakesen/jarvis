@@ -561,6 +561,14 @@ reading older history does not jump to bottom during further streamed growth.
 Browser emulation and synthetic viewport events are not physical Safari
 acceptance.
 
+## Calendar proposal review (P15-46 / #1494)
+
+Calendar proposals reuse the existing pending-confirmation list and its approval
+controls in web and native clients; there is no new layout or styling. Preserve
+the full bounded proposal text for review. Consumed partial or unverified changes
+leave error notices in the existing activity feed, including failed items and a
+warning against repeating completed or unverified writes.
+
 ## Shared control geometry (16 October 2026; local candidate)
 
 Dan's three supplied screenshots identify inconsistent Refresh/Create action

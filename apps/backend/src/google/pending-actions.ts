@@ -1,4 +1,6 @@
-import { randomInt } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
+import type { BrowserConfirmation } from '../core/owner-interactions.js';
+import type { ConfirmationDecision } from '../database/confirmation-store.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
 import { approvalNotPending } from '../core/approval.js';
 import {
@@ -15,6 +17,7 @@ const COMPLETED_ACTION_REPLY_INSTRUCTION =
 export type GoogleActionScope = 'calendar' | 'mail';
 
 interface PendingAction {
+  readonly browserId: string;
   readonly code: string;
   readonly scope: GoogleActionScope;
   readonly sourceMessageId: string;
@@ -28,6 +31,7 @@ interface PendingAction {
 }
 
 export class PendingGoogleActions {
+  onChanged: () => void = () => {};
   private readonly actions = new Map<string, PendingAction>();
   private calendarProposal: PendingAction | undefined;
   private calendarReceipt: {
@@ -38,7 +42,7 @@ export class PendingGoogleActions {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  stage(input: Omit<PendingAction, 'code' | 'createdAt' | 'confirmation'>): {
+  stage(input: Omit<PendingAction, 'code' | 'browserId' | 'createdAt' | 'confirmation'>): {
     readonly status: 'awaiting_confirmation';
     readonly summary: string;
     readonly confirmationCode: string;
@@ -48,6 +52,9 @@ export class PendingGoogleActions {
     this.removeExpired();
     if (typeof input.sourceSessionId !== 'string' || input.sourceSessionId.length === 0) {
       throw new TypeError('A pending Google action must be bound to the session that staged it');
+    }
+    if (input.scope === 'calendar' && input.summary.length > 40_000) {
+      throw new ToolRefusal('The calendar proposal is too large to review. Prepare a smaller proposal.');
     }
     if (this.actions.size >= MAX_PENDING_ACTIONS) {
       throw new Error('Too many pending Google actions');
@@ -70,13 +77,14 @@ export class PendingGoogleActions {
     });
     const action: PendingAction = {
       ...input, ...(input.items ? { items: Object.freeze([...input.items]) } : {}),
-      code, createdAt, confirmation,
+      code, browserId: randomBytes(32).toString('base64url'), createdAt, confirmation,
     };
     this.actions.set(code, action);
     if (input.scope === 'calendar') {
       this.calendarProposal = action;
       this.calendarReceipt = undefined;
     }
+    this.onChanged();
     return {
       ...confirmation.presentation,
       confirmationCode: code,
@@ -129,8 +137,32 @@ export class PendingGoogleActions {
     // Nothing below this check awaits before the action is consumed, so exactly one confirmation can proceed.
     this.removeExpired();
     if (signal.aborted || this.actions.get(code) !== action) throw new ToolRefusal(approvalNotPending);
+    return this.complete(action, verdict, signal);
+  }
+
+  pendingBrowserConfirmations(): readonly BrowserConfirmation[] {
+    this.removeExpired();
+    return [...this.actions.values()].filter((action) => action.scope === 'calendar').map((action) => ({
+      id: action.browserId, actionKind: 'calendar_change', summary: action.summary,
+      expiresAt: action.confirmation.presentation.expiresAt,
+    }));
+  }
+
+  async resolveBrowserConfirmation(
+    id: string, decision: ConfirmationDecision, signal: AbortSignal,
+  ): Promise<false | { readonly result: unknown }> {
+    this.removeExpired();
+    const action = [...this.actions.values()].find((candidate) =>
+      candidate.scope === 'calendar' && candidate.browserId === id);
+    if (!action || (decision !== 'approve' && decision !== 'reject')) return false;
+    return { result: await this.complete(action, decision === 'approve' ? 'approve' : 'decline', signal) };
+  }
+
+  private async complete(action: PendingAction, verdict: ApprovalVerdict | undefined, signal: AbortSignal) {
+    const { scope, code } = action;
     const decision = action.confirmation.consume(verdict, signal);
     this.actions.delete(code);
+    this.onChanged();
     const remember = (result: Record<string, unknown>) => {
       if (scope === 'calendar' && this.calendarProposal === action) {
         this.calendarReceipt = {
@@ -197,7 +229,10 @@ export class PendingGoogleActions {
   private removeExpired(): void {
     const cutoff = this.now() - ACTION_TTL_MS;
     for (const [code, action] of this.actions) {
-      if (!action.confirmation.pending) this.actions.delete(code);
+      if (!action.confirmation.pending) {
+        this.actions.delete(code);
+        this.onChanged();
+      }
     }
     if (this.calendarProposal && this.calendarProposal.createdAt <= cutoff) {
       this.calendarProposal = undefined;

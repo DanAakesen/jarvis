@@ -1,3 +1,16 @@
+## P15-46 — suggestions create approvals (#1494)
+
+Implemented shared staging guidance, bounded hosted calendar-offer repair and
+calendar tap approval through the existing feed and single-use action. Focused
+regressions cover propose → yes/ja, direct instructions, older pending proposals,
+failed staging, expiry/replacement, tap replay and owner/agent authorization.
+Local checks passed: 1,234 agent tests, 565 focused backend tests, 33 web tests,
+and 200 native Core tests (an unrelated voice timing failure passed on rerun).
+Affected lint/build checks, synthetic local HTTP approval and secret scanning
+passed; read-only review found no remaining significant issues. Expanded backend
+qualification and CodeQL remain in progress. Live model and native device
+acceptance remain unverified; no deployment is included.
+
 ## Managed policy failure causes (#1373; 30 October 2026)
 
 Implemented optional sanitized `providerCause` across hosted error events,

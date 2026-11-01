@@ -47,9 +47,13 @@ public final class JarvisApprovalsClient: Sendable {
         )
         guard response.statusCode == 200, response.body.count <= 1024 * 1024,
               let result = try? JSONDecoder().decode(PendingConfirmations.self, from: response.body),
-              result.confirmations.count <= 10, Self.validTime(result.updatedAt),
+              result.confirmations.count <= 11,
+              result.confirmations.filter({ $0.actionKind == .calendarChange }).count <= 1,
+              result.confirmations.filter({ $0.actionKind != .calendarChange }).count <= 10,
+              Self.validTime(result.updatedAt),
               result.confirmations.allSatisfy({
-                  Self.validID($0.id) && !$0.summary.isEmpty && $0.summary.utf16.count <= 4_000 &&
+                  Self.validID($0.id) && !$0.summary.isEmpty &&
+                  $0.summary.utf16.count <= ($0.actionKind == .calendarChange ? 40_000 : 4_000) &&
                   Self.validTime($0.expiresAt)
               }) else {
             throw JarvisApprovalsClientError.invalidResponse

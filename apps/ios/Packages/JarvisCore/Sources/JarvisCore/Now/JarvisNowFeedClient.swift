@@ -52,7 +52,9 @@ public final class JarvisNowFeedClient: Sendable {
     private static func valid(_ feed: JarvisNowFeed) -> Bool {
         feed.running.count <= 100 &&
             feed.items.count <= 100 &&
-            feed.confirmations.count <= 10 &&
+            feed.confirmations.count <= 11 &&
+            feed.confirmations.filter({ $0.actionKind == .calendarChange }).count <= 1 &&
+            feed.confirmations.filter({ $0.actionKind != .calendarChange }).count <= 10 &&
             validTime(feed.updatedAt) &&
             feed.running.allSatisfy {
                 validID($0.id) && !$0.title.isEmpty && $0.title.utf16.count <= 200 &&
@@ -65,7 +67,8 @@ public final class JarvisNowFeedClient: Sendable {
                     ($0.link?.utf16.count ?? 0) <= 2_048 && validTime($0.at)
             } &&
             feed.confirmations.allSatisfy {
-                !$0.summary.isEmpty && $0.summary.utf16.count <= 4_000
+                !$0.summary.isEmpty &&
+                    $0.summary.utf16.count <= ($0.actionKind == .calendarChange ? 40_000 : 4_000)
             }
     }
 

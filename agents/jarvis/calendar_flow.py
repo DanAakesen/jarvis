@@ -17,7 +17,7 @@ CALENDAR_READS = {
     "calendar_find_free_slots",
 }
 _CALENDAR_CONTEXT = re.compile(
-    r"\b(calendar|kalender\w*|begivenhed\w*)\b|"
+    r"\b(calendar|kalender\w*|begivenhed\w*|meetings?|møde\w*)\b|"
     r"\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}"
     r"\b(?:reservation\w*|appointments?|events?)\b",
     re.IGNORECASE,
@@ -40,6 +40,22 @@ _EXPLICIT_CALENDAR_CREATE = re.compile(
     r"(?:add?|create|schedule|put|book|tilføj|opret|læg)\b",
     re.IGNORECASE,
 )
+_CALENDAR_ACTION = (
+    r"(?:add(?:ing)?|creat(?:e|ing)|schedul(?:e|ing)|put(?:ting)?|book(?:ing)?|"
+    r"mov(?:e|ing)|updat(?:e|ing)|delet(?:e|ing)|cancel(?:ling)?|reschedul(?:e|ing)|"
+    r"tilføje?|oprette?|lægge?|flytte?|slette?|aflyse?|ændre)"
+)
+_CALENDAR_OFFER = re.compile(
+    r"\b(?:shall I|should I|can I|could I|would you like me to|do you want me to|"
+    r"I (?:can|could|suggest|recommend)|vil du have(?:,)? at jeg|"
+    r"skal jeg|kan jeg|jeg (?:kan|foreslår|anbefaler))\s+(?:(?:we|that we|at vi)\s+)?"
+    rf"\b{_CALENDAR_ACTION}\b",
+    re.IGNORECASE,
+)
+
+
+def calendar_offer(text: str) -> bool:
+    return bool(_CALENDAR_OFFER.search(_QUOTED_CONTENT.sub("", text)))
 
 
 def _calendar_scope(text: str) -> bool:
@@ -228,7 +244,7 @@ def calendar_safe_prefix(text: str) -> str:
         sentence = text[end:boundary.end()]
         if (
             (_calendar_scope(sentence) and not _calendar_intent(sentence))
-            or calendar_claim(sentence)
+            or calendar_claim(sentence) or calendar_offer(sentence)
         ):
             break
         end = boundary.end()

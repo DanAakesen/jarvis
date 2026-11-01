@@ -9,6 +9,9 @@ import type { NowFeed, NowFeedEventHub, NowFeedStore } from './now.js';
 import type { AwayModeStore } from './away-mode.js';
 import type { OwnerInteractionService } from './owner-interactions.js';
 import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
+import { PendingGoogleActions } from '../google/pending-actions.js';
+import { createGoogleModule } from '../google/tools.js';
+import { coreModule } from './index.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 'sig'].join('.')}` };
@@ -261,6 +264,81 @@ describe('Now feed API', () => {
       payload: { decision: 'allow' },
     });
     expect(invalid.statusCode).toBe(400);
+  });
+
+  it.each(['owner', 'agent', 'other', 'anonymous'])('gates calendar tap approvals for %s', async (identity) => {
+    const actions = new PendingGoogleActions();
+    const execute = vi.fn(async () => ({ status: 'completed' }));
+    actions.stage({ scope: 'calendar', sourceSessionId: '1', sourceMessageId: '42',
+      summary: 'Move the synthetic meeting to 15:00.', execute });
+    const card = actions.pendingBrowserConfirmations()[0]!;
+    const app = buildApp(config, undefined, {
+      auth: async () => identity === 'agent'
+        ? { kind: 'jarvis-agent', objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }
+        : { objectId: identity === 'other' ? 'other-owner' : config.auth.ownerObjectId,
+          tenantId: config.auth.tenantId, displayName: 'Dan' },
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) },
+      modules: [coreModule, createGoogleModule({ request: vi.fn() }, {
+        timeZone: 'Europe/Copenhagen', pendingActions: actions,
+      })],
+    });
+    apps.push(app);
+    if (identity === 'owner') {
+      const shown = await app.inject({ url: '/now', headers });
+      expect(shown.json().confirmations).toEqual([card]);
+      expect(execute).not.toHaveBeenCalled();
+    }
+    const response = await app.inject({
+      method: 'POST', url: `/now/confirmations/${card.id}`,
+      ...(identity === 'anonymous' ? {} : { headers }),
+      payload: { decision: 'approve' },
+    });
+    expect(response.statusCode).toBe(identity === 'owner' ? 204 : identity === 'anonymous' ? 401 : 403);
+    expect(execute).toHaveBeenCalledTimes(identity === 'owner' ? 1 : 0);
+    if (identity === 'owner') {
+      expect((await app.inject({ url: '/now', headers })).json().confirmations).toEqual([]);
+      expect((await app.inject({ method: 'POST', url: `/now/confirmations/${card.id}`, headers,
+        payload: { decision: 'approve' } })).statusCode).toBe(404);
+      expect(execute).toHaveBeenCalledOnce();
+    }
+  });
+
+  it.each(['partial', 'unverified', 'throw'])('shows %s calendar tap results instead of false success', async (status) => {
+    const actions = new PendingGoogleActions();
+    const execute = vi.fn(async () => {
+      if (status === 'throw') throw new Error('Unsafe provider diagnostic');
+      return { status, detail: 'Only one event was created.', items: [
+        { summary: 'First meeting', status: 'completed' },
+        { summary: 'Second meeting', status: 'unverified', detail: 'Check the calendar.' },
+      ] };
+    });
+    actions.stage({ scope: 'calendar', sourceSessionId: '1', sourceMessageId: '42',
+      summary: 'Create both synthetic meetings.', execute });
+    const card = actions.pendingBrowserConfirmations()[0]!;
+    const recordNotification = vi.fn<NonNullable<NowFeedStore['recordNotification']>>(async () => {});
+    const app = buildApp(config, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+      modules: [coreModule, createGoogleModule({ request: vi.fn() }, {
+        timeZone: 'Europe/Copenhagen', pendingActions: actions,
+      })],
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true), recordNotification },
+    });
+    apps.push(app);
+    const response = await app.inject({ method: 'POST', url: `/now/confirmations/${card.id}`, headers,
+      payload: { decision: 'approve' } });
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toContain('do not repeat');
+    expect(response.body).not.toContain('Unsafe provider diagnostic');
+    if (status !== 'throw') expect(response.json().error).toContain('Second meeting: Check the calendar.');
+    expect(recordNotification).toHaveBeenCalledWith('error', expect.stringContaining('do not repeat'));
+    if (status !== 'throw') {
+      expect(recordNotification).toHaveBeenCalledWith('error',
+        expect.stringContaining('Second meeting: Check the calendar.'));
+    }
+    expect(recordNotification.mock.calls.every(([, text]) => text.length <= 400)).toBe(true);
+    expect((await app.inject({ method: 'POST', url: `/now/confirmations/${card.id}`, headers,
+      payload: { decision: 'approve' } })).statusCode).toBe(404);
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it('refuses browser approvals and presence updates from a different authenticated identity', async () => {

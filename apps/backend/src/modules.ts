@@ -3,6 +3,9 @@ import { createToolRegistry, type JarvisTool, type ToolRegistry } from './core/t
 
 export interface BackendModule {
   readonly id: string;
+  readonly registerServices?: <Logger extends FastifyBaseLogger>(
+    app: FastifyInstance<RawServerDefault, RawRequestDefaultExpression, RawReplyDefaultExpression, Logger>,
+  ) => void;
   readonly registerRoutes: FastifyPluginAsync;
   readonly tools: readonly JarvisTool[];
 }
@@ -27,5 +30,6 @@ export function registerModules<Logger extends FastifyBaseLogger>(
   }
   // Validate every contribution before Fastify starts registering any routes.
   app.decorate('jarvisTools', createToolRegistry(modules));
+  for (const module of modules) module.registerServices?.(app);
   for (const module of modules) app.register(module.registerRoutes);
 }

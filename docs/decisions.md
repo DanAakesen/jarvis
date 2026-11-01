@@ -1,3 +1,18 @@
+## 1 November 2026 — bind offers to existing approvals (P15-46 / #1494)
+
+The calendar claim guard excluded questions, so an actionable conversational
+offer could finish without a staging receipt. Calendar staging was also absent
+from the browser approval feed. Require staging in shared instructions and give
+unstaged hosted calendar offers one bounded corrective round. Do not parse prose
+into write arguments or treat the initiating instruction as later approval.
+
+Expose the same staged calendar action to the existing owner-only tap endpoint
+using an opaque browser ID, not its conversational code. Both paths consume once;
+partial/unknown outcomes remain visible and are never automatically replayed.
+Register shared module services on the common Fastify ancestor so sibling routes
+see the same instance. No migration, dependency, authorization relaxation or
+deployment is included. Offline checks are not live model/device acceptance.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

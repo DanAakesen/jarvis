@@ -22,6 +22,7 @@ from calendar_flow import (
     calendar_claim,
     calendar_details_requested,
     calendar_multiple_requested,
+    calendar_offer,
     calendar_reply,
     calendar_unsettled_confirmation,
     pending_calendar,
@@ -35,6 +36,10 @@ SUMMARY = (
     'to 2027-12-10T11:00:00.000Z (Europe/Copenhagen); attendees: none.'
 )
 PENDING = {"status": "awaiting_confirmation", "confirmationCode": "12345678", "summary": SUMMARY}
+MOVE_PENDING = {
+    **PENDING,
+    "summary": 'Move "Synthetic meeting" to 15:00–16:00 (Europe/Copenhagen); attendees: none.',
+}
 MAIL_SUMMARY = (
     'Reply to "Dentist appointment" from guest@example.test with this exact text:\n'
     'Synthetic reply.'
@@ -78,8 +83,8 @@ class CalendarBackend(FakeBackend):
         super().__init__(catalogue=[
             {"name": name, "description": name, "inputSchema": {"type": "object"}}
             for name in ["calendar_get_pending_change", "calendar_confirm_change",
-                         "calendar_create_event", "calendar_list_events", "mail_search",
-                         "mail_confirm_action"]
+                         "calendar_create_event", "calendar_move_event", "calendar_list_events",
+                         "mail_search", "mail_confirm_action"]
         ])
         self.pending = pending
         self.stage_result = PENDING.copy()
@@ -89,6 +94,7 @@ class CalendarBackend(FakeBackend):
         # approve or decline; the flag lets a test play that refusal.
         self.strict_reply = strict_reply
         self.reply = None
+        self.applied = []
 
     def refuse_undecided_reply(self):
         if not self.strict_reply:
@@ -116,7 +122,7 @@ class CalendarBackend(FakeBackend):
             self.requests.append(request)
             if name == "calendar_get_pending_change":
                 payload = {**(self.pending or {"status": "none"}), "reply": self.reply}
-            elif name == "calendar_create_event":
+            elif name in {"calendar_create_event", "calendar_move_event"}:
                 self.pending = self.stage_result.copy() if self.outcome == "ok" else None
                 payload = self.stage_result.copy()
             elif name == "calendar_confirm_change":
@@ -124,6 +130,8 @@ class CalendarBackend(FakeBackend):
                 refusal = self.refuse_undecided_reply()
                 if refusal is not None:
                     return refusal
+                if self.reply != "decline" and not self.fail_confirmation:
+                    self.applied.append(self.pending)
                 self.pending = None  # Consumption happens before provider execution.
                 payload = {"status": "completed", "detail": "The event was created.",
                            "summary": SUMMARY,
@@ -285,6 +293,121 @@ async def test_staging_then_repeated_yes_executes_once_without_restage_or_approv
         assert backend.calendar_calls.count("calendar_confirm_change") == 1
         assert backend.calendar_calls.count("calendar_create_event") == 1
         assert len(transport.responses.requests) == 1
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("older_pending", [None, PENDING])
+@pytest.mark.parametrize("voice,question,offer,yes", [
+    (False, "My calendar meeting would fit better at 15:00.",
+     "Shall I move your calendar meeting to 15:00?", "yes"),
+    (True, "Mit kalendermøde passer bedre klokken 15.",
+     "Skal jeg flytte dit kalendermøde til klokken 15?", "ja"),
+])
+async def test_conversational_offer_is_staged_before_delivery_and_yes_applies_it(
+    provider, older_pending, voice, question, offer, yes,
+):
+    backend = CalendarBackend(pending=older_pending, strict_reply=True)
+    backend.stage_result = MOVE_PENDING.copy()
+    model, _ = provider_client(provider, backend, [
+        [delta(offer), completed()],
+        [completed(tool_call("calendar_move_event"))],
+    ])
+    try:
+        staged = await turn(model, [ModelMessage("user", question)], voice=voice)
+        assert offer not in staged
+        assert MOVE_PENDING["summary"] in staged and backend.pending == MOVE_PENDING
+        assert backend.applied == []
+        assert backend.calendar_calls.count("calendar_confirm_change") == 0
+        backend.reply = "approve"
+        result = await turn(model, [
+            ModelMessage("assistant", staged), ModelMessage("user", yes),
+        ], "43", voice=voice)
+        assert result == (
+            "Kalenderændringen er gennemført." if voice else "The calendar change is done."
+        )
+        assert backend.pending is None
+        assert backend.calendar_calls.count("calendar_confirm_change") == 1
+        assert backend.calendar_calls.count("calendar_move_event") == 1
+        assert backend.applied == [MOVE_PENDING]
+        assert "no pending" not in result and "ingen afventende" not in result
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("voice,question", [
+    (False, "Move my calendar meeting to 15:00."),
+    (True, "Flyt mit kalendermøde til klokken 15."),
+])
+async def test_direct_instruction_stages_without_an_extra_preparation_question(
+    provider, voice, question,
+):
+    backend = CalendarBackend(strict_reply=True)
+    backend.stage_result = MOVE_PENDING.copy()
+    model, _ = provider_client(provider, backend, [
+        [delta("Do you want me to move your calendar meeting to 15:00?"), completed()],
+        [completed(tool_call("calendar_move_event"))],
+    ])
+    try:
+        text = await turn(model, [ModelMessage("user", question)], voice=voice)
+        assert MOVE_PENDING["summary"] in text
+        assert "to 15:00?" not in text
+        assert backend.calendar_calls.count("calendar_move_event") == 1
+        assert backend.calendar_calls.count("calendar_confirm_change") == 0
+        assert backend.applied == []
+        backend.reply = "approve"
+        approved = await turn(model, [
+            ModelMessage("assistant", text), ModelMessage("user", "ja" if voice else "do it"),
+        ], "43", voice=voice)
+        assert approved == (
+            "Kalenderændringen er gennemført." if voice else "The calendar change is done."
+        )
+        assert backend.applied == [MOVE_PENDING]
+    finally:
+        await model.close()
+
+
+async def test_repeated_unstaged_offer_fails_closed_without_an_unbounded_retry():
+    backend = CalendarBackend()
+    offer = "Shall I move your calendar meeting to 15:00?"
+    model, transport = client([], backend=backend, rounds=[
+        [delta(offer), completed()], [delta(offer), completed()],
+    ])
+    try:
+        text = await turn(model, [ModelMessage("user", "Review my calendar")])
+        assert offer not in text
+        assert "no verified calendar result" in text
+        assert backend.pending is None
+        assert backend.calendar_calls == ["calendar_get_pending_change"]
+        assert len(transport.responses.requests) == 2
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("text", [
+    "What time should the calendar event start?",
+    "I cannot move it without the new time.",
+    "Would you like me to find those bookings or add them to your calendar?",
+    'The email says "Shall I move your meeting?"',
+])
+def test_detail_questions_read_offers_and_quoted_data_are_not_change_offers(text):
+    assert not calendar_offer(text)
+
+
+@pytest.mark.parametrize("outcome", ["error", "refused"])
+async def test_failed_stage_cannot_append_a_new_unstaged_offer(outcome):
+    backend = CalendarBackend(outcome=outcome)
+    offer = "Shall I move your calendar meeting to 15:00?"
+    model, _ = client([], backend=backend, rounds=[
+        [completed(tool_call("calendar_move_event"))], [delta(offer), completed()],
+    ])
+    try:
+        text = await turn(model, [ModelMessage("user", "Move my meeting to 15:00")])
+        assert offer not in text and "no verified calendar result" in text
+        assert backend.calendar_calls.count("calendar_move_event") == 1
+        assert backend.applied == []
     finally:
         await model.close()
 

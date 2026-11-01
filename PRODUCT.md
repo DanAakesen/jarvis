@@ -1,3 +1,12 @@
+## Suggestions and change approval (P15-46 / #1494)
+
+Jarvis stages a state-changing proposal before offering it. A clear instruction
+prepares the change without an extra preparation question; genuinely missing
+details still need clarification. Calendar proposals appear in the existing
+approval feed and accept a tap or a later yes/ja against the latest staged change.
+Writes retain the existing approval gate, session checks, expiry and single use.
+Danish and English replies distinguish pending, completed and unverified results.
+
 ## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
 
 Read-only diagnostic access covers Jarvis's backend, hosted AI agents, coding
