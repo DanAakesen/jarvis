@@ -94,6 +94,45 @@ final class JarvisCoreTests: XCTestCase {
         ))
     }
 
+    func testSidebarEdgeSwipeOpensOnDistanceOrFlickOnly() {
+        XCTAssertTrue(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: -160, translationY: 10, velocityX: -100, drawerWidth: 288, openThreshold: 0.5
+        ))
+        XCTAssertTrue(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: -40, translationY: 5, velocityX: -900, drawerWidth: 288, openThreshold: 0.5
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: -40, translationY: 5, velocityX: -100, drawerWidth: 288, openThreshold: 0.5
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: -10, translationY: 2, velocityX: -900, drawerWidth: 288, openThreshold: 0.5
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: 200, translationY: 0, velocityX: 900, drawerWidth: 288, openThreshold: 0.5
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: -160, translationY: 200, velocityX: -900, drawerWidth: 288, openThreshold: 0.5
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldOpen(
+            translationX: -160, translationY: 0, velocityX: -900, drawerWidth: 0, openThreshold: 0.5
+        ))
+    }
+
+    func testSidebarSwipeClosesTowardTheTrailingEdgeOnly() {
+        XCTAssertTrue(JarvisSidebarGesturePolicy.shouldClose(
+            translationX: 100, translationY: 4, velocityX: 50, drawerWidth: 288, closeThreshold: 0.3
+        ))
+        XCTAssertTrue(JarvisSidebarGesturePolicy.shouldClose(
+            translationX: 30, translationY: 4, velocityX: 800, drawerWidth: 288, closeThreshold: 0.3
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldClose(
+            translationX: 30, translationY: 4, velocityX: 50, drawerWidth: 288, closeThreshold: 0.3
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.shouldClose(
+            translationX: -100, translationY: 4, velocityX: -800, drawerWidth: 288, closeThreshold: 0.3
+        ))
+    }
+
     func testSidebarGestureRejectsWrongDirectionAndVerticalMovement() {
         XCTAssertFalse(JarvisSidebarGesturePolicy.canBegin(
             startX: 382,

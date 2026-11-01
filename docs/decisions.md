@@ -10237,3 +10237,19 @@ and embedding them can be ungrammatical; Date.FormatStyle supports localized
 absolute date/time components. No deliberate platform deviation or custom
 formatter is introduced. New local regressions pass; Mac rendering and live
 acceptance remain unverified.
+
+## 2026-11-01: iPhone sidebar edge swipe, plain toolbar icons (#1484)
+
+The drawer stays a root-owned, top-most layer. The edge swipe is a
+`UIScreenEdgePanGestureRecognizer` (`edges = .right`, the drawer side) installed
+on the window by `JarvisSidebarEdgeOpener`; it recognises simultaneously, never
+cancels touches, and commits state only when the pan ends and passes
+`JarvisSidebarGesturePolicy.shouldOpen`. The leading edge stays with the system
+back swipe. The drawer and scrim close by tap or by a trailing swipe
+(`shouldClose`). The Chat toolbar bell and `sidebar.trailing` button are
+separate items with `sharedBackgroundVisibility(.hidden)`; sidebar icons use the
+stone secondary accent. The temporary debug badge and write log are removed.
+Apple docs: UIScreenEdgePanGestureRecognizer, UIGestureRecognizerDelegate,
+SwiftUI ToolbarContent.sharedBackgroundVisibility, ToolbarSpacer, Human
+Interface Guidelines (Toolbars, Sidebars, Gestures). Device behaviour is
+unverified until the next preview build.

@@ -870,39 +870,42 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".accessibilityHidden(true)", composer_background)
         self.assertIn("#selector(UIResponder.resignFirstResponder)", gate)
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func openSidebar\(caller: String = .*\) \{\s+openTapCount \+= 1\s+dismissKeyboard\(\)\s+"
-                                r"write\(caller: caller\) \{ \$0\.openSidebar\(\) \}")
+        self.assertRegex(model, r"func openSidebar\(\) \{\s+dismissKeyboard\(\)\s+"
+                                r"write \{ \$0\.openSidebar\(\) \}")
+        for debug in ("openTapCount", "recentSidebarWrites", "caller", "TEMPORARY"):
+            self.assertNotIn(debug, model)
+        self.assertNotIn("debug.navigation", gate)
+        self.assertNotIn("JarvisNavigationDebugBadge", gate)
         self.assertIn("overlay.windowLevel = .alert + 1", gate)
         self.assertIn("override var canBecomeKey: Bool { false }", gate)
         self.assertNotIn("JarvisInputHitTestingProbe", chat)
 
-    def test_ios_sidebar_edge_swipe_commits_only_on_completed_qualified_gestures(self):
+    def test_ios_sidebar_edge_swipe_uses_system_edge_pan_and_commits_only_when_completed(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        gesture = source.split("    private func sidebarEdgeGesture(", 1)[1].split(
-            "    private func navigate(to destination", 1
-        )[0]
-        ended = gesture.split(".onEnded { value in", 1)[1]
-        self.assertIn("guard scenePhase == .active, !navigation.isSidebarOpen", ended)
-        self.assertIn("JarvisSidebarGesturePolicy.canBegin(", ended)
-        self.assertIn("value.startLocation.x", ended)
-        self.assertIn("value.translation.width", ended)
-        self.assertIn("value.translation.height", ended)
-        self.assertIn("> JarvisDesignTokens.sidebarOpenThreshold else { return }", ended)
-        self.assertIn("navigation.openSidebar()", ended)
-        self.assertNotIn("navigation.openSidebar()", gesture.split(".onEnded", 1)[0])
+        opener = (ROOT / "apps/ios/Jarvis/JarvisSidebarEdgeOpener.swift").read_text()
+        self.assertNotIn("sidebarEdgeGesture", source)
         for obsolete in ("@GestureState", ".updating(", ".onChanged(", "predictedEndTranslation",
                          "sidebarDrag", "sidebarGestureGeneration", ".id(gestureGeneration)",
                          ".simultaneousGesture"):
             self.assertNotIn(obsolete, source)
-        edge = source.split("if !navigation.isSidebarOpen {", 1)[1].split(
-            "if voiceModel.isMinimized", 1
-        )[0]
-        self.assertIn(".frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)", edge)
-        self.assertIn(".gesture(sidebarEdgeGesture(", edge)
+        wiring = source.split("JarvisSidebarEdgeOpener(", 1)[1].split("if voiceModel.isMinimized", 1)[0]
+        self.assertIn("isEnabled: !navigation.isSidebarOpen", wiring)
+        self.assertIn("guard scenePhase == .active, !navigation.isSidebarOpen else { return }", wiring)
+        self.assertIn("navigation.openSidebar()", wiring)
+        self.assertIn("UIScreenEdgePanGestureRecognizer", opener)
+        self.assertIn("recognizer.edges = .right", opener)
+        self.assertIn("window?.addGestureRecognizer", opener.replace("newWindow?", "window?"))
+        self.assertIn(") -> Bool {\n            true\n", opener.split("shouldRecognizeSimultaneouslyWith", 1)[1])
+        handler = opener.split("@objc private func handle(", 1)[1]
+        self.assertIn("guard recognizer.state == .ended", handler)
+        self.assertIn("JarvisSidebarGesturePolicy.shouldOpen(", handler)
+        self.assertLess(handler.index("JarvisSidebarGesturePolicy.shouldOpen("), handler.index("parent.onOpen()"))
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        self.assertIn("JarvisSidebarGesturePolicy.shouldClose(", sidebar)
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func setPath\(_ path: \[JarvisDestination\], caller: String = .*\) \{\s+"
+        self.assertRegex(model, r"func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
                                r"guard path != state\.path else \{ return \}\s+"
-                               r"write\(caller: caller\) \{\s+\$0\.setPath\(path\)\s+\$0\.closeSidebar\(\)")
+                               r"write \{\s+\$0\.setPath\(path\)\s+\$0\.closeSidebar\(\)")
 
     def test_ios_navigation_reference_ownership_and_plain_conditional_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
@@ -912,7 +915,7 @@ class SafeFailureTests(unittest.TestCase):
         )[0]
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
         self.assertIn("@MainActor\nfinal class JarvisNavigationModel: ObservableObject", model)
-        self.assertEqual(model.count("@Published"), 3)  # two are TEMPORARY debug fields
+        self.assertEqual(model.count("@Published"), 1)
         self.assertIn("@Published private(set) var state: JarvisNavigationState", model)
         for derived in ("var path: [JarvisDestination] { state.path }",
                         "var isSidebarOpen: Bool { state.isSidebarOpen }",

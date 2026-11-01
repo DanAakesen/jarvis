@@ -372,9 +372,6 @@ struct JarvisGateRootView: View {
             .allowsHitTesting(!model.shouldCoverContent)
             .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
-            .overlay(alignment: .bottom) {
-                JarvisNavigationDebugBadge(navigation: navigation)
-            }
             .task {
                 model.refreshOverlay()
                 await model.load()
@@ -396,28 +393,6 @@ struct JarvisGateRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
                 Task { await model.signOut() }
             }
-    }
-}
-
-/// TEMPORARY: always-visible navigation state for on-device diagnosis. Remove once the sidebar opens.
-private struct JarvisNavigationDebugBadge: View {
-    @ObservedObject var navigation: JarvisNavigationModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("sidebar open=\(navigation.isSidebarOpen ? "true" : "false") taps=\(navigation.openTapCount)")
-            ForEach(Array(navigation.recentSidebarWrites.enumerated()), id: \.offset) { _, write in
-                Text(write)
-            }
-        }
-        .font(.system(size: 10, design: .monospaced))
-        .foregroundStyle(.primary)
-        .padding(4)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-        .padding(.bottom, 2)
-        .allowsHitTesting(false)
-        .accessibilityIdentifier("debug.navigation")
-        .zIndex(2)
     }
 }
 

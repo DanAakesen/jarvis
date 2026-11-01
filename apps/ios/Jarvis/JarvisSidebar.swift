@@ -47,6 +47,20 @@ struct JarvisSidebarDrawerLayer: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance)
+                    .onEnded { value in
+                        guard JarvisSidebarGesturePolicy.shouldClose(
+                            translationX: Double(value.translation.width),
+                            translationY: Double(value.translation.height),
+                            velocityX: Double(value.velocity.width),
+                            drawerWidth: Double(drawerWidth),
+                            closeThreshold: Double(JarvisDesignTokens.sidebarCloseThreshold)
+                        ) else { return }
+                        navigation.closeSidebar()
+                    },
+                isEnabled: navigation.isSidebarOpen
+            )
         }
         .ignoresSafeArea(.container)
         .allowsHitTesting(navigation.isSidebarOpen)
@@ -82,6 +96,7 @@ struct JarvisSidebar: View {
                 } label: {
                     Image(systemName: JarvisDestination.settings.symbolName)
                         .font(.system(size: JarvisDesignTokens.sidebarIconSize))
+                        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
                         .frame(
                             width: JarvisDesignTokens.sidebarSettingsButtonSize,
                             height: JarvisDesignTokens.sidebarSettingsButtonSize
@@ -89,11 +104,6 @@ struct JarvisSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
-                .foregroundStyle(
-                    settingsFocused || settingsHovered
-                        ? JarvisDesignTokens.primaryAccent
-                        : Color.primary
-                )
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
@@ -147,6 +157,7 @@ struct JarvisSidebar: View {
             HStack(spacing: JarvisDesignTokens.sidebarRowLabelSpacing) {
                 Image(systemName: destination.symbolName)
                     .font(.system(size: JarvisDesignTokens.sidebarIconSize))
+                    .foregroundStyle(destination.isNavigable ? JarvisDesignTokens.secondaryAccent : Color.secondary)
                     .frame(width: JarvisDesignTokens.sidebarIconColumnWidth)
                 Text(destination.localizedTitle(language: language))
                     .font(.body.weight(isHighlighted ? .semibold : .regular))

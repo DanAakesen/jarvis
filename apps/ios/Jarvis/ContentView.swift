@@ -278,13 +278,12 @@ struct ContentView: View {
                 }
                 .accessibilityHidden(navigation.isSidebarOpen)
 
-                if !navigation.isSidebarOpen {
-                    Color.clear
-                        .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
-                        .contentShape(Rectangle())
-                        .gesture(sidebarEdgeGesture(screenWidth: size.width, drawerWidth: drawerWidth))
-                        .accessibilityHidden(true)
+                JarvisSidebarEdgeOpener(isEnabled: !navigation.isSidebarOpen, drawerWidth: drawerWidth) {
+                    guard scenePhase == .active, !navigation.isSidebarOpen else { return }
+                    navigation.openSidebar()
                 }
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
 
                 if voiceModel.isMinimized {
                     VoiceMiniBar(model: voiceModel) {
@@ -341,28 +340,6 @@ struct ContentView: View {
             bottom: max(fallback.bottom, insets.bottom),
             trailing: max(fallback.trailing, insets.right)
         )
-    }
-
-    private func sidebarEdgeGesture(screenWidth: CGFloat, drawerWidth: CGFloat) -> some Gesture {
-        DragGesture(
-            minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance,
-            coordinateSpace: .named("sidebar")
-        )
-            .onEnded { value in
-                guard scenePhase == .active, !navigation.isSidebarOpen,
-                      JarvisSidebarGesturePolicy.canBegin(
-                        startX: Double(value.startLocation.x),
-                        translationX: Double(value.translation.width),
-                        translationY: Double(value.translation.height),
-                        screenWidth: Double(screenWidth),
-                        drawerWidth: Double(drawerWidth),
-                        startProgress: 0,
-                        openingStartFraction: Double(JarvisDesignTokens.sidebarGestureStartFraction)
-                      ),
-                      -value.translation.width / max(drawerWidth, 1)
-                        > JarvisDesignTokens.sidebarOpenThreshold else { return }
-                navigation.openSidebar()
-            }
     }
 
     private func navigate(to destination: JarvisDestination) {
