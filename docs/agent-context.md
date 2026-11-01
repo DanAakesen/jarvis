@@ -6208,6 +6208,38 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 
 ## iOS Phase 1c
 
+### Apple documentation requirement (owner instruction, 1 November 2026)
+
+Before implementing any iOS change, read the relevant Apple documentation and
+Human Interface Guidelines. Prefer the platform API, modifier or component over
+hand-rolled behavior when a system solution exists. Select references for the
+affected boundary, such as SwiftUI scrolling, navigation, gestures, toolbars and
+sheets; ActivityKit/Live Activities; or AVFoundation capture device discovery.
+Every iOS PR description must list the Apple pages actually relied on and each
+deliberate deviation with its reason. If documentation cannot be accessed, state
+the limitation rather than claiming it was read or that platform compliance was
+verified.
+
+For P15-44 / #1490, the relevant references are
+[ScrollViewReader](https://developer.apple.com/documentation/swiftui/scrollviewreader),
+[scrollTo(_:anchor:)](https://developer.apple.com/documentation/swiftui/scrollviewproxy/scrollto(_:anchor:)),
+[safeAreaInset](https://developer.apple.com/documentation/swiftui/view/safeareainset(edge:alignment:spacing:content:)),
+[accessibilityReduceMotion](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion),
+[XCUIElement](https://developer.apple.com/documentation/xcuiautomation/xcuielement)
+(element readiness, typing and keyboard interaction), and
+[HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
+These map to the existing system scroll proxy, bottom composer inset, motion
+environment and XCTest UI interactions. The pending-row insert/reconciliation is
+application-owned conversation state, not a replacement scroll or input control.
+The fixture-only Reduce Motion override exists to exercise the no-animation path
+without changing simulator settings; normal launches read the system environment.
+The `Task.yield()` before scrolling is application scheduling, not an Apple
+documented guarantee of a completed layout pass.
+This follow-up could not read the official pages: `developer.apple.com` failed
+DNS resolution through both the page-fetch tool and curl. These are references
+for the outstanding review, not claims of prior reliance. Simulator visibility,
+keyboard-focus verification and screenshot evidence remain pending.
+
 `apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
