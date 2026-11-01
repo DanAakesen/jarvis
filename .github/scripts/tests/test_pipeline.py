@@ -738,6 +738,25 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".ignoresSafeArea(.container)", content)
         self.assertNotIn(".ignoresSafeArea()", content)
 
+    def test_ios_chat_sent_row_uses_layout_aware_scroll_position(self):
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn(".scrollTargetLayout()", chat)
+        self.assertIn(".scrollPosition(id: $scrollTargetID, anchor: .bottom)", chat)
+        self.assertIn(".onChange(of: model.messages.last?.id, initial: true)", chat)
+        self.assertIn("scrollTargetID = messageID", chat)
+        conversation = chat.split("private var conversation: some View", 1)[1].split("private func messageRow", 1)[0]
+        self.assertNotIn("await Task.yield()", conversation)
+        tests = (ROOT / "apps/ios/JarvisUITests/JarvisChatVisibilityTests.swift").read_text()
+        self.assertIn("XCTWaiter.wait(for: [visible], timeout: 2)", tests)
+        self.assertLess(tests.index('attachFailureHierarchy("sent bubble visibility'),
+                        tests.index("XCTAssertEqual(visibility, .completed)"))
+        self.assertIn('failureScreenshot.name = "chat-sent-failure-\\(language)"', tests)
+        steps = load_workflow(ROOT / ".github/workflows/ios-ci.yml")["jobs"]["macos"]["steps"]
+        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertNotIn("xcodebuild test", capture["run"])
+        gate = next(step for step in steps if step.get("name") == "Native Chat UI behaviour gate")
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/chat-behaviour.xcresult"', gate["run"])
+
     def test_ios_chat_visibility_fixture_isolates_auth_before_first_render(self):
         gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
         fixture = gate.split("private static var isChatVisibilityFixture", 1)[1].split("var shouldCoverContent", 1)[0]

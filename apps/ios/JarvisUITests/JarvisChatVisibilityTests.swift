@@ -111,7 +111,15 @@ final class JarvisChatVisibilityTests: XCTestCase {
             },
             object: nil
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 2), .completed)
+        let visibility = XCTWaiter.wait(for: [visible], timeout: 2)
+        if visibility != .completed {
+            attachFailureHierarchy("sent bubble visibility \(visibility)")
+            let failureScreenshot = XCTAttachment(screenshot: app.screenshot())
+            failureScreenshot.name = "chat-sent-failure-\(language)"
+            failureScreenshot.lifetime = .keepAlways
+            add(failureScreenshot)
+        }
+        XCTAssertEqual(visibility, .completed)
         XCTAssertTrue(bubble.isHittable)
         XCTAssertGreaterThanOrEqual(bubble.frame.minY, transcript.frame.minY)
         XCTAssertLessThanOrEqual(bubble.frame.maxY, transcript.frame.maxY)

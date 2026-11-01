@@ -126,6 +126,7 @@ struct JarvisChatScreen: View {
     @State private var isScreenSharing = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
+    @State private var scrollTargetID: String?
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
@@ -376,17 +377,17 @@ struct JarvisChatScreen: View {
                             .frame(height: 1)
                             .id("conversation-bottom")
                     }
+                    .scrollTargetLayout()
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                     .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("chat-transcript")
                 .defaultScrollAnchor(.bottom)
-                .task(id: model.messages.last?.id) {
-                    await Task.yield()
-                    guard !Task.isCancelled else { return }
+                .scrollPosition(id: $scrollTargetID, anchor: .bottom)
+                .onChange(of: model.messages.last?.id, initial: true) { _, messageID in
                     withAnimation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
-                        proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                        scrollTargetID = messageID
                     }
                 }
                 .onChange(of: model.streamingText) { _, _ in

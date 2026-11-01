@@ -6233,8 +6233,11 @@ environment and XCTest UI interactions. The pending-row insert/reconciliation is
 application-owned conversation state, not a replacement scroll or input control.
 The fixture-only Reduce Motion override exists to exercise the no-animation path
 without changing simulator settings; normal launches read the system environment.
-The `Task.yield()` before scrolling is application scheduling, not an Apple
-documented guarantee of a completed layout pass.
+Latest-row scrolling now uses
+[scrollPosition(id:anchor:)](https://developer.apple.com/documentation/swiftui/view/scrollposition(id:anchor:))
+and [scrollTargetLayout(isEnabled:)](https://developer.apple.com/documentation/swiftui/view/scrolltargetlayout(isenabled:)),
+not `Task.yield()` as a presumed completed layout pass. Direct retrieval of these
+pages also failed DNS before this change; official-page review remains outstanding.
 This follow-up could not read the official pages: `developer.apple.com` failed
 DNS resolution through both the page-fetch tool and curl. These are references
 for the outstanding review, not claims of prior reliance. Simulator visibility,
@@ -6544,6 +6547,18 @@ retrieval still failed DNS before editing. No claim those pages were read;
 no custom text-input, keyboard observer, or design change was added. This Linux
 environment has no `xcodebuild` or simulator; the existing ready-PR Mac gate
 must verify the updated app, keyboard, optimistic bubble and exported screenshots.
+
+Run 41304338614 compiled the simulator app and passed Chat presentation and
+unacknowledged-failure recovery, but both send-visibility tests timed out at
+line 114 within the unchanged two-second deadline. Teardown showed the sent
+bubble eventually visible; it did not capture assertion-time state. The tests
+now print/attach the full hierarchy and keep `chat-sent-failure-da/en` screenshots
+before the visibility assertion fails. Latest-row scrolling uses native
+layout-aware positioning instead of yielding before a lazy-list proxy scroll.
+Remove the duplicate test invocation from simulator boot/capture: the dedicated
+behaviour gate must own the `chat-behaviour.xcresult` bundle, and an early test
+failure must not prevent the preceding screenshots. Export/upload remain
+`if: always()`. Updated-head native visibility and screenshots remain unverified.
 
 The synthetic
 `--ui-test-chat-send` scenario delays server acknowledgment five seconds and

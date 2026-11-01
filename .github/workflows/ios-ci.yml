@@ -151,13 +151,6 @@ jobs:
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
-          xcodebuild test \
-            -project apps/ios/Jarvis.xcodeproj \
-            -scheme Jarvis \
-            -destination "id=$DEVICE_ID" \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2

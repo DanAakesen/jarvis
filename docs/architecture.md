@@ -1513,7 +1513,8 @@ P15-44 inserts a screen-local pending user row synchronously on send. The SSE
 `user` event replaces that row with the server ID; unacknowledged failures remove
 it and restore the draft/attachments. Sending waits for initial history loading
 so that load cannot overwrite the pending row. Transcript scrolling observes
-the latest row ID (including acknowledgment with unchanged row count); Reduce
+the latest row ID through SwiftUI `scrollPosition(id:anchor:)` and the lazy
+stack's `scrollTargetLayout()` (including acknowledgment with unchanged row count); Reduce
 Motion removes animation, not scrolling. No wire or persistence contract changes.
 
 The navigation shell dim overlay is visual-only (`allowsHitTesting(false)`).

@@ -1,5 +1,16 @@
 ## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
 
+Run 41304338614 passes simulator compilation, Chat presentation and failure
+recovery but times out on both immediate-send visibility tests at line 114.
+Replace yield-based lazy-list proxy scrolling with native
+`scrollPosition(id:anchor:)` and `scrollTargetLayout()`, targeting the latest
+message ID. Keep animation optional for Reduce Motion and the two-second
+visibility deadline unchanged. Capture hierarchy and screenshots before that
+assertion fails, not only at teardown. Run UI tests only in the dedicated
+result-bundle gate so a duplicate early failure cannot abort screenshot capture.
+The layout-timing diagnosis and correction still require simulator confirmation;
+Apple documentation access remains DNS-blocked.
+
 Run 41301282280's failure-time hierarchy confirms a second login-failure window
 over Danish Chat. Initialize the simulator-only send fixture without real auth
 clients before rendering; require both fixture flags and preserve device

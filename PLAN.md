@@ -3474,7 +3474,18 @@ fixture now initializes offline before rendering to avoid the observed login
 gate. Reused PR #1485's contained accessibility and scoped drawer-input surfaces,
 with coordination on that PR; its broader navigation state remains separate.
 Next verify the real simulator gate and bilingual screenshots. Local Linux has
-no simulator; single-window composer recovery and iPhone acceptance are unverified.
+no simulator; iPhone acceptance is unverified.
+
+Run 41304338614 passed simulator compilation, Chat presentation and
+unacknowledged-failure recovery. Both language send tests reached the optimistic
+bubble assertion but timed out at line 114 (two seconds). Latest-row scrolling
+now uses native layout-aware `scrollPosition`/`scrollTargetLayout` rather than
+yielding before a lazy-list proxy scroll. Capture hierarchy and failure screenshots
+before the strict assertion; remove the duplicate early test run that aborted
+ordinary screenshot capture before the result-bundle gate. 61 pipeline tests and
+Swift syntax parsing pass. Next verify updated-head simulator visibility,
+deduplication and bilingual screenshots; merge #1485 after it lands. Official
+Apple-page review remains DNS-blocked, and local native execution is unavailable.
 
 P15-44 / [#1490](https://github.com/DanAakesen/jarvis/issues/1490) adds immediate
 local sent-message insertion, server-ID reconciliation, pre-acknowledgment draft
