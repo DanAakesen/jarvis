@@ -701,8 +701,9 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")', content)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
         self.assertIn("self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil", chat)
-        self.assertLess(chat.index("await model.load()"), chat.index("activitySheet = initialActivitySheet"))
-        self.assertIn("JarvisActivitySheet(model: model, kind: sheet)", chat)
+        self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
+        self.assertIn(".sheet(item: $presentedSheet", chat)
+        self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
 
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"

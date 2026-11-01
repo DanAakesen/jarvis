@@ -139,7 +139,7 @@ struct JarvisChatScreen: View {
         .task {
             await model.load()
             if let initialActivitySheet {
-                activitySheet = initialActivitySheet
+                presentedSheet = .activity(initialActivitySheet)
             }
             await model.watchActivity()
         }
