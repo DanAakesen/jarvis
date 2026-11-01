@@ -698,6 +698,43 @@ class SafeFailureTests(unittest.TestCase):
         fixture = (ROOT / "apps/ios/Jarvis/VoiceActivityScreenshot.swift").read_text()
         self.assertTrue(fixture.startswith("#if targetEnvironment(simulator)"))
 
+    def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        subprocess.run(["bash", "-n"], input=capture["run"], text=True, check=True)
+        compare = next(step for step in steps if step.get("name") == "Pair simulator captures with approved board renders")
+        artifact = next(step for step in steps if step.get("name") == "Upload iOS screenshots")
+        self.assertEqual(artifact["with"]["path"], "${{ runner.temp }}/ios-screenshots/")
+        screens = ("chat", "voice", "notifications", "factory", "settings", "notes", "health", "sidebar")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "ios-screenshots"
+            root.mkdir()
+            images = []
+            for appearance in ("light", "dark"):
+                for screen in screens:
+                    name = (f"factory-board-{appearance}-da.png" if screen == "factory"
+                            else f"ambient-{screen}-{appearance}.png")
+                    image = root / name
+                    image.touch()  # File-presence fixtures; these are not simulator screenshots.
+                    images.append(image)
+            env = {**os.environ, "RUNNER_TEMP": directory}
+            subprocess.run(["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env, check=True)
+            gallery = (root / "comparisons.html").read_text()
+            self.assertEqual(gallery.count("<iframe "), 16)
+            for image in images:
+                self.assertIn(f'src="{image.name}"', gallery)
+            self.assertIn("sheet=activity", gallery)
+            self.assertIn("sidebar=open", gallery)
+            self.assertTrue((root / "board/board.html").is_file())
+            images[0].unlink()
+            result = subprocess.run(
+                ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Missing simulator capture:", result.stderr)
+
     def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
         design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
         style = design.split("func jarvisToolbarButtonStyle()", 1)[1].split("\n    }", 1)[0]

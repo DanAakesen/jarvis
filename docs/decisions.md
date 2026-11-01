@@ -25,6 +25,41 @@ synthetic and compiled out of device builds. Linux Core tests are local evidence
 Apple compilation, actual Lock Screen controls/background audio and the
 Simulator/board screenshot comparison remain pending native acceptance.
 
+## 31 October 2026 — one native iPhone ambient background (P15-38 / #1478)
+
+Superseded in implementation detail on 1 November: Dan requested current main's
+gate backdrop and all current screen behaviour. Reuse `JarvisScreenBackground`,
+which already backs `JarvisGateAmbientBackground`, instead of the first
+P15-38 renderer and decorative orb. Preserve main's Chat plus menu, localization,
+camera/video/screen-sharing and Voice/caption/orb states. Merge main without
+rewriting branch history, keep both documentation entries and all capture/upload
+steps, including the plus-menu screenshot and ambient comparison artifact.
+Fresh native CI and simulator evidence are required for the merged commit.
+
+The subsequent #1465 main merge keeps the corrected drawer gesture, dismiss
+overlay placement, safe-area handling, row order and typography. Retain the
+shared full-screen ambient backdrop beneath the glass sidebar rather than
+reintroducing its per-screen gradient copy. Keep both sidebar/Notifications
+captures and the ambient comparison set in the existing one-boot job.
+
+Use the approved Chat backdrop on every native screen and app-owned sheet,
+as requested after TestFlight build 12. Keep one definition in
+`JarvisDesignSystem.swift`, not per-screen gradient copies: the board's four
+elliptical glows, theme-specific page colours, and subdued static orb.
+Voice and sign-in/lock reuse the same field beneath their foreground orb.
+Cards/list rows and the sidebar use glass, with a solid Reduce Transparency
+fallback. Preserve gate privacy coverage and existing screen behaviour.
+
+Extend the existing ready-PR screenshot hook without another Mac job or
+simulator boot. Package both appearances of all eight requested surfaces with
+`comparisons.html` and the checked-in board so native captures and concept
+renders can be viewed side by side. Notifications means the existing Needs you
+sheet, not a new APNs screen. Preview transports stay synthetic and Voice fixture
+startup never opens the microphone. Linux source contracts and Swift syntax
+parsing are local evidence only; Mac compile/captures, CI green and owner visual
+acceptance remain pending. Main was fetched and was already an ancestor of the
+working branch, so no history rewrite or merge was needed.
+
 ## 31 October 2026 — native Chat plus menu (#1462)
 
 Match the approved Chat board with an anchored popover above the composer plus

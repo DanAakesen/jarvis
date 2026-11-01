@@ -19,7 +19,7 @@ struct JarvisDeploymentsSettingsView: View {
     }
 
     var body: some View {
-        List {
+        JarvisList {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
@@ -75,6 +75,7 @@ struct JarvisDeploymentsSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .jarvisAmbientBackground()
         .navigationTitle(copy(.deploymentsRow))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -180,7 +181,7 @@ struct JarvisNewDeploymentView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error).foregroundStyle(.red)
             }

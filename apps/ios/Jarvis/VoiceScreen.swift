@@ -7,6 +7,7 @@ struct VoiceScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var model: VoiceScreenModel
+    var fixtureMode = false
     let onMinimize: () -> Void
 
     @State private var cameraOffset: CGSize = .zero
@@ -56,6 +57,7 @@ struct VoiceScreenView: View {
                     }
                     controls
                         .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
+                        .disabled(fixtureMode)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -68,7 +70,7 @@ struct VoiceScreenView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            if model.voiceState == .idle {
+            if !fixtureMode, model.voiceState == .idle {
                 #if targetEnvironment(simulator)
                 if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-activity-fixture") { return }
                 #endif
@@ -76,7 +78,7 @@ struct VoiceScreenView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
+            if !fixtureMode, phase == .active {
                 model.refreshCameraPermissionState()
                 Task { await model.retryIfNeeded() }
             }
@@ -510,7 +512,7 @@ private struct VoicePhotoViewfinder: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            JarvisScreenBackground()
             VoiceCameraPreview(session: camera.session)
                 .ignoresSafeArea()
             VStack {
@@ -544,7 +546,7 @@ private struct VoiceScreenSharePicker: View {
                 .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemBackground))
+        .jarvisAmbientBackground()
     }
 }
 

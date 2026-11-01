@@ -88,6 +88,7 @@ struct JarvisNoteEditorView: View {
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.top, JarvisDesignTokens.notesSectionSpacing)
+        .jarvisAmbientBackground()
         .navigationTitle(title.isEmpty ? copy.notes : title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden()

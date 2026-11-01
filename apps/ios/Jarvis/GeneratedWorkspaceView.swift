@@ -36,7 +36,7 @@ struct GeneratedWorkspaceSheet: View {
                 .padding(JarvisDesignTokens.contentInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(Color(uiColor: .systemBackground))
+            .jarvisAmbientBackground()
             .navigationTitle(presented.view.workspaceTitle(language: language))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -49,7 +49,7 @@ struct GeneratedWorkspaceSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(.regularMaterial)
+        .presentationBackground { JarvisScreenBackground() }
         .environment(\.locale, language.locale)
     }
 
@@ -709,7 +709,10 @@ private struct UnsupportedRenderer: View {
         }
         .padding(JarvisDesignTokens.contentInset)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
+        .background {
+            JarvisGlassSurface()
+                .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(formatted(.unsupportedOnPhone, title, kind))
     }
@@ -920,10 +923,10 @@ private struct GeneratedWorkspacePreviewGallery: View {
                             onAction: { _ in }
                         )
                         .padding(JarvisDesignTokens.contentInset)
-                        .background(
-                            Color(uiColor: .secondarySystemBackground),
-                            in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius)
-                        )
+                        .background {
+                            JarvisGlassSurface()
+                                .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceCornerRadius))
+                        }
                     }
                 }
                 .padding(JarvisDesignTokens.contentInset)
