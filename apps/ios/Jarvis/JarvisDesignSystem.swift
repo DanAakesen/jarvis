@@ -88,6 +88,12 @@ enum JarvisDesignTokens {
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
+    static let chatPlusMenuWidth: CGFloat = 272
+    static let chatPlusMenuInset: CGFloat = 10
+    static let chatPlusMenuSpacing: CGFloat = 2
+    static let chatPlusMenuRowHeight: CGFloat = 44
+    static let chatPlusMenuRadius: CGFloat = 22
+    static let chatLivePreviewHeight: CGFloat = 126
     static let chatGlassInset: CGFloat = 12
     static let chatGlassOpacity: CGFloat = 0.16
     static let chatBadgeInset: CGFloat = 6

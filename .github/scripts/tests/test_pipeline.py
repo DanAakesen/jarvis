@@ -641,6 +641,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
         self.assertIn("main-light.png", source)
         self.assertIn("main-dark.png", source)
+        self.assertIn("--screenshot-chat-plus-menu", source)
+        self.assertIn("chat-plus-menu-light.png", source)
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
 
@@ -657,6 +659,7 @@ class SafeFailureTests(unittest.TestCase):
         )
         self.assertEqual(artifact["with"]["retention-days"], 14)
         self.assertEqual(artifact["with"]["if-no-files-found"], "error")
+        self.assertIn("ios-screenshots/*.png", artifact["with"]["path"])
         comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
         self.assertEqual(comment["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertIn("ARTIFACT_URL", comment["env"])
@@ -668,6 +671,13 @@ class SafeFailureTests(unittest.TestCase):
             "--screenshot-sidebar-open",
             (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
         )
+        self.assertIn(
+            "--screenshot-chat-plus-menu",
+            (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
+        )
+        ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
+        self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
+        self.assertIn("lockscreen-tasks-${appearance}-${language}.png", ios_workflow)
 
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"

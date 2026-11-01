@@ -1,3 +1,4 @@
+import Foundation
 import JarvisCore
 import SwiftUI
 
@@ -67,10 +68,12 @@ final class JarvisChatModel: ObservableObject {
     @Published var nowFeed: JarvisNowFeed?
     @Published var activityError: String?
     @Published var activityMessage: String?
+    @Published private(set) var voiceLanguage: ChatLanguage = .da
 
     private let client: JarvisChatClient?
     private let nowClient: JarvisNowFeedClient?
     private let updatesClient: JarvisWorkspaceClient?
+    private let settingsClient: JarvisSettingsClient?
     private var historyPaging = ChatHistoryPagingState()
     private var sessionID: String?
     private var language: ChatLanguage
@@ -82,13 +85,20 @@ final class JarvisChatModel: ObservableObject {
     let fixtureMode: Bool
     let startupError: String?
 
+    private var appLanguage: JarvisAppLanguage {
+        JarvisAppLanguage(
+            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+        ) ?? .default
+    }
+
     init(client: JarvisClient?, fixtureMode: Bool = false, startupError: String? = nil) {
         self.client = client.map { JarvisChatClient(client: $0) }
         nowClient = client.map { JarvisNowFeedClient(client: $0) }
         updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
+        settingsClient = client.map { JarvisSettingsClient(client: $0) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
-        language = Locale.current.language.languageCode?.identifier == "da" ? .da : .en
+        language = .da
     }
 
     var canSend: Bool {
@@ -142,6 +152,7 @@ final class JarvisChatModel: ObservableObject {
             historyError = message(for: error)
         }
         isLoading = false
+        await loadVoiceLanguage()
         await refreshActivity()
 
         await reattachActiveTurnIfNeeded()
@@ -198,6 +209,25 @@ final class JarvisChatModel: ObservableObject {
     func removeAttachment(_ attachment: PendingChatAttachment) {
         pendingAttachments.removeAll { $0.id == attachment.id }
         uploadedAttachmentIDs[attachment.id] = nil
+    }
+
+    func setVoiceLanguage(_ language: ChatLanguage) async {
+        guard !fixtureMode, !isSending, language != voiceLanguage, let settingsClient else { return }
+        do {
+            _ = try await settingsClient.saveSettings(
+                JarvisSettingsPatch(
+                    area: "voice",
+                    key: "defaultLanguage",
+                    value: .string(language.rawValue)
+                )
+            )
+            voiceLanguage = language
+            self.language = language
+            sessionID = nil
+            actionError = nil
+        } catch {
+            actionError = JarvisChatLocalization.string(.voiceLanguageUpdateFailed, language: appLanguage)
+        }
     }
 
     func send() {
@@ -335,6 +365,7 @@ final class JarvisChatModel: ObservableObject {
             actionError = startupError ?? "Chat is unavailable."
             return
         }
+
         do {
             var attachmentIDs: [String] = []
             if !attachments.isEmpty { statusLine = "Uploading attachments…" }
@@ -379,6 +410,31 @@ final class JarvisChatModel: ObservableObject {
             streamingText = ""
         }
         sendTask = nil
+    }
+
+    private func loadVoiceLanguage() async {
+        guard !fixtureMode, let settingsClient else { return }
+        do {
+            let settings = try await settingsClient.loadSettings()
+            let rawLanguage: String
+            if let value = settings.value(area: "voice", key: "defaultLanguage") {
+                guard let parsedLanguage = value.stringValue else {
+                    throw JarvisSettingsClientError.invalidResponse
+                }
+                rawLanguage = parsedLanguage
+            } else {
+                rawLanguage = ChatLanguage.da.rawValue
+            }
+            guard let language = ChatLanguage(rawValue: rawLanguage) else {
+                throw JarvisSettingsClientError.invalidResponse
+            }
+            voiceLanguage = language
+            if sessionID == nil { self.language = language }
+        } catch {
+            voiceLanguage = .da
+            if sessionID == nil { language = .da }
+            actionError = JarvisChatLocalization.string(.voiceLanguageLoadFailed, language: appLanguage)
+        }
     }
 
     private func reattach(_ turn: ActiveChatTurn) async {
