@@ -4,55 +4,69 @@ import JarvisCore
 @MainActor
 final class JarvisNavigationModel: ObservableObject {
     @Published private(set) var state: JarvisNavigationState
-    // TEMPORARY debug instrumentation for the on-device sidebar investigation; remove once it opens.
-    @Published private(set) var openTapCount = 0
-    @Published private(set) var recentSidebarWrites: [String] = []
+    @Published private(set) var sidebarDiagnostics = JarvisSidebarDiagnostics()
+    let navigationRequested = PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()
     private let dismissKeyboard: () -> Void
 
     init(initialState: JarvisNavigationState = JarvisNavigationState(),
          dismissKeyboard: @escaping () -> Void = {}) {
         state = initialState
         self.dismissKeyboard = dismissKeyboard
+        sidebarDiagnostics.record(
+            caller: .initial, requested: initialState.isSidebarOpen,
+            before: false, after: initialState.isSidebarOpen
+        )
     }
 
     var path: [JarvisDestination] { state.path }
     var isSidebarOpen: Bool { state.isSidebarOpen }
     var currentDestination: JarvisDestination { state.currentDestination }
 
-    func openSidebar(caller: String = "\(#fileID):\(#line)") {
-        openTapCount += 1
+    func openSidebar(caller: JarvisSidebarWriter) {
         dismissKeyboard()
-        write(caller: caller) { $0.openSidebar() }
+        writeSidebar(caller: caller, requested: true) { $0.openSidebar() }
     }
 
-    func closeSidebar(caller: String = "\(#fileID):\(#line)") {
-        write(caller: caller) { $0.closeSidebar() }
+    func closeSidebar(caller: JarvisSidebarWriter) {
+        writeSidebar(caller: caller, requested: false) { $0.closeSidebar() }
     }
 
-    func setPath(_ path: [JarvisDestination], caller: String = "\(#fileID):\(#line)") {
-        guard path != state.path else { return }
-        write(caller: caller) {
-            $0.setPath(path)
-            $0.closeSidebar()
+    func setPath(_ path: [JarvisDestination], caller: JarvisSidebarWriter) {
+        let update = JarvisNavigationPathUpdate(path: path, from: state)
+        if let request = update.navigationRequest {
+            navigationRequested.send(request)
         }
+        writeSidebar(caller: caller, requested: false) { $0 = update.state }
     }
 
-    func navigate(to destination: JarvisDestination, caller: String = "\(#fileID):\(#line)") {
-        write(caller: caller) { $0.navigate(to: destination) }
+    func navigate(to destination: JarvisDestination, caller: JarvisSidebarWriter) {
+        // Content owns voice/fixture side effects; deliver before changing the route.
+        if destination.isNavigable {
+            navigationRequested.send((from: currentDestination, to: destination))
+        }
+        writeSidebar(caller: caller, requested: false) { $0.navigate(to: destination) }
     }
 
-    func voiceSessionStateChanged(_ voiceState: VoiceSessionState, caller: String = "\(#fileID):\(#line)") {
-        write(caller: caller) { $0.voiceSessionStateChanged(voiceState) }
+    func voiceSessionStateChanged(_ voiceState: VoiceSessionState) {
+        writeSidebar(
+            caller: voiceState == .ended ? .voiceEnded : .voiceState,
+            requested: voiceState == .ended ? false : isSidebarOpen
+        ) { $0.voiceSessionStateChanged(voiceState) }
     }
 
-    func reset() {
-        state = JarvisNavigationState()
+    func reset(caller: JarvisSidebarWriter) {
+        writeSidebar(caller: caller, requested: false) { $0 = JarvisNavigationState() }
     }
 
-    private func write(caller: String, _ change: (inout JarvisNavigationState) -> Void) {
-        let before = state.isSidebarOpen
-        change(&state)
-        guard state.isSidebarOpen != before else { return }
-        recentSidebarWrites = Array((recentSidebarWrites + ["\(state.isSidebarOpen ? "open" : "close") \(caller)"]).suffix(3))
+    private func writeSidebar(
+        caller: JarvisSidebarWriter, requested: Bool,
+        mutation: (inout JarvisNavigationState) -> Void
+    ) {
+        let before = isSidebarOpen
+        var next = state
+        mutation(&next)
+        if next != state { state = next }
+        sidebarDiagnostics.record(caller: caller, requested: requested, before: before, after: isSidebarOpen)
+        print("Jarvis sidebar caller=\(caller.rawValue) requested=\(requested) before=\(before) after=\(isSidebarOpen) taps=\(sidebarDiagnostics.buttonTapCount)")
     }
 }

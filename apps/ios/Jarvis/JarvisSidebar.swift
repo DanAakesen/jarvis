@@ -10,50 +10,6 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
     }
 }
 
-/// Top-most layer of the app root. It renders from the root-owned navigation model only, so no
-/// screen, sheet, or voice state below it can hide the drawer or leave a stale scrim behind.
-struct JarvisSidebarDrawerLayer: View {
-    @EnvironmentObject private var navigation: JarvisNavigationModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var animation: Animation? {
-        reduceMotion ? nil : .interactiveSpring(
-            response: JarvisDesignTokens.sidebarSpringResponse,
-            dampingFraction: JarvisDesignTokens.sidebarSpringDamping
-        )
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            let drawerWidth = min(
-                geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
-                JarvisDesignTokens.sidebarMaximumWidth
-            )
-            ZStack(alignment: .trailing) {
-                if navigation.isSidebarOpen {
-                    Color.black.opacity(JarvisDesignTokens.screenDimOpacity)
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture { navigation.closeSidebar() }
-                        .accessibilityHidden(true)
-
-                    JarvisSidebar(
-                        currentDestination: navigation.currentDestination,
-                        safeAreaInsets: ContentView.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets),
-                        onNavigate: { navigation.navigate(to: $0) }
-                    )
-                    .frame(width: drawerWidth, height: geometry.size.height)
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
-                }
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
-        }
-        .ignoresSafeArea(.container)
-        .allowsHitTesting(navigation.isSidebarOpen)
-        .animation(animation, value: navigation.isSidebarOpen)
-    }
-}
-
 struct JarvisSidebar: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
@@ -131,7 +87,7 @@ struct JarvisSidebar: View {
         .accessibilityIdentifier("navigation.sidebar")
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
-            navigation.closeSidebar()
+            navigation.closeSidebar(caller: .sidebarAccessibility)
         }
         .environment(\.locale, language.locale)
     }

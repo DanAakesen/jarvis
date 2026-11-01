@@ -336,6 +336,9 @@ private final class JarvisGateModel: ObservableObject {
 
 struct JarvisGateRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("jarvis.appTheme") private var storedTheme = "system"
+    @State private var drawerWindowSize: CGSize?
     @StateObject private var model = JarvisGateModel()
     @StateObject private var navigation = JarvisNavigationModel(
         initialState: ContentView.initialNavigation(),
@@ -363,28 +366,68 @@ struct JarvisGateRootView: View {
             }
             // Only sign-out discards the shell; sign-in resets session content explicitly.
             .id(model.signOutGeneration)
-
-            JarvisSidebarDrawerLayer()
-                .zIndex(1)
-        }
             .environmentObject(navigation)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
             .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
-            .overlay(alignment: .bottom) {
-                JarvisNavigationDebugBadge(navigation: navigation)
+            // The drawer is above the shell, but cannot surpass the separate alert+1 privacy window.
+            ZStack(alignment: .trailing) {
+               if navigation.isSidebarOpen && !model.shouldCoverContent {
+                   ZStack(alignment: .trailing) {
+                       Color.black.opacity(JarvisDesignTokens.screenDimOpacity)
+                           .ignoresSafeArea()
+                           .contentShape(Rectangle())
+                           .onTapGesture { navigation.closeSidebar(caller: .rootDrawer) }
+                           .accessibilityHidden(true)
+
+                       JarvisSidebar(
+                           currentDestination: navigation.currentDestination,
+                           safeAreaInsets: drawerSafeAreaInsets,
+                           onNavigate: { navigation.navigate(to: $0, caller: .rootDrawer) }
+                       )
+                       .frame(
+                           width: min(
+                               drawerSize.width * JarvisDesignTokens.sidebarWidthFraction,
+                               JarvisDesignTokens.sidebarMaximumWidth
+                           ),
+                           height: drawerSize.height
+                       )
+                       .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                   }
+                   .transition(.opacity)
+               }
+
+               // TEMP owner shipping preview, including device Release. Remove before merge.
+               JarvisSidebarDebugBadge(navigation: navigation)
+                   .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                   .padding(.bottom, drawerSafeAreaInsets.bottom + 96)
+                   .zIndex(1)
             }
-            .task {
+            .frame(width: drawerSize.width, height: drawerSize.height)
+            .ignoresSafeArea(.container)
+            .environmentObject(navigation)
+            .animation(model.shouldCoverContent ? nil : sidebarAnimation, value: navigation.isSidebarOpen)
+            .transaction { if model.shouldCoverContent { $0.disablesAnimations = true } }
+            .zIndex(1000)
+        }
+        .ignoresSafeArea(.container)
+        .preferredColorScheme(storedTheme == "light" ? .light : storedTheme == "dark" ? .dark : nil)
+        .onGeometryChange(for: CGSize.self) { geometry in
+            geometry.size
+        } action: { _ in
+            drawerWindowSize = ContentView.keyWindow?.bounds.size ?? UIScreen.main.bounds.size
+        }
+        .task {
                 model.refreshOverlay()
                 await model.load()
                 model.refreshOverlay()
             }
             .onChange(of: model.signOutGeneration) { _, _ in
-                navigation.reset()
+                navigation.reset(caller: .gateSignOut)
             }
             .onChange(of: model.shouldCoverContent) { _, covered in
-                if covered { navigation.closeSidebar() }
+                if covered { navigation.closeSidebar(caller: .gateCover) }
                 model.refreshOverlay()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -397,27 +440,43 @@ struct JarvisGateRootView: View {
                 Task { await model.signOut() }
             }
     }
+
+    private var drawerSize: CGSize {
+        drawerWindowSize ?? ContentView.keyWindow?.bounds.size ?? UIScreen.main.bounds.size
+    }
+
+    private var drawerSafeAreaInsets: EdgeInsets {
+        ContentView.resolvedSafeAreaInsets(fallback: EdgeInsets())
+    }
+
+    private var sidebarAnimation: Animation? {
+        reduceMotion ? nil : .interactiveSpring(
+            response: JarvisDesignTokens.sidebarSpringResponse,
+            dampingFraction: JarvisDesignTokens.sidebarSpringDamping
+        )
+    }
 }
 
-/// TEMPORARY: always-visible navigation state for on-device diagnosis. Remove once the sidebar opens.
-private struct JarvisNavigationDebugBadge: View {
+private struct JarvisSidebarDebugBadge: View {
     @ObservedObject var navigation: JarvisNavigationModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("sidebar open=\(navigation.isSidebarOpen ? "true" : "false") taps=\(navigation.openTapCount)")
-            ForEach(Array(navigation.recentSidebarWrites.enumerated()), id: \.offset) { _, write in
-                Text(write)
-            }
-        }
-        .font(.system(size: 10, design: .monospaced))
-        .foregroundStyle(.primary)
-        .padding(4)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-        .padding(.bottom, 2)
-        .allowsHitTesting(false)
-        .accessibilityIdentifier("debug.navigation")
-        .zIndex(2)
+        Text(navigation.sidebarDiagnostics.badgeText(isSidebarOpen: navigation.isSidebarOpen))
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.white)
+            .padding(4)
+            .background(.black.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+            .allowsHitTesting(false)
+            .accessibilityIdentifier("debug.sidebar.trace")
+            .accessibilityHidden(!Self.exposesTestValue)
+    }
+
+    private static var exposesTestValue: Bool {
+#if targetEnvironment(simulator)
+        ProcessInfo.processInfo.arguments.contains("--ui-test-navigation")
+#else
+        false
+#endif
     }
 }
 

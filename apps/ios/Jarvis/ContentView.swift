@@ -138,6 +138,9 @@ struct ContentView: View {
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
         .onDisappear { workspaceRuntime.resetSession() }
+        .onReceive(navigation.navigationRequested) { request in
+            prepareNavigation(to: request.to, from: request.from)
+        }
     }
 
     private func sidebarShell(
@@ -153,7 +156,7 @@ struct ContentView: View {
                     path: Binding(
                         get: { navigation.path },
                         set: {
-                            navigation.setPath($0)
+                            navigation.setPath($0, caller: .pathBinding)
                         }
                     )
                 ) {
@@ -250,9 +253,6 @@ struct ContentView: View {
                     guard appliedSessionEpoch == sessionEpoch else { return }
                     navigation.voiceSessionStateChanged(state)
                 }
-                .onChange(of: navigation.currentDestination) { previous, destination in
-                    destinationChanged(from: previous, to: destination)
-                }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
                     guard destination != nil,
                           let destination = workspaceRuntime.consumeRequestedDestination() else {
@@ -274,7 +274,7 @@ struct ContentView: View {
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {
-                    navigation.openSidebar()
+                    navigation.openSidebar(caller: .contentAccessibility)
                 }
                 .accessibilityHidden(navigation.isSidebarOpen)
 
@@ -310,7 +310,7 @@ struct ContentView: View {
                 if phase != .active {
                     var transaction = Transaction()
                     transaction.disablesAnimations = true
-                    withTransaction(transaction) { navigation.closeSidebar() }
+                    withTransaction(transaction) { navigation.closeSidebar(caller: .scenePhase) }
                 }
             }
     }
@@ -323,7 +323,7 @@ struct ContentView: View {
         }
     }
 
-    private static var keyWindow: UIWindow? {
+    static var keyWindow: UIWindow? {
         UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap(\.windows)
@@ -361,30 +361,30 @@ struct ContentView: View {
                       ),
                       -value.translation.width / max(drawerWidth, 1)
                         > JarvisDesignTokens.sidebarOpenThreshold else { return }
-                navigation.openSidebar()
+                navigation.openSidebar(caller: .edge)
             }
     }
 
     private func navigate(to destination: JarvisDestination) {
-        navigation.navigate(to: destination)
+        navigation.navigate(to: destination, caller: .contentNavigate)
     }
 
-    // Every destination change, from the root-owned drawer or from a screen, passes through here.
-    private func destinationChanged(from previous: JarvisDestination, to destination: JarvisDestination) {
+    private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
         if destination == .voice {
             voiceModel.restore()
         } else if previous == .voice && voiceModel.isSessionActive {
             voiceModel.minimize()
         }
-        guard navigationFixtureMode else { return }
-        switch destination {
-        case .notes:
-            notesClient = Self.makeNotesClient(fixtureMode: true)
-        case .health:
-            healthClient = try? JarvisHealthLiftFixture.makeClient(language: language, empty: false)
-        case .softwareFactory:
-            factoryClient = Self.makeFactoryClient(previewState: .board, fixtureMode: true)
-        default: break
+        if navigationFixtureMode {
+            switch destination {
+            case .notes:
+                notesClient = Self.makeNotesClient(fixtureMode: true)
+            case .health:
+                healthClient = try? JarvisHealthLiftFixture.makeClient(language: language, empty: false)
+            case .softwareFactory:
+                factoryClient = Self.makeFactoryClient(previewState: .board, fixtureMode: true)
+            default: break
+            }
         }
     }
 

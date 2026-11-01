@@ -127,6 +127,56 @@ public struct JarvisNavigationState: Equatable {
     }
 }
 
+public struct JarvisNavigationPathUpdate {
+    public let state: JarvisNavigationState
+    public let navigationRequest: (from: JarvisDestination, to: JarvisDestination)?
+
+    public init(path: [JarvisDestination], from previous: JarvisNavigationState) {
+        var next = previous
+        next.setPath(path)
+        if next.path != previous.path { next.closeSidebar() }
+        state = next
+        navigationRequest = next.currentDestination != previous.currentDestination
+            ? (from: previous.currentDestination, to: next.currentDestination)
+            : nil
+    }
+}
+
+// TEMP owner-preview diagnostics. Remove the badge and this trace before merge.
+public enum JarvisSidebarWriter: String {
+    case initial, menu, edge, contentAccessibility, sidebarAccessibility, pathBinding
+    case contentNavigate, rootDrawer, voiceState, voiceEnded, sessionReset
+    case scenePhase, gateCover, gateSignOut
+}
+
+public struct JarvisSidebarWrite: Equatable {
+    public let caller: JarvisSidebarWriter
+    public let requested: Bool
+    public let before: Bool
+    public let after: Bool
+}
+
+public struct JarvisSidebarDiagnostics: Equatable {
+    public private(set) var buttonTapCount = 0
+    public private(set) var writes: [JarvisSidebarWrite] = []
+
+    public init() {}
+
+    public mutating func record(caller: JarvisSidebarWriter, requested: Bool, before: Bool, after: Bool) {
+        if caller == .menu { buttonTapCount += 1 }
+        writes.append(JarvisSidebarWrite(caller: caller, requested: requested, before: before, after: after))
+        writes = Array(writes.suffix(3))
+    }
+
+    public func badgeText(isSidebarOpen: Bool) -> String {
+        let lastWriter = writes.last?.caller.rawValue ?? "none"
+        let history = writes.map {
+            "\($0.caller.rawValue) req=\($0.requested) \($0.before)→\($0.after)"
+        }.joined(separator: "\n")
+        return "TEMP isSidebarOpen=\(isSidebarOpen) taps=\(buttonTapCount) last=\(lastWriter)\n\(history)"
+    }
+}
+
 public enum JarvisSidebarGesturePolicy {
     public static func canBegin(
         startX: Double,

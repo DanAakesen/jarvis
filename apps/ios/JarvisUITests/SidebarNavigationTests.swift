@@ -57,6 +57,9 @@ final class SidebarNavigationTests: XCTestCase {
 
         let sidebar = app.otherElements.matching(identifier: "navigation.sidebar").element
         XCTAssertFalse(sidebar.exists)
+        let trace = app.staticTexts["debug.sidebar.trace"]
+        XCTAssertTrue(trace.exists)
+        XCTAssertTrue(trace.label.contains("isSidebarOpen=false taps=0"))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let opened = NSPredicate { _, _ in
             sidebar.exists && sidebar.isHittable && !sidebar.frame.isEmpty
@@ -71,5 +74,7 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertTrue(sidebar.exists)
         XCTAssertTrue(sidebar.isHittable)
         XCTAssertTrue(app.buttons["navigation.chat"].isHittable)
+        XCTAssertTrue(trace.label.contains("isSidebarOpen=true taps=1"))
+        XCTAssertTrue(trace.label.contains("menu req=true false→true"))
     }
 }

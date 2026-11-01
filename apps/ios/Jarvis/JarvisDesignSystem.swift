@@ -15,7 +15,7 @@ struct JarvisSidebarMenuButton: View {
 
     var body: some View {
         Button {
-            navigation.openSidebar()
+            navigation.openSidebar(caller: .menu)
         } label: {
             Image(systemName: "sidebar.trailing")
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
