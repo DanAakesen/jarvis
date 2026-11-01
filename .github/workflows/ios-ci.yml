@@ -138,6 +138,10 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-chat-fixture --screenshot-chat-plus-menu
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-plus-menu-light.png"
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"
@@ -184,7 +188,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, open-sidebar, and Factory screenshots]($ARTIFACT_URL)
+          [Download the light, dark, Chat plus menu, open-sidebar, and Factory screenshots]($ARTIFACT_URL)
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
