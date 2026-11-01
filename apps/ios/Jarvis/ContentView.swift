@@ -265,6 +265,7 @@ struct ContentView: View {
                 .overlay {
                     Color.black
                         .opacity(progress * JarvisDesignTokens.screenDimOpacity)
+                        .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
