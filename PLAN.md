@@ -2139,7 +2139,10 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   token/update delivery are implemented. Targeted Core tests and metadata checks
   pass locally. Backend focused tests, lint/build and contract checks pass;
   SQL integration is blocked by missing isolated loopback configuration.
-  Next: finish security review, then ready-PR Apple compilation, APNs
+  CodeQL Actions reports no alerts; Swift database creation failed and JavaScript
+  analysis was skipped for database size. Source review covers the changed
+  boundaries; SQL and live delivery remain unverified.
+  Next: ready-PR Apple compilation, APNs
   configuration/migrations 0071–0072/provisioning and a
   locked-iPhone trial. No deployment or physical-device acceptance is claimed.
 

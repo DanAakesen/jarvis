@@ -218,6 +218,7 @@ struct JarvisTaskActivityNotice: View {
                         JarvisFactoryLocalization.string(.openSettings, language: language),
                         destination: settingsURL
                     )
+                    .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget, alignment: .leading)
                 }
             }
             .padding()

@@ -6529,6 +6529,12 @@ Deploy migrations `0071_activitykit_registrations.sql` and
 The latter preserves the synchronous forecast contract but allows a saved
 `html_app:` result link to survive a lost Workspace acknowledgement. Saved results
 and display delivery are separate states; rollback refuses to discard those links.
+Local validation passes the 202-test Core suite, project/plist metadata and focused
+backend/contracts checks with backend lint/build. SQL integration is blocked by
+the required isolated loopback configuration. CodeQL Actions reports no alerts;
+Swift database creation failed and JavaScript analysis was skipped for database
+size, so neither analysis is claimed as passed. Source review and secret scans
+are separate checks, not substitutes for the pending Apple/device acceptance.
 
 P15-16 adds `JarvisGatePolicy` to pure-Swift `JarvisCore`; its Linux tests cover
 cold start, the 60-second background threshold, missing/expired sessions, denied

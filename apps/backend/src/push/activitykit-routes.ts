@@ -114,7 +114,10 @@ export function registerActivityKitRoutes<Logger extends FastifyBaseLogger>(
           continue;
         }
         const isTerminal = ['done', 'failed', 'cancelled'].includes(phase);
-        if (isTerminal) terminal.add(key(resource));
+        if (isTerminal) {
+          if (!terminal.has(key(resource))) retries.delete(key(resource));
+          terminal.add(key(resource));
+        }
         else terminal.delete(key(resource));
         if (isTerminal && (retries.get(key(resource))?.count ?? 0) >= 3) continue;
         let retryable = false;
@@ -150,7 +153,7 @@ export function registerActivityKitRoutes<Logger extends FastifyBaseLogger>(
   function retry(resource: Resource) {
     if (stopping) return;
     const count = (retries.get(key(resource))?.count ?? 0) + 1;
-    const at = Date.now() + 5000 * 2 ** (count - 1);
+    const at = Date.now() + (count < 3 ? 5000 * 2 ** (count - 1) : 0);
     retries.set(key(resource), { count, at });
     if (count < 3) pending.set(key(resource), resource);
     else app.log.warn('activitykit.push_retry_exhausted');

@@ -251,6 +251,26 @@ describe('ActivityKit owner registration', () => {
     expect(f.send.mock.calls[1]?.[1]).toMatchObject({ phase: 'failed', activity: null });
     expect(f.rows.size).toBe(0);
   });
+  it('sends terminal completion after exhausting running-phase retries when APNs recovers', async () => {
+    const f = fixture();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    await f.app.ready();
+    const job = await f.app.backgroundJobs.start('research', 'Private title', 2);
+    f.send.mockResolvedValue({ accepted: false, invalidToken: false, retryable: true });
+    await post(f.app, { ...registration, resourceId: job.jobId });
+    await vi.advanceTimersByTimeAsync(16_000);
+    expect(f.send).toHaveBeenCalledTimes(3);
+    expect(f.rows.size).toBe(1);
+    f.send.mockResolvedValue({ accepted: true, invalidToken: false });
+    await job.done('result');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(f.send).toHaveBeenCalledTimes(4);
+    expect(f.send.mock.calls[3]?.[1]).toMatchObject({ phase: 'done', activity: null });
+    expect(f.store.remove).toHaveBeenCalledWith(config.auth.ownerObjectId, registration.activityId, token);
+    expect(f.rows.size).toBe(0);
+    await vi.advanceTimersByTimeAsync(240_000);
+    expect(f.send).toHaveBeenCalledTimes(4);
+  });
   it('heartbeats registered running jobs before the five-minute stale date even without events', async () => {
     const f = fixture();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
