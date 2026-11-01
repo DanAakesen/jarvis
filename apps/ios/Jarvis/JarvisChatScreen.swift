@@ -1,3 +1,4 @@
+import Foundation
 import JarvisCore
 import PhotosUI
 import SwiftUI
@@ -325,16 +326,14 @@ struct JarvisChatScreen: View {
                                 .foregroundStyle(tool.outcome == .ok ? Color.secondary : Color.orange)
                                 .accessibilityHidden(true)
                             Text(tool.tool.replacingOccurrences(of: "_", with: " "))
-                            Spacer(minLength: 0)
                             Text(tool.outcome.rawValue.capitalized)
                                 .foregroundStyle(.secondary)
                         }
                         .font(.caption)
+                        .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .padding(.vertical, JarvisDesignTokens.chatGlassInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !row.message.attachments.isEmpty {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -361,7 +360,7 @@ struct JarvisChatScreen: View {
             style: .continuous
         )
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(text)
+            Text(messageText(text, role: role))
                 .font(.body)
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
@@ -404,6 +403,14 @@ struct JarvisChatScreen: View {
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(isUser ? "You" : "Jarvis"): \(text)")
+    }
+
+    private func messageText(_ text: String, role: ConversationRole) -> AttributedString {
+        guard role == .jarvis,
+              let markdown = try? AttributedString(markdown: text) else {
+            return AttributedString(text)
+        }
+        return markdown
     }
 
     private var composer: some View {
