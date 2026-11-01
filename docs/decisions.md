@@ -10368,3 +10368,15 @@ five-second-delay menu tests were folded into the English menu test. The item te
 waits for `factory.segment.board` (always rendered) and puts the temporary on-screen
 navigation trace (`debug.navigation.trace`) in its failure message. The cause of the
 non-navigating item is still unconfirmed.
+
+## 2026-11-01: Sidebar drawer above the page, clipped to the revealed strip (P15-41)
+
+CI run 41351802814 showed the drawer never became hittable after a menu tap and
+the item tap never left Chat. The drawer sat *behind* the page in z-order, so a
+page layer (the close-tap catcher) could take row taps and only close the drawer.
+The drawer is now drawn above the page and clipped to the strip the page has
+uncovered, so it looks revealed but no page layer can cover its rows. The trace
+element is queried without a type, the container is no longer required to be
+hittable (its rows are), and per-test time allowances are 120/150 s because a
+cold simulator launch took 38 s. Unconfirmed on device until the next preview
+build; the temporary debug line stays until Dan confirms.
