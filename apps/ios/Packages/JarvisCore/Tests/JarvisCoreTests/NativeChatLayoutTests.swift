@@ -76,6 +76,14 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(contentView.contains(".frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)"))
     }
 
+    func testVoiceStateChangeIsFactoredOutOfNavigationViewBuilder() throws {
+        let contentView = try source("apps/ios/Jarvis/ContentView.swift")
+        XCTAssertTrue(contentView.contains("handleVoiceStateChange(state)"))
+        XCTAssertTrue(contentView.contains("private func handleVoiceStateChange(_ state: VoiceSessionState)"))
+        XCTAssertTrue(contentView.contains("let endedState: VoiceSessionState = .ended"))
+        XCTAssertTrue(contentView.contains("let shouldCloseSidebar: Bool = state == endedState"))
+    }
+
     func testSimulatorArtifactContainsBaseAndUpdatedChatCaptures() throws {
         let workflow = try source(".github/workflows/ios-ci.yml")
         XCTAssertTrue(workflow.contains(#"git show "$BASE_SHA:apps/ios/Jarvis/JarvisChatScreen.swift""#))

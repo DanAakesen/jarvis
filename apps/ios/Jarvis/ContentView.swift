@@ -242,8 +242,7 @@ struct ContentView: View {
                 .tint(JarvisDesignTokens.primaryAccent)
                 .task { await workspaceRuntime.run() }
                 .onChange(of: voiceModel.voiceState) { _, state in
-                    navigation.voiceSessionStateChanged(state)
-                    if state == .ended { setSidebarOpen(false) }
+                    handleVoiceStateChange(state)
                 }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
                     guard destination != nil,
@@ -444,6 +443,15 @@ struct ContentView: View {
         }
         navigation.setSidebarOpen(open)
         animateSidebar(to: open ? 1 : 0)
+    }
+
+    private func handleVoiceStateChange(_ state: VoiceSessionState) {
+        let endedState: VoiceSessionState = .ended
+        let shouldCloseSidebar: Bool = state == endedState
+        navigation.voiceSessionStateChanged(state)
+        if shouldCloseSidebar {
+            setSidebarOpen(false)
+        }
     }
 
     private func navigate(to destination: JarvisDestination, drawerWidth: CGFloat) {
