@@ -7,10 +7,11 @@ retain the last selection in app-session memory. Reuse stone secondary and
 restrained orange primary accents; localize every control and accessibility name
 in Danish and English without helper copy.
 
-Simulator UI tests exercise the photo sheet, switch and video tile in both
-languages when a camera exists. A camera-less simulator records its unavailable
-state and skips hardware-dependent assertions; CI exports the test screenshots
-with the existing simulator artifact.
+Simulator UI tests use a deterministic camera fixture to exercise the photo
+sheet, switch, lens choices and video tile in both languages without hardware.
+The fixture displays a placeholder preview and disables photo capture; production
+camera access and device discovery remain unchanged. CI exports the test
+screenshots with the existing simulator artifact.
 
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 

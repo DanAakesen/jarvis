@@ -507,6 +507,7 @@ struct JarvisChatScreen: View {
                 .buttonStyle(.glass)
                 .disabled(model.isSending || isPreparingCamera)
                 .accessibilityLabel(copy(.plusMenuLabel))
+                .accessibilityIdentifier("chat.plus.menu")
                 .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
                 .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
                 .popover(
@@ -588,6 +589,7 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 isScreenSharing ? copy(.stopSharingScreen) : copy(.shareScreen),
                 symbol: isScreenSharing ? "stop.circle" : "rectangle.on.rectangle",
+                identifier: "chat.plus.screen-sharing",
                 disabled: model.fixtureMode || isPreparingCamera,
                 hint: model.fixtureMode ? copy(.screenSharingUnavailable) : "",
                 action: {
@@ -597,6 +599,7 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 isVideoEnabled ? copy(.disableVideo) : copy(.enableVideo),
                 symbol: isVideoEnabled ? "video.slash" : "video",
+                identifier: "chat.plus.video",
                 disabled: model.fixtureMode && !allowCameraInFixture,
                 hint: model.fixtureMode && !allowCameraInFixture ? copy(.videoUnavailable) : "",
                 action: toggleVideo
@@ -604,6 +607,7 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 copy(.attach),
                 symbol: "paperclip",
+                identifier: "chat.plus.attach",
                 disabled: model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
                 hint: addAttachmentHint,
                 action: { attachmentDialog = true }
@@ -611,6 +615,7 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 copy(.camera),
                 symbol: "camera",
+                identifier: "chat.plus.camera",
                 disabled: (model.fixtureMode && !allowCameraInFixture)
                     || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
                 hint: addAttachmentHint,
@@ -675,6 +680,7 @@ struct JarvisChatScreen: View {
     private func plusMenuButton(
         _ title: String,
         symbol: String,
+        identifier: String,
         disabled: Bool = false,
         hint: String = "",
         action: @escaping () -> Void
@@ -693,6 +699,7 @@ struct JarvisChatScreen: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled || isPreparingCamera)
+        .accessibilityIdentifier(identifier)
         .accessibilityHint(isPreparingCamera ? copy(.cameraStarting) : hint)
     }
 
@@ -759,11 +766,12 @@ struct JarvisChatScreen: View {
     }
 
     private func makeCameraCapture() async -> VoiceCameraCapture? {
-        guard await VoiceCameraCapture.requestAccess() else {
+        let simulatorFixtureMode = model.fixtureMode && allowCameraInFixture
+        if !simulatorFixtureMode, !(await VoiceCameraCapture.requestAccess()) {
             model.actionError = copy(.cameraPermissionDenied)
             return nil
         }
-        let capture = VoiceCameraCapture()
+        let capture = VoiceCameraCapture(simulatorFixtureMode: simulatorFixtureMode)
         do {
             try capture.start()
             model.actionError = nil
@@ -1063,9 +1071,15 @@ private struct JarvisChatCameraSheet: View {
     var body: some View {
         ZStack {
             JarvisScreenBackground()
-            VoiceCameraPreview(session: camera.session)
-                .ignoresSafeArea()
-                .accessibilityLabel(copy(.cameraPreview))
+            Group {
+                if camera.isSimulatorFixture {
+                    JarvisCameraPlaceholderPreview(label: copy(.cameraPreview))
+                } else {
+                    VoiceCameraPreview(session: camera.session)
+                        .accessibilityLabel(copy(.cameraPreview))
+                }
+            }
+            .ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack {
                     JarvisCameraOptions(camera: camera, language: language, isDisabled: isCapturingPhoto)
@@ -1096,7 +1110,7 @@ private struct JarvisChatCameraSheet: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(isCapturingPhoto)
+                .disabled(isCapturingPhoto || camera.isSimulatorFixture)
                 .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
                 .accessibilityIdentifier("camera.capture")
                 .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
@@ -1118,7 +1132,13 @@ private struct JarvisCameraPreviewTile: View {
     }
 
     var body: some View {
-        VoiceCameraPreview(session: camera.session)
+        Group {
+            if camera.isSimulatorFixture {
+                JarvisCameraPlaceholderPreview(label: copy(.cameraPreview))
+            } else {
+                VoiceCameraPreview(session: camera.session)
+            }
+        }
             .frame(
                 width: JarvisDesignTokens.chatCameraPreviewWidth,
                 height: JarvisDesignTokens.chatCameraPreviewHeight
@@ -1160,6 +1180,23 @@ private struct JarvisCameraPreviewTile: View {
             .accessibilityLabel(copy(.videoOn))
             .accessibilityIdentifier("camera.preview")
             .accessibilityElement(children: .contain)
+    }
+}
+
+private struct JarvisCameraPlaceholderPreview: View {
+    let label: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.82)
+            Image(systemName: "camera.fill")
+                .font(.title2)
+                .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("camera.preview.placeholder")
     }
 }
 

@@ -58,6 +58,7 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     private let context = CIContext()
     private let output = AVCaptureVideoDataOutput()
     private let stillPhotoOutput = AVCapturePhotoOutput()
+    private let simulatorFixtureMode: Bool
     private let lock = NSLock()
     private var latestJPEG: Data?
     private var photoContinuation: CheckedContinuation<Data, any Error>?
@@ -66,8 +67,9 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     private var activePosition: AVCaptureDevice.Position = .back
     private var selectedLenses: [AVCaptureDevice.Position: VoiceCameraLens] = [:]
 
-    override init() {
-        devicesByPosition = [
+    init(simulatorFixtureMode: Bool = false) {
+        self.simulatorFixtureMode = simulatorFixtureMode
+        devicesByPosition = simulatorFixtureMode ? [:] : [
             .back: AVCaptureDevice.DiscoverySession(
                 deviceTypes: Self.backCameraTypes,
                 mediaType: .video,
@@ -81,6 +83,8 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         ]
         super.init()
     }
+
+    var isSimulatorFixture: Bool { simulatorFixtureMode }
 
     var position: AVCaptureDevice.Position {
         queue.sync { activePosition }
@@ -120,6 +124,19 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     func start() throws {
         var result: Result<Void, any Error> = .success(())
         queue.sync {
+            if simulatorFixtureMode {
+                let positions = self.availablePositions
+                let position = Self.preferences.position().flatMap {
+                    positions.contains($0) ? $0 : nil
+                } ?? .back
+                let lens = Self.preferences.lens(for: position).flatMap {
+                    self.availableLenses(for: position).contains($0) ? $0 : nil
+                } ?? .wide
+                activePosition = position
+                selectedLenses[position] = lens
+                Self.preferences.select(position: position, lens: lens)
+                return
+            }
             session.beginConfiguration()
             do {
                 session.sessionPreset = .high
@@ -173,6 +190,12 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                       }) ?? self.preferredLens(for: position) else {
                     throw VoiceCameraError.unavailable
                 }
+                if self.simulatorFixtureMode {
+                    self.activePosition = position
+                    self.selectedLenses[position] = lens
+                    Self.preferences.select(position: position, lens: lens)
+                    return
+                }
                 try self.replaceVideoInput(position: position, lens: lens)
             }
         }
@@ -185,6 +208,11 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
             result = Result {
                 guard self.availableLenses(for: self.activePosition).contains(lens) else {
                     throw VoiceCameraError.unavailable
+                }
+                if self.simulatorFixtureMode {
+                    self.selectedLenses[self.activePosition] = lens
+                    Self.preferences.select(position: self.activePosition, lens: lens)
+                    return
                 }
                 try self.replaceVideoInput(position: self.activePosition, lens: lens)
             }
@@ -333,10 +361,14 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     }
 
     private var availablePositions: [AVCaptureDevice.Position] {
+        if simulatorFixtureMode { return [.back, .front] }
         [AVCaptureDevice.Position.back, .front].filter { !cameraDevices(for: $0).isEmpty }
     }
 
     private func availableLenses(for position: AVCaptureDevice.Position) -> [VoiceCameraLens] {
+        if simulatorFixtureMode {
+            return position == .back ? VoiceCameraLens.allCases : [.wide]
+        }
         let types = Set(cameraDevices(for: position).map(\.deviceType))
         return VoiceCameraLens.allCases.filter { lens in
             if position == .front, lens == .wide {

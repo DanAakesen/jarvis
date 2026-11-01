@@ -3,37 +3,23 @@ import XCTest
 
 final class CameraSheetUITests: XCTestCase {
     @MainActor
-    func testCameraAndVideoSheetsExposeCameraControlsInDanishAndEnglish() throws {
-        let backCamera = hasCamera(at: .back)
-        let frontCamera = hasCamera(at: .front)
-        guard backCamera || frontCamera else {
-            let app = launch(language: "en")
-            let addToMessage = app.buttons["plus"]
-            XCTAssertTrue(addToMessage.waitForExistence(timeout: 10))
-            addToMessage.tap()
-            let cameraOption = app.buttons.matching(
-                NSPredicate(format: "label IN %@", ["Camera", "Kamera"])
-            ).firstMatch
-            XCTAssertTrue(cameraOption.waitForExistence(timeout: 5))
-            cameraOption.tap()
-            allowCameraIfRequested(in: app)
-            attachScreenshot(from: app, named: "camera-unavailable")
-            throw XCTSkip("The simulator does not expose a camera device.")
-        }
-
+    func testCameraAndVideoSheetsExposeCameraControlsInDanishAndEnglish() {
         for language in ["da", "en"] {
             let labels = CameraLabels(language: language)
             let app = launch(language: language)
-            XCTAssertTrue(app.buttons[labels.addToMessage].waitForExistence(timeout: 10))
-            app.buttons[labels.addToMessage].tap()
-            app.buttons[labels.camera].tap()
-            allowCameraIfRequested(in: app)
+            let addToMessage = app.buttons["chat.plus.menu"]
+            XCTAssertTrue(addToMessage.waitForExistence(timeout: 10))
+            XCTAssertEqual(addToMessage.label, labels.addToMessage)
+            addToMessage.tap()
+            let cameraOption = app.buttons["chat.plus.camera"]
+            XCTAssertTrue(cameraOption.waitForExistence(timeout: 5))
+            XCTAssertEqual(cameraOption.label, labels.camera)
+            cameraOption.tap()
 
             let captureButton = app.buttons["camera.capture"]
-            guard captureButton.waitForExistence(timeout: 10) else {
-                attachScreenshot(from: app, named: "camera-unavailable-\(language)")
-                throw XCTSkip("The simulator camera could not start.")
-            }
+            XCTAssertTrue(captureButton.waitForExistence(timeout: 10))
+            XCTAssertFalse(captureButton.isEnabled)
+            XCTAssertTrue(app.descendants(matching: .any)["camera.preview.placeholder"].exists)
 
             XCTAssertTrue(app.buttons["camera.lens"].exists)
             XCTAssertEqual(app.buttons["camera.lens"].label, labels.cameraLens)
@@ -41,40 +27,31 @@ final class CameraSheetUITests: XCTestCase {
             let rememberedBackLens = assertLensOptions(
                 in: app,
                 labels: labels,
-                position: backCamera ? .back : .front
+                position: .back
             )
-            let switchedToFront = exerciseCameraSwitchIfAvailable(
+            exerciseCameraSwitch(
                 in: app,
                 labels: labels,
-                hasBothPositions: backCamera && frontCamera,
                 screenshotSuffix: language
             )
-            if switchedToFront {
-                assertLensOptions(in: app, labels: labels, position: .front)
-            }
+            assertLensOptions(in: app, labels: labels, position: .front)
 
             app.buttons["camera.stop"].tap()
-            app.buttons[labels.addToMessage].tap()
-            app.buttons[labels.enableVideo].tap()
+            addToMessage.tap()
+            app.buttons["chat.plus.video"].tap()
 
             let stopVideoButton = app.buttons["camera.stop"]
-            guard stopVideoButton.waitForExistence(timeout: 10),
-                  app.buttons["camera.lens"].waitForExistence(timeout: 3) else {
-                attachScreenshot(from: app, named: "video-unavailable-\(language)")
-                throw XCTSkip("The simulator camera could not start the video preview.")
-            }
+            XCTAssertTrue(stopVideoButton.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["camera.lens"].waitForExistence(timeout: 3))
             XCTAssertEqual(stopVideoButton.label, labels.disableVideo)
-            XCTAssertTrue(app.buttons["camera.lens"].exists)
+            XCTAssertTrue(app.descendants(matching: .any)["camera.preview.placeholder"].exists)
             attachScreenshot(from: app, named: "video-preview-\(language)")
-            let switchedBackToBack = exerciseCameraSwitchIfAvailable(
+            exerciseCameraSwitch(
                 in: app,
                 labels: labels,
-                hasBothPositions: backCamera && frontCamera,
                 screenshotSuffix: "video-\(language)"
             )
-            if switchedToFront && switchedBackToBack {
-                XCTAssertEqual(app.buttons["camera.lens"].value as? String, rememberedBackLens)
-            }
+            XCTAssertEqual(app.buttons["camera.lens"].value as? String, rememberedBackLens)
             stopVideoButton.tap()
             app.terminate()
         }
@@ -89,32 +66,12 @@ final class CameraSheetUITests: XCTestCase {
     }
 
     @MainActor
-    private func allowCameraIfRequested(in app: XCUIApplication) {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        for alerts in [springboard.alerts, app.alerts] {
-            let allowButton = alerts.buttons.matching(
-                NSPredicate(format: "label BEGINSWITH[c] %@", "Allow")
-            ).firstMatch
-            if allowButton.waitForExistence(timeout: 3) {
-                allowButton.tap()
-                return
-            }
-        }
-    }
-
-    @MainActor
-    private func exerciseCameraSwitchIfAvailable(
+    private func exerciseCameraSwitch(
         in app: XCUIApplication,
         labels: CameraLabels,
-        hasBothPositions: Bool,
         screenshotSuffix: String
-    ) -> Bool {
+    ) {
         let switchButton = app.buttons["camera.switch"]
-        guard hasBothPositions else {
-            XCTAssertFalse(switchButton.exists)
-            return false
-        }
-
         XCTAssertTrue(switchButton.waitForExistence(timeout: 5))
         XCTAssertEqual(switchButton.label, labels.switchCamera)
         let originalPosition = switchButton.value as? String
@@ -128,7 +85,6 @@ final class CameraSheetUITests: XCTestCase {
         waitForExpectations(timeout: 5)
         XCTAssertEqual(switchButton.value as? String, expectedPosition)
         attachScreenshot(from: app, named: "camera-switched-\(screenshotSuffix)")
-        return true
     }
 
     @MainActor
@@ -142,28 +98,19 @@ final class CameraSheetUITests: XCTestCase {
         XCTAssertFalse(selectedLens?.isEmpty ?? true)
         lensButton.tap()
 
-        let types = position == .back
-            ? [AVCaptureDevice.DeviceType.builtInUltraWideCamera,
-               .builtInWideAngleCamera,
-               .builtInTelephotoCamera]
-            : [.builtInWideAngleCamera, .builtInTrueDepthCamera]
-        let supportedTypes = Set(AVCaptureDevice.DiscoverySession(
-            deviceTypes: types,
-            mediaType: .video,
-            position: position
-        ).devices.map(\.deviceType))
         let options: [(AVCaptureDevice.DeviceType, String)] = [
             (.builtInUltraWideCamera, labels.ultraWideLens),
             (.builtInWideAngleCamera, labels.wideLens),
             (.builtInTelephotoCamera, labels.telephotoLens),
         ]
-        var supportedTitles: [String] = []
-        for (type, title) in options {
-            let supported = type == .builtInWideAngleCamera && position == .front
-                ? supportedTypes.contains(.builtInWideAngleCamera) || supportedTypes.contains(.builtInTrueDepthCamera)
-                : supportedTypes.contains(type)
-            XCTAssertEqual(app.buttons[title].waitForExistence(timeout: 3), supported, title)
-            if supported { supportedTitles.append(title) }
+        let supportedOptions = position == .back ? options : [options[1]]
+        let supportedTitles = supportedOptions.map { $0.1 }
+        for (_, title) in options {
+            XCTAssertEqual(
+                app.buttons[title].waitForExistence(timeout: 3),
+                supportedTitles.contains(title),
+                title
+            )
         }
         let nextLens = supportedTitles.first(where: { $0 != selectedLens }) ?? selectedLens ?? ""
         app.buttons[nextLens].tap()
@@ -178,17 +125,6 @@ final class CameraSheetUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
-
-    private func hasCamera(at position: AVCaptureDevice.Position) -> Bool {
-        let types: [AVCaptureDevice.DeviceType] = position == .back
-            ? [.builtInUltraWideCamera, .builtInWideAngleCamera, .builtInTelephotoCamera]
-            : [.builtInWideAngleCamera, .builtInTrueDepthCamera]
-        return !AVCaptureDevice.DiscoverySession(
-            deviceTypes: types,
-            mediaType: .video,
-            position: position
-        ).devices.isEmpty
-    }
 }
 
 private struct CameraLabels {
@@ -201,7 +137,6 @@ private struct CameraLabels {
     let ultraWideLens: String
     let wideLens: String
     let telephotoLens: String
-    let enableVideo: String
     let disableVideo: String
 
     init(language: String) {
@@ -215,7 +150,6 @@ private struct CameraLabels {
             ultraWideLens = "Ultravidvinkel"
             wideLens = "Vidvinkel"
             telephotoLens = "Tele"
-            enableVideo = "Slå video til"
             disableVideo = "Slå video fra"
         } else {
             addToMessage = "Add to message"
@@ -227,7 +161,6 @@ private struct CameraLabels {
             ultraWideLens = "Ultra-wide"
             wideLens = "Wide"
             telephotoLens = "Telephoto"
-            enableVideo = "Enable video"
             disableVideo = "Disable video"
         }
     }

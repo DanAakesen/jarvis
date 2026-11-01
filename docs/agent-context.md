@@ -6476,12 +6476,11 @@ Lock Screen task/approval fixture capture.
 
 Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
 checks do not compile SwiftUI. The ready-PR Mac job is the only SwiftUI compile
-check and also runs `JarvisUITests` in the existing simulator boot. The camera UI
-test captures the photo sheet and floating video preview in Danish and English,
-switching cameras when both positions are available; otherwise it records the
-unavailable state and skips hardware-dependent assertions. CI exports XCTest
-attachments into the existing screenshot artifact. Notes-tab/state screenshots
-are not produced by CI.
+check and also runs `JarvisUITests` in the existing simulator boot. The camera
+UI test uses a deterministic no-hardware fixture to capture the photo sheet and
+floating video preview in Danish and English, exercising camera switching and
+supported fixture lenses. CI exports XCTest attachments into the existing
+screenshot artifact. Notes-tab/state screenshots are not produced by CI.
 
 ## P15-36 Lock Screen task and approval surfaces
 
