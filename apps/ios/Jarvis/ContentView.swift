@@ -195,7 +195,12 @@ struct ContentView: View {
                             }
                         }
                 }
+                .tint(JarvisDesignTokens.primaryAccent)
                 .task { await workspaceRuntime.run() }
+                .onChange(of: voiceModel.voiceState) { _, state in
+                    navigation.voiceSessionStateChanged(state)
+                    if state == .ended { setSidebarOpen(false) }
+                }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
                     guard destination != nil,
                           let destination = workspaceRuntime.consumeRequestedDestination() else {
@@ -212,7 +217,7 @@ struct ContentView: View {
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height)
-                .background(Color(uiColor: .systemBackground))
+                .background(JarvisDesignTokens.pageBackground)
                 .overlay {
                     Color.black
                         .opacity(progress * JarvisDesignTokens.screenDimOpacity)
@@ -259,7 +264,7 @@ struct ContentView: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .background(Color(uiColor: .systemBackground))
+            .background(JarvisDesignTokens.pageBackground)
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)

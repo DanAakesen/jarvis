@@ -641,6 +641,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
         self.assertIn("main-light.png", source)
         self.assertIn("main-dark.png", source)
+        self.assertIn("--screenshot-chat-plus-menu", source)
+        self.assertIn("chat-plus-menu-light.png", source)
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
 
@@ -667,6 +669,10 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(
             "--screenshot-sidebar-open",
             (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
+        )
+        self.assertIn(
+            "--screenshot-chat-plus-menu",
+            (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
         )
         capture = next(step for step in job["steps"]
                        if step.get("name") == "Boot iPhone Simulator and capture screenshots")
