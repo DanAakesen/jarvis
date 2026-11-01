@@ -320,9 +320,9 @@ struct ContentView: View {
                 if JarvisAppLanguage(rawValue: storedLanguage) == nil {
                     storedLanguage = JarvisAppLanguage.default.rawValue
                 }
-                .onChange(of: scenePhase) { _, phase in
-                    if phase != .active { setSidebarOpen(false) }
-                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { setSidebarOpen(false) }
             }
         }
         .ignoresSafeArea()
