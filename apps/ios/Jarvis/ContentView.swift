@@ -263,6 +263,7 @@ struct ContentView: View {
                 ) { presented in
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
+                .allowsHitTesting(!navigation.isSidebarOpen)
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .background { JarvisScreenBackground() }
                 .overlay {
@@ -285,6 +286,7 @@ struct ContentView: View {
                 }
                 .offset(x: -drawerWidth * progress)
                 .animation(sidebarAnimation, value: navigation.isSidebarOpen)
+                .accessibilityElement(children: .contain)
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {
@@ -325,7 +327,7 @@ struct ContentView: View {
                 if phase != .active { setSidebarOpen(false) }
             }
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
     }
 

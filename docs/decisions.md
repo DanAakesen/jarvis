@@ -9859,6 +9859,24 @@ authorization. Disable dismissed window input before hiding it and explicitly
 synchronize the overlay after gate loading. The single-window failures still
 require a fresh simulator run; this candidate fix is not device acceptance.
 
+Run [41294736529](https://github.com/DanAakesen/jarvis/actions/runs/41294736529)
+still fails at launch. Its English/interruption hierarchies show one window, no
+keyboard, and an enabled input at `{{104,796},{83.3,22}}`; the Now bar ends above
+it. PR #1491 run 41294540199 also fails composer hittability. Neither observation
+proves a Now-bar overlap. The closed sidebar and decorative ellipses remain in
+the accessibility tree: establish `.contain` boundaries before ancestor hiding
+modifiers so child hiding is preserved. Explicitly gate navigation-host input on
+the sidebar Boolean, exclude composer glass from hit testing, and stop opting
+the live navigation shell out of keyboard safe-area handling. Preserve visuals,
+copy, mounted navigation identity, and all test assertions.
+
+Accessibility snapshots do not identify the UIKit hit recipient. A simulator-only
+navigation-fixture probe therefore logs native hit ancestry, input bounds,
+clipping and interaction flags, never message text, with bounded output. Retain
+the complete failing XCUITest hierarchy in both logs and result attachments.
+These boundary corrections need native verification; do not call the shared
+touch-blocking root cause established until the simulator evidence supports it.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

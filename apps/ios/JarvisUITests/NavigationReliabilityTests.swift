@@ -232,7 +232,9 @@ final class NavigationReliabilityTests: XCTestCase {
 
     private func attachFailureEvidence(_ name: String) {
         attachScreenshot(name)
-        let hierarchy = XCTAttachment(string: app.debugDescription)
+        let description = app.debugDescription
+        print("\(name): accessibility hierarchy\n\(description)")
+        let hierarchy = XCTAttachment(string: description)
         hierarchy.name = "\(name): accessibility hierarchy"
         hierarchy.lifetime = .keepAlways
         add(hierarchy)

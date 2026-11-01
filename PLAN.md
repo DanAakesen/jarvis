@@ -3427,7 +3427,10 @@ Run 41291487261 then stopped at the initial Chat input check; retained evidence
 identifies a login gate covering Chat in Danish and gate-host transition warnings
 in the other launches. A follow-up initializes offline navigation fixtures
 unlocked before rendering and explicitly synchronizes gate-window dismissal.
-Repeated input assertions remain intact. Next: verify the revised
+Run 41294736529 still fails launch input hittability, also seen on PR #1491.
+The next correction isolates accessibility/input boundaries and restores keyboard
+safe-area handling, with native fixture hit-test diagnostics. Repeated input
+assertions remain intact; the shared touch blocker is not yet proven. Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
 unverified.

@@ -1380,6 +1380,14 @@ Navigation fixtures initialize the gate as unlocked before its first render and
 do not construct real authentication/notification clients. Background privacy
 cover handling remains active. Gate teardown disables window input before hiding
 it, and loading explicitly synchronizes the overlay with the committed gate state.
+Gate and navigation accessibility containers preserve their children's hidden
+states, rather than re-exposing decorative layers and the closed sidebar.
+The navigation host accepts input only when the committed sidebar state is closed;
+the tap-to-close overlay remains independently interactive. The shell ignores
+container safe areas, not the keyboard region, and composer glass is noninteractive.
+Navigation fixtures log bounded, text-free native hit-test/input ancestry reports
+alongside retained XCUITest hierarchy dumps to distinguish UIKit occlusion from
+accessibility or geometry failures.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

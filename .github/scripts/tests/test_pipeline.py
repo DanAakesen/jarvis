@@ -681,6 +681,25 @@ class SafeFailureTests(unittest.TestCase):
         teardown = source.split("guard visible else {", 1)[1].split("return", 1)[0]
         self.assertLess(teardown.index("isUserInteractionEnabled = false"), teardown.index("isHidden = true"))
 
+    def test_ios_navigation_input_boundaries_preserve_children_and_keyboard(self):
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        self.assertIn(".ignoresSafeArea(.container)", content)
+        self.assertIn(".allowsHitTesting(!navigation.isSidebarOpen)", content)
+        for source, hidden in ((content, ".accessibilityHidden(navigation.isSidebarOpen)"),
+                               (gate, ".accessibilityHidden(model.shouldCoverContent)")):
+            self.assertLess(source.index(".accessibilityElement(children: .contain)"),
+                            source.index(hidden))
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        composer_background = chat.split(".fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)", 1)[1].split("            }", 1)[0]
+        self.assertIn(".allowsHitTesting(false)", composer_background)
+        self.assertIn(".accessibilityHidden(true)", composer_background)
+        probe = (ROOT / "apps/ios/Jarvis/JarvisInputHitTestingProbe.swift").read_text()
+        self.assertTrue(probe.startswith("#if targetEnvironment(simulator)"))
+        self.assertIn("candidate.hitTest(converted, with: nil)", probe)
+        self.assertIn("reportCount < 20", probe)
+        self.assertNotIn(".text", probe)
+
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         job = workflow["jobs"]["macos"]

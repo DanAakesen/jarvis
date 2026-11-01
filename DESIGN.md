@@ -2854,7 +2854,11 @@ with the screen so it cannot intercept sidebar buttons. P15-41 confines opening
 drags to the right-edge strip and closing drags to the revealed screen; normal
 screen controls no longer share a full-screen drawer recognizer. Chat's native
 toolbar also exposes the localized menu action. The sidebar composition,
-settling spring, dimming, and blur are unchanged. The pure-Swift recognition
+settling spring, dimming, and blur are unchanged.
+The navigation shell retains keyboard safe-area avoidance; decorative composer
+glass never receives input. Accessibility containment keeps the closed drawer
+and decorations out of the exposed screen's control tree without changing layout.
+The pure-Swift recognition
 policy remains unit tested. The simulator artifact includes open-sidebar screenshots in both
 appearances beside the chat captures.
 

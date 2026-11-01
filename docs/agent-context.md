@@ -6296,6 +6296,22 @@ The separate gate window is retained to cover app-owned presentations, including
 sheets; replacing that privacy boundary is outside this navigation correction.
 Gate dismissal disables window input before hiding it, and loading explicitly
 resynchronizes the overlay. Successful simulator verification remains pending.
+Run 41294736529 still failed initial input hittability, as did composer tests in
+PR #1491. English/interruption dumps show one window, no keyboard or Now-bar
+overlap, but exposed closed-sidebar/decorative accessibility elements. The
+follow-up isolates accessibility containers, explicitly gates navigation-host
+input, excludes composer glass from hit testing, and preserves keyboard safe-area
+handling. Tests are not loosened. Navigation fixtures now emit `Jarvis input hit
+test` reports of native UIKit hit/input ancestry without message text; failed
+XCUITest hierarchies are printed as well as attached. Inspect these reports in
+the retained result bundle if activation points still fail.
+Indexed Apple
+[accessibilityElement(children:)](https://developer.apple.com/documentation/swiftui/view/accessibilityelement(children:)),
+[contain](https://developer.apple.com/documentation/swiftui/accessibilitychildbehavior/contain),
+[safeAreaInset](https://developer.apple.com/documentation/swiftui/view/safeareainset(edge:alignment:spacing:content:))
+and [SafeAreaRegions](https://developer.apple.com/documentation/swiftui/safearearegions)
+guidance was consulted before this correction; direct retrieval still fails DNS.
+The native probe is fixture-only instrumentation, not a replacement input API.
 Build-18 reproduction, before/after simulator test results, and physical-iPhone
 acceptance remain pending; cycle screenshots are not baseline-build evidence.
 

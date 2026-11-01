@@ -346,6 +346,7 @@ struct JarvisGateRootView: View {
             .id(model.contentEpoch)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
+            .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
             .task {
                 model.refreshOverlay()

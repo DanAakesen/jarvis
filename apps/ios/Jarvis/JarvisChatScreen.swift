@@ -517,6 +517,15 @@ struct JarvisChatScreen: View {
                     .accessibilityLabel("Message Jarvis")
                     .accessibilityIdentifier("chat.input")
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
+#if targetEnvironment(simulator)
+                    .background {
+                        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
+                            JarvisInputHitTestingProbe()
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
+#endif
 
                 Picker("Mode", selection: $composerMode) {
                     Image(systemName: "bubble.left")
@@ -565,6 +574,8 @@ struct JarvisChatScreen: View {
                 RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
                     .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
                     .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatComposerRadius))
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
