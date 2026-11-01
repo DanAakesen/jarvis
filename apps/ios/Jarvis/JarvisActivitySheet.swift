@@ -3,8 +3,17 @@ import SwiftUI
 
 struct JarvisActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @ObservedObject var model: JarvisChatModel
     let kind: ActivitySheetKind
+
+    private var appLanguage: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: appLanguage)
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,6 +31,7 @@ struct JarvisActivitySheet: View {
                                 .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                         }
                     } else if let feed = model.nowFeed {
+                        let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty || !feed.items.isEmpty
                         if let error = model.activityError {
                             HStack {
                                 Text(error)
@@ -40,17 +50,22 @@ struct JarvisActivitySheet: View {
                                 .foregroundStyle(.secondary)
                                 .accessibilityAddTraits(.updatesFrequently)
                         }
+                        if hasActivity || feed.awayMode {
+                            awayModeSection(feed.awayMode)
+                        }
                         if !feed.confirmations.isEmpty {
                             confirmationSection(feed.confirmations)
                         }
                         if !feed.running.isEmpty {
                             runningSection(feed.running)
                         }
-                        awayModeSection(feed.awayMode)
                         ForEach(NowFeedActivityCategory.allCases, id: \.self) { category in
-                            activitySection(category, items: feed.items.filter { $0.category == category })
+                            let items = feed.items.filter { $0.category == category }
+                            if !items.isEmpty {
+                                activitySection(category, items: items)
+                            }
                         }
-                        if feed.confirmations.isEmpty && feed.running.isEmpty && feed.items.isEmpty {
+                        if !hasActivity {
                             ContentUnavailableView("No activity", systemImage: "checkmark.circle")
                         }
                     } else {
@@ -67,8 +82,14 @@ struct JarvisActivitySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    }
                         .jarvisToolbarButtonStyle()
+                        .accessibilityLabel(copy(.done))
                 }
             }
         }
@@ -157,34 +178,27 @@ struct JarvisActivitySheet: View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             Text(category.title)
                 .font(.headline)
-            if items.isEmpty {
-                Text(category.emptyMessage)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                ForEach(items, id: \.id) { item in
-                    HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
-                        VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                            Text(item.title)
-                                .font(.body)
-                            Text(timeString(item.at))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 0)
-                        Button(model.dismissingActivityIDs.contains(item.id) ? "Dismissing…" : "Dismiss") {
-                            Task { await model.dismissActivity(item) }
-                        }
-                        .buttonStyle(.glass)
-                        .disabled(model.fixtureMode || model.dismissingActivityIDs.contains(item.id))
-                        .accessibilityLabel("Dismiss \(item.title)")
-                        .accessibilityHint(model.fixtureMode ? "Dismissal is disabled with fixture data." : "")
+            ForEach(items, id: \.id) { item in
+                HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
+                    VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                        Text(item.title)
+                            .font(.body)
+                        Text(timeString(item.at))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .padding(JarvisDesignTokens.chatGlassInset)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                    Spacer(minLength: 0)
+                    Button(model.dismissingActivityIDs.contains(item.id) ? "Dismissing…" : "Dismiss") {
+                        Task { await model.dismissActivity(item) }
+                    }
+                    .buttonStyle(.glass)
+                    .disabled(model.fixtureMode || model.dismissingActivityIDs.contains(item.id))
+                    .accessibilityLabel("Dismiss \(item.title)")
+                    .accessibilityHint(model.fixtureMode ? "Dismissal is disabled with fixture data." : "")
                 }
+                .padding(JarvisDesignTokens.chatGlassInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
             }
         }
     }
@@ -207,15 +221,6 @@ private extension NowFeedActivityCategory {
         case .release: "Releases and deployments"
         case .credential: "Credential warnings"
         case .alert: "Alerts"
-        }
-    }
-
-    var emptyMessage: String {
-        switch self {
-        case .attention: "No tasks need attention."
-        case .release: "No recent releases or deployments."
-        case .credential: "No credential warnings."
-        case .alert: "No active alerts."
         }
     }
 }

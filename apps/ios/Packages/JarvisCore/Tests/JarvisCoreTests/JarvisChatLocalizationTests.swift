@@ -17,5 +17,7 @@ final class JarvisChatLocalizationTests: XCTestCase {
         XCTAssertEqual(JarvisChatLocalization.string(.dictate, language: .da), "Dikter")
         XCTAssertEqual(JarvisChatLocalization.string(.startVoice, language: .en), "Start voice")
         XCTAssertEqual(JarvisChatLocalization.string(.sendMessage, language: .da), "Send besked")
+        XCTAssertEqual(JarvisChatLocalization.string(.done, language: .da), "Færdig")
+        XCTAssertEqual(JarvisChatLocalization.string(.done, language: .en), "Done")
     }
 }

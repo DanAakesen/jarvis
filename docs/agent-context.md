@@ -6394,11 +6394,25 @@ For P15-29 / #1459, the same boot also captures `notifications-light.png` and
 `notifications-dark.png` using `--screenshot-chat-fixture
 --screenshot-notifications-open`. Compare the Chat bell and the sheet's Done
 button; both use the shared plain toolbar-label style, without an extra glass
-fill. Linux checks cannot verify the rendered toolbar. The #1448 artifact
+fill. P15-48 adds bell captures with counts 1 and 12 at default and accessibility
+XXXL Dynamic Type in both appearances, plus default and accessibility-XXXL sheet
+captures. The fixture-only `--screenshot-needs-you-count=1|12` argument changes
+only the displayed count. The bell badge stays within its 44-point control; the
+shared sheet close icon uses the localized Done accessibility label and stone
+secondary tint. Linux checks cannot verify the rendered toolbar. The #1448 artifact
 ([run 41241917037](https://github.com/DanAakesen/jarvis/actions/runs/41241917037))
 has no open-sheet baseline; its light Chat capture is obscured by the gate.
 Usable before/after simulator comparison remains pending; do not treat that
 capture as visual acceptance.
+
+P15-43 keeps the Chat Voice language control on the stone secondary accent and
+insets the plus-menu content by 16 points. Empty Background activity retains the
+no-activity icon and text without empty category or Away-off rows; the composer
+Now bar is omitted until a turn or feed activity exists. The same Simulator boot
+captures `background-activity-empty-{light,dark}.png` and
+`background-activity-active-{light,dark}.png` in the existing artifact using
+`--screenshot-activity-state=empty|active`. These synthetic captures do not
+replace physical-iPhone visual acceptance.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;

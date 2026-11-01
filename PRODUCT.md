@@ -220,11 +220,12 @@ activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
 The approved Chat board sets the native layout: the text field leads the
-two-row glass composer, compact actions sit below it, and the Now bar floats
-above without a backing panel. The navigation header stays transparent and
-borderless while messages fade softly as they scroll beneath it. Only the
-user's message bubble has a background; keep existing Danish and English copy
-and do not add helper text to the screen.
+two-row glass composer, compact actions sit below it, and the Now bar, when
+shown, floats above without a backing panel. The Now bar appears only while a
+turn is sending or the feed contains background activity. The navigation header
+stays transparent and borderless while messages fade softly as they scroll beneath
+it. Only the user's message bubble has a background; keep existing Danish and
+English copy and do not add helper text to the screen.
 
 The composer puts its input on the first row and a small plus, dictate and
 voice/send action on the second. With an empty draft the right action opens the
@@ -238,10 +239,14 @@ existing shared setting and applies to the next Chat session. The existing web
 contract allows documents up to 20 MB and images up to 10 MB per attachment.
 Synthetic fixtures are clearly marked and used only in previews and CI
 screenshots. Native Entra sign-in remains a separate concern; no fake
-conversation or successful live sign-in is implied.
+conversation or successful live sign-in is implied. The activity sheet keeps
+the no-activity icon and text without empty category rows.
 
-The notifications toolbar button and its sheet's Done button use one shared
-system-style surface, without stacked button fills or strokes (P15-29 / #1459).
+The notifications toolbar button keeps its badge inside the 44-point control,
+including two-digit counts. Notifications and Background activity sheets use a
+compact xmark with a localized Done accessibility label (Færdig/Done). Both retain
+the stone secondary tint and shared system glass surface without stacked fills or
+strokes (P15-48, updating P15-29 / #1459).
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
