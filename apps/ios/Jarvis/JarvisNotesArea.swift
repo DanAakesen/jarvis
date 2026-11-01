@@ -171,7 +171,7 @@ struct JarvisNotesArea: View {
                 searchContent
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .background(JarvisScreenBackground())
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
