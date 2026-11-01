@@ -9909,6 +9909,21 @@ Indexed GestureState, updating/onEnded and accessibility-container guidance was
 reviewed before these edits; direct Apple retrieval remains blocked.
 The Danish startup path and missing-row fix still require native evidence.
 
+Run [41304146202](https://github.com/DanAakesen/jarvis/actions/runs/41304146202)
+passes both launch-input checks and all three short-drag/background cycles.
+Both language repetition tests fail the first menu tap; their printed trees
+show Chat unshifted, the closed edge strip present, and no sidebar rows.
+The plain menu label only expands its frame, unlike the bell's explicit hit
+shape. Define `contentShape(Rectangle())` inside that existing 44-point label
+to make the whole target interactive without changing visuals or routing.
+Indexed Apple Button and ContentShapeKinds.interaction guidance was reviewed
+before editing; direct Apple retrieval remains DNS-blocked. This is a targeted
+hit-region correction, not proof that the complete native flow now passes.
+Retain `ios-scheme.xcresult` from the earlier full-scheme invocation: its failure
+currently stops the screenshot step before the dedicated navigation bundle is
+created. Keep both test invocations and every UI assertion and timeout intact.
+Build-18 before/after and physical-iPhone acceptance remain outstanding.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

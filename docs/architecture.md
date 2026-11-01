@@ -1394,6 +1394,10 @@ alongside retained XCUITest hierarchy dumps to distinguish UIKit occlusion from
 accessibility or geometry failures.
 Simulator startup logs record only gate fixture selection; fixture navigation
 commands record only Boolean state/request values, not arguments or content.
+The plain-style Chat menu label explicitly defines its existing 44-point hit
+region with `contentShape(Rectangle())`, matching the bell's interaction boundary.
+CI retains both the full-scheme and dedicated navigation result bundles on
+failure, including failures before screenshot capture completes.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

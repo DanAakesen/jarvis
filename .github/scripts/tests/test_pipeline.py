@@ -666,6 +666,19 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(evidence["if"], "always()")
         self.assertEqual(evidence["with"]["path"], "${{ runner.temp }}/ios-navigation.xcresult")
         self.assertEqual(evidence["with"]["retention-days"], 14)
+        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult"', capture["run"])
+        scheme_evidence = next(step for step in steps if step.get("name") == "Upload iPhone app scheme test results")
+        self.assertEqual(scheme_evidence["if"], "always()")
+        self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
+        self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
+
+    def test_ios_chat_launcher_hit_shape_covers_its_plain_button_label(self):
+        source = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        label = source.split("Button(action: onOpenSidebar) {", 1)[1].split(
+            ".jarvisToolbarButtonStyle()", 1
+        )[0]
+        self.assertLess(label.index(".frame("), label.index(".contentShape(Rectangle())"))
 
     def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()

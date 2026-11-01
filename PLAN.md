@@ -3437,7 +3437,11 @@ The follow-up removes the gesture completion dependency on resettable
 `@GestureState` and gives the sidebar its own accessibility container.
 Unchanged path-binding writes no longer close the drawer; bounded-content
 startup/command diagnostics distinguish the remaining launch and activation paths.
-These corrections are not yet native-verified. Next: verify the revised
+Run 41304146202 passes launch input checks in both languages and all three
+short-drag/background recovery cycles, but both repeated-navigation tests fail
+their first menu-button tap. The follow-up defines the plain launcher's full
+44-point label hit shape and retains the earlier full-scheme result bundle on
+failure. The launcher correction is not yet native-verified. Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
 unverified.

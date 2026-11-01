@@ -197,6 +197,7 @@ struct JarvisChatScreen: View {
                 Button(action: onOpenSidebar) {
                     Image(systemName: "line.3.horizontal")
                         .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                        .contentShape(Rectangle())
                 }
                 .jarvisToolbarButtonStyle()
                 .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: appLanguage))

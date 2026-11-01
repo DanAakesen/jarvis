@@ -157,6 +157,7 @@ jobs:
             -scheme Jarvis \
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
           xcrun simctl ui "$DEVICE_ID" appearance light
@@ -293,6 +294,14 @@ jobs:
                 "$SCREENSHOT_DIR/lockscreen-tasks-${appearance}-${language}.png"
             done
           done
+      - name: Upload iPhone app scheme test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-scheme-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-scheme.xcresult
+          if-no-files-found: warn
+          retention-days: 14
       - name: Run iPhone navigation regression
         working-directory: apps/ios
         run: |
