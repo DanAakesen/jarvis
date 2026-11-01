@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+extension View {
+    func jarvisToolbarButtonStyle() -> some View {
+        // The system toolbar owns the glass surface; the button adds no second fill.
+        buttonStyle(.plain)
+    }
+}
+
 enum JarvisDesignTokens {
     static let primaryAccent = adaptiveColor(
         light: UIColor(red: 180.0 / 255, green: 95.0 / 255, blue: 6.0 / 255, alpha: 1),
@@ -60,10 +67,17 @@ enum JarvisDesignTokens {
     static let sidebarGestureStartFraction: CGFloat = 0.62
     static let sidebarGestureMinimumDistance: CGFloat = 8
     static let sidebarOpenThreshold: CGFloat = 0.5
+    static let sidebarBrandFontSize: CGFloat = 22
+    static let sidebarSettingsButtonSize: CGFloat = 44
+    static let sidebarHeaderLeadingInset: CGFloat = 26
+    static let sidebarHeaderTrailingInset: CGFloat = 10
+    static let sidebarHeaderRuleInset: CGFloat = 12
+    static let sidebarHeaderRuleVerticalInset: CGFloat = 8
+    static let sidebarHeaderRuleHeight: CGFloat = 0.5
     static let sidebarRowHeight: CGFloat = 52
     static let sidebarRowSpacing: CGFloat = 2
     static let sidebarRowLabelSpacing: CGFloat = 14
-    static let sidebarHorizontalInset: CGFloat = 24
+    static let sidebarHorizontalInset: CGFloat = 26
     static let sidebarVerticalInset: CGFloat = 16
     static let sidebarIconSize: CGFloat = 21
     static let sidebarIconColumnWidth: CGFloat = 25

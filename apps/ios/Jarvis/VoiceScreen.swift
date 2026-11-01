@@ -28,8 +28,8 @@ struct VoiceScreenView: View {
                     VoiceOrbView(
                         status: connectionTitle ?? model.statusText,
                         state: model.voiceState,
-                        isMuted: model.showsConnectionRecovery || model.isMuted,
-                        canMinimize: model.isSessionActive && !model.showsConnectionRecovery
+                        canMinimize: model.isSessionActive && !model.showsConnectionRecovery,
+                        isMuted: model.showsConnectionRecovery || model.isMuted
                     ) {
                         minimizeVoice()
                     }

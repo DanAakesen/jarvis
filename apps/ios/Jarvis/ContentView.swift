@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -107,6 +108,7 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let safeAreaInsets = Self.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets)
             let drawerWidth = min(
                 geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
                 JarvisDesignTokens.sidebarMaximumWidth
@@ -119,7 +121,7 @@ struct ContentView: View {
                 JarvisSidebar(
                     currentDestination: navigation.currentDestination,
                     isOpen: navigation.isSidebarOpen,
-                    safeAreaInsets: geometry.safeAreaInsets,
+                    safeAreaInsets: safeAreaInsets,
                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
                     onClose: closeSidebar
                 )
@@ -135,6 +137,8 @@ struct ContentView: View {
                     JarvisChatScreen(
                         client: chatClient,
                         fixtureMode: fixtureMode,
+                        initialActivitySheet: fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
+                            ? .needsYou : nil,
                         startupError: startupError,
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )
@@ -224,8 +228,6 @@ struct ContentView: View {
                         .accessibilityHidden(true)
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
-                .offset(x: -drawerWidth * progress)
-                .contentShape(Rectangle())
                 .overlay {
                     if progress > 0 {
                         Color.clear
@@ -234,7 +236,9 @@ struct ContentView: View {
                             .accessibilityHidden(true)
                     }
                 }
-                .gesture(sidebarDragGesture(
+                .offset(x: -drawerWidth * progress)
+                .contentShape(Rectangle())
+                .simultaneousGesture(sidebarDragGesture(
                     screenWidth: geometry.size.width,
                     drawerWidth: drawerWidth
                 ))
@@ -260,7 +264,7 @@ struct ContentView: View {
                         navigate(to: .voice, drawerWidth: drawerWidth)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, geometry.safeAreaInsets.bottom + JarvisDesignTokens.voiceControlBottomInset)
+                    .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.voiceControlBottomInset)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -284,6 +288,22 @@ struct ContentView: View {
         case "dark": .dark
         default: nil
         }
+    }
+
+    private static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow) else {
+            return fallback
+        }
+        let insets = window.safeAreaInsets
+        return EdgeInsets(
+            top: max(fallback.top, insets.top),
+            leading: max(fallback.leading, insets.left),
+            bottom: max(fallback.bottom, insets.bottom),
+            trailing: max(fallback.trailing, insets.right)
+        )
     }
 
     private func sidebarDragGesture(
@@ -344,12 +364,15 @@ struct ContentView: View {
         drawerWidth: CGFloat,
         startProgress: CGFloat
     ) -> Bool {
-        guard abs(value.translation.width) > abs(value.translation.height) else { return false }
-        if startProgress > 0 {
-            return value.startLocation.x < screenWidth - drawerWidth * startProgress
-        }
-        return value.startLocation.x >= screenWidth * JarvisDesignTokens.sidebarGestureStartFraction
-            && value.translation.width < 0
+        JarvisSidebarGesturePolicy.canBegin(
+            startX: Double(value.startLocation.x),
+            translationX: Double(value.translation.width),
+            translationY: Double(value.translation.height),
+            screenWidth: Double(screenWidth),
+            drawerWidth: Double(drawerWidth),
+            startProgress: Double(startProgress),
+            openingStartFraction: Double(JarvisDesignTokens.sidebarGestureStartFraction)
+        )
     }
 
     private var sidebarAnimation: Animation? {

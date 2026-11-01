@@ -1360,7 +1360,8 @@ WebSocket adapter against the #1391 core seam.
 
 `JarvisCore` owns the pure-Swift destination list, navigation path, and sidebar
 open/closed state; Linux tests cover path normalization, navigation, and the
-sidebar state. The SwiftUI target binds that state to `NavigationStack` and
+sidebar state and gesture-recognition policy. The SwiftUI target binds that state
+to `NavigationStack`, keeps the tap-to-close region with the moving screen, and
 renders the fixed-behind sidebar and title-only placeholders for unbuilt
 destinations. P15-10 replaces the Chat root placeholder with the native chat
 screen and P15-11 replaces the Voice placeholder with the native voice screen.
@@ -1644,6 +1645,11 @@ screenshot job; its launch arguments select segment, state, and Danish/English
 copy. Linux tests exercise
 the real chat and tools clients against test resources, including history
 pagination and reattachment.
+
+P15-29 adds `--screenshot-notifications-open` alongside the Chat fixture flag.
+It presents the real activity sheet after Chat finishes loading its fixture;
+live startup ignores the initial-sheet input. The existing single simulator
+boot captures the sheet in both appearances.
 
 `JarvisApprovalsClient` reuses `JarvisClient` authentication and error mapping
 for the existing `GET /now` confirmations and `POST /now/confirmations/:id`
