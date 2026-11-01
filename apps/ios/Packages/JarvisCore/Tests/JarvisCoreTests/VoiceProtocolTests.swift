@@ -194,6 +194,24 @@ final class VoiceProtocolTests: XCTestCase {
         XCTAssertFalse(policy.shouldReconnect(attempt: 9, userEnded: false))
         XCTAssertTrue(policy.shouldReconnect(attempt: 8, userEnded: false))
     }
+
+    func testFreshSessionEligibilityAndLocalizedVoiceCopy() {
+        XCTAssertTrue(VoiceSessionState.idle.canStartSession)
+        XCTAssertTrue(VoiceSessionState.ended.canStartSession)
+        XCTAssertTrue(VoiceSessionState.failed.canStartSession)
+        for state in [VoiceSessionState.connecting, .ready, .listening, .speaking, .reconnecting(attempt: 1)] {
+            XCTAssertFalse(state.canStartSession)
+        }
+        for key in JarvisVoiceLocalizationKey.allCases {
+            for language in JarvisAppLanguage.allCases {
+                XCTAssertNotEqual(JarvisVoiceLocalization.string(key, language: language), "voice.\(key.rawValue)")
+            }
+        }
+        XCTAssertEqual(JarvisVoiceLocalization.string(.listening, language: .da), "Lytter")
+        XCTAssertEqual(JarvisVoiceLocalization.string(.thinking, language: .en), "Thinking")
+        XCTAssertEqual(JarvisVoiceLocalization.string(.speaking, language: .da), "Taler")
+        XCTAssertEqual(JarvisVoiceLocalization.string(.end, language: .da), "Afslut samtale")
+    }
 }
 
 final class VoiceSessionClientTests: XCTestCase {
@@ -391,6 +409,51 @@ final class VoiceSessionClientTests: XCTestCase {
         await waitForState(.listening, in: client)
         continuation.finish()
         try await client.end()
+    }
+
+    func testEndThenOpenFreshSessionConnectsWithoutRefresh() async throws {
+        let (oldStream, oldContinuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        let oldTransport = FakeWebSocketTransport(streams: [oldStream])
+        let oldClient = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!,
+            transport: oldTransport
+        )
+        try await oldClient.start(accessToken: "fixture.old", language: .en)
+        oldContinuation.yield(#"{"type":"jarvis.session.ready","sessionId":12}"#)
+        await waitForState(.listening, in: oldClient)
+        try await oldClient.setMuted(true)
+        try await oldClient.setCameraState(on: true)
+        try await oldClient.end()
+
+        let endedState = await oldClient.state()
+        XCTAssertTrue(endedState.canStartSession, "Reopening Voice must auto-start after End")
+        let (newStream, newContinuation) = AsyncThrowingStream<String, any Error>.makeStream()
+        let newTransport = FakeWebSocketTransport(streams: [newStream])
+        let newClient = VoiceSessionClient(
+            baseURL: URL(string: "https://api.example.invalid")!,
+            transport: newTransport
+        )
+        if endedState.canStartSession {
+            try await newClient.start(accessToken: "fixture.new", language: .da)
+        }
+        oldContinuation.yield(#"{"type":"jarvis.session.ended"}"#)
+        oldContinuation.finish(throwing: FakeVoiceSocketError.dropped)
+        newContinuation.yield(#"{"type":"jarvis.session.ready","sessionId":13}"#)
+        await waitForState(.listening, in: newClient)
+        await waitForSentMessage(#""type":"jarvis.microphone.active""#, count: 1, on: newTransport)
+        let connections = await newTransport.connections()
+        XCTAssertEqual(connections.count, 1)
+        XCTAssertEqual(connections.first?.url.absoluteString, "wss://api.example.invalid/voice/da")
+        XCTAssertEqual(connections.first?.subprotocols, ["jarvis.voice.v1", "jarvis.auth.fixture.new"])
+        let texts = await newTransport.sentTexts()
+        XCTAssertFalse(texts.contains(#"{"type":"jarvis.microphone.muted"}"#))
+        XCTAssertFalse(texts.contains(#"{"on":true,"type":"jarvis.camera.state"}"#))
+        let closes = await oldTransport.closedCodes()
+        XCTAssertEqual(closes, [1000])
+        let oldAttempts = await oldTransport.connectionAttempts()
+        XCTAssertEqual(oldAttempts, 1)
+        try await newClient.end()
+        newContinuation.finish()
     }
 
     private func waitForState(

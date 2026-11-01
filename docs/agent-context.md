@@ -6532,7 +6532,7 @@ Run `swift test --filter 'VoiceLiveActivityTests|VoiceSessionClientTests'` from
 These cover state projection, localized copy, PCM levels, stale/ended session
 controls, command errors and muted capture, not Apple frameworks.
 The existing ready-PR Mac job builds the extension and captures six synthetic
-Lock Screen states within a 25-minute job deadline. The expanded notification,
+Lock Screen states within the current 30-minute job deadline. The expanded notification,
 Factory and voice captures reached the previous 20-minute limit in run
 41259067682 after compilation succeeded; retain all captures and one boot.
 The states (Danish/English Listening, Speaking, Muted) use the same
@@ -6545,6 +6545,23 @@ mute/unmute must gate in-app capture, End must dismiss and stop audio, and old
 controls must not affect a replacement session.
 
 ### Native voice screen and audio (P15-11)
+
+P15-40 (#1482) adds End → reopen regression coverage. Run `swift test --filter
+Voice` in `apps/ios/Packages/JarvisCore` to include both protocol and async
+session-client tests (filtering only `VoiceProtocolTests` excludes lifecycle
+tests). The existing ready-PR Mac capture now includes six synthetic Voice PNGs:
+listening, thinking and speaking in light/dark, with board/surfaces links in its
+PR comment and state-specific pairs in `comparisons.html`. `JarvisOrbRenderingTests`
+checks transparent blur margins, radial alpha feathering and opacity-only core
+animation; this source check does not replace inspecting the captured pixels.
+The combined simulator build/capture has a 30-minute job bound: the merged
+Factory, ambient and Voice captures exceeded the former 20-minute bound.
+Simulator-only `--screenshot-voice-fixture` and
+`--screenshot-voice-state=listening|thinking|speaking`, together with the existing
+`--screenshot-chat-fixture`, select the rendered Voice screen without starting
+microphone capture or a voice transport. These images do not verify live audio.
+The Linux runner cannot capture Simulator images or compile Apple UI/audio code;
+the requested images and physical End/start acceptance remain pending those checks.
 
 The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
 values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
