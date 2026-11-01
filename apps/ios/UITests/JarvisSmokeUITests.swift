@@ -95,32 +95,52 @@ final class JarvisSmokeUITests: XCTestCase {
         addAttachment.tap()
         capture("plus-menu")
 
-        let chooseFiles = app.buttons["Choose files"]
-        let photoLibrary = app.buttons["Photo library"]
-        let takePhoto = app.buttons["Take photo"]
-        let shareScreen = app.buttons["Share screen unavailable"]
-        let cancel = app.buttons["Cancel"]
+        let voiceLanguage = app.buttons[localized("Voice language", "Stemmesprog")]
+        let shareScreen = app.buttons[localized("Share screen", "Del skærm")]
+        let enableVideo = app.buttons[localized("Enable video", "Slå video til")]
+        let attach = app.buttons[localized("Attach file or photo", "Vedhæft fil eller foto")]
+        let camera = app.buttons[localized("Camera", "Kamera")]
+        XCTAssertTrue(voiceLanguage.waitForExistence(timeout: 10))
+        XCTAssertTrue(shareScreen.exists)
+        XCTAssertTrue(enableVideo.exists)
+        XCTAssertTrue(attach.exists)
+        XCTAssertTrue(camera.exists)
+        XCTAssertFalse(voiceLanguage.isEnabled)
+        XCTAssertFalse(shareScreen.isEnabled)
+        XCTAssertFalse(enableVideo.isEnabled)
+        XCTAssertTrue(attach.isEnabled)
+        XCTAssertFalse(camera.isEnabled)
+
+        attach.tap()
+        let chooseFiles = app.buttons[localized("Choose files", "Vælg filer")]
+        let photoLibrary = app.buttons[localized("Photo library", "Fotobibliotek")]
+        let attachmentCancel = app.buttons[localized("Cancel", "Annuller")]
         XCTAssertTrue(chooseFiles.waitForExistence(timeout: 10))
         XCTAssertTrue(photoLibrary.exists)
-        XCTAssertTrue(takePhoto.exists)
-        XCTAssertTrue(shareScreen.exists)
-        XCTAssertTrue(cancel.exists)
-        XCTAssertFalse(takePhoto.isEnabled)
-        XCTAssertFalse(shareScreen.isEnabled)
+        XCTAssertTrue(attachmentCancel.exists)
 
         chooseFiles.tap()
-        let filesCancel = app.buttons["Cancel"].firstMatch
+        let filesCancel = app.buttons.matching(
+            NSPredicate(format: "label IN %@", ["Cancel", "Annuller"])
+        ).firstMatch
         XCTAssertTrue(filesCancel.waitForExistence(timeout: 10))
         filesCancel.tap()
 
         addAttachment.tap()
+        XCTAssertTrue(attach.waitForExistence(timeout: 10))
+        attach.tap()
         XCTAssertTrue(photoLibrary.waitForExistence(timeout: 10))
         photoLibrary.tap()
-        let photosCancel = app.buttons["Cancel"].firstMatch
+        let photosCancel = app.buttons.matching(
+            NSPredicate(format: "label IN %@", ["Cancel", "Annuller"])
+        ).firstMatch
         XCTAssertTrue(photosCancel.waitForExistence(timeout: 10))
         photosCancel.tap()
 
         addAttachment.tap()
+        XCTAssertTrue(attach.waitForExistence(timeout: 10))
+        attach.tap()
+        let cancel = app.buttons[localized("Cancel", "Annuller")]
         XCTAssertTrue(cancel.waitForExistence(timeout: 10))
         cancel.tap()
     }

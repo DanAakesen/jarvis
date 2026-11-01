@@ -6273,8 +6273,8 @@ the screen with `--screenshot-factory-fixture`,
 `--screenshot-factory-language=da|en`. Supported states are board, needs,
 releases, detail, release, steer, newtask, empty, loading, error, offline,
 stale, reconnecting and search. Capture all those states in light/dark and both
-languages through the existing `ios-ci.yml` simulator boot; do not add a Mac
-job, simulator boot or UI-test target.
+languages through the existing `ios-ci.yml` simulator boot, after its XCUITest
+smoke flow; keep these captures in the same job and boot.
 
 The app's Factory project menu selects one project at a time. Needs Dan is
 limited to that project's board; do not add a cross-project query or fan-out.
@@ -6358,7 +6358,13 @@ comparison is structural, not pixel-perfect. The established Factory screenshot
 matrix still runs in this same simulator boot. The workflow uploads app captures,
 paired board renders and comparison output as a 14-day artifact; its single
 pull-request comment maps each capture to its board reference. Open the artifact
-to view the images. The job does not sign, use secrets or upload to TestFlight.
+to view the images. The same boot also captures the anchored Chat plus menu using
+`--screenshot-chat-plus-menu`, alongside the established Chat, sidebar and Factory
+captures; Chat captures use `--screenshot-chat-fixture` and the sidebar uses
+`--screenshot-sidebar-open`. Each launch explicitly requests its appearance, and
+the comparator checks background luminance against every theme-named image.
+GitHub comments link to the artifact rather than displaying its images inline.
+The job does not sign, use secrets or upload to TestFlight.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
@@ -6483,8 +6489,7 @@ outcomes. Native generated-view previews cover each contracted renderer and
 unknown-version fallback with synthetic data; Core fixture tests cover the
 existing routes and command acknowledgement. Run `swift build` and `swift test`
 from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
-require the existing Mac compile check; no simulator boot or UI-test job was
-added.
+compile in the existing ready-PR Mac job, which also runs the simulator UI tests.
 
 The screen follows the checked-in Workspaces frame's fixed-bottom search. Its
 app and VoiceOver strings use `JarvisWorkspaceLocalization` resources in Danish

@@ -163,7 +163,12 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture --screenshot-theme=light
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-chat-fixture --screenshot-chat-plus-menu --screenshot-theme=light
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-plus-menu-light.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-sidebar-open --screenshot-chat-fixture --screenshot-theme=light
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"
           xcrun simctl ui "$DEVICE_ID" appearance dark
@@ -216,7 +221,7 @@ jobs:
           payload_file="$RUNNER_TEMP/ios-screenshot-comment.json"
           board_url="https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html"
           if [[ -n "${ARTIFACT_URL:-}" ]]; then
-            artifact_link="[Download simulator screenshots, paired board renders, and comparison results]($ARTIFACT_URL)"
+            artifact_link="[Download the Chat, plus-menu, sidebar, and Factory screenshots with paired board renders and comparison results]($ARTIFACT_URL)"
           else
             artifact_link="Screenshot artifact upload was unavailable."
           fi
