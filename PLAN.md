@@ -3470,6 +3470,8 @@ failure. Run 41308630589 still fails both first menu taps; retained app logs pro
 the open command fires, while interruption recovery passes. The next correction
 reads navigation in `ContentView.body` before its deferred geometry closure and
 uses that snapshot for all shell rendering. Native confirmation remains pending.
+The final input correction removes the drag-progress tap-catcher fallback and
+uses `withAnimation` for committed sidebar commands; UI tests remain unchanged.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

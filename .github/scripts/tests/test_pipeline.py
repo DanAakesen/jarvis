@@ -740,7 +740,13 @@ class SafeFailureTests(unittest.TestCase):
         self.assertLess(body.index("let currentNavigation = navigation"),
                         body.index("GeometryReader"))
         self.assertNotIn("navigation.isSidebarOpen", body)
-        self.assertIn(".animation(sidebarAnimation, value: currentNavigation.isSidebarOpen)", body)
+        self.assertNotIn(".animation(sidebarAnimation", body)
+        tap_catcher = body.split(".onTapGesture(perform: closeSidebar)", 1)[0].rsplit(
+            ".overlay {", 1
+        )[1]
+        self.assertIn("if currentNavigation.isSidebarOpen {", tap_catcher)
+        self.assertNotIn("progress", tap_catcher)
+        self.assertIn("withAnimation(sidebarAnimation) {\n            navigation.setSidebarOpen(open)", source)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

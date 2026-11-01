@@ -9971,6 +9971,13 @@ state owner, copied persistent state, navigation-host identity reset or test
 workaround. Indexed Apple State/GeometryReader guidance was consulted; direct
 retrieval remains blocked. Native confirmation of this correction is pending.
 
+The dispatcher requires a committed-state-only tap-catcher. Remove its remaining
+active-drag/progress fallback: a closed drawer has no full-screen close surface.
+Use `withAnimation` on committed sidebar commands instead of the implicit shell
+animation. Keep `@GestureState` automatic cancellation reset, existing visual
+tokens and all UI tests; add no diagnostics. Indexed Apple GestureState,
+updating and withAnimation guidance was reviewed; native acceptance is pending.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

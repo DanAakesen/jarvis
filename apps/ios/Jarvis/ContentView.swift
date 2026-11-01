@@ -285,7 +285,7 @@ struct ContentView: View {
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
                 .overlay {
-                    if currentNavigation.isSidebarOpen || (isDragging && progress > 0) {
+                    if currentNavigation.isSidebarOpen {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture(perform: closeSidebar)
@@ -297,7 +297,6 @@ struct ContentView: View {
                     }
                 }
                 .offset(x: -drawerWidth * progress)
-                .animation(sidebarAnimation, value: currentNavigation.isSidebarOpen)
                 .accessibilityElement(children: .contain)
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
@@ -442,7 +441,9 @@ struct ContentView: View {
                 #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
             )
         }
-        navigation.setSidebarOpen(open)
+        withAnimation(sidebarAnimation) {
+            navigation.setSidebarOpen(open)
+        }
     }
 
     private func navigate(to destination: JarvisDestination, drawerWidth: CGFloat) {
@@ -463,7 +464,9 @@ struct ContentView: View {
             default: break
             }
         }
-        navigation.navigate(to: destination)
+        withAnimation(sidebarAnimation) {
+            navigation.navigate(to: destination)
+        }
     }
 
     private func closeSidebar() {

@@ -1379,6 +1379,9 @@ content, so the shell's render dependency is registered on its first evaluation.
 Reveal, accessibility and input flags use that per-evaluation snapshot; actions
 still mutate the single persisted `JarvisNavigationState`.
 No animation callback writes navigation or presentation state.
+The full-screen tap-catcher exists only while the committed sidebar is open,
+never for transient or animated progress. Sidebar commands use `withAnimation`;
+cancelled drags auto-reset to the committed reveal without activating a blocker.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes
