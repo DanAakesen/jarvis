@@ -72,6 +72,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var isCancelling = false
     @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
     @Published var dismissingActivityIDs = Set<String>()
+    @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
     @Published var statusLine: String?
@@ -139,9 +140,14 @@ final class JarvisChatModel: ObservableObject {
         } == true
     }
 
+    var backgroundPresentation: BackgroundTaskPresentation {
+        BackgroundTaskPresentation(tasks: backgroundTasks)
+    }
+
     var needsYouCount: Int {
-        guard let nowFeed else { return 0 }
-        return nowFeed.confirmations.filter { !locallyResolvedConfirmationIDs.contains($0.id) }.count + nowFeed.items.filter {
+        guard let nowFeed else { return backgroundPresentation.needsYouCount }
+        return backgroundPresentation.needsYouCount
+            + nowFeed.confirmations.filter { !locallyResolvedConfirmationIDs.contains($0.id) }.count + nowFeed.items.filter {
             $0.category == .attention || $0.category == .credential || $0.category == .alert
         }.count
     }
@@ -389,6 +395,22 @@ final class JarvisChatModel: ObservableObject {
             activityMessage = "Activity dismissed."
             nowFeed = try await nowClient.load()
             activityError = nil
+        } catch {
+            activityError = message(for: error)
+        }
+    }
+
+    func dismissBackgroundTask(_ task: BackgroundTaskRecord) async {
+        guard !fixtureMode, let nowClient, !dismissingBackgroundTaskIDs.contains(task.id) else { return }
+        dismissingBackgroundTaskIDs.insert(task.id)
+        activityMessage = nil
+        defer { dismissingBackgroundTaskIDs.remove(task.id) }
+        do {
+            try await nowClient.dismissBackgroundTask(id: task.id)
+            backgroundTasks.removeAll { $0.id == task.id }
+            activityError = nil
+        } catch JarvisNowFeedClientError.activityUnavailable {
+            backgroundTasks.removeAll { $0.id == task.id }
         } catch {
             activityError = message(for: error)
         }
