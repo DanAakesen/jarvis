@@ -3030,8 +3030,9 @@ The Danish/English copy and gate composition remain unchanged.
 ## Native iOS Health dashboard (P15-18; owner-approved 31 October 2026)
 
 The approved composition is one native scroll beneath a Health/refresh title row,
-with a text-only Dashboard/Track workout switcher, a small period menu, and the
-fixed glass search bar above the bottom safe area. Dashboard blocks show Gym,
+with a small period menu and a fixed bottom bar above the bottom safe area.
+P15-39 places the native Dashboard/Track workout segmented pill directly above
+the glass search field and plus button for thumb reach. Dashboard blocks show Gym,
 Run and Steps rings; the selected-period protein, calorie and sleep summary;
 recent sessions; body metric sparklines; a protein chart with a target line; and
 one freshness status. Rows use native navigation for workout, sleep, meals and
@@ -3047,16 +3048,15 @@ Orange is a small primary accent; stone is the secondary token. All visible
 and VoiceOver copy and number/date formatting follow the app-owned Danish/English
 preference.
 
-The checked-in `docs/ios/design/board.html?screen=health&tab=dashboard&lang=en`
-currently renders a blank Health placeholder rather than the approved frames.
-The implementation follows the approved issue description and does not copy
-literal values from that stale local board. The workout segment is disabled,
-while Last lifts and plus are omitted; the shared lift routes from #1423 are
-available on main, but this Dashboard implementation does not expose them. No
-replacement API is implied. The existing iOS
-screenshot hook remains within its three-capture cost guard and does not traverse
-Health, so light/dark Health simulator images and key-state screenshots remain
-unverified for owner review.
+The checked-in `docs/ios/design/board.html?screen=health&tab=track&lang=da`
+shows Exercises and History only. Plus opens **New lift** with name, kg, reps
+and sets and past-exercise quick-add chips; no form or save status sits on the
+tab. Native logging reuses the shared lift routes from #1423. Last lifts remains
+omitted from the Dashboard. The existing one-boot simulator screenshot job now
+includes Track workout, New lift and empty states in both languages and themes,
+with a board link beside the artifact in its PR comment. Linux Chromium review
+covers the board, not native rendering; simulator compilation/captures and owner
+visual review remain pending.
 
 ## Native iOS Workspaces (P15-14; 30 October 2026)
 

@@ -177,6 +177,15 @@ jobs:
             sleep 2
             xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
+              for state in track newlift empty; do
+                xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-health-fixture \
+                  "--screenshot-health-state=$state" \
+                  "--screenshot-health-language=$language"
+                sleep 2
+                xcrun simctl io "$DEVICE_ID" screenshot \
+                  "$SCREENSHOT_DIR/health-${state}-${appearance}-${language}.png"
+              done
               for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                   --screenshot-chat-fixture \
@@ -268,8 +277,10 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Voice states, and board comparisons]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, and board comparisons]($ARTIFACT_URL)
 
+          Compare Health Track workout, New lift, and empty states (Danish/English, light/dark)
+          with the [approved Health board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_HEAD_REF/docs/ios/design/board.html).
           Voice uses explicitly synthetic listening, thinking, and speaking states
           (six PNGs: light and dark), not a live microphone or transport session.
           Compare beside the [approved Voice board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html)

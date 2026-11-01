@@ -1697,10 +1697,15 @@ The small custom ring, material panel and trend sparkline share geometry and
 color tokens in `JarvisDesignTokens`: SwiftUI has no native labeled ring or
 sparkline, and a standard `List`/`Form` cannot compose the approved single
 scrolling surface with mixed Charts content. Navigation, refresh, menus,
-search, scrolling, charts and detail lists remain system controls. Track workout
-remains disabled and Last lifts and plus remain omitted in this Dashboard-only
-implementation, although the shared lift routes from #1423 are available on
-main; no iOS-specific backend path or payload is added.
+search, scrolling, charts and detail lists remain system controls. P15-39 adds
+the list-only Track workout tab and a plus-button New lift `Form` sheet.
+Capabilities negotiate version 6; periodless `daily.health.lifts` queries
+read bounded history and latest-per-exercise values. History exposes cursor
+paging; chips prefill those real latest values. `POST /daily/lifts` uses a
+validated `JarvisLiftDraft`; failed saves keep the same values and UUID for
+explicit idempotent retry, without automatic write retries. The segmented
+picker lives in the bottom safe-area inset above search and plus. Last lifts
+remains omitted from the Dashboard; no iOS-specific route or payload is added.
 
 ## Web skeleton and configuration
 

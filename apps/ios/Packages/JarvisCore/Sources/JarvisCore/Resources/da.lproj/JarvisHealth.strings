@@ -59,3 +59,17 @@
 "health.partial" = "Viser en del af resultaterne";
 "health.hourShort" = "t";
 "health.minuteShort" = "min";
+"health.newLift" = "Nyt løft";
+"health.exercises" = "Øvelser";
+"health.history" = "Historik";
+"health.pastExercises" = "Tidligere øvelser";
+"health.noLifts" = "Ingen løft logget";
+"health.name" = "Navn";
+"health.liftWeight" = "Vægt (kg)";
+"health.reps" = "Gentagelser";
+"health.sets" = "Sæt";
+"health.save" = "Gem";
+"health.saving" = "Gemmer…";
+"health.saveFailed" = "Kunne ikke gemme. Prøv igen med de samme værdier.";
+"health.cancel" = "Annuller";
+"health.loadMore" = "Vis flere";

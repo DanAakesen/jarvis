@@ -1777,6 +1777,13 @@ scheduler, model call or proactive delivery, and this slice sets no proactive fl
 
 ## Health migration (approved P12)
 
+Native iPhone Health logging (P15-39 / #1480) uses only the plus-button
+**New lift** sheet, with chips that prefill an exercise's last logged weight,
+reps and sets. **Track workout** contains Exercises and History, or the existing
+empty state, without an inline form, Save button or save-status line.
+The Dashboard/Track workout segmented pill sits in the fixed bottom bar above
+search and plus. Visible and accessibility copy follows Danish/English.
+
 Tool parity is an acceptance requirement for every retained Daily capability,
 not a later convenience. The page and Jarvis chat/voice must use the same
 owner-authorised services, source data, calculations and confirmation rules.

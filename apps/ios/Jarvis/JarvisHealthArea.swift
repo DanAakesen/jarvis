@@ -195,28 +195,46 @@ struct JarvisHealthArea: View {
     let observeRefreshEvents: Bool
     let onRetryConfiguration: () -> Void
     private let now: Date
+    private let presentNewLiftAfterLoading: Bool
 
     @State private var periodPreset: JarvisHealthPeriodPreset = .today
     @State private var searchText = ""
     @State private var refreshVersion = 0
     @State private var dashboard: JarvisHealthDashboardData?
     @State private var isLoading = false
+    @State private var trackWorkout = false
+    @State private var newLiftPresented = false
+    @State private var lifts: [[String: JSONValue]] = []
+    @State private var pastExercises: [[String: JSONValue]] = []
+    @State private var exercisesPartial = false
+    @State private var liftCursor: JSONValue?
+    @State private var liftsLoading = false
+    @State private var liftLoadID: UUID?
+    @State private var liftFailure: JarvisHealthFailure?
+    @State private var previewSheetPresented = false
 
     init(
         client: JarvisHealthClient?,
         language: JarvisAppLanguage,
         observeRefreshEvents: Bool,
         onRetryConfiguration: @escaping () -> Void = {},
-        now: Date = Date()
+        now: Date = Date(),
+        workoutInitiallySelected: Bool = false,
+        presentNewLiftAfterLoading: Bool = false
     ) {
         self.client = client
         self.language = language
         self.observeRefreshEvents = observeRefreshEvents
         self.onRetryConfiguration = onRetryConfiguration
         self.now = now
+        self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
+        _trackWorkout = State(initialValue: workoutInitiallySelected)
     }
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
+    private var liftsAvailable: Bool {
+        dashboard?.capabilities?.availableSources.contains(JarvisHealthSource.lifts.rawValue) == true
+    }
     private var period: JarvisHealthPeriod {
         JarvisHealthPeriod.make(periodPreset, now: now)
     }
@@ -224,59 +242,73 @@ struct JarvisHealthArea: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            segmentSwitcher
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
-                    periodMenu
-                    if let dashboard {
-                        if let failure = dashboard.failure {
-                            failureRow(failure)
-                        }
-                        if dashboard.failure == nil && dashboard.hasFailure {
-                            failureRow(firstFailure(in: dashboard))
-                        }
-                        if dashboard.capabilities != nil {
-                            JarvisHealthRingsSection(
-                                data: dashboard,
-                                period: period,
-                                language: language
-                            )
-                            JarvisHealthSummarySection(
-                                data: dashboard,
-                                period: period,
-                                periodPreset: periodPreset,
-                                client: client,
-                                language: language,
-                                isToday: periodPreset == .today,
-                                now: now
-                            )
-                            JarvisHealthSessionsSection(
-                                read: dashboard.workouts,
-                                period: period,
-                                client: client,
-                                capabilities: dashboard.capabilities,
-                                language: language
-                            )
-                            JarvisHealthBodySection(
-                                metrics: visibleMetrics(in: dashboard),
-                                dashboard: dashboard,
-                                period: period,
-                                client: client,
-                                language: language,
-                                hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            )
-                            JarvisHealthNutritionSection(
-                                read: dashboard.nutritionDays,
-                                targets: dashboard.nutritionTargets,
-                                targetFailure: dashboard.nutritionTargetFailure,
-                                period: period,
-                                language: language
-                            )
-                            freshnessLine(dashboard)
-                        }
+                    if trackWorkout {
+                        if let liftFailure { failureRow(liftFailure) }
+                        JarvisHealthLiftLog(
+                            lifts: lifts,
+                            exercises: pastExercises,
+                            searchText: searchText,
+                            loading: liftsLoading,
+                            failed: liftFailure != nil,
+                            hasMore: liftCursor != nil,
+                            exercisesPartial: exercisesPartial,
+                            language: language,
+                            loadMore: { Task { await loadLifts(more: true) } }
+                        )
                     } else {
-                        ProgressView(copy.text(.loading))
-                            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthChartHeight)
+                        periodMenu
+                        if let dashboard {
+                            if let failure = dashboard.failure {
+                                failureRow(failure)
+                            }
+                            if dashboard.failure == nil && dashboard.hasFailure {
+                                failureRow(firstFailure(in: dashboard))
+                            }
+                            if dashboard.capabilities != nil {
+                                JarvisHealthRingsSection(
+                                    data: dashboard,
+                                    period: period,
+                                    language: language
+                                )
+                                JarvisHealthSummarySection(
+                                    data: dashboard,
+                                    period: period,
+                                    periodPreset: periodPreset,
+                                    client: client,
+                                    language: language,
+                                    isToday: periodPreset == .today,
+                                    now: now
+                                )
+                                JarvisHealthSessionsSection(
+                                    read: dashboard.workouts,
+                                    period: period,
+                                    client: client,
+                                    capabilities: dashboard.capabilities,
+                                    language: language
+                                )
+                                JarvisHealthBodySection(
+                                    metrics: visibleMetrics(in: dashboard),
+                                    dashboard: dashboard,
+                                    period: period,
+                                    client: client,
+                                    language: language,
+                                    hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                )
+                                JarvisHealthNutritionSection(
+                                    read: dashboard.nutritionDays,
+                                    targets: dashboard.nutritionTargets,
+                                    targetFailure: dashboard.nutritionTargetFailure,
+                                    period: period,
+                                    language: language
+                                )
+                                freshnessLine(dashboard)
+                            }
+                        } else {
+                            ProgressView(copy.text(.loading))
+                                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthChartHeight)
+                        }
                     }
                 }
                 .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
@@ -289,10 +321,26 @@ struct JarvisHealthArea: View {
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            searchBar
+            VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                segmentSwitcher
+                searchBar
+            }
+            .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
+            .background(.bar)
         }
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {
             await loadDashboard()
+        }
+        .task(id: "\(liftsAvailable)-\(refreshVersion)") {
+            await loadLifts()
+        }
+        .sheet(isPresented: $newLiftPresented) {
+            JarvisHealthNewLiftSheet(
+                client: client,
+                exercises: pastExercises,
+                language: language,
+                onSaved: { refreshVersion += 1 }
+            )
         }
         .task {
             guard observeRefreshEvents, let client else { return }
@@ -331,25 +379,13 @@ struct JarvisHealthArea: View {
     }
 
     private var segmentSwitcher: some View {
-        HStack(spacing: 0) {
-            Text(copy.text(.dashboard))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(JarvisDesignTokens.healthAccent)
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthControlHeight)
-                .accessibilityAddTraits(.isSelected)
-
-            Button {} label: {
-                Text(copy.text(.trackWorkout))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthControlHeight)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(true)
+        Picker(copy.text(.title), selection: $trackWorkout) {
+            Text(copy.text(.dashboard)).tag(false)
+            Text(copy.text(.trackWorkout)).tag(true)
         }
+        .pickerStyle(.segmented)
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-        .accessibilityElement(children: .contain)
+        .onChange(of: trackWorkout) { _, _ in searchText = "" }
     }
 
     private var periodMenu: some View {
@@ -385,36 +421,84 @@ struct JarvisHealthArea: View {
 
     private var searchBar: some View {
         HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField(copy.text(.search), text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityLabel(copy.text(.search))
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
+            HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                TextField(copy.text(.search), text: $searchText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityLabel(copy.text(.search))
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                            .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(copy.text(.clearSearch))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy.text(.clearSearch))
             }
+            .padding(.leading, JarvisDesignTokens.healthSectionSpacing)
+            .padding(.trailing, JarvisDesignTokens.notesCompactInset)
+            .frame(minHeight: JarvisDesignTokens.healthControlHeight)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
+            )
+            Button {
+                newLiftPresented = true
+            } label: {
+                Image(systemName: "plus")
+                    .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
+            }
+            .buttonStyle(.glass)
+            .disabled(!liftsAvailable || liftsLoading)
+            .accessibilityLabel(copy.text(liftsAvailable ? .newLift : .unavailable))
         }
-        .padding(.leading, JarvisDesignTokens.healthSectionSpacing)
-        .padding(.trailing, JarvisDesignTokens.notesCompactInset)
-        .frame(minHeight: JarvisDesignTokens.healthControlHeight)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
-        )
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-        .padding(.top, JarvisDesignTokens.healthSectionSpacing)
-        .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
-        .background(.bar)
+    }
+
+    @MainActor
+    private func loadLifts(more: Bool = false) async {
+        guard !more || !liftsLoading else { return }
+        let loadID = UUID()
+        liftLoadID = loadID
+        guard let client, liftsAvailable else {
+            liftsLoading = false
+            liftFailure = .unavailable
+            return
+        }
+        liftsLoading = true
+        defer {
+            if liftLoadID == loadID { liftsLoading = false }
+        }
+        do {
+            let history = try await client.query(JarvisHealthQuery(
+                source: .lifts, limit: 100, cursor: more ? liftCursor : nil
+            ))
+            let latest = more ? nil : try await client.queryAll(JarvisHealthQuery(
+                source: .lifts, limit: 100, lastPerExercise: true
+            ))
+            try Task.checkCancellation()
+            guard liftLoadID == loadID else { return }
+            lifts = more ? lifts + history.items : history.items
+            liftCursor = history.coverage.next
+            if let latest {
+                pastExercises = latest.items
+                exercisesPartial = latest.coverage.hasMore
+                if presentNewLiftAfterLoading && !previewSheetPresented {
+                    previewSheetPresented = true
+                    newLiftPresented = true
+                }
+            }
+            liftFailure = nil
+        } catch is CancellationError {
+        } catch {
+            if liftLoadID == loadID { liftFailure = JarvisHealthFailure(error) }
+        }
     }
 
     private func failureRow(_ failure: JarvisHealthFailure) -> some View {

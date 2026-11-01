@@ -675,6 +675,33 @@ class SafeFailureTests(unittest.TestCase):
             "--screenshot-chat-plus-menu",
             (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
         )
+        capture = next(step for step in job["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("for state in track newlift empty;", capture["run"])
+        self.assertIn("--screenshot-health-fixture", capture["run"])
+        self.assertIn("--screenshot-health-language=$language", capture["run"])
+        self.assertIn("health-${state}-${appearance}-${language}.png", capture["run"])
+        self.assertEqual(capture["run"].count("xcrun simctl boot "), 1)
+        self.assertIn("approved Health board", comment["run"])
+
+    def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
+        area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
+        header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]
+        self.assertNotIn("segmentSwitcher", header_body)
+        bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
+        self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
+        self.assertIn(".pickerStyle(.segmented)", area)
+        self.assertIn("guard !more || !liftsLoading", area)
+        self.assertIn("guard liftLoadID == loadID else { return }", area)
+        log = (ROOT / "apps/ios/Jarvis/JarvisHealthLiftLog.swift").read_text()
+        lists, sheet = log.split("struct JarvisHealthNewLiftSheet", 1)
+        self.assertNotIn("TextField(", lists)
+        self.assertNotIn("copy.text(.save)", lists)
+        self.assertIn("copy.text(.exercises)", lists)
+        self.assertIn("copy.text(.history)", lists)
+        self.assertIn("copy.text(.noLifts)", lists)
+        self.assertIn("copy.text(.pastExercises)", sheet)
+        self.assertIn("client.createLift(submittedDraft)", sheet)
 
     def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
