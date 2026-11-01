@@ -14,25 +14,25 @@ struct VoiceScreenView: View {
     @State private var isDraggingCamera = false
     @State private var showsCameraViewfinder = false
     @State private var showsScreenSharePicker = false
+    @State private var captionsHidden = false
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Color(uiColor: .systemBackground)
-                    .ignoresSafeArea()
+                JarvisScreenBackground()
 
                 VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
                     Spacer(minLength: 0)
-                    VoiceOrbView(status: model.statusText, state: model.voiceState) {
+                    VoiceOrbView(status: model.statusText, state: model.voiceState, isMuted: model.isMuted) {
                         minimizeVoice()
                     }
                     Text(model.statusText)
-                        .font(.title3.weight(.semibold))
+                        .font(.system(size: JarvisDesignTokens.voiceStatusFontSize, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .contentTransition(.opacity)
                         .accessibilityHidden(true)
 
-                    if model.isCaptionsEnabled, hasCaptions {
+                    if model.isCaptionsEnabled, !captionsHidden, hasCaptions {
                         captions
                     }
 
@@ -98,29 +98,79 @@ struct VoiceScreenView: View {
     }
 
     private var captions: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.voiceStatusSpacing) {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
             if !model.userCaption.isEmpty {
-                Text(model.userCaption)
-                    .foregroundStyle(.secondary)
+                captionLine(
+                    label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
+                    text: model.userCaption,
+                    color: .secondary
+                )
             }
             if !model.assistantCaption.isEmpty {
-                Text(model.assistantCaption)
-                    .foregroundStyle(.primary)
+                captionLine(
+                    label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
+                    text: model.assistantCaption,
+                    color: JarvisDesignTokens.primaryAccent
+                )
             }
         }
-        .font(.body)
-        .multilineTextAlignment(.center)
-        .lineLimit(JarvisDesignTokens.voiceCaptionLineLimit)
+        .padding(.vertical, JarvisDesignTokens.voiceStatusSpacing)
+        .padding(.leading, JarvisDesignTokens.voiceStatusSpacing)
+        .padding(.trailing, JarvisDesignTokens.voiceControlDiameter - JarvisDesignTokens.voiceStatusSpacing)
         .frame(maxWidth: .infinity)
         .frame(maxHeight: JarvisDesignTokens.voiceCaptionMaximumHeight)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(captionAccessibilityLabel)
+        .glassEffect(
+            .regular,
+            in: .rect(cornerRadius: JarvisDesignTokens.voiceCaptionPanelRadius)
+        )
+        .padding(.horizontal, -JarvisDesignTokens.voiceCaptionHorizontalExtension)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                captionsHidden = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(JarvisNotesLocalization.string(.voiceHideCaptions, language: appLanguage))
+        }
     }
 
     private var captionAccessibilityLabel: String {
-        ["Voice captions", model.userCaption, model.assistantCaption]
+        [
+            JarvisNotesLocalization.string(.voiceCaptionsLabel, language: appLanguage),
+            model.userCaption,
+            model.assistantCaption,
+        ]
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
+    }
+
+    private var appLanguage: JarvisAppLanguage {
+        JarvisAppLanguage(
+            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+        ) ?? .default
+    }
+
+    private func captionLine(label: String, text: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.voiceCaptionSpeakerSpacing) {
+            Text(label)
+                .font(.system(size: JarvisDesignTokens.voiceCaptionSpeakerFontSize, weight: .bold))
+                .tracking(0.48)
+                .textCase(.uppercase)
+                .foregroundStyle(color)
+            Text(text)
+                .font(.system(size: JarvisDesignTokens.voiceCaptionFontSize))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private var controls: some View {
@@ -201,13 +251,24 @@ struct VoiceScreenView: View {
             .accessibilityLabel("Add camera or screen sharing")
 
             VoiceControlButton(
-                symbol: model.isCaptionsEnabled ? "captions.bubble.fill" : "captions.bubble",
-                label: model.isCaptionsEnabled ? "Hide captions" : "Show captions",
-                isSelected: model.isCaptionsEnabled,
+                symbol: nil,
+                label: JarvisNotesLocalization.string(
+                    model.isCaptionsEnabled && !captionsHidden ? .voiceHideCaptions : .voiceShowCaptions,
+                    language: appLanguage
+                ),
+                isSelected: model.isCaptionsEnabled && !captionsHidden,
                 disabled: false,
-                tint: .primary,
-                action: model.toggleCaptions
-            )
+                tint: model.isCaptionsEnabled && !captionsHidden
+                    ? JarvisDesignTokens.primaryAccent
+                    : .primary,
+                title: "CC"
+            ) {
+                if captionsHidden {
+                    captionsHidden = false
+                } else {
+                    model.toggleCaptions()
+                }
+            }
 
             VoiceControlButton(
                 symbol: "phone.down.fill",
@@ -369,106 +430,38 @@ struct VoiceScreenView: View {
 }
 
 private struct VoiceOrbView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let status: String
     let state: VoiceSessionState
+    let isMuted: Bool
     let onMinimize: () -> Void
 
-    private var accent: Color {
+    private var activity: JarvisOrbActivity {
+        if isMuted { return .muted }
         switch state {
-        case .listening: JarvisDesignTokens.voiceListeningColor
-        case .ready, .speaking: JarvisDesignTokens.voiceSpeakingColor
-        case .reconnecting, .failed, .ended: JarvisDesignTokens.voiceOfflineColor
-        case .idle, .connecting: JarvisDesignTokens.voiceConnectingColor
-        }
-    }
-
-    private var scale: CGFloat {
-        switch state {
-        case .listening: JarvisDesignTokens.voiceOrbListeningScale
-        case .speaking: JarvisDesignTokens.voiceOrbSpeakingScale
-        default: 1
+        case .listening: return .listening
+        case .ready: return .thinking
+        case .speaking: return .speaking
+        case .reconnecting: return .reconnecting
+        case .failed, .ended: return .offline
+        case .idle, .connecting: return .calm
         }
     }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [accent.opacity(JarvisDesignTokens.voiceOrbGlowOpacity), .clear],
-                        center: .center,
-                        startRadius: JarvisDesignTokens.voiceOrbGlowStartRadius,
-                        endRadius: JarvisDesignTokens.voiceOrbDiameter / JarvisDesignTokens.voiceOrbGlowRadiusDivisor
-                    )
-                )
-                .padding(JarvisDesignTokens.voiceOrbGlowInset)
-                .accessibilityHidden(true)
-
-            Circle()
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [
-                                    accent.opacity(JarvisDesignTokens.voiceOrbHighlightOpacity),
-                                    Color(uiColor: .secondarySystemBackground),
-                                ],
-                                center: JarvisDesignTokens.voiceOrbHighlightCenter,
-                                startRadius: JarvisDesignTokens.voiceOrbHighlightStartRadius,
-                                endRadius: JarvisDesignTokens.voiceOrbDiameter
-                            )
-                        )
-                        .clipShape(Circle())
-                }
-                .overlay {
-                    Circle()
-                        .stroke(
-                            accent.opacity(JarvisDesignTokens.voiceOrbStrokeOpacity),
-                            lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth
-                        )
-                }
-                .overlay {
-                    Image(systemName: "waveform")
-                        .font(.system(size: JarvisDesignTokens.voiceOrbDiameter / 4, weight: .light))
-                        .foregroundStyle(
-                            JarvisDesignTokens.voiceOrbForegroundColor.opacity(JarvisDesignTokens.voiceOrbIconOpacity)
-                        )
-                        .shadow(
-                            color: accent.opacity(JarvisDesignTokens.voiceOrbIconShadowOpacity),
-                            radius: JarvisDesignTokens.voiceStatusSpacing
-                        )
-                }
-                .shadow(
-                    color: accent.opacity(JarvisDesignTokens.voiceOrbShadowOpacity),
-                    radius: JarvisDesignTokens.voiceStatusSpacing * JarvisDesignTokens.voiceOrbShadowRadiusMultiplier
-                )
-        }
-        .frame(
-            width: JarvisDesignTokens.voiceOrbDiameter,
-            height: JarvisDesignTokens.voiceOrbDiameter
-        )
-        .scaleEffect(reduceMotion ? 1 : scale)
-        .animation(
-            reduceMotion ? nil : .spring(
-                response: JarvisDesignTokens.voiceOrbTransitionDuration,
-                dampingFraction: JarvisDesignTokens.voiceOrbSpringDamping
-            ),
-            value: state
-        )
-        .accessibilityElement()
-        .accessibilityLabel("Jarvis voice. \(status)")
-        .accessibilityAction(named: Text("Minimize voice"), onMinimize)
+        JarvisOrbView(activity: activity)
+            .accessibilityElement()
+            .accessibilityLabel("Jarvis voice. \(status)")
+            .accessibilityAction(named: Text("Minimize voice"), onMinimize)
     }
 }
 
 private struct VoiceControlButton: View {
-    let symbol: String
+    let symbol: String?
     let label: String
     let isSelected: Bool
     let disabled: Bool
     let tint: Color
+    var title: String? = nil
     var prominent = false
     let action: () -> Void
 
@@ -489,13 +482,21 @@ private struct VoiceControlButton: View {
 
     private var button: some View {
         Button(action: action) {
-            Image(systemName: symbol)
-                .font(.title3.weight(.semibold))
+            Group {
+                if let title {
+                    Text(title)
+                        .font(.system(size: 14, weight: .bold))
+                } else if let symbol {
+                    Image(systemName: symbol)
+                        .font(.title3.weight(.semibold))
+                }
+            }
                 .foregroundStyle(tint)
                 .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
                 .contentShape(Circle())
         }
         .disabled(disabled)
+        .tint(tint)
         .accessibilityLabel(label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

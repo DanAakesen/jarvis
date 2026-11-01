@@ -41,7 +41,7 @@ struct JarvisSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
-                .foregroundStyle(settingsFocused || settingsHovered ? Color.accentColor : Color.primary)
+                .foregroundStyle(settingsFocused || settingsHovered ? JarvisDesignTokens.primaryAccent : Color.primary)
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .accessibilityIdentifier("sidebar.settings")
                 .focused($settingsFocused)
@@ -68,7 +68,7 @@ struct JarvisSidebar: View {
             }
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
-        .background(Color(uiColor: .systemBackground))
+        .background(JarvisDesignTokens.pageBackground)
         .accessibilityHidden(!isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()
@@ -110,6 +110,6 @@ struct JarvisSidebar: View {
 
     private func rowColor(for destination: JarvisDestination, selected: Bool) -> Color {
         guard destination.isNavigable else { return .secondary }
-        return selected ? Color.accentColor : Color.primary
+        return selected ? JarvisDesignTokens.primaryAccent : Color.primary
     }
 }
