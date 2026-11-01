@@ -838,7 +838,19 @@ class SafeFailureTests(unittest.TestCase):
                 self.assertIn(".jarvisToolbarButtonStyle()", toolbar)
                 self.assertNotIn(".buttonStyle(.glass)", toolbar)
                 self.assertNotIn(".glassEffect(", toolbar)
-        self.assertIn('Button("Done") { dismiss() }', source)
+        self.assertIn('Image(systemName: "xmark")', source)
+        self.assertIn("Button { dismiss() } label:", source)
+        self.assertIn(".accessibilityLabel(copy(.done))", source)
+        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", source)
+        self.assertNotIn('Button("Done")', source)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn('Text(displayedNeedsYouCount > 99 ? "99+" : "\\(displayedNeedsYouCount)")', chat)
+        self.assertIn(
+            ".frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)",
+            chat,
+        )
+        self.assertIn(".offset(x: -2, y: 2)", chat)
+        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", chat)
 
     def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -847,9 +859,16 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("for appearance in light dark", capture["run"])
         self.assertIn("--screenshot-chat-fixture --screenshot-notifications-open", capture["run"])
         self.assertIn("notifications-${appearance}.png", capture["run"])
+        self.assertIn("for dynamic_type in default accessibility-xxx-large", capture["run"])
+        self.assertIn("content_size=accessibility-extra-extra-extra-large", capture["run"])
+        self.assertIn("for count in 1 12", capture["run"])
+        self.assertIn("--screenshot-needs-you-count=$count", capture["run"])
+        self.assertIn("bell-count-${count}-${dynamic_type}-${appearance}.png", capture["run"])
+        self.assertIn('xcrun simctl ui "$DEVICE_ID" content_size large', capture["run"])
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertIn('fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")', content)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn("guard model.fixtureMode,", chat)
         self.assertIn("self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil", chat)
         self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
         self.assertIn(".sheet(item: $presentedSheet", chat)
