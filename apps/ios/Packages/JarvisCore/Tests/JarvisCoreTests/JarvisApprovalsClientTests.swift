@@ -3,6 +3,46 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisApprovalsClientTests: XCTestCase {
+    func testCalendarProposalFitsAlongsideExistingApprovalsWithoutTruncation() async throws {
+        let existing = (0..<10).map { index in
+            ["id": String(repeating: String(index), count: 43), "actionKind": "merge",
+             "summary": "Existing request", "expiresAt": "2026-10-30T19:00:00.000Z"]
+        }
+        let summary = String(repeating: "x", count: 40_000)
+        let calendar = ["id": String(repeating: "Z", count: 43), "actionKind": "calendar_change",
+                        "summary": summary, "expiresAt": "2026-10-30T19:00:00.000Z"]
+        let transport = FakeApprovalsTransport([HTTPResponse(statusCode: 200, body: json([
+            "confirmations": existing + [calendar], "awayMode": false,
+            "updatedAt": "2026-10-30T18:59:00.000Z",
+        ]))])
+        let pending = try await makeApprovalsClient(transport: transport).pendingConfirmations()
+        XCTAssertEqual(pending.confirmations.count, 11)
+        XCTAssertEqual(pending.confirmations.last?.summary, summary)
+    }
+
+    func testCalendarFeedExpansionPreservesOtherApprovalBounds() async throws {
+        for (count, kind, size) in [
+            (2, "calendar_change", 100), (1, "calendar_change", 40_001),
+            (11, "merge", 100), (1, "merge", 4_001),
+        ] {
+            let confirmations = (0..<count).map { _ in
+                ["id": String(repeating: "A", count: 43), "actionKind": kind,
+                 "summary": String(repeating: "x", count: size),
+                 "expiresAt": "2026-10-30T19:00:00.000Z"]
+            }
+            let transport = FakeApprovalsTransport([HTTPResponse(statusCode: 200, body: json([
+                "confirmations": confirmations, "awayMode": false,
+                "updatedAt": "2026-10-30T18:59:00.000Z",
+            ]))])
+            do {
+                _ = try await makeApprovalsClient(transport: transport).pendingConfirmations()
+                XCTFail("Expected approval bounds to be enforced")
+            } catch {
+                XCTAssertEqual(error as? JarvisApprovalsClientError, .invalidResponse)
+            }
+        }
+    }
+
     func testListsPendingConfirmationsAndIgnoresUnknownFields() async throws {
         let transport = FakeApprovalsTransport([
             HTTPResponse(statusCode: 200, body: json([

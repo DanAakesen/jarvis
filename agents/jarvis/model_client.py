@@ -30,6 +30,7 @@ from calendar_flow import (
     calendar_context,
     calendar_details_requested,
     calendar_multiple_requested,
+    calendar_offer,
     calendar_reply,
     calendar_response_scope,
     calendar_safe_acknowledgment_prefix,
@@ -1088,6 +1089,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 acknowledgment_emitted = False
                 calendar_evidence = []
                 calendar_mutation = None
+                calendar_proposal_repair = False
                 completed_tool_calls: dict[
                     tuple[str, str], tuple[tuple[str, str], dict[str, Any]]
                 ] = {}
@@ -1411,10 +1413,44 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             continue
                         if calendar_guard:
                             text = "".join(calendar_text)
+                            unstaged_offer = (
+                                calendar_mutation is None
+                                and (
+                                    calendar_turn
+                                    or calendar_evidence
+                                    or calendar_response_scope(calendar_messages, text)
+                                )
+                                and calendar_offer(text)
+                            )
+                            if unstaged_offer:
+                                if (
+                                    calendar_enabled and not calendar_proposal_repair
+                                    and not force_final_synthesis
+                                ):
+                                    calendar_proposal_repair = True
+                                    model_input.append({
+                                        "role": "user",
+                                        "content": (
+                                            "Runtime correction: no calendar proposal was staged "
+                                            "for this offer in this turn. "
+                                            "Use the calendar create/update/move/delete tool now "
+                                            "to prepare the requested or suggested change for "
+                                            "approval. Do not call calendar_confirm_change on "
+                                            "this staging turn. Do not ask whether to prepare it. "
+                                            "If required details are genuinely missing, ask only "
+                                            "for those; never invent them. Do not repeat an "
+                                            "unstaged offer."
+                                        ),
+                                    })
+                                    continue
+                                yield no_calendar_evidence(danish)
+                                return
                             reply = text
                             if calendar_mutation is not None:
                                 name, result = calendar_mutation
-                                explanation = text if not calendar_claim(text) else ""
+                                explanation = text if not (
+                                    calendar_claim(text) or calendar_offer(text)
+                                ) else ""
                                 text = calendar_reply(name, result, danish)
                                 if (
                                     multiple_calendar_events

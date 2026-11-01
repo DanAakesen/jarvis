@@ -257,7 +257,10 @@ struct JarvisChatScreen: View {
             switch sheet {
             case .activity(let kind):
                 JarvisActivitySheet(model: model, kind: kind)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents(
+                        model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true
+                            ? [.large] : [.medium, .large]
+                    )
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             case .camera:
@@ -1055,7 +1058,9 @@ struct JarvisChatScreen: View {
 
             if let confirmation = model.activeConfirmation {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                    Text(confirmation.actionKind == .calendarChange
+                         ? (appLanguage == .da ? "Kalenderændring" : "Calendar change")
+                         : confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text(confirmation.summary)
@@ -1063,19 +1068,37 @@ struct JarvisChatScreen: View {
                         .lineLimit(JarvisDesignTokens.chatConfirmationSummaryLines)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     HStack {
-                        Button("Decline") {
+                        Button {
                             Task { await model.resolve(confirmation, decision: .reject) }
+                        } label: {
+                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
+                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
+                                 : JarvisApprovalLocalization.string(.decline, language: appLanguage))
+                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.glass)
                         .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
-                        .accessibilityHint(model.fixtureMode ? "Approval actions are disabled with fixture data." : "")
+                        .accessibilityIdentifier("now-confirmation-decline-\(confirmation.id)")
+                        .accessibilityHint(model.fixtureMode
+                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                            : "")
                         Spacer()
-                        Button("Approve") {
+                        Button {
                             Task { await model.resolve(confirmation, decision: .approve) }
+                        } label: {
+                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
+                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
+                                 : JarvisApprovalLocalization.string(.approve, language: appLanguage))
+                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.glassProminent)
                         .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
-                        .accessibilityHint(model.fixtureMode ? "Approval actions are disabled with fixture data." : "")
+                        .accessibilityIdentifier("now-confirmation-approve-\(confirmation.id)")
+                        .accessibilityHint(model.fixtureMode
+                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                            : "")
                     }
                 }
                 .padding(JarvisDesignTokens.chatGlassInset)

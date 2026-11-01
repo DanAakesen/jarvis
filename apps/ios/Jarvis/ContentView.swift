@@ -33,6 +33,14 @@ struct ContentView: View {
 
     init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
         let arguments = ProcessInfo.processInfo.arguments
+#if targetEnvironment(simulator)
+        let calendarChangeLanguage: JarvisAppLanguage? = arguments.contains("--screenshot-calendar-change-fixture")
+            ? JarvisAppLanguage(rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? "")
+                ?? .default
+            : nil
+#else
+        let calendarChangeLanguage: JarvisAppLanguage? = nil
+#endif
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
         let voiceConnectionScreenshot = arguments.contains("--screenshot-voice-connection-lost")
@@ -60,6 +68,7 @@ struct ContentView: View {
             || activityScreenshotState != nil
             || factoryFixtureMode
             || healthFixtureMode
+            || calendarChangeLanguage != nil
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
@@ -97,7 +106,11 @@ struct ContentView: View {
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
-            resolvedClient = try? JarvisFixtureScenario.makeClient(emptyActivity: activityScreenshotState == "empty")
+            if let calendarChangeLanguage {
+                resolvedClient = try? JarvisFixtureScenario.makeClient(calendarChangeLanguage: calendarChangeLanguage)
+            } else {
+                resolvedClient = try? JarvisFixtureScenario.makeClient(emptyActivity: activityScreenshotState == "empty")
+            }
             resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
             settingsClient = try? JarvisFixtureScenario.makeSettingsClient()
         } else if let client {

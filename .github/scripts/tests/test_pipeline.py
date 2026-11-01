@@ -829,6 +829,71 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".sheet(item: $presentedSheet", chat)
         self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
 
+    def test_ios_calendar_change_review_has_bilingual_simulator_evidence(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        capture = next(step["run"] for step in steps
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("for appearance in light dark", capture)
+        self.assertIn("for language in da en", capture)
+        self.assertIn("--screenshot-calendar-change-fixture --screenshot-notifications-open", capture)
+        self.assertIn('-jarvis.appLanguage "$language" -jarvis.appTheme "$appearance"', capture)
+        self.assertIn("calendar-change-confirmation-${language}-${appearance}.png", capture)
+        self.assertEqual(capture.count('xcrun simctl boot "$DEVICE_ID"'), 1)
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/JarvisUITests.xcresult"', capture)
+        self.assertIn("xcrun xcresulttool export attachments", capture)
+        self.assertIn('--output-path "$SCREENSHOT_DIR/ui-test-attachments"', capture)
+        self.assertNotIn("defaults write", capture)
+        comment = next(step["run"] for step in steps
+                       if step.get("name") == "Post or update screenshot comment")
+        self.assertIn("calendar-change-confirmation-{da,en}-{light,dark}.png", comment)
+        self.assertIn("do not prove backend execution", comment)
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        simulator = content.split("#if targetEnvironment(simulator)", 1)[1].split("#else", 1)[0]
+        self.assertIn("--screenshot-calendar-change-fixture", simulator)
+        self.assertIn("UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey)", simulator)
+        self.assertIn("|| calendarChangeLanguage != nil", content)
+        fixture = (ROOT / "apps/ios/Jarvis/JarvisFixtureScenario.swift").read_text()
+        self.assertIn('"actionKind": "calendar_change"', fixture)
+        self.assertIn('"running": [], "items": [], "awayMode": false', fixture)
+        self.assertIn("Synthetic preview — no calendar writes.", fixture)
+        self.assertIn("Syntetisk eksempel — ingen kalenderændringer.", fixture)
+        self.assertIn('baseURL: URL(string: "https://fixture.invalid/api")!', fixture)
+        for filename in ("JarvisActivitySheet.swift", "JarvisChatScreen.swift"):
+            source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
+            for action in ("approve", "decline"):
+                self.assertIn(f"JarvisApprovalLocalization.string(.{action}, language: appLanguage)", source)
+            self.assertIn(".disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))", source)
+            self.assertIn("minWidth: JarvisDesignTokens.chatMinimumTapTarget", source)
+            self.assertIn("minHeight: JarvisDesignTokens.chatMinimumTapTarget", source)
+            self.assertIn('appLanguage == .da ? "Kalenderændring" : "Calendar change"', source)
+        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
+        self.assertIn('hasCalendarConfirmation && appLanguage == .da ? "Afventer godkendelse"', sheet)
+        self.assertIn("JarvisApprovalLocalization.string(.expires, language: appLanguage)", sheet)
+        self.assertIn('.accessibilityIdentifier("confirmation-fixture-reason")', sheet)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn("model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true", chat)
+        self.assertIn("? [.large] : [.medium, .large]", chat)
+        ui_tests = (ROOT / "apps/ios/JarvisUITests/ChatPresentationUITests.swift").read_text()
+        self.assertIn("testCalendarChangeSheetShowsFullReviewAndLocalizedControls", ui_tests)
+        self.assertIn("testCalendarChangeNowBarUsesLocalizedControls", ui_tests)
+        self.assertIn("XCTAssertEqual(review.label, expectedReview)", ui_tests)
+        self.assertIn("XCTAttachment(screenshot: app.screenshot())", ui_tests)
+        self.assertIn("screenshot.lifetime = .keepAlways", ui_tests)
+        self.assertIn("XCTAssertGreaterThanOrEqual(button.frame.height, 44)", ui_tests)
+
+    def test_lock_screen_approval_expiry_uses_absolute_system_time(self):
+        preview = (ROOT / "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift").read_text()
+        notification = (ROOT / "apps/ios/Jarvis/JarvisApprovalNotificationCoordinator.swift").read_text()
+        for source in (preview, notification):
+            self.assertIn("expiresAt.formatted(", source)
+            self.assertIn(".dateTime.hour().minute().locale(language.locale)", source)
+            self.assertIn("arguments: [expiryTime]", source)
+            self.assertNotIn("RelativeDateTimeFormatter", source)
+        for language, template in (("da", "Udløber kl. %@"), ("en", "Expires at %@")):
+            resource = ROOT / f"apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources/{language}.lproj/JarvisApprovals.strings"
+            self.assertIn(f'"approval.expires" = "{template}";', resource.read_text())
+
     def test_ios_background_activity_empty_state_and_screenshots(self):
         screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
         model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()

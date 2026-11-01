@@ -76,14 +76,17 @@ function isNowFeed(value: unknown): value is Extract<NowFeed, { status: 'ready' 
       (task.agent === 'codex' || task.agent === 'copilot') &&
       typeof task.activity === 'string' && task.activity.length <= 400 && validTime(task.startedAt)) &&
     Array.isArray(value.items) && value.items.length <= 100 && value.items.every(isActivityItem) &&
-    Array.isArray(value.confirmations) && value.confirmations.length <= 10 &&
+    Array.isArray(value.confirmations) && value.confirmations.length <= 11 &&
+    value.confirmations.filter((item) => isRecord(item) && item.actionKind === 'calendar_change').length <= 1 &&
+    value.confirmations.filter((item) => isRecord(item) && item.actionKind !== 'calendar_change').length <= 10 &&
     value.confirmations.every((confirmation) =>
       isRecord(confirmation) && typeof confirmation.id === 'string' &&
       confirmationIdPattern.test(confirmation.id) &&
       typeof confirmation.actionKind === 'string' &&
       confirmationKinds.has(confirmation.actionKind as ConfirmationActionKind) &&
       typeof confirmation.summary === 'string' && confirmation.summary.length > 0 &&
-      confirmation.summary.length <= 4000 && validTime(confirmation.expiresAt));
+      confirmation.summary.length <= (confirmation.actionKind === 'calendar_change' ? 40_000 : 4000) &&
+      validTime(confirmation.expiresAt));
 }
 
 async function authorizedRequest(
