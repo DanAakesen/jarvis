@@ -583,6 +583,10 @@ Native iPhone destination headers (Notes, Health, Factory) use the shared
 44-point, no-fill sidebar menu action in the existing orange accent, with localized
 English/Danish labels. Chat groups its menu launcher with the bell in the native
 top-right trailing toolbar, matching the right-side drawer.
+P15-41 renders that drawer as a topmost conditional overlay with a dim tap-close
+region and trailing move transition (opacity for reduced motion), rather than
+shifting/blurring the foreground. Header geometry, drawer content and palette
+remain unchanged; rendered device acceptance is still pending.
 
 Dan's three supplied screenshots identify inconsistent Refresh/Create action
 shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's

@@ -123,7 +123,6 @@ struct JarvisNotesArea: View {
     let client: JarvisNotesClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
-    var onOpenSidebar: (() -> Void)? = nil
 
     @State private var selectedTab: JarvisNotesTab = .notes
     @State private var selectedScope: JarvisNotesSearchScope = .all
@@ -242,9 +241,7 @@ struct JarvisNotesArea: View {
 
     private var header: some View {
         HStack {
-            if let onOpenSidebar {
-                JarvisSidebarMenuButton(language: language, action: onOpenSidebar)
-            }
+            JarvisSidebarMenuButton(language: language)
             Text(copy.title)
                 .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.primary)

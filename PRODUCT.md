@@ -219,9 +219,12 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
 screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.
 Chat, Health, Notes and Factory provide localized menu launchers as well as the right-edge swipe; tapping
-the revealed screen closes the sidebar. Interrupted gestures must return to the
+the dimmed screen closes the sidebar. Interrupted gestures must return to the
 committed open/closed state without an invisible input blocker. The iPhone UI gate
-exercises Chat, Health, Notes, and Factory in Danish and English.
+requires the actual drawer to appear and be hittable within two seconds in Danish
+and English. The owner temporarily selects only this focused test class for
+preview CI; the retained Chat/Health/Notes/Factory controls and voice regression
+still requires verification before full issue acceptance.
 
 P15-38 / #1478 applies Chat's approved ambient background to every native
 screen and app-owned sheet: one light/dark definition and the same glow positions,

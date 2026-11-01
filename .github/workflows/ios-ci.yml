@@ -161,8 +161,7 @@ jobs:
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
-            -only-testing:JarvisUITests/NavigationBisectTests \
-            -only-testing:JarvisUITests/NavigationReliabilityTests \
+            -only-testing:JarvisUITests/SidebarNavigationTests \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
           xcrun xcresulttool export attachments \
@@ -329,8 +328,7 @@ jobs:
             -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/ios-navigation.xcresult" \
-            -only-testing:JarvisUITests/NavigationReliabilityTests \
-            -only-testing:JarvisUITests/NavigationBisectTests \
+            -only-testing:JarvisUITests/SidebarNavigationTests \
             -parallel-testing-enabled NO \
             -maximum-test-execution-time-allowance 600 \
             CODE_SIGNING_ALLOWED=NO \

@@ -106,9 +106,6 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     init() {
-#if targetEnvironment(simulator)
-        print("Jarvis gate startup: navigationFixture=\(Self.isNavigationFixture)")
-#endif
         if Self.isNavigationFixture {
             tokenStore = nil
             provider = nil
@@ -340,48 +337,16 @@ private final class JarvisGateModel: ObservableObject {
 struct JarvisGateRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model = JarvisGateModel()
+    @StateObject private var navigation = JarvisNavigationModel(
+        initialState: ContentView.initialNavigation(),
+        dismissKeyboard: {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+            )
+        }
+    )
 
     var body: some View {
-        if NavigationBisectVariant.current != nil {
-            ZStack(alignment: .topLeading) {
-                gatedContent
-                NavigationBisectProbe(identifier: "navigation.bisectRoot") { isEnabled in
-                    "shouldCoverContent=\(model.shouldCoverContent);"
-                        + "rootDisabled=\(model.shouldCoverContent || !isEnabled)"
-                        + ";contentEpoch=\(model.contentEpoch)"
-                        + ";signOutGeneration=\(model.signOutGeneration)"
-                        + ";presentations=\(navigationBisectPresentations)"
-                }
-                NavigationBisectRootControl(identifier: "navigation.controlOutsideGate")
-                    .padding(.top, 210)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-        } else {
-            gatedContent
-        }
-    }
-
-    private var navigationBisectPresentations: String {
-        let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows).filter { !$0.isHidden }
-        return windows.prefix(8).map { window in
-            var pending = window.rootViewController.map { [$0] } ?? []
-            var presented: [String] = []
-            var visited = Set<ObjectIdentifier>()
-            while let controller = pending.popLast(), visited.count < 32 {
-                guard visited.insert(ObjectIdentifier(controller)).inserted else { continue }
-                pending.append(contentsOf: controller.children)
-                if let modal = controller.presentedViewController {
-                    presented.append("\(type(of: modal)):style=\(modal.modalPresentationStyle.rawValue)")
-                    pending.append(modal)
-                }
-            }
-            return "level=\(window.windowLevel.rawValue),key=\(window.isKeyWindow),"
-                + "interactive=\(window.isUserInteractionEnabled),frame=\(window.frame),modals=\(presented)"
-        }.joined(separator: "|")
-    }
-
-    private var gatedContent: some View {
         Group {
             if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
                 JarvisLockScreenTasksPreview(
@@ -395,16 +360,11 @@ struct JarvisGateRootView: View {
                 ContentView(sessionEpoch: model.contentEpoch)
             }
         }
-            .overlay(alignment: .topTrailing) {
-                if NavigationBisectVariant.current != nil {
-                    NavigationBisectRootControl(identifier: "navigation.controlInsideGate")
-                        .padding(.top, 140)
-                }
-            }
             // Only sign-out discards the shell; sign-in resets session content explicitly.
             .id(model.signOutGeneration)
+            .environmentObject(navigation)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
-            .navigationBisectGateHitTesting(!model.shouldCoverContent)
+            .allowsHitTesting(!model.shouldCoverContent)
             .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
             .task {
@@ -412,7 +372,11 @@ struct JarvisGateRootView: View {
                 await model.load()
                 model.refreshOverlay()
             }
-            .onChange(of: model.shouldCoverContent) { _, _ in
+            .onChange(of: model.signOutGeneration) { _, _ in
+                navigation.reset()
+            }
+            .onChange(of: model.shouldCoverContent) { _, covered in
+                if covered { navigation.closeSidebar() }
                 model.refreshOverlay()
             }
             .onChange(of: scenePhase) { _, phase in
@@ -424,22 +388,6 @@ struct JarvisGateRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
                 Task { await model.signOut() }
             }
-    }
-}
-
-private struct NavigationBisectRootControl: View {
-    let identifier: String
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var count = 0
-
-    var body: some View {
-        Button(JarvisAppLanguage.current == .da ? "Testtryk" : "Test tap") {
-            count += 1
-        }
-        .frame(width: 100, height: 44)
-        .contentShape(Rectangle())
-        .accessibilityIdentifier(identifier)
-        .accessibilityValue("count=\(count);isEnabled=\(isEnabled)")
     }
 }
 

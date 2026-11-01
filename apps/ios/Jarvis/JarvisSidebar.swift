@@ -11,6 +11,7 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
 }
 
 struct JarvisSidebar: View {
+    @EnvironmentObject private var navigation: JarvisNavigationModel
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedDestination: JarvisDestination?
@@ -18,10 +19,8 @@ struct JarvisSidebar: View {
     @State private var hoveredDestination: JarvisDestination?
     @State private var settingsHovered = false
     let currentDestination: JarvisDestination
-    let isOpen: Bool
     let safeAreaInsets: EdgeInsets
     let onNavigate: (JarvisDestination) -> Void
-    let onClose: () -> Void
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -85,10 +84,10 @@ struct JarvisSidebar: View {
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
         .accessibilityElement(children: .contain)
-        .accessibilityHidden(!isOpen)
-        .allowsHitTesting(isOpen)
+        .accessibilityIdentifier("navigation.sidebar")
+        .accessibilityAddTraits(.isModal)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
-            onClose()
+            navigation.closeSidebar()
         }
         .environment(\.locale, language.locale)
     }

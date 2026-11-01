@@ -10,11 +10,13 @@ extension View {
 }
 
 struct JarvisSidebarMenuButton: View {
+    @EnvironmentObject private var navigation: JarvisNavigationModel
     let language: JarvisAppLanguage
-    let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            navigation.openSidebar()
+        } label: {
             Image(systemName: "line.3.horizontal")
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
@@ -323,14 +325,6 @@ struct JarvisScreenBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        if NavigationBisectVariant.current == .H {
-            Color.clear.accessibilityHidden(true)
-        } else {
-            ambientBody
-        }
-    }
-
-    private var ambientBody: some View {
         GeometryReader { geometry in
             let size = geometry.size
             ZStack {

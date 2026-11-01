@@ -6249,18 +6249,12 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 
 ### Standing iOS documentation-first requirement
 
-P15-41's temporary navigation bisect launches only simulator navigation fixtures
-with `--ui-test-navigation-variant=A` through `F`. `NavigationBisectTests` runs
-each variant in Danish and English in the full-scheme CI invocation, independently
-of the existing regression tests. Results print `NAVIGATION BISECT` and include
-noninteractive, visually transparent accessibility probes for shell and gate
-state. Remove the isolation switches after selecting and verifying the fix.
-Round two adds G–K: write history, no ambient decoration, no legacy input probe
-or gate hit-testing modifier, separate element/coordinate taps, and no
-navigation effects. `navigation.bisectWrites` contains only bounded caller tags
-and Boolean/path-state transitions. Timed snapshots report requested and actual
-elapsed times. `element.tap()` is a synthesized touch, not proof of VoiceOver
-accessibility activation. All isolation remains simulator-fixture-only.
+P15-41 replaces the temporary bisect with one environment-injected navigation
+reference owned above ContentView and a conditional topmost drawer. No bisect
+variants, launch counters or native hit-test probes remain. The owner requests
+`SidebarNavigationTests` alone in both iOS CI invocations for preview qualification;
+the broader `NavigationReliabilityTests` remains available, but is not qualified
+by a passing focused run. `ios-testflight.yml` remains owner-managed and untouched.
 
 Before implementing any iOS change, read the relevant Apple API documentation
 and Human Interface Guidelines. Prefer the platform API, modifier, or component
@@ -6294,11 +6288,10 @@ after the implementation; direct page retrieval failed in this environment:
 
 Deliberate P15-41 deviations:
 
-- Retain the owner-approved right-side fixed-behind drawer rather than the HIG's
-  leading sidebar/system split-view composition. The requirement explicitly
-  preserves its design. Routing, toolbar controls, drag recognition and transient
-  state still use SwiftUI APIs; the custom generation counter invalidates commands
-  arriving during a drag, not a replacement gesture recognizer or navigation stack.
+- Retain the owner-approved right-side drawer rather than the HIG's leading
+  sidebar/system split-view composition. Render it above the content with native
+  transitions and a separate edge gesture; no progress observer or recognizer
+  generation machinery is retained.
 - The test-only toolbar helper sends a frame-center `XCUICoordinate` tap instead
   of requiring `XCUIElement.isHittable` before `tap()`. Run 41286956749 showed
   invalid activation-point/window snapshots before any interaction. This is an
@@ -6313,18 +6306,18 @@ Deliberate P15-41 deviations:
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
 
-P15-41 adds `JarvisUITests/NavigationReliabilityTests` to the generated `Jarvis`
+P15-41 adds `JarvisUITests/SidebarNavigationTests` to the generated `Jarvis`
 scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
 `xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
-'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/NavigationReliabilityTests
-CODE_SIGNING_ALLOWED=NO test`. The existing ready-PR iOS job runs this regression
+'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/SidebarNavigationTests
+CODE_SIGNING_ALLOWED=NO test`. The ready-PR iOS job runs this focused class
 on its already-booted iPhone and retains `ios-navigation.xcresult` for 14 days,
 including cycle screenshots and failures,
-along with `ios-scheme.xcresult` from the earlier full-scheme test invocation.
+along with `ios-scheme.xcresult` from the earlier focused scheme invocation.
 Both uploads run on failure; use the scheme bundle when screenshot-step tests
 stop the job before the dedicated navigation invocation.
 Run 41308630589 retains fired menu commands with a closed rendered shell.
-The follow-up reads the shell's navigation dependency in `ContentView.body`
+The earlier, now superseded follow-up read the shell's navigation dependency in `ContentView.body`
 before its GeometryReader closure; rendering uses that snapshot, while actions
 mutate the same persisted state. Full native navigation remains unverified.
 Its 45-minute limit accommodates

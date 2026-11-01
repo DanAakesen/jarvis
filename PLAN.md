@@ -3564,6 +3564,16 @@ G's epoch-zero stale render; exact-head simulator qualification remains pending.
 Local validation passes 19 focused iOS pipeline checks, 78 Swift core
 session/navigation checks and parsing of all edited Swift files. Linux cannot
 verify the new XCUI tests or rendered menu recovery.
+Preview build 22 reportedly keeps the top-right menu visible but tapping still
+does not open. Comment 6562281755 authorizes replacing the view-local shell state
+with a reference model owned above ContentView, direct environment-model button
+actions and a topmost conditional drawer. This is implemented; all bisect/probes
+are removed. Local checks pass 20 focused pipeline tests, 65 Core/source tests
+and parsing of 14 changed Swift files. Qualify
+with bilingual two-second visible-drawer tests. iOS CI runs only that class per
+owner instruction; the retained broader regression still requires verification.
+Keep the owner's TestFlight workflow unchanged. Native compilation/device
+confirmation remain pending; this ownership change is not yet proven recovery.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

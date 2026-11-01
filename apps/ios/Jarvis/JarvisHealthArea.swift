@@ -194,7 +194,6 @@ struct JarvisHealthArea: View {
     let language: JarvisAppLanguage
     let observeRefreshEvents: Bool
     let onRetryConfiguration: () -> Void
-    let onOpenSidebar: (() -> Void)?
     private let now: Date
     private let presentNewLiftAfterLoading: Bool
 
@@ -221,14 +220,12 @@ struct JarvisHealthArea: View {
         onRetryConfiguration: @escaping () -> Void = {},
         now: Date = Date(),
         workoutInitiallySelected: Bool = false,
-        presentNewLiftAfterLoading: Bool = false,
-        onOpenSidebar: (() -> Void)? = nil
+        presentNewLiftAfterLoading: Bool = false
     ) {
         self.client = client
         self.language = language
         self.observeRefreshEvents = observeRefreshEvents
         self.onRetryConfiguration = onRetryConfiguration
-        self.onOpenSidebar = onOpenSidebar
         self.now = now
         self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
         _trackWorkout = State(initialValue: workoutInitiallySelected)
@@ -361,9 +358,7 @@ struct JarvisHealthArea: View {
 
     private var header: some View {
         HStack {
-            if let onOpenSidebar {
-                JarvisSidebarMenuButton(language: language, action: onOpenSidebar)
-            }
+            JarvisSidebarMenuButton(language: language)
             Text(copy.text(.title))
                 .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.primary)

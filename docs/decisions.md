@@ -9934,6 +9934,21 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Comment 6562281755 replaces further bisecting after preview build 22 reportedly
+keeps the menu visible but does not open. One reference navigation model is owned
+above ContentView and injected through SwiftUI's environment; menu controls invoke
+its open method directly. A conditional topmost dim layer and trailing drawer
+replace foreground offsets/blur and drag-generation machinery. The separate edge
+gesture commits only on completion. Delete bisect tests/probes and run the new
+bilingual visible-drawer test class alone in CI as requested; this focused gate
+does not establish broader controls/voice acceptance. Preserve ios-testflight.yml
+for the owner's revert. Device recovery and native execution remain unverified.
+Relevant platform references are [EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject),
+[StateObject](https://developer.apple.com/documentation/swiftui/stateobject),
+and [transition](https://developer.apple.com/documentation/swiftui/view/transition(_:)).
+Use these APIs rather than a custom state observer; the right-side drawer remains
+an explicit owner-approved deviation from leading/system split-view navigation.
+
 Owner correction: Chat's menu belongs at the top right beside the bell, matching
 the right-side drawer. Use native `ToolbarItemGroup(placement: .topBarTrailing)`,
 keeping both labels, the 44-point target and plain no-extra-fill style.

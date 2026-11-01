@@ -127,8 +127,6 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
-    private let showsSidebarToolbarButton: Bool
-    let onOpenSidebar: () -> Void
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
 
@@ -137,8 +135,6 @@ struct JarvisChatScreen: View {
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
-        showsSidebarToolbarButton: Bool = true,
-        onOpenSidebar: @escaping () -> Void = {},
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
         _model = StateObject(wrappedValue: JarvisChatModel(
@@ -147,8 +143,6 @@ struct JarvisChatScreen: View {
             startupError: startupError
         ))
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
-        self.showsSidebarToolbarButton = showsSidebarToolbarButton
-        self.onOpenSidebar = onOpenSidebar
         self.onNavigate = onNavigate
     }
 
@@ -198,17 +192,7 @@ struct JarvisChatScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if showsSidebarToolbarButton {
-                    Button(action: onOpenSidebar) {
-                        Image(systemName: "line.3.horizontal")
-                            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .contentShape(Rectangle())
-                    }
-                    .jarvisToolbarButtonStyle()
-                    .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: appLanguage))
-                    .accessibilityIdentifier("navigation.openSidebar")
-                    .modifier(NavigationBisectMenuValue())
-                }
+                JarvisSidebarMenuButton(language: appLanguage)
                 Button {
                     presentedSheet = .activity(.needsYou)
                 } label: {
@@ -319,7 +303,7 @@ struct JarvisChatScreen: View {
         attachmentPickers
         .jarvisAmbientBackground()
         .onChange(of: composerMode) { _, mode in
-            guard NavigationBisectVariant.current != .K, mode == .voice else { return }
+            guard mode == .voice else { return }
             composerMode = .chat
             onNavigate(.voice)
         }
@@ -679,16 +663,6 @@ struct JarvisChatScreen: View {
                     .accessibilityLabel("Message Jarvis")
                     .accessibilityIdentifier("chat.input")
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
-#if targetEnvironment(simulator)
-                    .background {
-                        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation"),
-                           NavigationBisectVariant.current != .I {
-                            JarvisInputHitTestingProbe()
-                                .allowsHitTesting(false)
-                                .accessibilityHidden(true)
-                        }
-                    }
-#endif
 
                 Picker("Mode", selection: $composerMode) {
                     Image(systemName: "bubble.left")
@@ -1228,6 +1202,7 @@ struct JarvisChatScreen: View {
             onNavigate: { _ in }
         )
     }
+    .environmentObject(JarvisNavigationModel())
 }
 
 private struct JarvisChatCameraSheet: View {

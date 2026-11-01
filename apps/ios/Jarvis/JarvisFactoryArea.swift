@@ -74,7 +74,6 @@ struct JarvisFactoryArea: View {
     let client: JarvisFactoryClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
-    let onOpenSidebar: (() -> Void)?
     let previewState: JarvisFactoryPreviewState?
     let liveUpdatesEnabled: Bool
 
@@ -122,13 +121,11 @@ struct JarvisFactoryArea: View {
         language: JarvisAppLanguage,
         onRetryConfiguration: @escaping () -> Void,
         previewState: JarvisFactoryPreviewState? = nil,
-        liveUpdatesEnabled: Bool = true,
-        onOpenSidebar: (() -> Void)? = nil
+        liveUpdatesEnabled: Bool = true
     ) {
         self.client = client
         self.language = language
         self.onRetryConfiguration = onRetryConfiguration
-        self.onOpenSidebar = onOpenSidebar
         self.previewState = previewState
         self.liveUpdatesEnabled = liveUpdatesEnabled
         _segment = State(initialValue: previewState?.segment ?? .board)
@@ -266,9 +263,7 @@ struct JarvisFactoryArea: View {
 
     private var header: some View {
         HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
-            if let onOpenSidebar {
-                JarvisSidebarMenuButton(language: language, action: onOpenSidebar)
-            }
+            JarvisSidebarMenuButton(language: language)
             Text(copy.text(.title))
                 .font(.title2.weight(.semibold))
                 .lineLimit(1)
@@ -869,6 +864,7 @@ private struct FactoryChecksStatus: View {
         onRetryConfiguration: {},
         liveUpdatesEnabled: false
     )
+    .environmentObject(JarvisNavigationModel())
 }
 
 #Preview("Software Factory · Needs Dan") {
@@ -879,6 +875,7 @@ private struct FactoryChecksStatus: View {
         previewState: .needs,
         liveUpdatesEnabled: false
     )
+    .environmentObject(JarvisNavigationModel())
 }
 
 #Preview("Software Factory · Task detail") {
@@ -889,6 +886,7 @@ private struct FactoryChecksStatus: View {
         previewState: .detail,
         liveUpdatesEnabled: false
     )
+    .environmentObject(JarvisNavigationModel())
 }
 
 #Preview("Software Factory · New task") {
@@ -899,6 +897,7 @@ private struct FactoryChecksStatus: View {
         previewState: .newtask,
         liveUpdatesEnabled: false
     )
+    .environmentObject(JarvisNavigationModel())
 }
 
 #Preview("Software Factory · Release detail") {
@@ -909,4 +908,5 @@ private struct FactoryChecksStatus: View {
         previewState: .release,
         liveUpdatesEnabled: false
     )
+    .environmentObject(JarvisNavigationModel())
 }
