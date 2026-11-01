@@ -18,6 +18,7 @@ struct JarvisOrbView: View {
     @State private var pulse = false
 
     let activity: JarvisOrbActivity
+    var diameter: CGFloat = JarvisDesignTokens.gateOrbSize
 
     private var amplitude: CGFloat {
         switch activity {
@@ -42,8 +43,20 @@ struct JarvisOrbView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let size = geometry.size.width
-            ZStack {
+            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animatesCore)) { timeline in
+                let phase = animatesCore
+                    ? timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / animationDuration
+                    : 0
+                sphere(size: geometry.size.width, phase: phase)
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .onAppear { pulse = true }
+    }
+
+    private func sphere(size: CGFloat, phase: Double) -> some View {
+        let energy = CGFloat(sin(phase)) * amplitude
+        return ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -77,6 +90,7 @@ struct JarvisOrbView: View {
                         radius: size * JarvisDesignTokens.orbGlassShadowRadiusScale
                     )
                     .shadow(color: JarvisDesignTokens.orbCyan.opacity(0.24), radius: size * 0.14)
+                ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -150,6 +164,10 @@ struct JarvisOrbView: View {
                         color: JarvisDesignTokens.orbCore.opacity(JarvisDesignTokens.orbCenterGlowOpacity),
                         radius: size * JarvisDesignTokens.orbCenterGlowRadiusScale
                     )
+                }
+                .scaleEffect(x: 1 + energy, y: 1 - energy * 0.5)
+                .rotationEffect(.degrees(animatesCore ? sin(phase * 0.7) * 12 : 0))
+                .brightness(animatesCore ? (Double(energy) + Double(amplitude)) * 0.3 : 0)
             }
             .frame(width: size, height: size)
             .scaleEffect(scale)
@@ -159,9 +177,6 @@ struct JarvisOrbView: View {
             .saturation(saturation)
             .grayscale(activity == .offline ? 1 : 0)
             .brightness(brightness)
-        }
-        .frame(width: JarvisDesignTokens.gateOrbSize, height: JarvisDesignTokens.gateOrbSize)
-        .onAppear { pulse = true }
     }
 
     private var saturation: Double {
@@ -250,12 +265,19 @@ struct JarvisOrbView: View {
     }
 
     private var scale: CGFloat {
-        guard !reduceMotion, scenePhase == .active, amplitude > 0 else { return 1 }
+        guard activity == .idle || activity == .signingIn,
+              !reduceMotion, scenePhase == .active, amplitude > 0 else { return 1 }
         return pulse ? 1 + amplitude : 1 - amplitude
     }
 
     private var pulseAnimation: Animation? {
-        guard !reduceMotion, scenePhase == .active, amplitude > 0 else { return nil }
+        guard activity == .idle || activity == .signingIn,
+              !reduceMotion, scenePhase == .active, amplitude > 0 else { return nil }
         return .easeInOut(duration: animationDuration).repeatForever(autoreverses: true)
+    }
+
+    private var animatesCore: Bool {
+        !reduceMotion && scenePhase == .active &&
+            (activity == .listening || activity == .thinking || activity == .speaking)
     }
 }

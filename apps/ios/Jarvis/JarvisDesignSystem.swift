@@ -97,9 +97,10 @@ enum JarvisDesignTokens {
     static let chatConfirmationSummaryLines = 3
     static let chatPhotoCompressionQuality: CGFloat = 0.88
     static let voiceOrbStrokeWidth: CGFloat = 1.5
-    static let voiceOrbListeningPulse: CGFloat = 0.035
-    static let voiceOrbThinkingPulse: CGFloat = 0.09
-    static let voiceOrbSpeakingPulse: CGFloat = 0.05
+    static let voiceOrbListeningPulse: CGFloat = 0.18
+    static let voiceOrbThinkingPulse: CGFloat = 0.12
+    static let voiceOrbSpeakingPulse: CGFloat = 0.24
+    static let voiceOrbHaloInset: CGFloat = 28
     static let voiceOrbListeningDuration: Double = 2.8
     static let voiceOrbThinkingDuration: Double = 1.5
     static let voiceOrbSpeakingDuration: Double = 0.9

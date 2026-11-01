@@ -2134,6 +2134,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 - **Active phase:** P15, iOS Phase 1c. The Phase 1a shell/CI and Phase 1b manual TestFlight workflow are implemented; P15-10 adds Chat, P15-11 Voice, P15-12 Notes, P15-13 the sidebar, P15-14 Workspaces, and P15-16 sign-in/Face ID. Existing `JarvisCore` clients and synthetic fixtures reuse web routes; Linux tests cover the pure-Swift package. The app preview and P15-15 simulator screenshots use an explicitly labelled synthetic fixture. Next: complete Linux checks, then use the existing ready-PR Mac compile for SwiftUI verification and owner review. The first owner-started TestFlight archive/export/upload remains unproven; no later screen is authorized without the owner's approval.
 - **P15-01 blockers:** hosted XcodeGen/Xcode 26.6 simulator build and owner review remain pending; this Linux environment cannot run the Mac build.
+- **P15-40 (#1482):** End → fresh Voice now auto-starts, invalidates stale callbacks and releases the old audio/transport. The red End control, stationary cyan-rimmed glass orb with animated amber centre, Reduced Motion and Danish/English Voice copy are implemented. Focused Linux voice tests pass. The existing ready-PR capture includes six synthetic Voice states and board references; Apple compilation, actual simulator screenshots and live iPhone End/start acceptance remain pending.
 
 - **Terra main chat (#1337):** request capacity 150 through the existing main-only
   deployment path, then apply the controlled saved-owner default update. #1338

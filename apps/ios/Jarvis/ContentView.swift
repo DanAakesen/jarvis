@@ -45,6 +45,11 @@ struct ContentView: View {
         if factoryScreenshot != nil {
             initialNavigation.navigate(to: .softwareFactory)
         }
+#if targetEnvironment(simulator)
+        if arguments.contains("--screenshot-voice-fixture") {
+            initialNavigation.navigate(to: .voice)
+        }
+#endif
         self.fixtureMode = fixtureMode
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode

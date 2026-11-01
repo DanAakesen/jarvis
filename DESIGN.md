@@ -2843,6 +2843,14 @@ Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
 
+P15-40 (#1482) keeps the cyan-rimmed dark sphere stationary and animates only the
+tangled orange/amber centre. Listening and speaking use stronger centre motion
+than thinking; Reduced Motion and an inactive scene pause it. Voice reserves the
+orb halo and a separate bottom caption/share/control region, including when
+captions are hidden, so status and caption changes cannot move the orb. Short
+screens reduce its diameter. End uses the shared red action tint with a white
+symbol, not a white fill, in both full-screen and minimized controls.
+
 ## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
 The approved `docs/ios/design/board.html?screen=chat` frames guide composition,
