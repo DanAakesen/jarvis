@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Require main branch
-        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/copilot/p15-41-fix-unreliable-navigation'
+        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/preview/nav-27'
         run: |
           echo "::error::This workflow can only run from the main branch."
           exit 1
@@ -174,7 +174,7 @@ jobs:
             exit 1
           fi
       - name: Revoke development certificates
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/p15-41-fix-unreliable-navigation')
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/preview/nav-27')
         timeout-minutes: 5
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
