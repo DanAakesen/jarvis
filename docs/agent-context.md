@@ -6910,15 +6910,19 @@ device testing.
 ## iOS Phase 1b: owner-started TestFlight upload
 
 `.github/workflows/ios-testflight.yml` is separate from `ci.yml` and runs only
-on manual dispatch. The single `macos-26` job uses the `ios-testflight`
-environment; the owner must restrict that environment to the `main` branch and
-configure `APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`,
+on manual dispatch. GitHub requires write access to dispatch it. The single
+`macos-26` job uses the `ios-testflight` environment; keep
+`APP_STORE_CONNECT_KEY_P8`, `APP_STORE_CONNECT_KEY_ID`,
 `APP_STORE_CONNECT_ISSUER_ID`, `APPLE_TEAM_ID`, `JARVIS_API_BASE_URL`,
 `JARVIS_ENTRA_CLIENT_ID`, `JARVIS_ENTRA_AUTHORITY_URL`, and
-`JARVIS_ENTRA_API_SCOPE` there before dispatching.
-The workflow refuses non-main refs, captures `xcodebuild` output rather than
-logging signing identifiers, writes the key with mode 600, and deletes it in
-an always-run cleanup step.
+`JARVIS_ENTRA_API_SCOPE` there. Configure that environment to permit `main`
+and only the intended preview branches, so its secrets remain protected.
+In **Run workflow**, select `main` for the usual build or the PR source branch
+for a preview, and enter that same name in the required `branch` input. The
+workflow validates that the input matches the selected ref, records non-main
+builds as previews, and does not create release tags.
+It captures `xcodebuild` output rather than logging signing identifiers, writes
+the key with mode 600, and deletes it in an always-run cleanup step.
 
 P15-26 retains automatic archive/export signing and the existing secrets.
 After export (including archive/export failure), an always-run main-only step
@@ -6936,10 +6940,17 @@ verify that on the next owner-started run. If the account is already at its
 limit, the first archive may fail, but final cleanup can free capacity for the
 next run. A hard runner termination may prevent always-run cleanup.
 
-Only the owner starts an upload: **Actions → iOS TestFlight**, select `main`,
-then **Run workflow**. A merge or pull request does not upload anything. The
-certificate-cleanup API permissions and real cleanup remain unverified; see the
-setup checklist
-and disabled `xcrun altool --upload-app` fallback in
-[`docs/ios/build-plan.md`](ios/build-plan.md). Do not run or dispatch this
-workflow while reviewing changes.
+Use **Actions → iOS TestFlight → Run workflow**, select `main` or the intended
+PR source branch, and enter the same value in the `branch` input. A merge or
+pull request does not upload anything automatically. The certificate-cleanup API permissions and real
+cleanup remain unverified; see the setup checklist and disabled
+`xcrun altool --upload-app` fallback in [`docs/ios/build-plan.md`](ios/build-plan.md).
+
+## iOS release train (P15-50)
+
+Use one TestFlight build per 15-minute test window and ship at the end of the
+window even if the work is only partly done. Dispatch preview builds from PR
+branches before merging. The XCUITest suite continues to run on PRs and retain
+its screenshots, but a UI-test failure is a warning rather than a merge gate;
+the same suite runs nightly on `main` and opens or updates one tracking issue
+when it fails.

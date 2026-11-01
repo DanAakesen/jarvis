@@ -92,7 +92,7 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(model.contains("let navigationRequested = PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()"))
         XCTAssertFalse(model.contains("guard destination != currentDestination"))
         XCTAssertLessThan(try XCTUnwrap(model.range(of: "navigationRequested.send")).lowerBound,
-                          try XCTUnwrap(model.range(of: "write(\"navigate("))).lowerBound)
+                          try XCTUnwrap(model.range(of: "write(\"navigate(")).lowerBound)
         let content = try source("Jarvis/ContentView.swift")
         XCTAssertTrue(content.contains(".onReceive(navigation.navigationRequested) { request in\n            prepareNavigation(to: request.to, from: request.from)"))
         XCTAssertFalse(content.contains(".onChange(of: navigation.currentDestination)"))
