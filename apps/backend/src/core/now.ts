@@ -131,7 +131,10 @@ export function registerNowRoutes(app: FastifyInstance) {
       app.nowFeedStore.read(),
       app.awayModeStore?.read() ?? Promise.resolve(defaultAwayModeState),
     ]);
-    const confirmations = app.ownerInteractions?.pendingBrowserConfirmations() ?? [];
+    const confirmations = [
+      ...app.ownerInteractions?.pendingBrowserConfirmations() ?? [],
+      ...app.pendingGoogleActions?.pendingBrowserConfirmations() ?? [],
+    ];
     return sendBounded(reply, {
       ...feed,
       awayMode: awayMode.mode !== 'present',
@@ -159,11 +162,47 @@ export function registerNowRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     const service = app.ownerInteractions;
-    if (!service) {
+    if (!service && !app.pendingGoogleActions) {
       return reply.code(503).send({ error: 'Confirmation service unavailable' });
     }
-    if (!await service.resolveBrowserConfirmation(request.params.id, request.body.decision)) {
+    let resolved: boolean | { readonly result: unknown } | undefined =
+      await service?.resolveBrowserConfirmation(request.params.id, request.body.decision);
+    if (!resolved) {
+      try {
+        resolved = await app.pendingGoogleActions?.resolveBrowserConfirmation(
+          request.params.id, request.body.decision, AbortSignal.timeout(30_000),
+        );
+      } catch {
+        const error = 'Calendar result is unverified. Check the calendar before retrying; do not repeat the write.';
+        await app.nowFeedStore?.recordNotification?.('error', error).catch(() => {});
+        app.nowEventHub.publish({ type: 'refresh' });
+        return reply.code(502).send({ error });
+      }
+    }
+    if (!resolved) {
       return reply.code(404).send({ error: 'Confirmation is no longer available.' });
+    }
+    if (typeof resolved === 'object') {
+      const result = resolved.result as { status?: string; detail?: string;
+        items?: readonly { summary?: string; status?: string; detail?: string }[] } | null;
+      if (result?.status !== 'completed' && result?.status !== 'cancelled') {
+        const details = result?.items?.filter((item) => item.status !== 'completed')
+          .map((item) => `${item.summary ?? ''}: ${item.detail ?? item.status ?? 'unverified'}`).join('\n');
+        const caution = 'Check the calendar before retrying; do not repeat completed or unverified writes.';
+        const notices = [
+          `${(result?.detail ?? 'Calendar result is unverified.').slice(0, 240)} ${caution}`,
+          ...result?.items?.filter((item) => item.status !== 'completed').slice(0, 10)
+            .map((item) => `${(item.summary ?? '').slice(0, 200)}: ${(item.detail ?? item.status ?? 'unverified').slice(0, 100)} ${caution}`) ?? [],
+        ];
+        for (const notice of notices) {
+          await app.nowFeedStore?.recordNotification?.('error', notice).catch(() => {});
+        }
+        app.nowEventHub.publish({ type: 'refresh' });
+        return reply.code(502).send({ error: [
+          result?.detail ?? 'Calendar result is unverified.',
+          details, caution,
+        ].filter(Boolean).join('\n') });
+      }
     }
     return reply.code(204).send();
   });

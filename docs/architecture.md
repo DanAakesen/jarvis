@@ -1,3 +1,30 @@
+## Suggestion-to-approval binding (P15-46 / #1494)
+
+Shared chat/realtime instructions require staging before a state-changing offer.
+The hosted model loop buffers actionable English/Danish calendar offers and gives
+an unstaged offer one corrective tool round, never deriving write arguments or
+approval authority from prose. Repeated offers fail closed; failed staging cannot
+append an approval invitation. An older proposal does not validate a new offer.
+
+Google contributes its existing `PendingGoogleActions` instance through the
+module's root-level `registerServices` hook, before encapsulated routes register.
+`GET /now` exposes calendar proposals with separate opaque browser IDs.
+Owner-only tap resolution and verified later-message approval consume the same
+`PendingAction` before execution. Refresh events remove stale cards; partial or
+unverified tap results return HTTP 502 and persist general/per-item error notices
+in the existing activity feed, with retry cautions. Web and both native feed
+clients accept one calendar review alongside ten other approvals; calendar
+summaries are bounded at 40,000 UTF-16 units without truncating the approved
+details, while other summaries retain their 4,000-unit limit. Existing
+ten-minute expiry and process-local restart limitations remain unchanged.
+
+Native screenshot qualification reuses the existing `FixtureTransport` and
+production approval sheet with one simulator-only synthetic `calendar_change`.
+Launch-argument language/theme preferences do not persist to later captures.
+Fixture decisions remain disabled; the ready-PR iOS job captures Danish/English
+light/dark review and exports retained XCTest attachments in its existing
+screenshot artifact. No production notification or write boundary is changed.
+
 ## Managed turn failure boundaries (#1350; 29 October 2026)
 
 The managed policy transport creates/binds its native conversation immediately

@@ -16,12 +16,11 @@ struct JarvisLockScreenTasksPreview: View {
     }
 
     private var expirationText: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = language.locale
-        formatter.dateTimeStyle = .named
-        let relative = formatter.localizedString(for: expiresAt, relativeTo: Date.now)
+        let expiryTime = expiresAt.formatted(
+            .dateTime.hour().minute().locale(language.locale)
+        )
         let template = JarvisApprovalLocalization.string(.expires, language: language)
-        return String(format: template, locale: language.locale, arguments: [relative])
+        return String(format: template, locale: language.locale, arguments: [expiryTime])
     }
 
     var body: some View {

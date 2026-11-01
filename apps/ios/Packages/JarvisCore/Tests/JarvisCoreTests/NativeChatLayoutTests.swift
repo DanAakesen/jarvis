@@ -60,28 +60,15 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(screen.contains(".scrollEdgeEffectStyle(.soft, for: .top)"))
     }
 
-    func testSidebarInteractionsDoNotInterceptChatActions() throws {
+    func testSidebarGestureMatchesMainNavigationSurface() throws {
         let contentView = try source("apps/ios/Jarvis/ContentView.swift")
-        let dimmingLayer = try section(
-            #"(private struct SidebarDimmingLayer: View \{.*?)(?=\nprivate struct SidebarDismissGestureLayer)"#,
-            in: contentView
-        )
-        XCTAssertTrue(dimmingLayer.contains(".allowsHitTesting(false)"))
-
         let foregroundLayer = try section(
             #"(private struct ContentForegroundLayer<.*?)(?=\nprivate struct SidebarDimmingLayer)"#,
             in: contentView
         )
-        XCTAssertFalse(foregroundLayer.contains(".simultaneousGesture("))
-
-        let edgeGestureLayer = try section(
-            #"(private struct SidebarEdgeGestureLayer<.*?)(?=\nprivate struct SidebarDrag)"#,
-            in: contentView
-        )
-        XCTAssertTrue(edgeGestureLayer.contains(".gesture(gesture)"))
-        XCTAssertTrue(edgeGestureLayer.contains("let edgeWidth: CGFloat = JarvisDesignTokens.sidebarEdgeGestureWidth"))
-        let designSystem = try source("apps/ios/Jarvis/JarvisDesignSystem.swift")
-        XCTAssertTrue(designSystem.contains("static let sidebarEdgeGestureWidth: CGFloat = 24"))
+        XCTAssertTrue(foregroundLayer.contains(".contentShape(Rectangle())"))
+        XCTAssertTrue(foregroundLayer.contains(".simultaneousGesture(sidebarDragGesture)"))
+        XCTAssertFalse(contentView.contains("SidebarEdgeGestureLayer"))
     }
 
     func testContentViewUsesSmallTypedViewComponents() throws {

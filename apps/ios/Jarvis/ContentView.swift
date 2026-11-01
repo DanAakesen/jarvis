@@ -64,6 +64,14 @@ struct ContentView: View {
 
     init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
         let arguments = ProcessInfo.processInfo.arguments
+#if targetEnvironment(simulator)
+        let calendarChangeLanguage: JarvisAppLanguage? = arguments.contains("--screenshot-calendar-change-fixture")
+            ? JarvisAppLanguage(rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? "")
+                ?? .default
+            : nil
+#else
+        let calendarChangeLanguage: JarvisAppLanguage? = nil
+#endif
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
         let voiceConnectionScreenshot = arguments.contains("--screenshot-voice-connection-lost")
@@ -103,6 +111,7 @@ struct ContentView: View {
             || activityScreenshotState != nil
             || factoryFixtureMode
             || healthFixtureMode
+            || calendarChangeLanguage != nil
         var initialNavigation = JarvisNavigationState()
         if sidebarInitiallyOpen {
             initialNavigation.openSidebar()
@@ -140,12 +149,12 @@ struct ContentView: View {
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
-            resolvedClient = try? JarvisFixtureScenario.makeClient(emptyActivity: activityScreenshotState == "empty")
-            if resolvedClient == nil {
-                resolvedStartupError = "Fixture preview is unavailable."
+            if let calendarChangeLanguage {
+                resolvedClient = try? JarvisFixtureScenario.makeClient(calendarChangeLanguage: calendarChangeLanguage)
             } else {
-                resolvedStartupError = nil
+                resolvedClient = try? JarvisFixtureScenario.makeClient(emptyActivity: activityScreenshotState == "empty")
             }
+            resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
             settingsClient = try? JarvisFixtureScenario.makeSettingsClient()
         } else if let client {
             resolvedClient = client
@@ -248,10 +257,6 @@ struct ContentView: View {
                 safeAreaInsets: safeAreaInsets
             ),
             foreground: foreground,
-            edgeGesture: sidebarEdgeGesture(
-                isSidebarOpen: navigation.isSidebarOpen,
-                gesture: dragGesture
-            ),
             progressObserver: sidebarProgressObserver,
             miniBar: voiceMiniBar(safeAreaInsets: safeAreaInsets, drawerWidth: drawerWidth),
             onAppear: normalizeStoredLanguage
@@ -337,14 +342,6 @@ struct ContentView: View {
                 NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
             }
         )
-    }
-
-    private func sidebarEdgeGesture(isSidebarOpen: Bool, gesture: some Gesture) -> some View {
-        Group {
-            if !isSidebarOpen {
-                SidebarEdgeGestureLayer(gesture: gesture)
-            }
-        }
     }
 
     private var sidebarProgressObserver: some View {
@@ -842,12 +839,11 @@ private struct ContentNavigationSurface: View {
     }
 }
 
-private struct ContentSidebarLayout<Sidebar: View, Foreground: View, EdgeGesture: View, ProgressObserver: View, MiniBar: View>: View {
+private struct ContentSidebarLayout<Sidebar: View, Foreground: View, ProgressObserver: View, MiniBar: View>: View {
     let screenSize: CGSize
     let language: JarvisAppLanguage
     let sidebar: Sidebar
     let foreground: Foreground
-    let edgeGesture: EdgeGesture
     let progressObserver: ProgressObserver
     let miniBar: MiniBar
     let onAppear: () -> Void
@@ -856,7 +852,6 @@ private struct ContentSidebarLayout<Sidebar: View, Foreground: View, EdgeGesture
         ZStack(alignment: .trailing) {
             sidebar
             foreground
-            edgeGesture
             progressObserver
             miniBar
         }
@@ -891,12 +886,13 @@ private struct ContentForegroundLayer<Content: View, DragGesture: Gesture>: View
             .overlay {
                 if hasVisibleSidebarProgress {
                     SidebarDismissGestureLayer(
-                        onClose: onCloseSidebar,
-                        gesture: sidebarDragGesture
+                        onClose: onCloseSidebar
                     )
                 }
             }
             .offset(x: horizontalOffset)
+            .contentShape(Rectangle())
+            .simultaneousGesture(sidebarDragGesture)
             .accessibilityAction(named: Text(openSidebarLabel)) {
                 onOpenSidebar()
             }
@@ -911,34 +907,17 @@ private struct SidebarDimmingLayer: View {
         let dimmingColor: Color = .black
         return dimmingColor
             .opacity(opacity)
-            .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
 }
 
-private struct SidebarDismissGestureLayer<DragGesture: Gesture>: View {
+private struct SidebarDismissGestureLayer: View {
     let onClose: () -> Void
-    let gesture: DragGesture
 
     var body: some View {
         Color.clear
             .contentShape(Rectangle())
             .onTapGesture(perform: onClose)
-            .simultaneousGesture(gesture)
-            .accessibilityHidden(true)
-    }
-}
-
-private struct SidebarEdgeGestureLayer<DragGesture: Gesture>: View {
-    let gesture: DragGesture
-
-    var body: some View {
-        let edgeWidth: CGFloat = JarvisDesignTokens.sidebarEdgeGestureWidth
-        return Color.clear
-            .frame(width: edgeWidth)
-            .frame(maxHeight: .infinity)
-            .contentShape(Rectangle())
-            .gesture(gesture)
             .accessibilityHidden(true)
     }
 }
