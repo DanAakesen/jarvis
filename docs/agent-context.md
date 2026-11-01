@@ -6538,6 +6538,23 @@ remain unverified.
 
 ### Native voice screen and audio (P15-11)
 
+P15-40 (#1482) adds End → reopen regression coverage. Run `swift test --filter
+Voice` in `apps/ios/Packages/JarvisCore` to include both protocol and async
+session-client tests (filtering only `VoiceProtocolTests` excludes lifecycle
+tests). The existing ready-PR Mac capture now includes six synthetic Voice PNGs:
+listening, thinking and speaking in light/dark, with board/surfaces links in its
+PR comment and state-specific pairs in `comparisons.html`. `JarvisOrbRenderingTests`
+checks transparent blur margins, radial alpha feathering and opacity-only core
+animation; this source check does not replace inspecting the captured pixels.
+The combined simulator build/capture has a 30-minute job bound: the merged
+Factory, ambient and Voice captures exceeded the former 20-minute bound.
+Simulator-only `--screenshot-voice-fixture` and
+`--screenshot-voice-state=listening|thinking|speaking`, together with the existing
+`--screenshot-chat-fixture`, select the rendered Voice screen without starting
+microphone capture or a voice transport. These images do not verify live audio.
+The Linux runner cannot capture Simulator images or compile Apple UI/audio code;
+the requested images and physical End/start acceptance remain pending those checks.
+
 The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
 values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
 used by both app and extension are in `apps/ios/Shared/VoiceScreenShareContract.swift`.

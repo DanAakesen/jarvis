@@ -9,6 +9,10 @@ public enum VoiceSessionState: Equatable, Sendable {
     case reconnecting(attempt: Int)
     case ended
     case failed
+
+    public var canStartSession: Bool {
+        self == .idle || self == .ended || self == .failed
+    }
 }
 
 public enum VoiceSessionAction: Equatable, Sendable {
@@ -271,7 +275,7 @@ public actor VoiceSessionClient {
     }
 
     public func end() async throws {
-        guard isLive else { return }
+        guard !userEnded else { return }
         userEnded = true
         apply(.endRequested)
         receiveTask?.cancel()
@@ -287,6 +291,10 @@ public actor VoiceSessionClient {
         isConnected = false
         await transport.close(code: 1000)
         clearCredentials()
+        endpoint = nil
+        isMuted = false
+        cameraState = nil
+        reconnectAttempts = 0
         if let sendError { throw sendError }
     }
 

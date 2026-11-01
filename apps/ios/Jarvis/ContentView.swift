@@ -66,6 +66,11 @@ struct ContentView: View {
         if healthFixtureMode { initialNavigation.navigate(to: .health) }
         healthScreenshotState = healthState
         healthScreenshotLanguage = healthLanguage
+#if targetEnvironment(simulator)
+        if arguments.contains("--screenshot-voice-fixture") {
+            initialNavigation.navigate(to: .voice)
+        }
+#endif
         self.fixtureMode = fixtureMode
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
