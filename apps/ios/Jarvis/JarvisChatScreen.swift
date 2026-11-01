@@ -643,6 +643,7 @@ struct JarvisChatScreen: View {
         .disabled(model.fixtureMode || model.isSending || isPreparingCamera)
         .accessibilityLabel(copy(.voiceLanguage))
         .accessibilityValue(copy(model.voiceLanguage == .da ? .danish : .english))
+        .accessibilityIdentifier("chat.voiceLanguage")
         .accessibilityHint(
             isPreparingCamera ? copy(.cameraStarting) :
                 (model.fixtureMode ? copy(.voiceSettingsUnavailable) :

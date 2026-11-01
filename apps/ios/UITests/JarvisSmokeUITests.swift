@@ -95,7 +95,7 @@ final class JarvisSmokeUITests: XCTestCase {
         addAttachment.tap()
         capture("plus-menu")
 
-        let voiceLanguage = app.buttons[localized("Voice language", "Stemmesprog")]
+        let voiceLanguage = app.descendants(matching: .any)["chat.voiceLanguage"]
         let shareScreen = app.buttons[localized("Share screen", "Del skærm")]
         let enableVideo = app.buttons[localized("Enable video", "Slå video til")]
         let attach = app.buttons[localized("Attach file or photo", "Vedhæft fil eller foto")]

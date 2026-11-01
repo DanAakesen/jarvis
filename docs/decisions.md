@@ -31,6 +31,12 @@ preferences. The screenshot gate samples edge-background luminance for every
 theme-named app and board PNG and fails when it contradicts the filename. This
 closes the audit finding where `main-dark.png` showed the light surface.
 
+## 31 October 2026 — Factory review status uses stone (P15-33 / #1468)
+
+Use the shared stone secondary tone for the Factory In review status in the web
+board and native iOS screen. Reuse the current light/dark palette tokens rather
+than introducing colors; keep unrelated success states unchanged.
+
 ## 31 October 2026 — one native iPhone ambient background (P15-38 / #1478)
 
 Superseded in implementation detail on 1 November: Dan requested current main's
