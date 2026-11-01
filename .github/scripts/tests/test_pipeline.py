@@ -711,6 +711,19 @@ class SafeFailureTests(unittest.TestCase):
         aggregate = load_workflow(ROOT / ".github/workflows/ci.yml")
         self.assertIn("ios", aggregate["jobs"]["result"]["needs"])
 
+    def test_ios_chat_shell_decoration_cannot_block_input(self):
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        dim = content.split("Color.black", 1)[1].split(".blur(", 1)[0]
+        self.assertIn(".allowsHitTesting(false)", dim)
+        dismissal = content.split(".blur(", 1)[1].split(".offset(", 1)[0]
+        self.assertIn("if navigation.isSidebarOpen", dismissal)
+        self.assertNotIn("if progress > 0", dismissal)
+        self.assertIn(".onTapGesture(perform: closeSidebar)", dismissal)
+        tests = (ROOT / "apps/ios/JarvisUITests/JarvisChatVisibilityTests.swift").read_text()
+        self.assertIn("XCUIApplication().debugDescription", tests)
+        self.assertIn('attachment.name = "chat-failure-app-hierarchy"', tests)
+        self.assertIn("attachment.lifetime = .keepAlways", tests)
+
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
         area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
         header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]

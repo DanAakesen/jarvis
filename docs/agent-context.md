@@ -6483,6 +6483,17 @@ draft restoration after an unacknowledged network failure. The tests wait for
 the transcript and an enabled, hittable `chat-composer` TextField,
 tap it, then wait for the keyboard before typing and verify the entered value.
 Failure recovery waits for both the restored draft and pending-bubble removal.
+The shell's decorative dim overlay never participates in hit-testing. Its
+tap-to-close overlay exists only while `navigation.isSidebarOpen`, not while
+asynchronous animation progress remains above zero; closed Chat must retain input
+even if that progress has a residual value. UI-test failures print the complete
+`XCUIApplication.debugDescription` and retain `chat-failure-app-hierarchy` in the
+existing attachment export. This supplements, not relaxes, composer hittability,
+keyboard and immediate-send assertions. PR #1485's broader navigation fix was
+still open during this correction; merge main after it lands and verify the
+combined shell in simulator CI. Official `allowsHitTesting(_:)` documentation
+and HIG Gestures retrieval still failed DNS resolution in this sandbox; no
+rendered hit-testing verification is claimed locally.
 The synthetic
 `--ui-test-chat-send` scenario delays server acknowledgment five seconds and
 the first reply another five seconds. Both language tests explicitly assert one

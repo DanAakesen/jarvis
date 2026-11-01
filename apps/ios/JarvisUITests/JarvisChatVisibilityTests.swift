@@ -5,6 +5,18 @@ final class JarvisChatVisibilityTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    override func tearDownWithError() throws {
+        if (testRun?.failureCount ?? 0) > 0 {
+            let hierarchy = XCUIApplication().debugDescription
+            print("Chat UI failure hierarchy:\n\(hierarchy)")
+            let attachment = XCTAttachment(string: hierarchy)
+            attachment.name = "chat-failure-app-hierarchy"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        try super.tearDownWithError()
+    }
+
     func testSentMessageIsVisibleBeforeDelayedReplyInEnglish() {
         assertSentMessageIsVisible(language: "en", reduceMotion: false)
     }

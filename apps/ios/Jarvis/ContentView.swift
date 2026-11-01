@@ -268,11 +268,12 @@ struct ContentView: View {
                 .overlay {
                     Color.black
                         .opacity(progress * JarvisDesignTokens.screenDimOpacity)
+                        .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
                 .overlay {
-                    if progress > 0 {
+                    if navigation.isSidebarOpen {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture(perform: closeSidebar)

@@ -1,5 +1,12 @@
 ## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
 
+For the run 41291995474 hit-testing follow-up, keep the shell's dim layer visual
+only using SwiftUI `allowsHitTesting(false)`. Key the intentional tap-to-close
+layer to logical sidebar-open state rather than animation progress, so residual
+progress cannot block closed Chat. Preserve the visual treatment and input
+assertions; retain full app-hierarchy evidence on UI-test failure. PR #1485's
+broader navigation change and native validation remain pending.
+
 Insert a local user bubble when Send is accepted rather than waiting for the
 SSE `user` event. Replace it with the server row on acknowledgment and restore
 the draft if sending fails before acknowledgment. Scroll on latest row identity

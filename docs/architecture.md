@@ -1513,6 +1513,12 @@ so that load cannot overwrite the pending row. Transcript scrolling observes
 the latest row ID (including acknowledgment with unchanged row count); Reduce
 Motion removes animation, not scrolling. No wire or persistence contract changes.
 
+The navigation shell dim overlay is visual-only (`allowsHitTesting(false)`).
+Its intentional tap-to-close layer is gated by `navigation.isSidebarOpen`,
+not asynchronous presented animation progress, to keep closed Chat interactive.
+The native UI gate retains the full app hierarchy on failure; runtime confirmation
+of the run 41291995474 hit-testing correction remains pending.
+
 `JarvisNowFeedClient` decodes the existing authenticated `GET /now` response,
 dismisses through `POST /now/activity/:id/dismiss`, and delegates confirmation
 decisions to `JarvisApprovalsClient`. The existing `/now/events` stream's
