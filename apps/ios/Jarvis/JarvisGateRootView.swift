@@ -347,7 +347,7 @@ struct JarvisGateRootView: View {
     )
 
     var body: some View {
-        ZStack {
+        JarvisSidebarReveal {
             Group {
                 if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
                     JarvisLockScreenTasksPreview(
@@ -363,9 +363,6 @@ struct JarvisGateRootView: View {
             }
             // Only sign-out discards the shell; sign-in resets session content explicitly.
             .id(model.signOutGeneration)
-
-            JarvisSidebarDrawerLayer()
-                .zIndex(1)
         }
             .environmentObject(navigation)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)

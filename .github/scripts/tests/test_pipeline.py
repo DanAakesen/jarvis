@@ -792,7 +792,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("@StateObject private var navigation = JarvisNavigationModel(", root)
         self.assertRegex(root, r"\.onChange\(of: model\.signOutGeneration\) \{ _, _ in\s+navigation\.reset\(\)")
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func reset\(\) \{\s+state = JarvisNavigationState\(\)")
+        self.assertRegex(model, r"func reset\(\) \{\s+dragProgress = nil\s+state = JarvisNavigationState\(\)")
         self.assertNotIn("NavigationLaunchLifecycle", shell)
         self.assertNotIn("navigationWrites", shell)
         self.assertEqual(shell.count(".id(sessionEpoch)"), 2)
@@ -890,14 +890,17 @@ class SafeFailureTests(unittest.TestCase):
             self.assertNotIn(obsolete, source)
         wiring = source.split("JarvisSidebarEdgeOpener(", 1)[1].split("if voiceModel.isMinimized", 1)[0]
         self.assertIn("isEnabled: !navigation.isSidebarOpen", wiring)
-        self.assertIn("guard scenePhase == .active, !navigation.isSidebarOpen else { return }", wiring)
+        self.assertIn("guard scenePhase == .active, !navigation.isSidebarOpen else", wiring)
+        self.assertIn("navigation.updateDrag(progress: progress)", wiring)
+        self.assertIn("navigation.cancelDrag()", wiring)
         self.assertIn("navigation.openSidebar()", wiring)
         self.assertIn("UIScreenEdgePanGestureRecognizer", opener)
         self.assertIn("recognizer.edges = .right", opener)
         self.assertIn("window?.addGestureRecognizer", opener.replace("newWindow?", "window?"))
         self.assertIn(") -> Bool {\n            true\n", opener.split("shouldRecognizeSimultaneouslyWith", 1)[1])
         handler = opener.split("@objc private func handle(", 1)[1]
-        self.assertIn("guard recognizer.state == .ended", handler)
+        self.assertIn("case .ended:", handler)
+        self.assertIn("default:\n                parent.onCancel()", handler)
         self.assertIn("JarvisSidebarGesturePolicy.shouldOpen(", handler)
         self.assertLess(handler.index("JarvisSidebarGesturePolicy.shouldOpen("), handler.index("parent.onOpen()"))
         sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
@@ -915,7 +918,7 @@ class SafeFailureTests(unittest.TestCase):
         )[0]
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
         self.assertIn("@MainActor\nfinal class JarvisNavigationModel: ObservableObject", model)
-        self.assertEqual(model.count("@Published"), 1)
+        self.assertEqual(model.count("@Published"), 2)  # state and transient dragProgress
         self.assertIn("@Published private(set) var state: JarvisNavigationState", model)
         for derived in ("var path: [JarvisDestination] { state.path }",
                         "var isSidebarOpen: Bool { state.isSidebarOpen }",
@@ -935,26 +938,30 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn(".overlay(alignment: .trailing)", shell)
         self.assertNotIn("JarvisSidebar(", source)
         sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
-        overlay = sidebar.split("struct JarvisSidebarDrawerLayer: View {", 1)[1].split(
+        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
             "struct JarvisSidebar: View {", 1
         )[0]
-        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", overlay)
-        self.assertRegex(overlay, r"if navigation\.isSidebarOpen \{\s+Color\.black")
-        self.assertIn("Color.black.opacity(JarvisDesignTokens.screenDimOpacity)", overlay)
-        self.assertIn(".ignoresSafeArea()", overlay)
-        self.assertIn(".contentShape(Rectangle())", overlay)
-        self.assertIn(".onTapGesture { navigation.closeSidebar() }", overlay)
-        self.assertLess(overlay.index("Color.black"), overlay.index("JarvisSidebar("))
-        self.assertIn(".frame(width: drawerWidth, height: geometry.size.height)", overlay)
-        self.assertIn(".transition(reduceMotion ? .opacity : .move(edge: .trailing))", overlay)
+        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", reveal)
+        self.assertIn("let progress = CGFloat(navigation.revealProgress)", reveal)
+        self.assertRegex(reveal, r"if progress > 0 \{\s+JarvisSidebar\(")
+        self.assertLess(reveal.index("JarvisSidebar("), reveal.index("page\n"))
+        self.assertIn(".offset(x: -drawerWidth * progress)", reveal)
+        self.assertIn(".allowsHitTesting(progress == 0)", reveal)
+        self.assertIn(".onTapGesture { navigation.closeSidebar() }", reveal)
+        self.assertIn(".gesture(closeSwipe(drawerWidth: drawerWidth))", reveal)
+        self.assertIn(".frame(width: drawerWidth, height: geometry.size.height)", reveal)
+        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil", reveal)
+        self.assertIn("navigation.cancelDrag()", reveal)
         self.assertEqual(sidebar.count("JarvisSidebar("), 1)
-        self.assertIn(".animation(animation, value: navigation.isSidebarOpen)", overlay)
+        self.assertNotIn("JarvisSidebarDrawerLayer", sidebar)
         gate_root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text().split(
             "struct JarvisGateRootView: View {", 1)[1]
-        self.assertRegex(gate_root, r"JarvisSidebarDrawerLayer\(\)\s+\.zIndex\(1\)")
+        self.assertIn("JarvisSidebarReveal {", gate_root)
+        self.assertLess(gate_root.index("JarvisSidebarReveal {"), gate_root.index(".id(model.signOutGeneration)"))
         self.assertLess(gate_root.index(".id(model.signOutGeneration)"),
-                        gate_root.index("JarvisSidebarDrawerLayer()"))
-        self.assertIn("reduceMotion ? nil", sidebar)
+                        gate_root.index(".environmentObject(navigation)"))
+        self.assertLess(gate_root.index(".environmentObject(navigation)"),
+                        gate_root.index(".blur(radius: model.shouldCoverContent"))
         self.assertIn("if phase != .active", shell)
         self.assertIn("transaction.disablesAnimations = true", shell)
         self.assertIn("withTransaction(transaction) { navigation.closeSidebar() }", shell)

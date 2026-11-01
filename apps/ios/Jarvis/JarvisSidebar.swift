@@ -10,14 +10,21 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
     }
 }
 
-/// Top-most layer of the app root. It renders from the root-owned navigation model only, so no
-/// screen, sheet, or voice state below it can hide the drawer or leave a stale scrim behind.
-struct JarvisSidebarDrawerLayer: View {
+/// Reveal container at the app root: the drawer sits behind the page and the page slides sideways to
+/// uncover it. It renders from the root-owned navigation model only (committed state plus the transient
+/// swipe progress), so no screen, sheet, or voice state can leave the page offset or a tap-catcher behind.
+struct JarvisSidebarReveal<Page: View>: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @GestureState private var isDraggingClosed = false
+    private let page: Page
+
+    init(@ViewBuilder page: () -> Page) {
+        self.page = page()
+    }
 
     private var animation: Animation? {
-        reduceMotion ? nil : .interactiveSpring(
+        reduceMotion || navigation.dragProgress != nil ? nil : .interactiveSpring(
             response: JarvisDesignTokens.sidebarSpringResponse,
             dampingFraction: JarvisDesignTokens.sidebarSpringDamping
         )
@@ -25,6 +32,12 @@ struct JarvisSidebarDrawerLayer: View {
 
     private func closeSwipe(drawerWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance)
+            .updating($isDraggingClosed) { _, state, _ in state = true }
+            .onChanged { value in
+                guard value.translation.width > 0,
+                      abs(value.translation.width) > abs(value.translation.height) else { return }
+                navigation.updateDrag(progress: 1 - Double(value.translation.width / max(drawerWidth, 1)))
+            }
             .onEnded { value in
                 guard JarvisSidebarGesturePolicy.shouldClose(
                     translationX: Double(value.translation.width),
@@ -32,7 +45,10 @@ struct JarvisSidebarDrawerLayer: View {
                     velocityX: Double(value.velocity.width),
                     drawerWidth: Double(drawerWidth),
                     closeThreshold: Double(JarvisDesignTokens.sidebarCloseThreshold)
-                ) else { return }
+                ) else {
+                    navigation.cancelDrag()
+                    return
+                }
                 navigation.closeSidebar()
             }
     }
@@ -43,30 +59,40 @@ struct JarvisSidebarDrawerLayer: View {
                 geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
                 JarvisDesignTokens.sidebarMaximumWidth
             )
+            let progress = CGFloat(navigation.revealProgress)
             ZStack(alignment: .trailing) {
-                if navigation.isSidebarOpen {
-                    Color.black.opacity(JarvisDesignTokens.screenDimOpacity)
-                        .ignoresSafeArea()
-                        .padding(.trailing, drawerWidth)
-                        .contentShape(Rectangle())
-                        .onTapGesture { navigation.closeSidebar() }
-                        .gesture(closeSwipe(drawerWidth: drawerWidth))
-                        .accessibilityHidden(true)
-
+                if progress > 0 {
                     JarvisSidebar(
                         currentDestination: navigation.currentDestination,
                         safeAreaInsets: ContentView.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets),
                         onNavigate: { navigation.navigate(to: $0) }
                     )
                     .frame(width: drawerWidth, height: geometry.size.height)
-                    .transition(reduceMotion ? .opacity : .move(edge: .trailing))
+                    .background { JarvisScreenBackground() }
                 }
+
+                page
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .allowsHitTesting(progress == 0)
+                    .overlay {
+                        if progress > 0 {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { navigation.closeSidebar() }
+                                .gesture(closeSwipe(drawerWidth: drawerWidth))
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .shadow(color: .black.opacity(JarvisDesignTokens.screenDimOpacity * Double(progress)), radius: 14)
+                    .offset(x: -drawerWidth * progress)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            .animation(animation, value: progress)
+            .onChange(of: isDraggingClosed) { _, dragging in
+                if !dragging { navigation.cancelDrag() }
+            }
         }
         .ignoresSafeArea(.container)
-        .allowsHitTesting(navigation.isSidebarOpen)
-        .animation(animation, value: navigation.isSidebarOpen)
     }
 }
 

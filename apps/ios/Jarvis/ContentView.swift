@@ -278,8 +278,19 @@ struct ContentView: View {
                 }
                 .accessibilityHidden(navigation.isSidebarOpen)
 
-                JarvisSidebarEdgeOpener(isEnabled: !navigation.isSidebarOpen, drawerWidth: drawerWidth) {
-                    guard scenePhase == .active, !navigation.isSidebarOpen else { return }
+                JarvisSidebarEdgeOpener(
+                    isEnabled: !navigation.isSidebarOpen,
+                    drawerWidth: drawerWidth,
+                    onProgress: { progress in
+                        guard scenePhase == .active, !navigation.isSidebarOpen else { return }
+                        navigation.updateDrag(progress: progress)
+                    },
+                    onCancel: { navigation.cancelDrag() }
+                ) {
+                    guard scenePhase == .active, !navigation.isSidebarOpen else {
+                        navigation.cancelDrag()
+                        return
+                    }
                     navigation.openSidebar()
                 }
                 .frame(width: 0, height: 0)

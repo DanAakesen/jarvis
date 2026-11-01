@@ -7,6 +7,8 @@ import UIKit
 struct JarvisSidebarEdgeOpener: UIViewRepresentable {
     let isEnabled: Bool
     let drawerWidth: CGFloat
+    let onProgress: (Double) -> Void
+    let onCancel: () -> Void
     let onOpen: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -75,19 +77,31 @@ struct JarvisSidebarEdgeOpener: UIViewRepresentable {
             true
         }
 
-        // Only a completed gesture changes navigation state, so a cancelled or failed pan leaves nothing behind.
+        // The page follows the finger while the pan is live; only a completed, qualifying pan commits.
         @objc private func handle(_ recognizer: UIScreenEdgePanGestureRecognizer) {
-            guard recognizer.state == .ended, let parent, let view = recognizer.view else { return }
+            guard let parent, let view = recognizer.view else { return }
             let translation = recognizer.translation(in: view)
-            let velocity = recognizer.velocity(in: view)
-            guard JarvisSidebarGesturePolicy.shouldOpen(
-                translationX: Double(translation.x),
-                translationY: Double(translation.y),
-                velocityX: Double(velocity.x),
-                drawerWidth: Double(parent.drawerWidth),
-                openThreshold: Double(JarvisDesignTokens.sidebarOpenThreshold)
-            ) else { return }
-            parent.onOpen()
+            switch recognizer.state {
+            case .began, .changed:
+                guard parent.drawerWidth > 0, translation.x < 0,
+                      abs(translation.x) > abs(translation.y) else { return }
+                parent.onProgress(Double(-translation.x / parent.drawerWidth))
+            case .ended:
+                let velocity = recognizer.velocity(in: view)
+                guard JarvisSidebarGesturePolicy.shouldOpen(
+                    translationX: Double(translation.x),
+                    translationY: Double(translation.y),
+                    velocityX: Double(velocity.x),
+                    drawerWidth: Double(parent.drawerWidth),
+                    openThreshold: Double(JarvisDesignTokens.sidebarOpenThreshold)
+                ) else {
+                    parent.onCancel()
+                    return
+                }
+                parent.onOpen()
+            default:
+                parent.onCancel()
+            }
         }
     }
 }

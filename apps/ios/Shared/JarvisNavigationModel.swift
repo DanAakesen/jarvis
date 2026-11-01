@@ -4,6 +4,8 @@ import JarvisCore
 @MainActor
 final class JarvisNavigationModel: ObservableObject {
     @Published private(set) var state: JarvisNavigationState
+    /// Finger-tracked reveal progress (0...1) while a swipe is in flight; nil whenever no swipe is active.
+    @Published private(set) var dragProgress: Double?
     private let dismissKeyboard: () -> Void
 
     init(initialState: JarvisNavigationState = JarvisNavigationState(),
@@ -15,6 +17,20 @@ final class JarvisNavigationModel: ObservableObject {
     var path: [JarvisDestination] { state.path }
     var isSidebarOpen: Bool { state.isSidebarOpen }
     var currentDestination: JarvisDestination { state.currentDestination }
+
+    /// What the page offset and the drawer render from: the live swipe if there is one, else the committed state.
+    var revealProgress: Double { dragProgress ?? (state.isSidebarOpen ? 1 : 0) }
+
+    func updateDrag(progress: Double) {
+        guard progress.isFinite else { return }
+        dragProgress = min(max(progress, 0), 1)
+    }
+
+    /// A cancelled, failed or non-committing swipe returns to the committed state.
+    func cancelDrag() {
+        guard dragProgress != nil else { return }
+        dragProgress = nil
+    }
 
     func openSidebar() {
         dismissKeyboard()
@@ -42,10 +58,12 @@ final class JarvisNavigationModel: ObservableObject {
     }
 
     func reset() {
+        dragProgress = nil
         state = JarvisNavigationState()
     }
 
     private func write(_ change: (inout JarvisNavigationState) -> Void) {
+        dragProgress = nil
         change(&state)
     }
 }

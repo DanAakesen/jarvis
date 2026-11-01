@@ -10253,3 +10253,17 @@ Apple docs: UIScreenEdgePanGestureRecognizer, UIGestureRecognizerDelegate,
 SwiftUI ToolbarContent.sharedBackgroundVisibility, ToolbarSpacer, Human
 Interface Guidelines (Toolbars, Sidebars, Gestures). Device behaviour is
 unverified until the next preview build.
+
+## 2026-11-01: iPhone sidebar is a reveal, not an overlay (#1484)
+
+Dan's design requirement: the page slides sideways and the sidebar sits behind
+it. `JarvisSidebarReveal` (root, inside the gate's blur/hit-testing group)
+offsets the page by `-drawerWidth * progress`; the drawer renders only while
+progress > 0. Progress is the root model's committed state or, during a swipe,
+the transient `dragProgress` (cleared by every state write, by cancel/failed
+pans and by a gesture-state reset). While open the page is not hit-testable and
+a catcher over it closes on tap or trailing swipe; the toolbar button and edge
+pan are unchanged. Reduced motion disables the spring and live tracking
+animation. The earlier scrim is gone, which also removes any layer that could
+sit over the drawer rows (item taps: scrim no longer overlaps rows, rows carry
+no gestures). Device behaviour is unverified until the next preview build.
