@@ -238,6 +238,46 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertNil(storedToken)
     }
 
+    func testRetainedContentClientUsesFreshGateSessionWithoutInteractiveProvider() async throws {
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 201, body: sessionJSON)),
+            .response(HTTPResponse(statusCode: 200, body: Data("[]".utf8))),
+            .response(HTTPResponse(statusCode: 204)),
+        ])
+        let tokenStore = FakeTokenStore()
+        let unavailableProvider = FakeAccessTokenProvider(token: "", failure: .signInRequired)
+        let contentClient = try makeClient(
+            transport: transport, tokenStore: tokenStore, provider: unavailableProvider
+        )
+        let gateClient = try makeClient(transport: transport, tokenStore: tokenStore)
+
+        do {
+            _ = try await contentClient.listTools()
+            XCTFail("Signed-out content must fail closed")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .signInRequired)
+        }
+        let beforeSignIn = await transport.recordedRequests()
+        XCTAssertTrue(beforeSignIn.isEmpty)
+
+        _ = try await gateClient.createOwnerSession()
+        _ = try await contentClient.listTools()
+        try await gateClient.revokeCurrentSession()
+        do {
+            _ = try await contentClient.listTools()
+            XCTFail("Retained content must not reuse the revoked token")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .signInRequired)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.post, .get, .delete])
+        XCTAssertEqual(requests.map { $0.headers["Authorization"] }, [
+            authorization("entra.fixture.token"),
+            authorization("session.fixture.token"),
+            authorization("session.fixture.token"),
+        ])
+    }
+
     func testCreateSessionOmitsBodyWhenDeviceLabelIsAbsent() async throws {
         let transport = FakeHTTPTransport([.response(jsonResponse(status: 201, body: sessionJSON))])
         let client = try makeClient(transport: transport)

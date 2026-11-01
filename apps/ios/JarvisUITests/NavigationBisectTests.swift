@@ -90,6 +90,7 @@ final class NavigationBisectTests: XCTestCase {
         ]
         app.launch()
         var result = "FAIL: launcher"
+        print("NAVIGATION LAUNCH lifecycle before readiness: \(state)")
         defer {
             print("NAVIGATION BISECT \(variant) \(language): \(result); \(state)")
             if result.hasPrefix("FAIL") {

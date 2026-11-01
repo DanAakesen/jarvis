@@ -243,6 +243,7 @@ struct JarvisChatScreen: View {
         }
         .task {
             await model.load()
+            await model.resumeIfSuspended()
             if let initialActivitySheet {
                 presentedSheet = .activity(initialActivitySheet)
             }
@@ -326,6 +327,7 @@ struct JarvisChatScreen: View {
         }
         .onAppear(perform: refreshScreenSharing)
         .onDisappear {
+            model.suspendObservation()
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
         }

@@ -343,7 +343,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isMinimized = false
     }
 
-    func end() async {
+    func end(returnToChat: Bool = true) async {
         guard !isEnding else { return }
         isEnding = true
         defer { isEnding = false }
@@ -353,7 +353,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isStarting = false
         let endingClient = sessionClient
         sessionClient = nil
-        voiceState = .ended
+        voiceState = returnToChat ? .ended : .idle
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
         stopAudio()
@@ -377,7 +377,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         sessionClient = nil
         voiceSessionID = nil
         responseID = nil
-        voiceState = .ended
+        voiceState = returnToChat ? .ended : .idle
         isMuted = false
         isMinimized = false
     }

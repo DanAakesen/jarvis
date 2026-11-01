@@ -311,6 +311,11 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
+    func resumeIfSuspended() async {
+        guard observationSuspended else { return }
+        await resume()
+    }
+
     func resume() async {
         guard !fixtureMode else { return }
         if observationSuspended {

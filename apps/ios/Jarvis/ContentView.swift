@@ -3,9 +3,51 @@ import SwiftUI
 import UIKit
 
 @MainActor
+private enum NavigationLaunchLifecycle {
+    private static let startedAt = ProcessInfo.processInfo.systemUptime
+    private(set) static var initCount = 0
+    private(set) static var stateObjectCount = 0
+    private static var logCount = 0
+
+    static func viewInitialized() -> Int {
+        initCount += 1
+        log("ContentView.init evaluation=\(initCount)")
+        return initCount
+    }
+
+    static func stateObjectCreated() -> Int {
+        stateObjectCount += 1
+        log("ContentView StateObject created identity=\(stateObjectCount)")
+        return stateObjectCount
+    }
+
+    static func log(_ event: String) {
+#if DEBUG
+        guard logCount < 32, ProcessInfo.processInfo.systemUptime - startedAt <= 15 else { return }
+        logCount += 1
+        print("Jarvis launch lifecycle: \(event);inits=\(initCount);objects=\(stateObjectCount)")
+#endif
+    }
+}
+
+@MainActor
 private final class NavigationBisectWrites: ObservableObject {
     @Published private(set) var entries: [String] = []
     private var sequence = 0
+    let identity: Int
+
+    init(initialWrites: [(String, Bool, Bool, String)]) {
+        identity = NavigationLaunchLifecycle.stateObjectCreated()
+        for (tag, before, after, stage) in initialWrites {
+            record(tag, before: before, after: after, stage: stage)
+        }
+    }
+
+    var lifecycleValue: String {
+        "initEvaluations=\(NavigationLaunchLifecycle.initCount);"
+            + "stateObjectCreations=\(NavigationLaunchLifecycle.stateObjectCount);"
+            + "installedStateObject=\(identity)"
+    }
 
     func record(_ tag: String, before: Bool, after: Bool, stage: String = "postwrite") {
         guard let variant = NavigationBisectVariant.current,
@@ -21,7 +63,7 @@ private struct NavigationBisectWritesProbe: View {
 
     var body: some View {
         NavigationBisectProbe(identifier: "navigation.bisectWrites") { _ in
-            writes.entries.joined(separator: "|")
+            writes.entries.joined(separator: "|") + ";" + writes.lifecycleValue
         }
     }
 }
@@ -166,12 +208,18 @@ struct ContentView: View {
     private let healthScreenshotState: String?
     private let healthScreenshotLanguage: JarvisAppLanguage?
     private let activityScreenshotState: String?
+    private let sessionEpoch: Int
+    private let initEvaluation: Int
+    @State private var appliedSessionEpoch: Int
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
-    init(client: JarvisClient? = nil, webAppURL: URL? = nil) {
+    init(client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0) {
+        self.sessionEpoch = sessionEpoch
+        _appliedSessionEpoch = State(initialValue: sessionEpoch)
+        initEvaluation = NavigationLaunchLifecycle.viewInitialized()
         let arguments = ProcessInfo.processInfo.arguments
 #if targetEnvironment(simulator)
         let navigationFixtureMode = arguments.contains("--ui-test-navigation")
@@ -212,13 +260,12 @@ struct ContentView: View {
             || healthFixtureMode
             || calendarChangeLanguage != nil
         var initialNavigation = JarvisNavigationState()
-        let writes = NavigationBisectWrites()
-        writes.record("init", before: false, after: initialNavigation.isSidebarOpen)
+        var initialWrites = [("init", false, initialNavigation.isSidebarOpen, "postwrite")]
         func mutateInitial(_ tag: String, _ mutation: (inout JarvisNavigationState) -> Void) {
             let before = initialNavigation.isSidebarOpen
-            writes.record(tag, before: before, after: before, stage: "prewrite")
+            initialWrites.append((tag, before, before, "prewrite"))
             mutation(&initialNavigation)
-            writes.record(tag, before: before, after: initialNavigation.isSidebarOpen)
+            initialWrites.append((tag, before, initialNavigation.isSidebarOpen, "postwrite"))
         }
         if sidebarInitiallyOpen {
             mutateInitial("init.openSidebar") { $0.openSidebar() }
@@ -272,6 +319,7 @@ struct ContentView: View {
             settingsClient = JarvisSettingsClient(client: client)
         } else {
             do {
+                // Reads the current Keychain session per request; only the gate may open Microsoft sign-in.
                 let resolved = try JarvisComposition.makeClient(
                     accessTokenProvider: JarvisUnavailableAccessTokenProvider()
                 )
@@ -293,7 +341,7 @@ struct ContentView: View {
             )
         )
         _navigation = State(initialValue: initialNavigation)
-        _navigationWrites = StateObject(wrappedValue: writes)
+        _navigationWrites = StateObject(wrappedValue: NavigationBisectWrites(initialWrites: initialWrites))
         _notesClient = State(initialValue: Self.makeNotesClient(fixtureMode: fixtureMode))
         _healthClient = State(initialValue: healthFixtureMode
             ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
@@ -334,6 +382,7 @@ struct ContentView: View {
         }
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
+        .onDisappear { workspaceRuntime.resetSession() }
     }
 
     private func sidebarShell(
@@ -390,76 +439,91 @@ struct ContentView: View {
                         onOpenSidebar: { setSidebarOpen(true) },
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )
+                        // Only session-owned screen data is discarded; the navigation host stays installed.
+                        .id(sessionEpoch)
                         .navigationDestination(for: JarvisDestination.self) { destination in
-                            if destination == .workspaces {
-                                WorkspacesView(runtime: workspaceRuntime)
-                            } else if destination == .voice {
-                                VoiceScreenView(
-                                    model: voiceModel,
-                                    language: voiceScreenshotLanguage ?? language,
-                                    fixtureMode: fixtureMode && !navigationFixtureMode,
-                                    onMinimize: { navigate(to: .chat, drawerWidth: drawerWidth) },
-                                    onEnd: { navigate(to: .chat, drawerWidth: drawerWidth) }
-                                )
-                            } else if destination == .chat {
-                                JarvisChatScreen(
-                                    client: chatClient,
-                                    fixtureMode: fixtureMode,
-                                    startupError: startupError,
-                                    showsSidebarToolbarButton: navigationBisectVariant != .F,
-                                    onOpenSidebar: { setSidebarOpen(true) },
-                                    onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
-                                )
-                            } else if destination == .notes {
-                                JarvisNotesArea(
-                                    client: notesClient,
-                                    language: language,
-                                    onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) },
-                                    onOpenSidebar: { setSidebarOpen(true) }
-                                )
-                            } else if destination == .health {
-                                JarvisHealthArea(
-                                    client: healthClient,
-                                    language: healthScreenshotLanguage ?? language,
-                                    observeRefreshEvents: !fixtureMode,
-                                    onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
-                                    now: fixtureMode ? JarvisHealthPreview.now : Date(),
-                                    workoutInitiallySelected: healthScreenshotState != nil,
-                                    presentNewLiftAfterLoading: healthScreenshotState == "newlift",
-                                    onOpenSidebar: { setSidebarOpen(true) }
-                                )
-                            } else if destination == .softwareFactory {
-                                JarvisFactoryArea(
-                                    client: factoryClient,
-                                    language: factoryScreenshot?.language ?? language,
-                                    onRetryConfiguration: {
-                                        factoryClient = Self.makeFactoryClient(
-                                            previewState: factoryScreenshot?.state,
-                                            fixtureMode: factoryFixtureMode
-                                        )
-                                    },
-                                    previewState: factoryScreenshot?.state,
-                                    liveUpdatesEnabled: !factoryFixtureMode,
-                                    onOpenSidebar: { setSidebarOpen(true) }
-                                )
-                            } else if destination == .settings {
-                                JarvisSettingsArea(
-                                    storedLanguage: $storedLanguage,
-                                    storedTheme: $storedTheme,
-                                    client: settingsClient,
-                                    onSignedOut: {
-                                        NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
-                                    }
-                                )
-                            } else {
-                                JarvisPlaceholderView(destination: destination, language: language)
+                            Group {
+                                if destination == .workspaces {
+                                    WorkspacesView(runtime: workspaceRuntime)
+                                } else if destination == .voice {
+                                    VoiceScreenView(
+                                        model: voiceModel,
+                                        language: voiceScreenshotLanguage ?? language,
+                                        fixtureMode: fixtureMode && !navigationFixtureMode,
+                                        onMinimize: { navigate(to: .chat, drawerWidth: drawerWidth) },
+                                        onEnd: { navigate(to: .chat, drawerWidth: drawerWidth) }
+                                    )
+                                } else if destination == .chat {
+                                    JarvisChatScreen(
+                                        client: chatClient,
+                                        fixtureMode: fixtureMode,
+                                        startupError: startupError,
+                                        showsSidebarToolbarButton: navigationBisectVariant != .F,
+                                        onOpenSidebar: { setSidebarOpen(true) },
+                                        onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
+                                    )
+                                } else if destination == .notes {
+                                    JarvisNotesArea(
+                                        client: notesClient,
+                                        language: language,
+                                        onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) },
+                                        onOpenSidebar: { setSidebarOpen(true) }
+                                    )
+                                } else if destination == .health {
+                                    JarvisHealthArea(
+                                        client: healthClient,
+                                        language: healthScreenshotLanguage ?? language,
+                                        observeRefreshEvents: !fixtureMode,
+                                        onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
+                                        now: fixtureMode ? JarvisHealthPreview.now : Date(),
+                                        workoutInitiallySelected: healthScreenshotState != nil,
+                                        presentNewLiftAfterLoading: healthScreenshotState == "newlift",
+                                        onOpenSidebar: { setSidebarOpen(true) }
+                                    )
+                                } else if destination == .softwareFactory {
+                                    JarvisFactoryArea(
+                                        client: factoryClient,
+                                        language: factoryScreenshot?.language ?? language,
+                                        onRetryConfiguration: {
+                                            factoryClient = Self.makeFactoryClient(
+                                                previewState: factoryScreenshot?.state,
+                                                fixtureMode: factoryFixtureMode
+                                            )
+                                        },
+                                        previewState: factoryScreenshot?.state,
+                                        liveUpdatesEnabled: !factoryFixtureMode,
+                                        onOpenSidebar: { setSidebarOpen(true) }
+                                    )
+                                } else if destination == .settings {
+                                    JarvisSettingsArea(
+                                        storedLanguage: $storedLanguage,
+                                        storedTheme: $storedTheme,
+                                        client: settingsClient,
+                                        onSignedOut: {
+                                            NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
+                                        }
+                                    )
+                                } else {
+                                    JarvisPlaceholderView(destination: destination, language: language)
+                                }
                             }
+                            .id(sessionEpoch)
                         }
                 }
                 .tint(JarvisDesignTokens.primaryAccent)
-                .task { await workspaceRuntime.run() }
+                .task(id: sessionEpoch) {
+                    if appliedSessionEpoch != sessionEpoch {
+                        workspaceRuntime.resetSession()
+                        await voiceModel.end(returnToChat: false)
+                        guard !Task.isCancelled else { return }
+                        appliedSessionEpoch = sessionEpoch
+                        if navigation.currentDestination == .voice { await voiceModel.start() }
+                    }
+                    guard !Task.isCancelled else { return }
+                    await workspaceRuntime.run()
+                }
                 .onChange(of: voiceModel.voiceState) { _, state in
-                    guard navigationBisectVariant != .K else { return }
+                    guard navigationBisectVariant != .K, appliedSessionEpoch == sessionEpoch else { return }
                     mutateNavigation(state == .ended ? "voiceEnded.stateChanged" : "voiceStateChanged") {
                         $0.voiceSessionStateChanged(state)
                     }
@@ -564,6 +628,7 @@ struct ContentView: View {
                             + "sidebarXOffset=\(-drawerWidth * progress);"
                             + "sidebarDisabled=\(!currentNavigation.isSidebarOpen || !isEnabled);"
                             + "contentDisabled=\(currentNavigation.isSidebarOpen || !isEnabled)"
+                            + ";initEvaluation=\(initEvaluation);\(navigationWrites.lifecycleValue)"
                     }
                     if [.G, .H, .I, .J, .K].contains(variant) {
                         NavigationBisectWritesProbe(writes: navigationWrites)
@@ -576,6 +641,9 @@ struct ContentView: View {
             .clipped()
             .environment(\.locale, language.locale)
             .onAppear {
+                NavigationLaunchLifecycle.log(
+                    "ContentView appeared evaluation=\(initEvaluation);installedStateObject=\(navigationWrites.identity)"
+                )
                 if JarvisAppLanguage(rawValue: storedLanguage) == nil {
                     storedLanguage = JarvisAppLanguage.default.rawValue
                 }

@@ -10105,6 +10105,22 @@ probe/gate modifier and navigation effects. Independent J launches compare
 element versus coordinate taps; neither establishes VoiceOver activation.
 Native winning-variant selection and cleanup remain pending.
 
+Comment 6561353007 separates shell lifetime from session data lifetime. Sign-in
+keeps ContentView and its navigation host/state installed; only session-owned
+screen content resets, while workspace state/streams and prior voice resources
+are explicitly cleared. Retain the full shell reset only for real sign-out, with
+the privacy gate covering content before teardown. Do not inject the interactive
+Microsoft provider into background content: existing clients read the current
+Keychain session on each request, verified by a retained-client sign-in/revocation
+regression. Apple [StateObject](https://developer.apple.com/documentation/swiftui/stateobject)
+and [id(_:)](https://developer.apple.com/documentation/swiftui/view/id(_:))
+documentation were read through the browser. Launch logs/probes distinguish
+initializer evaluations from actual installed StateObject markers without
+publishing diagnostic changes during initialization. The five-second bilingual
+menu tests add strict hittability and real-sidebar assertions; existing waits
+and assertions remain. G's epoch-zero stale render is not attributed to session
+resets, and native acceptance remains pending.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

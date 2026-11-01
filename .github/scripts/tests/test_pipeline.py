@@ -732,7 +732,40 @@ class SafeFailureTests(unittest.TestCase):
         shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertEqual(shell.count("onOpenSidebar: { setSidebarOpen(true) }"), 5)
         tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
-        self.assertEqual(tests.count("assertDestinationMenuWorks()"), 4)
+        self.assertEqual(tests.count("assertDestinationMenuWorks()"), 5)
+
+    def test_ios_sign_in_preserves_shell_and_bounds_launch_identity_evidence(self):
+        root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        self.assertNotIn(".id(model.contentEpoch)", root)
+        self.assertIn(".id(model.signOutGeneration)", root)
+        self.assertIn("ContentView(sessionEpoch: model.contentEpoch)", root)
+        sign_in = root.split("func signIn() async {", 1)[1].split("func beginSignIn()", 1)[0]
+        self.assertIn("contentEpoch += 1", sign_in)
+        self.assertNotIn("signOutGeneration += 1", sign_in)
+        sign_out = root.split("func signOut() async {", 1)[1].split("func retryUnlock()", 1)[0]
+        self.assertLess(sign_out.index("refreshOverlay()"), sign_out.index("tokenStore?.delete()"))
+        self.assertIn("signOutGeneration += 1", sign_out)
+        for clearing in ("tokenStore?.delete()", "provider?.signOut()", "command: .end"):
+            self.assertIn(clearing, sign_out)
+        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn("logCount < 32", shell)
+        self.assertIn("systemUptime - startedAt <= 15", shell)
+        self.assertIn("installedStateObject=", shell)
+        self.assertIn("initEvaluations=", shell)
+        self.assertIn("StateObject(wrappedValue: NavigationBisectWrites(initialWrites: initialWrites))", shell)
+        self.assertNotIn("let writes = NavigationBisectWrites()", shell)
+        self.assertEqual(shell.count(".id(sessionEpoch)"), 2)
+        self.assertIn(".task(id: sessionEpoch)", shell)
+        self.assertIn("workspaceRuntime.resetSession()", shell)
+        self.assertIn("voiceModel.end(returnToChat: false)", shell)
+        self.assertIn("JarvisUnavailableAccessTokenProvider()", shell)
+        tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
+        for required in ("testMenuRemainsHittableFiveSecondsAfterLaunchInDanish",
+                         "testMenuRemainsHittableFiveSecondsAfterLaunchInEnglish",
+                         "startupDelay: 5", "Thread.sleep(forTimeInterval: startupDelay)",
+                         "XCTAssertTrue(menu.exists)", "XCTAssertTrue(menu.isHittable)",
+                         "menu.tap()", "assertSidebarOpen()"):
+            self.assertIn(required, tests)
 
     def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
@@ -1073,7 +1106,9 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("calendar-change-confirmation-{da,en}-{light,dark}.png", comment)
         self.assertIn("do not prove backend execution", comment)
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        initialization = content.split("init(client: JarvisClient? = nil, webAppURL: URL? = nil)", 1)[1]
+        initialization = content.split(
+            "init(client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0)", 1
+        )[1]
         simulator, device = initialization.split("#if targetEnvironment(simulator)", 1)[1].split("#else", 1)
         self.assertIn("--screenshot-calendar-change-fixture", simulator)
         self.assertIn("UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey)", simulator)

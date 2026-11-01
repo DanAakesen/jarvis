@@ -3548,6 +3548,17 @@ receive the same committed open callback through a shared no-fill menu button.
 Repeated bilingual tests additionally open/close from each header. The temporary
 first CI invocation now includes both navigation suites; full-scheme restoration
 and native verification remain pending.
+Comment 6561353007 keeps the shell and navigation host installed across sign-in,
+resets only session-owned screen content, clears/reconnects workspace state and
+ends the prior voice resources without routing back to Chat. A full shell reset
+remains sign-out-only for data clearing. Bounded launch counters distinguish
+initializer re-evaluation from installed StateObject identity changes; the
+five-second Danish/English menu tests require existence, hittability and real
+sidebar opening on Chat and the destination headers. These changes do not explain
+G's epoch-zero stale render; exact-head simulator qualification remains pending.
+Local validation passes 19 focused iOS pipeline checks, 78 Swift core
+session/navigation checks and parsing of all edited Swift files. Linux cannot
+verify the new XCUI tests or rendered menu recovery.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

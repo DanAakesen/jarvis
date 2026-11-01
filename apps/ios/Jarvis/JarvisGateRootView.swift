@@ -82,6 +82,7 @@ private final class JarvisGateOverlay {
 private final class JarvisGateModel: ObservableObject {
     @Published private(set) var presentation: JarvisGatePresentation = .loading
     @Published private(set) var contentEpoch = 0
+    @Published private(set) var signOutGeneration = 0
     @Published private var isPrivacyCoverVisible = true
 
     private let policy = JarvisGatePolicy()
@@ -90,6 +91,7 @@ private final class JarvisGateModel: ObservableObject {
     private let client: JarvisClient?
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
+    private var isSigningOut = false
 
     private static var isNavigationFixture: Bool {
 #if targetEnvironment(simulator)
@@ -211,7 +213,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signIn() async {
-        guard presentation != .signIn(.signingIn) else { return }
+        guard !isSigningOut, presentation != .signIn(.signingIn) else { return }
         presentation = .signIn(.signingIn)
         guard let client else {
             presentation = .signIn(.failed)
@@ -233,7 +235,11 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signOut() async {
-        guard !Self.isNavigationFixture else { return }
+        guard !Self.isNavigationFixture, !isSigningOut else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
+        presentation = .loading
+        refreshOverlay()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
@@ -241,6 +247,7 @@ private final class JarvisGateModel: ObservableObject {
             try await tokenStore?.delete()
             try provider?.signOut()
             contentEpoch += 1
+            signOutGeneration += 1
             presentation = .signIn(.idle)
         } catch {
             presentation = .signIn(.denied)
@@ -342,6 +349,7 @@ struct JarvisGateRootView: View {
                     "shouldCoverContent=\(model.shouldCoverContent);"
                         + "rootDisabled=\(model.shouldCoverContent || !isEnabled)"
                         + ";contentEpoch=\(model.contentEpoch)"
+                        + ";signOutGeneration=\(model.signOutGeneration)"
                         + ";presentations=\(navigationBisectPresentations)"
                 }
                 NavigationBisectRootControl(identifier: "navigation.controlOutsideGate")
@@ -384,7 +392,7 @@ struct JarvisGateRootView: View {
                     ) ?? .default
                 )
             } else {
-                ContentView()
+                ContentView(sessionEpoch: model.contentEpoch)
             }
         }
             .overlay(alignment: .topTrailing) {
@@ -393,7 +401,8 @@ struct JarvisGateRootView: View {
                         .padding(.top, 140)
                 }
             }
-            .id(model.contentEpoch)
+            // Only sign-out discards the shell; sign-in resets session content explicitly.
+            .id(model.signOutGeneration)
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .navigationBisectGateHitTesting(!model.shouldCoverContent)
             .accessibilityElement(children: .contain)

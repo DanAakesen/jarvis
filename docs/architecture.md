@@ -1449,7 +1449,21 @@ container safe areas, not the keyboard region, and composer glass is noninteract
 Navigation fixtures log bounded, text-free native hit-test/input ancestry reports
 alongside retained XCUITest hierarchy dumps to distinguish UIKit occlusion from
 accessibility or geometry failures.
-Simulator startup logs record only gate fixture selection; fixture navigation
+Debug launch lifecycle logs are bounded to 32 entries in the first 15 seconds.
+They count ContentView initializer evaluations separately from lazily created
+shell StateObject markers; existing fixture probes expose the installed marker
+identity. Re-evaluating an initializer is not evidence of losing persisted state.
+Sign-in changes only the session-owned Chat/destination content identity, not
+ContentView, the NavigationStack, navigation state or sidebar write history.
+Workspace state is explicitly cleared with a fresh event client and stale-run
+generation guards; prior voice resources end without forcing a Chat route.
+Chat detaches its transport when removed and resumes suspended observation when
+returning. Only real sign-out retains a full shell reset; the gate covers content
+before credential/resource teardown and keeps failures covered.
+Content clients still fail closed without a Keychain session and cannot open
+interactive Microsoft authentication. Their existing per-request token reads
+pick up a fresh gate-created session without replacing the client.
+Simulator startup logs also record gate fixture selection; fixture navigation
 commands record only Boolean state/request values, not arguments or content.
 The plain-style Chat menu label explicitly defines its existing 44-point hit
 region with `contentShape(Rectangle())`, matching the bell's interaction boundary.

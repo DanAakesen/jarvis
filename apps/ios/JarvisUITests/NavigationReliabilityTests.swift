@@ -15,6 +15,33 @@ final class NavigationReliabilityTests: XCTestCase {
         exerciseNavigation(language: "en")
     }
 
+    func testMenuRemainsHittableFiveSecondsAfterLaunchInDanish() {
+        assertMenuAfterStartup(language: "da")
+    }
+
+    func testMenuRemainsHittableFiveSecondsAfterLaunchInEnglish() {
+        assertMenuAfterStartup(language: "en")
+    }
+
+    private func assertMenuAfterStartup(language: String) {
+        launch(language: language, startupDelay: 5)
+        defer { app.terminate() }
+        let menu = app.buttons["navigation.openSidebar"]
+        XCTAssertTrue(menu.exists)
+        XCTAssertTrue(menu.isHittable)
+        menu.tap()
+        assertSidebarOpen()
+        closeByTap()
+        for destination in ["health", "notes", "softwareFactory"] {
+            navigate(to: destination)
+            let destinationMenu = app.buttons["navigation.openSidebar"]
+            XCTAssertTrue(destinationMenu.exists)
+            XCTAssertTrue(destinationMenu.isHittable)
+            assertDestinationMenuWorks()
+        }
+        attachScreenshot("Menu after five-second startup and destinations (\(language))")
+    }
+
     func testShortDragAndBackgroundInterruptionRecover() {
         launch(language: "da")
         for _ in 0..<3 {
@@ -37,7 +64,7 @@ final class NavigationReliabilityTests: XCTestCase {
         attachScreenshot("Recovered after short drags and background interruption")
     }
 
-    private func launch(language: String) {
+    private func launch(language: String, startupDelay: TimeInterval = 0) {
         app.launchArguments = [
             "--ui-test-navigation",
             "-jarvis.appLanguage", language,
@@ -45,6 +72,7 @@ final class NavigationReliabilityTests: XCTestCase {
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ]
         app.launch()
+        if startupDelay > 0 { Thread.sleep(forTimeInterval: startupDelay) }
         waitFor(app.descendants(matching: .any)["chat.input"], key: "isHittable", value: true)
         waitForToolbarFrame(app.buttons["navigation.openSidebar"])
         attachScreenshot("Before navigation sequence (\(language))")
