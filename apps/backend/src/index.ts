@@ -137,6 +137,12 @@ import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createPushStore } from './database/push-store.js';
 import { createActivityRegistrationStore } from './database/activitykit-store.js';
 import { createActivityPushSender, loadActivityKitConfig } from './push/activitykit.js';
+import { createApprovalNotificationStore } from './database/approval-notification-store.js';
+import {
+  createApprovalNotificationDispatcher,
+  createApprovalNotificationSender,
+  loadApprovalNotificationConfig,
+} from './push/approval-notifications.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeDaily } from './daily/composition.js';
@@ -172,6 +178,19 @@ try {
   if (activityKitConfig && !database) throw new ConfigurationError('JARVIS_ACTIVITYKIT_ENABLED requires the existing SQL pool');
   const activityKit = activityKitConfig && database
     ? { store: createActivityRegistrationStore(database.pool), sender: await createActivityPushSender(activityKitConfig) }
+    : undefined;
+  const approvalNotificationConfig = loadApprovalNotificationConfig();
+  if (approvalNotificationConfig && !database) {
+    throw new ConfigurationError('JARVIS_APPROVAL_NOTIFICATIONS_ENABLED requires the existing SQL pool');
+  }
+  const approvalNotifications = approvalNotificationConfig && database
+    ? {
+      store: createApprovalNotificationStore(database.pool),
+      sender: await createApprovalNotificationSender(approvalNotificationConfig),
+    }
+    : undefined;
+  const notifyApproval = approvalNotifications
+    ? createApprovalNotificationDispatcher(config.auth.ownerObjectId, approvalNotifications, logger)
     : undefined;
   if (config.healthUploadEnabled && !database) {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED requires the existing SQL pool');
@@ -625,9 +644,12 @@ try {
         await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
-      onConfirmationPending: (confirmation, foodEstimate) => nowEventHub.publish(foodEstimate
-        ? { type: 'food_estimate_pending', ...foodEstimate, confirmation }
-        : { type: 'status', kind: 'approval_pending' }),
+      onConfirmationPending: (confirmation, foodEstimate) => {
+        notifyApproval?.(confirmation);
+        nowEventHub.publish(foodEstimate
+          ? { type: 'food_estimate_pending', ...foodEstimate, confirmation }
+          : { type: 'status', kind: 'approval_pending' });
+      },
     })
     : undefined;
   const webhookDeliveryStore = database ? createWebhookDeliveryStore(database.pool, alertNotifier) : null;
@@ -1207,6 +1229,8 @@ try {
     } : {}),
     ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
     ...(activityKit ? { activityKit } : {}),
+    ...(approvalNotifications ? { approvalNotifications } : {}),
+    ...(notifyApproval ? { notifyApproval } : {}),
     ...(vaultModule && config.foundryProjectEndpoint && credential ? {
       onEmbeddingModelChanged: async (jobs) => {
         if (activeEmbeddingReindex) {
