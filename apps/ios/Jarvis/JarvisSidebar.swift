@@ -66,8 +66,6 @@ struct JarvisSidebar: View {
                 .padding(.vertical, JarvisDesignTokens.sidebarHeaderRuleVerticalInset)
 
             GeometryReader { scrollGeometry in
-                let bottomInset = safeAreaInsets.bottom
-                    + JarvisDesignTokens.sidebarVerticalInset
                 ScrollViewReader { scrollProxy in
                     ScrollView {
                         VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
@@ -78,16 +76,10 @@ struct JarvisSidebar: View {
                         }
                         .frame(
                             maxWidth: .infinity,
-                            minHeight: max(
-                                0,
-                                scrollGeometry.size.height -
-                                    safeAreaInsets.bottom -
-                                    JarvisDesignTokens.sidebarVerticalInset
-                            ),
+                            minHeight: scrollGeometry.size.height,
                             alignment: .bottom
                         )
                         .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
-                        .padding(.bottom, bottomInset)
                     }
                     .scrollIndicators(.hidden)
                     .onChange(of: isOpen, initial: true) { _, isOpen in
@@ -97,6 +89,7 @@ struct JarvisSidebar: View {
                     }
                 }
             }
+            .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.sidebarVerticalInset)
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
