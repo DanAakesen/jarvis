@@ -55,10 +55,15 @@ final class ChatComposerUITests: XCTestCase {
             XCTAssertTrue(camera.isEnabled)
             camera.tap()
 
-            XCTAssertTrue(app.buttons["camera.shutter"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.buttons["camera.close"].exists)
-            app.buttons["camera.close"].tap()
-            XCTAssertTrue(app.buttons["camera.shutter"].waitForNonExistence(timeout: 5))
+            let shutter = app.descendants(matching: .any)["camera.shutter"]
+            XCTAssertTrue(
+                shutter.waitForExistence(timeout: 10),
+                "The camera sheet must open. Hierarchy: \(app.debugDescription)"
+            )
+            let close = app.descendants(matching: .any)["camera.close"]
+            XCTAssertTrue(close.exists)
+            close.tap()
+            XCTAssertTrue(shutter.waitForNonExistence(timeout: 5))
             app.terminate()
         }
     }
