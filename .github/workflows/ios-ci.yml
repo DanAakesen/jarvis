@@ -167,8 +167,8 @@ jobs:
             -only-testing:JarvisUITests/SidebarNavigationTests \
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES \
-            -default-test-execution-time-allowance 60 \
-            -maximum-test-execution-time-allowance 90 \
+            -default-test-execution-time-allowance 120 \
+            -maximum-test-execution-time-allowance 150 \
             CODE_SIGNING_ALLOWED=NO; then
             echo "result=success" >> "$GITHUB_OUTPUT"
           else

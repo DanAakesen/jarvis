@@ -6318,8 +6318,8 @@ scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
 'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/SidebarNavigationTests
 CODE_SIGNING_ALLOWED=NO test`. The ready-PR iOS job runs this focused class
 once, inside the "Boot iPhone Simulator and capture screenshots" step, with
-per-test time limits (`-default-test-execution-time-allowance 60`,
-`-maximum-test-execution-time-allowance 90`), and retains `ios-scheme.xcresult`
+per-test time limits (`-default-test-execution-time-allowance 120`,
+`-maximum-test-execution-time-allowance 150`), and retains `ios-scheme.xcresult`
 for 14 days, including failures. A failing class marks the run failed in the
 final "Fail the run when UI tests fail" step after screenshots are captured.
 The earlier separate navigation invocation was removed because it repeated the

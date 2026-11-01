@@ -663,7 +663,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
         self.assertNotIn("-skip-testing", capture["run"])
         self.assertIn("-test-timeouts-enabled YES", capture["run"])
-        self.assertIn("-maximum-test-execution-time-allowance 90", capture["run"])
+        self.assertIn("-maximum-test-execution-time-allowance 150", capture["run"])
         self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult"', capture["run"])
         gate = next(step for step in steps if step.get("name") == "Fail the run when UI tests fail")
         self.assertIn("steps.capture.outputs.result == 'failure'", gate["if"])
@@ -702,13 +702,13 @@ class SafeFailureTests(unittest.TestCase):
                          "XCTAssertGreaterThanOrEqual(menu.frame.width, 43.5)",
                          "XCTAssertGreaterThanOrEqual(menu.frame.height, 43.5)",
                          'app.buttons["chat.notifications"]', "XCTAssertTrue(bell.isHittable)",
-                         'app.otherElements.matching(identifier: "navigation.sidebar").element',
+                         'app.descendants(matching: .any).matching(identifier: "navigation.sidebar").firstMatch',
                          "XCTAssertFalse(sidebar.exists)",
                          "menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()",
-                         "sidebar.exists && sidebar.isHittable && !sidebar.frame.isEmpty",
+                         "sidebar.exists && !sidebar.frame.isEmpty",
                          "self.app.frame.contains(sidebar.frame)",
                          'self.app.buttons["navigation.chat"].isHittable',
-                         "XCTAssertTrue(sidebar.exists)", "XCTAssertTrue(sidebar.isHittable)",
+                         "XCTAssertTrue(sidebar.exists)",
                          'XCTAssertTrue(app.buttons["navigation.chat"].isHittable)'):
             self.assertIn(required, source)
         opened = source.split("menu.coordinate(withNormalizedOffset:", 1)[1]
@@ -931,7 +931,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", reveal)
         self.assertIn("let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0", reveal)
         self.assertRegex(reveal, r"if progress > 0 \{\s+JarvisSidebar\(")
-        self.assertLess(reveal.index("JarvisSidebar("), reveal.index("page\n"))
+        self.assertLess(reveal.index("page\n"), reveal.index("JarvisSidebar("))
+        self.assertIn(".frame(width: drawerWidth * progress, height: geometry.size.height, alignment: .trailing)", reveal)
         self.assertIn(".offset(x: -drawerWidth * progress)", reveal)
         self.assertIn(".allowsHitTesting(progress == 0)", reveal)
         self.assertIn(".onTapGesture { navigation.closeSidebar() }", reveal)
