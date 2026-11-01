@@ -3,6 +3,7 @@ import Foundation
 public enum JarvisApprovalLocalizationKey: String, CaseIterable, Sendable {
     case approve = "approval.approve"
     case decline = "approval.decline"
+    case sending = "approval.sending"
     case expires = "approval.expires"
     case approvedFromLockScreen = "approval.approvedFromLockScreen"
     case declinedFromLockScreen = "approval.declinedFromLockScreen"

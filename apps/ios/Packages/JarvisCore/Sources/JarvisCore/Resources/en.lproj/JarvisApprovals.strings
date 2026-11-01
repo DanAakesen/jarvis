@@ -1,5 +1,6 @@
 "approval.approve" = "Approve";
 "approval.decline" = "Decline";
+"approval.sending" = "Sending…";
 "approval.expires" = "Expires at %@";
 "approval.approvedFromLockScreen" = "Approved from the Lock Screen.";
 "approval.declinedFromLockScreen" = "Declined from the Lock Screen.";

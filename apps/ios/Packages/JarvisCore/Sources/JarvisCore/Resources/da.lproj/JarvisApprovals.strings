@@ -1,5 +1,6 @@
 "approval.approve" = "Godkend";
 "approval.decline" = "Afvis";
+"approval.sending" = "Sender…";
 "approval.expires" = "Udløber kl. %@";
 "approval.approvedFromLockScreen" = "Godkendt fra låseskærmen.";
 "approval.declinedFromLockScreen" = "Afvist fra låseskærmen.";

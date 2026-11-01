@@ -59,7 +59,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var isLoadingOlder = false
     @Published var isSending = false
     @Published var isCancelling = false
-    @Published var resolvingConfirmationIDs = Set<String>()
+    @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
     @Published var dismissingActivityIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
@@ -370,10 +370,10 @@ final class JarvisChatModel: ObservableObject {
 
     func resolve(_ confirmation: PendingConfirmation, decision: ConfirmationDecision) async {
         guard !fixtureMode, let nowClient,
-              !resolvingConfirmationIDs.contains(confirmation.id) else { return }
-        resolvingConfirmationIDs.insert(confirmation.id)
+              resolvingConfirmationDecisions[confirmation.id] == nil else { return }
+        resolvingConfirmationDecisions[confirmation.id] = decision
         activityMessage = nil
-        defer { resolvingConfirmationIDs.remove(confirmation.id) }
+        defer { resolvingConfirmationDecisions.removeValue(forKey: confirmation.id) }
         do {
             try await nowClient.resolveConfirmation(id: confirmation.id, decision: decision)
             activityMessage = decision == .approve ? "Approval recorded." : "Request declined."
@@ -382,6 +382,14 @@ final class JarvisChatModel: ObservableObject {
         } catch {
             activityError = message(for: error)
         }
+    }
+
+    func isResolving(_ confirmation: PendingConfirmation, decision: ConfirmationDecision) -> Bool {
+        resolvingConfirmationDecisions[confirmation.id] == decision
+    }
+
+    func isResolving(_ confirmation: PendingConfirmation) -> Bool {
+        resolvingConfirmationDecisions[confirmation.id] != nil
     }
 
     private func consumeLockScreenApprovalResult() {
