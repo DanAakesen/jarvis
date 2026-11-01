@@ -810,6 +810,35 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".sheet(item: $presentedSheet", chat)
         self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
 
+    def test_ios_background_activity_empty_state_and_screenshots(self):
+        screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()
+        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
+        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        fixture = (ROOT / "apps/ios/Jarvis/JarvisFixtureScenario.swift").read_text()
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step["run"] for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+
+        self.assertIn("if model.shouldShowNowBar {\n                nowBar", screen)
+        activity_predicate = model.split("var shouldShowNowBar: Bool", 1)[1].split("var needsYouCount", 1)[0]
+        self.assertIn("!$0.confirmations.isEmpty", activity_predicate)
+        self.assertIn("!$0.running.isEmpty", activity_predicate)
+        self.assertIn("!$0.items.isEmpty", activity_predicate)
+        self.assertNotIn("$0.awayMode", activity_predicate)
+        self.assertIn(".tint(JarvisDesignTokens.secondaryAccent)", screen)
+        self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
+        self.assertIn('ContentUnavailableView("No activity", systemImage: "checkmark.circle")', sheet)
+        self.assertIn("if !items.isEmpty", sheet)
+        self.assertNotIn("emptyMessage", sheet)
+        self.assertIn('for state in empty active', capture)
+        self.assertIn('"--screenshot-activity-state=$state"', capture)
+        self.assertIn('background-activity-${state}-${appearance}.png', capture)
+        self.assertIn('--screenshot-activity-state=', content)
+        self.assertIn("makeClient(emptyActivity: activityScreenshotState == \"empty\")", content)
+        self.assertIn('"awayMode": false', fixture)
+
     def test_ios_voice_states_have_captures_and_board_comparisons(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         steps = workflow["jobs"]["macos"]["steps"]
