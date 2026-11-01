@@ -58,8 +58,9 @@ final class JarvisNavigationModelTests: XCTestCase {
             XCTAssertTrue(screen.contains("JarvisSidebarMenuButton(language:"))
             XCTAssertFalse(screen.contains("onOpenSidebar"))
         }
-        XCTAssertTrue(try source("Jarvis/JarvisChatScreen.swift")
-            .contains("ToolbarItemGroup(placement: .topBarTrailing)"))
+        let chat = try source("Jarvis/JarvisChatScreen.swift")
+        XCTAssertFalse(chat.contains("ToolbarItemGroup(placement: .topBarTrailing)"))
+        XCTAssertTrue(chat.contains("ToolbarSpacer(.fixed, placement: .topBarTrailing)"))
     }
 
     func testDrawerExistsOnlyWhenOpenWithoutForegroundOrGestureStateTransforms() throws {

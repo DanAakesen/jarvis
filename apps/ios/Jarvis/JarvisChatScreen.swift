@@ -191,8 +191,7 @@ struct JarvisChatScreen: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                JarvisSidebarMenuButton(language: appLanguage)
+            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     presentedSheet = .activity(.needsYou)
                 } label: {
@@ -221,6 +220,10 @@ struct JarvisChatScreen: View {
                 .jarvisToolbarButtonStyle()
                 .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
                 .accessibilityIdentifier("chat.notifications")
+            }
+            ToolbarSpacer(.fixed, placement: .topBarTrailing)
+            ToolbarItem(placement: .topBarTrailing) {
+                JarvisSidebarMenuButton(language: appLanguage)
             }
         }
         .task {

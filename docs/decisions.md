@@ -9934,6 +9934,12 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Comment 6562578040 separates Chat's bell/menu into individual trailing ToolbarItems
+with a fixed [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
+The sidebar launcher is outermost at the far right; the bell is to its left.
+Bilingual sidebar UI tests assert separated frames in that order. Native visual
+verification remains pending; no custom glass fill is added.
+
 Comment 6562283849 selects SF Symbol `sidebar.trailing` for the shared sidebar
 launcher on Chat, Health, Notes and Factory. Preserve its no-fill styling,
 44-point target, accessibility identifier and Danish/English labels.

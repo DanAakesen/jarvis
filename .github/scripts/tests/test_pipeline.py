@@ -759,7 +759,15 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("openSidebarFromButton", shell)
         self.assertNotIn("onOpenSidebar", shell)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertIn("ToolbarItemGroup(placement: .topBarTrailing)", chat)
+        self.assertNotIn("ToolbarItemGroup(placement: .topBarTrailing)", chat)
+        self.assertEqual(chat.count("ToolbarItem(placement: .topBarTrailing)"), 2)
+        self.assertIn("ToolbarSpacer(.fixed, placement: .topBarTrailing)", chat)
+        self.assertLess(chat.index('.accessibilityIdentifier("chat.notifications")'),
+                        chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"))
+        self.assertLess(chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"),
+                        chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
+        ui_tests = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
+        self.assertIn("XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX", ui_tests)
         self.assertNotIn("ToolbarItem(placement: .topBarLeading)", chat)
         self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
         self.assertNotIn("onOpenSidebar", chat)

@@ -52,6 +52,8 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertTrue(bell.exists)
         XCTAssertTrue(bell.isHittable)
         XCTAssertEqual(menu.frame.midY, bell.frame.midY, accuracy: 5)
+        XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX,
+                             "The sidebar launcher must be separate and farther right than the bell")
 
         let sidebar = app.otherElements.matching(identifier: "navigation.sidebar").element
         XCTAssertFalse(sidebar.exists)
