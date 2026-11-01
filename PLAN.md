@@ -2132,6 +2132,17 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
+  acknowledgement; iOS detaches observation on lock and refreshes persisted
+  history/jobs and active-turn replay on return. Automatic background-job/Factory
+  activities, task Dynamic Island states, da/en Settings recovery and ActivityKit
+  token/update delivery are implemented. Targeted Core tests and metadata checks
+  pass locally. Backend focused tests, lint/build and contract checks pass;
+  SQL integration is blocked by missing isolated loopback configuration.
+  Next: finish security review, then ready-PR Apple compilation, APNs
+  configuration/migrations 0071–0072/provisioning and a
+  locked-iPhone trial. No deployment or physical-device acceptance is claimed.
+
 - **P15-34 / #1470:** local voice Live Activity and session-scoped Lock Screen
   Mute/End are implemented with Danish/English copy, measured waveform, native
   widget extension and audio background declaration. Core build, focused tests,

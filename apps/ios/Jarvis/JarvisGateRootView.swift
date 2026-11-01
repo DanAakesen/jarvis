@@ -100,6 +100,7 @@ private final class JarvisGateModel: ObservableObject {
            let client = try? JarvisComposition.makeClient(accessTokenProvider: provider) {
             self.provider = provider
             self.client = client
+            JarvisFactoryLiveActivityController.configure(client: client)
             let notificationClient = try? JarvisComposition.makeClient(
                 accessTokenProvider: provider,
                 requestTimeout: JarvisApprovalNotificationCoordinator.requestTimeout

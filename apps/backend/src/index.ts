@@ -135,6 +135,8 @@ import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
 import { createProductionModules } from './production-modules.js';
 import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createPushStore } from './database/push-store.js';
+import { createActivityRegistrationStore } from './database/activitykit-store.js';
+import { createActivityPushSender, loadActivityKitConfig } from './push/activitykit.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeDaily } from './daily/composition.js';
@@ -166,6 +168,11 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const activityKitConfig = loadActivityKitConfig();
+  if (activityKitConfig && !database) throw new ConfigurationError('JARVIS_ACTIVITYKIT_ENABLED requires the existing SQL pool');
+  const activityKit = activityKitConfig && database
+    ? { store: createActivityRegistrationStore(database.pool), sender: await createActivityPushSender(activityKitConfig) }
+    : undefined;
   if (config.healthUploadEnabled && !database) {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED requires the existing SQL pool');
   }
@@ -849,7 +856,7 @@ try {
     ? createHtmlViewModule(workspaceHtmlArtifactStore, workspaceItemsStore)
     : undefined;
   const weatherModule = database && workspaceHtmlArtifactStore
-    ? createWeatherModule(workspaceHtmlArtifactStore)
+    ? createWeatherModule(workspaceHtmlArtifactStore, undefined, workspaceItemsStore)
     : undefined;
   const workspacesModule = database && workspaceItemsStore && workspaceHtmlArtifactStore
     ? createWorkspacesModule(workspaceItemsStore, workspaceHtmlArtifactStore, workspaceArtifacts)
@@ -1199,6 +1206,7 @@ try {
       ...(usageStore ? { usageStore } : {}),
     } : {}),
     ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
+    ...(activityKit ? { activityKit } : {}),
     ...(vaultModule && config.foundryProjectEndpoint && credential ? {
       onEmbeddingModelChanged: async (jobs) => {
         if (activeEmbeddingReindex) {

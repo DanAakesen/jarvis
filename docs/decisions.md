@@ -1,3 +1,26 @@
+## 1 November 2026 — lock-independent tasks and task activities (P15-49 / #1498)
+
+A persisted background job owns its execution, not its request, progress window
+or observing SSE connection. Research already detached its runner, but required
+the initial Workspace acknowledgement before starting it; losing that client
+incorrectly failed the persisted job. Make initial progress delivery optional,
+preserve validation and explicit cancellation, and recover from durable state.
+Tracked weather uses the same rule while retaining its synchronous forecast
+response. Persist the report and Workspace-item link before optional display;
+use the existing result-open route for recovery. Migration 0072 extends result
+references to `html_app` jobs and refuses destructive rollback when links exist.
+
+Start task activities automatically for Factory and background jobs. Keep waiting
+state and briefly retain real terminal state; never infer completion from a
+running-only feed. Use existing WidgetKit surfaces for task Dynamic Island content,
+localized settings recovery and explicit stale-state feedback. Only actual
+confirmations expose approval actions. Add owner-only SQL token registration and
+APNs task update/end delivery with a protected provider key and explicit environment;
+do not introduce push-to-start, deploy credentials or claim live delivery here.
+The plist flag and embedded extension existed; APNs entitlement and delivery
+plumbing did not. Apple compilation, signing, locked-phone rendering and delivery
+remain separate acceptance evidence.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

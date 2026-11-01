@@ -90,6 +90,16 @@ Native design (approved in P15-36, 31 October 2026):
 
 The approve and decline route itself needs no change.
 
+P15-49 (#1498) implements the task portion: owner-only ActivityKit token
+registration in SQL and APNs task update/end delivery. It covers existing
+Factory tasks and durable `/jobs` background work, not approval notification
+pushes or push-to-start. The app requests the activity automatically in the
+foreground and registers its update token; server execution is independent of
+that token or client connection. Protected APNs configuration, the migration,
+Push Notifications provisioning and signed-device verification are still release
+prerequisites. Disabled activities and unavailable remote updates have explicit
+Danish/English in-app recovery; stale activities do not claim current state.
+
 ## 9. Unverified (test on a real device)
 
 - Background audio, Bluetooth and route changes, microphone recovery after a lock or a call, and how long a WebSocket survives in the background.

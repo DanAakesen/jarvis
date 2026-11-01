@@ -367,6 +367,93 @@ describe('background interactive research', () => {
     expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
   });
 
+  it.each(['missing workspace', 'disconnect during progress', 'aborted tool request', 'request abort after progress'] as const)(
+    'runs server-owned research despite %s at startup',
+    async (failure) => {
+      const runner = makeRunner();
+      const { app, broker, connection, artifacts, workspaceItems } = fixture(runner);
+      const completion = vi.fn();
+      const jobEvents: BackgroundJob[] = [];
+      app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') jobEvents.push(event.job); });
+      let abortRequest!: () => void;
+      app.addHook('preHandler', (request, _reply, done) => {
+        request.announceResearchCompletion = completion;
+        abortRequest = () => { request.raw.emit('aborted'); };
+        done();
+      });
+      if (failure === 'missing workspace') {
+        connection.close();
+      } else if (failure === 'disconnect during progress') {
+        connection.close();
+        const disconnecting = broker.connect(ownerId, () => {
+          disconnecting.close();
+          return true;
+        });
+      } else {
+        const execute = broker.execute.bind(broker);
+        vi.spyOn(broker, 'execute').mockImplementationOnce(async (owner, command, signal) => {
+          if (failure === 'request abort after progress') await execute(owner, command, signal);
+          abortRequest();
+          expect(signal.aborted).toBe(true);
+          connection.close();
+          if (failure === 'aborted tool request') return execute(owner, command, signal);
+        });
+      }
+
+      const response = await startResearch(app, 'quick');
+
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: { jobId: expect.any(String) } });
+      const jobId = response.json().result.jobId as string;
+      await vi.waitFor(async () => {
+        expect(await app.backgroundJobs.list()).toEqual([
+          expect.objectContaining({ jobId, status: 'done', resultId: `research:${jobId}`, resultDelivery: 'pending' }),
+        ]);
+      });
+      expect(artifacts).toHaveLength(1);
+      expect(workspaceItems.size).toBe(1);
+      expect(runner.client.startCodexTool).toHaveBeenCalledTimes(3);
+      expect(runner.client.cancel).not.toHaveBeenCalled();
+      expect(jobEvents.some((job) => job.status === 'failed')).toBe(false);
+      expect(completion).toHaveBeenCalledWith({ status: 'complete', summary: 'The research found a supported result.' });
+    },
+  );
+
+  it('preserves explicit cancellation after the workspace disconnects', async () => {
+    const runner = makeRunner();
+    const status = vi.mocked(runner.client.status).getMockImplementation()!;
+    vi.spyOn(runner.client, 'status').mockImplementation(async (id, options) => ({
+      ...await status(id, options),
+      status: 'running',
+      finishedAt: null,
+      result: null,
+    }));
+    const { app, connection, artifacts } = fixture(runner, undefined, 5_000);
+    const completion = vi.fn();
+    const jobEvents: BackgroundJob[] = [];
+    app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') jobEvents.push(event.job); });
+    app.addHook('preHandler', (request, _reply, done) => {
+      request.announceResearchCompletion = completion;
+      done();
+    });
+    const started = await startResearch(app, 'quick');
+    const jobId = started.json().result.jobId as string;
+    await vi.waitFor(() => expect(runner.client.status).toHaveBeenCalled());
+    connection.close();
+
+    const cancelled = await app.inject({
+      method: 'POST', url: `/jobs/${jobId}/cancel`, headers: ownerHeaders,
+    });
+
+    expect(cancelled.statusCode).toBe(202);
+    await vi.waitFor(() => expect(runner.client.deleteSession).toHaveBeenCalledOnce());
+    expect(runner.client.cancel).toHaveBeenCalledOnce();
+    expect((await app.backgroundJobs.details(jobId))?.details.job.status).toBe('cancelled');
+    expect(jobEvents.at(-1)?.status).toBe('cancelled');
+    expect(jobEvents.some((job) => job.status === 'failed')).toBe(false);
+    expect(artifacts).toHaveLength(0);
+    expect(completion).not.toHaveBeenCalled();
+  });
+
   it('records an ambiguous report acknowledgement without failing the saved research job', async () => {
     const searchGate = deferred();
     const reportGate = deferred();

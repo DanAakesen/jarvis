@@ -13,6 +13,19 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('allows completed weather results without deleting evidence or changing compatibility identifiers', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0072_weather_job_results.sql');
+    expect(migration?.sql).toContain("kind IN (N'research', N'html_app') AND status = N'done'");
+    expect(migration?.sql).toContain("THEN N'research:' ELSE N'html_app:'");
+    expect(migration?.sql).toContain('TRY_CONVERT(uniqueidentifier');
+    expect(migration?.sql).toContain('result_folio_id = LOWER(result_folio_id)');
+    expect(migration?.sql).not.toMatch(/\b(?:UPDATE|DELETE|TRIGGER)\b/u);
+    const down = await readDownMigration('0072_weather_job_results.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('Weather job results must be preserved');
+    expect(down.sql).toContain("kind = N'research' AND status = N'done'");
+    expect(down.sql).not.toMatch(/\b(?:UPDATE|DELETE)\b/u);
+  });
   it('stores owner-bound background job dismissals separately from raw jobs with reversible visibility state', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0053_background_job_dismissals.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_dismissals');
@@ -342,6 +355,8 @@ describe('committed SQL manifest', () => {
       '0068_issue_delivery_origin.sql',
       '0069_runtime_test_sessions.sql',
       '0070_daily_lift_entries.sql',
+      '0071_activitykit_registrations.sql',
+      '0072_weather_job_results.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
