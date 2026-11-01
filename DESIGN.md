@@ -581,7 +581,8 @@ approval notifications. Do not embed a relative phrase in an absolute template.
 
 Native iPhone destination headers (Notes, Health, Factory) use the shared
 44-point, no-fill sidebar menu action in the existing orange accent, with localized
-English/Danish labels. Chat retains its native leading toolbar launcher and bell.
+English/Danish labels. Chat groups its menu launcher with the bell in the native
+top-right trailing toolbar, matching the right-side drawer.
 
 Dan's three supplied screenshots identify inconsistent Refresh/Create action
 shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's

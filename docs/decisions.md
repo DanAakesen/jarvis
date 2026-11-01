@@ -9934,6 +9934,17 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Owner correction: Chat's menu belongs at the top right beside the bell, matching
+the right-side drawer. Use native `ToolbarItemGroup(placement: .topBarTrailing)`,
+keeping both labels, the 44-point target and plain no-extra-fill style.
+[Apple ToolbarItemGroup](https://developer.apple.com/documentation/swiftui/toolbaritemgroup)
+and [topBarTrailing](https://developer.apple.com/documentation/swiftui/toolbaritemplacement/topbartrailing)
+were reviewed through indexed guidance; no custom toolbar layout is introduced.
+Run 41333021582 still fails navigation; all four root counters pass, with no
+alerts/sheets reported. Add an independently observed button-only action counter
+and expose write histories in every variant. This evidence is not a confirmed
+root-cause fix; native five-second placement/reliability results remain pending.
+
 The missing-button hypothesis describes main, not this PR: 8488515 added Chat's
 real toolbar Button; G CI logs report its existence and executed open writes.
 Available `git log -S` main history has no Chat launcher removal. Add matching

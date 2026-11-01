@@ -33,6 +33,7 @@ private enum NavigationLaunchLifecycle {
 @MainActor
 private final class NavigationBisectWrites: ObservableObject {
     @Published private(set) var entries: [String] = []
+    @Published private(set) var openSidebarTapCount = 0
     private var sequence = 0
     let identity: Int
 
@@ -50,11 +51,26 @@ private final class NavigationBisectWrites: ObservableObject {
     }
 
     func record(_ tag: String, before: Bool, after: Bool, stage: String = "postwrite") {
-        guard let variant = NavigationBisectVariant.current,
-              [.G, .H, .I, .J, .K].contains(variant) else { return }
+        guard NavigationBisectVariant.current != nil else { return }
         sequence += 1
         entries.append("\(sequence):\(stage):caller=\(tag):before=\(before):after=\(after)")
         if entries.count > 32 { entries.removeFirst(entries.count - 32) }
+    }
+
+    func recordOpenSidebarTap() {
+        guard NavigationBisectVariant.current != nil else { return }
+        openSidebarTapCount += 1
+    }
+}
+
+private struct NavigationBisectStateProbe: View {
+    @ObservedObject var writes: NavigationBisectWrites
+    let value: (Bool) -> String
+
+    var body: some View {
+        NavigationBisectProbe(identifier: "navigation.bisectState") { isEnabled in
+            value(isEnabled) + ";openSidebarTapCount=\(writes.openSidebarTapCount)"
+        }
     }
 }
 
@@ -436,7 +452,7 @@ struct ContentView: View {
                                 ? .needsYou : nil),
                         startupError: startupError,
                         showsSidebarToolbarButton: navigationBisectVariant != .F,
-                        onOpenSidebar: { setSidebarOpen(true) },
+                        onOpenSidebar: openSidebarFromButton,
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )
                         // Only session-owned screen data is discarded; the navigation host stays installed.
@@ -459,7 +475,7 @@ struct ContentView: View {
                                         fixtureMode: fixtureMode,
                                         startupError: startupError,
                                         showsSidebarToolbarButton: navigationBisectVariant != .F,
-                                        onOpenSidebar: { setSidebarOpen(true) },
+                                        onOpenSidebar: openSidebarFromButton,
                                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                                     )
                                 } else if destination == .notes {
@@ -467,7 +483,7 @@ struct ContentView: View {
                                         client: notesClient,
                                         language: language,
                                         onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) },
-                                        onOpenSidebar: { setSidebarOpen(true) }
+                                        onOpenSidebar: openSidebarFromButton
                                     )
                                 } else if destination == .health {
                                     JarvisHealthArea(
@@ -478,7 +494,7 @@ struct ContentView: View {
                                         now: fixtureMode ? JarvisHealthPreview.now : Date(),
                                         workoutInitiallySelected: healthScreenshotState != nil,
                                         presentNewLiftAfterLoading: healthScreenshotState == "newlift",
-                                        onOpenSidebar: { setSidebarOpen(true) }
+                                        onOpenSidebar: openSidebarFromButton
                                     )
                                 } else if destination == .softwareFactory {
                                     JarvisFactoryArea(
@@ -492,7 +508,7 @@ struct ContentView: View {
                                         },
                                         previewState: factoryScreenshot?.state,
                                         liveUpdatesEnabled: !factoryFixtureMode,
-                                        onOpenSidebar: { setSidebarOpen(true) }
+                                        onOpenSidebar: openSidebarFromButton
                                     )
                                 } else if destination == .settings {
                                     JarvisSettingsArea(
@@ -549,7 +565,7 @@ struct ContentView: View {
                 .overlay(alignment: .topLeading) {
                     if navigationBisectVariant == .F,
                        currentNavigation.currentDestination == .chat {
-                        Button { setSidebarOpen(true) } label: {
+                        Button(action: openSidebarFromButton) {
                             Image(systemName: "line.3.horizontal")
                                 .frame(
                                     width: JarvisDesignTokens.chatMinimumTapTarget,
@@ -623,17 +639,15 @@ struct ContentView: View {
             .frame(width: size.width, height: size.height)
             .overlay(alignment: .topLeading) {
                 if let variant = navigationBisectVariant {
-                    NavigationBisectProbe(identifier: "navigation.bisectState") { isEnabled in
+                    NavigationBisectStateProbe(writes: navigationWrites) { isEnabled in
                         "variant=\(variant.rawValue);isSidebarOpen=\(currentNavigation.isSidebarOpen);"
                             + "sidebarXOffset=\(-drawerWidth * progress);"
                             + "sidebarDisabled=\(!currentNavigation.isSidebarOpen || !isEnabled);"
                             + "contentDisabled=\(currentNavigation.isSidebarOpen || !isEnabled)"
                             + ";initEvaluation=\(initEvaluation);\(navigationWrites.lifecycleValue)"
                     }
-                    if [.G, .H, .I, .J, .K].contains(variant) {
-                        NavigationBisectWritesProbe(writes: navigationWrites)
-                            .offset(y: 2)
-                    }
+                    NavigationBisectWritesProbe(writes: navigationWrites)
+                        .offset(y: 2)
                 }
             }
             .background { JarvisScreenBackground() }
@@ -769,6 +783,11 @@ struct ContentView: View {
                 mutateNavigation(caller) { $0.setSidebarOpen(open) }
             }
         }
+    }
+
+    private func openSidebarFromButton() {
+        navigationWrites.recordOpenSidebarTap()
+        setSidebarOpen(true)
     }
 
     private func navigate(to destination: JarvisDestination, drawerWidth: CGFloat) {

@@ -197,8 +197,8 @@ struct JarvisChatScreen: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if showsSidebarToolbarButton {
-                ToolbarItem(placement: .topBarLeading) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if showsSidebarToolbarButton {
                     Button(action: onOpenSidebar) {
                         Image(systemName: "line.3.horizontal")
                             .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
@@ -209,8 +209,6 @@ struct JarvisChatScreen: View {
                     .accessibilityIdentifier("navigation.openSidebar")
                     .modifier(NavigationBisectMenuValue())
                 }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     presentedSheet = .activity(.needsYou)
                 } label: {

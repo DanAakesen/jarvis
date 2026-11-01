@@ -29,6 +29,8 @@ final class NavigationReliabilityTests: XCTestCase {
         let menu = app.buttons["navigation.openSidebar"]
         XCTAssertTrue(menu.exists)
         XCTAssertTrue(menu.isHittable)
+        XCTAssertGreaterThan(menu.frame.midX, app.frame.midX, "Sidebar menu must remain at the top right")
+        XCTAssertTrue(app.buttons["chat.notifications"].exists)
         menu.tap()
         assertSidebarOpen()
         closeByTap()

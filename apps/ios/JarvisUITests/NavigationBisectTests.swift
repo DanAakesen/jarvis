@@ -124,6 +124,9 @@ final class NavigationBisectTests: XCTestCase {
         } else {
             launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         }
+        print("NAVIGATION BISECT \(variant) \(language) after tap: "
+              + "exists=\(launcher.exists);isHittable=\(launcher.exists && launcher.isHittable);"
+              + "frame=\(launcher.exists ? String(describing: launcher.frame) : "unavailable");\(state)")
         if "GHIJK".contains(variant) {
             let started = ProcessInfo.processInfo.systemUptime
             for requested in [0.0, 0.5, 2.0] {

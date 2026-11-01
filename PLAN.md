@@ -3548,6 +3548,11 @@ receive the same committed open callback through a shared no-fill menu button.
 Repeated bilingual tests additionally open/close from each header. The temporary
 first CI invocation now includes both navigation suites; full-scheme restoration
 and native verification remain pending.
+Run 41333021582 remains red with one initializer/installed state owner. All four
+root-counter tests pass and report no alerts/sheets. Move Chat's menu beside the
+bell in the trailing toolbar. Independently observed button-only tap counts and
+all-variant write histories now distinguish action delivery from stale rendering;
+post-tap frames/hittability and five-second top-right placement remain asserted.
 Comment 6561353007 keeps the shell and navigation host installed across sign-in,
 resets only session-owned screen content, clears/reconnects workspace state and
 ends the prior voice resources without routing back to Chat. A full shell reset

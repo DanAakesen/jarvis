@@ -1432,6 +1432,9 @@ establish stacking or interception. Production gates and composition are unchang
 Chat's real toolbar launcher and Notes/Health/Factory header launchers receive
 ContentView's `setSidebarOpen(true)` callback. Standalone area previews omit the
 header launcher when no callback is supplied; the edge gesture remains available.
+The button callback increments a fixture-only count separately from accessibility
+actions/gesture commands. The state probe independently observes this count and
+every variant exposes the bounded write ring even when shell rendering is stale.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes
