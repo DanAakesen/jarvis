@@ -41,6 +41,10 @@ enum JarvisDesignTokens {
         light: UIColor(red: 47.0 / 255, green: 128.0 / 255, blue: 237.0 / 255, alpha: 1),
         dark: UIColor(red: 59.0 / 255, green: 139.0 / 255, blue: 255.0 / 255, alpha: 1)
     )
+    static let glassSolid = adaptiveColor(
+        light: UIColor(red: 239.0 / 255, green: 232.0 / 255, blue: 220.0 / 255, alpha: 1),
+        dark: UIColor(red: 22.0 / 255, green: 28.0 / 255, blue: 36.0 / 255, alpha: 1)
+    )
 
     static let controlMinimumHeight: CGFloat = 44
     static let contentInset: CGFloat = 20
@@ -329,6 +333,7 @@ struct JarvisScreenBackground: View {
             .frame(width: size.width, height: size.height)
         }
         .ignoresSafeArea()
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
@@ -345,5 +350,57 @@ struct JarvisScreenBackground: View {
             .frame(width: size.width * 1.2, height: size.height * 0.72)
             .position(x: size.width * x, y: size.height * y)
             .accessibilityHidden(true)
+    }
+}
+
+struct JarvisGlassSurface: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        if reduceTransparency {
+            JarvisDesignTokens.glassSolid
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
+    }
+}
+
+struct JarvisForm<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        Form {
+            content.listRowBackground(JarvisGlassSurface())
+        }
+        .jarvisAmbientBackground()
+    }
+}
+
+struct JarvisList<Content: View>: View {
+    private let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        List {
+            content.listRowBackground(JarvisGlassSurface())
+        }
+        .scrollContentBackground(.hidden)
+    }
+}
+
+extension View {
+    func jarvisAmbientBackground() -> some View {
+        frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scrollContentBackground(.hidden)
+            .background { JarvisScreenBackground() }
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar, .bottomBar)
+            .presentationBackground { JarvisScreenBackground() }
     }
 }

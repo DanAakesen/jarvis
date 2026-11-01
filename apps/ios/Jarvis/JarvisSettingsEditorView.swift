@@ -143,7 +143,7 @@ struct JarvisSettingsEditorView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             if let error {
                 Text(error)
                     .foregroundStyle(.red)
@@ -406,7 +406,7 @@ struct JarvisSettingsLanguageView: View {
     }
 
     var body: some View {
-        Form {
+        JarvisForm {
             Picker(copy(.language), selection: $draft) {
                 Text(copy(.danish)).tag(JarvisAppLanguage.da.rawValue)
                 Text(copy(.english)).tag(JarvisAppLanguage.en.rawValue)

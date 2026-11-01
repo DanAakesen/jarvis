@@ -6355,6 +6355,22 @@ files directly from workflow artifacts, so the images are not inline previews;
 open the artifact to view them. This job does not sign, use secrets, or upload
 to TestFlight.
 
+P15-38 adds light/dark Chat, Voice, Notifications (the existing Needs you sheet),
+Factory, Settings, Notes, Health and sidebar comparisons in the same simulator
+boot. Extract the artifact and open `comparisons.html`; each simulator PNG sits
+beside an interactive copy of the checked-in board. The optional board web-orb
+renderer requires network access. `--screenshot-screen=voice|notifications|settings|notes|health`
+only selects synthetic screen states when an existing fixture flag is present.
+Notes/Health reuse their preview transports and Health's fixed reference date;
+Voice fixtures disable automatic session/microphone startup and controls.
+Run `swift test --filter JarvisAmbientBackgroundTests` from
+`apps/ios/Packages/JarvisCore` for main's shared gate palette/glow positions,
+shared-screen and screenshot
+source contracts. These do not compile SwiftUI or replace native visual checks.
+The 1 November main merge preserves Chat's plus-menu capture and current
+Chat/Sidebar/Voice behaviour; `jarvisAmbientBackground()` now uses main's existing
+`JarvisScreenBackground`, as does the gate wrapper. No second renderer is retained.
+
 For P15-29 / #1459, the same boot also captures `notifications-light.png` and
 `notifications-dark.png` using `--screenshot-chat-fixture
 --screenshot-notifications-open`. Compare the Chat bell and the sheet's Done

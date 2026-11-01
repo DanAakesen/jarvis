@@ -162,6 +162,16 @@ jobs:
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            for screen in chat voice notifications settings notes health sidebar; do
+              extra_args=("--screenshot-screen=$screen")
+              if [[ "$screen" == sidebar ]]; then
+                extra_args=("--screenshot-sidebar-open")
+              fi
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-chat-fixture "${extra_args[@]}"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/ambient-${screen}-${appearance}.png"
+            done
             xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
               --screenshot-chat-fixture --screenshot-notifications-open
             sleep 2
@@ -169,6 +179,7 @@ jobs:
             for language in da en; do
               for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-chat-fixture \
                   --screenshot-factory-fixture \
                   "--screenshot-factory-state=$state" \
                   "--screenshot-factory-language=$language"
@@ -178,12 +189,54 @@ jobs:
               done
             done
           done
+      - name: Pair simulator captures with approved board renders
+        run: |
+          cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"
+          python3 - <<'PY'
+          import html
+          import os
+          from pathlib import Path
+          from urllib.parse import urlencode
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "ios-screenshots"
+          sections = []
+          for appearance in ("light", "dark"):
+              for screen in ("chat", "voice", "notifications", "factory", "settings", "notes", "health", "sidebar"):
+                  image = (f"factory-board-{appearance}-da.png" if screen == "factory"
+                           else f"ambient-{screen}-{appearance}.png")
+                  if not (root / image).is_file():
+                      raise SystemExit(f"Missing simulator capture: {image}")
+                  query = {"screen": screen, "theme": appearance, "bare": "screen", "zoom": "fit"}
+                  if screen in ("notifications", "sidebar"):
+                      query["screen"] = "chat"
+                      query["sheet" if screen == "notifications" else "sidebar"] = "activity" if screen == "notifications" else "open"
+                  board = html.escape("board/board.html?" + urlencode(query), quote=True)
+                  title = f"{screen.title()} · {appearance}"
+                  sections.append(f'''<section><h2>{title}</h2><div class="pair">
+                    <figure><figcaption>iPhone simulator · synthetic fixture</figcaption>
+                      <img src="{image}" alt="{title} simulator screenshot"></figure>
+                    <figure><figcaption>Approved concept board · not the running app</figcaption>
+                      <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
+                    </div></section>''')
+          (root / "comparisons.html").write_text('''<!doctype html><html lang="en">
+          <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Shared iPhone background comparisons</title>
+          <style>body{font:16px system-ui;margin:24px;background:#161c24;color:#f3fff9}
+          h1,h2{font-weight:600}.pair{display:flex;flex-wrap:wrap;gap:24px}
+          figure{margin:0}figcaption{margin:8px 0}img,iframe{width:440px;height:956px;
+          border:0;object-fit:contain;background:#07090f}section{margin-bottom:40px}
+          @media(max-width:480px){body{margin:12px}img,iframe{width:100%;max-width:440px}
+          figure{width:100%}}</style><h1>Shared iPhone background comparisons</h1>
+          <p>Simulator captures are on the left; the checked-in board renders on the right.
+          Open this file after extracting the complete artifact. The board is interactive;
+          its optional web orb renderer needs network access.</p>''' + "".join(sections) + "</html>")
+          PY
       - name: Upload iOS screenshots
         id: screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ios-screenshots/*.png
+          path: ${{ runner.temp }}/ios-screenshots/
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
@@ -201,9 +254,13 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light/dark Chat, Chat plus menu, open-sidebar, notifications, Danish/English Voice connection-loss, and Factory screenshots]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, and board comparisons]($ARTIFACT_URL)
 
-          [Compare with the approved Connection lost surface]($BOARD_URL)
+          Extract the artifact and open \`comparisons.html\` for Chat, Voice, Notifications
+          (Needs you sheet), Factory, Settings, Notes, Health, and sidebar in both appearances.
+          The artifact also includes Danish/English Voice connection-loss captures;
+          compare them with the approved Connection lost surface on the board:
+          [$BOARD_URL]($BOARD_URL). Each simulator capture sits next to its checked-in board render.
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
