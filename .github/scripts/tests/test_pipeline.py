@@ -846,7 +846,19 @@ class SafeFailureTests(unittest.TestCase):
                 self.assertIn(".jarvisToolbarButtonStyle()", toolbar)
                 self.assertNotIn(".buttonStyle(.glass)", toolbar)
                 self.assertNotIn(".glassEffect(", toolbar)
-        self.assertIn('Button("Done") { dismiss() }', source)
+        self.assertIn('Image(systemName: "xmark")', source)
+        self.assertIn("Button { dismiss() } label:", source)
+        self.assertIn(".accessibilityLabel(copy(.done))", source)
+        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", source)
+        self.assertNotIn('Button("Done")', source)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn('Text(displayedNeedsYouCount > 99 ? "99+" : "\\(displayedNeedsYouCount)")', chat)
+        self.assertIn(
+            ".frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)",
+            chat,
+        )
+        self.assertIn(".offset(x: -2, y: 2)", chat)
+        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", chat)
 
     def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -855,13 +867,51 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("for appearance in light dark", capture["run"])
         self.assertIn("--screenshot-chat-fixture --screenshot-notifications-open", capture["run"])
         self.assertIn("notifications-${appearance}.png", capture["run"])
+        self.assertIn("for dynamic_type in default accessibility-xxx-large", capture["run"])
+        self.assertIn("content_size=accessibility-extra-extra-extra-large", capture["run"])
+        self.assertIn("for count in 1 12", capture["run"])
+        self.assertIn("--screenshot-needs-you-count=$count", capture["run"])
+        self.assertIn("bell-count-${count}-${dynamic_type}-${appearance}.png", capture["run"])
+        self.assertIn('xcrun simctl ui "$DEVICE_ID" content_size large', capture["run"])
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertIn('fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")', content)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn("guard model.fixtureMode,", chat)
         self.assertIn("self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil", chat)
         self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
         self.assertIn(".sheet(item: $presentedSheet", chat)
         self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
+
+    def test_ios_background_activity_empty_state_and_screenshots(self):
+        screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()
+        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
+        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        fixture = (ROOT / "apps/ios/Jarvis/JarvisFixtureScenario.swift").read_text()
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step["run"] for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+
+        self.assertIn("if model.shouldShowNowBar {\n                nowBar", screen)
+        activity_predicate = model.split("var shouldShowNowBar: Bool", 1)[1].split("var needsYouCount", 1)[0]
+        self.assertIn("!$0.confirmations.isEmpty", activity_predicate)
+        self.assertIn("!$0.running.isEmpty", activity_predicate)
+        self.assertIn("!$0.items.isEmpty", activity_predicate)
+        self.assertNotIn("$0.awayMode", activity_predicate)
+        self.assertIn(".tint(JarvisDesignTokens.secondaryAccent)", screen)
+        self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
+        self.assertIn('ContentUnavailableView("No activity", systemImage: "checkmark.circle")', sheet)
+        self.assertIn("if !items.isEmpty", sheet)
+        self.assertNotIn("emptyMessage", sheet)
+        self.assertIn('for state in empty active', capture)
+        self.assertIn('"--screenshot-activity-state=$state"', capture)
+        self.assertIn('background-activity-${state}-${appearance}.png', capture)
+        self.assertIn('--screenshot-activity-state=', content)
+        self.assertIn("private let activityScreenshotState: String?", content)
+        self.assertIn("self.activityScreenshotState = activityScreenshotState", content)
+        self.assertIn("makeClient(emptyActivity: activityScreenshotState == \"empty\")", content)
+        self.assertIn('"awayMode": false', fixture)
 
     def test_ios_voice_states_have_captures_and_board_comparisons(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

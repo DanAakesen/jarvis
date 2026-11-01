@@ -25,6 +25,7 @@ struct ContentView: View {
     private let factoryFixtureMode: Bool
     private let healthScreenshotState: String?
     private let healthScreenshotLanguage: JarvisAppLanguage?
+    private let activityScreenshotState: String?
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -53,9 +54,15 @@ struct ContentView: View {
         let healthLanguage = healthFixtureMode ? arguments.first(where: {
             $0.hasPrefix("--screenshot-health-language=")
         })?.components(separatedBy: "=").last.flatMap(JarvisAppLanguage.init(rawValue:)) : nil
+        let activityScreenshotState = arguments
+            .first(where: { $0.hasPrefix("--screenshot-activity-state=") })
+            .map { String($0.dropFirst("--screenshot-activity-state=".count)) }
+            .flatMap { $0 == "empty" || $0 == "active" ? $0 : nil }
+        self.activityScreenshotState = activityScreenshotState
         let fixtureMode = settingsPreview
             || voiceConnectionScreenshot
             || arguments.contains("--screenshot-chat-fixture")
+            || activityScreenshotState != nil
             || factoryFixtureMode
             || healthFixtureMode
         var initialNavigation = JarvisNavigationState()
@@ -96,7 +103,7 @@ struct ContentView: View {
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
-            resolvedClient = try? JarvisFixtureScenario.makeClient()
+            resolvedClient = try? JarvisFixtureScenario.makeClient(emptyActivity: activityScreenshotState == "empty")
             resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
             settingsClient = try? JarvisFixtureScenario.makeSettingsClient()
         } else if let client {
@@ -173,9 +180,11 @@ struct ContentView: View {
                     JarvisChatScreen(
                         client: chatClient,
                         fixtureMode: fixtureMode,
-                        initialActivitySheet: fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
-                            || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
-                            ? .needsYou : nil,
+                        initialActivitySheet: activityScreenshotState != nil
+                            ? .background
+                            : (fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
+                                || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
+                                ? .needsYou : nil),
                         startupError: startupError,
                         onOpenSidebar: { setSidebarOpen(true) },
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }

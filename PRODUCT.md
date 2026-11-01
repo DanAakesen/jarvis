@@ -235,9 +235,15 @@ applies to the next Chat session. The existing web contract allows documents up
 to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
 marked and used only in previews and CI screenshots. Native Entra sign-in remains
 a separate concern; no fake conversation or successful live sign-in is implied.
+The activity sheet keeps the no-activity icon and text without empty category rows.
+The composer Now bar appears only while a turn is sending or the feed contains
+background activity.
 
-The notifications toolbar button and its sheet's Done button use one shared
-system-style surface, without stacked button fills or strokes (P15-29 / #1459).
+The notifications toolbar button keeps its badge inside the 44-point control,
+including two-digit counts. Notifications and Background activity sheets use a
+compact xmark with a localized Done accessibility label (Færdig/Done). Both retain
+the stone secondary tint and shared system glass surface without stacked fills or
+strokes (P15-48, updating P15-29 / #1459).
 
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 

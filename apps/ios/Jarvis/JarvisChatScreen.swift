@@ -102,6 +102,17 @@ struct JarvisChatScreen: View {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
+    private var displayedNeedsYouCount: Int {
+        let argumentPrefix = "--screenshot-needs-you-count="
+        guard model.fixtureMode,
+              let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(argumentPrefix) }),
+              let count = Int(argument.dropFirst(argumentPrefix.count)),
+              (1...99).contains(count) else {
+            return model.needsYouCount
+        }
+        return count
+    }
+
     private func copy(_ key: JarvisChatLocalizationKey) -> String {
         JarvisChatLocalization.string(key, language: appLanguage)
     }
@@ -129,23 +140,30 @@ struct JarvisChatScreen: View {
                 Button {
                     presentedSheet = .activity(.needsYou)
                 } label: {
-                    Image(systemName: "bell")
-                        .symbolVariant(model.needsYouCount > 0 ? .fill : .none)
-                        .foregroundStyle(.primary)
-                        .overlay(alignment: .topTrailing) {
-                            if model.needsYouCount > 0 {
-                                Text(model.needsYouCount > 99 ? "99+" : "\(model.needsYouCount)")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
-                                    .padding(.horizontal, JarvisDesignTokens.chatBadgeInset)
-                                    .background(JarvisDesignTokens.primaryAccent, in: Capsule())
-                                    .offset(x: JarvisDesignTokens.chatBadgeInset, y: -JarvisDesignTokens.chatBadgeInset)
-                            }
+                    ZStack {
+                        Image(systemName: "bell")
+                            .symbolVariant(displayedNeedsYouCount > 0 ? .fill : .none)
+                            .font(.system(size: 18, weight: .regular))
+                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    .overlay(alignment: .topTrailing) {
+                        if displayedNeedsYouCount > 0 {
+                            Text(displayedNeedsYouCount > 99 ? "99+" : "\(displayedNeedsYouCount)")
+                                .font(.system(size: 10, weight: .bold))
+                                .monospacedDigit()
+                                .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
+                                .padding(.horizontal, 4)
+                                .frame(minWidth: 18, minHeight: 16)
+                                .background(JarvisDesignTokens.primaryAccent, in: Capsule())
+                                .offset(x: -2, y: 2)
                         }
-                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                    }
+                    .contentShape(Rectangle())
                 }
                 .jarvisToolbarButtonStyle()
-                .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
+                .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
                 .accessibilityIdentifier("chat.notifications")
             }
         }
@@ -421,7 +439,9 @@ struct JarvisChatScreen: View {
 
     private var composer: some View {
         VStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
-            nowBar
+            if model.shouldShowNowBar {
+                nowBar
+            }
             if isScreenSharing {
                 Label(copy(.screenSharingActive), systemImage: "dot.radiowaves.left.and.right")
                     .font(.footnote)
@@ -647,6 +667,7 @@ struct JarvisChatScreen: View {
             .contentShape(Rectangle())
         }
         .disabled(model.fixtureMode || model.isSending || isPreparingCamera)
+        .tint(JarvisDesignTokens.secondaryAccent)
         .accessibilityLabel(copy(.voiceLanguage))
         .accessibilityValue(copy(model.voiceLanguage == .da ? .danish : .english))
         .accessibilityHint(

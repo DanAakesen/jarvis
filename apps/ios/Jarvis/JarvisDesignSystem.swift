@@ -114,7 +114,7 @@ enum JarvisDesignTokens {
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
     static let chatPlusMenuWidth: CGFloat = 272
-    static let chatPlusMenuInset: CGFloat = 10
+    static let chatPlusMenuInset: CGFloat = 16
     static let chatPlusMenuSpacing: CGFloat = 2
     static let chatPlusMenuRowHeight: CGFloat = 44
     static let chatPlusMenuRadius: CGFloat = 22
