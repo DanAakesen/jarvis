@@ -2400,7 +2400,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     <table>
       <tbody>
         <tr><th scope="row">Dashboard: training rings, today, last lifts, sessions, body trend, protein, freshness line</th><td class="st">Web today</td><td>Health area of the web: Apple Health workouts, nutrition and sleep from the daily health endpoints. Period chips are client-side filters.</td></tr>
-        <tr><th scope="row">Track workout: lift log (name, kg, reps, sets, history, edit, delete, last values prefilled)</th><td class="st">Proposed</td><td>Needs new backend (Proposed): a lifts record (for example daily.training.lifts) with list, create, update and delete on the one shared API. The web gets the same screen from it.</td></tr>
+        <tr><th scope="row">Track workout: Exercises and History only; plus opens New lift with past-exercise chips</th><td class="st">Approved P15-39</td><td>Reuse the shared daily.health.lifts reads and /daily/lifts writes. The Health segment pill sits in the bottom bar above search and plus; no inline form, Save button or save-status line.</td></tr>
       </tbody>
     </table>
     <h2 id="notes-factory-h">Software Factory</h2>
@@ -6371,7 +6371,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   }
   function trackPane() {
     const hist = LIFTS.slice().sort(byDate);
-    let h = formHtml('hf', S.f) + '<button class="nbtn glass tint hbtn" type="button" id="hf-save" data-flat>' + esc(L('Save', 'Gem')) + '</button><div id="hf-status">' + saveLine() + '</div>';
+    let h = '';
     if (!hist.length) return h + '<div class="nstate">' + ic('i-dumbbell') + '<p>' + esc(L('No lifts logged', 'Ingen løft logget')) + '</p></div>';
     h += hd(L('Exercises', 'Øvelser')) + grp(exRows(() => true)) + hd(L('History', 'Historik')) + '<ul class="group">' + hist.map(liftRow).join('') + '</ul>';
     return h;
@@ -6536,6 +6536,10 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     const a = S.area, tb = tab(), st = S.st, q = S.q.trim().toLowerCase(), sr = S.searching, ar = AR[a];
     $('#t-hub').textContent = ar.title();
     const seg = $('#hseg'), tabs = ar.tabs();
+    if (a === 'health') {
+      const row = $('#hbar .nbar-row');
+      if (seg.nextElementSibling !== row) $('#hbar').insertBefore(seg, row);
+    } else if (seg.parentElement !== scroller) scroller.insertBefore(seg, $('#hbanner'));
     if (seg.dataset.k !== a + lang) {
       seg.dataset.k = a + lang; seg.style.setProperty('--n', tabs.length);
       seg.innerHTML = tabs.map(t => '<button type="button" role="tab" data-v="' + t[0] + '">' + esc(t[1]) + '</button>').join('');
@@ -6586,7 +6590,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if (window.jvEdges) window.jvEdges();
   }
   function trackPane0() {
-    return formHtml('hf', S.f) + '<button class="nbtn glass tint hbtn" type="button" id="hf-save" data-flat>' + esc(L('Save', 'Gem')) + '</button><div id="hf-status">' + saveLine() + '</div><div class="nstate">' + ic('i-dumbbell') + '<p>' + esc(L('No lifts logged', 'Ingen løft logget')) + '</p></div>';
+    return '<div class="nstate">' + ic('i-dumbbell') + '<p>' + esc(L('No lifts logged', 'Ingen løft logget')) + '</p></div>';
   }
   /* Detail (pushed screen) and sheets */
   let detOpen = false, DT = null, shOpen = false, shk = null, noClick = 0, curArea = null;
@@ -6889,7 +6893,8 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       const nm = b.dataset.ex;
       if (S.searching) endSearch();
       if (b.dataset.jump || S.tabs[S.area] !== 'track') setTab('track');
-      prefill('hf', nm); scroller.scrollTop = 0; refocus('#hf-kg'); return;
+      if (!offline()) { openSheet('lift', { from: b }); prefill('hs', nm); }
+      return;
     }
     if ((b = t.closest('[data-sug]'))) { prefill('hf', b.dataset.sug); return; }
     if (t.closest('#hf-save')) { doSave(); return; }

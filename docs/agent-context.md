@@ -6263,6 +6263,25 @@ and cursor-paginated history, a pending confirmation followed by approval, and
 listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
 routes through the authenticated HTTP client; no app-specific backend is used.
 
+### Health sheet-only logging checks and screenshots (P15-39 / #1480)
+
+Run `swift test --filter JarvisHealthClientTests` and `swift build` from
+`apps/ios/Packages/JarvisCore`, then the Core suite. Run
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py`
+from the repository root for sheet-only layout and screenshot cost-guard checks.
+Linux can parse SwiftUI syntax but cannot compile Apple frameworks or capture
+the simulator.
+
+`--screenshot-health-fixture --screenshot-health-state=track|newlift|empty
+--screenshot-health-language=da|en` uses synthetic `FixtureTransport` data only.
+The existing ready-PR, one-boot Mac job captures these states in light/dark and
+links its artifact beside the approved Health board in the PR comment.
+The Mac job has a 30-minute limit for the combined Chat, sidebar, notifications,
+Factory, and Health captures, upload, and cleanup; it still boots only once.
+Those artifacts and native visual acceptance remain unverified until that job
+runs. The board can be inspected locally with Chromium; that is not simulator
+evidence.
+
 ### Software Factory UI fixture and screenshots (P15-19)
 
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory

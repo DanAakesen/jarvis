@@ -116,6 +116,20 @@ board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
 
+## 31 October 2026 — Health logging only in the plus sheet (P15-39 / #1480)
+
+The owner's issue supersedes the dashboard-only P15-18 limitation: enable
+Track workout as Exercises and History only, with the empty state and no inline
+form, Save button or save-status line. Plus opens New lift with chips that
+prefill actual last exercise values. Move the native segmented pill to the
+bottom bar above search and plus, with Danish/English copy.
+
+Reuse version-6 capabilities, the periodless shared lift query and existing
+POST route. Keep failed submissions unchanged for same-key explicit retry.
+Update the approved board and extend the existing one-boot simulator capture
+job, not a new Mac job. Local Linux and board checks cannot establish native
+rendering or owner acceptance; simulator screenshots remain pending CI.
+
 ## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
 
 The owner approved the Health concept on 31 October. Build the Dashboard first
@@ -9759,6 +9773,14 @@ orange filament core on a black background, with no rings or orbit ellipses
 around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
+
+## 1 November 2026 — Combined iOS screenshot job timeout
+
+Keep the one-boot simulator workflow and all screenshot/upload steps, with a
+30-minute job limit instead of 20. Run `41261737993` completed its build,
+captures, upload, and comment, but was marked cancelled at the 20-minute limit
+after adding the sidebar coverage alongside Health. The extra bounded time
+allows the complete evidence set and cleanup without reducing coverage.
 
 ## 31 October 2026 — P15-31 iOS sidebar follows the approved board
 
