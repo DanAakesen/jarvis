@@ -1423,6 +1423,8 @@ ambient/orb and legacy-probe/gate-modifier isolation, tap-method comparison and
 navigation-effect isolation. Drawer input gating and launcher enablement are
 reported separately. Fixture switches cannot activate in device/release builds;
 authentication and privacy-cover windows remain active during the bisect.
+The fixture variant enum lives in `apps/ios/Shared/NavigationBisectVariant.swift`,
+included by both the app and Voice Activity extension's shared decorative views.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes

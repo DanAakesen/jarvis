@@ -3534,6 +3534,9 @@ Round one A–F fails with closed-state probes. Round two G–K records bounded
 caller-tagged writes, isolates ambient/input-probe/navigation-effect code and
 compares element and coordinate taps with requested 0/0.5/2-second snapshots.
 Actual sampling times are printed because accessibility queries can take time.
+Round-two CI initially fails compilation: the Voice Activity extension shares
+orb/design-system sources but not ContentView. Move the variant enum into Shared
+to restore target visibility; G–K results and build-20 device recovery are pending.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

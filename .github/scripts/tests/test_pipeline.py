@@ -799,9 +799,16 @@ class SafeFailureTests(unittest.TestCase):
                         mutation.index("mutation(&navigation)"))
         self.assertLess(mutation.index("mutation(&navigation)"),
                         mutation.index("navigationWrites.record(tag, before: before, after: navigation.isSidebarOpen)"))
+        variant = (ROOT / "apps/ios/Shared/NavigationBisectVariant.swift").read_text()
         for required in ("case A, B, C, D, E, F, G, H, I, J, K",
                          "#if DEBUG && targetEnvironment(simulator)",
-                         '@StateObject private var navigationWrites: NavigationBisectWrites',
+                         'arguments.contains("--ui-test-navigation")'):
+            self.assertIn(required, variant)
+        self.assertNotIn("enum NavigationBisectVariant", source)
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        for target in ("Jarvis", "JarvisVoiceActivity"):
+            self.assertIn({"path": "Shared"}, project["targets"][target]["sources"])
+        for required in ('@StateObject private var navigationWrites: NavigationBisectWrites',
                          'NavigationBisectProbe(identifier: "navigation.bisectWrites")',
                          "entries.count > 32", "before=\\(before):after=\\(after)",
                          'mutateNavigation("pathBinding.setPath")',
