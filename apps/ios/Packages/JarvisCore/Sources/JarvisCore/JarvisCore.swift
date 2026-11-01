@@ -127,6 +127,21 @@ public struct JarvisNavigationState: Equatable {
     }
 }
 
+public struct JarvisNavigationPathUpdate {
+    public let state: JarvisNavigationState
+    public let navigationRequest: (from: JarvisDestination, to: JarvisDestination)?
+
+    public init(path: [JarvisDestination], from previous: JarvisNavigationState) {
+        var next = previous
+        next.setPath(path)
+        if next.path != previous.path { next.closeSidebar() }
+        state = next
+        navigationRequest = next.currentDestination != previous.currentDestination
+            ? (from: previous.currentDestination, to: next.currentDestination)
+            : nil
+    }
+}
+
 public enum JarvisSidebarGesturePolicy {
     /// A finished edge swipe opens the drawer when it is mostly horizontal, travels toward the
     /// drawer, and either covers enough of the drawer width or is a quick flick.

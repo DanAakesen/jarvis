@@ -19,9 +19,12 @@ struct JarvisSidebarReveal<Page: View>: View {
     @Environment(\.scenePhase) private var scenePhase
     @GestureState private var isDraggingClosed = false
     @GestureState private var isDraggingOpen = false
+    private let isEnabled: Bool
     private let page: Page
 
-    init(@ViewBuilder page: () -> Page) {
+    /// `isEnabled` is false while the sign-in or privacy gate covers the app: the drawer and edge strip are inert.
+    init(isEnabled: Bool = true, @ViewBuilder page: () -> Page) {
+        self.isEnabled = isEnabled
         self.page = page()
     }
 
@@ -90,7 +93,7 @@ struct JarvisSidebarReveal<Page: View>: View {
                 geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
                 JarvisDesignTokens.sidebarMaximumWidth
             )
-            let progress = CGFloat(navigation.revealProgress)
+            let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0
             ZStack(alignment: .trailing) {
                 if progress > 0 {
                     JarvisSidebar(
@@ -119,7 +122,7 @@ struct JarvisSidebarReveal<Page: View>: View {
 
                 // Full-height trailing strip above every page layer. It is narrow so the toolbar button beside
                 // it stays tappable, and its high-priority drag wins over scrolling beneath it.
-                if progress == 0 || isDraggingOpen {
+                if isEnabled && (progress == 0 || isDraggingOpen) {
                     Color.clear
                         .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth, height: geometry.size.height)
                         .contentShape(Rectangle())

@@ -3574,10 +3574,31 @@ with bilingual two-second visible-drawer tests. iOS CI runs only that class per
 owner instruction; the retained broader regression still requires verification.
 Keep the owner's TestFlight workflow unchanged. Native compilation/device
 confirmation remain pending; this ownership change is not yet proven recovery.
-Next: verify the revised
+Preview build 23 (cad7cd0) reportedly still shows no drawer after a tap.
+Comment 6562637427 requests a gate-root last-child drawer at zIndex(1000),
+outside content modifiers, and a temporary device-visible badge with Boolean,
+button count and last three static caller-tagged writes. Preserve privacy/auth
+protection and the icon/separate-toolbar fixes; TestFlight remains untouched.
+Reconciled the concurrent `622dc0f` implementation on top of its preserved
+history. One privacy-gated root drawer and one temporary Release badge remain;
+static three-request tracing records no-ops and counts only menu Button taps.
+Same-Voice navigation side effects, root theme and UIKit-window geometry refresh
+are retained. Integrated checks pass 21 focused iOS pipeline tests, 61 Core/source
+tests and parsing of all eight changed Swift files. Native/device behavior remains
+unverified.
+Current Python CI has two main-only TestFlight guard assertions conflicting
+with the owner's temporary branch exception. Do not weaken those tests or edit
+the workflow; the owner plans to revert the exception before merge.
+Next: capture exact-head native/device evidence, remove temporary diagnostics,
+verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
 unverified.
+The reconciled root-layer change passes 21 iOS pipeline checks, 64 Core/source
+tests and parsing of eight changed Swift files. Review caught and fixed native
+back navigation failing to restore minimized Voice; normalized path updates now
+dispatch destination effects before writing state. Native execution remains
+pending, and the temporary badge is a pre-merge removal item.
 
 Preparation is done and the owner authorised the foundation phase on 30 October 2026.
 Every screen needs the owner's approval before it is built or shipped.

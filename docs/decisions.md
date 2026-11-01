@@ -9934,18 +9934,17 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
-Dispatcher handover (comment on #1484): the drawer now renders from
-`JarvisSidebarDrawerLayer`, the top-most `zIndex(1)` layer of `JarvisGateRootView`,
-driven only by the root-owned `JarvisNavigationModel`; ContentView no longer renders
-it. Destination side effects (voice restore/minimize, navigation fixtures) run from
-one `onChange(of: navigation.currentDestination)`, so drawer rows need no closure
-into ContentView. Reading the code found no single proven cause: the drawer was
+Concurrent dispatcher handover (`622dc0f`, superseded by the reconciliation below):
+that implementation moved the drawer to `JarvisSidebarDrawerLayer`, a
+`zIndex(1)` root layer driven by `JarvisNavigationModel`, and removed it from
+ContentView. Voice restore/minimize and fixture side effects used
+`onChange(of: navigation.currentDestination)`. Reading the code found no single
+proven cause: the drawer had been
 inside the content subtree that the gate blurs and hit-test-disables, and a toolbar
-action reaches it only through the shared model. A TEMPORARY always-visible
-debug badge (open flag, open-tap count, last three isSidebarOpen writes with call
-site, English only because it is diagnostic) lets the owner read device state from a
-screenshot; remove it, its two `@Published` fields and the `caller` parameters once
-the sidebar opens. Focused CI still runs only `SidebarNavigationTests`
+action reaches it only through the shared model. Its temporary English debug badge
+showed an open flag, count of open requests and last three changed-state writes
+with call-site tags. Those fields and the duplicate wrapper/badge are superseded;
+they were not native recovery evidence. Focused CI still runs only `SidebarNavigationTests`
 (Danish/English). Apple references: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
 [zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)),
 [EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject),
@@ -9953,6 +9952,32 @@ the sidebar opens. Focused CI still runs only `SidebarNavigationTests`
 [ToolbarItem](https://developer.apple.com/documentation/swiftui/toolbaritem) and
 [HIG Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars).
 Native/device behavior is unverified (no Xcode here).
+
+Comment 6562637427 tests a layering hypothesis after preview build 23 (cad7cd0)
+reportedly still fails to open visibly. Move the conditional drawer/dim layer to
+the gate root's last ZStack child at zIndex(1000), outside ContentView and content
+modifiers. Keep authentication/privacy windows and omit the drawer when covered;
+zIndex cannot elevate app content over a separate UIWindow.
+Temporarily show a screenshot-readable bottom badge in device releases with
+button-only tap count, sidebar Boolean, last static caller tag and last three
+before/after write requests, including no-ops. No private content is logged.
+Remove badge/recording before merge. Root layering is an authorized experiment,
+not verified recovery. References: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
+[zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)) and
+[UIWindow.windowLevel](https://developer.apple.com/documentation/uikit/uiwindow/windowlevel).
+Indexed excerpts were consulted; direct Apple retrieval remains unavailable.
+
+Reconciliation preserves `226a1ae` and `622dc0f` in branch history while retaining
+one drawer/badge implementation. The drawer is outside content modifiers,
+omitted when `shouldCoverContent` is true, and remains below the unchanged
+alert+1 privacy UIWindow. The badge is above the drawer and hidden from
+accessibility outside the existing simulator navigation-test fixture.
+Static caller enums replace file/line strings; every request, including no-op
+path binding and reset requests, enters the bounded three-entry trace. Only the
+actual menu Button uses the counted `menu` tag. A synchronous model navigation
+event preserves ContentView-owned side effects even when Voice is selected
+again; root theme preference and UIKit-window geometry refresh cover the
+drawer's sibling placement. Native/device recovery remains unverified.
 
 Comment 6562578040 separates Chat's bell/menu into individual trailing ToolbarItems
 with a fixed [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).

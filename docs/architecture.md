@@ -1391,18 +1391,38 @@ reference in `apps/ios/Shared`. GateRoot owns its StateObject above ContentView'
 sign-out identity boundary and injects it through the environment. Shared target
 membership also supports the menu component compiled by the Voice Activity
 extension. Chat's top-right toolbar and Health/Notes/Factory headers call
-`navigation.openSidebar()` directly. Previews supply the same environment model;
+`navigation.openSidebar(caller: .menu)` directly. Previews supply the same environment model;
 screenshot launch destinations initialize it before ContentView is installed.
 
-ContentView binds the model path to NavigationStack. `JarvisSidebarDrawerLayer`, the
-top-most layer of GateRoot, conditionally renders the trailing drawer with a dim
-tap-close region; ContentView applies voice/fixture side effects when the destination changes. Native transitions honor
+ContentView binds the model path to NavigationStack. The gate root renders the
+conditional trailing drawer and dim tap-close region as its last ZStack child at
+zIndex(1000), outside ContentView, its GeometryReader/NavigationStack and the
+content's blur, identity and input modifiers. Root-level app-theme preference
+governs the sibling drawer. A root `onGeometryChange` modifier refreshes UIKit
+window bounds on layout changes; the existing UIKit safe-area helper supplies
+drawer insets without a GeometryReader enclosing the drawer.
+ContentView applies voice restore/minimize and fixture side effects through the
+model's synchronous `navigationRequested` event before the route is written,
+including selection of the current Voice destination and normalized
+path-binding destination changes during native back navigation. This replaces the
+concurrent `622dc0f` destination-change observer and duplicate drawer wrapper;
+that commit remains in branch history. Native transitions honor
 reduced motion. There are no persistent reveal offsets, animation callbacks,
 drag-generation IDs or open-path hit-testing toggles. The narrow right-edge
 gesture commits only after a completed opening swipe; cancellation leaves the
 committed model unchanged. Opening dismisses the keyboard. Navigation and voice
 ending close the drawer; leaving the active scene also closes it. No bisect
-variants, write rings, launch counters or native input probes remain.
+variants or native input probes remain.
+
+Comment 6562637427 temporarily restores screenshot-readable diagnostics in device
+preview builds: an always-visible, noninteractive bottom badge shows the Boolean,
+button-only tap count, last static writer tag and last three requested
+before/after writes (including no-ops). No content, credentials or account data
+are recorded. All navigation commands have caller tags to distinguish input
+delivery, state resets and layering. Remove the badge/diagnostic recording before
+merge after native evidence is captured. A root zIndex does not surpass the
+gate's alert-level UIWindow or system presentations: privacy/auth covers remain
+intact and the drawer is omitted while content must be covered.
 
 The app scheme includes `JarvisUITests`. The simulator-only navigation fixture
 exercises real views and offline voice transports. `SidebarNavigationTests`

@@ -11,6 +11,7 @@ final class JarvisNavigationModel: ObservableObject {
     @Published private(set) var debugWrites: [String] = []
     @Published private(set) var debugShown = "-"
     private var lastProgrammaticNavigation = Date.distantPast
+    let navigationRequested = PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()
     private let dismissKeyboard: () -> Void
 
     init(initialState: JarvisNavigationState = JarvisNavigationState(),
@@ -61,14 +62,19 @@ final class JarvisNavigationModel: ObservableObject {
             note("setPath(binding) ignored \(path.map(\.rawValue))")
             return
         }
-        write("setPath(binding) \(path.map(\.rawValue))") {
-            $0.setPath(path)
-            $0.closeSidebar()
+        let update = JarvisNavigationPathUpdate(path: path, from: state)
+        if let request = update.navigationRequest {
+            navigationRequested.send(request)
         }
+        write("setPath(binding) \(path.map(\.rawValue))") { $0 = update.state }
     }
 
     func navigate(to destination: JarvisDestination) {
         lastProgrammaticNavigation = Date()
+        // Content owns voice/fixture side effects; deliver before changing the route.
+        if destination.isNavigable {
+            navigationRequested.send((from: currentDestination, to: destination))
+        }
         write("navigate(\(destination.rawValue))") { $0.navigate(to: destination) }
     }
 

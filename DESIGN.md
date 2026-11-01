@@ -589,10 +589,15 @@ the existing `navigation.openSidebar` identifier and Danish/English labels.
 References: [Apple SF Symbols](https://developer.apple.com/sf-symbols/) and
 [HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
 Separation uses [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
-P15-41 renders that drawer as a topmost conditional overlay with a dim tap-close
+P15-41 renders that drawer at the gate root, above content modifiers, as a
+topmost conditional overlay with a dim tap-close
 region and trailing move transition (opacity for reduced motion), rather than
 shifting/blurring the foreground. Header geometry, drawer content and palette
 remain unchanged; rendered device acceptance is still pending.
+Comment 6562637427 adds a temporary noninteractive bottom diagnostics badge to
+device previews showing open/tap/writer metadata. This is investigative UI, not
+an approved permanent visual change; remove it before merge. Keep the
+authentication/privacy cover intact.
 
 Dan's three supplied screenshots identify inconsistent Refresh/Create action
 shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's

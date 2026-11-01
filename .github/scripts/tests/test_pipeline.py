@@ -818,7 +818,7 @@ class SafeFailureTests(unittest.TestCase):
         for state in ("tokenStore = nil", "provider = nil", "client = nil",
                       "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
             self.assertIn(state, initialization)
-        self.assertIn("await model.load()\n                model.refreshOverlay()", source)
+        self.assertIn("await model.load()\n            model.refreshOverlay()", source)
         teardown = source.split("guard visible else {", 1)[1].split("return", 1)[0]
         self.assertLess(teardown.index("isUserInteractionEnabled = false"), teardown.index("isHidden = true"))
 
@@ -901,7 +901,8 @@ class SafeFailureTests(unittest.TestCase):
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
         self.assertRegex(model, r"(?s)func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
                                r".*?guard path != state\.path else \{.*?\}\s+"
-                               r"write\(.*?\) \{\s+\$0\.setPath\(path\)\s+\$0\.closeSidebar\(\)")
+                               r"let update = JarvisNavigationPathUpdate\(path: path, from: state\).*?"
+                               r"write\(.*?\) \{ \$0 = update\.state \}")
 
     def test_ios_navigation_reference_ownership_and_plain_conditional_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
@@ -935,7 +936,7 @@ class SafeFailureTests(unittest.TestCase):
             "struct JarvisSidebar: View {", 1
         )[0]
         self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", reveal)
-        self.assertIn("let progress = CGFloat(navigation.revealProgress)", reveal)
+        self.assertIn("let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0", reveal)
         self.assertRegex(reveal, r"if progress > 0 \{\s+JarvisSidebar\(")
         self.assertLess(reveal.index("JarvisSidebar("), reveal.index("page\n"))
         self.assertIn(".offset(x: -drawerWidth * progress)", reveal)
@@ -949,20 +950,18 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("JarvisSidebarDrawerLayer", sidebar)
         gate_root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text().split(
             "struct JarvisGateRootView: View {", 1)[1]
-        self.assertIn("JarvisSidebarReveal {", gate_root)
-        self.assertLess(gate_root.index("JarvisSidebarReveal {"), gate_root.index(".id(model.signOutGeneration)"))
+        self.assertIn("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {", gate_root)
+        self.assertLess(gate_root.index("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {"), gate_root.index(".id(model.signOutGeneration)"))
         self.assertLess(gate_root.index(".id(model.signOutGeneration)"),
                         gate_root.index(".environmentObject(navigation)"))
-        self.assertLess(gate_root.index(".environmentObject(navigation)"),
-                        gate_root.index(".blur(radius: model.shouldCoverContent"))
+        self.assertLess(gate_root.index(".blur(radius: model.shouldCoverContent"),
+                        gate_root.index(".environmentObject(navigation)"))
         self.assertIn("if phase != .active", shell)
         self.assertIn("transaction.disablesAnimations = true", shell)
         self.assertIn("withTransaction(transaction) { navigation.closeSidebar() }", shell)
         for obsolete in (".offset(", ".blur(", "committedProgress", "currentDrag",
                         "navigationWrites", "mutateNavigation", "NavigationLaunchLifecycle"):
             self.assertNotIn(obsolete, source)
-        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        root = gate.split("struct JarvisGateRootView: View {", 1)[1]
         self.assertEqual(root.count("@StateObject private var navigation"), 1)
         self.assertLess(root.index("@StateObject private var navigation"),
                         root.index("var body: some View"))
@@ -986,6 +985,25 @@ class SafeFailureTests(unittest.TestCase):
                                 "navigation.bisect", "Jarvis launch lifecycle:",
                                 "Jarvis gate startup:", "Jarvis navigation command:"):
                     self.assertNotIn(obsolete, runtime, str(path))
+
+    def test_ios_root_drawer_preserves_content_owned_navigation_side_effects(self):
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertIn("PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()", model)
+        navigate = model.split("func navigate(to destination:", 1)[1].split("func voiceSessionStateChanged", 1)[0]
+        self.assertLess(navigate.index("navigationRequested.send((from: currentDestination, to: destination))"),
+                        navigate.index('write("navigate('))
+        self.assertNotIn("guard destination != currentDestination", navigate)
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn(".onReceive(navigation.navigationRequested)", content)
+        self.assertNotIn(".onChange(of: navigation.currentDestination)", content)
+        self.assertIn("prepareNavigation(to: request.to, from: request.from)", content)
+        preparation = content.split("private func prepareNavigation(", 1)[1].split(
+            "static func initialNavigation(", 1
+        )[0]
+        for behavior in ("voiceModel.restore()", "previous == .voice && voiceModel.isSessionActive",
+                        "voiceModel.minimize()", "if navigationFixtureMode", "case .notes:",
+                        "case .health:", "case .softwareFactory:"):
+            self.assertIn(behavior, preparation)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

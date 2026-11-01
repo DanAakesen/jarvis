@@ -336,6 +336,7 @@ private final class JarvisGateModel: ObservableObject {
 
 struct JarvisGateRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @StateObject private var model = JarvisGateModel()
     @StateObject private var navigation = JarvisNavigationModel(
         initialState: ContentView.initialNavigation(),
@@ -347,7 +348,7 @@ struct JarvisGateRootView: View {
     )
 
     var body: some View {
-        JarvisSidebarReveal {
+        JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {
             Group {
                 if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
                     JarvisLockScreenTasksPreview(
@@ -363,36 +364,39 @@ struct JarvisGateRootView: View {
             }
             // Only sign-out discards the shell; sign-in resets session content explicitly.
             .id(model.signOutGeneration)
-        }
-            .environmentObject(navigation)
-            .overlay(alignment: .bottom) {
-                JarvisNavigationDebugLine(navigation: navigation)
-            }
+            // Gating applies to the page only; the root drawer and edge strip stay outside it.
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
             .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
-            .task {
-                model.refreshOverlay()
-                await model.load()
-                model.refreshOverlay()
-            }
-            .onChange(of: model.signOutGeneration) { _, _ in
-                navigation.reset()
-            }
-            .onChange(of: model.shouldCoverContent) { _, covered in
-                if covered { navigation.closeSidebar() }
-                model.refreshOverlay()
-            }
-            .onChange(of: scenePhase) { _, phase in
-                model.scenePhaseChanged(phase)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .jarvisSignInRequired).receive(on: DispatchQueue.main)) { _ in
-                model.clientRequestedSignIn()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
-                Task { await model.signOut() }
-            }
+        }
+        .environmentObject(navigation)
+        // The drawer sits outside ContentView, so the stored theme must be applied at the root as well.
+        .preferredColorScheme(storedTheme == "light" ? .light : storedTheme == "dark" ? .dark : nil)
+        .overlay(alignment: .bottom) {
+            JarvisNavigationDebugLine(navigation: navigation)
+        }
+        .task {
+            model.refreshOverlay()
+            await model.load()
+            model.refreshOverlay()
+        }
+        .onChange(of: model.signOutGeneration) { _, _ in
+            navigation.reset()
+        }
+        .onChange(of: model.shouldCoverContent) { _, covered in
+            if covered { navigation.closeSidebar() }
+            model.refreshOverlay()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            model.scenePhaseChanged(phase)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisSignInRequired).receive(on: DispatchQueue.main)) { _ in
+            model.clientRequestedSignIn()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
+            Task { await model.signOut() }
+        }
     }
 }
 

@@ -6250,8 +6250,14 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 ### Standing iOS documentation-first requirement
 
 P15-41 replaces the temporary bisect with one environment-injected navigation
-reference owned above ContentView and a conditional topmost drawer. No bisect
-variants, launch counters or native hit-test probes remain. The owner requests
+reference owned above ContentView and a conditional drawer at the gate root,
+outside content blur/identity/input modifiers. No bisect variants or native
+hit-test probes remain. Comment 6562637427 requests a temporary noninteractive
+device-visible bottom badge with open state, button-only tap count and three
+static tagged before/after writes. It is included in preview releases and must be
+removed before merge; it records no private content. Privacy/auth windows remain
+above the app and the drawer is not exposed while the gate covers content.
+The owner requests
 `SidebarNavigationTests` alone in both iOS CI invocations for preview qualification;
 the broader `NavigationReliabilityTests` remains available, but is not qualified
 by a passing focused run. `ios-testflight.yml` remains owner-managed and untouched.
