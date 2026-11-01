@@ -232,80 +232,82 @@ struct JarvisChatScreen: View {
 
     @ViewBuilder
     private var conversation: some View {
-        if model.isLoading && model.messages.isEmpty {
-            ProgressView("Loading")
+        Group {
+            if model.isLoading && model.messages.isEmpty {
+                ProgressView("Loading")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = model.historyError, model.messages.isEmpty {
+                ContentUnavailableView {
+                    Label("Chat unavailable", systemImage: "wifi.slash")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") { Task { await model.retryHistory() } }
+                        .buttonStyle(.glass)
+                        .disabled(model.fixtureMode)
+                        .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = model.historyError, model.messages.isEmpty {
-            ContentUnavailableView {
-                Label("Chat unavailable", systemImage: "wifi.slash")
-            } description: {
-                Text(error)
-            } actions: {
-                Button("Retry") { Task { await model.retryHistory() } }
-                    .buttonStyle(.glass)
-                    .disabled(model.fixtureMode)
-                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                        if let error = model.historyError {
-                            HStack {
-                                Text(error)
-                                    .font(.footnote)
-                                    .foregroundStyle(.red)
-                                Spacer()
-                                Button("Retry") { Task { await model.retryHistory() } }
-                                    .buttonStyle(.glass)
-                                    .disabled(model.fixtureMode)
-                                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
-                            }
-                        }
-                        if model.hasOlderMessages {
-                            Button {
-                                Task { await model.loadOlder() }
-                            } label: {
-                                if model.isLoadingOlder {
-                                    ProgressView()
-                                } else {
-                                    Text("Load earlier messages")
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                            if let error = model.historyError {
+                                HStack {
+                                    Text(error)
+                                        .font(.footnote)
+                                        .foregroundStyle(.red)
+                                    Spacer()
+                                    Button("Retry") { Task { await model.retryHistory() } }
+                                        .buttonStyle(.glass)
+                                        .disabled(model.fixtureMode)
+                                        .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                                 }
                             }
-                            .buttonStyle(.glass)
-                            .disabled(model.isLoadingOlder)
-                            .frame(maxWidth: .infinity)
-                            .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
+                            if model.hasOlderMessages {
+                                Button {
+                                    Task { await model.loadOlder() }
+                                } label: {
+                                    if model.isLoadingOlder {
+                                        ProgressView()
+                                    } else {
+                                        Text("Load earlier messages")
+                                    }
+                                }
+                                .buttonStyle(.glass)
+                                .disabled(model.isLoadingOlder)
+                                .frame(maxWidth: .infinity)
+                                .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
+                            }
+                            ForEach(renderedRows) { row in
+                                messageRow(row)
+                            }
+                            if !model.streamingText.isEmpty {
+                                messageBubble(
+                                    text: model.streamingText,
+                                    role: .jarvis,
+                                    interrupted: false
+                                )
+                                    .id("streaming-message")
+                            }
+                            Color.clear
+                                .frame(height: 1)
+                                .id("conversation-bottom")
                         }
-                        ForEach(renderedRows) { row in
-                            messageRow(row)
-                        }
-                        if !model.streamingText.isEmpty {
-                            messageBubble(
-                                text: model.streamingText,
-                                role: .jarvis,
-                                interrupted: false
-                            )
-                                .id("streaming-message")
-                        }
-                        Color.clear
-                            .frame(height: 1)
-                            .id("conversation-bottom")
+                        .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+                        .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
                     }
-                    .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-                    .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .defaultScrollAnchor(.bottom)
-                .onChange(of: model.messages.count) { _, _ in
-                    guard !reduceMotion else { return }
-                    withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
+                    .scrollDismissesKeyboard(.interactively)
+                    .defaultScrollAnchor(.bottom)
+                    .onChange(of: model.messages.count) { _, _ in
+                        guard !reduceMotion else { return }
+                        withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
+                            proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: model.streamingText) { _, _ in
                         proxy.scrollTo("conversation-bottom", anchor: .bottom)
                     }
-                }
-                .onChange(of: model.streamingText) { _, _ in
-                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
                 }
             }
         }

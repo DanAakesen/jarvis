@@ -16,6 +16,7 @@ struct ContentView: View {
     private let chatClient: JarvisClient?
     private let startupError: String?
     private let fixtureMode: Bool
+    private let cameraUITestMode: Bool
     private let settingsClient: JarvisSettingsClient?
     private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
@@ -55,6 +56,7 @@ struct ContentView: View {
             .map { String($0.dropFirst("--screenshot-activity-state=".count)) }
             .flatMap { $0 == "empty" || $0 == "active" ? $0 : nil }
         self.activityScreenshotState = activityScreenshotState
+        self.cameraUITestMode = cameraUITestMode
         let fixtureMode = settingsPreview
             || cameraUITestMode
             || voiceConnectionScreenshot
