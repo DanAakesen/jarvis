@@ -1523,10 +1523,10 @@ from a current array snapshot, not stored separately.
 Transcript scrolling explicitly calls `ScrollViewReader`'s proxy with that ID.
 The regular `VStack` lays out loaded rows without lazy height estimates; content
 and viewport size observations repeat the scroll after actual layout changes.
-The requested ID is separate from the bidirectional `scrollPosition` binding,
-so viewport observation cannot erase the send request. Manual dragging releases
-the request. `scrollTargetLayout()`/`scrollPosition` remain complementary system
-support, not the only immediate-send path.
+The explicit requested ID has no bidirectional scroll-position writer. Target
+appearance also triggers the proxy scroll; manual dragging releases the request.
+The failed simulator follow-up removed `scrollPosition`/`scrollTargetLayout`
+entirely rather than retaining a competing target update.
 Each row has an explicit target ID; the last target includes the existing
 vertical inset so bottom alignment leaves the bubble inside the viewport.
 Pending sends scroll without animation; later row changes retain motion-aware
@@ -1554,6 +1554,9 @@ and ignores real-session notifications, rather than unlocking after constructing
 those clients. On Simulator, `--screenshot-chat-fixture` alone selects this
 isolation, covering calendar presentation as well as the separate delayed-send
 scenario. Device authorization is unchanged.
+Offline Chat fixtures also stop after loading their synthetic Now snapshot:
+they do not configure/synchronize ActivityKit, query real background jobs or touch
+the notification center. Real authenticated launches retain #1501's integrations.
 Background privacy covers remain active. Gate/navigation accessibility containment
 preserves child hiding, and the drawer recognizer is restricted to the closed
 right edge or open dismissal surface, not attached to Chat controls. These reuse

@@ -111,7 +111,7 @@ final class JarvisChatModel: ObservableObject {
         updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
         settingsClient = client.map { JarvisSettingsClient(client: $0) }
         factoryClient = client.map { JarvisFactoryClient(client: $0) }
-        if let client { JarvisFactoryLiveActivityController.configure(client: client) }
+        if let client, !fixtureMode { JarvisFactoryLiveActivityController.configure(client: client) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
         language = .da
@@ -301,6 +301,7 @@ final class JarvisChatModel: ObservableObject {
         do {
             nowFeed = try await nowClient.load()
             activityError = nil
+            if fixtureMode { return }
             let language = JarvisAppLanguage(
                 rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
             ) ?? .default

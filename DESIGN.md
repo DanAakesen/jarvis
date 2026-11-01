@@ -2810,6 +2810,9 @@ text.
 Native Chat scrolls the accepted user row without animation using the system
 scroll proxy. Content and viewport size changes correct its bottom alignment,
 including composer/keyboard layout changes; dragging releases that scroll request.
+Target appearance also retries alignment; no scroll-position binding competes
+with that explicit request. Offline Chat previews do not initiate system activity
+or notification effects.
 Loaded history uses a regular `VStack` so the newest target has measured rather
 than estimated row geometry. Paging remains explicit. The glass bubble, Markdown
 reply/tool columns and bilingual copy are unchanged; large loaded-history

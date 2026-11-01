@@ -3552,6 +3552,19 @@ build, all 197 Core tests, all 59 pipeline tests, Swift syntax parsing and fixtu
 typechecking pass. Next verify the ready-PR Mac UI gate and screenshots; physical-device acceptance remains
 unverified.
 
+Run 41313981594 on `7c8d3072` passed native compilation and screenshot capture,
+but calendar 15/16 and both language immediate-visibility waiters still failed;
+failure recovery passed. Late diagnostics show bubbles inside the viewport after
+the delayed reply, so the first correction was insufficient. The follow-up removes
+the competing `scrollPosition` writer, scrolls on target appearance as well as
+measured geometry, and stops offline Chat fixtures from invoking ActivityKit,
+background-job lookup and notification-center effects. The existing source
+contract is strengthened for the actual proxy/send/retention path; native tests,
+assertions, deadlines and workflow remain unchanged. Swift parsing, 26 focused
+Core tests and all 61 pipeline contracts pass. Artifact 13087453206 exists, but
+its blob host is DNS-blocked; full logs were inspected, not the new calendar
+hierarchy. Next verify the updated head's native gate and physical iPhone.
+
 P15-39 / [#1480](https://github.com/DanAakesen/jarvis/issues/1480) adds the native
 list-only Track workout tab and plus-button New lift sheet with past-exercise
 chips, using the shared lift contract. The Dashboard/Track workout segmented

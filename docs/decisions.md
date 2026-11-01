@@ -18,6 +18,18 @@ failed DNS; references and the eager-layout choice are listed in agent context,
 not presented as successfully read documentation. Simulator and physical-device
 acceptance remain separate.
 
+Run 41313981594 disproved acceptance of `7c8d3072`: native compilation and captures
+passed, but calendar 15/16 and both immediate-send waiters failed; recovery passed.
+Remove the remaining bidirectional scroll-position writer rather than allowing
+it to compete with explicit proxy requests. Trigger the scroll on target appearance
+and measured layout, without delaying network work or relaxing native assertions.
+Offline Chat fixtures must not invoke ActivityKit or notification-center effects;
+stop after their synthetic Now snapshot while real launches retain #1501.
+Strengthen the existing source contract for these paths, not the native deadlines.
+The new artifact's blob host is DNS-blocked, so its calendar hierarchy remains
+unread; full logs and late contained-bubble diagnostics do not prove its root cause
+or physical acceptance. Official `onAppear` retrieval also failed DNS.
+
 Run 41308631898's retained calendar failure hierarchy
 (`chat-behaviour/A209B023-B598-40C1-85E0-8969493DC4C2.txt`, artifact
 13085069846) shows “Chat isn't configured” and a second “Login mislykkedes”

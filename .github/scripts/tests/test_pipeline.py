@@ -738,12 +738,28 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".ignoresSafeArea(.container)", content)
         self.assertNotIn(".ignoresSafeArea()", content)
 
-    def test_ios_chat_sent_row_uses_layout_aware_scroll_position(self):
+    def test_ios_chat_sent_row_uses_explicit_layout_aware_scroll_proxy(self):
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertIn(".scrollTargetLayout()", chat)
-        self.assertIn(".scrollPosition(id: $scrollTargetID, anchor: .bottom)", chat)
+        self.assertIn("ScrollViewReader { proxy in", chat)
+        self.assertIn("proxy.scrollTo(requestedScrollID, anchor: .bottom)", chat)
+        self.assertNotIn(".scrollPosition(", chat)
         self.assertIn(".onChange(of: model.messages.last?.id, initial: true)", chat)
-        self.assertIn("scrollTargetID = messageID", chat)
+        self.assertIn("requestedScrollID = messageID", chat)
+        self.assertIn("if let insertedID = model.send()", chat)
+        self.assertIn("requestedScrollID = insertedID", chat)
+        self.assertIn("guard row.id == requestedScrollID else { return }", chat)
+        self.assertIn(".onGeometryChange(for: CGSize.self)", chat)
+        self.assertIn("if phase == .interacting { requestedScrollID = nil }", chat)
+        model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()
+        send = model.split("func send() -> String?", 1)[1].split("func cancel()", 1)[0]
+        self.assertNotIn("await", send.split("sendTask = Task", 1)[0])
+        self.assertLess(send.index("messages.append("), send.index("sendTask = Task"))
+        self.assertIn("return pendingID", send)
+        self.assertIn("let retainedActiveUser = confirmed.filter", model)
+        self.assertIn("sorted(replacing ? incoming + retainedActiveUser : confirmed + incoming) + pending", model)
+        self.assertIn("if let client, !fixtureMode", model)
+        activity = model.split("func refreshActivity()", 1)[1].split("func resume()", 1)[0]
+        self.assertLess(activity.index("if fixtureMode { return }"), activity.index("nowClient.backgroundTasks()"))
         conversation = chat.split("private var conversation: some View", 1)[1].split("private func messageRow", 1)[0]
         self.assertNotIn("await Task.yield()", conversation)
         self.assertIn("row.id == model.messages.last?.id ? JarvisDesignTokens.chatVerticalInset : 0", conversation)

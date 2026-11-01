@@ -6247,9 +6247,10 @@ The build-19 follow-up calls `ScrollViewReader`'s `scrollTo(_:anchor:)` explicit
 for the ID synchronously returned by MainActor `send()`. Content and viewport
 `onGeometryChange` callbacks correct alignment after measured layout changes,
 without yields, delays or animation completion. Loaded rows use `VStack` instead
-of estimated lazy geometry; history paging remains unchanged. Dragging releases
-the explicit request through `onScrollPhaseChange`; the scroll-position binding
-cannot replace that separate request. Replacement history retains pending rows.
+of estimated lazy geometry; history paging remains unchanged. Target `onAppear`
+also triggers the proxy after insertion. Dragging releases the request through
+`onScrollPhaseChange`; no bidirectional scroll-position binding remains.
+Replacement history retains pending and acknowledged-active user rows.
 Main's #1501 activity notice remains above the transcript, outside the composer.
 The additional official references are
 [MainActor](https://developer.apple.com/documentation/swift/mainactor),
@@ -6262,6 +6263,21 @@ DNS again; no official page was successfully read or claimed as relied-on eviden
 The deliberate application choice is eager layout of loaded history for accurate
 row bounds, not a custom scroll control. Large-history performance, simulator
 geometry and physical-iPhone acceptance need native evidence.
+
+Exact-head run 41313981594 (`7c8d3072`) compiled the app and captured screenshots,
+but failed calendar 15/16 and both language visibility waiters at current line
+127 (the prior run's line 122); failure recovery passed. Late diagnostics report
+hittable, contained bubbles only after the delayed reply, not proof of instant
+visibility. Removed the remaining competing scroll-position writer and isolated
+offline fixtures from ActivityKit/background-job/notification side effects.
+The existing source contract now checks explicit proxy scrolling, target
+appearance, geometry, synchronous append-before-task and active-row retention;
+native UI assertions/deadlines and the workflow are unchanged.
+[onAppear](https://developer.apple.com/documentation/swiftui/view/onappear(perform:))
+retrieval also failed DNS. Artifact 13087453206 was uploaded, but its blob host
+failed DNS on repeated curl and page-fetch attempts; its calendar hierarchy
+could not be inspected. The full job logs were read instead. Updated-head native
+verification remains required, not a green claim.
 
 Run 41308631898's exported calendar failure hierarchy shows a nonfixture
 “Chat isn't configured” screen and a second login-failure window. The

@@ -126,7 +126,6 @@ struct JarvisChatScreen: View {
     @State private var isScreenSharing = false
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
-    @State private var scrollTargetID: String?
     @State private var requestedScrollID: String?
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
@@ -375,6 +374,10 @@ struct JarvisChatScreen: View {
                                     row.id == model.messages.last?.id ? JarvisDesignTokens.chatVerticalInset : 0
                                 )
                                 .id(row.id)
+                                .onAppear {
+                                    guard row.id == requestedScrollID else { return }
+                                    scrollToRequestedMessage(using: proxy)
+                                }
                         }
                         if !model.streamingText.isEmpty {
                             messageBubble(
@@ -389,7 +392,6 @@ struct JarvisChatScreen: View {
                             .frame(height: 1)
                             .id("conversation-bottom")
                     }
-                    .scrollTargetLayout()
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                     .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
                     .onGeometryChange(for: CGSize.self) { geometry in
@@ -401,12 +403,10 @@ struct JarvisChatScreen: View {
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("chat-transcript")
                 .defaultScrollAnchor(.bottom)
-                .scrollPosition(id: $scrollTargetID, anchor: .bottom)
                 .onChange(of: model.messages.last?.id, initial: true) { _, messageID in
                     let isPendingSend = messageID?.hasPrefix("pending-") == true
                     requestedScrollID = messageID
                     withAnimation(reduceMotion || isPendingSend ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
-                        scrollTargetID = messageID
                         scrollToRequestedMessage(using: proxy)
                     }
                 }
@@ -1047,7 +1047,6 @@ struct JarvisChatScreen: View {
             guard model.pendingAttachments.count == attachmentCount + 1 else { return }
         }
         if let insertedID = model.send() {
-            scrollTargetID = insertedID
             requestedScrollID = insertedID
         }
     }
