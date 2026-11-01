@@ -61,6 +61,41 @@ final class JarvisSettingsClientTests: XCTestCase {
         await assertConsumed(transport)
     }
 
+    func testVoiceLanguageMenuSavesThroughTheExistingSettingsRoute() async throws {
+        let transport = try settingsFixture("""
+        {
+          "version": 1,
+          "interactions": [{
+            "method": "PATCH",
+            "path": "/api/settings",
+            "requestBody": {"settings": {"voice": {"defaultLanguage": "en"}}},
+            "response": {
+              "statusCode": 200,
+              "body": {
+                "settings": {"voice": {"defaultLanguage": "en"}},
+                "options": {},
+                "credentials": []
+              }
+            }
+          }]
+        }
+        """)
+        let settings = JarvisSettingsClient(client: try makeClient(transport))
+
+        let saved = try await settings.saveSettings(
+            JarvisSettingsPatch(
+                area: "voice",
+                key: "defaultLanguage",
+                value: .string(ChatLanguage.en.rawValue)
+            )
+        )
+
+        XCTAssertEqual(saved.string(area: "voice", key: "defaultLanguage"), "en")
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.path), ["/api/settings"])
+        await assertConsumed(transport)
+    }
+
     func testTargetWritesAreBoundedAndMemoryPagesUseTheVerifiedOffsetContract() async throws {
         let transport = try settingsFixture("""
         {
@@ -153,6 +188,14 @@ final class JarvisSettingsClientTests: XCTestCase {
                 JarvisSettingsPatch(area: "appearance", key: "theme", value: .string("unknown-theme"))
             )
             XCTFail("Unknown settings values must be rejected")
+        } catch {
+            XCTAssertEqual(error as? JarvisSettingsClientError, .invalidRequest)
+        }
+        do {
+            _ = try await settings.saveSettings(
+                JarvisSettingsPatch(area: "voice", key: "defaultLanguage", value: .string("fr"))
+            )
+            XCTFail("Only Danish and English voice languages are supported")
         } catch {
             XCTAssertEqual(error as? JarvisSettingsClientError, .invalidRequest)
         }

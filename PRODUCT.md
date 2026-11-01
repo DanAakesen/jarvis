@@ -177,12 +177,15 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
-The composer offers Chat and Voice navigation; voice capture remains out of
-scope. Photos and camera captures remain on-device until send. The existing web
-contract allows documents up to 20 MB and images up to 10 MB per attachment.
-Synthetic fixtures are clearly marked and used only in previews and CI
-screenshots. Native Entra sign-in and ReplayKit broadcast support are separate
-follow-ups; no fake conversation or successful live sign-in is implied.
+The composer offers Chat and Voice navigation and a plus menu anchored above its
+trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
+language. Camera uses an in-app viewfinder and still-photo capture; video and
+ReplayKit screen sharing keep frames local until a Chat turn sends them as image
+attachments. Voice language reads and saves the existing shared setting and
+applies to the next Chat session. The existing web contract allows documents up
+to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
+marked and used only in previews and CI screenshots. Native Entra sign-in remains
+a separate concern; no fake conversation or successful live sign-in is implied.
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical
