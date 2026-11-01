@@ -6516,7 +6516,10 @@ Run `swift test --filter 'VoiceLiveActivityTests|VoiceSessionClientTests'` from
 These cover state projection, localized copy, PCM levels, stale/ended session
 controls, command errors and muted capture, not Apple frameworks.
 The existing ready-PR Mac job builds the extension and captures six synthetic
-Lock Screen states (Danish/English Listening, Speaking, Muted) in the same
+Lock Screen states within a 25-minute job deadline. The expanded notification,
+Factory and voice captures reached the previous 20-minute limit in run
+41259067682 after compilation succeeded; retain all captures and one boot.
+The states (Danish/English Listening, Speaking, Muted) use the same
 Simulator boot. `--screenshot-voice-activity-fixture` is Simulator-only and uses
 no real microphone, credentials or network. Capture uses Simulator's Lock/Home
 keyboard shortcuts, which require macOS UI automation permission. Compare

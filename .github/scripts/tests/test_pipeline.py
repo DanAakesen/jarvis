@@ -632,7 +632,7 @@ class SafeFailureTests(unittest.TestCase):
             source,
         )
         self.assertIn("    runs-on: macos-26", source)
-        self.assertIn("    timeout-minutes: 20", source)
+        self.assertIn("    timeout-minutes: 25", source)
         self.assertIn("      cancel-in-progress: true", source)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
