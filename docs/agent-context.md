@@ -6438,7 +6438,11 @@ UI behaviour gate on its already-booted simulator with `xcodebuild test`,
 `-parallel-testing-enabled NO` and `CODE_SIGNING_ALLOWED=NO`. It tests immediate
 send visibility above the composer from a scrolled-up long transcript, server
 acknowledgment without duplication, Danish/English settings, Reduce Motion and
-draft restoration after an unacknowledged network failure. The synthetic
+draft restoration after an unacknowledged network failure. The tests wait for
+the transcript and an enabled, hittable `chat-composer` TextField,
+tap it, then wait for the keyboard before typing and verify the entered value.
+Failure recovery waits for both the restored draft and pending-bubble removal.
+The synthetic
 `--ui-test-chat-send` scenario delays server acknowledgment five seconds and
 the first reply another five seconds. Both language tests explicitly assert one
 visible sent bubble while no reply exists, then one bubble after the reply;

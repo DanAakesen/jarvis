@@ -20,18 +20,38 @@ final class JarvisChatVisibilityTests: XCTestCase {
             "--ui-test-chat-send-failure",
         ]
         app.launch()
-        let composer = app.descendants(matching: .any)["chat-composer"]
-        XCTAssertTrue(composer.waitForExistence(timeout: 10))
-        composer.tap()
-        composer.typeText("Hi Jarvis")
+        let composer = enterMessage(in: app)
         app.buttons["chat-send"].tap()
 
         let restored = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "value == %@", "Hi Jarvis"),
-            object: composer
+            predicate: NSPredicate { _, _ in
+                composer.value as? String == "Hi Jarvis" &&
+                    app.descendants(matching: .any).matching(identifier: "chat-user-message").count == 0
+            },
+            object: nil
         )
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 10), .completed)
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat-user-message").count, 0)
+    }
+
+    private func enterMessage(in app: XCUIApplication) -> XCUIElement {
+        let transcript = app.scrollViews["chat-transcript"]
+        XCTAssertTrue(transcript.waitForExistence(timeout: 10))
+        let composer = app.textFields["chat-composer"]
+        let ready = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == true AND enabled == true AND hittable == true"),
+            object: composer
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        composer.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        composer.typeText("Hi Jarvis")
+        let entered = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", "Hi Jarvis"),
+            object: composer
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [entered], timeout: 10), .completed)
+        return composer
     }
 
     private func assertSentMessageIsVisible(language: String, reduceMotion: Bool) {
@@ -43,10 +63,7 @@ final class JarvisChatVisibilityTests: XCTestCase {
         if reduceMotion { app.launchArguments.append("--ui-test-reduce-motion") }
         app.launch()
 
-        let composer = app.descendants(matching: .any)["chat-composer"]
-        XCTAssertTrue(composer.waitForExistence(timeout: 10))
-        composer.tap()
-        composer.typeText("Hi Jarvis")
+        let composer = enterMessage(in: app)
         let transcript = app.scrollViews["chat-transcript"]
         XCTAssertTrue(transcript.waitForExistence(timeout: 10))
         transcript.swipeDown()
