@@ -176,7 +176,7 @@ Sources checked before implementation: `apps/backend/src/core/settings.ts`,
 
 ## 13. Health dashboard (P15-18)
 
-The approved Dashboard reuses the authenticated Daily API. The iPhone does not upload HealthKit data and adds no backend route or iOS-specific payload. Before querying, it calls `GET /daily/capabilities` with `Accept: application/json;version=5` and only requests advertised sources.
+The approved Dashboard reuses the authenticated Daily API. The iPhone does not upload HealthKit data and adds no backend route or iOS-specific payload. Before querying, it calls `GET /daily/capabilities` with `Accept: application/json;version=6` and only requests advertised sources.
 
 | Dashboard block or action | Existing endpoint and source |
 |---|---|
@@ -190,7 +190,7 @@ The approved Dashboard reuses the authenticated Daily API. The iPhone does not u
 | Protein chart and target line | `POST /daily/query` with `source: "daily.nutrition.days"` and `GET /daily/nutrition-targets`. |
 | Freshness status | `POST /daily/query` with `source: "daily.sync"`. Dashboard refresh listens to the existing authenticated `GET /now/events` stream for `refresh` or `now` events, then reloads the same reads. |
 
-`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. This Dashboard implementation leaves Track workout disabled and Last lifts/plus omitted. The shared lift routes described in section 15 are now present on main from #1423; future native logging should reuse them without a substitute route or payload.
+`GET /daily/nutrition-targets` is an existing route used by the web nutrition-target client; it was not enumerated in the issue's endpoint list, but is required for the approved protein and calorie targets. It is reused unchanged. P15-39 enables Track workout and plus using the shared lift contract in section 15. History queries use `source: daily.health.lifts`, `limit: 100` and the returned cursor; quick-add chips use `lastPerExercise: true`. New lift sends `idempotencyKey`, `exerciseName`, `weightKg`, `reps` and `sets` to `POST /daily/lifts`, retaining the same submission on explicit save retry. No inline form or new route is added. Last lifts remains omitted from the Dashboard.
 
 Sources checked: `apps/backend/src/daily/index.ts`, `apps/backend/src/daily/query.ts`, `apps/backend/src/daily/health/read-model.ts`, `apps/backend/src/daily/routes/training-targets.ts`, `apps/backend/src/daily/routes/nutrition-targets.ts`, `apps/web/src/daily/client.ts`, `apps/web/src/daily/sections/overview/health-panel/data.ts`, `apps/web/src/daily/sections/overview/useTopCardData.ts`, `apps/web/src/daily/nutrition-targets.ts` and `apps/web/src/daily/sections/workouts/WorkoutDetail.tsx`.
 

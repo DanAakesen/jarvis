@@ -6263,6 +6263,25 @@ and cursor-paginated history, a pending confirmation followed by approval, and
 listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
 routes through the authenticated HTTP client; no app-specific backend is used.
 
+### Health sheet-only logging checks and screenshots (P15-39 / #1480)
+
+Run `swift test --filter JarvisHealthClientTests` and `swift build` from
+`apps/ios/Packages/JarvisCore`, then the Core suite. Run
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py`
+from the repository root for sheet-only layout and screenshot cost-guard checks.
+Linux can parse SwiftUI syntax but cannot compile Apple frameworks or capture
+the simulator.
+
+`--screenshot-health-fixture --screenshot-health-state=track|newlift|empty
+--screenshot-health-language=da|en` uses synthetic `FixtureTransport` data only.
+The existing ready-PR, one-boot Mac job captures these states in light/dark and
+links its artifact beside the approved Health board in the PR comment.
+The Mac job has a 30-minute limit for the combined Chat, sidebar, notifications,
+Factory, and Health captures, upload, and cleanup; it still boots only once.
+Those artifacts and native visual acceptance remain unverified until that job
+runs. The board can be inspected locally with Chromium; that is not simulator
+evidence.
+
 ### Software Factory UI fixture and screenshots (P15-19)
 
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
@@ -6546,6 +6565,23 @@ backend route is added. Active-client choice and command replay after reconnect
 remain unverified.
 
 ### Native voice screen and audio (P15-11)
+
+P15-40 (#1482) adds End → reopen regression coverage. Run `swift test --filter
+Voice` in `apps/ios/Packages/JarvisCore` to include both protocol and async
+session-client tests (filtering only `VoiceProtocolTests` excludes lifecycle
+tests). The existing ready-PR Mac capture now includes six synthetic Voice PNGs:
+listening, thinking and speaking in light/dark, with board/surfaces links in its
+PR comment and state-specific pairs in `comparisons.html`. `JarvisOrbRenderingTests`
+checks transparent blur margins, radial alpha feathering and opacity-only core
+animation; this source check does not replace inspecting the captured pixels.
+The combined simulator build/capture has a 30-minute job bound: the merged
+Factory, ambient and Voice captures exceeded the former 20-minute bound.
+Simulator-only `--screenshot-voice-fixture` and
+`--screenshot-voice-state=listening|thinking|speaking`, together with the existing
+`--screenshot-chat-fixture`, select the rendered Voice screen without starting
+microphone capture or a voice transport. These images do not verify live audio.
+The Linux runner cannot capture Simulator images or compile Apple UI/audio code;
+the requested images and physical End/start acceptance remain pending those checks.
 
 The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
 values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
