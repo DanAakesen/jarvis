@@ -4,6 +4,10 @@
 "settings.title" = "Settings";
 "navigation.chat" = "Chat";
 "navigation.voice" = "Voice";
+"voice.connectionLost" = "Connection lost";
+"voice.retryNow" = "Retry now";
+"voice.retrying" = "Reconnecting";
+"voice.connectionEnd" = "End";
 "navigation.workspaces" = "Workspaces";
 "navigation.health" = "Health";
 "navigation.softwareFactory" = "Software Factory";

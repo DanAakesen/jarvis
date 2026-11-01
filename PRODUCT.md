@@ -75,6 +75,14 @@ recovery after a phone call; CarPlay; Live Activity; and Action Button.
 The screen requires an existing Keychain owner-session token; native sign-in is
 not included, so first-install voice remains unavailable until that separate work.
 
+### Connection loss (#1476; 31 October 2026)
+
+After an established realtime connection drops, Voice shows a muted orb, the
+“Connection lost” title, and Retry now and End actions. Retry now starts another
+session with the existing bounded reconnect policy; End closes the session and
+returns to Chat. Initial connection failures do not use the lost state. Copy
+follows the app's Danish-default language preference.
+
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
 Retained backend-log chat access remains disabled until Azure isolation is proven.
