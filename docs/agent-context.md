@@ -6317,11 +6317,13 @@ scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
 `xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
 'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/SidebarNavigationTests
 CODE_SIGNING_ALLOWED=NO test`. The ready-PR iOS job runs this focused class
-on its already-booted iPhone and retains `ios-navigation.xcresult` for 14 days,
-including cycle screenshots and failures,
-along with `ios-scheme.xcresult` from the earlier focused scheme invocation.
-Both uploads run on failure; use the scheme bundle when screenshot-step tests
-stop the job before the dedicated navigation invocation.
+once, inside the "Boot iPhone Simulator and capture screenshots" step, with
+per-test time limits (`-default-test-execution-time-allowance 60`,
+`-maximum-test-execution-time-allowance 90`), and retains `ios-scheme.xcresult`
+for 14 days, including failures. A failing class marks the run failed in the
+final "Fail the run when UI tests fail" step after screenshots are captured.
+The earlier separate navigation invocation was removed because it repeated the
+same tests and pushed the job past its time limit.
 Run 41308630589 retains fired menu commands with a closed rendered shell.
 The earlier, now superseded follow-up read the shell's navigation dependency in `ContentView.body`
 before its GeometryReader closure; rendering uses that snapshot, while actions
@@ -6640,8 +6642,9 @@ the routes listed in section 12 of `docs/ios/integration-contract.md`. Pure
 validation, target bounds, memory paging/filtering, dirty tracking and account
 revocation remain in JarvisCore. The app-owned Danish/English language defaults
 to Danish; the shared appearance theme is propagated to the app color scheme.
-Remote notifications remain unavailable because APNs support is not implemented;
-P15-36 separately adds local approval notifications while active. Health upload
+P15-51 adds optional remote approval notifications using APNs; delivery requires
+protected APNs configuration and `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED=true`.
+It removes local approval notification creation to avoid duplicate alerts. Health upload
 credential creation stays disabled because the backend rejects owner-session
 credential creation.
 Advanced voice tuning, retrieval thresholds, timeouts and project administration
@@ -6654,14 +6657,14 @@ checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
 check and is gated on a ready pull request; keep the single simulator boot and do
 not add UI tests. Notes-tab/state screenshots are not produced by CI.
 
-## P15-36 Lock Screen task and approval surfaces
+## P15-36 Lock Screen task and P15-51 approval surfaces
 
 The app's ActivityKit controller follows real running tasks from the existing
 `/now` feed and Factory task SSE; WidgetKit renders the shared
 `FactoryTaskActivitySurface`. No backend progress fraction exists, so the linear
-track is indeterminate. Local approval notifications sync real `/now`
-confirmations while active, require device authentication for actions and call
-the existing confirmation endpoint. Successful/failed results appear in the Now
+track is indeterminate. Approval alerts use P15-51's backend APNs notification;
+the registered category requires device authentication for actions and calls the
+existing confirmation endpoint. Successful/failed results appear in the Now
 activity sheet. If notification previews are disabled, the category has no
 Approve/Decline actions.
 
@@ -6708,7 +6711,47 @@ states, da/en disabled-activity guidance and its Settings link, explicit cancel,
 and real confirmation actions only. Provision Push Notifications on the app ID
 and the distribution profile; the widget needs no separate APNs entitlement.
 APNs key/configuration, migration and deployed delivery remain release prerequisites.
-Approval notification pushes and suspended expiry/removal remain separate work.
+## P15-51 approval flow polish
+
+The Chat approval row sits immediately above Now, contains only Approve and
+Decline, and shows progress only on the chosen action. The no-summary row uses
+the shared orange/stone control tokens and Danish/English labels. The standard
+system notification prompt is requested after the signed-in app unlocks, not
+when the first approval arrives.
+
+The app registers the APNs device token through owner-authenticated
+`POST /ios/approval-notifications`, including the app language, current time
+zone and whether previews permit actions. Sign-out calls `DELETE` for the
+registered token. Migration `0073_approval_notification_registrations.sql`
+stores up to five owner devices with a 30-day expiry. The backend sends one
+`apns-push-type: alert` payload when a core confirmation is persisted or a
+calendar proposal is staged. It includes a bounded summary/expiry alert, the
+registered `jarvis.approval` (or no-actions private) category, thread ID and
+confirmation ID; it does not send an additional plain web push or create a
+local notification. APNs config is shared with ActivityKit:
+`APNS_TEAM_ID`, `APNS_KEY_ID`, protected ES256 `APNS_SIGNING_KEY`, and
+`APNS_ENVIRONMENT=sandbox|production`; opt in with
+`JARVIS_APPROVAL_NOTIFICATIONS_ENABLED=true`. No approval Live Activity is
+created; ActivityKit remains the task-progress surface. APNs delivery is
+best-effort and stale alerts resolved by another device remain until the app
+refreshes.
+
+Run focused checks from the repository root:
+
+```sh
+npm test --workspace @jarvis/backend -- src/push/approval-notifications.test.ts src/google/pending-actions.test.ts src/core/owner-interactions.test.ts src/database/migrations.test.ts
+npm run build --workspace @jarvis/backend
+```
+
+From `apps/ios/Packages/JarvisCore`, run:
+
+```sh
+swift test --filter 'JarvisApprovalLocalizationTests|JarvisApprovalsClientTests'
+swift build
+```
+
+Linux does not type-check the SwiftUI app; the ready-PR Mac job and signed-device
+APNs/Lock Screen behavior remain the platform checks.
 
 The task update endpoint is `POST /ios/task-activities` with
 `{taskID, activityID, pushToken, language}`; UUID task IDs select background jobs,

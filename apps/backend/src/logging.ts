@@ -49,6 +49,8 @@ const failureEvents = new Set([
   'folio.research_result_open_failed', 'folio.job_result_open_failed', 'folio.search_failed',
   'activitykit.push_not_accepted', 'activitykit.push_unavailable', 'activitykit.snapshot_unavailable',
   'activitykit.push_retry_exhausted', 'activitykit.registration_unavailable',
+  'approval_notification.push_not_accepted', 'approval_notification.push_unavailable',
+  'approval_notification.delivery_unavailable', 'approval_notification.registration_unavailable',
   'folio.update_failed', 'github.delivery_policy_evaluation_failed', 'github.installation_token_failed',
   'github.issue_progress_failed', 'github.issue_start_failed', 'github.repository_list_failed',
   'github.repository_management_failed', 'github.webhook_delivery_store_failed', 'github.webhook_mapping_failed',

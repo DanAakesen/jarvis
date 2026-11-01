@@ -167,6 +167,9 @@ jobs:
             -only-testing:JarvisUITests/SidebarNavigationTests \
             -only-testing:JarvisUITests/ChatComposerUITests \
             -parallel-testing-enabled NO \
+            -test-timeouts-enabled YES \
+            -default-test-execution-time-allowance 60 \
+            -maximum-test-execution-time-allowance 90 \
             CODE_SIGNING_ALLOWED=NO; then
             echo "result=success" >> "$GITHUB_OUTPUT"
           else
@@ -330,31 +333,6 @@ jobs:
           path: ${{ runner.temp }}/ios-scheme.xcresult
           if-no-files-found: warn
           retention-days: 14
-      - name: Run iPhone navigation regression
-        working-directory: apps/ios
-        run: |
-          set -euo pipefail
-          xcrun simctl ui "$IOS_SIMULATOR_UDID" appearance light
-          xcodebuild \
-            -project Jarvis.xcodeproj \
-            -scheme Jarvis \
-            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID" \
-            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/ios-navigation.xcresult" \
-            -only-testing:JarvisUITests/SidebarNavigationTests \
-            -only-testing:JarvisUITests/ChatComposerUITests \
-            -parallel-testing-enabled NO \
-            -maximum-test-execution-time-allowance 600 \
-            CODE_SIGNING_ALLOWED=NO \
-            test
-      - name: Upload iPhone navigation test results
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: ios-navigation-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ios-navigation.xcresult
-          if-no-files-found: warn
-          retention-days: 14
       - name: Pair simulator captures with approved board renders
         run: |
           cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"
@@ -508,8 +486,8 @@ jobs:
             gh api --method POST --input "$payload_file" \
               "repos/$GITHUB_REPOSITORY/issues"
           fi
-      - name: Fail the nightly run when UI tests fail
-        if: always() && github.event_name == 'schedule' && steps.capture.outputs.result == 'failure'
+      - name: Fail the run when UI tests fail
+        if: always() && steps.capture.outputs.result == 'failure'
         run: exit 1
       - name: Shut down iPhone Simulator
         if: always()

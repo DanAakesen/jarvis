@@ -170,6 +170,7 @@ private final class JarvisGateModel: ObservableObject {
                 presentation = .signIn(.idle)
             case .unlocked:
                 presentation = .unlocked
+                await prepareApprovalNotifications()
                 await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
             }
         } catch {
@@ -240,6 +241,7 @@ private final class JarvisGateModel: ObservableObject {
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
+        await JarvisApprovalNotificationCoordinator.shared.unregisterDeviceToken()
         do {
             try await tokenStore?.delete()
             try provider?.signOut()
@@ -325,12 +327,19 @@ private final class JarvisGateModel: ObservableObject {
             }
             presentation = .unlocked
             isPrivacyCoverVisible = false
+            await prepareApprovalNotifications()
             await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
         } catch let error as LAError where error.code == .biometryLockout || error.code == .userFallback {
             presentation = .lock(.passcode)
         } catch {
             presentation = .lock(.failed)
         }
+    }
+
+    private func prepareApprovalNotifications() async {
+        let coordinator = JarvisApprovalNotificationCoordinator.shared
+        guard await coordinator.requestAuthorizationIfNeeded() else { return }
+        await coordinator.registerForRemoteNotificationsIfAuthorized()
     }
 }
 
@@ -404,9 +413,13 @@ struct JarvisGateRootView: View {
 private struct JarvisNavigationDebugLine: View {
     @ObservedObject var navigation: JarvisNavigationModel
 
+    private var summary: String {
+        "path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))")
+            Text(summary)
             ForEach(Array(navigation.debugWrites.enumerated()), id: \.offset) { _, line in
                 Text(line)
             }
@@ -415,7 +428,9 @@ private struct JarvisNavigationDebugLine: View {
         .padding(4)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
         .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(([summary] + navigation.debugWrites).joined(separator: " | "))
+        .accessibilityIdentifier("debug.navigation.trace")
     }
 }
 

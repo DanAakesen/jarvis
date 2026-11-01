@@ -256,20 +256,40 @@ owner-session routes only and add no iOS-specific backend path.
 
 The app-owned language preference remains Danish by default and selects all
 Settings copy; the existing shared theme token owns accent/tint, and the saved
-appearance theme updates the app color scheme. Remote notifications remain disabled
-until APNs registration and test-send support exist. P15-36 separately authorizes
-local-only actionable approval notifications and local ActivityKit updates while
-active; no suspended-app delivery is claimed. Health credential status is
-read-only because the existing POST requires fresh Microsoft sign-in and
-rejects the stored owner-session token; do not invent a route or persist the
-one-time upload token. Advanced voice tuning, retrieval thresholds, timeouts and
-project administration remain web-only in v1.
+appearance theme updates the app color scheme. P15-51 adds optional remote
+actionable approval alerts; task ActivityKit updates remain separate. Health
+credential status is read-only because the existing POST requires fresh Microsoft
+sign-in and rejects the stored owner-session token; do not invent a route or persist
+the one-time upload token. Advanced voice tuning, retrieval thresholds, timeouts
+and project administration remain web-only in v1.
 
 The checked-in design board does not include the owner-approved Settings frames
 referenced by the issue. Follow the approved issue concept, do not copy literal
 board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
+
+## 1 November 2026 — approval flow polish and APNs delivery (P15-51 / #1504)
+
+Approval controls keep progress local to the selected decision, render only
+Approve and Decline directly above Now, and use the shared orange/stone treatment
+and Danish/English copy. Request the standard notification permission after sign-in
+and device unlock, before an approval exists. Send one APNs alert when a core
+confirmation is persisted or a calendar proposal is staged; do not create a
+local copy or a duplicate plain push. Keep task Live Activities separate.
+
+Use an actionable notification category for approval actions rather than an
+approval Live Activity. This follows Apple's actionable-notification and remote
+notification guidance, with ActivityKit push documentation reviewed for the
+separate task activity: [Declaring Your Actionable Notification Types](https://developer.apple.com/documentation/usernotifications/declaring-your-actionable-notification-types),
+[Generating a Remote Notification](https://developer.apple.com/documentation/usernotifications/generating-a-remote-notification),
+and [Starting and Updating Live Activities with ActivityKit Push Notifications](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications).
+The direct Apple page fetch was unavailable in this environment; web search
+provided the official documentation references. The explicit deviation is no
+approval Live Activity and no second push to remove an alert resolved on another
+device; stale alerts are rejected by the existing endpoint and removed on refresh.
+Delivery is best-effort, opt-in and requires protected APNs configuration.
+Mac compilation, rendered UI, and physical-device delivery remain unverified.
 
 ## 31 October 2026 — Health logging only in the plus sheet (P15-39 / #1480)
 
@@ -7958,7 +7978,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-31 | The web app shares the orange primary and stone secondary palette: `#ffb45c` with `#1d1200` control text in dark mode and `#b45f06` with white text in light mode; stone is `#c9bfae` in dark mode and `#6f6551` in light mode. Light-theme focus and link text use a deeper orange for 4.5:1 contrast. Existing per-user `--theme-accent` overrides remain supported. The orb's cyan glass edge and listening/voice colors stay unchanged; orange fills remain limited to primary controls and soft tints. | Dan's P15-21 decision on 31 October 2026 aligns web interaction, selection, progress and quiet secondary roles with the approved palette while retaining the separately owned orb and voice appearance. | Confirmed by Dan |
 | 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
 | 2026-10-31 | P15-34 / #1470 approves the local Lock Screen hands-free session. Dynamic Island is approved separately in P15-35. Connection lost was approved separately in P15-37, and local Lock Screen tasks and decisions in P15-36. | The hands-free card's approval does not authorize other system surfaces or APNs. APNs push remains a separate backend gap and decision. | Hands-free agreed; APNs out of scope |
-| 2026-10-31 | The Lock Screen tasks and decisions surface is approved for P15-36. Use real running Factory task data and pending confirmations, local ActivityKit updates, and local approval notifications with authenticated Approve/Decline actions; keep measured progress indeterminate because the backend has no numeric progress contract. | Dan's P15-36 issue explicitly approves the Lock Screen tasks card. APNs registration, server delivery, and task/approval lifecycle pushes are not part of this approval and remain required for updates while the app is suspended. | Confirmed by Dan |
+| 2026-10-31 | The Lock Screen task surface is approved for P15-36; pending confirmations may expose authenticated Approve/Decline actions. Keep task progress indeterminate because the backend has no numeric progress contract. | P15-51 separately authorizes creation-time APNs approval alerts; task Live Activities remain separate. | Confirmed by Dan; implementation updated in P15-51 |
+| 2026-11-01 | P15-51 uses one actionable APNs alert at approval creation, early standard permission, a buttons-only Chat action row above Now, and independent decision progress. Do not create approval Live Activities or duplicate local/plain-push notifications. | The backend sends the bounded summary/expiry alert through registered APNs devices. Apple actionable-notification and remote-notification docs guide this flow; ActivityKit push documentation remains applicable to task activities only. Other-device resolution does not send a second lifecycle push. | Confirmed by issue P15-51 |
 | 2026-10-31 | Build the approved native Voice connection-loss state (P15-37 / #1476): only a real dropped connection shows the muted orb, “Connection lost”, Retry now and End. Retry starts a fresh session using the existing bounded reconnect policy; End closes the session and returns to Chat. Use orange primary and stone secondary glass actions, with Danish-default app-language copy and no helper text. | The existing `VoiceSessionClient` caps automatic reconnects at eight attempts. A user-requested retry starts another bounded session; the pure-Swift presentation state machine tests connected, lost, retrying and ended, including that initial failures are not mislabeled as drops. The iOS simulator PR artifact captures the synthetic state in Danish and English. | Confirmed by issue P15-37 |
 | 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |
 | 2026-10-31 | The Chat look is unified. Only the user bubble has a background: a soft orange-tinted glass pill. Jarvis replies, tool rows and status lines such as Writing it up are unboxed plain text. No solid orange fills are used anywhere: large orange areas are too harsh on the eyes, so orange is used for small accents, tints and strokes. | Dan approved this final Chat look on 2026-10-31 after reviewing the board. It applies to every surface that shows conversation text. The build is tracked in #1400 and the rule is repeated in #1430, #1431 and #1432. | Confirmed by Dan |
@@ -10407,3 +10428,14 @@ and fixture side effects before the route changes. `ios-testflight.yml` equals
 ## 2026-11-01 — P15-52 camera-sheet UI test matches the menu item by title
 
 Run 41347453078 failed `testCameraSheetOpensFromThePlusMenu` because `chat.plus.camera` was not found once the native menu item was enabled. The test now matches the item by identifier or by its localized title (Kamera/Camera). Not yet run on a Mac; the navigation branch had no new commits when this was pushed.
+
+## 2026-11-01: One navigation UI test run, trace in the failure message
+
+Confirmed: CI run 41347453078 showed the menu-size assertion failing at 43.99999999999999
+(now compared with a 43.5 tolerance) and the Software Factory item tap not showing its
+screen. The class runs once in the screenshot step (it ran twice, taking about 30 minutes)
+with 60/90 second per-test limits, and fails the run after screenshots. The two
+five-second-delay menu tests were folded into the English menu test. The item test now
+waits for `factory.segment.board` (always rendered) and puts the temporary on-screen
+navigation trace (`debug.navigation.trace`) in its failure message. The cause of the
+non-navigating item is still unconfirmed.

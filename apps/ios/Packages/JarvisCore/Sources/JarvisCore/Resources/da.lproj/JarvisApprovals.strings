@@ -1,5 +1,9 @@
 "approval.approve" = "Godkend";
 "approval.decline" = "Afvis";
+"approval.sending" = "Sender…";
+"approval.recorded" = "Godkendelsen er registreret.";
+"approval.declinedInApp" = "Anmodningen blev afvist.";
+"approval.resolutionFailed" = "Handlingen blev ikke gennemført. Prøv igen.";
 "approval.expires" = "Udløber kl. %@";
 "approval.approvedFromLockScreen" = "Godkendt fra låseskærmen.";
 "approval.declinedFromLockScreen" = "Afvist fra låseskærmen.";
