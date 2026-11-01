@@ -6395,7 +6395,12 @@ For P15-29 / #1459, the same boot also captures `notifications-light.png` and
 `notifications-dark.png` using `--screenshot-chat-fixture
 --screenshot-notifications-open`. Compare the Chat bell and the sheet's Done
 button; both use the shared plain toolbar-label style, without an extra glass
-fill. Linux checks cannot verify the rendered toolbar. The #1448 artifact
+fill. P15-48 adds bell captures with counts 1 and 12 at default and accessibility
+XXXL Dynamic Type in both appearances, plus default and accessibility-XXXL sheet
+captures. The fixture-only `--screenshot-needs-you-count=1|12` argument changes
+only the displayed count. The bell badge stays within its 44-point control; the
+shared sheet close icon uses the localized Done accessibility label and stone
+secondary tint. Linux checks cannot verify the rendered toolbar. The #1448 artifact
 ([run 41241917037](https://github.com/DanAakesen/jarvis/actions/runs/41241917037))
 has no open-sheet baseline; its light Chat capture is obscured by the gate.
 Usable before/after simulator comparison remains pending; do not treat that

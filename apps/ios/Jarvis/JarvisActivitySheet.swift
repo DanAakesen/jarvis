@@ -3,8 +3,17 @@ import SwiftUI
 
 struct JarvisActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @ObservedObject var model: JarvisChatModel
     let kind: ActivitySheetKind
+
+    private var appLanguage: JarvisAppLanguage {
+        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: appLanguage)
+    }
 
     var body: some View {
         NavigationStack {
@@ -73,8 +82,14 @@ struct JarvisActivitySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    }
                         .jarvisToolbarButtonStyle()
+                        .accessibilityLabel(copy(.done))
                 }
             }
         }
