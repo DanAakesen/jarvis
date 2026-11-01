@@ -67,8 +67,8 @@ final class JarvisNavigationModelTests: XCTestCase {
     func testDrawerExistsOnlyWhenOpenWithoutForegroundOrGestureStateTransforms() throws {
         let shell = try source("Jarvis/ContentView.swift")
         XCTAssertTrue(shell.contains("@EnvironmentObject private var navigation: JarvisNavigationModel"))
-        XCTAssertTrue(shell.contains("get: { navigation.path }"))
-        XCTAssertTrue(shell.contains("navigation.setPath($0)"))
+        XCTAssertTrue(shell.contains("destinationView(navigation.currentDestination)"))
+        XCTAssertFalse(shell.contains("path: Binding"))
         let sidebar = try source("Jarvis/JarvisSidebar.swift")
         XCTAssertFalse(shell.contains("JarvisSidebar("))
         XCTAssertTrue(sidebar.contains("struct JarvisSidebarReveal<Page: View>: View"))
