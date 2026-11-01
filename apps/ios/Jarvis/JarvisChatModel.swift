@@ -59,7 +59,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var isLoadingOlder = false
     @Published var isSending = false
     @Published var isCancelling = false
-    @Published var resolvingConfirmationIDs = Set<String>()
+    @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
     @Published var dismissingActivityIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
@@ -81,6 +81,7 @@ final class JarvisChatModel: ObservableObject {
     private var language: ChatLanguage
     private var activeMessageID: String?
     private var uploadedAttachmentIDs: [UUID: String] = [:]
+    private var locallyResolvedConfirmationIDs = Set<String>()
     private var sendTask: Task<Void, Never>?
     private var observationSuspended = false
     private var didLoad = false
@@ -116,12 +117,12 @@ final class JarvisChatModel: ObservableObject {
     var hasOlderMessages: Bool { historyPaging.nextCursor != nil }
 
     var activeConfirmation: PendingConfirmation? {
-        nowFeed?.confirmations.first
+        nowFeed?.confirmations.first { !locallyResolvedConfirmationIDs.contains($0.id) }
     }
 
     var shouldShowNowBar: Bool {
         isSending || !backgroundTasks.isEmpty || nowFeed.map {
-            !$0.confirmations.isEmpty ||
+            activeConfirmation != nil ||
                 !$0.running.isEmpty ||
                 !$0.items.isEmpty
         } == true
@@ -129,7 +130,7 @@ final class JarvisChatModel: ObservableObject {
 
     var needsYouCount: Int {
         guard let nowFeed else { return 0 }
-        return nowFeed.confirmations.count + nowFeed.items.filter {
+        return nowFeed.confirmations.filter { !locallyResolvedConfirmationIDs.contains($0.id) }.count + nowFeed.items.filter {
             $0.category == .attention || $0.category == .credential || $0.category == .alert
         }.count
     }
@@ -283,7 +284,7 @@ final class JarvisChatModel: ObservableObject {
             return
         }
         do {
-            nowFeed = try await nowClient.load()
+            replaceNowFeed(try await nowClient.load())
             activityError = nil
             let language = JarvisAppLanguage(
                 rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
@@ -370,18 +371,41 @@ final class JarvisChatModel: ObservableObject {
 
     func resolve(_ confirmation: PendingConfirmation, decision: ConfirmationDecision) async {
         guard !fixtureMode, let nowClient,
-              !resolvingConfirmationIDs.contains(confirmation.id) else { return }
-        resolvingConfirmationIDs.insert(confirmation.id)
+              resolvingConfirmationDecisions[confirmation.id] == nil else { return }
+        resolvingConfirmationDecisions[confirmation.id] = decision
         activityMessage = nil
-        defer { resolvingConfirmationIDs.remove(confirmation.id) }
+        defer { resolvingConfirmationDecisions.removeValue(forKey: confirmation.id) }
         do {
             try await nowClient.resolveConfirmation(id: confirmation.id, decision: decision)
-            activityMessage = decision == .approve ? "Approval recorded." : "Request declined."
-            nowFeed = try await nowClient.load()
+            locallyResolvedConfirmationIDs.insert(confirmation.id)
+            let result: JarvisApprovalLocalizationKey = decision == .approve ? .recorded : .declinedInApp
+            activityMessage = JarvisApprovalLocalization.string(result, language: appLanguage)
             activityError = nil
+            await JarvisApprovalNotificationCoordinator.shared.dismissNotification(
+                confirmationID: confirmation.id
+            )
+            do {
+                replaceNowFeed(try await nowClient.load())
+            } catch {
+                activityError = message(for: error)
+            }
         } catch {
-            activityError = message(for: error)
+            activityError = JarvisApprovalLocalization.string(.resolutionFailed, language: appLanguage)
         }
+    }
+
+    private func replaceNowFeed(_ feed: JarvisNowFeed) {
+        nowFeed = feed
+        let currentIDs = Set(feed.confirmations.map(\.id))
+        locallyResolvedConfirmationIDs.formIntersection(currentIDs)
+    }
+
+    func isResolving(_ confirmation: PendingConfirmation, decision: ConfirmationDecision) -> Bool {
+        resolvingConfirmationDecisions[confirmation.id] == decision
+    }
+
+    func isResolving(_ confirmation: PendingConfirmation) -> Bool {
+        resolvingConfirmationDecisions[confirmation.id] != nil
     }
 
     private func consumeLockScreenApprovalResult() {

@@ -885,13 +885,16 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('baseURL: URL(string: "https://fixture.invalid/api")!', fixture)
         for filename in ("JarvisActivitySheet.swift", "JarvisChatScreen.swift"):
             source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
-            for action in ("approve", "decline"):
-                self.assertIn(f"JarvisApprovalLocalization.string(.{action}, language: appLanguage)", source)
-            self.assertIn(".disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))", source)
+            self.assertIn("JarvisApprovalLocalization.string", source)
+            self.assertIn("model.isResolving(confirmation, decision:", source)
+            self.assertIn(".disabled(model.fixtureMode || model.isResolving(confirmation))", source)
             self.assertIn("minWidth: JarvisDesignTokens.chatMinimumTapTarget", source)
             self.assertIn("minHeight: JarvisDesignTokens.chatMinimumTapTarget", source)
-            self.assertIn('appLanguage == .da ? "Kalenderændring" : "Calendar change"', source)
         sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
+        self.assertIn("JarvisApprovalLocalization.string(.approve, language: appLanguage)", sheet)
+        self.assertIn("JarvisApprovalLocalization.string(.decline, language: appLanguage)", sheet)
+        self.assertIn("JarvisApprovalLocalization.string(.sending, language: appLanguage)", sheet)
+        self.assertIn('appLanguage == .da ? "Kalenderændring" : "Calendar change"', sheet)
         self.assertIn('hasCalendarConfirmation && appLanguage == .da ? "Afventer godkendelse"', sheet)
         self.assertIn("JarvisApprovalLocalization.string(.expires, language: appLanguage)", sheet)
         self.assertIn('.accessibilityIdentifier("confirmation-fixture-reason")', sheet)
@@ -906,14 +909,17 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("screenshot.lifetime = .keepAlways", ui_tests)
         self.assertIn("XCTAssertGreaterThanOrEqual(button.frame.height, 44)", ui_tests)
 
-    def test_lock_screen_approval_expiry_uses_absolute_system_time(self):
+    def test_lock_screen_approval_preview_and_apns_expiry_use_local_time(self):
         preview = (ROOT / "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift").read_text()
         notification = (ROOT / "apps/ios/Jarvis/JarvisApprovalNotificationCoordinator.swift").read_text()
-        for source in (preview, notification):
-            self.assertIn("expiresAt.formatted(", source)
-            self.assertIn(".dateTime.hour().minute().locale(language.locale)", source)
-            self.assertIn("arguments: [expiryTime]", source)
-            self.assertNotIn("RelativeDateTimeFormatter", source)
+        self.assertIn("expiresAt.formatted(", preview)
+        self.assertIn(".dateTime.hour().minute().locale(language.locale)", preview)
+        self.assertIn("arguments: [expiryTime]", preview)
+        self.assertNotIn("RelativeDateTimeFormatter", preview)
+        self.assertIn("timeZone: TimeZone.current.identifier", notification)
+        apns = (ROOT / "apps/backend/src/push/approval-notifications.ts").read_text()
+        self.assertIn("timeZone: input.timeZone", apns)
+        self.assertIn("timeZoneName: 'short'", apns)
         for language, template in (("da", "Udløber kl. %@"), ("en", "Expires at %@")):
             resource = ROOT / f"apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources/{language}.lproj/JarvisApprovals.strings"
             self.assertIn(f'"approval.expires" = "{template}";', resource.read_text())
@@ -931,7 +937,7 @@ class SafeFailureTests(unittest.TestCase):
 
         self.assertIn("if model.shouldShowNowBar {\n                nowBar", screen)
         activity_predicate = model.split("var shouldShowNowBar: Bool", 1)[1].split("var needsYouCount", 1)[0]
-        self.assertIn("!$0.confirmations.isEmpty", activity_predicate)
+        self.assertIn("activeConfirmation != nil", activity_predicate)
         self.assertIn("!$0.running.isEmpty", activity_predicate)
         self.assertIn("!$0.items.isEmpty", activity_predicate)
         self.assertNotIn("$0.awayMode", activity_predicate)

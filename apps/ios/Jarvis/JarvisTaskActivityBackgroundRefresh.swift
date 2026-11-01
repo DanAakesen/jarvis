@@ -12,6 +12,16 @@ final class JarvisAppDelegate: NSObject, UIApplicationDelegate {
         JarvisTaskActivityBackgroundRefresh.shared.register()
         return true
     }
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        Task {
+            await JarvisApprovalNotificationCoordinator.shared
+                .didRegisterForRemoteNotifications(deviceToken: deviceToken)
+        }
+    }
 }
 
 private struct JarvisBackgroundAccessTokenProvider: AccessTokenProvider {

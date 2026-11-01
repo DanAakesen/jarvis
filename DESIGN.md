@@ -2946,7 +2946,11 @@ the system has no conversation bubble with distinct sender alignment and a
 tinted glass surface; the inline Now bar is custom because it combines live
 status and the pending confirmation's two actions in the composer stack; the
 activity sheet is custom because it groups the existing feed categories and
-confirmation decisions. Reduced Motion removes the message-arrival animation;
+confirmation decisions. A pending approval uses a buttons-only row directly above
+the Now bar: stone Decline first, orange Approve last, with the shared 44-point
+target and no repeated proposal text or explainer. Only the pressed action shows
+Sending; a failed action can be retried and its result is available in the Now
+activity sheet. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
@@ -3140,15 +3144,17 @@ symbol, localized state, actual task activity, elapsed time from `startedAt`,
 and a linear progress track. Since existing task routes provide no numeric
 progress, the track is indeterminate rather than showing an invented fraction.
 The approval notification uses the system Jarvis app icon (the dark glass orb
-with cyan rim and amber tangled centre), server-provided summary and expiry,
-and authentication-required Approve/Decline actions. Orange remains a small
-accent; stone is the secondary token.
+with cyan rim and amber tangled centre), server-provided summary and device-local
+absolute expiry, and authentication-required Approve/Decline actions. Orange
+remains a small accent; stone is the secondary token.
 
-ActivityKit and WidgetKit provide the system Lock Screen presentation. App
-language comes from `JarvisAppLanguage`; notification action feedback is shown
-in the existing Now activity sheet. Local updates use the existing `/now`
-snapshot/events and Factory task event stream. No APNs delivery or update is
-claimed by P15-36 alone. P15-49 (#1498) adds task Dynamic Island content:
+ActivityKit and WidgetKit provide the task Lock Screen presentation; approvals
+use one remote actionable notification, not a second local notification or an
+approval Live Activity. The app registers the actionable category before asking
+for standard notification permission after sign-in/unlock. App language and time
+zone come from the device; notification action feedback is shown in the existing
+Now activity sheet. Local task updates use the existing `/now` snapshot/events
+and Factory task event stream. P15-49 (#1498) adds task Dynamic Island content:
 expanded shows the same task surface; compact shows a state symbol and localized
 state; minimal shows the state symbol with a task/state accessibility label.
 Waiting and terminal states have no running progress animation or elapsed timer.

@@ -155,14 +155,14 @@ struct JarvisActivitySheet: View {
                         Button {
                             Task { await model.resolve(confirmation, decision: .reject) }
                         } label: {
-                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
-                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
+                            Text(model.isResolving(confirmation, decision: .reject)
+                                 ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
                                  : JarvisApprovalLocalization.string(.decline, language: appLanguage))
                                 .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
                                        minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.glass)
-                        .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
+                        .disabled(model.fixtureMode || model.isResolving(confirmation))
                         .accessibilityIdentifier("confirmation-decline-\(confirmation.id)")
                         .accessibilityHint(model.fixtureMode
                             ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
@@ -171,14 +171,14 @@ struct JarvisActivitySheet: View {
                         Button {
                             Task { await model.resolve(confirmation, decision: .approve) }
                         } label: {
-                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
-                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
+                            Text(model.isResolving(confirmation, decision: .approve)
+                                 ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
                                  : JarvisApprovalLocalization.string(.approve, language: appLanguage))
                                 .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
                                        minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
                         .buttonStyle(.glassProminent)
-                        .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
+                        .disabled(model.fixtureMode || model.isResolving(confirmation))
                         .accessibilityIdentifier("confirmation-approve-\(confirmation.id)")
                         .accessibilityHint(model.fixtureMode
                             ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")

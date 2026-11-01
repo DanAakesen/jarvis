@@ -16,24 +16,29 @@ export interface ActivityPushResult {
 export interface ActivityPushSender {
   send(token: string, content: ActivityContentState, signal: AbortSignal): Promise<ActivityPushResult>;
 }
-export interface ActivityKitConfig {
+export interface ApnsConfig {
   teamId: string;
   keyId: string;
   signingKey: string;
   environment: 'sandbox' | 'production';
+}
+export type ActivityKitConfig = ApnsConfig;
+
+export function loadApnsConfig(env: NodeJS.ProcessEnv = process.env): ApnsConfig {
+  const { APNS_TEAM_ID: teamId, APNS_KEY_ID: keyId, APNS_SIGNING_KEY: signingKey, APNS_ENVIRONMENT: environment } = env;
+  if (!teamId || !/^[A-Z0-9]{10}$/u.test(teamId) || !keyId || !/^[A-Z0-9]{10}$/u.test(keyId) ||
+      !signingKey || signingKey.length > 4096 || !signingKey.startsWith('-----BEGIN PRIVATE KEY-----') ||
+      (environment !== 'sandbox' && environment !== 'production')) {
+    throw new ConfigurationError('APNs requires valid APNS_TEAM_ID, APNS_KEY_ID, APNS_SIGNING_KEY and explicit APNS_ENVIRONMENT');
+  }
+  return { teamId, keyId, signingKey, environment };
 }
 
 export function loadActivityKitConfig(env: NodeJS.ProcessEnv = process.env): ActivityKitConfig | undefined {
   const enabled = env.JARVIS_ACTIVITYKIT_ENABLED;
   if (enabled === undefined || enabled === 'false') return undefined;
   if (enabled !== 'true') throw new ConfigurationError('JARVIS_ACTIVITYKIT_ENABLED must be true or false');
-  const { APNS_TEAM_ID: teamId, APNS_KEY_ID: keyId, APNS_SIGNING_KEY: signingKey, APNS_ENVIRONMENT: environment } = env;
-  if (!teamId || !/^[A-Z0-9]{10}$/u.test(teamId) || !keyId || !/^[A-Z0-9]{10}$/u.test(keyId) ||
-      !signingKey || signingKey.length > 4096 || !signingKey.startsWith('-----BEGIN PRIVATE KEY-----') ||
-      (environment !== 'sandbox' && environment !== 'production')) {
-    throw new ConfigurationError('ActivityKit requires valid APNS_TEAM_ID, APNS_KEY_ID, APNS_SIGNING_KEY and explicit APNS_ENVIRONMENT');
-  }
-  return { teamId, keyId, signingKey, environment };
+  return loadApnsConfig(env);
 }
 
 export function activityPayload(content: ActivityContentState, now: number): Buffer {
