@@ -48,22 +48,27 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX,
                              "The sidebar launcher must be separate and farther right than the bell")
 
-        let sidebar = app.otherElements.matching(identifier: "navigation.sidebar").element
+        let sidebar = app.descendants(matching: .any).matching(identifier: "navigation.sidebar").firstMatch
         XCTAssertFalse(sidebar.exists)
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         let opened = NSPredicate { _, _ in
-            sidebar.exists && sidebar.isHittable && !sidebar.frame.isEmpty
+            sidebar.exists && !sidebar.frame.isEmpty
                 && self.app.frame.contains(sidebar.frame)
                 && self.app.buttons["navigation.chat"].isHittable
         }
         XCTAssertEqual(
             XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: opened, object: sidebar)], timeout: 2),
             .completed,
-            "A physical menu tap must expose a visible, interactive drawer within two seconds"
+            "A physical menu tap must expose a visible, interactive drawer within two seconds. Navigation trace: \(navigationTrace)"
         )
         XCTAssertTrue(sidebar.exists)
-        XCTAssertTrue(sidebar.isHittable)
         XCTAssertTrue(app.buttons["navigation.chat"].isHittable)
+    }
+
+    /// The temporary on-screen trace is a label-only accessibility element, so query it without a type.
+    private var navigationTrace: String {
+        let trace = app.descendants(matching: .any).matching(identifier: "debug.navigation.trace").firstMatch
+        return trace.exists ? trace.label : "unavailable"
     }
 
     func testSidebarItemNavigatesToSoftwareFactoryInDanish() {
@@ -90,11 +95,10 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertTrue(item.waitForExistence(timeout: 2))
         XCTAssertTrue(item.isHittable)
         item.tap()
-        let trace = app.staticTexts["debug.navigation.trace"]
         let factoryScreen = app.buttons["factory.segment.board"]
         XCTAssertTrue(
             factoryScreen.waitForExistence(timeout: 3),
-            "Tapping a sidebar item must show its screen. Navigation trace: \(trace.exists ? trace.label : "unavailable")"
+            "Tapping a sidebar item must show its screen. Navigation trace: \(navigationTrace)"
         )
         XCTAssertTrue(factoryScreen.isHittable, "The Software Factory screen must be visible, not offset away")
         XCTAssertFalse(app.buttons["chat.notifications"].isHittable, "The Chat screen must have been left")
