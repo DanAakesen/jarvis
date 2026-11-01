@@ -1,3 +1,15 @@
+## 1 November 2026 — native Chat Markdown, tool alignment and HTML apps (P15-45 / #1492)
+
+Render Jarvis chat replies with SwiftUI Markdown while keeping user messages as
+plain text; tool rows remain unboxed and use the assistant column's leading edge.
+Use the existing generated-view event, artifact model and owner-authenticated HTML
+route for HTML apps. Render only validated artifacts in a nonpersistent WKWebView
+with a restrictive CSP, no file access, and no JavaScript bridge to app data. Keep
+the web-only `window.jarvis` actions unavailable on iOS rather than expanding the
+native permission surface for this issue. Add simulator UI verification and named
+calendar-answer screenshots to the existing ready-PR iOS job, without another
+simulator boot.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

@@ -242,6 +242,25 @@ screenshots. Native Entra sign-in remains a separate concern; no fake
 conversation or successful live sign-in is implied. The activity sheet keeps
 the no-activity icon and text without empty category rows.
 
+Jarvis replies render Markdown structure, including headings, emphasis, lists and
+event date/time lines. Persisted tool outcomes stay unboxed and start at the
+Jarvis reply's leading edge; only the user's message has a background. Generated
+workspace views continue to arrive over the existing workspace event contract.
+The native sheet also loads `html-app` artifacts from the existing authenticated
+HTML-artifact route and renders them in an isolated WebKit view with a restrictive
+content policy, no app bridge, and no persistent website data. The view can display
+local HTML/JavaScript but does not support web-only `window.jarvis` actions such as
+asking Jarvis, pinning, or opening links from inside the generated app.
+
+The plus menu is anchored above its trigger. The existing web contract allows
+documents up to 20 MB and images up to 10 MB per attachment. Generated workspace
+views continue to arrive over the existing workspace event contract. The native
+sheet also loads `html-app` artifacts from the existing authenticated HTML-artifact
+route and renders them in an isolated WebKit view with a restrictive content
+policy, no app bridge, and no persistent website data. The view can display local
+HTML/JavaScript but does not support web-only `window.jarvis` actions such as
+asking Jarvis, pinning, or opening links from inside the generated app.
+
 The notifications toolbar button keeps its badge inside the 44-point control,
 including two-digit counts. Notifications and Background activity sheets use a
 compact xmark with a localized Done accessibility label (Færdig/Done). Both retain

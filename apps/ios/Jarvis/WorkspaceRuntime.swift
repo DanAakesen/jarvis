@@ -115,6 +115,13 @@ final class WorkspaceRuntime: ObservableObject {
         return true
     }
 
+    func loadHTMLArtifact(id: String) async throws -> HtmlArtifact {
+        guard let workspaceClient else {
+            throw JarvisWorkspaceClientError.invalidResponse
+        }
+        return try await workspaceClient.htmlArtifact(id: id)
+    }
+
     func canPerform(_ action: GeneratedViewAction) -> Bool {
         switch action {
         case .openRoute(let route):

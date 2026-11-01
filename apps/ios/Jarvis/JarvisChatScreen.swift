@@ -1,3 +1,4 @@
+import Foundation
 import JarvisCore
 import PhotosUI
 import SwiftUI
@@ -31,6 +32,71 @@ private struct RenderedChatRow: Identifiable {
     let showsTimestamp: Bool
 
     var id: String { message.id }
+}
+
+private enum ChatMarkdownBlock {
+    case heading(level: Int, text: String)
+    case paragraph(String)
+    case listItem(marker: String, text: String)
+
+    static func parse(_ markdown: String) -> [ChatMarkdownBlock] {
+        var blocks: [ChatMarkdownBlock] = []
+        var paragraphLines: [String] = []
+
+        func appendParagraph() {
+            guard !paragraphLines.isEmpty else { return }
+            blocks.append(.paragraph(paragraphLines.joined(separator: " ")))
+            paragraphLines.removeAll()
+        }
+
+        for sourceLine in markdown.components(separatedBy: .newlines) {
+            let line = sourceLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else {
+                appendParagraph()
+                continue
+            }
+
+            let headingLevel = line.prefix(while: { $0 == "#" }).count
+            if (1...6).contains(headingLevel),
+               line.dropFirst(headingLevel).first?.isWhitespace == true {
+                appendParagraph()
+                let heading = line.dropFirst(headingLevel).trimmingCharacters(in: .whitespaces)
+                blocks.append(.heading(level: headingLevel, text: heading))
+                continue
+            }
+
+            if let marker = ["- ", "* ", "+ "].first(where: line.hasPrefix) {
+                appendParagraph()
+                blocks.append(.listItem(
+                    marker: "•",
+                    text: String(line.dropFirst(marker.count))
+                ))
+                continue
+            }
+
+            if let listItem = numberedListItem(line) {
+                appendParagraph()
+                blocks.append(.listItem(marker: listItem.marker, text: listItem.text))
+                continue
+            }
+
+            paragraphLines.append(line)
+        }
+
+        appendParagraph()
+        return blocks
+    }
+
+    private static func numberedListItem(_ line: String) -> (marker: String, text: String)? {
+        guard let separator = line.firstIndex(where: { $0 == "." || $0 == ")" }),
+              line[line.index(after: separator)...].first?.isWhitespace == true else {
+            return nil
+        }
+        let number = line[..<separator]
+        guard !number.isEmpty, number.allSatisfy(\.isNumber) else { return nil }
+        let text = line[line.index(after: separator)...].trimmingCharacters(in: .whitespaces)
+        return ("\(number)\(line[separator])", text)
+    }
 }
 
 struct JarvisChatScreen: View {
@@ -306,7 +372,8 @@ struct JarvisChatScreen: View {
                             messageBubble(
                                 text: model.streamingText,
                                 role: .jarvis,
-                                interrupted: false
+                                interrupted: false,
+                                messageID: "streaming"
                             )
                                 .id("streaming-message")
                         }
@@ -343,7 +410,12 @@ struct JarvisChatScreen: View {
                     .frame(maxWidth: .infinity, alignment: row.message.role == .dan ? .trailing : .leading)
                     .accessibilityLabel("Message time, \(timeString(row.message.at))")
             }
-            messageBubble(text: row.message.text, role: row.message.role, interrupted: row.message.interrupted)
+            messageBubble(
+                text: row.message.text,
+                role: row.message.role,
+                interrupted: row.message.interrupted,
+                messageID: row.message.id
+            )
             if !row.message.toolCalls.isEmpty {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                     ForEach(row.message.toolCalls, id: \.id) { tool in
@@ -352,16 +424,14 @@ struct JarvisChatScreen: View {
                                 .foregroundStyle(tool.outcome == .ok ? Color.secondary : Color.orange)
                                 .accessibilityHidden(true)
                             Text(tool.tool.replacingOccurrences(of: "_", with: " "))
-                            Spacer(minLength: 0)
                             Text(tool.outcome.rawValue.capitalized)
                                 .foregroundStyle(.secondary)
                         }
                         .font(.caption)
+                        .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
                         .accessibilityElement(children: .combine)
                     }
                 }
-                .padding(.vertical, JarvisDesignTokens.chatGlassInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if !row.message.attachments.isEmpty {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -381,14 +451,19 @@ struct JarvisChatScreen: View {
         .frame(maxWidth: .infinity, alignment: row.message.role == .dan ? .trailing : .leading)
     }
 
-    private func messageBubble(text: String, role: ConversationRole, interrupted: Bool) -> some View {
+    private func messageBubble(
+        text: String,
+        role: ConversationRole,
+        interrupted: Bool,
+        messageID: String
+    ) -> some View {
         let isUser = role == .dan
         let userBubbleShape = RoundedRectangle(
             cornerRadius: JarvisDesignTokens.chatUserBubbleRadius,
             style: .continuous
         )
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(text)
+            messageText(text, role: role, messageID: messageID)
                 .font(.body)
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
@@ -422,15 +497,69 @@ struct JarvisChatScreen: View {
                             lineWidth: JarvisDesignTokens.chatUserBubbleBorderWidth
                         )
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("You: \(text)")
             } else {
                 content
                     .padding(.vertical, JarvisDesignTokens.chatGlassInset)
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
+                    .accessibilityElement(children: .contain)
             }
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(isUser ? "You" : "Jarvis"): \(text)")
+    }
+
+    @ViewBuilder
+    private func messageText(_ text: String, role: ConversationRole, messageID: String) -> some View {
+        if role == .jarvis {
+            let blocks = ChatMarkdownBlock.parse(text)
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
+                    markdownBlock(block)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("chat-markdown-block-\(messageID)-\(index)")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            Text(text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func markdownBlock(_ block: ChatMarkdownBlock) -> some View {
+        switch block {
+        case .heading(let level, let text):
+            inlineMarkdown(text)
+                .font(headingFont(level))
+                .accessibilityAddTraits(.isHeader)
+        case .paragraph(let text):
+            inlineMarkdown(text)
+        case .listItem(let marker, let text):
+            HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                Text(marker)
+                    .accessibilityHidden(true)
+                inlineMarkdown(text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    private func inlineMarkdown(_ text: String) -> Text {
+        if let attributedText = try? AttributedString(markdown: text) {
+            return Text(attributedText)
+        }
+        return Text(text)
+    }
+
+    private func headingFont(_ level: Int) -> Font {
+        switch level {
+        case 1: .title2.weight(.semibold)
+        case 2: .title3.weight(.semibold)
+        default: .headline
+        }
     }
 
     private var composer: some View {
