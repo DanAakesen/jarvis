@@ -31,6 +31,20 @@ private enum ChatSheet: Identifiable {
     }
 }
 
+private enum FixtureAttachmentPicker: String, Identifiable {
+    case files
+    case photos
+
+    var id: String { rawValue }
+
+    var localizationKey: JarvisChatLocalizationKey {
+        switch self {
+        case .files: .chooseFiles
+        case .photos: .photoLibrary
+        }
+    }
+}
+
 private struct RenderedChatRow: Identifiable {
     let message: JarvisChatRow
     let showsTimestamp: Bool
@@ -49,6 +63,7 @@ struct JarvisChatScreen: View {
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
+    @State private var fixtureAttachmentPicker: FixtureAttachmentPicker?
     @State private var isPlusMenuPresented = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-plus-menu")
     @State private var cameraCapture: VoiceCameraCapture?
     @State private var isVideoEnabled = false
@@ -167,8 +182,20 @@ struct JarvisChatScreen: View {
     private var attachmentPickers: some View {
         layout
         .confirmationDialog(copy(.addToMessage), isPresented: $attachmentDialog, titleVisibility: .visible) {
-            Button(copy(.chooseFiles)) { fileImporterPresented = true }
-            Button(copy(.photoLibrary)) { photosPickerPresented = true }
+            Button(copy(.chooseFiles)) {
+                if model.fixtureMode && allowsFixtureAttachments {
+                    fixtureAttachmentPicker = .files
+                } else {
+                    fileImporterPresented = true
+                }
+            }
+            Button(copy(.photoLibrary)) {
+                if model.fixtureMode && allowsFixtureAttachments {
+                    fixtureAttachmentPicker = .photos
+                } else {
+                    photosPickerPresented = true
+                }
+            }
             Button(copy(.cancel), role: .cancel) {}
         }
         .fileImporter(
@@ -215,6 +242,13 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             }
+        }
+        .alert(item: $fixtureAttachmentPicker) { picker in
+            Alert(
+                title: Text(copy(picker.localizationKey)),
+                message: Text("The system picker is suppressed in UI tests."),
+                dismissButton: .default(Text(copy(.cancel)))
+            )
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase != .active else {

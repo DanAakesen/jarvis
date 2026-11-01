@@ -4,7 +4,8 @@ Extend the existing ready-PR Mac job and single iPhone simulator boot with a
 `JarvisUITests` smoke flow. Use DEBUG-only synthetic sign-in and voice fixtures,
 never a real account, token, microphone session, backend or voice service. Check
 sidebar drag/button, every enabled navigation route, Chat attachment-menu
-entries, ending Voice back to Chat, and opening Needs you then pressing Done.
+entries (the UI fixture verifies each picker action without launching an OS
+picker), ending Voice back to Chat, and opening Needs you then pressing Done.
 Attach every screen in light/dark and Danish/English.
 
 Render the matching frames from the checked-in iOS board HTML with macOS WebKit.

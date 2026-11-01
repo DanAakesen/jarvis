@@ -125,20 +125,18 @@ final class JarvisSmokeUITests: XCTestCase {
         XCTAssertTrue(photoLibrary.exists)
 
         chooseFiles.tap()
-        app.terminate()
-        launchChat()
+        let filePickerFixture = app.alerts[localized("Choose files", "Vælg filer")]
+        XCTAssertTrue(filePickerFixture.waitForExistence(timeout: 10))
+        filePickerFixture.buttons[localized("Cancel", "Annuller")].tap()
 
-        let addAttachmentAgain = app.buttons["chat.addAttachment"]
-        XCTAssertTrue(addAttachmentAgain.waitForExistence(timeout: 10))
-        addAttachmentAgain.tap()
-        let attachAgain = app.buttons[localized("Attach file or photo", "Vedhæft fil eller foto")]
-        XCTAssertTrue(attachAgain.waitForExistence(timeout: 10))
-        attachAgain.tap()
-        let photoLibraryAgain = app.buttons[localized("Photo library", "Fotobibliotek")]
-        XCTAssertTrue(photoLibraryAgain.waitForExistence(timeout: 10))
-        photoLibraryAgain.tap()
-        app.terminate()
-        launchChat()
+        addAttachment.tap()
+        XCTAssertTrue(attach.waitForExistence(timeout: 10))
+        attach.tap()
+        XCTAssertTrue(photoLibrary.waitForExistence(timeout: 10))
+        photoLibrary.tap()
+        let photoPickerFixture = app.alerts[localized("Photo library", "Fotobibliotek")]
+        XCTAssertTrue(photoPickerFixture.waitForExistence(timeout: 10))
+        photoPickerFixture.buttons[localized("Cancel", "Annuller")].tap()
     }
 
     private func exerciseNotifications() {
