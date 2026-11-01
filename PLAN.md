@@ -3449,6 +3449,16 @@ no per-screen hardcoded values, and a stated reason for each custom component.
 | P15-19 | [#1431](https://github.com/DanAakesen/jarvis/issues/1431) | Native iPhone Software Factory | Approved SwiftUI Board, selected-project Needs Dan and Releases, task/release detail, state-aware controls, confirmed restart flow, steering and create-task sheets reuse existing authenticated routes. Pure-Swift models, filtering, control availability and same-submission-ID retries are fixture-tested on Linux; visible copy is Danish/English. The CI screenshot hook captures all Factory segments/details/key states in the existing one-boot job. The selected-project choice is intentional: no cross-project aggregation or APNs is added. The Factory design-board frames are now present on main; Mac compile, frame comparison and owner visual review remain pending. | P15-03, P15-08, P15-09, P15-13, P15-15, P15-16 | In progress |
 | P15-36 | [#1474](https://github.com/DanAakesen/jarvis/issues/1474) | Lock Screen Factory task Live Activity and actionable approval notification | ActivityKit/WidgetKit activity follows up to five newest real running tasks from `/now` and Factory task events; the system timer uses `startedAt`, and the progress track is indeterminate because the backend has no numeric progress. Local notifications mirror validated `/now` confirmations; authentication-required actions call the existing approve/reject route and save result feedback for the Now sheet. Danish/English strings and the approved system-surfaces board are updated. CI adds the WidgetKit target and Lock Screen fixture to the existing one-boot screenshot job. Dynamic Island is separately approved and implemented in P15-35. APNs device registration, sender, task/approval pushes and stale-notification update/removal while suspended remain open; WidgetKit App ID provisioning, Mac compile and rendered screenshot are pending. | P15-05, P15-15, P15-16, P15-19 | In progress |
 
+P15-44 / [#1490](https://github.com/DanAakesen/jarvis/issues/1490) adds immediate
+local sent-message insertion, server-ID reconciliation, pre-acknowledgment draft
+recovery and latest-row scrolling that still runs with Reduce Motion. The native
+UI behaviour gate covers scrolled-up send visibility, acknowledgment without
+duplication and failure recovery; kept Danish/English screenshots are exported
+into the existing simulator artifact. Design and copy are unchanged. Local Core
+build, all 197 Core tests, all 56 pipeline tests, Swift syntax parsing and fixture
+typechecking pass. Next verify the ready-PR Mac UI gate and screenshots; physical-device acceptance remains
+unverified.
+
 P15-39 / [#1480](https://github.com/DanAakesen/jarvis/issues/1480) adds the native
 list-only Track workout tab and plus-button New lift sheet with past-exercise
 chips, using the shared lift contract. The Dashboard/Track workout segmented

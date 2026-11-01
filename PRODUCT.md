@@ -219,6 +219,12 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
+P15-44 / #1490 makes sent text visible immediately, before server acknowledgment,
+and scrolls it above the pinned composer, including with Reduce Motion. Server
+acknowledgment replaces the local bubble without duplication; a failure before
+acknowledgment restores the draft for retry. Danish/English copy and the visual
+design are unchanged.
+
 The composer offers Chat and Voice navigation and a plus menu anchored above its
 trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
 language. Camera uses an in-app viewfinder and still-photo capture; video and

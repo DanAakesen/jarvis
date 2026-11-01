@@ -6432,6 +6432,22 @@ There is no backend route specific to iOS. Run `swift build` and `swift test` fr
 `apps/ios/Packages/JarvisCore` for Linux validation; the Mac job is the only
 SwiftUI compile check.
 
+P15-44 / #1490 adds `JarvisUITests/JarvisChatVisibilityTests.swift` to the
+XcodeGen `Jarvis` test scheme. The existing ready-PR Mac job runs the native Chat
+UI behaviour gate on its already-booted simulator with `xcodebuild test`,
+`-parallel-testing-enabled NO` and `CODE_SIGNING_ALLOWED=NO`. It tests immediate
+send visibility above the composer from a scrolled-up long transcript, server
+acknowledgment without duplication, Danish/English settings, Reduce Motion and
+draft restoration after an unacknowledged network failure. The synthetic
+`--ui-test-chat-send` scenario delays server acknowledgment five seconds;
+`--ui-test-chat-send-failure` injects a network failure.
+`xcresulttool export attachments` writes the kept `chat-sent-da`/`chat-sent-en`
+screenshots and attachment manifest under `chat-behaviour/` in the existing
+14-day screenshot artifact, even when the UI gate fails. These tests need Xcode
+and an iPhone simulator; Linux Swift parsing/Core tests do not establish native
+visibility or produce simulator screenshots. The cost guard and single boot
+remain unchanged.
+
 P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
 reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
 The app-owned language preference selects the complete Notes localization catalog

@@ -688,6 +688,29 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(capture["run"].count("xcrun simctl boot "), 1)
         self.assertIn("approved Health board", comment["run"])
 
+    def test_ios_chat_visibility_tests_gate_ci_and_export_simulator_evidence(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        self.assertEqual(project["targets"]["JarvisUITests"]["type"], "bundle.ui-testing")
+        self.assertEqual(project["schemes"]["Jarvis"]["test"]["targets"], ["JarvisUITests"])
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        gate = next(step for step in steps if step.get("name") == "Native Chat UI behaviour gate")
+        self.assertNotIn("continue-on-error", gate)
+        self.assertIn("xcodebuild", gate["run"])
+        self.assertIn("test", shlex.split(gate["run"]))
+        self.assertIn("id=$IOS_SIMULATOR_UDID", gate["run"])
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/chat-behaviour.xcresult"', gate["run"])
+        export = next(step for step in steps if step.get("name") == "Export Chat behaviour screenshots")
+        self.assertEqual(export["if"], "always()")
+        self.assertIn("xcrun xcresulttool export attachments", export["run"])
+        self.assertIn("$RUNNER_TEMP/ios-screenshots/chat-behaviour", export["run"])
+        upload = next(step for step in steps if step.get("name") == "Upload iOS screenshots")
+        self.assertEqual(upload["if"], "always()")
+        self.assertLess(steps.index(gate), steps.index(export))
+        self.assertLess(steps.index(export), steps.index(upload))
+        aggregate = load_workflow(ROOT / ".github/workflows/ci.yml")
+        self.assertIn("ios", aggregate["jobs"]["result"]["needs"])
+
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
         area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
         header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]

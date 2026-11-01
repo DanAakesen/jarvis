@@ -39,7 +39,7 @@ private struct RenderedChatRow: Identifiable {
 }
 
 struct JarvisChatScreen: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
@@ -97,6 +97,11 @@ struct JarvisChatScreen: View {
 
     private var appLanguage: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+    }
+
+    private var reduceMotion: Bool {
+        systemReduceMotion || (model.fixtureMode &&
+            ProcessInfo.processInfo.arguments.contains("--ui-test-reduce-motion"))
     }
 
     private func copy(_ key: JarvisChatLocalizationKey) -> String {
@@ -292,10 +297,12 @@ struct JarvisChatScreen: View {
                     .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .accessibilityIdentifier("chat-transcript")
                 .defaultScrollAnchor(.bottom)
-                .onChange(of: model.messages.count) { _, _ in
-                    guard !reduceMotion else { return }
-                    withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
+                .task(id: model.messages.last?.id) {
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
                         proxy.scrollTo("conversation-bottom", anchor: .bottom)
                     }
                 }
@@ -404,6 +411,7 @@ struct JarvisChatScreen: View {
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(isUser ? "You" : "Jarvis"): \(text)")
+        .accessibilityIdentifier(isUser ? "chat-user-message" : "chat-jarvis-message")
     }
 
     private var composer: some View {
@@ -501,6 +509,7 @@ struct JarvisChatScreen: View {
                     .onSubmit(sendMessage)
                     .disabled(model.isSending || model.fixtureTurnUnavailable)
                     .accessibilityLabel("Message Jarvis")
+                    .accessibilityIdentifier("chat-composer")
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
 
                 Picker("Mode", selection: $composerMode) {
@@ -541,6 +550,7 @@ struct JarvisChatScreen: View {
                     .buttonStyle(.glassProminent)
                     .disabled(!model.canSend)
                     .accessibilityLabel("Send message")
+                    .accessibilityIdentifier("chat-send")
                     .accessibilityHint(sendHint)
                 }
             }

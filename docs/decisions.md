@@ -1,3 +1,15 @@
+## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
+
+Insert a local user bubble when Send is accepted rather than waiting for the
+SSE `user` event. Replace it with the server row on acknowledgment and restore
+the draft if sending fails before acknowledgment. Scroll on latest row identity
+changes, including with Reduce Motion; keep the existing composer safe-area
+inset, glass styling and Danish/English catalogs. Initial history loading must
+finish before sending. Native send/visibility tests and kept screenshots run in
+the existing one-boot ready-PR iOS job, not a new Mac job or TestFlight upload.
+Simulator execution and physical-device acceptance remain separate from Linux
+validation.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

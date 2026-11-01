@@ -2,15 +2,63 @@ import Foundation
 import JarvisCore
 
 enum JarvisFixtureScenario {
-    static func makeClient() throws -> JarvisClient {
+    static func makeClient(sendVisibilityFixture: Bool = false) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: FixtureTransport(scenario: Data(scenario.utf8)),
+            transport: FixtureTransport(scenario: sendVisibilityFixture ? sendVisibilityScenario() : Data(scenario.utf8)),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
+    }
+
+    private static func sendVisibilityScenario() throws -> Data {
+        var fixture = try JSONSerialization.jsonObject(with: Data(scenario.utf8)) as! [String: Any]
+        var interactions = fixture["interactions"] as! [[String: Any]]
+        var response = interactions[0]["response"] as! [String: Any]
+        var history = response["body"] as! [String: Any]
+        let sample = (history["messages"] as! [[String: Any]])[1]
+        history["messages"] = (0..<30).map { index -> [String: Any] in
+            var row = sample
+            row["id"] = "\(400 + index)"
+            row["text"] = "Synthetic earlier message \(index). This transcript exercises scrolling above the pinned composer."
+            row["at"] = String(format: "2026-10-30T09:%02d:00Z", index)
+            row["toolCalls"] = []
+            return row
+        }
+        response["body"] = history
+        interactions[0]["response"] = response
+
+        response = interactions[1]["response"] as! [String: Any]
+        var feed = response["body"] as! [String: Any]
+        feed["confirmations"] = []
+        response["body"] = feed
+        interactions[1]["response"] = response
+
+        var stream = interactions[3]["stream"] as! [String: Any]
+        var chunks = stream["chunks"] as! [[String: Any]]
+        chunks[0]["delayMilliseconds"] = 5_000
+        chunks[0]["text"] = (chunks[0]["text"] as! String)
+            .replacingOccurrences(of: "The fixture turn", with: "Hi Jarvis")
+        chunks[1]["delayMilliseconds"] = 5_000
+        stream["chunks"] = chunks
+        interactions[3]["stream"] = stream
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-chat-send-failure") {
+            interactions[3] = [
+                "method": "POST", "path": "/api/conversation/sessions/12/turns",
+                "delayMilliseconds": 2_000, "failure": "network",
+            ]
+        }
+        response = interactions[4]["response"] as! [String: Any]
+        var finalHistory = response["body"] as! [String: Any]
+        var finalMessages = finalHistory["messages"] as! [[String: Any]]
+        finalMessages[0]["text"] = "Hi Jarvis"
+        finalHistory["messages"] = finalMessages
+        response["body"] = finalHistory
+        interactions[4]["response"] = response
+        fixture["interactions"] = interactions
+        return try JSONSerialization.data(withJSONObject: fixture)
     }
 
     static func makeSettingsClient() throws -> JarvisSettingsClient {

@@ -64,6 +64,20 @@ targets:
         SWIFT_OBJC_BRIDGING_HEADER: Jarvis/Broadcast/ReplayKitStop.h
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
+  JarvisUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: JarvisUITests
+    dependencies:
+      - target: Jarvis
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.uitests
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: "YES"
   JarvisVoiceActivity:
     type: app-extension
     platform: iOS
@@ -106,3 +120,11 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
+schemes:
+  Jarvis:
+    build:
+      targets:
+        Jarvis: all
+    test:
+      targets:
+        - JarvisUITests

@@ -90,7 +90,9 @@ struct ContentView: View {
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
-            resolvedClient = try? JarvisFixtureScenario.makeClient()
+            resolvedClient = try? JarvisFixtureScenario.makeClient(
+                sendVisibilityFixture: arguments.contains("--ui-test-chat-send")
+            )
             resolvedStartupError = resolvedClient == nil ? "Fixture preview is unavailable." : nil
             settingsClient = try? JarvisFixtureScenario.makeSettingsClient()
         } else if let client {

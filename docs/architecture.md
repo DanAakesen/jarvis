@@ -1506,6 +1506,13 @@ preserves the cursor for older loaded pages when a turn refreshes the latest
 page. `ChatMessageGrouping` in `JarvisCore` keeps timestamp grouping
 deterministic and Linux-tested.
 
+P15-44 inserts a screen-local pending user row synchronously on send. The SSE
+`user` event replaces that row with the server ID; unacknowledged failures remove
+it and restore the draft/attachments. Sending waits for initial history loading
+so that load cannot overwrite the pending row. Transcript scrolling observes
+the latest row ID (including acknowledgment with unchanged row count); Reduce
+Motion removes animation, not scrolling. No wire or persistence contract changes.
+
 `JarvisNowFeedClient` decodes the existing authenticated `GET /now` response,
 dismisses through `POST /now/activity/:id/dismiss`, and delegates confirmation
 decisions to `JarvisApprovalsClient`. The existing `/now/events` stream's

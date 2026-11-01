@@ -30,6 +30,16 @@ struct JarvisChatRow: Identifiable, Equatable {
         toolCalls = []
         attachments = []
     }
+
+    init(pendingID: String, text: String) {
+        id = pendingID
+        role = .dan
+        self.text = text
+        at = ISO8601DateFormatter().string(from: Date())
+        interrupted = false
+        toolCalls = []
+        attachments = []
+    }
 }
 
 struct PendingChatAttachment: Identifiable {
@@ -78,6 +88,7 @@ final class JarvisChatModel: ObservableObject {
     private var sessionID: String?
     private var language: ChatLanguage
     private var activeMessageID: String?
+    private var pendingMessageID: String?
     private var uploadedAttachmentIDs: [UUID: String] = [:]
     private var sendTask: Task<Void, Never>?
     private var didLoad = false
@@ -102,7 +113,7 @@ final class JarvisChatModel: ObservableObject {
     }
 
     var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !isLoading && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
             (!fixtureMode || !fixtureTurnUsed)
     }
 
@@ -240,6 +251,10 @@ final class JarvisChatModel: ObservableObject {
         streamingText = ""
         let text = draft
         let attachments = pendingAttachments
+        let pendingID = "pending-\(UUID().uuidString)"
+        pendingMessageID = pendingID
+        messages.append(JarvisChatRow(pendingID: pendingID, text: text))
+        draft = ""
         sendTask = Task { await sendTurn(text: text, attachments: attachments) }
     }
 
@@ -361,6 +376,7 @@ final class JarvisChatModel: ObservableObject {
 
     private func sendTurn(text: String, attachments: [PendingChatAttachment]) async {
         guard let client else {
+            restoreUnacknowledgedMessage(text: text, attachments: attachments)
             isSending = false
             actionError = startupError ?? "Chat is unavailable."
             return
@@ -395,14 +411,17 @@ final class JarvisChatModel: ObservableObject {
             pendingAttachments = []
             uploadedAttachmentIDs = [:]
             try await consume(events)
+            guard pendingMessageID == nil else { throw JarvisChatClientError.invalidResponse }
             await refreshHistory()
             isSending = false
         } catch is CancellationError {
+            restoreUnacknowledgedMessage(text: text, attachments: attachments)
             isSending = false
             activeMessageID = nil
             statusLine = nil
             streamingText = ""
         } catch {
+            restoreUnacknowledgedMessage(text: text, attachments: attachments)
             isSending = false
             activeMessageID = nil
             statusLine = nil
@@ -410,6 +429,14 @@ final class JarvisChatModel: ObservableObject {
             streamingText = ""
         }
         sendTask = nil
+    }
+
+    private func restoreUnacknowledgedMessage(text: String, attachments: [PendingChatAttachment]) {
+        guard let pendingMessageID else { return }
+        messages.removeAll { $0.id == pendingMessageID }
+        self.pendingMessageID = nil
+        if draft.isEmpty { draft = text }
+        if pendingAttachments.isEmpty { pendingAttachments = attachments }
     }
 
     private func loadVoiceLanguage() async {
@@ -483,6 +510,10 @@ final class JarvisChatModel: ObservableObject {
             case .user(let message):
                 activeMessageID = message.id
                 sessionID = message.sessionId
+                if let pendingMessageID {
+                    messages.removeAll { $0.id == pendingMessageID }
+                    self.pendingMessageID = nil
+                }
                 addOrReplace(JarvisChatRow(message))
             case .delta(let text):
                 streamingText += text

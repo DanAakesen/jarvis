@@ -27,7 +27,8 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys.sort == ["Jarvis", "JarvisBroadcast", "JarvisUITests", "JarvisVoiceActivity", "JarvisWidgets"].sort
+            abort "native UI behaviour gate is required" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
@@ -250,6 +251,26 @@ jobs:
                 "$SCREENSHOT_DIR/lockscreen-tasks-${appearance}-${language}.png"
             done
           done
+      - name: Native Chat UI behaviour gate
+        working-directory: apps/ios
+        run: |
+          xcodebuild \
+            -project Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/chat-behaviour.xcresult" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - name: Export Chat behaviour screenshots
+        if: always()
+        run: |
+          if [[ -d "$RUNNER_TEMP/chat-behaviour.xcresult" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/chat-behaviour.xcresult" \
+              --output-path "$RUNNER_TEMP/ios-screenshots/chat-behaviour"
+          fi
       - name: Pair simulator captures with approved board renders
         run: |
           cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"
@@ -308,6 +329,7 @@ jobs:
           its optional web orb renderer needs network access.</p>''' + "".join(sections) + "</html>")
       - name: Upload iOS screenshots
         id: screenshots
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
@@ -347,6 +369,8 @@ jobs:
           The artifact also includes Danish/English Voice connection-loss captures;
           compare them with the approved Connection lost surface on the board:
           [$BOARD_URL]($BOARD_URL). Each simulator capture sits next to its checked-in board render.
+          Native Chat send/visibility tests gate this job. Their Danish/English sent-message
+          screenshots are exported under \`chat-behaviour/\` with the attachment manifest.
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
