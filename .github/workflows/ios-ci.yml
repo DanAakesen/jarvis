@@ -27,7 +27,7 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets", "JarvisUITests"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "navigation UI test target is required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
             abort "navigation UI tests must run in the app scheme" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
@@ -152,10 +152,20 @@ jobs:
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          xcodebuild test \
+            -project apps/ios/Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "id=$DEVICE_ID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -parallel-testing-enabled NO \
+            CODE_SIGNING_ALLOWED=NO
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-calendar-answer-light.png"
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
             --screenshot-chat-fixture --screenshot-chat-plus-menu
           sleep 2
@@ -167,6 +177,9 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-calendar-answer-dark.png"
           for language in da en; do
             xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
               --screenshot-voice-connection-lost \

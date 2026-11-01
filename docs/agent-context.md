@@ -6474,17 +6474,17 @@ builds/tests the core and validates project, plist and entitlement metadata;
 the macOS job builds for the generic iOS Simulator only after Linux passes, and
 only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
-`CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
-and captures the Chat screen in light and dark appearance plus the open sidebar
-in light and dark appearance. It also captures the anchored plus menu using
-`--screenshot-chat-plus-menu`. Chat captures use `--screenshot-chat-fixture` to
-select clearly marked synthetic data without a backend; sidebar captures also use
-`--screenshot-sidebar-open` to initialize the real navigation shell in its open
-state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
-one pull request comment with the artifact link. GitHub comments cannot display
-files directly from workflow artifacts, so the images are not inline previews;
-open the artifact to view them. This job does not sign, use secrets, or upload
-to TestFlight.
+`CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, runs the
+`JarvisUITests` Chat presentation test, and captures the Chat screen in light and
+dark appearance plus the calendar answer/tool-status row in both appearances. It
+also captures the open sidebar and anchored plus menu. Chat captures use
+`--screenshot-chat-fixture` to select synthetic data without a backend; sidebar
+captures also use `--screenshot-sidebar-open` to initialize the real navigation
+shell in its open state. The workflow retains one simulator boot and uploads
+those PNGs as a 14-day artifact, then posts or updates one pull request comment
+with the artifact link. GitHub comments cannot display files directly from
+workflow artifacts, so open the artifact to view them. This job does not sign,
+use secrets, or upload to TestFlight.
 
 P15-38 adds light/dark Chat, Voice, Notifications (the existing Needs you sheet),
 Factory, Settings, Notes, Health and sidebar comparisons in the same simulator
@@ -6496,8 +6496,9 @@ Notes/Health reuse their preview transports and Health's fixed reference date;
 Voice fixtures disable automatic session/microphone startup and controls.
 Run `swift test --filter JarvisAmbientBackgroundTests` from
 `apps/ios/Packages/JarvisCore` for main's shared gate palette/glow positions,
-shared-screen and screenshot
-source contracts. These do not compile SwiftUI or replace native visual checks.
+shared-screen and screenshot source contracts. Run the Chat UI test through the
+ready-PR Mac job; Linux Core tests and source checks do not compile SwiftUI or
+replace rendered native visual checks.
 The 1 November main merge preserves Chat's plus-menu capture and current
 Chat/Sidebar/Voice behaviour; `jarvisAmbientBackground()` now uses main's existing
 `JarvisScreenBackground`, as does the gate wrapper. No second renderer is retained.
@@ -6546,7 +6547,10 @@ dismissal, confirmation and event routes. Final history supplies persisted tool
 outcomes; reattachment prefers the active turn for the latest displayed session,
 then falls back to the first server-ordered turn; the active-turn lookup repeats
 when the Now stream reconnects. `ChatHistoryPagingState` preserves the oldest
-loaded cursor across refreshes of the latest page. The web
+loaded cursor across refreshes of the latest page. Jarvis reply strings render
+as Markdown, and tool rows remain unboxed at the reply's leading edge. The
+calendar fixture contains three dated events and a persisted tool outcome; the
+Mac UI test checks the content and column alignment. The web
 limits are five attachments, up to 20 MB for documents and
 10 MB for images. Local camera/photo data is uploaded only on send. Synthetic
 fixtures are selected only in previews and screenshot mode. The app has no
@@ -6666,15 +6670,14 @@ The Swift source status also accepts `running`, matching the runtime guard even
 though the TypeScript declaration and JSON schema omit it.
 
 P15-14 adds the native Workspaces list and generated-view sheet in the app target.
-Its `JarvisWorkspacesClient` uses only the existing list/open/patch/delete routes;
-`WorkspaceRuntime` registers a phone snapshot, applies supported commands from
-the existing `/now/events` stream and promptly acknowledges refused or applied
-outcomes. Native generated-view previews cover each contracted renderer and
-unknown-version fallback with synthetic data; Core fixture tests cover the
-existing routes and command acknowledgement. Run `swift build` and `swift test`
-from `apps/ios/Packages/JarvisCore`. The app-target SwiftUI files and previews
-require the existing Mac compile check; no simulator boot or UI-test job was
-added.
+Its `JarvisWorkspacesClient` uses existing list/open/patch/delete routes plus the
+owner-authenticated HTML-artifact GET; `WorkspaceRuntime` registers a phone
+snapshot, applies supported commands from the existing `/now/events` stream and
+promptly acknowledges refused or applied outcomes. Native generated-view previews
+cover each contracted renderer and unknown-version fallback with synthetic data;
+Core fixture tests cover artifact fetch validation and command acknowledgement.
+Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. The app-target
+SwiftUI files and previews require the ready-PR Mac build and UI test.
 
 The screen follows the checked-in Workspaces frame's fixed-bottom search. Its
 app and VoiceOver strings use `JarvisWorkspaceLocalization` resources in Danish
@@ -6682,13 +6685,15 @@ and English, selected by the persisted `JarvisAppLanguage` preference (Danish
 default). The shared native gate orb uses dark glass and an orange center with
 no orbit/meridian ellipses; the Workspaces frame itself has no orb.
 
-The list renders table, list, detail, text, timeline, chart, task-card, status
-and image views. HTML-app, knowledge-graph and code remain unsupported cards,
-and supplied HTML is not executed. `JARVIS_WEB_APP_URL` is optional and accepts
-only an HTTPS origin; it does not identify a workspace item. The app uses the
-existing Keychain session and configured `JARVIS_API_BASE_URL`; no iOS-specific
-backend route is added. Active-client choice and command replay after reconnect
-remain unverified.
+The list renders table, list, detail, text, timeline, chart, task-card, status,
+image and HTML-app views. HTML artifacts are validated and run in a nonpersistent
+WKWebView with a restrictive CSP, no file scheme, and no native message bridge.
+The web-only `window.jarvis` ask/pin/link actions remain unavailable on iOS;
+knowledge-graph and code remain unsupported cards. `JARVIS_WEB_APP_URL` is
+optional and accepts only an HTTPS origin; it does not identify a workspace item.
+The app uses the existing Keychain session and configured `JARVIS_API_BASE_URL`;
+no iOS-specific backend route is added. Active-client choice and command replay
+after reconnect remain unverified.
 
 ### Local voice Live Activity (P15-34)
 

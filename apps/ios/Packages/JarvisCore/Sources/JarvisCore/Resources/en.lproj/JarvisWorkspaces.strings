@@ -60,6 +60,8 @@
 "workspace.toolUnavailable" = "Tool actions are not available on iPhone.";
 "workspace.windowActionUnavailable" = "This window action is not available on iPhone.";
 "workspace.htmlApp" = "HTML app";
+"workspace.htmlAppLoading" = "Loading HTML app";
+"workspace.htmlAppLoadFailed" = "The HTML app could not be loaded.";
 "workspace.knowledgeGraph" = "Knowledge graph";
 "workspace.codeView" = "Code view";
 "workspace.generatedView" = "Generated view";
