@@ -6243,6 +6243,18 @@ DNS resolution through both the page-fetch tool and curl. These are references
 for the outstanding review, not claims of prior reliance. Simulator visibility,
 keyboard-focus verification and screenshot evidence remain pending.
 
+Run 41308631898's exported calendar failure hierarchy shows a nonfixture
+“Chat isn't configured” screen and a second login-failure window. The
+simulator-only offline gate now applies to `--screenshot-chat-fixture` alone,
+not just the additional delayed-send flag. Native send failure diagnostics
+also print exact existence, hittability and frames before the retained hierarchy.
+The latest scroll target includes bottom clearance and pending sends avoid
+layout animation; the strict two-second visibility check is unchanged.
+Official `scrollPosition` and accessibility-element page/JSON retrieval and
+curl again failed DNS before editing. No official Apple-page review is claimed.
+Local validation: 61 pipeline contract tests, 61 targeted Core tests and Swift
+syntax parsing. Updated-head simulator tests and screenshots remain pending.
+
 For the run 41294540199 follow-up, also review
 [VStack](https://developer.apple.com/documentation/swiftui/vstack),
 [ignoresSafeArea](https://developer.apple.com/documentation/swiftui/view/ignoressafearea(_:edges:))

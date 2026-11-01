@@ -307,10 +307,6 @@ struct JarvisChatScreen: View {
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
         }
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
-            value: model.messages.count
-        )
     }
 
     @ViewBuilder
@@ -363,6 +359,11 @@ struct JarvisChatScreen: View {
                         }
                         ForEach(renderedRows) { row in
                             messageRow(row)
+                                .padding(
+                                    .bottom,
+                                    row.id == model.messages.last?.id ? JarvisDesignTokens.chatVerticalInset : 0
+                                )
+                                .id(row.id)
                         }
                         if !model.streamingText.isEmpty {
                             messageBubble(
@@ -386,7 +387,8 @@ struct JarvisChatScreen: View {
                 .defaultScrollAnchor(.bottom)
                 .scrollPosition(id: $scrollTargetID, anchor: .bottom)
                 .onChange(of: model.messages.last?.id, initial: true) { _, messageID in
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
+                    let isPendingSend = messageID?.hasPrefix("pending-") == true
+                    withAnimation(reduceMotion || isPendingSend ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
                         scrollTargetID = messageID
                     }
                 }

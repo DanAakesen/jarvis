@@ -746,6 +746,11 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("scrollTargetID = messageID", chat)
         conversation = chat.split("private var conversation: some View", 1)[1].split("private func messageRow", 1)[0]
         self.assertNotIn("await Task.yield()", conversation)
+        self.assertIn("row.id == model.messages.last?.id ? JarvisDesignTokens.chatVerticalInset : 0", conversation)
+        self.assertIn(".id(row.id)", conversation)
+        self.assertIn('let isPendingSend = messageID?.hasPrefix("pending-") == true', conversation)
+        self.assertIn("withAnimation(reduceMotion || isPendingSend ? nil", conversation)
+        self.assertNotIn("value: model.messages.count", chat)
         tests = (ROOT / "apps/ios/JarvisUITests/JarvisChatVisibilityTests.swift").read_text()
         self.assertIn("XCTWaiter.wait(for: [visible], timeout: 2)", tests)
         self.assertLess(tests.index('attachFailureHierarchy("sent bubble visibility'),
@@ -757,19 +762,21 @@ class SafeFailureTests(unittest.TestCase):
         gate = next(step for step in steps if step.get("name") == "Native Chat UI behaviour gate")
         self.assertIn('-resultBundlePath "$RUNNER_TEMP/chat-behaviour.xcresult"', gate["run"])
 
-    def test_ios_chat_visibility_fixture_isolates_auth_before_first_render(self):
+    def test_ios_chat_presentation_and_send_fixtures_isolate_auth_before_first_render(self):
         gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        fixture = gate.split("private static var isChatVisibilityFixture", 1)[1].split("var shouldCoverContent", 1)[0]
+        fixture = gate.split("private static var isChatFixture", 1)[1].split("var shouldCoverContent", 1)[0]
         self.assertIn("#if targetEnvironment(simulator)", fixture)
         self.assertIn('arguments.contains("--screenshot-chat-fixture")', fixture)
-        self.assertIn('arguments.contains("--ui-test-chat-send")', fixture)
+        self.assertNotIn('arguments.contains("--ui-test-chat-send")', fixture)
         self.assertIn("#else\n        false", fixture)
+        presentation = (ROOT / "apps/ios/JarvisUITests/ChatPresentationUITests.swift").read_text()
+        self.assertIn('app.launchArguments = ["--screenshot-chat-fixture"]', presentation)
         initialization = gate.split("init() {", 1)[1].split("func load()", 1)[0]
         offline = initialization.split("tokenStore = try?", 1)[0]
         for value in ("tokenStore = nil", "provider = nil", "client = nil",
                       "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
             self.assertIn(value, offline)
-        self.assertIn("guard !Self.isChatVisibilityFixture else { return }", gate)
+        self.assertIn("guard !Self.isChatFixture else { return }", gate)
         self.assertIn("await model.load()\n                model.refreshOverlay()", gate)
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertNotIn(".simultaneousGesture(sidebarDragGesture(", content)

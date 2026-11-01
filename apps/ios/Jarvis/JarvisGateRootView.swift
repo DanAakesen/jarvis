@@ -91,11 +91,10 @@ private final class JarvisGateModel: ObservableObject {
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
 
-    private static var isChatVisibilityFixture: Bool {
+    private static var isChatFixture: Bool {
 #if targetEnvironment(simulator)
         let arguments = ProcessInfo.processInfo.arguments
-        return arguments.contains("--screenshot-chat-fixture") &&
-            arguments.contains("--ui-test-chat-send")
+        return arguments.contains("--screenshot-chat-fixture")
 #else
         false
 #endif
@@ -106,7 +105,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     init() {
-        if Self.isChatVisibilityFixture {
+        if Self.isChatFixture {
             tokenStore = nil
             provider = nil
             client = nil
@@ -186,12 +185,12 @@ private final class JarvisGateModel: ObservableObject {
         case .active:
             let requiresLock = policy.shouldLock(lastBackgroundedAt: backgroundedAt, now: Date())
             backgroundedAt = nil
-            if requiresLock, presentation == .unlocked, !Self.isChatVisibilityFixture {
+            if requiresLock, presentation == .unlocked, !Self.isChatFixture {
                 presentation = .lock(.waiting)
                 Task { await authenticate() }
             } else {
                 isPrivacyCoverVisible = false
-                if presentation == .unlocked, !Self.isChatVisibilityFixture {
+                if presentation == .unlocked, !Self.isChatFixture {
                     Task {
                         await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
                     }
@@ -230,7 +229,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signOut() async {
-        guard !Self.isChatVisibilityFixture else { return }
+        guard !Self.isChatFixture else { return }
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
@@ -270,7 +269,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func clientRequestedSignIn() {
-        guard !Self.isChatVisibilityFixture else { return }
+        guard !Self.isChatFixture else { return }
         switch presentation {
         case .unlocked, .lock:
             sessionExpired()

@@ -3487,6 +3487,20 @@ Swift syntax parsing pass. Next verify updated-head simulator visibility,
 deduplication and bilingual screenshots; merge #1485 after it lands. Official
 Apple-page review remains DNS-blocked, and local native execution is unavailable.
 
+Run 41308631898 fails calendar presentation at lines 15/16 and both language
+send checks at line 122. The exported calendar hierarchy confirms nonfixture
+configuration failure and a second login-failure window. Extend simulator
+Chat fixture gate isolation to presentation launches as well as send launches.
+The Danish sent bubble touches the transcript bottom; English is below it.
+Include last-row clearance in an explicit native target, remove whole-screen
+message-count layout animation and scroll local sends immediately. Preserve
+merged Markdown/tool formatting, copy, strict checks and evidence export.
+Local 61 pipeline tests, 61 targeted Core tests and Swift syntax parsing pass.
+Next verify updated-head native visibility, acknowledgment, calendar geometry
+and screenshots; the scroll diagnosis is not yet simulator-confirmed. PR #1485
+is still open at 3929485; merge after it lands. Direct Apple review remains
+DNS-blocked, with no local Xcode/native UI execution.
+
 P15-44 / [#1490](https://github.com/DanAakesen/jarvis/issues/1490) adds immediate
 local sent-message insertion, server-ID reconciliation, pre-acknowledgment draft
 recovery and latest-row scrolling that still runs with Reduce Motion. The native

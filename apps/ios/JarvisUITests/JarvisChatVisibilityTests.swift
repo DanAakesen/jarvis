@@ -113,6 +113,11 @@ final class JarvisChatVisibilityTests: XCTestCase {
         )
         let visibility = XCTWaiter.wait(for: [visible], timeout: 2)
         if visibility != .completed {
+            if bubble.exists {
+                print("Sent bubble geometry (\(language)): hittable=\(bubble.isHittable), bubble=\(bubble.frame), transcript=\(transcript.frame), composer=\(composer.frame)")
+            } else {
+                print("Sent bubble missing (\(language))")
+            }
             attachFailureHierarchy("sent bubble visibility \(visibility)")
             let failureScreenshot = XCTAttachment(screenshot: app.screenshot())
             failureScreenshot.name = "chat-sent-failure-\(language)"

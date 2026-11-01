@@ -224,6 +224,8 @@ and scrolls it above the pinned composer, including with Reduce Motion. Server
 acknowledgment replaces the local bubble without duplication; a failure before
 acknowledgment restores the draft for retry. Danish/English copy and the visual
 design are unchanged.
+The local sent row must have clearance above the transcript's bottom edge, not
+merely touch it, and must not wait for an arrival-layout animation.
 
 Jarvis replies render Markdown structure, including headings, emphasis, lists and
 event date/time lines. Persisted tool outcomes stay unboxed and start at the

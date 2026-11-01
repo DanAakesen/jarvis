@@ -1,5 +1,24 @@
 ## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
 
+Run 41308631898's retained calendar failure hierarchy
+(`chat-behaviour/A209B023-B598-40C1-85E0-8969493DC4C2.txt`, artifact
+13085069846) shows “Chat isn't configured” and a second “Login mislykkedes”
+window, not missing Markdown formatting. Extend the existing simulator-only
+offline gate to all Chat fixture launches; do not initialize real auth or
+notification clients for the calendar presentation fixture.
+
+Both language send assertions fail at line 122. The assertion-time hierarchy
+places Danish's bubble at y=637.7, height=44.3 against a transcript bottom of
+682; English's bubble starts at y=699.7 below that same bottom. Preserve the
+native target layout, give the last row explicit identity with its vertical
+clearance inside the target, and remove the message-count animation around
+the whole screen. Pending sends scroll without animation; later replies keep
+motion-aware scrolling. The flush-edge/animated-layout diagnosis still needs
+native confirmation; add exact frame/hittability failure diagnostics rather
+than relaxing assertions or timeouts. Keep merged Markdown/tool formatting,
+both suites and screenshot/result-bundle export unchanged. Official Apple
+page and JSON retrieval plus curl remain DNS-blocked.
+
 Run 41304338614 passes simulator compilation, Chat presentation and failure
 recovery but times out on both immediate-send visibility tests at line 114.
 Replace yield-based lazy-list proxy scrolling with native

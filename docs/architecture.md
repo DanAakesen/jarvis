@@ -1514,8 +1514,12 @@ P15-44 inserts a screen-local pending user row synchronously on send. The SSE
 it and restore the draft/attachments. Sending waits for initial history loading
 so that load cannot overwrite the pending row. Transcript scrolling observes
 the latest row ID through SwiftUI `scrollPosition(id:anchor:)` and the lazy
-stack's `scrollTargetLayout()` (including acknowledgment with unchanged row count); Reduce
-Motion removes animation, not scrolling. No wire or persistence contract changes.
+stack's `scrollTargetLayout()` (including acknowledgment with unchanged row count).
+Each row has an explicit target ID; the last target includes the existing
+vertical inset so bottom alignment leaves the bubble inside the viewport.
+Pending sends scroll without animation; later row changes retain motion-aware
+scroll animation. The message-count animation no longer wraps the entire
+transcript/composer layout. No wire or persistence contract changes.
 
 The navigation shell dim overlay is visual-only (`allowsHitTesting(false)`).
 Its intentional tap-to-close layer is gated by `navigation.isSidebarOpen`,
@@ -1533,9 +1537,11 @@ gate must establish whether this resolves activation-point failures.
 
 Run 41301282280 confirms a foreground login-failure window over Danish Chat;
 English/failure-recovery still time out on composer readiness. The simulator-only
-send fixture now initializes the gate unlocked without auth/notification clients
+Chat fixture now initializes the gate unlocked without auth/notification clients
 and ignores real-session notifications, rather than unlocking after constructing
-those clients. Both fixture flags are required; device authorization is unchanged.
+those clients. On Simulator, `--screenshot-chat-fixture` alone selects this
+isolation, covering calendar presentation as well as the separate delayed-send
+scenario. Device authorization is unchanged.
 Background privacy covers remain active. Gate/navigation accessibility containment
 preserves child hiding, and the drawer recognizer is restricted to the closed
 right edge or open dismissal surface, not attached to Chat controls. These reuse
