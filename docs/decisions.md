@@ -1,7 +1,8 @@
 ## 1 November 2026 — iOS preview builds and release train (P15-50 / #1502)
 
 Allow a write-authorized manual TestFlight dispatch from an intended PR branch
-as well as `main`, keeping all signing and app configuration in the protected
+as well as `main`, with an explicit branch input validated against the selected
+workflow ref. Keep all signing and app configuration in the protected
 `ios-testflight` environment. Non-main uploads are marked as previews in the
 workflow build notes and never create release tags; the existing main upload
 path remains unchanged.

@@ -989,6 +989,10 @@ class SafeFailureTests(unittest.TestCase):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
         workflow = load_workflow(workflow_path)
         self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["branch"], {
+            "description": "Branch to build; must match the selected workflow branch",
+            "required": True, "default": "main", "type": "string",
+        })
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         self.assertEqual(workflow["concurrency"], {
             "group": "ios-testflight", "cancel-in-progress": False,
@@ -1012,9 +1016,14 @@ class SafeFailureTests(unittest.TestCase):
         for line in raw_workflow.splitlines():
             if "uses:" in line:
                 self.assertRegex(line, r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v\S+")
-        guard = next(step for step in job["steps"] if step.get("name") == "Require a branch")
-        self.assertEqual(guard["if"], "github.ref_type != 'branch'")
+        guard = next(step for step in job["steps"] if step.get("name") == "Validate dispatch branch")
+        self.assertEqual(guard["env"]["INPUT_BRANCH"], "${{ inputs.branch }}")
+        self.assertIn("git check-ref-format --branch", guard["run"])
+        self.assertIn('"$GITHUB_REF" != "refs/heads/$INPUT_BRANCH"', guard["run"])
         self.assertIn("exit 1", guard["run"])
+        checkout = next(step for step in job["steps"]
+                        if step.get("uses", "").startswith("actions/checkout@"))
+        self.assertEqual(checkout["with"]["ref"], "${{ inputs.branch }}")
         preview_notes = next(step for step in job["steps"] if step.get("name") == "Add preview build notes")
         self.assertEqual(preview_notes["if"], "github.ref != 'refs/heads/main'")
         self.assertIn("Preview build", preview_notes["run"])

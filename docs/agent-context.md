@@ -6785,8 +6785,10 @@ on manual dispatch. GitHub requires write access to dispatch it. The single
 `JARVIS_ENTRA_CLIENT_ID`, `JARVIS_ENTRA_AUTHORITY_URL`, and
 `JARVIS_ENTRA_API_SCOPE` there. Configure that environment to permit `main`
 and only the intended preview branches, so its secrets remain protected.
-Dispatch `main` for the usual build or a PR source branch for a preview; the
-workflow records non-main builds as previews and does not create release tags.
+In **Run workflow**, select `main` for the usual build or the PR source branch
+for a preview, and enter that same name in the required `branch` input. The
+workflow validates that the input matches the selected ref, records non-main
+builds as previews, and does not create release tags.
 It captures `xcodebuild` output rather than logging signing identifiers, writes
 the key with mode 600, and deletes it in an always-run cleanup step.
 
@@ -6806,9 +6808,9 @@ verify that on the next owner-started run. If the account is already at its
 limit, the first archive may fail, but final cleanup can free capacity for the
 next run. A hard runner termination may prevent always-run cleanup.
 
-Use **Actions → iOS TestFlight**, select `main` or the intended PR source
-branch, then **Run workflow**. A merge or pull request does not upload
-anything automatically. The certificate-cleanup API permissions and real
+Use **Actions → iOS TestFlight → Run workflow**, select `main` or the intended
+PR source branch, and enter the same value in the `branch` input. A merge or
+pull request does not upload anything automatically. The certificate-cleanup API permissions and real
 cleanup remain unverified; see the setup checklist and disabled
 `xcrun altool --upload-app` fallback in [`docs/ios/build-plan.md`](ios/build-plan.md).
 

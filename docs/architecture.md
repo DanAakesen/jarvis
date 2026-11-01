@@ -1332,9 +1332,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 ## Stack overview
 
 The manually dispatched iOS TestFlight workflow retains automatic signing and
-its existing App Store Connect key in the `ios-testflight` environment. It
-accepts `main` and environment-approved preview branches; non-main build notes
-identify previews, which do not create release tags. Its final main-only
+its existing App Store Connect key in the `ios-testflight` environment. An
+explicit branch input must match the selected workflow ref and Git branch
+syntax. It accepts `main` and environment-approved preview branches; non-main
+build notes identify previews, which do not create release tags. Its final main-only
 certificate cleanup uses that key through Ruby standard-library ES256/HTTPS,
 validates the full paginated listing, and revokes only
 `DEVELOPMENT`/`IOS_DEVELOPMENT` certificates. Distribution and other
