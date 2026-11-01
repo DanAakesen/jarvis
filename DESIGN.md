@@ -2770,6 +2770,17 @@ one at 700px and narrower.
 
 ## Native iOS colour and Chat look (owner decision, 31 October 2026)
 
+P15-38 / #1478 makes the approved Chat backdrop shared across native screens
+and app-owned sheets. The 1 November reconciliation reuses main's
+`JarvisScreenBackground` in `JarvisDesignSystem.swift`, which already supplies
+the gate's `JarvisGateAmbientBackground` wrapper, instead of the earlier competing
+renderer and decorative orb. Keep main's glow rendering and foreground orbs.
+Shared forms/lists use glass rows, with the board's solid
+surface fallback for Reduce Transparency; the sidebar is glass over the
+full-screen shell backdrop. Geometry and colours live only in the design system.
+Native screenshot comparison and owner acceptance remain pending the ready-PR
+Mac run; Linux source-contract tests are not rendered evidence.
+
 Orange is the primary accent of the iPhone app and stone is the secondary
 (`accent-2`). Dark mode uses `#ffb45c` with `#1d1200` text on primary controls
 and `#c9bfae` for the secondary; light mode uses `#b45f06` with white text and

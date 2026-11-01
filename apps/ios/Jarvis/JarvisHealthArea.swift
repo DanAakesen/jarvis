@@ -317,7 +317,7 @@ struct JarvisHealthArea: View {
             }
             .scrollIndicators(.hidden)
         }
-        .background(JarvisScreenBackground())
+        .jarvisAmbientBackground()
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {

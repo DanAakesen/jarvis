@@ -118,7 +118,7 @@ struct JarvisHealthNewLiftSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            JarvisForm {
                 Section {
                     TextField(copy.text(.name), text: $name)
                     TextField(copy.text(.liftWeight), text: $weight).keyboardType(.decimalPad)
