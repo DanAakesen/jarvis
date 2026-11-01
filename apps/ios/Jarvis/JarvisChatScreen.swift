@@ -127,6 +127,7 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     @State private var scrollTargetID: String?
+    @State private var requestedScrollID: String?
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
@@ -148,8 +149,9 @@ struct JarvisChatScreen: View {
     }
 
     private var renderedRows: [RenderedChatRow] {
-        model.messages.enumerated().map { index, message in
-            let previous = index > 0 ? model.messages[index - 1] : nil
+        let messages = model.messages
+        return messages.enumerated().map { index, message in
+            let previous = index > 0 ? messages[index - 1] : nil
             return RenderedChatRow(
                 message: message,
                 showsTimestamp: ChatMessageGrouping.showsTimestamp(
@@ -188,7 +190,6 @@ struct JarvisChatScreen: View {
 
     private var layout: some View {
         VStack(spacing: 0) {
-            JarvisTaskActivityNotice(language: appLanguage)
             conversation
             composer
         }
@@ -312,8 +313,15 @@ struct JarvisChatScreen: View {
         }
     }
 
-    @ViewBuilder
     private var conversation: some View {
+        VStack(spacing: 0) {
+            JarvisTaskActivityNotice(language: appLanguage)
+            transcript
+        }
+    }
+
+    @ViewBuilder
+    private var transcript: some View {
         if model.isLoading && model.messages.isEmpty {
             ProgressView("Loading")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -332,7 +340,7 @@ struct JarvisChatScreen: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    VStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                         if let error = model.historyError {
                             HStack {
                                 Text(error)
@@ -384,6 +392,11 @@ struct JarvisChatScreen: View {
                     .scrollTargetLayout()
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                     .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
+                    .onGeometryChange(for: CGSize.self) { geometry in
+                        geometry.size
+                    } action: { _ in
+                        scrollToRequestedMessage(using: proxy)
+                    }
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .accessibilityIdentifier("chat-transcript")
@@ -391,15 +404,31 @@ struct JarvisChatScreen: View {
                 .scrollPosition(id: $scrollTargetID, anchor: .bottom)
                 .onChange(of: model.messages.last?.id, initial: true) { _, messageID in
                     let isPendingSend = messageID?.hasPrefix("pending-") == true
+                    requestedScrollID = messageID
                     withAnimation(reduceMotion || isPendingSend ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
                         scrollTargetID = messageID
+                        scrollToRequestedMessage(using: proxy)
                     }
                 }
                 .onChange(of: model.streamingText) { _, _ in
-                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                    requestedScrollID = "conversation-bottom"
+                    scrollToRequestedMessage(using: proxy)
+                }
+                .onGeometryChange(for: CGSize.self) { geometry in
+                    geometry.size
+                } action: { _ in
+                    scrollToRequestedMessage(using: proxy)
+                }
+                .onScrollPhaseChange { _, phase in
+                    if phase == .interacting { requestedScrollID = nil }
                 }
             }
         }
+    }
+
+    private func scrollToRequestedMessage(using proxy: ScrollViewProxy) {
+        guard let requestedScrollID else { return }
+        proxy.scrollTo(requestedScrollID, anchor: .bottom)
     }
 
     @ViewBuilder
@@ -1017,7 +1046,10 @@ struct JarvisChatScreen: View {
             )
             guard model.pendingAttachments.count == attachmentCount + 1 else { return }
         }
-        model.send()
+        if let insertedID = model.send() {
+            scrollTargetID = insertedID
+            requestedScrollID = insertedID
+        }
     }
 
     private var addAttachmentHint: String {

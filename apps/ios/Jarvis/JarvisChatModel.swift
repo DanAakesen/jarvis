@@ -257,8 +257,8 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
-    func send() {
-        guard !isSending, canSend else { return }
+    func send() -> String? {
+        guard !isSending, canSend else { return nil }
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
         isCancelling = false
@@ -272,6 +272,7 @@ final class JarvisChatModel: ObservableObject {
         messages.append(JarvisChatRow(pendingID: pendingID, text: text))
         draft = ""
         sendTask = Task { await sendTurn(text: text, attachments: attachments) }
+        return pendingID
     }
 
     func cancel() async {
@@ -453,7 +454,6 @@ final class JarvisChatModel: ObservableObject {
                 text: text,
                 attachmentIds: attachmentIDs
             )
-            draft = ""
             pendingAttachments = []
             uploadedAttachmentIDs = [:]
             try await consume(events)
@@ -593,7 +593,9 @@ final class JarvisChatModel: ObservableObject {
         let incoming = page.messages
             .filter { $0.channel == .chat }
             .map(JarvisChatRow.init)
-        messages = sorted(replacing ? incoming : messages + incoming)
+        let pending = messages.filter { $0.id == pendingMessageID }
+        let confirmed = messages.filter { $0.id != pendingMessageID }
+        messages = sorted(replacing ? incoming : confirmed + incoming) + pending
         if let latest = messages.last {
             let latestMessage = page.messages.first { $0.id == latest.id }
             sessionID = latestMessage?.sessionId ?? sessionID

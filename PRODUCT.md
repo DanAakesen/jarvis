@@ -226,6 +226,10 @@ acknowledgment restores the draft for retry. Danish/English copy and the visual
 design are unchanged.
 The local sent row must have clearance above the transcript's bottom edge, not
 merely touch it, and must not wait for an arrival-layout animation.
+The send action must synchronously receive the inserted row ID before any network
+work, then scroll that ID using `ScrollViewReader`. History refreshes must retain
+an unacknowledged local row. Build 19's physical-iPhone failure remains acceptance
+evidence; passing source checks alone does not establish immediate visibility.
 
 Jarvis replies render Markdown structure, including headings, emphasis, lists and
 event date/time lines. Persisted tool outcomes stay unboxed and start at the

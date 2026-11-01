@@ -6233,7 +6233,7 @@ environment and XCTest UI interactions. The pending-row insert/reconciliation is
 application-owned conversation state, not a replacement scroll or input control.
 The fixture-only Reduce Motion override exists to exercise the no-animation path
 without changing simulator settings; normal launches read the system environment.
-Latest-row scrolling now uses
+Latest-row scrolling previously used only
 [scrollPosition(id:anchor:)](https://developer.apple.com/documentation/swiftui/view/scrollposition(id:anchor:))
 and [scrollTargetLayout(isEnabled:)](https://developer.apple.com/documentation/swiftui/view/scrolltargetlayout(isenabled:)),
 not `Task.yield()` as a presumed completed layout pass. Direct retrieval of these
@@ -6242,6 +6242,26 @@ This follow-up could not read the official pages: `developer.apple.com` failed
 DNS resolution through both the page-fetch tool and curl. These are references
 for the outstanding review, not claims of prior reliance. Simulator visibility,
 keyboard-focus verification and screenshot evidence remain pending.
+
+The build-19 follow-up calls `ScrollViewReader`'s `scrollTo(_:anchor:)` explicitly
+for the ID synchronously returned by MainActor `send()`. Content and viewport
+`onGeometryChange` callbacks correct alignment after measured layout changes,
+without yields, delays or animation completion. Loaded rows use `VStack` instead
+of estimated lazy geometry; history paging remains unchanged. Dragging releases
+the explicit request through `onScrollPhaseChange`; the scroll-position binding
+cannot replace that separate request. Replacement history retains pending rows.
+Main's #1501 activity notice remains above the transcript, outside the composer.
+The additional official references are
+[MainActor](https://developer.apple.com/documentation/swift/mainactor),
+[StateObject](https://developer.apple.com/documentation/swiftui/stateobject),
+[VStack](https://developer.apple.com/documentation/swiftui/vstack),
+[onGeometryChange](https://developer.apple.com/documentation/swiftui/view/ongeometrychange(for:of:action:))
+and [onScrollPhaseChange](https://developer.apple.com/documentation/swiftui/view/onscrollphasechange(_:)).
+Fetches of the scrolling/observation/geometry pages and HIG Accessibility failed
+DNS again; no official page was successfully read or claimed as relied-on evidence.
+The deliberate application choice is eager layout of loaded history for accurate
+row bounds, not a custom scroll control. Large-history performance, simulator
+geometry and physical-iPhone acceptance need native evidence.
 
 Run 41308631898's exported calendar failure hierarchy shows a nonfixture
 “Chat isn't configured” screen and a second login-failure window. The

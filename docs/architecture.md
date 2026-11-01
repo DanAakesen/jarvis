@@ -1512,9 +1512,19 @@ deterministic and Linux-tested.
 P15-44 inserts a screen-local pending user row synchronously on send. The SSE
 `user` event replaces that row with the server ID; unacknowledged failures remove
 it and restore the draft/attachments. Sending waits for initial history loading
-so that load cannot overwrite the pending row. Transcript scrolling observes
-the latest row ID through SwiftUI `scrollPosition(id:anchor:)` and the lazy
-stack's `scrollTargetLayout()` (including acknowledgment with unchanged row count).
+so that load cannot overwrite the pending row. Replacement and incremental history
+application also retain the pending row at the end until acknowledgment or failure.
+The synchronous MainActor `send()` returns its inserted ID directly to the send
+action; only afterward does its task perform upload/session/network work.
+`@StateObject` observes the model's `@Published messages`; `renderedRows` is computed
+from a current array snapshot, not stored separately.
+Transcript scrolling explicitly calls `ScrollViewReader`'s proxy with that ID.
+The regular `VStack` lays out loaded rows without lazy height estimates; content
+and viewport size observations repeat the scroll after actual layout changes.
+The requested ID is separate from the bidirectional `scrollPosition` binding,
+so viewport observation cannot erase the send request. Manual dragging releases
+the request. `scrollTargetLayout()`/`scrollPosition` remain complementary system
+support, not the only immediate-send path.
 Each row has an explicit target ID; the last target includes the existing
 vertical inset so bottom alignment leaves the bubble inside the viewport.
 Pending sends scroll without animation; later row changes retain motion-aware

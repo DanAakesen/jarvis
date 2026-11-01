@@ -1,5 +1,22 @@
 ## 1 November 2026 — immediate native Chat send visibility (P15-44 / #1490)
 
+Build 19's physical-iPhone failure is authoritative; previous source checks did
+not establish visibility. The actual MainActor model already appends before its
+network task. `@StateObject`/`@Published` observation and computed `renderedRows`
+do not introduce a reply-time cache. Return the accepted row ID synchronously to
+the send action, retain it across replacement history, and explicitly scroll it
+with `ScrollViewReader`. Use measured `VStack` geometry instead of lazy estimated
+heights; repeat the request when content or viewport size changes, not after a
+delay/yield. Keep request identity separate from the bidirectional scroll-position
+binding and release it when the user drags. Eager layout costs more for heavily
+paged history; native performance remains unverified. The artifact confirms
+offscreen/flush-edge bubbles, but cannot prove the physical-device root cause.
+Preserve calendar fixture isolation, Markdown/tool formatting, #1501's activity
+notice, bilingual copy and every native assertion/deadline. Official Apple fetches
+failed DNS; references and the eager-layout choice are listed in agent context,
+not presented as successfully read documentation. Simulator and physical-device
+acceptance remain separate.
+
 Run 41308631898's retained calendar failure hierarchy
 (`chat-behaviour/A209B023-B598-40C1-85E0-8969493DC4C2.txt`, artifact
 13085069846) shows “Chat isn't configured” and a second “Login mislykkedes”

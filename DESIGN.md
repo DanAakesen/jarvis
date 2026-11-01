@@ -2807,6 +2807,14 @@ only the user bubble has a background, a soft orange-tinted glass pill with a
 up are unboxed plain text. Phone screens carry no explainer, helper or hint
 text.
 
+Native Chat scrolls the accepted user row without animation using the system
+scroll proxy. Content and viewport size changes correct its bottom alignment,
+including composer/keyboard layout changes; dragging releases that scroll request.
+Loaded history uses a regular `VStack` so the newest target has measured rather
+than estimated row geometry. Paging remains explicit. The glass bubble, Markdown
+reply/tool columns and bilingual copy are unchanged; large loaded-history
+performance and physical-iPhone visibility require native acceptance.
+
 All concept board screens, the Lock Screen hands-free session, and the Dynamic
 Island on `docs/ios/design/surfaces.html` are approved. P15-34 implements the
 Lock Screen and P15-35 adds Island compact, minimal and expanded presentations

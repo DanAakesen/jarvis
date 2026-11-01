@@ -3526,6 +3526,22 @@ and screenshots; the scroll diagnosis is not yet simulator-confirmed. PR #1485
 is still open at 3929485; merge after it lands. Direct Apple review remains
 DNS-blocked, with no local Xcode/native UI execution.
 
+Build 19 still fails immediate-send visibility on a physical iPhone. The new
+follow-up merged refreshed main (#1493/#1501) first in two-parent `2cf971b1`,
+then retained the pending row across history replacement and returned its ID
+synchronously from MainActor `send()` to the actual send action. Explicit
+`ScrollViewReader` scrolling uses measured `VStack` content/viewport size changes
+and a separate request ID, rather than relying only on `scrollPosition` or
+estimated lazy row heights. `renderedRows` remains a fresh observed-model snapshot.
+Calendar fixture isolation, Markdown/tool columns, copy, both native suites and
+all their assertions/deadlines remain unchanged. The merged activity notice stays
+above the transcript. Local validation passed: Swift syntax parsing, Core build
+and all 214 Core tests, all 61 pipeline tests, 115 merged-background backend tests,
+backend TypeScript build and targeted ESLint. Next verify exact-fix-head native
+CI, calendar 15/16 and both language visibility checks (prior run's line 122),
+retained screenshots, and physical-iPhone acceptance. Official Apple page fetches
+remain DNS-blocked. #1485 is open at `6d666b2c`; merge main again after it lands.
+
 P15-44 / [#1490](https://github.com/DanAakesen/jarvis/issues/1490) adds immediate
 local sent-message insertion, server-ID reconciliation, pre-acknowledgment draft
 recovery and latest-row scrolling that still runs with Reduce Motion. The native
