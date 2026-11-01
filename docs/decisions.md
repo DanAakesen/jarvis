@@ -10484,3 +10484,10 @@ build; the temporary debug line stays until Dan confirms.
 ## 2026-11-01: Camera-sheet UI test hardening (P15-52)
 
 The combined head failed `testCameraSheetOpensFromThePlusMenu` at the shutter wait (39 s). Cause not confirmed without Xcode. Two likely suspects were changed: `stopVideo()` (called on any non-active scene phase and on disappear) no longer runs under the `--ui-test-camera-sheet` hook, so it cannot dismiss the stub sheet; and the sheet container is now `.accessibilityElement(children: .contain)` so its `chat.cameraSheet` identifier cannot hide `camera.shutter`. The test queries any element type, waits 10 s and prints the hierarchy on failure.
+
+## 2026-11-02: Root screen chosen from the navigation model, not a NavigationStack path (P15-41)
+
+CI trace after tapping a sidebar item was `path=[softwareFactory] current=softwareFactory shown=-`: the model
+was correct but the stack never pushed the destination. The visible root screen is now selected directly from
+`navigation.currentDestination` inside a plain `NavigationStack` (kept only for nested pushes such as Factory task
+detail), so a root destination cannot be dropped by a path push. Unconfirmed on device until the next preview build.
