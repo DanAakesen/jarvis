@@ -1,3 +1,19 @@
+## 1 November 2026 — iOS preview builds and release train (P15-50 / #1502)
+
+Allow a write-authorized manual TestFlight dispatch from an intended PR branch
+as well as `main`, keeping all signing and app configuration in the protected
+`ios-testflight` environment. Non-main uploads are marked as previews in the
+workflow build notes and never create release tags; the existing main upload
+path remains unchanged.
+
+Keep JarvisCore build/tests, the iOS Simulator build, Python/source-contract
+tests and CodeQL blocking. PR XCUITests still run and upload screenshots, but
+their failure is reported in the existing PR comment rather than failing the
+aggregate `CI result` gate. Run the suite nightly on `main`; a failure opens or
+updates one tracking issue. Release cadence is one build per 15-minute test
+window, shipping at the window boundary even when work is partly done, with
+preview builds before merge.
+
 ## 1 November 2026 — main merge and bilingual calendar approval evidence (P15-46 / #1494)
 
 Merge current main rather than rewriting branch history. Preserve #1493 Chat

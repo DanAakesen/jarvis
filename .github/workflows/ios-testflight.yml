@@ -17,10 +17,10 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - name: Require main branch
-        if: github.ref != 'refs/heads/main'
+      - name: Require a branch
+        if: github.ref_type != 'branch'
         run: |
-          echo "::error::This workflow can only run from the main branch."
+          echo "::error::This workflow can only run from a branch."
           exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check signing configuration
@@ -173,6 +173,17 @@ jobs:
                 done || true
             exit 1
           fi
+      - name: Add preview build notes
+        if: github.ref != 'refs/heads/main'
+        run: |
+          {
+            echo "## Preview build"
+            echo
+            echo "Branch: \`$GITHUB_REF_NAME\`"
+            echo "Commit: \`$GITHUB_SHA\`"
+            echo
+            echo "This TestFlight build is a preview; it does not create a release tag."
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Revoke development certificates
         if: always() && github.ref == 'refs/heads/main'
         timeout-minutes: 5

@@ -3,6 +3,8 @@ name: iOS CI
 on:
   workflow_call:
   workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
 
 permissions:
   contents: read
@@ -87,7 +89,7 @@ jobs:
   macos:
     name: iOS Simulator build
     needs: linux
-    if: needs.linux.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    if: needs.linux.result == 'success' && ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'schedule' && github.ref == 'refs/heads/main'))
     runs-on: macos-26
     timeout-minutes: 30
     permissions:
@@ -132,6 +134,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
       - name: Boot iPhone Simulator and capture screenshots
+        id: capture
         run: |
           set -euo pipefail
           DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
@@ -153,17 +156,26 @@ jobs:
           xcrun simctl bootstatus "$DEVICE_ID" -b
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
-          xcodebuild test \
+          if xcodebuild test \
             -project apps/ios/Jarvis.xcodeproj \
             -scheme Jarvis \
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/JarvisUITests.xcresult" \
             -parallel-testing-enabled NO \
-            CODE_SIGNING_ALLOWED=NO
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/JarvisUITests.xcresult" \
-            --output-path "$SCREENSHOT_DIR/ui-test-attachments"
+            CODE_SIGNING_ALLOWED=NO; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::XCUITest failed; continuing screenshot capture and reporting the failure."
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ -d "$RUNNER_TEMP/JarvisUITests.xcresult" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/JarvisUITests.xcresult" \
+              --output-path "$SCREENSHOT_DIR/ui-test-attachments"
+          else
+            mkdir -p "$SCREENSHOT_DIR/ui-test-attachments"
+          fi
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
@@ -366,14 +378,16 @@ jobs:
         id: screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
+          name: ios-screenshots-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/ios-screenshots/
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          UI_TEST_RESULT: ${{ steps.capture.outputs.result }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
           BOARD_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/ios/design/surfaces.html
         run: |
@@ -412,6 +426,12 @@ jobs:
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
+          if [[ "$UI_TEST_RESULT" == "failure" ]]; then
+            {
+              echo
+              echo "⚠️ **Warning: iOS UI tests failed.** The failure is non-blocking for the CI result gate; review the workflow run for details."
+            } >> "$comment_file"
+          fi
           jq -n --rawfile body "$comment_file" '{body: $body}' > "$payload_file"
           comment_id="$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
             | jq -r --arg marker "$marker" '[.[][] | select(.user.login == "github-actions[bot]" and ((.body // "") | contains($marker))) | .id] | last // empty')"
@@ -422,6 +442,38 @@ jobs:
             gh api --method POST --input "$payload_file" \
               "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
           fi
+      - name: Open or update the nightly UI test issue
+        if: always() && github.event_name == 'schedule' && steps.capture.outputs.result == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title='Nightly iOS UI tests failing'
+          body_file="$RUNNER_TEMP/nightly-ios-ui-test-issue.md"
+          payload_file="$RUNNER_TEMP/nightly-ios-ui-test-issue.json"
+          cat > "$body_file" <<EOF
+          <!-- nightly-ios-ui-test-failure -->
+          The nightly iOS UI tests failed on \`main\` at \`$GITHUB_SHA\`.
+
+          [Workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
+          EOF
+          issue_number="$(gh api --method GET \
+            -f q="repo:$GITHUB_REPOSITORY is:issue in:title \"$title\"" \
+            search/issues \
+            | jq -r --arg title "$title" '.items[] | select(.title == $title) | .number' \
+            | head -n 1)"
+          jq -n --arg title "$title" --rawfile body "$body_file" \
+            '{title: $title, body: $body, state: "open"}' > "$payload_file"
+          if [[ -n "$issue_number" ]]; then
+            gh api --method PATCH --input "$payload_file" \
+              "repos/$GITHUB_REPOSITORY/issues/$issue_number"
+          else
+            gh api --method POST --input "$payload_file" \
+              "repos/$GITHUB_REPOSITORY/issues"
+          fi
+      - name: Fail the nightly run when UI tests fail
+        if: always() && github.event_name == 'schedule' && steps.capture.outputs.result == 'failure'
+        run: exit 1
       - name: Shut down iPhone Simulator
         if: always()
         run: |
