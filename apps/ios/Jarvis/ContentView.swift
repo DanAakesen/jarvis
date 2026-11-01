@@ -273,10 +273,6 @@ struct ContentView: View {
                 }
                 .offset(x: -drawerWidth * progress)
                 .contentShape(Rectangle())
-                .simultaneousGesture(sidebarDragGesture(
-                    screenWidth: geometry.size.width,
-                    drawerWidth: drawerWidth
-                ))
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {
@@ -307,6 +303,10 @@ struct ContentView: View {
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)
+            .simultaneousGesture(sidebarDragGesture(
+                screenWidth: geometry.size.width,
+                drawerWidth: drawerWidth
+            ))
             .onAppear {
                 if JarvisAppLanguage(rawValue: storedLanguage) == nil {
                     storedLanguage = JarvisAppLanguage.default.rawValue
