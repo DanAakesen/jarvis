@@ -289,6 +289,7 @@ struct JarvisFactoryTaskDetailView: View {
             hasMoreEvents = detail.events.count == 100
             lastEventID = events.last?.id
             taskConnection = .connected
+            await JarvisFactoryLiveActivityController.update(task: detail.task, language: language)
             if showSteeringAtLaunch {
                 steeringPresented = true
             }
@@ -319,7 +320,7 @@ struct JarvisFactoryTaskDetailView: View {
         while !Task.isCancelled {
             do {
                 try await client.listenForTaskEvents(taskId: taskID, after: lastEventID) { event in
-                    let stateChanged = await MainActor.run {
+                    let (stateChanged, currentTask) = await MainActor.run {
                         taskConnection = .connected
                         eventRetryCount = 0
                         lastEventID = event.id
@@ -327,7 +328,14 @@ struct JarvisFactoryTaskDetailView: View {
                             events.append(event)
                             events.sort { $0.at < $1.at }
                         }
-                        return event.type == "state_changed"
+                        return (event.type == "state_changed", task)
+                    }
+                    if let currentTask {
+                        await JarvisFactoryLiveActivityController.update(
+                            task: currentTask,
+                            activityText: event.summary,
+                            language: language
+                        )
                     }
                     if stateChanged {
                         do {
@@ -339,6 +347,10 @@ struct JarvisFactoryTaskDetailView: View {
                                 events = (detail.events.filter { !knownIDs.contains($0.id) } + events)
                                     .sorted { $0.at < $1.at }
                             }
+                            await JarvisFactoryLiveActivityController.update(
+                                task: detail.task,
+                                language: language
+                            )
                         } catch {
                             await MainActor.run { actionFailed = true }
                         }

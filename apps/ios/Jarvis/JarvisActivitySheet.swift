@@ -73,9 +73,10 @@ struct JarvisActivitySheet: View {
             }
         }
         .task {
-            if model.nowFeed == nil && model.activityError == nil {
-                await model.refreshActivity()
-            }
+            await model.refreshActivity()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisApprovalActionCompleted)) { _ in
+            Task { await model.refreshActivity() }
         }
     }
 

@@ -1,0 +1,8 @@
+"approval.approve" = "Approve";
+"approval.decline" = "Decline";
+"approval.expires" = "Expires at %@";
+"approval.approvedFromLockScreen" = "Approved from the Lock Screen.";
+"approval.declinedFromLockScreen" = "Declined from the Lock Screen.";
+"approval.actionFailed" = "The action wasn't completed. Open Jarvis to try again.";
+"approval.notificationNow" = "now";
+"approval.previewSummary" = "Merge the changes into main?";

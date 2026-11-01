@@ -1,6 +1,6 @@
 # Jarvis iOS: backend integration contract (draft)
 
-Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings and Health on 31 October 2026; sections 11–13 reuse existing routes. P15-14 implements Workspaces without a new backend route. Lock Screen approvals remain a separate decision, unverified behavior remains marked and no backend change is authorized by this contract.
+Draft for the native iPhone app, derived from reading the current backend and web client. The code is the source of truth: open the cited file before relying on a detail. Items marked UNVERIFIED were not confirmed from code and need a test on a real device. The owner approved Notes, Voice, Sign-in and Lock concepts on 30 October 2026 and Settings, Health and the Lock Screen tasks surface on 31 October 2026; sections 11–13 reuse existing routes. P15-14 implements Workspaces without a new backend route. APNs backend work remains separate and is not authorized by this client contract.
 
 ## 1. Sign-in and session
 
@@ -69,23 +69,23 @@ What exists today, read from `apps/backend/src/core/now.ts`, `owner-interactions
 - The pending confirmation is held in the memory of the one backend instance (the deployment is fixed at one replica), so a restart ends it. The app treats 404 as no longer available.
 - Today the only hook when a confirmation is created is `onConfirmationPending`, and it feeds the in-app event stream, not a push.
 
-Native design (my call, reversible, not owner-confirmed):
+Native design (approved in P15-36, 31 October 2026):
 
-- A notification category with Approve and Decline, both marked `.authenticationRequired`, so the phone asks for Face ID or the passcode before the action runs.
-- The action handler makes one short authenticated `POST /now/confirmations/:id` and ends. It reads the session token from the Keychain, which works because of the class in section 1.
-- Only yes or no decisions get actions. Anything with more than two options opens the app.
-- The notification text names exactly what is being approved, taken from `summary`.
-- If the request fails, the handler posts a notification that says to open Jarvis. It never reports a success it did not receive.
-- When the confirmation is resolved elsewhere (the web app or a voice session) or expires, the backend updates or removes the notification, so a stale Approve button cannot sit on the Lock Screen.
+- The app mirrors currently pending confirmations from `GET /now` into local notifications while active and refreshes on the existing `/now/events` stream.
+- A notification category offers Approve and Decline, both marked `.authenticationRequired`. The action handler makes one authenticated `POST /now/confirmations/:id` using the existing after-first-unlock Keychain session, with an eight-second request timeout and no retry.
+- The notification names the exact server-provided `summary` and expiry. It never reports success unless the endpoint returns 204; success or failure is shown in the existing Now activity sheet.
+- Only yes/no decisions get actions. Stale notifications are removed on the next successful `/now` snapshot; the server still rejects expired or already-used IDs.
+- These are local notifications, not remote pushes. Updates cannot be guaranteed while the app is suspended.
 
 ## 8. New backend work the app needs
 
 | Item | Why |
 |---|---|
-| Device registration endpoint plus a small SQL table | Store push and Live Activity tokens per device. |
-| APNs sender in the backend, key held in Key Vault | Push for "a task needs a decision", task progress and Live Activity updates. |
-| Push when a confirmation is created | Added next to `onConfirmationPending`. Carries the confirmation id and the summary. |
-| Update or remove the notification when a confirmation resolves or expires | Keeps a stale Approve button off the Lock Screen. The route already answers 404 for a stale one. |
+| Device registration endpoint plus a small SQL table | Store APNs device and ActivityKit push tokens per device. |
+| APNs sender in the backend, key held in Key Vault | Deliver approval notifications and task Live Activity updates while the app is suspended. |
+| Push when a confirmation is created | Publish from the existing confirmation-pending hook, carrying only the ID and required notification content. |
+| Update or remove an approval notification when the confirmation resolves or expires | Prevent stale Approve/Decline actions from remaining on the Lock Screen. The route already answers 404 for a stale one. |
+| Factory task Live Activity push updates | Publish validated task state/activity and end updates through the existing task event lifecycle. |
 | Entra mobile redirect (a registration change, not code) | Native sign-in. |
 
 The approve and decline route itself needs no change.
@@ -97,7 +97,7 @@ The approve and decline route itself needs no change.
 - Attachment type allowlist and rate quotas.
 - Tool and error event shapes on the voice socket.
 - Starting the microphone from a locked phone (Action Button, a shortcut or a Lock Screen control), and what the Face ID lock does to it.
-- How an approval notification behaves when the system hides previews on the Lock Screen. If the text cannot be shown, the actions must not be offered blind.
+- Real-device confirmation that hidden Lock Screen previews suppress Approve/Decline when `showPreviewsSetting` is `.never`; local notifications use a no-action category in that setting and require device authentication for visible actions.
 - Whether Approve and Decline appear and work on the Apple Watch, including the authentication step.
 - The passcode fallback of the Face ID lock on a cold start, on return from the background and in CarPlay.
 - Whether App Intents (Action Button, shortcuts, Siri phrases) need no capability tick. About 90 percent sure; confirm when the first one is built.
@@ -154,8 +154,9 @@ this screen.
 | List and delete routines | `GET /routines` returns `{routines}`. The web panel deletes through `DELETE /recipes/:id`, which returns 204. |
 | Read account and sign out | `GET /me` returns the validated owner display name. `DELETE /auth/session` revokes the current session; `DELETE /auth/sessions` revokes all sessions. The existing client removes the device's Keychain token only after the server confirms the revocation. |
 
-Notifications remain disabled: the backend supports web push, but APNs device
-registration and test delivery are not implemented. Advanced voice tuning,
+Remote notifications remain unavailable: the backend supports web push, but APNs
+device registration and test delivery are not implemented. P15-36 adds only local
+approval notifications and local ActivityKit updates while active. Advanced voice tuning,
 retrieval thresholds, timeouts and project administration remain web-only in v1.
 The checked-in `docs/ios/design/board.html` does not contain the approved
 `screen=settings` frames referenced by the issue; the implementation follows
