@@ -1514,6 +1514,8 @@ P15-44 inserts a screen-local pending user row synchronously on send. The SSE
 it and restore the draft/attachments. Sending waits for initial history loading
 so that load cannot overwrite the pending row. Replacement and incremental history
 application also retain the pending row at the end until acknowledgment or failure.
+An in-flight replacement page cannot remove the acknowledged active user row
+while its reply is still running; a returned server copy takes precedence.
 The synchronous MainActor `send()` returns its inserted ID directly to the send
 action; only afterward does its task perform upload/session/network work.
 `@StateObject` observes the model's `@Published messages`; `renderedRows` is computed

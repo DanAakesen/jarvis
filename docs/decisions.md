@@ -4,7 +4,8 @@ Build 19's physical-iPhone failure is authoritative; previous source checks did
 not establish visibility. The actual MainActor model already appends before its
 network task. `@StateObject`/`@Published` observation and computed `renderedRows`
 do not introduce a reply-time cache. Return the accepted row ID synchronously to
-the send action, retain it across replacement history, and explicitly scroll it
+the send action, retain it across replacement history (including the acknowledged
+active user row until its reply), and explicitly scroll it
 with `ScrollViewReader`. Use measured `VStack` geometry instead of lazy estimated
 heights; repeat the request when content or viewport size changes, not after a
 delay/yield. Keep request identity separate from the bidirectional scroll-position

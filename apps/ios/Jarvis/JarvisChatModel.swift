@@ -595,7 +595,11 @@ final class JarvisChatModel: ObservableObject {
             .map(JarvisChatRow.init)
         let pending = messages.filter { $0.id == pendingMessageID }
         let confirmed = messages.filter { $0.id != pendingMessageID }
-        messages = sorted(replacing ? incoming : confirmed + incoming) + pending
+        let retainedActiveUser = confirmed.filter { message in
+            message.id == activeMessageID && message.role == .dan &&
+                !incoming.contains { $0.id == message.id }
+        }
+        messages = sorted(replacing ? incoming + retainedActiveUser : confirmed + incoming) + pending
         if let latest = messages.last {
             let latestMessage = page.messages.first { $0.id == latest.id }
             sessionID = latestMessage?.sessionId ?? sessionID
