@@ -1376,6 +1376,10 @@ the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes
 `JarvisUITests`; its simulator-only fixture exercises the real navigation and
 voice start/mute/end lifecycle using existing offline transports.
+Navigation fixtures initialize the gate as unlocked before its first render and
+do not construct real authentication/notification clients. Background privacy
+cover handling remains active. Gate teardown disables window input before hiding
+it, and loading explicitly synchronizes the overlay with the committed gate state.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

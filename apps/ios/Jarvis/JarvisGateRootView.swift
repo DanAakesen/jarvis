@@ -53,6 +53,7 @@ private final class JarvisGateOverlay {
 
     func update(visible: Bool, model: JarvisGateModel) {
         guard visible else {
+            window?.isUserInteractionEnabled = false
             window?.isHidden = true
             window = nil
             return
@@ -90,11 +91,27 @@ private final class JarvisGateModel: ObservableObject {
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
 
+    private static var isNavigationFixture: Bool {
+#if targetEnvironment(simulator)
+        ProcessInfo.processInfo.arguments.contains("--ui-test-navigation")
+#else
+        false
+#endif
+    }
+
     var shouldCoverContent: Bool {
         presentation != .unlocked || isPrivacyCoverVisible
     }
 
     init() {
+        if Self.isNavigationFixture {
+            tokenStore = nil
+            provider = nil
+            client = nil
+            presentation = .unlocked
+            isPrivacyCoverVisible = false
+            return
+        }
         tokenStore = try? KeychainTokenStore()
         if let provider = try? MicrosoftAccessTokenProvider(),
            let client = try? JarvisComposition.makeClient(accessTokenProvider: provider) {
@@ -116,13 +133,6 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
-#if targetEnvironment(simulator)
-        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
-            presentation = .unlocked
-            isPrivacyCoverVisible = false
-            return
-        }
-#endif
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-health-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
@@ -179,7 +189,7 @@ private final class JarvisGateModel: ObservableObject {
                 Task { await authenticate() }
             } else {
                 isPrivacyCoverVisible = false
-                if presentation == .unlocked {
+                if presentation == .unlocked, !Self.isNavigationFixture {
                     Task {
                         await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
                     }
@@ -218,6 +228,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signOut() async {
+        guard !Self.isNavigationFixture else { return }
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
@@ -257,6 +268,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func clientRequestedSignIn() {
+        guard !Self.isNavigationFixture else { return }
         switch presentation {
         case .unlocked, .lock:
             sessionExpired()
@@ -338,6 +350,7 @@ struct JarvisGateRootView: View {
             .task {
                 model.refreshOverlay()
                 await model.load()
+                model.refreshOverlay()
             }
             .onChange(of: model.shouldCoverContent) { _, _ in
                 model.refreshOverlay()

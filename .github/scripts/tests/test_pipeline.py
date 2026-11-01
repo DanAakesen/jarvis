@@ -667,6 +667,20 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(evidence["with"]["path"], "${{ runner.temp }}/ios-navigation.xcresult")
         self.assertEqual(evidence["with"]["retention-days"], 14)
 
+    def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
+        source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        fixture = source.split("private static var isNavigationFixture: Bool {", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("#if targetEnvironment(simulator)", fixture)
+        self.assertIn('#else\n        false', fixture)
+        initialization = source.split("    init() {", 1)[1].split("tokenStore = try?", 1)[0]
+        self.assertIn("if Self.isNavigationFixture", initialization)
+        for state in ("tokenStore = nil", "provider = nil", "client = nil",
+                      "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
+            self.assertIn(state, initialization)
+        self.assertIn("await model.load()\n                model.refreshOverlay()", source)
+        teardown = source.split("guard visible else {", 1)[1].split("return", 1)[0]
+        self.assertLess(teardown.index("isUserInteractionEnabled = false"), teardown.index("isHidden = true"))
+
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         job = workflow["jobs"]["macos"]

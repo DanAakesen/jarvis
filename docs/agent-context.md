@@ -6281,6 +6281,21 @@ normal bottom-control hittability remain mandatory. Wait failures retain a
 screenshot and accessibility hierarchy, with the assertion caller's location.
 The revised sequence still needs a successful simulator run; the original
 failure does not establish whether physical navigation works.
+Run 41291487261 then failed at the initial Chat input check, before a sidebar
+action. Its retained failure hierarchy shows a login-failure gate window in
+Danish, and the other launches log gate-host appearance-transition warnings.
+Navigation fixtures now initialize unlocked before rendering and skip real
+authentication/notification clients; background privacy covers remain enabled.
+The input and repeated-navigation assertions are unchanged.
+Before this follow-up, indexed Apple guidance for
+[UIWindow](https://developer.apple.com/documentation/uikit/uiwindow),
+[isHidden](https://developer.apple.com/documentation/uikit/uiview/ishidden),
+[UIHostingController](https://developer.apple.com/documentation/swiftui/uihostingcontroller)
+and `allowsHitTesting` was consulted. Direct Apple retrieval still fails DNS.
+The separate gate window is retained to cover app-owned presentations, including
+sheets; replacing that privacy boundary is outside this navigation correction.
+Gate dismissal disables window input before hiding it, and loading explicitly
+resynchronizes the overlay. Successful simulator verification remains pending.
 Build-18 reproduction, before/after simulator test results, and physical-iPhone
 acceptance remain pending; cycle screenshots are not baseline-build evidence.
 

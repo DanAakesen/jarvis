@@ -9847,6 +9847,18 @@ bottom-control and repeated-cycle checks. The test-only correction adds explicit
 failure screenshot/hierarchy evidence; physical input remains unverified until
 the revised simulator sequence runs.
 
+Run [41291487261](https://github.com/DanAakesen/jarvis/actions/runs/41291487261)
+fails at the initial Chat input check, before any sidebar action. Its retained
+Danish accessibility hierarchy contains a second full-screen login-failure gate
+window over Chat; English and interruption launches log unbalanced appearance
+transitions for the gate's hosting controller. These do not establish a residual
+sidebar blocker. Initialize simulator navigation fixtures unlocked before first
+render, without real authentication clients, rather than creating and immediately
+removing a loading window. Preserve background privacy covers and device
+authorization. Disable dismissed window input before hiding it and explicitly
+synchronize the overlay after gate loading. The single-window failures still
+require a fresh simulator run; this candidate fix is not device acceptance.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

@@ -3423,7 +3423,11 @@ results retained by the existing iOS gate. Run 41286956749 compiled the app and
 tests, but all three tests stopped at the initial toolbar `isHittable` query
 before tapping or navigating. The test now sends a physical tap within a
 validated toolbar frame and still requires the real sidebar/sheet transition.
-Local Swift syntax and nine iOS pipeline checks pass. Next: verify the revised
+Run 41291487261 then stopped at the initial Chat input check; retained evidence
+identifies a login gate covering Chat in Danish and gate-host transition warnings
+in the other launches. A follow-up initializes offline navigation fixtures
+unlocked before rendering and explicitly synchronizes gate-window dismissal.
+Repeated input assertions remain intact. Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
 unverified.
