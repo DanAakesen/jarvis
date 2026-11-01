@@ -2,6 +2,12 @@ name: iOS TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build; must match the selected workflow branch
+        required: true
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -17,12 +23,22 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - name: Require main branch
-        if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/copilot/p15-41-fix-unreliable-navigation'
+      - name: Validate dispatch branch
+        env:
+          INPUT_BRANCH: ${{ inputs.branch }}
         run: |
-          echo "::error::This workflow can only run from the main branch."
-          exit 1
+          if [[ ! "$INPUT_BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] \
+            || ! git check-ref-format --branch "$INPUT_BRANCH" >/dev/null 2>&1; then
+            echo "::error::The branch input is invalid."
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/$INPUT_BRANCH" ]]; then
+            echo "::error::Select the same branch in the workflow ref picker and branch input."
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.branch }}
       - name: Check signing configuration
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
@@ -173,8 +189,19 @@ jobs:
                 done || true
             exit 1
           fi
+      - name: Add preview build notes
+        if: github.ref != 'refs/heads/main'
+        run: |
+          {
+            echo "## Preview build"
+            echo
+            echo "Branch: \`$GITHUB_REF_NAME\`"
+            echo "Commit: \`$GITHUB_SHA\`"
+            echo
+            echo "This TestFlight build is a preview; it does not create a release tag."
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Revoke development certificates
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/p15-41-fix-unreliable-navigation')
+        if: always() && github.ref == 'refs/heads/main'
         timeout-minutes: 5
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}

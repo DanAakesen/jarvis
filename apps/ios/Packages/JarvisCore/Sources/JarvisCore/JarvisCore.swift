@@ -127,7 +127,64 @@ public struct JarvisNavigationState: Equatable {
     }
 }
 
+public struct JarvisNavigationPathUpdate {
+    public let state: JarvisNavigationState
+    public let navigationRequest: (from: JarvisDestination, to: JarvisDestination)?
+
+    public init(path: [JarvisDestination], from previous: JarvisNavigationState) {
+        var next = previous
+        next.setPath(path)
+        if next.path != previous.path { next.closeSidebar() }
+        state = next
+        navigationRequest = next.currentDestination != previous.currentDestination
+            ? (from: previous.currentDestination, to: next.currentDestination)
+            : nil
+    }
+}
+
 public enum JarvisSidebarGesturePolicy {
+    /// A finished edge swipe opens the drawer when it is mostly horizontal, travels toward the
+    /// drawer, and either covers enough of the drawer width or is a quick flick.
+    public static func shouldOpen(
+        translationX: Double,
+        translationY: Double,
+        velocityX: Double,
+        drawerWidth: Double,
+        openThreshold: Double,
+        flickVelocity: Double = 600,
+        flickMinimumDistance: Double = 24
+    ) -> Bool {
+        guard translationX.isFinite, translationY.isFinite, velocityX.isFinite,
+              drawerWidth.isFinite, openThreshold.isFinite, drawerWidth > 0,
+              translationX < 0, abs(translationX) > abs(translationY) else {
+            return false
+        }
+        let distance = -translationX
+        return distance / drawerWidth > openThreshold
+            || (-velocityX > flickVelocity && distance >= flickMinimumDistance)
+    }
+
+    /// A finished swipe on the open drawer or scrim closes it under the mirrored rules.
+    public static func shouldClose(
+        translationX: Double,
+        translationY: Double,
+        velocityX: Double,
+        drawerWidth: Double,
+        closeThreshold: Double,
+        flickVelocity: Double = 600,
+        flickMinimumDistance: Double = 24
+    ) -> Bool {
+        shouldOpen(
+            translationX: -translationX,
+            translationY: translationY,
+            velocityX: -velocityX,
+            drawerWidth: drawerWidth,
+            openThreshold: closeThreshold,
+            flickVelocity: flickVelocity,
+            flickMinimumDistance: flickMinimumDistance
+        )
+    }
+
     public static func canBegin(
         startX: Double,
         translationX: Double,

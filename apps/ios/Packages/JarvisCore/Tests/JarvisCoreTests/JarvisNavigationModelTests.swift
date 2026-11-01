@@ -20,11 +20,12 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(model.contains("var path: [JarvisDestination] { state.path }"))
         XCTAssertTrue(model.contains("var isSidebarOpen: Bool { state.isSidebarOpen }"))
         XCTAssertTrue(model.contains("var currentDestination: JarvisDestination { state.currentDestination }"))
-        XCTAssertTrue(model.contains("dismissKeyboard()\n        state.openSidebar()"))
-        XCTAssertTrue(model.contains("guard path != state.path else { return }"))
-        XCTAssertTrue(model.contains("state.setPath(path)\n        state.closeSidebar()"))
-        XCTAssertTrue(model.contains("state.navigate(to: destination)"))
-        XCTAssertTrue(model.contains("state.voiceSessionStateChanged(voiceState)"))
+        XCTAssertTrue(model.contains("dismissKeyboard()\n        write(\"openSidebar\") { $0.openSidebar() }"))
+        XCTAssertTrue(model.contains("guard path != state.path else {"))
+        XCTAssertTrue(model.contains("let update = JarvisNavigationPathUpdate(path: path, from: state)"))
+        XCTAssertTrue(model.contains("{ $0 = update.state }"))
+        XCTAssertTrue(model.contains("$0.navigate(to: destination)"))
+        XCTAssertTrue(model.contains("$0.voiceSessionStateChanged(voiceState)"))
         XCTAssertTrue(model.contains("state = JarvisNavigationState()"))
     }
 
@@ -39,7 +40,7 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(content.contains("#selector(UIResponder.resignFirstResponder)"))
         XCTAssertTrue(content.contains(".allowsHitTesting(!model.shouldCoverContent)"))
         XCTAssertTrue(content.contains(".accessibilityHidden(model.shouldCoverContent)"))
-        XCTAssertTrue(content.contains(".onChange(of: model.signOutGeneration) { _, _ in\n                navigation.reset()"))
+        XCTAssertTrue(content.contains(".onChange(of: model.signOutGeneration) { _, _ in\n            navigation.reset()"))
         XCTAssertTrue(gate.contains("overlay.windowLevel = .alert + 1"))
         XCTAssertTrue(gate.contains("override var canBecomeKey: Bool { false }"))
     }
@@ -68,17 +69,102 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(shell.contains("@EnvironmentObject private var navigation: JarvisNavigationModel"))
         XCTAssertTrue(shell.contains("get: { navigation.path }"))
         XCTAssertTrue(shell.contains("navigation.setPath($0)"))
-        XCTAssertTrue(shell.contains(".overlay(alignment: .trailing) {\n                if navigation.isSidebarOpen"))
-        XCTAssertTrue(shell.contains(".onTapGesture { navigation.closeSidebar() }"))
-        XCTAssertTrue(shell.contains(".move(edge: .trailing)"))
-        XCTAssertTrue(shell.contains("reduceMotion ? nil"))
+        let sidebar = try source("Jarvis/JarvisSidebar.swift")
+        XCTAssertFalse(shell.contains("JarvisSidebar("))
+        XCTAssertTrue(sidebar.contains("struct JarvisSidebarReveal<Page: View>: View"))
+        XCTAssertTrue(sidebar.contains("if progress > 0 {\n                    JarvisSidebar("))
+        XCTAssertTrue(sidebar.contains(".offset(x: -drawerWidth * progress)"))
+        XCTAssertTrue(sidebar.contains(".allowsHitTesting(progress == 0)"))
+        XCTAssertTrue(sidebar.contains(".onTapGesture { navigation.closeSidebar() }"))
+        XCTAssertTrue(sidebar.contains("reduceMotion || navigation.dragProgress != nil ? nil"))
+        let gate = try source("Jarvis/JarvisGateRootView.swift")
+        XCTAssertTrue(gate.contains("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {"))
         XCTAssertTrue(shell.contains("transaction.disablesAnimations = true"))
-        XCTAssertTrue(shell.contains("guard scenePhase == .active, !navigation.isSidebarOpen"))
         for obsolete in ["@GestureState", "sidebarGestureGeneration", ".simultaneousGesture",
                          ".offset(", ".blur(", ".allowsHitTesting(", "NavigationBisect", "navigationWrites"] {
             XCTAssertFalse(shell.contains(obsolete), obsolete)
         }
         XCTAssertTrue(try source("Jarvis/JarvisSidebar.swift").contains(".accessibilityIdentifier(\"navigation.sidebar\")"))
+    }
+
+    func testRootDrawerNavigationDeliversContentOwnedVoiceAndFixtureEffectsBeforeRouteWrite() throws {
+        let model = try source("Shared/JarvisNavigationModel.swift")
+        XCTAssertTrue(model.contains("let navigationRequested = PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()"))
+        XCTAssertFalse(model.contains("guard destination != currentDestination"))
+        XCTAssertLessThan(try XCTUnwrap(model.range(of: "navigationRequested.send")).lowerBound,
+                          try XCTUnwrap(model.range(of: "write(\"navigate(")).lowerBound)
+        let content = try source("Jarvis/ContentView.swift")
+        XCTAssertTrue(content.contains(".onReceive(navigation.navigationRequested) { request in\n            prepareNavigation(to: request.to, from: request.from)"))
+        XCTAssertFalse(content.contains(".onChange(of: navigation.currentDestination)"))
+        XCTAssertTrue(content.contains("voiceModel.restore()"))
+        XCTAssertTrue(content.contains("if destination == .voice {\n            voiceModel.restore()"))
+        XCTAssertTrue(content.contains("previous == .voice && voiceModel.isSessionActive"))
+        XCTAssertTrue(content.contains("voiceModel.minimize()"))
+        XCTAssertTrue(content.contains("if navigationFixtureMode"))
+        XCTAssertTrue(content.contains("workspaceRuntime.resetSession()"))
+        XCTAssertTrue(content.contains("await voiceModel.end(returnToChat: false)"))
+    }
+
+    func testBackPathEmitsVoiceRestoreDestinationBeforeModelWrite() throws {
+        var previous = JarvisNavigationState()
+        previous.navigate(to: .voice)
+        previous.navigate(to: .status)
+        previous.openSidebar()
+        let update = JarvisNavigationPathUpdate(path: [.voice], from: previous)
+        let request = try XCTUnwrap(update.navigationRequest)
+        XCTAssertEqual(request.from, .status)
+        XCTAssertEqual(request.to, .voice)
+        XCTAssertEqual(previous.currentDestination, .status)
+        XCTAssertTrue(previous.isSidebarOpen)
+        XCTAssertEqual(update.state.currentDestination, .voice)
+        XCTAssertFalse(update.state.isSidebarOpen)
+
+        let model = try source("Shared/JarvisNavigationModel.swift")
+        let setter = try XCTUnwrap(model.components(separatedBy: "func setPath(").last?
+            .components(separatedBy: "func navigate(").first)
+        XCTAssertTrue(setter.contains("JarvisNavigationPathUpdate(path: path, from: state)"))
+        XCTAssertTrue(setter.contains("if let request = update.navigationRequest"))
+        XCTAssertLessThan(try XCTUnwrap(setter.range(of: "navigationRequested.send(request)")).lowerBound,
+                          try XCTUnwrap(setter.range(of: "write(\"setPath(binding)")).lowerBound)
+    }
+
+    func testEquivalentNormalizedBackPathsKeepOpenDrawerAndEmitNoEvent() {
+        var previous = JarvisNavigationState()
+        previous.navigate(to: .voice)
+        previous.openSidebar()
+        for path: [JarvisDestination] in [[.voice], [.chat, .voice, .voice, .banking]] {
+            let update = JarvisNavigationPathUpdate(path: path, from: previous)
+            XCTAssertEqual(update.state, previous)
+            XCTAssertNil(update.navigationRequest)
+        }
+    }
+
+    func testPathChangesWithSameDestinationDoNotRepeatVoiceEffects() {
+        var previous = JarvisNavigationState()
+        previous.navigate(to: .notes)
+        previous.navigate(to: .voice)
+        previous.openSidebar()
+        let update = JarvisNavigationPathUpdate(path: [.voice], from: previous)
+        XCTAssertEqual(update.state.path, [.voice])
+        XCTAssertFalse(update.state.isSidebarOpen)
+        XCTAssertNil(update.navigationRequest)
+    }
+
+    func testRevealOwnsDrawerOutsidePageGatingAndIsInertWhileCovered() throws {
+        let gate = try source("Jarvis/JarvisGateRootView.swift")
+        let root = String(gate[try XCTUnwrap(gate.range(of: "struct JarvisGateRootView: View")).lowerBound...])
+        let reveal = try XCTUnwrap(root.range(of: "JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {"))
+        let hitTesting = try XCTUnwrap(root.range(of: ".allowsHitTesting(!model.shouldCoverContent)"))
+        let environment = try XCTUnwrap(root.range(of: ".environmentObject(navigation)"))
+        XCTAssertLessThan(reveal.lowerBound, hitTesting.lowerBound)
+        XCTAssertLessThan(hitTesting.lowerBound, environment.lowerBound)
+        XCTAssertFalse(root.contains("JarvisSidebar("))
+        XCTAssertTrue(root.contains("@AppStorage(\"jarvis.appTheme\") private var storedTheme"))
+        XCTAssertTrue(root.contains(".preferredColorScheme(storedTheme == \"light\" ? .light : storedTheme == \"dark\" ? .dark : nil)"))
+        XCTAssertFalse(gate.contains("JarvisSidebarDebugBadge"))
+        let sidebar = try source("Jarvis/JarvisSidebar.swift")
+        XCTAssertTrue(sidebar.contains("let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0"))
+        XCTAssertTrue(sidebar.contains("if isEnabled && (progress == 0 || isDraggingOpen) {"))
     }
 
     func testStandalonePreviewsSupplyTheNavigationEnvironment() throws {

@@ -218,10 +218,12 @@ struct JarvisChatScreen: View {
                 .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
                 .accessibilityIdentifier("chat.notifications")
             }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSidebarMenuButton(language: appLanguage)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             await model.load()

@@ -3,7 +3,6 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
@@ -139,6 +138,9 @@ struct ContentView: View {
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
         .onDisappear { workspaceRuntime.resetSession() }
+        .onReceive(navigation.navigationRequested) { request in
+            prepareNavigation(to: request.to, from: request.from)
+        }
     }
 
     private func sidebarShell(
@@ -232,6 +234,7 @@ struct ContentView: View {
                                     JarvisPlaceholderView(destination: destination, language: language)
                                 }
                             }
+                            .onAppear { navigation.debugDestinationShown(destination) }
                             .id(sessionEpoch)
                         }
                 }
@@ -276,14 +279,6 @@ struct ContentView: View {
                 }
                 .accessibilityHidden(navigation.isSidebarOpen)
 
-                if !navigation.isSidebarOpen {
-                    Color.clear
-                        .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
-                        .contentShape(Rectangle())
-                        .gesture(sidebarEdgeGesture(screenWidth: size.width, drawerWidth: drawerWidth))
-                        .accessibilityHidden(true)
-                }
-
                 if voiceModel.isMinimized {
                     VoiceMiniBar(model: voiceModel) {
                         voiceModel.restore()
@@ -295,26 +290,6 @@ struct ContentView: View {
                 }
             }
             .frame(width: size.width, height: size.height)
-            .overlay(alignment: .trailing) {
-                if navigation.isSidebarOpen {
-                    ZStack(alignment: .trailing) {
-                        Color.black.opacity(JarvisDesignTokens.screenDimOpacity)
-                            .ignoresSafeArea()
-                            .contentShape(Rectangle())
-                            .onTapGesture { navigation.closeSidebar() }
-                            .accessibilityHidden(true)
-
-                        JarvisSidebar(
-                            currentDestination: navigation.currentDestination,
-                            safeAreaInsets: safeAreaInsets,
-                            onNavigate: { navigate(to: $0) }
-                        )
-                        .frame(width: drawerWidth, height: size.height)
-                        .transition(reduceMotion ? .opacity : .move(edge: .trailing))
-                    }
-                }
-            }
-            .animation(sidebarAnimation, value: navigation.isSidebarOpen)
             .background { JarvisScreenBackground() }
             .coordinateSpace(name: "sidebar")
             .clipped()
@@ -341,14 +316,14 @@ struct ContentView: View {
         }
     }
 
-    private static var keyWindow: UIWindow? {
+    static var keyWindow: UIWindow? {
         UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap(\.windows)
             .first(where: \.isKeyWindow)
     }
 
-    private static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
+    static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
         guard let window = keyWindow else {
             return fallback
         }
@@ -361,39 +336,14 @@ struct ContentView: View {
         )
     }
 
-    private func sidebarEdgeGesture(screenWidth: CGFloat, drawerWidth: CGFloat) -> some Gesture {
-        DragGesture(
-            minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance,
-            coordinateSpace: .named("sidebar")
-        )
-            .onEnded { value in
-                guard scenePhase == .active, !navigation.isSidebarOpen,
-                      JarvisSidebarGesturePolicy.canBegin(
-                        startX: Double(value.startLocation.x),
-                        translationX: Double(value.translation.width),
-                        translationY: Double(value.translation.height),
-                        screenWidth: Double(screenWidth),
-                        drawerWidth: Double(drawerWidth),
-                        startProgress: 0,
-                        openingStartFraction: Double(JarvisDesignTokens.sidebarGestureStartFraction)
-                      ),
-                      -value.translation.width / max(drawerWidth, 1)
-                        > JarvisDesignTokens.sidebarOpenThreshold else { return }
-                navigation.openSidebar()
-            }
-    }
-
-    private var sidebarAnimation: Animation? {
-        reduceMotion ? nil : .interactiveSpring(
-                response: JarvisDesignTokens.sidebarSpringResponse,
-                dampingFraction: JarvisDesignTokens.sidebarSpringDamping
-        )
-    }
-
     private func navigate(to destination: JarvisDestination) {
+        navigation.navigate(to: destination)
+    }
+
+    private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
         if destination == .voice {
             voiceModel.restore()
-        } else if navigation.currentDestination == .voice && voiceModel.isSessionActive {
+        } else if previous == .voice && voiceModel.isSessionActive {
             voiceModel.minimize()
         }
         if navigationFixtureMode {
@@ -407,7 +357,6 @@ struct ContentView: View {
             default: break
             }
         }
-        navigation.navigate(to: destination)
     }
 
     static func initialNavigation(arguments: [String] = ProcessInfo.processInfo.arguments) -> JarvisNavigationState {

@@ -623,13 +623,14 @@ class SafeFailureTests(unittest.TestCase):
         ])
 
     def test_ios_macos_build_is_cost_guarded(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         source = (ROOT / ".github/workflows/ios-ci.yml").read_text()
-        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:", source)
+        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:\n  schedule:", source)
+        self.assertEqual(workflow["on"]["schedule"], [{"cron": "17 3 * * *"}])
         self.assertIn("    needs: linux", source)
         self.assertIn(
-            "    if: needs.linux.result == 'success' && github.event_name == 'pull_request' "
-            "&& github.event.pull_request.draft == false",
-            source,
+            "github.event_name == 'schedule' && github.ref == 'refs/heads/main'",
+            workflow["jobs"]["macos"]["if"],
         )
         self.assertIn("    runs-on: macos-26", source)
         self.assertIn("    timeout-minutes: 45", source)
@@ -792,7 +793,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("@StateObject private var navigation = JarvisNavigationModel(", root)
         self.assertRegex(root, r"\.onChange\(of: model\.signOutGeneration\) \{ _, _ in\s+navigation\.reset\(\)")
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func reset\(\) \{\s+state = JarvisNavigationState\(\)")
+        self.assertRegex(model, r"func reset\(\) \{\s+(note\(\"reset\"\)\s+)?dragProgress = nil\s+state = JarvisNavigationState\(\)")
         self.assertNotIn("NavigationLaunchLifecycle", shell)
         self.assertNotIn("navigationWrites", shell)
         self.assertEqual(shell.count(".id(sessionEpoch)"), 2)
@@ -818,7 +819,7 @@ class SafeFailureTests(unittest.TestCase):
         for state in ("tokenStore = nil", "provider = nil", "client = nil",
                       "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
             self.assertIn(state, initialization)
-        self.assertIn("await model.load()\n                model.refreshOverlay()", source)
+        self.assertIn("await model.load()\n            model.refreshOverlay()", source)
         teardown = source.split("guard visible else {", 1)[1].split("return", 1)[0]
         self.assertLess(teardown.index("isUserInteractionEnabled = false"), teardown.index("isHidden = true"))
 
@@ -861,7 +862,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertLess(sidebar.index(".accessibilityElement(children: .contain)"),
                         sidebar.index('.accessibilityIdentifier("navigation.sidebar")'))
         self.assertIn(".accessibilityAddTraits(.isModal)", sidebar)
-        self.assertNotIn(".allowsHitTesting(", sidebar)
+        self.assertNotIn(".allowsHitTesting(", sidebar.split("struct JarvisSidebar: View {", 1)[1])
         self.assertNotIn(".accessibilityHidden(!isOpen)", sidebar)
         self.assertIn("navigation.closeSidebar()", sidebar)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
@@ -870,38 +871,39 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".accessibilityHidden(true)", composer_background)
         self.assertIn("#selector(UIResponder.resignFirstResponder)", gate)
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func openSidebar\(\) \{\s+dismissKeyboard\(\)\s+state\.openSidebar\(\)")
+        self.assertRegex(model, r"func openSidebar\(\) \{\s+dismissKeyboard\(\)\s+"
+                                r"write\(\"openSidebar\"\) \{ \$0\.openSidebar\(\) \}")
+        self.assertNotIn("openTapCount", model)  # TEMPORARY debugWrites/debugShown allowed until Dan confirms
         self.assertIn("overlay.windowLevel = .alert + 1", gate)
         self.assertIn("override var canBecomeKey: Bool { false }", gate)
         self.assertNotIn("JarvisInputHitTestingProbe", chat)
 
-    def test_ios_sidebar_edge_swipe_commits_only_on_completed_qualified_gestures(self):
+    def test_ios_sidebar_swipes_use_global_space_strip_and_commit_only_when_completed(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        gesture = source.split("    private func sidebarEdgeGesture(", 1)[1].split(
-            "    private var sidebarAnimation:", 1
-        )[0]
-        ended = gesture.split(".onEnded { value in", 1)[1]
-        self.assertIn("guard scenePhase == .active, !navigation.isSidebarOpen", ended)
-        self.assertIn("JarvisSidebarGesturePolicy.canBegin(", ended)
-        self.assertIn("value.startLocation.x", ended)
-        self.assertIn("value.translation.width", ended)
-        self.assertIn("value.translation.height", ended)
-        self.assertIn("> JarvisDesignTokens.sidebarOpenThreshold else { return }", ended)
-        self.assertIn("navigation.openSidebar()", ended)
-        self.assertNotIn("navigation.openSidebar()", gesture.split(".onEnded", 1)[0])
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        self.assertFalse((ROOT / "apps/ios/Jarvis/JarvisSidebarEdgeOpener.swift").exists())
+        self.assertNotIn("JarvisSidebarEdgeOpener", source)
         for obsolete in ("@GestureState", ".updating(", ".onChanged(", "predictedEndTranslation",
                          "sidebarDrag", "sidebarGestureGeneration", ".id(gestureGeneration)",
                          ".simultaneousGesture"):
             self.assertNotIn(obsolete, source)
-        edge = source.split("if !navigation.isSidebarOpen {", 1)[1].split(
-            "if voiceModel.isMinimized", 1
+        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
+            "struct JarvisSidebar: View {", 1
         )[0]
-        self.assertIn(".frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)", edge)
-        self.assertIn(".gesture(sidebarEdgeGesture(", edge)
+        self.assertEqual(reveal.count("coordinateSpace: .global"), 2)
+        self.assertIn(".highPriorityGesture(openSwipe(drawerWidth: drawerWidth))", reveal)
+        self.assertIn("JarvisDesignTokens.sidebarEdgeGestureWidth", reveal)
+        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil : .spring(", reveal)
+        self.assertIn("JarvisSidebarGesturePolicy.shouldOpen(", reveal)
+        self.assertIn("JarvisSidebarGesturePolicy.shouldClose(", reveal)
+        self.assertIn("navigation.updateDrag(progress:", reveal)
+        self.assertIn("navigation.cancelDrag()", reveal)
+        self.assertLess(reveal.index("page\n"), reveal.index(".highPriorityGesture("))
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
-                               r"guard path != state\.path else \{ return \}\s+"
-                               r"state\.setPath\(path\)\s+state\.closeSidebar\(\)")
+        self.assertRegex(model, r"(?s)func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
+                               r".*?guard path != state\.path else \{.*?\}\s+"
+                               r"let update = JarvisNavigationPathUpdate\(path: path, from: state\).*?"
+                               r"write\(.*?\) \{ \$0 = update\.state \}")
 
     def test_ios_navigation_reference_ownership_and_plain_conditional_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
@@ -911,7 +913,7 @@ class SafeFailureTests(unittest.TestCase):
         )[0]
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
         self.assertIn("@MainActor\nfinal class JarvisNavigationModel: ObservableObject", model)
-        self.assertEqual(model.count("@Published"), 1)
+        self.assertEqual(model.count("@Published"), 4)  # state, dragProgress, two TEMPORARY debug fields
         self.assertIn("@Published private(set) var state: JarvisNavigationState", model)
         for derived in ("var path: [JarvisDestination] { state.path }",
                         "var isSidebarOpen: Bool { state.isSidebarOpen }",
@@ -926,30 +928,42 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("guard appliedSessionEpoch == sessionEpoch else { return }", shell)
         self.assertIn("workspaceRuntime.consumeRequestedDestination()", shell)
         self.assertIn("navigation.navigate(to: destination)", source)
-        self.assertIn("state.navigate(to: destination)", model)
-        self.assertIn("state.voiceSessionStateChanged(voiceState)", model)
-        overlay = shell.split(".overlay(alignment: .trailing) {", 1)[1].split(
-            ".animation(sidebarAnimation", 1
+        self.assertIn("$0.navigate(to: destination)", model)
+        self.assertIn("$0.voiceSessionStateChanged(voiceState)", model)
+        self.assertNotIn(".overlay(alignment: .trailing)", shell)
+        self.assertNotIn("JarvisSidebar(", source)
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
+            "struct JarvisSidebar: View {", 1
         )[0]
-        self.assertRegex(overlay, r"^\s+if navigation\.isSidebarOpen \{\s+ZStack\(alignment: \.trailing\)")
-        self.assertIn("Color.black.opacity(JarvisDesignTokens.screenDimOpacity)", overlay)
-        self.assertIn(".ignoresSafeArea()", overlay)
-        self.assertIn(".contentShape(Rectangle())", overlay)
-        self.assertIn(".onTapGesture { navigation.closeSidebar() }", overlay)
-        self.assertLess(overlay.index("Color.black"), overlay.index("JarvisSidebar("))
-        self.assertIn(".frame(width: drawerWidth, height: size.height)", overlay)
-        self.assertIn(".transition(reduceMotion ? .opacity : .move(edge: .trailing))", overlay)
-        self.assertEqual(source.count("JarvisSidebar("), 1)
-        self.assertIn(".animation(sidebarAnimation, value: navigation.isSidebarOpen)", shell)
-        self.assertIn("reduceMotion ? nil", source)
+        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", reveal)
+        self.assertIn("let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0", reveal)
+        self.assertRegex(reveal, r"if progress > 0 \{\s+JarvisSidebar\(")
+        self.assertLess(reveal.index("JarvisSidebar("), reveal.index("page\n"))
+        self.assertIn(".offset(x: -drawerWidth * progress)", reveal)
+        self.assertIn(".allowsHitTesting(progress == 0)", reveal)
+        self.assertIn(".onTapGesture { navigation.closeSidebar() }", reveal)
+        self.assertIn(".gesture(closeSwipe(drawerWidth: drawerWidth))", reveal)
+        self.assertIn(".frame(width: drawerWidth, height: geometry.size.height)", reveal)
+        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil", reveal)
+        self.assertIn("navigation.cancelDrag()", reveal)
+        self.assertEqual(sidebar.count("JarvisSidebar("), 1)
+        self.assertNotIn("JarvisSidebarDrawerLayer", sidebar)
+        gate_root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text().split(
+            "struct JarvisGateRootView: View {", 1)[1]
+        self.assertIn("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {", gate_root)
+        self.assertLess(gate_root.index("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {"), gate_root.index(".id(model.signOutGeneration)"))
+        self.assertLess(gate_root.index(".id(model.signOutGeneration)"),
+                        gate_root.index(".environmentObject(navigation)"))
+        self.assertLess(gate_root.index(".blur(radius: model.shouldCoverContent"),
+                        gate_root.index(".environmentObject(navigation)"))
         self.assertIn("if phase != .active", shell)
         self.assertIn("transaction.disablesAnimations = true", shell)
         self.assertIn("withTransaction(transaction) { navigation.closeSidebar() }", shell)
         for obsolete in (".offset(", ".blur(", "committedProgress", "currentDrag",
                         "navigationWrites", "mutateNavigation", "NavigationLaunchLifecycle"):
             self.assertNotIn(obsolete, source)
-        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        root = gate.split("struct JarvisGateRootView: View {", 1)[1]
+        root = gate_root
         self.assertEqual(root.count("@StateObject private var navigation"), 1)
         self.assertLess(root.index("@StateObject private var navigation"),
                         root.index("var body: some View"))
@@ -973,6 +987,48 @@ class SafeFailureTests(unittest.TestCase):
                                 "navigation.bisect", "Jarvis launch lifecycle:",
                                 "Jarvis gate startup:", "Jarvis navigation command:"):
                     self.assertNotIn(obsolete, runtime, str(path))
+
+    def test_ios_root_drawer_preserves_content_owned_navigation_side_effects(self):
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertIn("PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()", model)
+        navigate = model.split("func navigate(to destination:", 1)[1].split("func voiceSessionStateChanged", 1)[0]
+        self.assertLess(navigate.index("navigationRequested.send((from: currentDestination, to: destination))"),
+                        navigate.index('write("navigate('))
+        self.assertNotIn("guard destination != currentDestination", navigate)
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn(".onReceive(navigation.navigationRequested)", content)
+        self.assertNotIn(".onChange(of: navigation.currentDestination)", content)
+        self.assertIn("prepareNavigation(to: request.to, from: request.from)", content)
+        preparation = content.split("private func prepareNavigation(", 1)[1].split(
+            "static func initialNavigation(", 1
+        )[0]
+        for behavior in ("voiceModel.restore()", "previous == .voice && voiceModel.isSessionActive",
+                        "voiceModel.minimize()", "if navigationFixtureMode", "case .notes:",
+                        "case .health:", "case .softwareFactory:"):
+            self.assertIn(behavior, preparation)
+
+    def test_ios_ui_test_failure_is_nonblocking_but_reported(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        job = workflow["jobs"]["macos"]
+        capture = next(step for step in job["steps"] if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertEqual(capture["id"], "capture")
+        self.assertIn("if xcodebuild test", capture["run"])
+        self.assertIn('echo "result=failure" >> "$GITHUB_OUTPUT"', capture["run"])
+        self.assertIn("xcrun xcresulttool export attachments", capture["run"])
+
+        comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
+        self.assertEqual(comment["if"], "github.event_name == 'pull_request'")
+        self.assertEqual(comment["env"]["UI_TEST_RESULT"], "${{ steps.capture.outputs.result }}")
+        self.assertIn("Warning: iOS UI tests failed.", comment["run"])
+
+        tracker = next(step for step in job["steps"] if step.get("name") == "Open or update the nightly UI test issue")
+        self.assertIn("steps.capture.outputs.result == 'failure'", tracker["if"])
+        self.assertIn("search/issues", tracker["run"])
+        self.assertIn("gh api --method PATCH", tracker["run"])
+        self.assertIn("gh api --method POST", tracker["run"])
+        self.assertIn("state: \"open\"", tracker["run"])
+        nightly_failure = next(step for step in job["steps"] if step.get("name") == "Fail the nightly run when UI tests fail")
+        self.assertIn("steps.capture.outputs.result == 'failure'", nightly_failure["if"])
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -1297,6 +1353,10 @@ class SafeFailureTests(unittest.TestCase):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
         workflow = load_workflow(workflow_path)
         self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["branch"], {
+            "description": "Branch to build; must match the selected workflow branch",
+            "required": True, "default": "main", "type": "string",
+        })
         self.assertEqual(workflow["permissions"], {"contents": "read"})
         self.assertEqual(workflow["concurrency"], {
             "group": "ios-testflight", "cancel-in-progress": False,
@@ -1320,9 +1380,19 @@ class SafeFailureTests(unittest.TestCase):
         for line in raw_workflow.splitlines():
             if "uses:" in line:
                 self.assertRegex(line, r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v\S+")
-        guard = next(step for step in job["steps"] if step.get("name") == "Require main branch")
-        self.assertEqual(guard["if"], "github.ref != 'refs/heads/main'")
+        guard = next(step for step in job["steps"] if step.get("name") == "Validate dispatch branch")
+        self.assertEqual(guard["env"]["INPUT_BRANCH"], "${{ inputs.branch }}")
+        self.assertIn("git check-ref-format --branch", guard["run"])
+        self.assertIn('"$GITHUB_REF" != "refs/heads/$INPUT_BRANCH"', guard["run"])
         self.assertIn("exit 1", guard["run"])
+        checkout = next(step for step in job["steps"]
+                        if step.get("uses", "").startswith("actions/checkout@"))
+        self.assertEqual(checkout["with"]["ref"], "${{ inputs.branch }}")
+        preview_notes = next(step for step in job["steps"] if step.get("name") == "Add preview build notes")
+        self.assertEqual(preview_notes["if"], "github.ref != 'refs/heads/main'")
+        self.assertIn("Preview build", preview_notes["run"])
+        self.assertIn("does not create a release tag", preview_notes["run"])
+        self.assertFalse(any("git tag" in step.get("run", "") for step in job["steps"]))
         preflight = next(step for step in job["steps"] if step.get("name") == "Check signing configuration")
         self.assertTrue({
             "APP_STORE_CONNECT_KEY_P8", "APP_STORE_CONNECT_KEY_ID",

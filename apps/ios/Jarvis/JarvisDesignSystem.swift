@@ -22,7 +22,7 @@ struct JarvisSidebarMenuButton: View {
                 .contentShape(Rectangle())
         }
         .jarvisToolbarButtonStyle()
-        .foregroundStyle(JarvisDesignTokens.primaryAccent)
+        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
         .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
         .accessibilityIdentifier("navigation.openSidebar")
     }
@@ -96,8 +96,9 @@ enum JarvisDesignTokens {
     static let sidebarMaximumWidth: CGFloat = 320
     static let sidebarGestureStartFraction: CGFloat = 0.62
     static let sidebarGestureMinimumDistance: CGFloat = 8
-    static let sidebarEdgeGestureWidth: CGFloat = 24
+    static let sidebarEdgeGestureWidth: CGFloat = 20
     static let sidebarOpenThreshold: CGFloat = 0.5
+    static let sidebarCloseThreshold: CGFloat = 0.3
     static let sidebarBrandFontSize: CGFloat = 22
     static let sidebarSettingsButtonSize: CGFloat = 44
     static let sidebarHeaderLeadingInset: CGFloat = 26

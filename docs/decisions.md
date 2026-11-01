@@ -1,3 +1,20 @@
+## 1 November 2026 — iOS preview builds and release train (P15-50 / #1502)
+
+Allow a write-authorized manual TestFlight dispatch from an intended PR branch
+as well as `main`, with an explicit branch input validated against the selected
+workflow ref. Keep all signing and app configuration in the protected
+`ios-testflight` environment. Non-main uploads are marked as previews in the
+workflow build notes and never create release tags; the existing main upload
+path remains unchanged.
+
+Keep JarvisCore build/tests, the iOS Simulator build, Python/source-contract
+tests and CodeQL blocking. PR XCUITests still run and upload screenshots, but
+their failure is reported in the existing PR comment rather than failing the
+aggregate `CI result` gate. Run the suite nightly on `main`; a failure opens or
+updates one tracking issue. Release cadence is one build per 15-minute test
+window, shipping at the window boundary even when work is partly done, with
+preview builds before merge.
+
 ## 1 November 2026 — main merge and bilingual calendar approval evidence (P15-46 / #1494)
 
 Merge current main rather than rewriting branch history. Preserve #1493 Chat
@@ -9934,6 +9951,51 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Concurrent dispatcher handover (`622dc0f`, superseded by the reconciliation below):
+that implementation moved the drawer to `JarvisSidebarDrawerLayer`, a
+`zIndex(1)` root layer driven by `JarvisNavigationModel`, and removed it from
+ContentView. Voice restore/minimize and fixture side effects used
+`onChange(of: navigation.currentDestination)`. Reading the code found no single
+proven cause: the drawer had been
+inside the content subtree that the gate blurs and hit-test-disables, and a toolbar
+action reaches it only through the shared model. Its temporary English debug badge
+showed an open flag, count of open requests and last three changed-state writes
+with call-site tags. Those fields and the duplicate wrapper/badge are superseded;
+they were not native recovery evidence. Focused CI still runs only `SidebarNavigationTests`
+(Danish/English). Apple references: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
+[zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)),
+[EnvironmentObject](https://developer.apple.com/documentation/swiftui/environmentobject),
+[onChange](https://developer.apple.com/documentation/swiftui/view/onchange(of:initial:_:)),
+[ToolbarItem](https://developer.apple.com/documentation/swiftui/toolbaritem) and
+[HIG Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars).
+Native/device behavior is unverified (no Xcode here).
+
+Comment 6562637427 tests a layering hypothesis after preview build 23 (cad7cd0)
+reportedly still fails to open visibly. Move the conditional drawer/dim layer to
+the gate root's last ZStack child at zIndex(1000), outside ContentView and content
+modifiers. Keep authentication/privacy windows and omit the drawer when covered;
+zIndex cannot elevate app content over a separate UIWindow.
+Temporarily show a screenshot-readable bottom badge in device releases with
+button-only tap count, sidebar Boolean, last static caller tag and last three
+before/after write requests, including no-ops. No private content is logged.
+Remove badge/recording before merge. Root layering is an authorized experiment,
+not verified recovery. References: [ZStack](https://developer.apple.com/documentation/swiftui/zstack),
+[zIndex](https://developer.apple.com/documentation/swiftui/view/zindex(_:)) and
+[UIWindow.windowLevel](https://developer.apple.com/documentation/uikit/uiwindow/windowlevel).
+Indexed excerpts were consulted; direct Apple retrieval remains unavailable.
+
+Reconciliation preserves `226a1ae` and `622dc0f` in branch history while retaining
+one drawer/badge implementation. The drawer is outside content modifiers,
+omitted when `shouldCoverContent` is true, and remains below the unchanged
+alert+1 privacy UIWindow. The badge is above the drawer and hidden from
+accessibility outside the existing simulator navigation-test fixture.
+Static caller enums replace file/line strings; every request, including no-op
+path binding and reset requests, enters the bounded three-entry trace. Only the
+actual menu Button uses the counted `menu` tag. A synchronous model navigation
+event preserves ContentView-owned side effects even when Voice is selected
+again; root theme preference and UIKit-window geometry refresh cover the
+drawer's sibling placement. Native/device recovery remains unverified.
+
 Comment 6562578040 separates Chat's bell/menu into individual trailing ToolbarItems
 with a fixed [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
 The sidebar launcher is outermost at the far right; the bell is to its left.
@@ -10285,3 +10347,59 @@ remain pending.
   [AVCapturePhotoSettings.flashMode](https://developer.apple.com/documentation/avfoundation/avcapturephotosettings/flashmode),
   [AVCaptureDevice.torchMode](https://developer.apple.com/documentation/avfoundation/avcapturedevice/torchmode).
   Not compiled or run here; Mac CI and device check pending.
+## 2026-11-01: iPhone sidebar edge swipe, plain toolbar icons (#1484)
+
+The drawer stays a root-owned, top-most layer. The edge swipe is a
+`UIScreenEdgePanGestureRecognizer` (`edges = .right`, the drawer side) installed
+on the window by `JarvisSidebarEdgeOpener`; it recognises simultaneously, never
+cancels touches, and commits state only when the pan ends and passes
+`JarvisSidebarGesturePolicy.shouldOpen`. The leading edge stays with the system
+back swipe. The drawer and scrim close by tap or by a trailing swipe
+(`shouldClose`). The Chat toolbar bell and `sidebar.trailing` button are
+separate items with `sharedBackgroundVisibility(.hidden)`; sidebar icons use the
+stone secondary accent. The temporary debug badge and write log are removed.
+Apple docs: UIScreenEdgePanGestureRecognizer, UIGestureRecognizerDelegate,
+SwiftUI ToolbarContent.sharedBackgroundVisibility, ToolbarSpacer, Human
+Interface Guidelines (Toolbars, Sidebars, Gestures). Device behaviour is
+unverified until the next preview build.
+
+## 2026-11-01: iPhone sidebar is a reveal, not an overlay (#1484)
+
+Dan's design requirement: the page slides sideways and the sidebar sits behind
+it. `JarvisSidebarReveal` (root, inside the gate's blur/hit-testing group)
+offsets the page by `-drawerWidth * progress`; the drawer renders only while
+progress > 0. Progress is the root model's committed state or, during a swipe,
+the transient `dragProgress` (cleared by every state write, by cancel/failed
+pans and by a gesture-state reset). While open the page is not hit-testable and
+a catcher over it closes on tap or trailing swipe; the toolbar button and edge
+pan are unchanged. Reduced motion disables the spring and live tracking
+animation. The earlier scrim is gone, which also removes any layer that could
+sit over the drawer rows (item taps: scrim no longer overlaps rows, rows carry
+no gestures). Device behaviour is unverified until the next preview build.
+
+## 2026-11-01: sidebar swipe fixes after build 28 (#1484)
+
+The window-level `UIScreenEdgePanGestureRecognizer` did nothing on device and is
+removed. Opening is now a SwiftUI `DragGesture` on a 20pt full-height trailing
+strip above the page inside `JarvisSidebarReveal` (`highPriorityGesture`); the
+close swipe is on the page catcher. Both read translation in the global space
+(the views move with the page, so a local space fed the offset back into the
+drag), set no animation while a finger is down, and animate with a spring on
+release. Programmatic `navigate(to:)` now marks a short window in which a
+shrinking path echoed through the `NavigationStack` binding is dropped as stale;
+this is a hypothesis for "items close the drawer but stay on Chat" and is not
+confirmed. A TEMPORARY on-screen debug line (path, current/shown destination,
+last writes) is in the root and must be removed once Dan confirms.
+
+## 2026-11-01: Merge of the base navigation branch and main
+
+Confirmed: merging `copilot/p15-41-fix-unreliable-navigation` (2530c471) and
+`origin/main` keeps the reveal, the 20pt open strip, plain stone icons and the
+temporary debug line, and drops the base's `JarvisSidebarDebugBadge`,
+`JarvisSidebarDiagnostics` and typed `caller:` tags. Kept from the base: the
+drawer is not gated by the page's blur, hit-testing or accessibility hiding
+(`JarvisSidebarReveal(isEnabled:)` makes it inert while the gate covers the
+app), the stored theme is applied at the root because the drawer sits outside
+`ContentView`, and `JarvisNavigationModel.navigationRequested` delivers voice
+and fixture side effects before the route changes. `ios-testflight.yml` equals
+`origin/main`.
