@@ -27,7 +27,7 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
