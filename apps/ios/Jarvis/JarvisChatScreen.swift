@@ -554,28 +554,41 @@ struct JarvisChatScreen: View {
                         .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
                         .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
                         .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
-                    } else {
+                    } else if hasDraftContent {
                         Button {
                             if dictation.isRecording { dictation.stop() }
-                            if hasDraftContent {
-                                sendMessage()
-                            } else {
-                                onNavigate(.voice)
-                            }
+                            sendMessage()
                         } label: {
-                            Image(systemName: hasDraftContent ? "arrow.up" : "waveform")
+                            Image(systemName: "arrow.up")
                                 .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
                                 .frame(width: 36, height: 36)
                                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(hasDraftContent ? JarvisDesignTokens.primaryAccent : .secondary)
-                        .disabled((hasDraftContent && !model.canSend) || dictation.isPreparing)
+                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                        .disabled(!model.canSend || dictation.isPreparing)
                         .accessibilityIdentifier("chat.voiceOrSend")
-                        .accessibilityLabel(copy(hasDraftContent ? .sendMessage : .startVoice))
-                        .accessibilityValue(copy(hasDraftContent ? .sendMessage : .startVoice))
-                        .accessibilityHint(hasDraftContent ? sendHint : "")
+                        .accessibilityLabel(copy(.sendMessage))
+                        .accessibilityValue(copy(.sendMessage))
+                        .accessibilityHint(sendHint)
+                    } else {
+                        NavigationLink(value: JarvisDestination.voice) {
+                            Image(systemName: "waveform")
+                                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
+                                .frame(width: 36, height: 36)
+                                .frame(
+                                    width: JarvisDesignTokens.chatMinimumTapTarget,
+                                    height: JarvisDesignTokens.chatMinimumTapTarget
+                                )
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .disabled(dictation.isPreparing)
+                        .accessibilityIdentifier("chat.voiceOrSend")
+                        .accessibilityLabel(copy(.startVoice))
+                        .accessibilityValue(copy(.startVoice))
                     }
                 }
             }
