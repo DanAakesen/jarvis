@@ -25,6 +25,7 @@ struct ContentView: View {
     private let factoryFixtureMode: Bool
     private let healthScreenshotState: String?
     private let healthScreenshotLanguage: JarvisAppLanguage?
+    private let activityScreenshotState: String?
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -52,6 +53,7 @@ struct ContentView: View {
             .first(where: { $0.hasPrefix("--screenshot-activity-state=") })
             .map { String($0.dropFirst("--screenshot-activity-state=".count)) }
             .flatMap { $0 == "empty" || $0 == "active" ? $0 : nil }
+        self.activityScreenshotState = activityScreenshotState
         let fixtureMode = settingsPreview
             || voiceConnectionScreenshot
             || arguments.contains("--screenshot-chat-fixture")

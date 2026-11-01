@@ -836,6 +836,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('"--screenshot-activity-state=$state"', capture)
         self.assertIn('background-activity-${state}-${appearance}.png', capture)
         self.assertIn('--screenshot-activity-state=', content)
+        self.assertIn("private let activityScreenshotState: String?", content)
+        self.assertIn("self.activityScreenshotState = activityScreenshotState", content)
         self.assertIn("makeClient(emptyActivity: activityScreenshotState == \"empty\")", content)
         self.assertIn('"awayMode": false', fixture)
 
