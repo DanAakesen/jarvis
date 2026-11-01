@@ -8,9 +8,14 @@ final class CameraSheetUITests: XCTestCase {
         let frontCamera = hasCamera(at: .front)
         guard backCamera || frontCamera else {
             let app = launch(language: "en")
-            XCTAssertTrue(app.buttons["Add to message"].waitForExistence(timeout: 10))
-            app.buttons["Add to message"].tap()
-            app.buttons["Camera"].tap()
+            let addToMessage = app.buttons["plus"]
+            XCTAssertTrue(addToMessage.waitForExistence(timeout: 10))
+            addToMessage.tap()
+            let cameraOption = app.buttons.matching(
+                NSPredicate(format: "label IN %@", ["Camera", "Kamera"])
+            ).firstMatch
+            XCTAssertTrue(cameraOption.waitForExistence(timeout: 5))
+            cameraOption.tap()
             allowCameraIfRequested(in: app)
             attachScreenshot(from: app, named: "camera-unavailable")
             throw XCTSkip("The simulator does not expose a camera device.")
