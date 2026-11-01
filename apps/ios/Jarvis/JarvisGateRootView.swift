@@ -90,11 +90,29 @@ private final class JarvisGateModel: ObservableObject {
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
 
+    private static func usesFixturePreview(arguments: [String]) -> Bool {
+        [
+            "--screenshot-chat-fixture",
+            "--ui-test-camera",
+            "--screenshot-health-fixture",
+            "--screenshot-settings-fixture",
+            "--screenshot-voice-connection-lost",
+            "--screenshot-lockscreen-task-fixture",
+        ].contains(where: arguments.contains)
+    }
+
     var shouldCoverContent: Bool {
         presentation != .unlocked || isPrivacyCoverVisible
     }
 
     init() {
+        if Self.usesFixturePreview(arguments: ProcessInfo.processInfo.arguments) {
+            tokenStore = nil
+            provider = nil
+            client = nil
+            return
+        }
+
         tokenStore = try? KeychainTokenStore()
         if let provider = try? MicrosoftAccessTokenProvider(),
            let client = try? JarvisComposition.makeClient(accessTokenProvider: provider) {
@@ -116,16 +134,7 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
-        if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--ui-test-camera") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-health-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
-            ProcessInfo.processInfo.arguments.contains("--screenshot-voice-connection-lost") {
-            presentation = .unlocked
-            isPrivacyCoverVisible = false
-            return
-        }
-        if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
+        if Self.usesFixturePreview(arguments: ProcessInfo.processInfo.arguments) {
             presentation = .unlocked
             isPrivacyCoverVisible = false
             return
