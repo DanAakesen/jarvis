@@ -162,6 +162,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -only-testing:JarvisUITests/SidebarNavigationTests \
+            -only-testing:JarvisUITests/ChatComposerUITests \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
           xcrun xcresulttool export attachments \
@@ -329,6 +330,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/ios-navigation.xcresult" \
             -only-testing:JarvisUITests/SidebarNavigationTests \
+            -only-testing:JarvisUITests/ChatComposerUITests \
             -parallel-testing-enabled NO \
             -maximum-test-execution-time-allowance 600 \
             CODE_SIGNING_ALLOWED=NO \

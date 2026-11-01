@@ -40,6 +40,13 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case cameraFrameUnavailable = "chat.plus.cameraFrameUnavailable"
     case screenFrameUnavailable = "chat.plus.screenFrameUnavailable"
     case plusMenuHint = "chat.plus.menuHint"
+    case flipCamera = "chat.camera.flip"
+    case cameraLens = "chat.camera.lens"
+    case lensUltraWide = "chat.camera.lens.ultraWide"
+    case lensWide = "chat.camera.lens.wide"
+    case lensTelephoto = "chat.camera.lens.telephoto"
+    case messagePlaceholder = "chat.composer.placeholder"
+    case voiceMode = "chat.composer.voice"
     case done = "chat.done"
 }
 

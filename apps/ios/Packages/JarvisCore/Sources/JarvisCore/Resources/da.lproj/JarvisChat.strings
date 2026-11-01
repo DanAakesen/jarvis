@@ -38,3 +38,10 @@
 "chat.plus.screenFrameUnavailable" = "Skærmbilledet er ikke tilgængeligt endnu.";
 "chat.plus.menuHint" = "Åbn værktøjer til kamera, filer, video, skærmdeling og stemmesprog.";
 "chat.done" = "Færdig";
+"chat.camera.flip" = "Skift kamera";
+"chat.camera.lens" = "Linse";
+"chat.camera.lens.ultraWide" = "Ultravidvinkel";
+"chat.camera.lens.wide" = "Vidvinkel";
+"chat.camera.lens.telephoto" = "Tele";
+"chat.composer.placeholder" = "Spørg Jarvis";
+"chat.composer.voice" = "Tale";

@@ -38,3 +38,10 @@
 "chat.plus.screenFrameUnavailable" = "The screen frame is not available yet.";
 "chat.plus.menuHint" = "Open camera, file, video, screen sharing, and voice language tools.";
 "chat.done" = "Done";
+"chat.camera.flip" = "Switch camera";
+"chat.camera.lens" = "Lens";
+"chat.camera.lens.ultraWide" = "Ultra-wide";
+"chat.camera.lens.wide" = "Wide";
+"chat.camera.lens.telephoto" = "Telephoto";
+"chat.composer.placeholder" = "Ask Jarvis";
+"chat.composer.voice" = "Voice";

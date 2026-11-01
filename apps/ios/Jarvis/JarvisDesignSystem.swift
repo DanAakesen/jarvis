@@ -130,6 +130,12 @@ enum JarvisDesignTokens {
     static let chatComposerRadius: CGFloat = 24
     static let chatComposerSpacing: CGFloat = 10
     static let chatComposerIconSize: CGFloat = 20
+    static let chatComposerSendDiameter: CGFloat = 34
+    static let chatComposerTextInset: CGFloat = 14
+    static let chatVideoTileWidth: CGFloat = 132
+    static let chatVideoTileHeight: CGFloat = 176
+    static let chatVideoTileRadius: CGFloat = 24
+    static let chatVideoTileBottomInset: CGFloat = 132
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16

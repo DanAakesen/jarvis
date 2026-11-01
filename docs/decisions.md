@@ -10217,3 +10217,47 @@ and embedding them can be ungrammatical; Date.FormatStyle supports localized
 absolute date/time components. No deliberate platform deviation or custom
 formatter is introduced. New local regressions pass; Mac rendering and live
 acceptance remain unverified.
+
+## 1 November 2026 — Chat polish batch (P15-52, #1506)
+
+Replaces #1486, #1490 and #1496. Composer and header follow `docs/ios/design/board.html`.
+
+- **Composer:** two-row glass card with the input on the first line and plain 44 pt
+  icon buttons below (plus menu, Voice, Send/Stop). Only Send has a small orange
+  disc (34 pt) when enabled; secondary controls use the stone accent. The `.bar`
+  material behind the composer and Now bar is removed. The mode segmented control
+  is now a single Voice button (`chat.mode`).
+- **Header:** no toolbar background or divider; the list uses
+  `scrollEdgeEffectStyle(.soft)` so messages fade under the header and composer.
+- **Send root cause:** the Dan message was inserted only when the server's `user`
+  event arrived, and the list scrolled to the bottom anchor in the same update
+  (skipped entirely with Reduce Motion). The model now inserts an optimistic row
+  and clears the draft at once, replaces it with the server row, and restores the
+  draft if the server never acknowledged it. The scroll runs after layout and
+  also on the last message id, sending state and streaming text.
+- **Plus menu:** native SwiftUI `Menu` anchored to the plus button (replaces the
+  popover). Native menus cannot be opened programmatically, so the
+  `--screenshot-chat-plus-menu` capture now shows the closed composer.
+- **Camera and video:** `AVCaptureDevice.DiscoverySession` lists only the lenses
+  the device has (ultra-wide, wide, telephoto) for the front or back camera. The
+  flip button and lens menu appear in the photo sheet and on the video tile; the
+  last choice is kept in memory for the app session. Video is a 132×176 tile
+  above the composer with stop, flip and lens controls.
+- **Tests:** `ChatComposerUITests` (send bubble visible, menu near the button,
+  camera sheet) runs with `SidebarNavigationTests` in iOS CI. The camera sheet
+  test uses `--ui-test-camera-sheet` because the simulator has no camera.
+
+Apple documents used: Human Interface Guidelines for
+[Menus](https://developer.apple.com/design/human-interface-guidelines/menus),
+[Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars),
+[Text fields](https://developer.apple.com/design/human-interface-guidelines/text-fields)
+and [Layout](https://developer.apple.com/design/human-interface-guidelines/layout);
+SwiftUI [Menu](https://developer.apple.com/documentation/swiftui/menu),
+[scrollEdgeEffectStyle](https://developer.apple.com/documentation/swiftui/view/scrolledgeeffectstyle(_:for:)),
+[ScrollViewProxy](https://developer.apple.com/documentation/swiftui/scrollviewproxy);
+AVFoundation [AVCaptureDevice.DiscoverySession](https://developer.apple.com/documentation/avfoundation/avcapturedevice/discoverysession)
+and [AVCaptureSession](https://developer.apple.com/documentation/avfoundation/avcapturesession).
+Deviations: the Send disc is the only filled control; lens labels use the
+0.5×/1×/2× shorthand on the button with full names in the menu. Nothing was
+compiled or run here (no Xcode on this runner); Mac CI and device acceptance
+remain pending.

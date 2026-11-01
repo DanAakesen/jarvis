@@ -4,7 +4,37 @@ import CoreImage
 import CoreVideo
 import Foundation
 import ImageIO
+import JarvisCore
 import QuartzCore
+
+enum VoiceCameraLens: String, CaseIterable, Identifiable, Sendable {
+    case ultraWide
+    case wide
+    case telephoto
+
+    var id: String { rawValue }
+
+    var deviceType: AVCaptureDevice.DeviceType {
+        switch self {
+        case .ultraWide: .builtInUltraWideCamera
+        case .wide: .builtInWideAngleCamera
+        case .telephoto: .builtInTelephotoCamera
+        }
+    }
+
+    var localizationKey: JarvisChatLocalizationKey {
+        switch self {
+        case .ultraWide: .lensUltraWide
+        case .wide: .lensWide
+        case .telephoto: .lensTelephoto
+        }
+    }
+}
+
+/// Last camera and lens Dan chose; kept in memory for the app session only.
+private let cameraChoiceLock = NSLock()
+nonisolated(unsafe) private var rememberedPosition: AVCaptureDevice.Position = .back
+nonisolated(unsafe) private var rememberedLens: VoiceCameraLens = .wide
 
 final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
@@ -33,6 +63,41 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         }
     }
 
+    static var rememberedChoice: (position: AVCaptureDevice.Position, lens: VoiceCameraLens) {
+        cameraChoiceLock.lock()
+        defer { cameraChoiceLock.unlock() }
+        return (rememberedPosition, rememberedLens)
+    }
+
+    /// Lenses the device actually offers for a camera position, found with device discovery.
+    static func availableLenses(position: AVCaptureDevice.Position) -> [VoiceCameraLens] {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: VoiceCameraLens.allCases.map(\.deviceType),
+            mediaType: .video,
+            position: position
+        )
+        let types = Set(discovery.devices.map(\.deviceType))
+        return VoiceCameraLens.allCases.filter { types.contains($0.deviceType) }
+    }
+
+    static func hasCamera(position: AVCaptureDevice.Position) -> Bool {
+        !availableLenses(position: position).isEmpty
+    }
+
+    static func device(position: AVCaptureDevice.Position, lens: VoiceCameraLens) -> AVCaptureDevice? {
+        if let exact = AVCaptureDevice.default(lens.deviceType, for: .video, position: position) {
+            return exact
+        }
+        if let first = availableLenses(position: position).first,
+           let fallback = AVCaptureDevice.default(first.deviceType, for: .video, position: position) {
+            return fallback
+        }
+        return AVCaptureDevice.default(for: .video)
+    }
+
+    private(set) var position: AVCaptureDevice.Position = .back
+    private(set) var lens: VoiceCameraLens = .wide
+
     static var isAuthorized: Bool {
         AVCaptureDevice.authorizationStatus(for: .video) == .authorized
     }
@@ -43,9 +108,12 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
             session.beginConfiguration()
             do {
                 session.sessionPreset = .high
-                guard let device = AVCaptureDevice.default(for: .video) else {
+                let choice = Self.rememberedChoice
+                guard let device = Self.device(position: choice.position, lens: choice.lens) else {
                     throw VoiceCameraError.unavailable
                 }
+                position = device.position == .unspecified ? choice.position : device.position
+                lens = VoiceCameraLens.allCases.first { $0.deviceType == device.deviceType } ?? choice.lens
                 let input = try AVCaptureDeviceInput(device: device)
                 guard session.canAddInput(input),
                       session.canAddOutput(output),
@@ -64,6 +132,37 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                 session.startRunning()
             } catch {
                 session.commitConfiguration()
+                result = .failure(error)
+            }
+        }
+        try result.get()
+    }
+
+    /// Swaps the active camera without restarting the session and remembers the choice.
+    func select(position newPosition: AVCaptureDevice.Position, lens newLens: VoiceCameraLens) throws {
+        var result: Result<Void, any Error> = .success(())
+        queue.sync {
+            session.beginConfiguration()
+            defer { session.commitConfiguration() }
+            do {
+                guard let device = Self.device(position: newPosition, lens: newLens) else {
+                    throw VoiceCameraError.unavailable
+                }
+                let input = try AVCaptureDeviceInput(device: device)
+                let previous = session.inputs
+                previous.forEach { session.removeInput($0) }
+                guard session.canAddInput(input) else {
+                    previous.forEach { if session.canAddInput($0) { session.addInput($0) } }
+                    throw VoiceCameraError.unavailable
+                }
+                session.addInput(input)
+                position = device.position == .unspecified ? newPosition : device.position
+                lens = VoiceCameraLens.allCases.first { $0.deviceType == device.deviceType } ?? newLens
+                cameraChoiceLock.lock()
+                rememberedPosition = position
+                rememberedLens = lens
+                cameraChoiceLock.unlock()
+            } catch {
                 result = .failure(error)
             }
         }

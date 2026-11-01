@@ -1001,7 +1001,7 @@ class SafeFailureTests(unittest.TestCase):
         )
         self.assertIn(
             "--screenshot-chat-plus-menu",
-            (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
+            (ROOT / ".github/workflows/ios-ci.yml").read_text(),
         )
         ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
         self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
