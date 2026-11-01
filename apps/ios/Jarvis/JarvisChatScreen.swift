@@ -61,6 +61,7 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
+    let onOpenSidebar: () -> Void
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
 
@@ -69,6 +70,7 @@ struct JarvisChatScreen: View {
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
+        onOpenSidebar: @escaping () -> Void = {},
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
         _model = StateObject(wrappedValue: JarvisChatModel(
@@ -77,6 +79,7 @@ struct JarvisChatScreen: View {
             startupError: startupError
         ))
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
+        self.onOpenSidebar = onOpenSidebar
         self.onNavigate = onNavigate
     }
 
@@ -113,6 +116,15 @@ struct JarvisChatScreen: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: onOpenSidebar) {
+                    Image(systemName: "line.3.horizontal")
+                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                }
+                .jarvisToolbarButtonStyle()
+                .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: appLanguage))
+                .accessibilityIdentifier("navigation.openSidebar")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     presentedSheet = .activity(.needsYou)
@@ -134,6 +146,7 @@ struct JarvisChatScreen: View {
                 }
                 .jarvisToolbarButtonStyle()
                 .accessibilityLabel(model.needsYouCount > 0 ? "Needs you, \(model.needsYouCount)" : "Needs you")
+                .accessibilityIdentifier("chat.notifications")
             }
         }
         .task {
@@ -481,6 +494,7 @@ struct JarvisChatScreen: View {
                 .buttonStyle(.glass)
                 .disabled(model.isSending || isPreparingCamera)
                 .accessibilityLabel(copy(.plusMenuLabel))
+                .accessibilityIdentifier("chat.plus")
                 .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
                 .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
                 .popover(
@@ -501,6 +515,7 @@ struct JarvisChatScreen: View {
                     .onSubmit(sendMessage)
                     .disabled(model.isSending || model.fixtureTurnUnavailable)
                     .accessibilityLabel("Message Jarvis")
+                    .accessibilityIdentifier("chat.input")
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
 
                 Picker("Mode", selection: $composerMode) {
@@ -515,6 +530,7 @@ struct JarvisChatScreen: View {
                 .frame(width: JarvisDesignTokens.chatMessageMaximumWidth * JarvisDesignTokens.chatModeWidthFraction)
                 .labelsHidden()
                 .accessibilityLabel("Chat or voice")
+                .accessibilityIdentifier("chat.mode")
 
                 if model.isSending {
                     Button {
@@ -597,6 +613,7 @@ struct JarvisChatScreen: View {
             in: .rect(cornerRadius: JarvisDesignTokens.chatPlusMenuRadius)
         )
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat.plusMenu")
     }
 
     private var voiceLanguageMenu: some View {

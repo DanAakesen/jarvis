@@ -632,7 +632,7 @@ class SafeFailureTests(unittest.TestCase):
             source,
         )
         self.assertIn("    runs-on: macos-26", source)
-        self.assertIn("    timeout-minutes: 30", source)
+        self.assertIn("    timeout-minutes: 45", source)
         self.assertIn("      cancel-in-progress: true", source)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
@@ -646,6 +646,26 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
         self.assertIn("sidebar-open-dark.png", source)
+
+    def test_ios_navigation_regression_gates_the_build_and_retains_results(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        target = project["targets"]["JarvisUITests"]
+        self.assertEqual(target["type"], "bundle.ui-testing")
+        self.assertEqual(target["dependencies"], [{"target": "Jarvis"}])
+        self.assertEqual(project["schemes"]["Jarvis"]["test"]["targets"], ["JarvisUITests"])
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        regression = next(step for step in steps if step.get("name") == "Run iPhone navigation regression")
+        self.assertNotIn("continue-on-error", regression)
+        self.assertNotIn("|| true", regression["run"])
+        self.assertIn("-only-testing:JarvisUITests/NavigationReliabilityTests", regression["run"])
+        self.assertIn('-destination "platform=iOS Simulator,id=$IOS_SIMULATOR_UDID"', regression["run"])
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-navigation.xcresult"', regression["run"])
+        subprocess.run(["bash", "-n"], input=regression["run"], text=True, check=True)
+        evidence = next(step for step in steps if step.get("name") == "Upload iPhone navigation test results")
+        self.assertEqual(evidence["if"], "always()")
+        self.assertEqual(evidence["with"]["path"], "${{ runner.temp }}/ios-navigation.xcresult")
+        self.assertEqual(evidence["with"]["retention-days"], 14)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

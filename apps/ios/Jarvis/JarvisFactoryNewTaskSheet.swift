@@ -121,6 +121,7 @@ struct JarvisFactoryNewTaskSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(copy.text(.cancel)) { dismiss() }
+                        .accessibilityIdentifier("sheet.cancel")
                         .disabled(creating)
                 }
                 ToolbarItem(placement: .confirmationAction) {

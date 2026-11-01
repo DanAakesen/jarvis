@@ -3417,6 +3417,13 @@ rename waits for all of them. The rows above keep their original working titles.
 
 ## P15 — iOS app
 
+P15-41 / [#1484](https://github.com/DanAakesen/jarvis/issues/1484): sidebar input
+recovery and repeated bilingual iPhone navigation tests are implemented, with
+results retained by the existing iOS gate. Local navigation tests and Swift
+syntax checks pass. Next: run the ready-PR simulator gate, retain before/after
+UI-test evidence, and verify build-18 recovery on an iPhone before TestFlight.
+Simulator execution and device acceptance are not yet complete.
+
 Preparation is done and the owner authorised the foundation phase on 30 October 2026.
 Every screen needs the owner's approval before it is built or shipped.
 

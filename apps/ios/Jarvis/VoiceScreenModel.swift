@@ -142,6 +142,26 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     var isPreview: Bool { screenshotState != nil }
 
     func start() async {
+#if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
+            guard sessionClient == nil else { return }
+            let client = VoiceSessionClient(
+                baseURL: URL(string: "https://fixture.example.invalid")!,
+                transport: VoiceActivityScreenshotSocket()
+            )
+            sessionClient = client
+            do {
+                try await client.start(accessToken: "fixture.voice", language: .da)
+                voiceState = .listening
+                isAudioReady = true
+            } catch {
+                sessionClient = nil
+                voiceState = .failed
+                errorMessage = Self.message(for: error)
+            }
+            return
+        }
+#endif
         if let screenshotState {
             voiceState = screenshotState
             isAudioReady = true

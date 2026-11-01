@@ -278,6 +278,7 @@ struct JarvisNotesArea: View {
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
                 .accessibilityLabel(copy.title(for: tab))
+                .accessibilityIdentifier("notes.tab.\(tab.rawValue)")
             }
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
@@ -498,6 +499,7 @@ struct JarvisNotesArea: View {
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .accessibilityLabel(copy.search)
+                    .accessibilityIdentifier("notes.search")
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -521,6 +523,7 @@ struct JarvisNotesArea: View {
                 } label: {
                     Label(copy.newNote, systemImage: "note.text")
                 }
+                .accessibilityIdentifier("notes.newNote")
                 Button {
                     newTaskPresented = true
                 } label: {
@@ -535,6 +538,7 @@ struct JarvisNotesArea: View {
                     .contentShape(Circle())
             }
             .accessibilityLabel(copy.create)
+            .accessibilityIdentifier("notes.plus")
             .accessibilityHint(
                 client == nil ? copy.unavailable : signInUnavailable ? copy.signIn : copy.createHint
             )

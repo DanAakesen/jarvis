@@ -300,6 +300,7 @@ struct JarvisFactoryArea: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(segment == item ? .isSelected : [])
+                .accessibilityIdentifier("factory.segment.\(item.rawValue)")
             }
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
@@ -503,6 +504,7 @@ struct JarvisFactoryArea: View {
                     .accessibilityLabel(copy.text(
                         segment == .releases ? .searchReleasesAccessibility : .searchAccessibility
                     ))
+                    .accessibilityIdentifier("factory.search")
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -530,6 +532,7 @@ struct JarvisFactoryArea: View {
             .buttonStyle(.plain)
             .disabled(client == nil || projects.isEmpty)
             .accessibilityLabel(copy.text(.newTask))
+            .accessibilityIdentifier("factory.plus")
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
         .padding(.top, JarvisDesignTokens.factorySectionSpacing)

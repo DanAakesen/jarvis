@@ -6212,6 +6212,20 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
 
+P15-41 adds `JarvisUITests/NavigationReliabilityTests` to the generated `Jarvis`
+scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
+`xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
+'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/NavigationReliabilityTests
+CODE_SIGNING_ALLOWED=NO test`. The existing ready-PR iOS job runs this regression
+on its already-booted iPhone and retains `ios-navigation.xcresult` for 14 days,
+including cycle screenshots and failures. Its 45-minute limit accommodates
+both the existing captures and the new repeated UI sequence. The
+`--ui-test-navigation` fixture is simulator-only and needs no live credentials,
+audio device, or backend; device authorization is unchanged.
+Linux can parse Swift and run Core/pipeline tests, but cannot execute XCUITest.
+Build-18 reproduction, before/after simulator test results, and physical-iPhone
+acceptance remain pending; cycle screenshots are not baseline-build evidence.
+
 `JarvisCore` owns the cross-platform HTTP client and the `HTTPTransport`,
 `TokenStore` and `AccessTokenProvider` seams. It calls the existing owner-session
 and tools routes, sends bearer authorization on every request, asks the provider

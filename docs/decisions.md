@@ -9808,6 +9808,24 @@ Later as shown on the board; Workspaces remains routable but is not a sidebar
 entry. The VoiceOver open action remains available, and right-edge drag
 recognition must not block screen controls or the sidebar's navigation buttons.
 
+## 1 November 2026 — P15-41 sidebar input recovery (#1484)
+
+Remove the animation observer's asynchronous progress feedback: its `0.001`
+update tolerance can leave positive reveal progress while the closed drawer's
+tap catcher still intercepts input. Settled progress and accessibility derive
+from navigation's open flag; only the live drag is transient. Gesture
+cancellation needs no separate saved start value, and commands invalidate
+in-flight drags. Keep the existing reveal design and animation, isolate the
+opening gesture to the right edge, and add the requested localized Chat menu
+launcher, which was absent from this revision.
+
+Gate the existing Mac iOS job on repeated XCUITest sequences in both languages,
+retaining the result bundle even on failure. Offline simulator fixtures cover
+navigation, sheets, keyboard input, and full-screen/minimized voice controls;
+they do not prove microphone transport or device behavior. Linux checks are
+not UI reproduction. Baseline build-18 and after-fix simulator results remain
+pending until macOS execution; do not treat cycle screenshots as baseline evidence.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

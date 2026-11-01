@@ -1366,8 +1366,16 @@ renders the fixed-behind sidebar and title-only placeholders for unbuilt
 destinations. P15-10 replaces the Chat root placeholder with the native chat
 screen and P15-11 replaces the Voice placeholder with the native voice screen.
 The shell observes voice state changes; `.ended` resets navigation to Chat and
-closes the sidebar using the existing progress/animation reset. Other voice states
-leave navigation unchanged.
+closes the sidebar. Other voice states leave navigation unchanged.
+P15-41 derives settled reveal progress and hit testing from
+`JarvisNavigationState.isSidebarOpen`. A transient `@GestureState` tracks only the
+current drag; commands invalidate its generation and cancellation resets it
+automatically. No animation callback writes navigation or presentation state.
+The opening recognizer lives on a right-edge strip, not the screen controls;
+the dimming layer never accepts input. Opening dismisses the keyboard, and
+leaving the active scene closes the drawer. The app scheme includes
+`JarvisUITests`; its simulator-only fixture exercises the real navigation and
+voice start/mute/end lifecycle using existing offline transports.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

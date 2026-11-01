@@ -68,6 +68,7 @@ struct JarvisActivitySheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
+                        .accessibilityIdentifier("chat.notifications.done")
                         .jarvisToolbarButtonStyle()
                 }
             }

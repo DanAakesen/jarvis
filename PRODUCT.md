@@ -204,6 +204,13 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
+screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.
+Chat provides a localized menu launcher as well as the right-edge swipe; tapping
+the revealed screen closes the sidebar. Interrupted gestures must return to the
+committed open/closed state without an invisible input blocker. The iPhone UI gate
+exercises Chat, Health, Notes, and Factory in Danish and English.
+
 P15-38 / #1478 applies Chat's approved ambient background to every native
 screen and app-owned sheet: one light/dark definition and the same glow positions,
 with glass content surfaces above it. The 1 November reconciliation reuses main's

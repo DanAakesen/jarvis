@@ -85,6 +85,7 @@ struct JarvisSidebar: View {
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
         .accessibilityHidden(!isOpen)
+        .allowsHitTesting(isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()
         }
@@ -117,6 +118,7 @@ struct JarvisSidebar: View {
         }
         .buttonStyle(JarvisSidebarButtonStyle())
         .disabled(!destination.isNavigable)
+        .accessibilityIdentifier("navigation.\(destination.rawValue)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .focused($focusedDestination, equals: destination)
         .onHover { hoveredDestination = $0 ? destination : nil }
