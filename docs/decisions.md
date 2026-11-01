@@ -1,3 +1,26 @@
+## 1 November 2026 — Apple documentation requirement and P15-46 review
+
+The owner requires relevant Apple API documentation and HIG review before iOS
+implementation, platform behavior where available, and a PR source/deviation
+list. The P15-46 native diff changes only approval JSON validation limits and
+tests, retaining Foundation `JSONDecoder`/`Codable` and the existing authenticated
+transport. It introduces no custom navigation, gestures, sheets, capture or
+Live Activity behavior. No deliberate platform deviation was identified in this
+diff; the approval count and string-size limits are application/server contracts.
+
+Relevant sources for review:
+
+- [JSONDecoder](https://developer.apple.com/documentation/foundation/jsondecoder)
+- [Encoding and Decoding Custom Types](https://developer.apple.com/documentation/foundation/archives_and_serialization/encoding_and_decoding_custom_types)
+- [URLSession](https://developer.apple.com/documentation/foundation/urlsession)
+- [HIG: Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts)
+
+These links were attempted during the review follow-up, not read before the
+original implementation. Direct retrieval failed with hostname resolution
+errors, and web search returned no usable results. No Apple page can therefore
+be claimed as relied-on evidence for this PR in this environment. Source review
+remains unverified; this follow-up changes documentation only, not native code.
+
 ## 1 November 2026 — bind offers to existing approvals (P15-46 / #1494)
 
 The calendar claim guard excluded questions, so an actionable conversational

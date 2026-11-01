@@ -1,3 +1,15 @@
+## Apple documentation before iOS implementation (owner requirement, 1 November 2026)
+
+Before implementing iOS changes, read the relevant Apple API documentation and
+Human Interface Guidelines. Use platform APIs, modifiers and components instead
+of hand-rolling behavior covered by the system. In the PR description, list the
+Apple pages actually relied on and explain any deliberate deviation. Select
+sources for the affected boundary, such as Foundation networking/serialization,
+SwiftUI navigation, gestures, toolbars and sheets, ActivityKit/Live Activities,
+or AVFoundation capture device discovery; unrelated APIs need not be reviewed.
+If sources cannot be accessed, report that limitation rather than claiming a
+review or attributing unverified guidance to Apple.
+
 ## Suggestion approval checks (P15-46 / #1494)
 
 From `agents/jarvis`, use the existing `.venv/bin/python -m pytest -q` and
