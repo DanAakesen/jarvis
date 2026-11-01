@@ -9706,6 +9706,14 @@ around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
 
+## 1 November 2026 — Combined iOS screenshot job timeout
+
+Keep the one-boot simulator workflow and all screenshot/upload steps, with a
+30-minute job limit instead of 20. Run `41261737993` completed its build,
+captures, upload, and comment, but was marked cancelled at the 20-minute limit
+after adding the sidebar coverage alongside Health. The extra bounded time
+allows the complete evidence set and cleanup without reducing coverage.
+
 ## 31 October 2026 — P15-31 iOS sidebar follows the approved board
 
 Owner feedback on TestFlight build 12 requires the native sidebar to match

@@ -6276,6 +6276,8 @@ the simulator.
 --screenshot-health-language=da|en` uses synthetic `FixtureTransport` data only.
 The existing ready-PR, one-boot Mac job captures these states in light/dark and
 links its artifact beside the approved Health board in the PR comment.
+The Mac job has a 30-minute limit for the combined Chat, sidebar, notifications,
+Factory, and Health captures, upload, and cleanup; it still boots only once.
 Those artifacts and native visual acceptance remain unverified until that job
 runs. The board can be inspected locally with Chromium; that is not simulator
 evidence.
