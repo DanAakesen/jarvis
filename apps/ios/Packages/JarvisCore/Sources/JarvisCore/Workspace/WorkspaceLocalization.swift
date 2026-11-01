@@ -63,6 +63,8 @@ public enum JarvisWorkspaceLocalizationKey: String, CaseIterable, Sendable {
     case toolUnavailable = "workspace.toolUnavailable"
     case windowActionUnavailable = "workspace.windowActionUnavailable"
     case htmlApp = "workspace.htmlApp"
+    case htmlAppLoading = "workspace.htmlAppLoading"
+    case htmlAppLoadFailed = "workspace.htmlAppLoadFailed"
     case knowledgeGraph = "workspace.knowledgeGraph"
     case codeView = "workspace.codeView"
     case generatedView = "workspace.generatedView"

@@ -29,6 +29,91 @@ final class WorkspaceCommandHandlerTests: XCTestCase {
         )
     }
 
+    func testFetchesValidatedHTMLArtifactFromWorkspaceEndpoint() async throws {
+        let artifactID = "12345678-1234-4234-8234-123456789abc"
+        let artifact: [String: Any] = [
+            "id": artifactID,
+            "kind": "html",
+            "title": "Synthetic app",
+            "html": "<!doctype html><html><body><main>Synthetic app</main></body></html>",
+            "sources": [],
+            "createdAt": "2026-01-31T09:00:00.000Z",
+            "pinned": false,
+        ]
+        let scenario: [String: Any] = [
+            "version": 1,
+            "interactions": [[
+                "method": "GET",
+                "path": "/api/factory/workspace-artifacts/html/\(artifactID)",
+                "response": ["statusCode": 200, "body": artifact],
+            ]],
+        ]
+        let transport = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: scenario))
+        let client = try JarvisClient(
+            configuration: JarvisClientConfiguration(
+                baseURL: URL(string: "https://fixture.example.invalid/api")!,
+                retryPolicy: RetryPolicy(maximumRetries: 0, delay: .zero, maximumDelay: .zero)
+            ),
+            transport: transport,
+            tokenStore: CommandFixtureTokenStore(),
+            accessTokenProvider: CommandFixtureTokenProvider()
+        )
+
+        let received = try await JarvisWorkspaceClient(client: client).htmlArtifact(id: artifactID)
+
+        XCTAssertEqual(received.id, artifactID)
+        XCTAssertEqual(received.html, artifact["html"] as? String)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.path), ["/api/factory/workspace-artifacts/html/\(artifactID)"])
+        let remaining = await transport.remainingInteractions()
+        XCTAssertEqual(remaining, 0)
+    }
+
+    func testHTMLArtifactRequestRejectsInvalidIDsAndMismatchedResponses() async throws {
+        let artifactID = "12345678-1234-4234-8234-123456789abc"
+        let artifact: [String: Any] = [
+            "id": "12345678-1234-4234-8234-123456789abd",
+            "kind": "html",
+            "title": "Synthetic app",
+            "html": "<!doctype html><html><body>Synthetic app</body></html>",
+            "sources": [],
+            "createdAt": "2026-01-31T09:00:00.000Z",
+            "pinned": false,
+        ]
+        let scenario: [String: Any] = [
+            "version": 1,
+            "interactions": [[
+                "method": "GET",
+                "path": "/api/factory/workspace-artifacts/html/\(artifactID)",
+                "response": ["statusCode": 200, "body": artifact],
+            ]],
+        ]
+        let transport = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: scenario))
+        let client = try JarvisClient(
+            configuration: JarvisClientConfiguration(
+                baseURL: URL(string: "https://fixture.example.invalid/api")!,
+                retryPolicy: RetryPolicy(maximumRetries: 0, delay: .zero, maximumDelay: .zero)
+            ),
+            transport: transport,
+            tokenStore: CommandFixtureTokenStore(),
+            accessTokenProvider: CommandFixtureTokenProvider()
+        )
+        let workspaceClient = JarvisWorkspaceClient(client: client)
+
+        do {
+            _ = try await workspaceClient.htmlArtifact(id: "../\(artifactID)")
+            XCTFail("Expected malformed artifact IDs to be rejected")
+        } catch {
+            XCTAssertEqual(error as? JarvisWorkspaceClientError, .invalidResponse)
+        }
+        do {
+            _ = try await workspaceClient.htmlArtifact(id: artifactID)
+            XCTFail("Expected an artifact with a different ID to be rejected")
+        } catch {
+            XCTAssertEqual(error as? JarvisWorkspaceClientError, .invalidResponse)
+        }
+    }
+
     func testReceivesAndAcknowledgesCommandWithFixtureTransport() async throws {
         let sessionId = "12345678-1234-4234-8234-123456789abc"
         let view: [String: Any] = [

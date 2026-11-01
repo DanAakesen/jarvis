@@ -130,7 +130,7 @@ private struct GeneratedViewContent: View {
         case .image(let envelope):
             ImageRenderer(data: envelope.data, previewImage: previewImage, language: language)
         case .htmlApp(let envelope):
-            UnsupportedRenderer(title: envelope.title, kind: text(.htmlApp), webAppURL: webAppURL, language: language)
+            HTMLAppRenderer(artifactId: envelope.data.artifactId, runtime: runtime, language: language)
         case .knowledgeGraph(let envelope):
             UnsupportedRenderer(title: envelope.title, kind: text(.knowledgeGraph), webAppURL: webAppURL, language: language)
         case .code(let envelope):
