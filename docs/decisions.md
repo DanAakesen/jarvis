@@ -18,6 +18,20 @@ failed DNS; references and the eager-layout choice are listed in agent context,
 not presented as successfully read documentation. Simulator and physical-device
 acceptance remain separate.
 
+Latest comment 6559375995 cites run 41313981594 on `7c8d3072`, not its successor
+`89a8b241`. Both current main (`32af478a`) and merged #1493 (`c0c12f6`)
+still produce `chat-markdown-block-\(messageID)-\(index)`; the fixture's calendar
+row remains `413`. The presentation query is not stale, so do not rename it or
+weaken native checks. Add source-contract coverage for this agreement and for
+MainActor publication before scheduling the network task, retaining the existing
+send/scroll correction. This proves source ordering, not rendered visibility.
+The full old-run logs confirm both two-second waiters timed out; later diagnostics
+show contained bubbles and cannot establish when insertion became visible.
+The calendar assertion-time hierarchy remains unavailable because its artifact
+blob host fails DNS. Do not assign an unproven calendar or physical-device cause.
+Run 41317288478 compiled `89a8b241` but was cancelled during captures, skipping
+the native gate. Latest-head native execution and physical acceptance remain outstanding.
+
 Run 41313981594 disproved acceptance of `7c8d3072`: native compilation and captures
 passed, but calendar 15/16 and both immediate-send waiters failed; recovery passed.
 Remove the remaining bidirectional scroll-position writer rather than allowing

@@ -3565,6 +3565,20 @@ Core tests and all 61 pipeline contracts pass. Artifact 13087453206 exists, but
 its blob host is DNS-blocked; full logs were inspected, not the new calendar
 hierarchy. Next verify the updated head's native gate and physical iPhone.
 
+Latest-comment 6559375995 follow-up verifies that `89a8b241` already synchronously
+publishes the pending row on MainActor before its network task and preserves the
+single scroll owner. Main `32af478a`, merged #1493 and the calendar fixture agree
+on `chat-markdown-block-413-0`; no stale UI-test identifier was found or renamed.
+Added focused source contracts for send ordering and the presentation/fixture
+identifier agreement, without changing app formatting, copy, design, assertions
+or deadlines. Four focused pipeline contracts, 37 relevant Core tests and Swift
+syntax parsing pass locally. These are not native-runtime acceptance. Run
+41317288478 on `89a8b241` compiled the simulator app, then was cancelled during
+capture; its native gate was skipped. The latest-head native gate, assertion-time
+calendar artifact, physical iPhone, Apple documentation review and Swift CodeQL
+qualification remain pending. #1485 is still open;
+integrate main after it lands rather than repeating its changes here.
+
 P15-39 / [#1480](https://github.com/DanAakesen/jarvis/issues/1480) adds the native
 list-only Track workout tab and plus-button New lift sheet with past-exercise
 chips, using the shared lift contract. The Dashboard/Track workout segmented

@@ -778,6 +778,40 @@ class SafeFailureTests(unittest.TestCase):
         gate = next(step for step in steps if step.get("name") == "Native Chat UI behaviour gate")
         self.assertIn('-resultBundlePath "$RUNNER_TEMP/chat-behaviour.xcresult"', gate["run"])
 
+    def test_ios_chat_send_publishes_the_row_before_scheduling_network_work(self):
+        model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()
+        self.assertIn("@MainActor\nfinal class JarvisChatModel: ObservableObject", model)
+        self.assertIn("@Published var messages: [JarvisChatRow]", model)
+        send = model.split("func send() -> String?", 1)[1].split("func cancel()", 1)[0]
+        synchronous, network = send.split("sendTask = Task", 1)
+        self.assertNotIn("await", synchronous)
+        self.assertIn("messages.append(JarvisChatRow(pendingID: pendingID, text: text))", synchronous)
+        self.assertLess(synchronous.index("messages.append("), synchronous.index('draft = ""'))
+        self.assertIn("await sendTurn(text: text, attachments: attachments)", network)
+        self.assertIn("return pendingID", network)
+        screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        action = screen.split("private func sendMessage()", 1)[1].split("private var addAttachmentHint", 1)[0]
+        self.assertNotIn("await", action)
+        self.assertNotIn("Task {", action)
+        self.assertIn("if let insertedID = model.send() {\n            requestedScrollID = insertedID", action)
+        self.assertIn("let messages = model.messages", screen)
+
+    def test_ios_calendar_presentation_identifiers_match_the_app_and_fixture(self):
+        screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        presentation = (ROOT / "apps/ios/JarvisUITests/ChatPresentationUITests.swift").read_text()
+        identifier = 'chat-markdown-block-\\(messageID)-\\(index)'
+        self.assertIn(f'.accessibilityIdentifier("{identifier}")', screen)
+        self.assertIn(f'.matching(identifier: "{identifier}")', presentation)
+        for index in range(5):
+            self.assertIn(f'markdownBlock(in: app, messageID: "413", index: {index})', presentation)
+        fixture = (ROOT / "apps/ios/Jarvis/JarvisFixtureScenario.swift").read_text()
+        scenario = json.loads(fixture.split('private static let scenario = #"""', 1)[1].split('"""#', 1)[0])
+        messages = scenario["interactions"][0]["response"]["body"]["messages"]
+        calendar = next(message for message in messages if message["id"] == "413")
+        self.assertEqual(calendar["role"], "jarvis")
+        self.assertTrue(calendar["text"].startswith("## Calendar for the next 30 days\n\n"))
+        self.assertEqual(calendar["toolCalls"][0]["tool"], "get_calendar_events")
+
     def test_ios_chat_presentation_and_send_fixtures_isolate_auth_before_first_render(self):
         gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
         fixture = gate.split("private static var isChatFixture", 1)[1].split("var shouldCoverContent", 1)[0]

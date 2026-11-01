@@ -6264,6 +6264,18 @@ The deliberate application choice is eager layout of loaded history for accurate
 row bounds, not a custom scroll control. Large-history performance, simulator
 geometry and physical-iPhone acceptance need native evidence.
 
+For latest comment 6559375995, the existing pipeline source contracts also check
+MainActor/Published ownership, synchronous send-action ordering and the matching
+Markdown identifier/fixture row. Main `32af478a` and merged #1493 still emit
+`chat-markdown-block-\(messageID)-\(index)`; calendar row `413` is unchanged.
+No native presentation identifier should be renamed without runtime evidence.
+Full logs for run 41313981594 were retrieved through the signed Actions log URL;
+the calendar hierarchy is exported as `chat-behaviour/C88F783B-5844-4DEA-876B-91DC15731885.txt`
+in artifact 13087453206, but its blob host remains DNS-blocked. The log does not
+contain that hierarchy, so its current calendar cause is unverified. MainActor
+documentation retrieval also failed DNS again. Linux source contracts, Core
+tests and syntax parsing cannot certify the unchanged native deadlines.
+
 Exact-head run 41313981594 (`7c8d3072`) compiled the app and captured screenshots,
 but failed calendar 15/16 and both language visibility waiters at current line
 127 (the prior run's line 122); failure recovery passed. Late diagnostics report
