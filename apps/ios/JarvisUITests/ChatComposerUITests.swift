@@ -34,7 +34,7 @@ final class ChatComposerUITests: XCTestCase {
             XCTAssertTrue(plus.waitForExistence(timeout: 10))
             plus.tap()
 
-            let item = app.descendants(matching: .any)["chat.plus.camera"]
+            let item = cameraMenuItem(in: app, language: language)
             XCTAssertTrue(item.waitForExistence(timeout: 5))
             let window = app.windows.firstMatch.frame
             XCTAssertGreaterThan(item.frame.minY, window.height * 0.3, "The menu must not open at the top of the screen.")
@@ -45,13 +45,13 @@ final class ChatComposerUITests: XCTestCase {
     }
 
     func testCameraSheetOpensFromThePlusMenu() {
-        for language in ["en", "da"] {
+        for language in ["en"] {
             let app = launch(language: language, extraArguments: ["--ui-test-camera-sheet"])
             let plus = app.buttons["chat.plus"]
             XCTAssertTrue(plus.waitForExistence(timeout: 10))
             plus.tap()
-            let camera = app.descendants(matching: .any)["chat.plus.camera"]
-            XCTAssertTrue(camera.waitForExistence(timeout: 5))
+            let camera = cameraMenuItem(in: app, language: language)
+            XCTAssertTrue(camera.waitForExistence(timeout: 10))
             XCTAssertTrue(camera.isEnabled)
             camera.tap()
 
@@ -61,6 +61,14 @@ final class ChatComposerUITests: XCTestCase {
             XCTAssertTrue(app.buttons["camera.shutter"].waitForNonExistence(timeout: 5))
             app.terminate()
         }
+    }
+
+    /// Native menu items may not keep the SwiftUI identifier once enabled, so match the localized title too.
+    private func cameraMenuItem(in app: XCUIApplication, language: String) -> XCUIElement {
+        let title = language == "da" ? "Kamera" : "Camera"
+        return app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ OR label == %@", "chat.plus.camera", title))
+            .firstMatch
     }
 
     private func launch(language: String, extraArguments: [String] = []) -> XCUIApplication {

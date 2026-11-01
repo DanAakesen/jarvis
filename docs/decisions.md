@@ -10448,6 +10448,10 @@ app), the stored theme is applied at the root because the drawer sits outside
 and fixture side effects before the route changes. `ios-testflight.yml` equals
 `origin/main`.
 
+## 2026-11-01 — P15-52 camera-sheet UI test matches the menu item by title
+
+Run 41347453078 failed `testCameraSheetOpensFromThePlusMenu` because `chat.plus.camera` was not found once the native menu item was enabled. The test now matches the item by identifier or by its localized title (Kamera/Camera). Not yet run on a Mac; the navigation branch had no new commits when this was pushed.
+
 ## 2026-11-01: One navigation UI test run, trace in the failure message
 
 Confirmed: CI run 41347453078 showed the menu-size assertion failing at 43.99999999999999
@@ -10458,3 +10462,7 @@ five-second-delay menu tests were folded into the English menu test. The item te
 waits for `factory.segment.board` (always rendered) and puts the temporary on-screen
 navigation trace (`debug.navigation.trace`) in its failure message. The cause of the
 non-navigating item is still unconfirmed.
+
+## 2026-11-01: Merged navigation 062ef8b; camera-sheet test runs in English only
+
+The navigation branch now runs its UI classes once in the screenshot step with 60/90 second per-test limits, and ChatComposerUITests is listed there. The camera-sheet test looped over two languages (about 30 seconds each) and would hit that limit, so it now covers English only; the Danish menu title is still matched by the other tests.
