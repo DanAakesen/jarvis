@@ -60,13 +60,20 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(screen.contains(".scrollEdgeEffectStyle(.soft, for: .top)"))
     }
 
-    func testSidebarDimmingOverlayDoesNotInterceptChatActions() throws {
+    func testSidebarInteractionsDoNotInterceptChatActions() throws {
         let contentView = try source("apps/ios/Jarvis/ContentView.swift")
         let dimmingOverlay = try section(
             #"\.overlay \{\s*Color\.black(.*?)\n\s*\}"#,
             in: contentView
         )
         XCTAssertTrue(dimmingOverlay.contains(".allowsHitTesting(false)"))
+
+        let navigationSurface = try section(
+            #"(\.offset\(x: -drawerWidth \* progress\).*?\.accessibilityHidden\(navigation\.isSidebarOpen\))"#,
+            in: contentView
+        )
+        XCTAssertFalse(navigationSurface.contains(".simultaneousGesture(sidebarDragGesture("))
+        XCTAssertTrue(contentView.contains(".frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)"))
     }
 
     func testSimulatorArtifactContainsBaseAndUpdatedChatCaptures() throws {
