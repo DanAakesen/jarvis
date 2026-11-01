@@ -73,7 +73,7 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
         let screens: [String: [String]] = [
             "ContentView.swift": ["JarvisPlaceholderView"],
             "JarvisChatScreen.swift": ["JarvisChatScreen"],
-            "VoiceScreen.swift": ["VoiceScreenView", "VoicePhotoViewfinder", "VoiceScreenSharePicker"],
+            "VoiceScreen.swift": ["VoiceScreenView", "VoicePhotoViewfinder"],
             "JarvisActivitySheet.swift": ["JarvisActivitySheet"],
             "WorkspacesView.swift": ["WorkspacesView"],
             "GeneratedWorkspaceView.swift": ["GeneratedWorkspaceSheet"],

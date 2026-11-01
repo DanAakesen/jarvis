@@ -357,6 +357,7 @@ describe('committed SQL manifest', () => {
       '0070_daily_lift_entries.sql',
       '0071_activitykit_registrations.sql',
       '0072_weather_job_results.sql',
+      '0073_approval_notification_registrations.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

@@ -17,13 +17,11 @@ enum ActivitySheetKind: String, Identifiable {
 private enum ChatSheet: Identifiable {
     case activity(ActivitySheetKind)
     case camera
-    case screenShare
 
     var id: String {
         switch self {
         case .activity(let kind): "activity-\(kind.id)"
         case .camera: "camera"
-        case .screenShare: "screen-share"
         }
     }
 }
@@ -118,6 +116,8 @@ struct JarvisChatScreen: View {
     @State private var cameraPreparationID = UUID()
     @State private var photoCaptureID = UUID()
     @State private var isScreenSharing = false
+    @State private var screenShare = ScreenShareSession()
+    @State private var screenSharePickerToken = 0
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
@@ -281,11 +281,6 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
                 }
-            case .screenShare:
-                screenSharePicker
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -303,6 +298,22 @@ struct JarvisChatScreen: View {
         attachmentPickers
         .jarvisAmbientBackground()
         .onAppear(perform: refreshScreenSharing)
+        .task(id: screenShare.isBusy) {
+            while screenShare.isBusy && !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                refreshScreenSharing()
+            }
+        }
+        .background {
+            VoiceSystemBroadcastPicker(
+                accessibilityLabel: copy(.screenSharePickerLabel),
+                presentationToken: screenSharePickerToken
+            )
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
         .onDisappear {
             dictation.stop()
             model.suspendObservation()
@@ -582,15 +593,19 @@ struct JarvisChatScreen: View {
 
     private var composer: some View {
         VStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
+            if let confirmation = model.activeConfirmation {
+                approvalBar(confirmation)
+            }
             if model.shouldShowNowBar {
                 nowBar
             }
-            if isScreenSharing {
-                Label(copy(.screenSharingActive), systemImage: "dot.radiowaves.left.and.right")
+            if let status = screenShareStatus {
+                Label(status.text, systemImage: status.symbol)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(status.isError ? Color.red : Color.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+                    .accessibilityAddTraits(.updatesFrequently)
             }
             if let error = model.actionError {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -838,7 +853,7 @@ struct JarvisChatScreen: View {
                 }
             }
             .accessibilityIdentifier("chat.plus.screenShare")
-            .disabled(model.fixtureMode)
+            .disabled(model.fixtureMode || screenShare.state == .starting)
             Button(
                 isVideoEnabled ? copy(.disableVideo) : copy(.enableVideo),
                 systemImage: isVideoEnabled ? "video.slash" : "video"
@@ -909,19 +924,15 @@ struct JarvisChatScreen: View {
         }
     }
 
-    private var screenSharePicker: some View {
-        VStack(spacing: JarvisDesignTokens.chatSheetRowSpacing) {
-            Text(copy(.screenShareTitle))
-                .font(.title2.weight(.semibold))
-            Text(copy(.screenShareInstructions))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-            VoiceSystemBroadcastPicker(accessibilityLabel: copy(.screenSharePickerLabel))
-                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+    private var screenShareStatus: (text: String, symbol: String, isError: Bool)? {
+        switch screenShare.state {
+        case .idle: nil
+        case .starting: (copy(.screenShareStarting), "dot.radiowaves.left.and.right", false)
+        case .live: (copy(.screenSharingActive), "dot.radiowaves.left.and.right", false)
+        case .stopped: (copy(.screenShareStopped), "stop.circle", false)
+        case .failed: (copy(.screenShareFailed), "exclamationmark.triangle", true)
+        case .extensionMissing: (copy(.screenShareExtensionMissing), "exclamationmark.triangle", true)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(JarvisDesignTokens.chatHorizontalInset)
-        .jarvisAmbientBackground()
     }
 
     /// UI tests run in the simulator without a camera; they present the real sheet over an idle session.
@@ -1080,16 +1091,20 @@ struct JarvisChatScreen: View {
     private func openScreenSharePicker() {
         guard !model.fixtureMode else { return }
         stopVideo()
-        presentedSheet = .screenShare
+        if screenShare.requestStart(extensionInstalled: VoiceBroadcastExtension.isInstalled) {
+            screenSharePickerToken += 1
+        }
     }
 
     private func stopScreenSharing() {
         screenShareBridge.requestStop()
+        screenShare.requestStop()
         isScreenSharing = false
     }
 
     private func refreshScreenSharing() {
-        isScreenSharing = screenShareBridge.isSharing
+        screenShare.observe(isSharing: screenShareBridge.isSharing)
+        isScreenSharing = screenShare.state == .live
     }
 
     private func sendMessage() {
@@ -1136,85 +1151,82 @@ struct JarvisChatScreen: View {
     }
 
     private var nowBar: some View {
-        VStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Button {
-                presentedSheet = .activity(.background)
-                Task { await model.refreshActivity() }
-            } label: {
-                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    if model.isSending {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
-                            .accessibilityHidden(true)
-                    }
-                    Text(model.nowTitle)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.up")
-                        .font(.caption.weight(.semibold))
+        Button {
+            presentedSheet = .activity(.background)
+            Task { await model.refreshActivity() }
+        } label: {
+            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                if model.isSending {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
                         .accessibilityHidden(true)
                 }
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                .padding(.horizontal, JarvisDesignTokens.chatGlassInset)
-                .contentShape(Rectangle())
+                Text(model.nowTitle)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up")
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(.glass)
-            .accessibilityLabel("Background activity, \(model.nowTitle)")
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .padding(.horizontal, JarvisDesignTokens.chatGlassInset)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.glass)
+        .accessibilityLabel("Background activity, \(model.nowTitle)")
+        .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+    }
 
-            if let confirmation = model.activeConfirmation {
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(confirmation.actionKind == .calendarChange
-                         ? (appLanguage == .da ? "Kalenderændring" : "Calendar change")
-                         : confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(confirmation.summary)
-                        .font(.subheadline)
-                        .lineLimit(JarvisDesignTokens.chatConfirmationSummaryLines)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    HStack {
-                        Button {
-                            Task { await model.resolve(confirmation, decision: .reject) }
-                        } label: {
-                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
-                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
-                                 : JarvisApprovalLocalization.string(.decline, language: appLanguage))
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        }
-                        .buttonStyle(.glass)
-                        .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
-                        .accessibilityIdentifier("now-confirmation-decline-\(confirmation.id)")
-                        .accessibilityHint(model.fixtureMode
-                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
-                            : "")
-                        Spacer()
-                        Button {
-                            Task { await model.resolve(confirmation, decision: .approve) }
-                        } label: {
-                            Text(model.resolvingConfirmationIDs.contains(confirmation.id)
-                                 ? (appLanguage == .da ? "Sender…" : "Sending…")
-                                 : JarvisApprovalLocalization.string(.approve, language: appLanguage))
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .disabled(model.fixtureMode || model.resolvingConfirmationIDs.contains(confirmation.id))
-                        .accessibilityIdentifier("now-confirmation-approve-\(confirmation.id)")
-                        .accessibilityHint(model.fixtureMode
-                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
-                            : "")
-                    }
-                }
-                .padding(JarvisDesignTokens.chatGlassInset)
-                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
-                .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-            }
+    private func approvalBar(_ confirmation: PendingConfirmation) -> some View {
+        HStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
+            approvalButton(confirmation, decision: .reject)
+                .buttonStyle(.glass)
+                .tint(JarvisDesignTokens.secondaryAccent)
+                .accessibilityIdentifier("now-confirmation-decline-\(confirmation.id)")
+            approvalButton(confirmation, decision: .approve)
+                .buttonStyle(.glassProminent)
+                .tint(JarvisDesignTokens.primaryAccent)
+                .accessibilityIdentifier("now-confirmation-approve-\(confirmation.id)")
         }
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+    }
+
+    private func approvalButton(
+            _ confirmation: PendingConfirmation,
+            decision: ConfirmationDecision
+    ) -> some View {
+        let isPending = model.isResolving(confirmation, decision: decision)
+        let actionLabel = JarvisApprovalLocalization.string(
+            decision == .approve ? .approve : .decline,
+            language: appLanguage
+        )
+        return Button {
+            Task { await model.resolve(confirmation, decision: decision) }
+        } label: {
+            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                if isPending {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityHidden(true)
+                }
+                Text(isPending
+                     ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
+                     : actionLabel)
+            }
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .contentShape(Rectangle())
+        }
+        .disabled(model.fixtureMode || model.isResolving(confirmation))
+        .accessibilityLabel(actionLabel)
+        .accessibilityValue(isPending
+            ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
+            : "")
+        .accessibilityHint(model.fixtureMode
+            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+            : "")
     }
 
     private func timeString(_ value: String) -> String {

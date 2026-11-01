@@ -68,9 +68,16 @@ import {
 } from './system-status.js';
 import { registerWebSocketPlugin } from './websocket.js';
 import { registerActivityKitRoutes, type ActivityKitServices } from './push/activitykit-routes.js';
+import {
+  registerApprovalNotificationRoutes,
+  type ApprovalNotificationServices,
+} from './push/approval-notifications.js';
+import type { BrowserConfirmation } from './core/owner-interactions.js';
 
 export interface BuildAppOptions {
   readonly activityKit?: ActivityKitServices;
+  readonly approvalNotifications?: ApprovalNotificationServices;
+  readonly notifyApproval?: (confirmation: BrowserConfirmation) => void;
   readonly managedRuntime?: import('./core/managed-runtime-routes.js').ManagedRuntimeServices;
   /** Supplied only after managed definition, settings and application-policy verification. */
   readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
@@ -182,6 +189,7 @@ declare module 'fastify' {
     approvalInterpreter: ApprovalInterpreter;
     browserAgent: BrowserAgent | null;
     ownerInteractions: OwnerInteractionService | null;
+    notifyApproval: (confirmation: BrowserConfirmation) => void;
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
@@ -257,6 +265,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     : null);
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
+  app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
   app.decorate('backendLogsConfigured', config.backendLogs !== undefined);
   app.decorate('backendLogAuthorizationProbe', options.backendLogAuthorizationProbe ?? null);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
@@ -348,6 +357,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('onEmbeddingModelChanged', options.onEmbeddingModelChanged ?? null);
   app.addHook('onReady', async () => { await backgroundJobs.initialize(); });
   registerActivityKitRoutes(app, options.activityKit);
+  registerApprovalNotificationRoutes(app, options.approvalNotifications);
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);

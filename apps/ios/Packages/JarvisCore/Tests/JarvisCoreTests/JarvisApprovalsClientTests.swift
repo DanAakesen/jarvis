@@ -99,6 +99,52 @@ final class JarvisApprovalsClientTests: XCTestCase {
         ])
     }
 
+    func testRegistersAndRemovesAnAuthenticatedApprovalNotificationDevice() async throws {
+        let token = String(repeating: "ab", count: 32)
+        let transport = FakeApprovalsTransport([
+            HTTPResponse(statusCode: 204),
+            HTTPResponse(statusCode: 204),
+        ])
+        let approvals = makeApprovalsClient(transport: transport)
+
+        try await approvals.registerDeviceToken(token, language: .en, showActions: true, timeZone: "Europe/Copenhagen")
+        try await approvals.unregisterDeviceToken(token)
+
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.post, .delete])
+        XCTAssertEqual(requests.map(\.url.path), [
+            "/api/ios/approval-notifications",
+            "/api/ios/approval-notifications",
+        ])
+        let bodies = try requests.compactMap(\.body).map {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: $0) as? [String: Any])
+        }
+        XCTAssertEqual(bodies[0]["deviceToken"] as? String, token)
+        XCTAssertEqual(bodies[0]["language"] as? String, "en")
+        XCTAssertEqual(bodies[0]["showActions"] as? Bool, true)
+        XCTAssertEqual(bodies[0]["timeZone"] as? String, "Europe/Copenhagen")
+        XCTAssertEqual(bodies[1]["deviceToken"] as? String, token)
+    }
+
+    func testRejectsMalformedApprovalNotificationDeviceTokens() async throws {
+        let transport = FakeApprovalsTransport([])
+        let approvals = makeApprovalsClient(transport: transport)
+
+        do {
+            try await approvals.registerDeviceToken(
+                "not-a-token",
+                language: .da,
+                showActions: true,
+                timeZone: "Europe/Copenhagen"
+            )
+            XCTFail("Expected invalid device token rejection")
+        } catch {
+            XCTAssertEqual(error as? JarvisApprovalsClientError, .invalidResponse)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
+    }
+
     func testMapsDecisionStatusesWithoutRetrying() async throws {
         let id = String(repeating: "B", count: 43)
         let cases: [(Int, any Error)] = [

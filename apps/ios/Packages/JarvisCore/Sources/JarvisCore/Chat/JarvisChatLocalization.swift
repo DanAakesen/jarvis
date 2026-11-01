@@ -60,6 +60,18 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case dictationUnavailable = "chat.composer.dictateUnavailable"
     case sendMessage = "chat.composer.send"
     case done = "chat.done"
+    case screenShareStarting = "chat.screenShareStarting"
+    case screenShareLive = "chat.screenShareLive"
+    case screenShareStopped = "chat.screenShareStopped"
+    case screenShareFailed = "chat.screenShareFailed"
+    case screenShareExtensionMissing = "chat.screenShareExtensionMissing"
+    case failedChecksTitle = "chat.failedChecksTitle"
+    case failedChecksSummary = "chat.failedChecksSummary"
+    case dismiss = "chat.dismiss"
+    case dismissing = "chat.dismissing"
+    case dismissLabel = "chat.dismissLabel"
+    case backgroundTaskDismissed = "chat.backgroundTaskDismissed"
+    case needsFailedTitle = "chat.needsFailedTitle"
 }
 
 public enum JarvisChatLocalization {

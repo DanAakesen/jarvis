@@ -170,6 +170,7 @@ private final class JarvisGateModel: ObservableObject {
                 presentation = .signIn(.idle)
             case .unlocked:
                 presentation = .unlocked
+                await prepareApprovalNotifications()
                 await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
             }
         } catch {
@@ -240,6 +241,7 @@ private final class JarvisGateModel: ObservableObject {
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
+        await JarvisApprovalNotificationCoordinator.shared.unregisterDeviceToken()
         do {
             try await tokenStore?.delete()
             try provider?.signOut()
@@ -325,12 +327,19 @@ private final class JarvisGateModel: ObservableObject {
             }
             presentation = .unlocked
             isPrivacyCoverVisible = false
+            await prepareApprovalNotifications()
             await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
         } catch let error as LAError where error.code == .biometryLockout || error.code == .userFallback {
             presentation = .lock(.passcode)
         } catch {
             presentation = .lock(.failed)
         }
+    }
+
+    private func prepareApprovalNotifications() async {
+        let coordinator = JarvisApprovalNotificationCoordinator.shared
+        guard await coordinator.requestAuthorizationIfNeeded() else { return }
+        await coordinator.registerForRemoteNotificationsIfAuthorized()
     }
 }
 

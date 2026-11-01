@@ -78,6 +78,38 @@ public final class JarvisApprovalsClient: Sendable {
         }
     }
 
+    public func registerDeviceToken(
+        _ token: String,
+        language: JarvisAppLanguage,
+        showActions: Bool,
+        timeZone: String
+    ) async throws {
+        guard Self.validDeviceToken(token) else { throw JarvisApprovalsClientError.invalidResponse }
+        let response = try await client.performAuthenticatedRequest(
+            method: .post,
+            path: ["ios", "approval-notifications"],
+            body: try JSONEncoder().encode(DeviceTokenRegistration(
+                deviceToken: token.lowercased(),
+                language: language.rawValue,
+                showActions: showActions,
+                timeZone: timeZone
+            )),
+            idempotent: true
+        )
+        guard response.statusCode == 204 else { throw JarvisApprovalsClientError.invalidResponse }
+    }
+
+    public func unregisterDeviceToken(_ token: String) async throws {
+        guard Self.validDeviceToken(token) else { throw JarvisApprovalsClientError.invalidResponse }
+        let response = try await client.performAuthenticatedRequest(
+            method: .delete,
+            path: ["ios", "approval-notifications"],
+            body: try JSONEncoder().encode(DeviceTokenRemoval(deviceToken: token.lowercased())),
+            idempotent: true
+        )
+        guard response.statusCode == 204 else { throw JarvisApprovalsClientError.invalidResponse }
+    }
+
     private static func validID(_ value: String) -> Bool {
         value.range(of: #"^[A-Za-z0-9_-]{43}$"#, options: .regularExpression) != nil
     }
@@ -88,8 +120,23 @@ public final class JarvisApprovalsClient: Sendable {
         formatter.formatOptions.insert(.withFractionalSeconds)
         return formatter.date(from: value) != nil
     }
+
+    private static func validDeviceToken(_ value: String) -> Bool {
+        value.range(of: #"^(?:[0-9a-f]{2}){32,256}$"#, options: .regularExpression) != nil
+    }
 }
 
 private struct DecisionRequest: Encodable {
     let decision: ConfirmationDecision
+}
+
+private struct DeviceTokenRegistration: Encodable {
+    let deviceToken: String
+    let language: String
+    let showActions: Bool
+    let timeZone: String
+}
+
+private struct DeviceTokenRemoval: Encodable {
+    let deviceToken: String
 }

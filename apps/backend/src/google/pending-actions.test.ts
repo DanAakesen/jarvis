@@ -53,6 +53,24 @@ describe('pending Google actions', () => {
       .toMatchObject({ status: 'none', lastChange: { status: 'completed' } });
   });
 
+  it('notifies approval delivery only when a calendar confirmation is staged', () => {
+    const calendar = fixture();
+    const notifyApproval = vi.fn();
+    calendar.actions.onConfirmationPending = notifyApproval;
+    const staged = calendar.stage();
+    expect(notifyApproval).toHaveBeenCalledOnce();
+    expect(notifyApproval).toHaveBeenCalledWith(expect.objectContaining({
+      id: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/u),
+      actionKind: 'calendar_change',
+      summary: staged.summary,
+    }));
+
+    const mail = fixture('mail');
+    mail.actions.onConfirmationPending = notifyApproval;
+    mail.stage();
+    expect(notifyApproval).toHaveBeenCalledOnce();
+  });
+
   it.each(['reject', 'expire', 'replace', 'abort', 'failure'])('keeps tap approval safe on %s', async (mode) => {
     const f = fixture();
     const card = f.actions.pendingBrowserConfirmations()[0]!;
