@@ -914,7 +914,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", content)
         self.assertNotIn("@State private var navigation", content)
         self.assertNotIn("@StateObject private var navigation", content)
-        self.assertIn("destinationView(navigation.currentDestination)", shell)
+        self.assertIn("JarvisDestinationHost(navigation: navigation)", shell)
         self.assertNotIn("path: Binding", shell)
         self.assertIn("navigation.voiceSessionStateChanged(state)", shell)
         self.assertIn("guard appliedSessionEpoch == sessionEpoch else { return }", shell)

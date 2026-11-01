@@ -10486,3 +10486,11 @@ CI trace after tapping a sidebar item was `path=[softwareFactory] current=softwa
 was correct but the stack never pushed the destination. The visible root screen is now selected directly from
 `navigation.currentDestination` inside a plain `NavigationStack` (kept only for nested pushes such as Factory task
 detail), so a root destination cannot be dropped by a path push. Unconfirmed on device until the next preview build.
+
+## 2026-11-02: Root screen host observes the navigation model directly (P15-41)
+
+CI on f5a5d64 showed `current=softwareFactory shown=chat open=false`: the model and drawer updated but the screen
+stayed on Chat, with both the path push and the `currentDestination` switch. The drawer reads the model in its own
+body; ContentView read it only inside its `GeometryReader` closure, which is not a reliable subscription. The root
+screen is now built by `JarvisDestinationHost`, which holds the model as `@ObservedObject`. This is the best reading
+of the code, not reproduced; confirm on the next preview build.
