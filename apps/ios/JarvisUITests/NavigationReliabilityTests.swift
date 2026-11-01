@@ -29,7 +29,7 @@ final class NavigationReliabilityTests: XCTestCase {
             openByEdge()
             XCUIDevice.shared.press(.home)
             app.activate()
-            tap(app.buttons["navigation.openSidebar"])
+            tapToolbarButton("navigation.openSidebar")
             assertSidebarOpen()
             closeByTap()
             assertChatInputWorks()
@@ -45,7 +45,8 @@ final class NavigationReliabilityTests: XCTestCase {
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ]
         app.launch()
-        waitFor(app.buttons["navigation.openSidebar"], key: "isHittable", value: true)
+        waitFor(app.descendants(matching: .any)["chat.input"], key: "isHittable", value: true)
+        waitForToolbarFrame(app.buttons["navigation.openSidebar"])
         attachScreenshot("Before navigation sequence (\(language))")
     }
 
@@ -53,7 +54,7 @@ final class NavigationReliabilityTests: XCTestCase {
         launch(language: language)
         for iteration in 1...3 {
             XCTContext.runActivity(named: "\(language): navigation cycle \(iteration)") { _ in
-                tap(app.buttons["navigation.openSidebar"])
+                tapToolbarButton("navigation.openSidebar")
                 assertSidebarOpen()
                 closeByTap()
                 assertChatInputWorks()
@@ -65,8 +66,9 @@ final class NavigationReliabilityTests: XCTestCase {
                 waitFor(plusMenu, key: "exists", value: true)
                 app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
                 waitFor(plusMenu, key: "exists", value: false)
-                tap(app.buttons["chat.notifications"])
-                tap(app.buttons["chat.notifications.done"])
+                tapToolbarButton("chat.notifications")
+                tapToolbarButton("chat.notifications.done")
+                waitFor(app.buttons["chat.notifications.done"], key: "exists", value: false)
                 assertChatInputWorks()
 
                 navigate(to: "health")
@@ -118,7 +120,7 @@ final class NavigationReliabilityTests: XCTestCase {
                 minimizeVoice()
                 tap(app.buttons["voice.mini.end"])
                 waitFor(app.buttons["voice.mini.end"], key: "exists", value: false)
-                tap(app.buttons["navigation.openSidebar"])
+                tapToolbarButton("navigation.openSidebar")
                 assertSidebarOpen()
                 closeByTap()
                 assertChatInputWorks()
@@ -190,11 +192,50 @@ final class NavigationReliabilityTests: XCTestCase {
         element.tap()
     }
 
-    private func waitFor(_ element: XCUIElement, key: String, value: Bool) {
+    private func tapToolbarButton(
+        _ identifier: String, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let button = app.buttons[identifier]
+        waitForToolbarFrame(button, file: file, line: line)
+        // iOS 26 toolbar proxies can report no activation point despite a valid frame.
+        // A physical center tap still has to trigger the asserted navigation/sheet change.
+        button.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    private func waitForToolbarFrame(
+        _ button: XCUIElement, file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let predicate = NSPredicate { _, _ in
+            guard button.exists, button.isEnabled else { return false }
+            let frame = button.frame
+            return !frame.isEmpty && frame.origin.x.isFinite && frame.origin.y.isFinite &&
+                frame.width.isFinite && frame.height.isFinite && self.app.frame.contains(frame)
+        }
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: button)
+        let result = XCTWaiter.wait(for: [expectation], timeout: 10)
+        if result != .completed { attachFailureEvidence("Invalid toolbar frame") }
+        XCTAssertEqual(result, .completed, "\(button) has no enabled onscreen frame",
+                       file: file, line: line)
+    }
+
+    private func waitFor(
+        _ element: XCUIElement, key: String, value: Bool,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
         let predicate = NSPredicate(format: "%K == %@", key, NSNumber(value: value))
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 10), .completed,
-                       "\(element) did not reach \(key)=\(value)")
+        let result = XCTWaiter.wait(for: [expectation], timeout: 10)
+        if result != .completed { attachFailureEvidence("Unmet \(key)=\(value)") }
+        XCTAssertEqual(result, .completed, "\(element) did not reach \(key)=\(value)",
+                       file: file, line: line)
+    }
+
+    private func attachFailureEvidence(_ name: String) {
+        attachScreenshot(name)
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "\(name): accessibility hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
     }
 
     private func attachScreenshot(_ name: String) {

@@ -6223,6 +6223,15 @@ both the existing captures and the new repeated UI sequence. The
 `--ui-test-navigation` fixture is simulator-only and needs no live credentials,
 audio device, or backend; device authorization is unchanged.
 Linux can parse Swift and run Core/pipeline tests, but cannot execute XCUITest.
+Run 41286956749 compiled successfully; all three UI tests failed before the first
+tap while querying the native toolbar launcher's `isHittable`. Retained video
+shows Chat onscreen, and snapshots include its finite button frame alongside
+occasional invalid window frames. Toolbar tests now wait for an enabled, finite,
+onscreen frame and physically tap its center; sidebar/sheet transitions and
+normal bottom-control hittability remain mandatory. Wait failures retain a
+screenshot and accessibility hierarchy, with the assertion caller's location.
+The revised sequence still needs a successful simulator run; the original
+failure does not establish whether physical navigation works.
 Build-18 reproduction, before/after simulator test results, and physical-iPhone
 acceptance remain pending; cycle screenshots are not baseline-build evidence.
 

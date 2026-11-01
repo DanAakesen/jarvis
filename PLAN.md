@@ -3419,10 +3419,14 @@ rename waits for all of them. The rows above keep their original working titles.
 
 P15-41 / [#1484](https://github.com/DanAakesen/jarvis/issues/1484): sidebar input
 recovery and repeated bilingual iPhone navigation tests are implemented, with
-results retained by the existing iOS gate. Local navigation tests and Swift
-syntax checks pass. Next: run the ready-PR simulator gate, retain before/after
-UI-test evidence, and verify build-18 recovery on an iPhone before TestFlight.
-Simulator execution and device acceptance are not yet complete.
+results retained by the existing iOS gate. Run 41286956749 compiled the app and
+tests, but all three tests stopped at the initial toolbar `isHittable` query
+before tapping or navigating. The test now sends a physical tap within a
+validated toolbar frame and still requires the real sidebar/sheet transition.
+Local Swift syntax and nine iOS pipeline checks pass. Next: verify the revised
+simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
+on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
+unverified.
 
 Preparation is done and the owner authorised the foundation phase on 30 October 2026.
 Every screen needs the owner's approval before it is built or shipped.

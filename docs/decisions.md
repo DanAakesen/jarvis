@@ -9826,6 +9826,18 @@ they do not prove microphone transport or device behavior. Linux checks are
 not UI reproduction. Baseline build-18 and after-fix simulator results remain
 pending until macOS execution; do not treat cycle screenshots as baseline evidence.
 
+Run [41286956749](https://github.com/DanAakesen/jarvis/actions/runs/41286956749)
+subsequently compiled both native targets but all three tests failed at the
+launcher's initial `isHittable` precondition, before any tap or repeated cycle.
+Its retained video shows Chat, while toolbar snapshots include both valid button
+frames and invalid window geometry. Do not infer a physical navigation failure
+from this precondition alone, or mask one by increasing the timeout. Use an
+enabled, finite, onscreen native-toolbar frame for a physical center tap and
+continue requiring the actual sidebar/sheet transition. Preserve edge-swipe,
+bottom-control and repeated-cycle checks. The test-only correction adds explicit
+failure screenshot/hierarchy evidence; physical input remains unverified until
+the revised simulator sequence runs.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in
