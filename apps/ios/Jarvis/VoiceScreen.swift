@@ -579,10 +579,7 @@ struct VoiceMiniBar: View {
             .accessibilityLabel(model.isMuted ? "Unmute microphone" : "Mute microphone")
 
             Button {
-                Task {
-                    await model.end()
-                    onReturnToChat()
-                }
+                Task { await model.end() }
             } label: {
                 Image(systemName: "phone.down.fill")
                     .foregroundStyle(.white)
