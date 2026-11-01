@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+extension View {
+    func jarvisToolbarButtonStyle() -> some View {
+        // The system toolbar owns the glass surface; the button adds no second fill.
+        buttonStyle(.plain)
+    }
+}
+
 enum JarvisDesignTokens {
     static let primaryAccent = adaptiveColor(
         light: UIColor(red: 180.0 / 255, green: 95.0 / 255, blue: 6.0 / 255, alpha: 1),
@@ -88,6 +95,12 @@ enum JarvisDesignTokens {
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
+    static let chatPlusMenuWidth: CGFloat = 272
+    static let chatPlusMenuInset: CGFloat = 10
+    static let chatPlusMenuSpacing: CGFloat = 2
+    static let chatPlusMenuRowHeight: CGFloat = 44
+    static let chatPlusMenuRadius: CGFloat = 22
+    static let chatLivePreviewHeight: CGFloat = 126
     static let chatGlassInset: CGFloat = 12
     static let chatGlassOpacity: CGFloat = 0.16
     static let chatBadgeInset: CGFloat = 6
