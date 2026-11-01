@@ -10323,3 +10323,16 @@ shrinking path echoed through the `NavigationStack` binding is dropped as stale;
 this is a hypothesis for "items close the drawer but stay on Chat" and is not
 confirmed. A TEMPORARY on-screen debug line (path, current/shown destination,
 last writes) is in the root and must be removed once Dan confirms.
+
+## 2026-11-01: Merge of the base navigation branch and main
+
+Confirmed: merging `copilot/p15-41-fix-unreliable-navigation` (2530c471) and
+`origin/main` keeps the reveal, the 20pt open strip, plain stone icons and the
+temporary debug line, and drops the base's `JarvisSidebarDebugBadge`,
+`JarvisSidebarDiagnostics` and typed `caller:` tags. Kept from the base: the
+drawer is not gated by the page's blur, hit-testing or accessibility hiding
+(`JarvisSidebarReveal(isEnabled:)` makes it inert while the gate covers the
+app), the stored theme is applied at the root because the drawer sits outside
+`ContentView`, and `JarvisNavigationModel.navigationRequested` delivers voice
+and fixture side effects before the route changes. `ios-testflight.yml` equals
+`origin/main`.
