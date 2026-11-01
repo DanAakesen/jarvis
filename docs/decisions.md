@@ -9764,6 +9764,9 @@ expanding its Canvas for blur margins, feather the entire centre to zero alpha
 before its bounds, and animate opacity rather than rectangular-layer brightness.
 The screenshot artifact pairs all three Voice states in both themes with the
 approved board. Fresh pixel inspection remains required before visual acceptance.
+Run 41264871752 compiled the app successfully but timed out during the combined
+capture at the 20-minute job limit. Increase that existing job's bound to 30
+minutes without dropping upstream captures or adding another Mac job.
 
 Build-14 feedback requires fresh Voice to connect after End without Refresh.
 Invalidate the screen generation before teardown, close the old transport,

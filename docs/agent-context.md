@@ -6527,6 +6527,8 @@ listening, thinking and speaking in light/dark, with board/surfaces links in its
 PR comment and state-specific pairs in `comparisons.html`. `JarvisOrbRenderingTests`
 checks transparent blur margins, radial alpha feathering and opacity-only core
 animation; this source check does not replace inspecting the captured pixels.
+The combined simulator build/capture has a 30-minute job bound: the merged
+Factory, ambient and Voice captures exceeded the former 20-minute bound.
 Simulator-only `--screenshot-voice-fixture` and
 `--screenshot-voice-state=listening|thinking|speaking`, together with the existing
 `--screenshot-chat-fixture`, select the rendered Voice screen without starting
