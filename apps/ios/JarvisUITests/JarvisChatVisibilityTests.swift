@@ -5,11 +5,11 @@ final class JarvisChatVisibilityTests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testSentMessageIsVisibleInEnglish() {
+    func testSentMessageIsVisibleBeforeDelayedReplyInEnglish() {
         assertSentMessageIsVisible(language: "en", reduceMotion: false)
     }
 
-    func testSentMessageIsVisibleInDanishWithReducedMotion() {
+    func testSentMessageIsVisibleBeforeDelayedReplyInDanishWithReducedMotion() {
         assertSentMessageIsVisible(language: "da", reduceMotion: true)
     }
 
@@ -57,6 +57,9 @@ final class JarvisChatVisibilityTests: XCTestCase {
             .matching(identifier: "chat-user-message")
             .matching(NSPredicate(format: "label == %@", "You: Hi Jarvis"))
         let bubble = bubbles.firstMatch
+        let replies = app.descendants(matching: .any)
+            .matching(identifier: "chat-jarvis-message")
+            .matching(NSPredicate(format: "label BEGINSWITH %@", "Jarvis: This response is "))
         // The server's user event is delayed five seconds: this must be the local insert.
         let visible = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in
@@ -73,14 +76,15 @@ final class JarvisChatVisibilityTests: XCTestCase {
         XCTAssertLessThanOrEqual(bubble.frame.maxY, transcript.frame.maxY)
         XCTAssertLessThanOrEqual(bubble.frame.maxY, composer.frame.minY)
         XCTAssertNotEqual(composer.value as? String, "Hi Jarvis")
+        XCTAssertEqual(bubbles.count, 1)
+        XCTAssertEqual(replies.count, 0, "The sent bubble must be visible before any delayed reply.")
 
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "chat-sent-\(language)"
         screenshot.lifetime = .keepAlways
         add(screenshot)
 
-        let reply = app.descendants(matching: .any)
-            .matching(identifier: "chat-jarvis-message")
+        let reply = replies
             .matching(NSPredicate(format: "label == %@", "Jarvis: This response is synthetic."))
             .firstMatch
         XCTAssertTrue(reply.waitForExistence(timeout: 15))

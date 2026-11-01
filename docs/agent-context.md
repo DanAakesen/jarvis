@@ -6439,7 +6439,9 @@ UI behaviour gate on its already-booted simulator with `xcodebuild test`,
 send visibility above the composer from a scrolled-up long transcript, server
 acknowledgment without duplication, Danish/English settings, Reduce Motion and
 draft restoration after an unacknowledged network failure. The synthetic
-`--ui-test-chat-send` scenario delays server acknowledgment five seconds;
+`--ui-test-chat-send` scenario delays server acknowledgment five seconds and
+the first reply another five seconds. Both language tests explicitly assert one
+visible sent bubble while no reply exists, then one bubble after the reply;
 `--ui-test-chat-send-failure` injects a network failure.
 `xcresulttool export attachments` writes the kept `chat-sent-da`/`chat-sent-en`
 screenshots and attachment manifest under `chat-behaviour/` in the existing
