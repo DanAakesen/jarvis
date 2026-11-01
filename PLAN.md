@@ -13,6 +13,18 @@ analysis was skipped for database size and Swift database creation failed.
 Implementation and local qualification are complete. Live model and native
 device acceptance remain unverified; no deployment is included.
 
+Review-status follow-up: PR #1495 is already non-draft. At head `3085770`,
+[CI](https://github.com/DanAakesen/jarvis/actions/runs/41291128508) and
+[GitHub CodeQL](https://github.com/DanAakesen/jarvis/actions/runs/41291128372)
+passed; these are separate from the local scanner limitations above.
+[PR title logs](https://github.com/DanAakesen/jarvis/actions/runs/41291128460)
+require `P15-46: Bind Jarvis calendar suggestions to change approvals`.
+The available tools cannot edit PR metadata, and the browser is signed out;
+title correction remains outstanding. Full Apple documentation/HIG review
+also remains blocked by direct source access; see the source audit in
+`docs/decisions.md`. Next: correct the title, verify the fresh title gate,
+complete Apple source review and perform live model/device acceptance.
+
 ## Managed policy failure causes (#1373; 30 October 2026)
 
 Implemented optional sanitized `providerCause` across hosted error events,

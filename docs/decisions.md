@@ -17,9 +17,19 @@ Relevant sources for review:
 
 These links were attempted during the review follow-up, not read before the
 original implementation. Direct retrieval failed with hostname resolution
-errors, and web search returned no usable results. No Apple page can therefore
-be claimed as relied-on evidence for this PR in this environment. Source review
-remains unverified; this follow-up changes documentation only, not native code.
+errors, and the first web search returned no usable results. Source review
+remains unverified; these references were not relied on before implementation.
+
+The status-check follow-up also attempted
+[Declaring Your Actionable Notification Types](https://developer.apple.com/documentation/usernotifications/declaring-your-actionable-notification-types)
+and [HIG: Notifications](https://developer.apple.com/design/human-interface-guidelines/notifications).
+Direct retrieval still failed. Search returned a cited HIG Notifications excerpt
+about offering simple tasks through notification actions; this is secondary
+search evidence, not a full Apple-page review. P15-46 reuses in-app approval
+controls and changes only native feed decoding limits. It does not add system
+notifications, notification categories or `UNUserNotificationCenter` actions.
+No new native behavior or deliberate platform deviation is introduced by this
+documentation follow-up; full Apple source review remains outstanding.
 
 ## 1 November 2026 — bind offers to existing approvals (P15-46 / #1494)
 
