@@ -85,6 +85,7 @@ final class JarvisChatModel: ObservableObject {
     private var observationSuspended = false
     private var didLoad = false
     private var fixtureTurnUsed = false
+    private var pendingUserMessageID: String?
     let fixtureMode: Bool
     let startupError: String?
 
@@ -249,6 +250,17 @@ final class JarvisChatModel: ObservableObject {
     func send() {
         guard !isSending, canSend else { return }
         if fixtureMode { fixtureTurnUsed = true }
+        let optimisticID = "optimistic-\(UUID().uuidString)"
+        pendingUserMessageID = optimisticID
+        addOrReplace(JarvisChatRow(
+            id: optimisticID,
+            role: .dan,
+            text: draft,
+            at: ISO8601DateFormatter().string(from: Date()),
+            interrupted: false,
+            toolCalls: [],
+            attachments: []
+        ))
         isSending = true
         isCancelling = false
         actionError = nil
@@ -412,6 +424,7 @@ final class JarvisChatModel: ObservableObject {
 
     private func sendTurn(text: String, attachments: [PendingChatAttachment]) async {
         guard let client else {
+            removePendingUserMessage()
             isSending = false
             actionError = startupError ?? "Chat is unavailable."
             return
@@ -444,16 +457,17 @@ final class JarvisChatModel: ObservableObject {
             )
             draft = ""
             pendingAttachments = []
-            uploadedAttachmentIDs = [:]
             try await consume(events)
             await refreshHistory()
             isSending = false
         } catch is CancellationError {
+            restorePendingUserMessage(text: text, attachments: attachments)
             isSending = false
             activeMessageID = nil
             statusLine = nil
             streamingText = ""
         } catch {
+            restorePendingUserMessage(text: text, attachments: attachments)
             isSending = false
             activeMessageID = nil
             statusLine = nil
@@ -535,7 +549,25 @@ final class JarvisChatModel: ObservableObject {
             case .user(let message):
                 activeMessageID = message.id
                 sessionID = message.sessionId
-                addOrReplace(JarvisChatRow(message))
+                if let pendingUserMessageID,
+                   let pending = messages.first(where: { $0.id == pendingUserMessageID }) {
+                    messages.removeAll { $0.id == pendingUserMessageID }
+                    self.pendingUserMessageID = nil
+                    addOrReplace(JarvisChatRow(
+                        id: message.id,
+                        role: message.role,
+                        text: message.text,
+                        at: message.at,
+                        interrupted: false,
+                        toolCalls: [],
+                        attachments: pending.attachments
+                    ))
+                    draft = ""
+                    pendingAttachments = []
+                    uploadedAttachmentIDs = [:]
+                } else {
+                    addOrReplace(JarvisChatRow(message))
+                }
             case .delta(let text):
                 streamingText += text
             case .acknowledgment(let text):
@@ -582,6 +614,19 @@ final class JarvisChatModel: ObservableObject {
             messages.append(message)
         }
         messages = sorted(messages)
+    }
+
+    private func removePendingUserMessage() {
+        guard let pendingUserMessageID else { return }
+        messages.removeAll { $0.id == pendingUserMessageID }
+        self.pendingUserMessageID = nil
+    }
+
+    private func restorePendingUserMessage(text: String, attachments: [PendingChatAttachment]) {
+        guard pendingUserMessageID != nil else { return }
+        if draft.isEmpty { draft = text }
+        if pendingAttachments.isEmpty { pendingAttachments = attachments }
+        removePendingUserMessage()
     }
 
     private func sorted(_ values: [JarvisChatRow]) -> [JarvisChatRow] {

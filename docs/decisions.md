@@ -122,6 +122,32 @@ native permission surface for this issue. Add simulator UI verification and name
 calendar-answer screenshots to the existing ready-PR iOS job, without another
 simulator boot.
 
+## 1 November 2026 — native Chat composer and camera controls (P15-52 / #1506)
+
+Match the approved iOS board with a two-row composer, translucent composer and
+Now surfaces, a transparent header with a transcript fade, and an unboxed Jarvis
+reply. Append the user's row optimistically and reconcile its temporary identity
+with the streamed user event; roll back only before acceptance. Use SwiftUI's
+system-anchored `Menu` for Plus. Discover camera positions and available back
+lenses with `AVCaptureDevice.DiscoverySession`, retain the choice in Chat view
+state, and use the existing `AVCaptureSession`/`AVCapturePhotoOutput` path. Keep
+the camera sheet and video tile app-owned to preserve the board; the video tile
+stays above the composer and has switch, pause, expand and stop controls. This is
+a layout-specific departure from the system Camera app, not a custom capture API.
+
+Affected controls use the existing orange primary and stone secondary roles with
+Danish/English labels and 44-point targets. CI runs only ChatPresentation and the
+two existing navigation UI test classes. Apple documentation consulted:
+[SwiftUI Menu](https://developer.apple.com/documentation/swiftui/menu),
+[AVCaptureDevice.DiscoverySession](https://developer.apple.com/documentation/avfoundation/avcapturedevice/discoverysession),
+[AVCaptureDeviceInput](https://developer.apple.com/documentation/avfoundation/avcapturedeviceinput),
+[AVCaptureSession](https://developer.apple.com/documentation/avfoundation/avcapturesession),
+[HIG Menus](https://developer.apple.com/design/human-interface-guidelines/menus),
+and [HIG Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons).
+The only visual exception is the existing solid composer fallback when Reduce
+Transparency is enabled; preserving that explicit accessibility setting takes
+precedence over the normal translucent treatment.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

@@ -88,6 +88,29 @@ approved local Lock Screen voice Live Activity below.
 The screen requires an existing Keychain owner-session token; native sign-in is
 not included, so first-install voice remains unavailable until that separate work.
 
+## Native iPhone Chat polish (#1506; 1 November 2026)
+
+Follow the approved iOS board in `docs/ios/design/board.html`. Put the message
+field on the first composer row, with visually compact controls below it and
+44-point touch targets. Keep the composer and Now bar translucent without an
+opaque backing in normal use; honor Reduce Transparency with the existing solid
+accessibility fallback. The navigation header has no background or divider;
+older messages fade beneath it. Only the user's message bubble has a surface.
+
+Append a user's message immediately when Send is tapped, scroll it into view
+even with Reduce Motion enabled, and reconcile the temporary row with the
+server's user event. Remove the temporary row when a turn fails before the
+server accepts it.
+
+Use the system menu anchored to Plus. Localize every affected control in Danish
+and English; keep screens free of helper copy, use orange for primary actions
+and stone for secondary actions, and avoid large orange fills. Present photo
+capture in a camera sheet with a front/back switch and a lens selector limited
+to devices discovered by `AVCaptureDevice.DiscoverySession`. Keep the selected
+camera and lens for the active Chat view. Show video as a compact preview above
+the composer with camera switch, pause, expand and stop controls. Run only the
+Chat presentation and existing navigation UI test classes in iOS CI.
+
 ## Native voice Lock Screen Live Activity (P15-34 / #1470)
 
 An active native voice session starts a local ActivityKit Live Activity after

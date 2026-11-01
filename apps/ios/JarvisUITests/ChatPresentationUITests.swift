@@ -3,6 +3,72 @@ import XCTest
 final class ChatPresentationUITests: XCTestCase {
     private let confirmationID = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
+    func testSendShowsMessageBeforeServerEvent() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--screenshot-chat-fixture",
+            "-jarvis.appLanguage", "en",
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+        ]
+        app.launch()
+
+        let input = app.descendants(matching: .any)["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("The fixture turn")
+
+        let send = app.buttons["chat.send"]
+        XCTAssertTrue(send.isEnabled)
+        send.tap()
+
+        let bubble = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "You: The fixture turn"))
+            .firstMatch
+        XCTAssertTrue(bubble.waitForExistence(timeout: 1.5))
+        XCTAssertTrue(bubble.isHittable)
+    }
+
+    func testPlusMenuIsAnchoredToItsButton() {
+        let app = chatFixtureApp()
+        app.launchArguments.append("--ui-test-camera-sheet")
+        app.launch()
+
+        let plus = app.buttons["chat.plus"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 10))
+        plus.tap()
+
+        let menuAction = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Camera"))
+            .firstMatch
+        XCTAssertTrue(menuAction.waitForExistence(timeout: 5))
+        XCTAssertTrue(menuAction.isHittable)
+        XCTAssertLessThan(
+            abs(menuAction.frame.midY - plus.frame.midY),
+            app.frame.height * 0.55,
+            "The native menu should remain near its plus-button anchor."
+        )
+    }
+
+    func testCameraSheetOpensFromPlusMenu() {
+        let app = chatFixtureApp()
+        app.launchArguments.append("--ui-test-camera-sheet")
+        app.launch()
+
+        let plus = app.buttons["chat.plus"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 10))
+        plus.tap()
+
+        let cameraAction = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "Camera"))
+            .firstMatch
+        XCTAssertTrue(cameraAction.waitForExistence(timeout: 5))
+        cameraAction.tap()
+
+        XCTAssertTrue(app.buttons["chat.camera.capture"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Close"].exists)
+    }
+
     func testCalendarChangeSheetShowsFullReviewAndLocalizedControls() {
         for language in ["da", "en"] {
             for appearance in ["light", "dark"] {
@@ -69,6 +135,17 @@ final class ChatPresentationUITests: XCTestCase {
             "-jarvis.appTheme", appearance,
         ]
         if openSheet { app.launchArguments.append("--screenshot-notifications-open") }
+        return app
+    }
+
+    private func chatFixtureApp() -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--screenshot-chat-fixture",
+            "-jarvis.appLanguage", "en",
+            "-AppleLanguages", "(en)",
+            "-AppleLocale", "en_US",
+        ]
         return app
     }
 

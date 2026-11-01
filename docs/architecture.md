@@ -1602,7 +1602,10 @@ foreground orb. There are no client/server contract or persistence changes.
 screen-scoped loading, streaming, cursor paging, attachment drafts, cancellation,
 reattachment and the persisted voice-language selection. The shared
 `JarvisChatClient` remains responsible for the existing conversation routes and
-SSE contract. The screen refreshes final history after a turn so persisted
+SSE contract. Sending inserts a temporary user row immediately; the server's
+user event replaces its local identity, and a failure before that event removes
+the temporary row. The transcript scrolls to new rows with or without Reduce
+Motion. The screen refreshes final history after a turn so persisted
 `toolCalls` and attachments replace the streaming presentation. Jarvis reply
 strings are parsed as Markdown in SwiftUI; tool rows are unboxed and bounded to
 the assistant column. User text remains plain text and keeps the only message
@@ -1618,11 +1621,15 @@ dismisses through `POST /now/activity/:id/dismiss`, and delegates confirmation
 decisions to `JarvisApprovalsClient`. The existing `/now/events` stream's
 `now`, `refresh`, `mode`, approval-status and `jarvis-activity` events trigger
 feed refreshes; a fresh `workspace-ready` also refreshes feed data and retries
-active-turn lookup. No activity, approval or chat route is added. The anchored
-plus popover uses the app's existing glass token layer and localized `JarvisChat`
-resource catalog. Camera opens an in-app `AVCaptureSession` viewfinder and
-captures stills through `AVCapturePhotoOutput`; video uses that session's current
-JPEG frame. ReplayKit screen sharing reuses the existing broadcast picker, App
+active-turn lookup. No activity, approval or chat route is added. Plus uses the
+system-anchored SwiftUI `Menu` and the localized `JarvisChat` resource catalog.
+Camera opens an in-app `AVCaptureSession` viewfinder, using
+`AVCaptureDevice.DiscoverySession` to select an available front/back device and
+supported wide, ultra-wide or telephoto lens. Chat view state retains selections
+when the camera is reopened. Still capture uses `AVCapturePhotoOutput`; video
+appears in a compact tile above the composer with camera switch, pause, expand
+and stop controls, and uses that session's current JPEG frame. ReplayKit screen
+sharing reuses the existing broadcast picker, App
 Group bridge and extension. Those media frames stay local until the next Chat
 turn attaches them through the existing multipart route. Voice language reads and
 updates the existing authenticated settings route and starts the next Chat
@@ -1634,8 +1641,10 @@ native client preserves those source limits.
 The app's synthetic fixture scenario is selected only by SwiftUI previews and
 the CI screenshot launch argument. It provides one sample text turn; Chat's
 attachment, camera, video, screen-share and voice-setting actions, plus feed
-writes, are disabled in fixture mode rather than returning fake success. Normal
-app launches use the configured URLSession client and Keychain store. A native
+writes, are disabled in fixture mode rather than returning fake success. The
+camera-sheet UI test presents a non-running capture session without requesting
+camera permission or starting a device. Normal app launches use the configured
+URLSession client and Keychain store. A native
 Entra/MSAL sign-in provider is not present in this checkout, so the app provider
 fails closed when no stored owner session exists.
 

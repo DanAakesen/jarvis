@@ -4,11 +4,13 @@ import UIKit
 
 struct VoiceCameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
+    var isPaused = false
 
     func makeUIView(context: Context) -> PreviewView {
         let view = PreviewView()
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        view.previewLayer.connection?.isEnabled = !isPaused
         return view
     }
 
@@ -16,6 +18,7 @@ struct VoiceCameraPreview: UIViewRepresentable {
         if uiView.previewLayer.session !== session {
             uiView.previewLayer.session = session
         }
+        uiView.previewLayer.connection?.isEnabled = !isPaused
     }
 
     final class PreviewView: UIView {

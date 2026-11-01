@@ -196,7 +196,7 @@ enum JarvisFixtureScenario {
         {
           "method":"POST","path":"/api/conversation/sessions/12/turns",
           "stream":{"statusCode":200,"headers":{"Content-Type":"text/event-stream"},"chunks":[
-            {"text":"event: user\ndata: {\"id\":\"430\",\"sessionId\":\"12\",\"role\":\"dan\",\"text\":\"The fixture turn\",\"model\":null,\"at\":\"2026-10-30T09:35:00Z\"}\n\n"},
+            {"text":"event: user\ndata: {\"id\":\"430\",\"sessionId\":\"12\",\"role\":\"dan\",\"text\":\"The fixture turn\",\"model\":null,\"at\":\"2026-10-30T09:35:00Z\"}\n\n","delayMilliseconds":2500},
             {"text":"event: delta\ndata: {\"text\":\"This response is \"}\n\n","delayMilliseconds":30},
             {"text":"event: delta\ndata: {\"text\":\"synthetic.\"}\n\n","delayMilliseconds":30},
             {"text":"event: done\ndata: {\"id\":\"431\",\"sessionId\":\"12\",\"role\":\"jarvis\",\"text\":\"This response is synthetic.\",\"model\":\"fixture\",\"at\":\"2026-10-30T09:35:01Z\"}\n\n"}

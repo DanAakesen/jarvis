@@ -87,7 +87,7 @@ jobs:
           PY
 
   macos:
-    name: iOS Simulator build and navigation tests
+    name: iOS Simulator build, Chat and navigation UI tests
     needs: linux
     if: needs.linux.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: macos-26
@@ -161,8 +161,7 @@ jobs:
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
-            -only-testing:JarvisUITests/NavigationBisectTests \
-            -only-testing:JarvisUITests/NavigationReliabilityTests \
+            -only-testing:JarvisUITests/ChatPresentationUITests \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
           xcrun xcresulttool export attachments \
@@ -175,10 +174,6 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-calendar-answer-light.png"
-          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
-            --screenshot-chat-fixture --screenshot-chat-plus-menu
-          sleep 2
-          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-plus-menu-light.png"
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"

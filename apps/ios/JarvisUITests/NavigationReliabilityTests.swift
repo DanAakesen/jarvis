@@ -92,10 +92,12 @@ final class NavigationReliabilityTests: XCTestCase {
                 closeByTap()
 
                 tap(app.buttons["chat.plus"])
-                let plusMenu = app.otherElements["chat.plusMenu"]
-                waitFor(plusMenu, key: "exists", value: true)
+                let cameraMenuAction = app.descendants(matching: .any)
+                    .matching(NSPredicate(format: "label == %@", language == "da" ? "Kamera" : "Camera"))
+                    .firstMatch
+                waitFor(cameraMenuAction, key: "exists", value: true)
                 app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
-                waitFor(plusMenu, key: "exists", value: false)
+                waitFor(cameraMenuAction, key: "exists", value: false)
                 tapToolbarButton("chat.notifications")
                 tapToolbarButton("chat.notifications.done")
                 waitFor(app.buttons["chat.notifications.done"], key: "exists", value: false)

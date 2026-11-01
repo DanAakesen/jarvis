@@ -6313,16 +6313,18 @@ Deliberate P15-41 deviations:
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.
 
-P15-41 adds `JarvisUITests/NavigationReliabilityTests` to the generated `Jarvis`
-scheme. On macOS, run `xcodegen generate` from `apps/ios`, then
-`xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
-'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/NavigationReliabilityTests
-CODE_SIGNING_ALLOWED=NO test`. The existing ready-PR iOS job runs this regression
-on its already-booted iPhone and retains `ios-navigation.xcresult` for 14 days,
-including cycle screenshots and failures,
-along with `ios-scheme.xcresult` from the earlier full-scheme test invocation.
-Both uploads run on failure; use the scheme bundle when screenshot-step tests
-stop the job before the dedicated navigation invocation.
+P15-41 adds `NavigationReliabilityTests` and `NavigationBisectTests` to the
+generated `Jarvis` scheme; P15-52 adds Chat interaction coverage to
+`ChatPresentationUITests`. On macOS, run `xcodegen generate` from `apps/ios`,
+then use `xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination
+'platform=iOS Simulator,id=<UDID>' -only-testing:JarvisUITests/ChatPresentationUITests
+CODE_SIGNING_ALLOWED=NO test` for Chat, and the same command with
+`-only-testing:JarvisUITests/NavigationReliabilityTests` and
+`-only-testing:JarvisUITests/NavigationBisectTests` for navigation. iOS CI runs
+only those three UI test classes, retaining `ios-scheme.xcresult` for Chat and
+`ios-navigation.xcresult` for navigation for 14 days. Both uploads run on
+failure. The Chat camera-sheet test uses a non-running capture session and does
+not verify a physical camera.
 Run 41308630589 retains fired menu commands with a closed rendered shell.
 The follow-up reads the shell's navigation dependency in `ContentView.body`
 before its GeometryReader closure; rendering uses that snapshot, while actions

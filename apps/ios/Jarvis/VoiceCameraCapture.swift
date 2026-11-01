@@ -6,6 +6,22 @@ import Foundation
 import ImageIO
 import QuartzCore
 
+enum JarvisCameraLens: String, CaseIterable, Identifiable {
+    case ultraWide
+    case wide
+    case telephoto
+
+    var id: String { rawValue }
+
+    var deviceType: AVCaptureDevice.DeviceType {
+        switch self {
+        case .ultraWide: .builtInUltraWideCamera
+        case .wide: .builtInWideAngleCamera
+        case .telephoto: .builtInTelephotoCamera
+        }
+    }
+}
+
 final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
 
@@ -17,6 +33,28 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     private var latestJPEG: Data?
     private var photoContinuation: CheckedContinuation<Data, any Error>?
     private var lastCapturedAt: CFTimeInterval = 0
+    private var currentInput: AVCaptureDeviceInput?
+    private var isVideoPaused = false
+    private(set) var position: AVCaptureDevice.Position = .back
+    private(set) var lens: JarvisCameraLens = .wide
+
+    static var availablePositions: [AVCaptureDevice.Position] {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .builtInTrueDepthCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        return [AVCaptureDevice.Position.front, .back].filter { position in
+            discovery.devices.contains { $0.position == position }
+        }
+    }
+
+    static func availableLenses(for position: AVCaptureDevice.Position) -> [JarvisCameraLens] {
+        let lenses: [JarvisCameraLens] = position == .back
+            ? JarvisCameraLens.allCases
+            : [.wide]
+        return lenses.filter { device(for: $0, position: position) != nil }
+    }
 
     static func requestAccess() async -> Bool {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
@@ -37,13 +75,18 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         AVCaptureDevice.authorizationStatus(for: .video) == .authorized
     }
 
-    func start() throws {
-        var result: Result<Void, any Error> = .success(())
-        queue.sync {
+    func start(position requestedPosition: AVCaptureDevice.Position, lens requestedLens: JarvisCameraLens) throws {
+        let result: Result<Void, any Error> = queue.sync {
             session.beginConfiguration()
             do {
                 session.sessionPreset = .high
-                guard let device = AVCaptureDevice.default(for: .video) else {
+                let position = Self.availablePositions.contains(requestedPosition)
+                    ? requestedPosition
+                    : (Self.availablePositions.first ?? requestedPosition)
+                let lens = Self.availableLenses(for: position).contains(requestedLens)
+                    ? requestedLens
+                    : (Self.availableLenses(for: position).first ?? requestedLens)
+                guard let device = Self.device(for: lens, position: position) else {
                     throw VoiceCameraError.unavailable
                 }
                 let input = try AVCaptureDeviceInput(device: device)
@@ -53,6 +96,9 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                     throw VoiceCameraError.unavailable
                 }
                 session.addInput(input)
+                currentInput = input
+                self.position = position
+                self.lens = lens
                 output.videoSettings = [
                     kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
                 ]
@@ -62,12 +108,43 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                 session.addOutput(stillPhotoOutput)
                 session.commitConfiguration()
                 session.startRunning()
+                return .success(())
             } catch {
                 session.commitConfiguration()
-                result = .failure(error)
+                return .failure(error)
             }
         }
         try result.get()
+    }
+
+    func selectCamera(position: AVCaptureDevice.Position, lens: JarvisCameraLens) throws {
+        let result: Result<Void, any Error> = queue.sync {
+            guard let currentInput,
+                  let device = Self.device(for: lens, position: position),
+                  let replacement = try? AVCaptureDeviceInput(device: device) else {
+                return .failure(VoiceCameraError.unavailable)
+            }
+            session.beginConfiguration()
+            session.removeInput(currentInput)
+            guard session.canAddInput(replacement) else {
+                if session.canAddInput(currentInput) { session.addInput(currentInput) }
+                session.commitConfiguration()
+                return .failure(VoiceCameraError.unavailable)
+            }
+            session.addInput(replacement)
+            session.commitConfiguration()
+            self.currentInput = replacement
+            self.position = position
+            self.lens = lens
+            return .success(())
+        }
+        try result.get()
+    }
+
+    func setVideoPaused(_ paused: Bool) {
+        queue.sync {
+            isVideoPaused = paused
+        }
     }
 
     func stop() {
@@ -76,6 +153,8 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
             if session.isRunning { session.stopRunning() }
             session.inputs.forEach { session.removeInput($0) }
             session.outputs.forEach { session.removeOutput($0) }
+            self.currentInput = nil
+            self.isVideoPaused = false
             self.lock.lock()
             self.latestJPEG = nil
             let continuation = self.photoContinuation
@@ -142,7 +221,8 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        guard CACurrentMediaTime() - lastCapturedAt >= JarvisDesignTokens.voiceCameraFrameInterval,
+        guard !isVideoPaused,
+              CACurrentMediaTime() - lastCapturedAt >= JarvisDesignTokens.voiceCameraFrameInterval,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
             return
         }
@@ -168,6 +248,20 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         lock.lock()
         latestJPEG = jpeg
         lock.unlock()
+    }
+
+    private static func device(
+        for lens: JarvisCameraLens,
+        position: AVCaptureDevice.Position
+    ) -> AVCaptureDevice? {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [lens.deviceType],
+            mediaType: .video,
+            position: position
+        )
+        if let device = discovery.devices.first { return device }
+        guard lens == .wide else { return nil }
+        return AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position)
     }
 }
 

@@ -577,6 +577,23 @@ Lock-screen approval previews use locale-aware system-formatted absolute
 hour/minute expiry with the existing Danish/English templates, matching real
 approval notifications. Do not embed a relative phrase in an absolute template.
 
+## Native iPhone Chat composer and capture (P15-52 / #1506)
+
+Match `docs/ios/design/board.html`: the input occupies the first composer row;
+smaller Plus, mode, stop and send icons sit beneath it inside a 44-point touch
+row. The composer and Now bar use transparent glass, not a solid bar fill; retain
+the solid backing only for the Reduce Transparency accessibility setting. Hide
+the navigation bar's material and divider, and fade the scrolling transcript
+under its top edge. Keep assistant replies unboxed and retain the user's
+translucent orange-tinted bubble as the only message surface.
+
+Plus is a native SwiftUI `Menu`, anchored by the system to its 44-point button.
+Camera controls use discovered, supported devices only. The photo sheet overlays
+the viewfinder controls; live video is a compact tile above the composer with
+camera switch, pause, expand and stop actions. Use existing orange and stone
+roles, bilingual accessible labels, and no explanatory helper copy inside the
+camera or sharing screens.
+
 ## Shared control geometry (16 October 2026; local candidate)
 
 Native iPhone destination headers (Notes, Health, Factory) use the shared

@@ -641,8 +641,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
         self.assertIn("main-light.png", source)
         self.assertIn("main-dark.png", source)
-        self.assertIn("--screenshot-chat-plus-menu", source)
-        self.assertIn("chat-plus-menu-light.png", source)
+        self.assertIn("-only-testing:JarvisUITests/ChatPresentationUITests", source)
+        self.assertNotIn("--screenshot-chat-plus-menu", source)
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
         self.assertIn("sidebar-open-dark.png", source)
@@ -668,6 +668,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(evidence["with"]["retention-days"], 14)
         capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult"', capture["run"])
+        self.assertIn("-only-testing:JarvisUITests/ChatPresentationUITests", capture["run"])
         scheme_evidence = next(step for step in steps if step.get("name") == "Upload iPhone app scheme test results")
         self.assertEqual(scheme_evidence["if"], "always()")
         self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
@@ -711,8 +712,7 @@ class SafeFailureTests(unittest.TestCase):
         capture = next(step for step in workflow["jobs"]["macos"]["steps"]
                        if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         self.assertIn("xcodebuild test", capture["run"])
-        # Temporary owner-authorized round-three diagnostic filter; restore the full gate before final delivery.
-        self.assertIn("-only-testing:JarvisUITests/NavigationBisectTests", capture["run"])
+        self.assertIn("-only-testing:JarvisUITests/ChatPresentationUITests", capture["run"])
         self.assertNotIn("-skip-testing", capture["run"])
         regression = next(step for step in workflow["jobs"]["macos"]["steps"]
                           if step.get("name") == "Run iPhone navigation regression")
@@ -938,10 +938,9 @@ class SafeFailureTests(unittest.TestCase):
             "--screenshot-sidebar-open",
             (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
         )
-        self.assertIn(
-            "--screenshot-chat-plus-menu",
-            (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
-        )
+        chat_tests = (ROOT / "apps/ios/JarvisUITests/ChatPresentationUITests.swift").read_text()
+        self.assertIn("testPlusMenuIsAnchoredToItsButton", chat_tests)
+        self.assertIn("testCameraSheetOpensFromPlusMenu", chat_tests)
         ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
         self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
         self.assertIn("lockscreen-tasks-${appearance}-${language}.png", ios_workflow)
@@ -1182,8 +1181,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("!$0.running.isEmpty", activity_predicate)
         self.assertIn("!$0.items.isEmpty", activity_predicate)
         self.assertNotIn("$0.awayMode", activity_predicate)
-        self.assertIn(".tint(JarvisDesignTokens.secondaryAccent)", screen)
-        self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
+        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", screen)
+        self.assertIn(".menuOrder(.fixed)", screen)
         self.assertIn('ContentUnavailableView("No activity", systemImage: "checkmark.circle")', sheet)
         self.assertIn("if !items.isEmpty", sheet)
         self.assertNotIn("emptyMessage", sheet)

@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import JarvisCore
 import PhotosUI
 import SwiftUI
@@ -115,9 +116,13 @@ struct JarvisChatScreen: View {
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
-    @State private var isPlusMenuPresented = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-plus-menu")
     @State private var cameraCapture: VoiceCameraCapture?
+    @State private var selectedCameraPosition: AVCaptureDevice.Position = .back
+    @State private var selectedCameraLens: JarvisCameraLens = .wide
+    @State private var lastBackCameraLens: JarvisCameraLens = .wide
     @State private var isVideoEnabled = false
+    @State private var isVideoPaused = false
+    @State private var isVideoPreviewExpanded = false
     @State private var stopCameraAfterPhoto = false
     @State private var isCapturingPhoto = false
     @State private var isPreparingCamera = false
@@ -171,6 +176,10 @@ struct JarvisChatScreen: View {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
+    private var cameraSheetUITest: Bool {
+        ProcessInfo.processInfo.arguments.contains("--ui-test-camera-sheet")
+    }
+
     private var displayedNeedsYouCount: Int {
         let argumentPrefix = "--screenshot-needs-you-count="
         guard model.fixtureMode,
@@ -196,6 +205,7 @@ struct JarvisChatScreen: View {
         }
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if showsSidebarToolbarButton {
@@ -235,7 +245,9 @@ struct JarvisChatScreen: View {
                     .contentShape(Rectangle())
                 }
                 .jarvisToolbarButtonStyle()
-                .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
+                .accessibilityLabel(displayedNeedsYouCount > 0
+                    ? String(format: copy(.needsYouCount), displayedNeedsYouCount > 99 ? "99+" : "\(displayedNeedsYouCount)")
+                    : copy(.needsYou))
                 .accessibilityIdentifier("chat.notifications")
             }
         }
@@ -290,8 +302,16 @@ struct JarvisChatScreen: View {
                         takePhotoTitle: copy(.takePhoto),
                         takingPhotoTitle: copy(.takingPhoto),
                         isCapturingPhoto: isCapturingPhoto,
+                        lensOptions: availableCameraLenses,
+                        selectedLens: selectedCameraLens,
+                        lensTitle: cameraLensTitle,
+                        cameraLensTitle: copy(.cameraLens),
+                        canSwitchCamera: canSwitchCamera,
+                        switchCameraTitle: copy(selectedCameraPosition == .front ? .cameraSwitchToBack : .cameraSwitchToFront),
                         onCapture: captureCameraPhoto,
-                        onCancel: cancelCameraPhoto
+                        onCancel: cancelCameraPhoto,
+                        onSwitchCamera: switchCameraPosition,
+                        onSelectLens: selectCameraLens
                     )
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -318,6 +338,7 @@ struct JarvisChatScreen: View {
     var body: some View {
         attachmentPickers
         .jarvisAmbientBackground()
+        .toolbarBackground(.hidden, for: .navigationBar)
         .onChange(of: composerMode) { _, mode in
             guard NavigationBisectVariant.current != .K, mode == .voice else { return }
             composerMode = .chat
@@ -337,82 +358,108 @@ struct JarvisChatScreen: View {
 
     @ViewBuilder
     private var conversation: some View {
-        if model.isLoading && model.messages.isEmpty {
-            ProgressView("Loading")
+        Group {
+            if model.isLoading && model.messages.isEmpty {
+                ProgressView("Loading")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if let error = model.historyError, model.messages.isEmpty {
+                ContentUnavailableView {
+                    Label("Chat unavailable", systemImage: "wifi.slash")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") { Task { await model.retryHistory() } }
+                        .buttonStyle(.glass)
+                        .disabled(model.fixtureMode)
+                        .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let error = model.historyError, model.messages.isEmpty {
-            ContentUnavailableView {
-                Label("Chat unavailable", systemImage: "wifi.slash")
-            } description: {
-                Text(error)
-            } actions: {
-                Button("Retry") { Task { await model.retryHistory() } }
-                    .buttonStyle(.glass)
-                    .disabled(model.fixtureMode)
-                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                        if let error = model.historyError {
-                            HStack {
-                                Text(error)
-                                    .font(.footnote)
-                                    .foregroundStyle(.red)
-                                Spacer()
-                                Button("Retry") { Task { await model.retryHistory() } }
-                                    .buttonStyle(.glass)
-                                    .disabled(model.fixtureMode)
-                                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
-                            }
-                        }
-                        if model.hasOlderMessages {
-                            Button {
-                                Task { await model.loadOlder() }
-                            } label: {
-                                if model.isLoadingOlder {
-                                    ProgressView()
-                                } else {
-                                    Text("Load earlier messages")
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                            if let error = model.historyError {
+                                HStack {
+                                    Text(error)
+                                        .font(.footnote)
+                                        .foregroundStyle(.red)
+                                    Spacer()
+                                    Button("Retry") { Task { await model.retryHistory() } }
+                                        .buttonStyle(.glass)
+                                        .disabled(model.fixtureMode)
+                                        .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                                 }
                             }
-                            .buttonStyle(.glass)
-                            .disabled(model.isLoadingOlder)
-                            .frame(maxWidth: .infinity)
-                            .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
-                        }
-                        ForEach(renderedRows) { row in
-                            messageRow(row)
-                        }
-                        if !model.streamingText.isEmpty {
-                            messageBubble(
-                                text: model.streamingText,
-                                role: .jarvis,
-                                interrupted: false,
-                                messageID: "streaming"
-                            )
+                            if model.hasOlderMessages {
+                                Button {
+                                    Task { await model.loadOlder() }
+                                } label: {
+                                    if model.isLoadingOlder {
+                                        ProgressView()
+                                    } else {
+                                        Text("Load earlier messages")
+                                    }
+                                }
+                                .buttonStyle(.glass)
+                                .disabled(model.isLoadingOlder)
+                                .frame(maxWidth: .infinity)
+                                .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
+                            }
+                            ForEach(renderedRows) { row in
+                                messageRow(row)
+                            }
+                            if !model.streamingText.isEmpty {
+                                messageBubble(
+                                    text: model.streamingText,
+                                    role: .jarvis,
+                                    interrupted: false,
+                                    messageID: "streaming"
+                                )
                                 .id("streaming-message")
+                            }
+                            Color.clear
+                                .frame(height: 1)
+                                .id("conversation-bottom")
                         }
-                        Color.clear
-                            .frame(height: 1)
-                            .id("conversation-bottom")
+                        .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+                        .padding(.top, JarvisDesignTokens.chatHeaderContentInset)
+                        .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
                     }
-                    .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-                    .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .defaultScrollAnchor(.bottom)
-                .onChange(of: model.messages.count) { _, _ in
-                    guard !reduceMotion else { return }
-                    withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
+                    .ignoresSafeArea(edges: .top)
+                    .scrollDismissesKeyboard(.interactively)
+                    .defaultScrollAnchor(.bottom)
+                    .onChange(of: model.messages.count) { _, _ in
+                        if reduceMotion {
+                            proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                        } else {
+                            withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
+                                proxy.scrollTo("conversation-bottom", anchor: .bottom)
+                            }
+                        }
+                    }
+                    .onChange(of: model.streamingText) { _, _ in
                         proxy.scrollTo("conversation-bottom", anchor: .bottom)
                     }
                 }
-                .onChange(of: model.streamingText) { _, _ in
-                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
-                }
+            }
+        }
+        .mask(alignment: .top) {
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.035),
+                    .init(color: .black, location: 0.15),
+                    .init(color: .black, location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if isVideoEnabled, let cameraCapture {
+                videoPreview(cameraCapture)
+                    .padding(.trailing, JarvisDesignTokens.chatHorizontalInset)
+                    .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
             }
         }
     }
@@ -486,7 +533,7 @@ struct JarvisChatScreen: View {
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if interrupted {
-                Text("Interrupted")
+                Text(copy(.interrupted))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -515,7 +562,7 @@ struct JarvisChatScreen: View {
                         )
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("You: \(text)")
+                    .accessibilityLabel("\(copy(.userSpeaker)): \(text)")
             } else {
                 content
                     .padding(.vertical, JarvisDesignTokens.chatGlassInset)
@@ -598,10 +645,10 @@ struct JarvisChatScreen: View {
                         .foregroundStyle(.red)
                         .accessibilityAddTraits(.isStaticText)
                     Spacer(minLength: 0)
-                    Button("Dismiss") { model.actionError = nil }
+                    Button(copy(.dismissError)) { model.actionError = nil }
                         .buttonStyle(.borderless)
                         .disabled(model.isSending)
-                        .accessibilityLabel("Dismiss error")
+                        .accessibilityLabel(copy(.dismissError))
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
@@ -622,7 +669,7 @@ struct JarvisChatScreen: View {
                                 }
                                 .buttonStyle(.borderless)
                                 .disabled(model.isSending)
-                                .accessibilityLabel("Remove \(attachment.name)")
+                                .accessibilityLabel("\(copy(.removeAttachment)): \(attachment.name)")
                             }
                             .font(.caption)
                             .padding(JarvisDesignTokens.chatMessageSpacing)
@@ -633,52 +680,17 @@ struct JarvisChatScreen: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            if isVideoEnabled, let cameraCapture {
-                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    VoiceCameraPreview(session: cameraCapture.session)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: JarvisDesignTokens.chatLivePreviewHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
-                        .accessibilityLabel(copy(.videoOn))
-                    Button(copy(.disableVideo), systemImage: "video.slash", action: stopVideo)
-                        .buttonStyle(.glass)
-                }
-                .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-            }
-            HStack(alignment: .bottom, spacing: JarvisDesignTokens.chatComposerSpacing) {
-                Button {
-                    isPlusMenuPresented.toggle()
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .medium))
-                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                }
-                .buttonStyle(.glass)
-                .disabled(model.isSending || isPreparingCamera)
-                .accessibilityLabel(copy(.plusMenuLabel))
-                .accessibilityIdentifier("chat.plus")
-                .accessibilityValue(copy(isPlusMenuPresented ? .menuExpanded : .menuCollapsed))
-                .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
-                .popover(
-                    isPresented: $isPlusMenuPresented,
-                    attachmentAnchor: .rect(.bounds),
-                    arrowEdge: .bottom
-                ) {
-                    plusMenu
-                        .presentationCompactAdaptation(.popover)
-                        .presentationBackground(.clear)
-                }
-
-                TextField("Ask Jarvis", text: $model.draft, axis: .vertical)
+            VStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                TextField(copy(.messagePlaceholder), text: $model.draft, axis: .vertical)
                     .font(.body)
                     .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
                     .focused($composerFocused)
                     .submitLabel(.send)
                     .onSubmit(sendMessage)
                     .disabled(model.isSending || model.fixtureTurnUnavailable)
-                    .accessibilityLabel("Message Jarvis")
+                    .accessibilityLabel(copy(.messageLabel))
                     .accessibilityIdentifier("chat.input")
-                    .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
+                    .accessibilityHint(model.fixtureTurnUnavailable ? copy(.fixtureTurnUnavailable) : "")
 #if targetEnvironment(simulator)
                     .background {
                         if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation"),
@@ -690,49 +702,66 @@ struct JarvisChatScreen: View {
                     }
 #endif
 
-                Picker("Mode", selection: $composerMode) {
-                    Image(systemName: "bubble.left")
-                        .accessibilityLabel("Chat")
-                        .tag(ChatComposerMode.chat)
-                    Image(systemName: "waveform")
-                        .accessibilityLabel("Voice")
-                        .tag(ChatComposerMode.voice)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: JarvisDesignTokens.chatMessageMaximumWidth * JarvisDesignTokens.chatModeWidthFraction)
-                .labelsHidden()
-                .accessibilityLabel("Chat or voice")
-                .accessibilityIdentifier("chat.mode")
+                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    plusMenu
 
-                if model.isSending {
-                    Button {
-                        Task { await model.cancel() }
-                    } label: {
-                        if model.isCancelling {
-                            ProgressView()
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        } else {
-                            Image(systemName: "stop.fill")
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                    Picker(copy(.chatMode), selection: $composerMode) {
+                        Image(systemName: "bubble.left")
+                            .accessibilityLabel(JarvisNotesLocalization.string(.chatTitle, language: appLanguage))
+                            .tag(ChatComposerMode.chat)
+                        Image(systemName: "waveform")
+                            .accessibilityLabel(JarvisNotesLocalization.string(.voiceTitle, language: appLanguage))
+                            .tag(ChatComposerMode.voice)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 92, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    .labelsHidden()
+                    .accessibilityLabel(copy(.chatMode))
+                    .accessibilityIdentifier("chat.mode")
+
+                    Spacer(minLength: 0)
+
+                    if model.isSending {
+                        Button {
+                            Task { await model.cancel() }
+                        } label: {
+                            Group {
+                                if model.isCancelling {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "stop.fill")
+                                        .font(.system(size: 16, weight: .medium))
+                                }
+                            }
+                            .frame(width: 36, height: 36)
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                        .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
+                        .accessibilityLabel(model.isCancelling ? copy(.cancellingTurn) : copy(.stopResponse))
+                        .accessibilityHint(model.fixtureMode ? copy(.cancellationUnavailable) : "")
+                    } else {
+                        Button(action: sendMessage) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: 36, height: 36)
+                                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                        .disabled(!model.canSend)
+                        .accessibilityLabel(copy(.sendMessage))
+                        .accessibilityIdentifier("chat.send")
+                        .accessibilityHint(sendHint)
                     }
-                    .buttonStyle(.glass)
-                    .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
-                    .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
-                    .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
-                } else {
-                    Button(action: sendMessage) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .semibold))
-                            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(!model.canSend)
-                    .accessibilityLabel("Send message")
-                    .accessibilityHint(sendHint)
                 }
             }
-            .padding(JarvisDesignTokens.chatComposerSpacing)
+            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
+            .padding(.vertical, JarvisDesignTokens.chatMessageSpacing)
             .background {
                 RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
                     .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
@@ -743,90 +772,70 @@ struct JarvisChatScreen: View {
             .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
         }
-        .background(.bar)
     }
 
     private var plusMenu: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.chatPlusMenuSpacing) {
-            voiceLanguageMenu
-            plusMenuButton(
-                isScreenSharing ? copy(.stopSharingScreen) : copy(.shareScreen),
-                symbol: isScreenSharing ? "stop.circle" : "rectangle.on.rectangle",
-                disabled: model.fixtureMode || isPreparingCamera,
-                hint: model.fixtureMode ? copy(.screenSharingUnavailable) : "",
-                action: {
-                    if isScreenSharing { stopScreenSharing() } else { openScreenSharePicker() }
-                }
-            )
-            plusMenuButton(
-                isVideoEnabled ? copy(.disableVideo) : copy(.enableVideo),
-                symbol: isVideoEnabled ? "video.slash" : "video",
-                disabled: model.fixtureMode,
-                hint: model.fixtureMode ? copy(.videoUnavailable) : "",
-                action: toggleVideo
-            )
-            plusMenuButton(
-                copy(.attach),
-                symbol: "paperclip",
-                disabled: model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
-                hint: addAttachmentHint,
-                action: { attachmentDialog = true }
-            )
-            plusMenuButton(
-                copy(.camera),
-                symbol: "camera",
-                disabled: model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
-                hint: addAttachmentHint,
-                action: openCameraForPhoto
-            )
-        }
-        .padding(JarvisDesignTokens.chatPlusMenuInset)
-        .frame(width: JarvisDesignTokens.chatPlusMenuWidth)
-        .glassEffect(
-            .regular,
-            in: .rect(cornerRadius: JarvisDesignTokens.chatPlusMenuRadius)
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("chat.plusMenu")
-    }
-
-    private var voiceLanguageMenu: some View {
         Menu {
-            voiceLanguageOption(.da, title: copy(.danish))
-            voiceLanguageOption(.en, title: copy(.english))
-        } label: {
-            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+            Menu {
+                voiceLanguageOption(.da, title: copy(.danish))
+                voiceLanguageOption(.en, title: copy(.english))
+            } label: {
                 Label(copy(.voiceLanguage), systemImage: "globe")
-                Spacer(minLength: JarvisDesignTokens.chatMessageSpacing)
-                Text(copy(model.voiceLanguage == .da ? .danish : .english))
-                    .foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
             }
-            .font(.body)
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatPlusMenuRowHeight, alignment: .leading)
-            .contentShape(Rectangle())
+            .disabled(model.fixtureMode || model.isSending || isPreparingCamera)
+
+            Button {
+                if isScreenSharing { stopScreenSharing() } else { openScreenSharePicker() }
+            } label: {
+                Label(
+                    isScreenSharing ? copy(.stopSharingScreen) : copy(.shareScreen),
+                    systemImage: isScreenSharing ? "stop.circle" : "rectangle.on.rectangle"
+                )
+            }
+            .disabled(model.fixtureMode || isPreparingCamera)
+            .accessibilityHint(model.fixtureMode ? copy(.screenSharingUnavailable) : "")
+
+            Button(action: toggleVideo) {
+                Label(
+                    isVideoEnabled ? copy(.disableVideo) : copy(.enableVideo),
+                    systemImage: isVideoEnabled ? "video.slash" : "video"
+                )
+            }
+            .disabled(model.fixtureMode)
+            .accessibilityHint(model.fixtureMode ? copy(.videoUnavailable) : "")
+
+            Button {
+                attachmentDialog = true
+            } label: {
+                Label(copy(.attach), systemImage: "paperclip")
+            }
+            .disabled(model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount)
+            .accessibilityHint(addAttachmentHint)
+
+            Button(action: openCameraForPhoto) {
+                Label(copy(.camera), systemImage: "camera")
+            }
+            .disabled((model.fixtureMode && !cameraSheetUITest) ||
+                      model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount)
+            .accessibilityHint(addAttachmentHint)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                .frame(width: 36, height: 36)
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                .contentShape(Rectangle())
         }
-        .disabled(model.fixtureMode || model.isSending || isPreparingCamera)
-        .tint(JarvisDesignTokens.secondaryAccent)
-        .accessibilityLabel(copy(.voiceLanguage))
-        .accessibilityValue(copy(model.voiceLanguage == .da ? .danish : .english))
-        .accessibilityHint(
-            isPreparingCamera ? copy(.cameraStarting) :
-                (model.fixtureMode ? copy(.voiceSettingsUnavailable) :
-                    (model.isSending ? copy(.chatBusyHint) : ""))
-        )
+        .menuOrder(.fixed)
+        .disabled(model.isSending || isPreparingCamera)
+        .accessibilityLabel(copy(.plusMenuLabel))
+        .accessibilityIdentifier("chat.plus")
+        .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
     }
 
     private func voiceLanguageOption(_ language: ChatLanguage, title: String) -> some View {
         Button {
-            isPlusMenuPresented = false
-            Task { @MainActor in
-                await Task.yield()
-                await model.setVoiceLanguage(language)
-            }
+            Task { await model.setVoiceLanguage(language) }
         } label: {
             if model.voiceLanguage == language {
                 Label(title, systemImage: "checkmark")
@@ -836,37 +845,10 @@ struct JarvisChatScreen: View {
         }
     }
 
-    private func plusMenuButton(
-        _ title: String,
-        symbol: String,
-        disabled: Bool = false,
-        hint: String = "",
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            isPlusMenuPresented = false
-            Task { @MainActor in
-                await Task.yield()
-                action()
-            }
-        } label: {
-            Label(title, systemImage: symbol)
-                .font(.body)
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatPlusMenuRowHeight, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(disabled || isPreparingCamera)
-        .accessibilityHint(isPreparingCamera ? copy(.cameraStarting) : hint)
-    }
-
     private var screenSharePicker: some View {
         VStack(spacing: JarvisDesignTokens.chatSheetRowSpacing) {
             Text(copy(.screenShareTitle))
                 .font(.title2.weight(.semibold))
-            Text(copy(.screenShareInstructions))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
             VoiceSystemBroadcastPicker(accessibilityLabel: copy(.screenSharePickerLabel))
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
         }
@@ -876,6 +858,12 @@ struct JarvisChatScreen: View {
     }
 
     private func openCameraForPhoto() {
+        if model.fixtureMode && cameraSheetUITest {
+            stopCameraAfterPhoto = true
+            cameraCapture = VoiceCameraCapture()
+            presentedSheet = .camera
+            return
+        }
         guard !model.fixtureMode else { return }
         if isScreenSharing { stopScreenSharing() }
         stopCameraAfterPhoto = cameraCapture == nil
@@ -929,7 +917,10 @@ struct JarvisChatScreen: View {
         }
         let capture = VoiceCameraCapture()
         do {
-            try capture.start()
+            try capture.start(position: selectedCameraPosition, lens: selectedCameraLens)
+            selectedCameraPosition = capture.position
+            selectedCameraLens = capture.lens
+            if capture.position == .back { lastBackCameraLens = capture.lens }
             model.actionError = nil
             return capture
         } catch {
@@ -998,11 +989,148 @@ struct JarvisChatScreen: View {
         cameraPreparationID = UUID()
         isPreparingCamera = false
         isVideoEnabled = false
+        isVideoPaused = false
+        isVideoPreviewExpanded = false
         if case .camera? = presentedSheet { presentedSheet = nil }
         stopCameraAfterPhoto = false
         isCapturingPhoto = false
         cameraCapture?.stop()
         cameraCapture = nil
+    }
+
+    private var canSwitchCamera: Bool {
+        VoiceCameraCapture.availablePositions.contains { $0 != selectedCameraPosition }
+    }
+
+    private var availableCameraLenses: [JarvisCameraLens] {
+        VoiceCameraCapture.availableLenses(for: selectedCameraPosition)
+    }
+
+    private func cameraLensTitle(_ lens: JarvisCameraLens) -> String {
+        switch lens {
+        case .ultraWide: copy(.cameraLensUltraWide)
+        case .wide: copy(.cameraLensWide)
+        case .telephoto: copy(.cameraLensTelephoto)
+        }
+    }
+
+    private func selectCameraLens(_ lens: JarvisCameraLens) {
+        do {
+            try cameraCapture?.selectCamera(position: selectedCameraPosition, lens: lens)
+            selectedCameraLens = lens
+            if selectedCameraPosition == .back { lastBackCameraLens = lens }
+        } catch {
+            model.actionError = copy(.cameraUnavailable)
+        }
+    }
+
+    private func switchCameraPosition() {
+        let nextPosition: AVCaptureDevice.Position = selectedCameraPosition == .front ? .back : .front
+        let nextLens = nextPosition == .back ? lastBackCameraLens : .wide
+        do {
+            try cameraCapture?.selectCamera(position: nextPosition, lens: nextLens)
+            selectedCameraPosition = nextPosition
+            selectedCameraLens = nextLens
+        } catch {
+            model.actionError = copy(.cameraUnavailable)
+        }
+    }
+
+    private func toggleVideoPaused() {
+        isVideoPaused.toggle()
+        cameraCapture?.setVideoPaused(isVideoPaused)
+    }
+
+    private var cameraPositionButton: some View {
+        Group {
+            if canSwitchCamera {
+                Button(action: switchCameraPosition) {
+                    Image(systemName: "camera.rotate")
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.glass)
+                .accessibilityLabel(copy(selectedCameraPosition == .front ? .cameraSwitchToBack : .cameraSwitchToFront))
+                .accessibilityIdentifier("chat.camera.switch")
+            }
+        }
+    }
+
+    private var cameraLensMenu: some View {
+        JarvisCameraLensMenu(
+            options: availableCameraLenses,
+            selected: selectedCameraLens,
+            title: cameraLensTitle,
+            accessibilityTitle: copy(.cameraLens),
+            onSelect: selectCameraLens
+        )
+        .buttonStyle(.glass)
+    }
+
+    private func videoPreview(_ camera: VoiceCameraCapture) -> some View {
+        let width = isVideoPreviewExpanded
+            ? JarvisDesignTokens.chatVideoPreviewExpandedWidth
+            : JarvisDesignTokens.voiceCameraTileWidth
+        let height = isVideoPreviewExpanded
+            ? JarvisDesignTokens.chatVideoPreviewExpandedHeight
+            : JarvisDesignTokens.voiceCameraTileHeight
+        return ZStack {
+            VoiceCameraPreview(session: camera.session, isPaused: isVideoPaused)
+                .accessibilityLabel(copy(.videoPreview))
+            VStack(spacing: 0) {
+                HStack(spacing: 4) {
+                    cameraPositionButton
+                    Spacer(minLength: 0)
+                    cameraLensMenu
+                    Button(action: stopVideo) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel(copy(.stopVideo))
+                    .accessibilityIdentifier("chat.video.stop")
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 4) {
+                    Button(action: toggleVideoPaused) {
+                        Image(systemName: isVideoPaused ? "play.fill" : "pause.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel(copy(isVideoPaused ? .resumeVideo : .pauseVideo))
+                    .accessibilityIdentifier("chat.video.pause")
+
+                    Button {
+                        isVideoPreviewExpanded.toggle()
+                    } label: {
+                        Image(systemName: isVideoPreviewExpanded
+                              ? "arrow.down.right.and.arrow.up.left"
+                              : "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.glass)
+                    .accessibilityLabel(copy(isVideoPreviewExpanded ? .shrinkPreview : .expandPreview))
+                    .accessibilityIdentifier("chat.video.expand")
+                }
+            }
+            .padding(4)
+        }
+        .frame(width: width, height: height)
+        .background(.black, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceCameraTileCornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceCameraTileCornerRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceCameraTileCornerRadius)
+                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .accessibilityIdentifier("chat.video.preview")
     }
 
     private func openScreenSharePicker() {
@@ -1055,10 +1183,10 @@ struct JarvisChatScreen: View {
     }
 
     private var sendHint: String {
-        if model.fixtureTurnUnavailable { return "The fixture supports one sample turn." }
+        if model.fixtureTurnUnavailable { return copy(.fixtureTurnUnavailable) }
         if model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
            !model.pendingAttachments.isEmpty {
-            return "Enter a message to send these attachments."
+            return copy(.enterMessageForAttachments)
         }
         return ""
     }
@@ -1090,7 +1218,7 @@ struct JarvisChatScreen: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.glass)
-            .accessibilityLabel("Background activity, \(model.nowTitle)")
+            .accessibilityLabel("\(copy(.backgroundActivity)), \(model.nowTitle)")
 
             if let confirmation = model.activeConfirmation {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -1236,8 +1364,16 @@ private struct JarvisChatCameraSheet: View {
     let takePhotoTitle: String
     let takingPhotoTitle: String
     let isCapturingPhoto: Bool
+    let lensOptions: [JarvisCameraLens]
+    let selectedLens: JarvisCameraLens
+    let lensTitle: (JarvisCameraLens) -> String
+    let cameraLensTitle: String
+    let canSwitchCamera: Bool
+    let switchCameraTitle: String
     let onCapture: () -> Void
     let onCancel: () -> Void
+    let onSwitchCamera: () -> Void
+    let onSelectLens: (JarvisCameraLens) -> Void
 
     var body: some View {
         ZStack {
@@ -1249,6 +1385,25 @@ private struct JarvisChatCameraSheet: View {
                     Button(closeTitle, systemImage: "xmark", action: onCancel)
                         .buttonStyle(.glass)
                     Spacer()
+                    JarvisCameraLensMenu(
+                        options: lensOptions,
+                        selected: selectedLens,
+                        title: lensTitle,
+                        accessibilityTitle: cameraLensTitle,
+                        onSelect: onSelectLens
+                    )
+                    .buttonStyle(.glass)
+                    if canSwitchCamera {
+                        Button(action: onSwitchCamera) {
+                            Image(systemName: "camera.rotate")
+                                .font(.system(size: 16, weight: .medium))
+                                .frame(width: JarvisDesignTokens.chatMinimumTapTarget,
+                                       height: JarvisDesignTokens.chatMinimumTapTarget)
+                        }
+                        .buttonStyle(.glass)
+                        .accessibilityLabel(switchCameraTitle)
+                        .accessibilityIdentifier("chat.camera.switch")
+                    }
                 }
                 Spacer()
                 Button(action: onCapture) {
@@ -1266,9 +1421,45 @@ private struct JarvisChatCameraSheet: View {
                 .buttonStyle(.plain)
                 .disabled(isCapturingPhoto)
                 .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
+                .accessibilityIdentifier("chat.camera.capture")
                 .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
             }
             .padding(JarvisDesignTokens.voiceStatusSpacing)
+        }
+        .accessibilityIdentifier("chat.camera.sheet")
+    }
+}
+
+private struct JarvisCameraLensMenu: View {
+    let options: [JarvisCameraLens]
+    let selected: JarvisCameraLens
+    let title: (JarvisCameraLens) -> String
+    var accessibilityTitle = ""
+    let onSelect: (JarvisCameraLens) -> Void
+
+    @ViewBuilder
+    var body: some View {
+        if options.count > 1 {
+            Menu {
+                ForEach(options) { lens in
+                    Button {
+                        onSelect(lens)
+                    } label: {
+                        if lens == selected {
+                            Label(title(lens), systemImage: "checkmark")
+                        } else {
+                            Text(title(lens))
+                        }
+                    }
+                }
+            } label: {
+                Label(title(selected), systemImage: "camera.aperture")
+                    .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                           minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            }
+            .accessibilityLabel(accessibilityTitle.isEmpty ? title(selected) : accessibilityTitle)
+            .accessibilityValue(title(selected))
+            .accessibilityIdentifier("chat.camera.lens")
         }
     }
 }
