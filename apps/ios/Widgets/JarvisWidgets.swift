@@ -15,6 +15,18 @@ struct JarvisFactoryLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: FactoryTaskActivityAttributes.self) { context in
             LockScreenFactoryTaskActivity(context: context)
+        } dynamicIsland: { _ in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.center) {
+                    EmptyView()
+                }
+            } compactLeading: {
+                EmptyView()
+            } compactTrailing: {
+                EmptyView()
+            } minimal: {
+                EmptyView()
+            }
         }
     }
 }
