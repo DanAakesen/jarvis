@@ -1,3 +1,17 @@
+## 1 November 2026 — native camera controls and video placement (P15-47 / #1496)
+
+Use the approved compact floating video preview beside the composer rather than
+a composer row or a video modal. Keep the photo viewfinder as a sheet. Expose a
+front/back switch and only the lenses reported by AVFoundation discovery, and
+retain the last selection in app-session memory. Reuse stone secondary and
+restrained orange primary accents; localize every control and accessibility name
+in Danish and English without helper copy.
+
+Simulator UI tests exercise the photo sheet, switch and video tile in both
+languages when a camera exists. A camera-less simulator records its unavailable
+state and skips hardware-dependent assertions; CI exports the test screenshots
+with the existing simulator artifact.
+
 ## 31 October 2026 — approved hands-free Dynamic Island (P15-35 / #1472)
 
 The Dynamic Island card is approved on the system surfaces board. Render compact

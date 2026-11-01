@@ -123,7 +123,7 @@ struct VoiceScreenView: View {
         }
         .sheet(isPresented: $showsCameraViewfinder) {
             if let camera = model.camera {
-                VoicePhotoViewfinder(camera: camera) {
+                VoicePhotoViewfinder(camera: camera, language: language) {
                     model.capturePhotoForNextTurn()
                     showsCameraViewfinder = false
                 }
@@ -620,6 +620,7 @@ private struct VoiceControlButton: View {
 private struct VoicePhotoViewfinder: View {
     @Environment(\.dismiss) private var dismiss
     let camera: VoiceCameraCapture
+    let language: JarvisAppLanguage
     let onCapture: () -> Void
 
     var body: some View {
@@ -627,11 +628,13 @@ private struct VoicePhotoViewfinder: View {
             JarvisScreenBackground()
             VoiceCameraPreview(session: camera.session)
                 .ignoresSafeArea()
+                .accessibilityLabel(JarvisVoiceLocalization.string(.viewfinder))
             VStack {
                 HStack {
                     Button(JarvisVoiceLocalization.string(.close)) { dismiss() }
                         .buttonStyle(.glass)
-                    Spacer()
+                    Spacer(minLength: JarvisDesignTokens.chatMessageSpacing)
+                    JarvisCameraOptions(camera: camera, language: language, isDisabled: false)
                 }
                 Spacer()
                 Button(action: onCapture) {

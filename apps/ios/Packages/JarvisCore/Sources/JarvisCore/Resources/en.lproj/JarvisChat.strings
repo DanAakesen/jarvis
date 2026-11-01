@@ -14,6 +14,14 @@
 "chat.plus.takePhoto" = "Take photo";
 "chat.plus.takingPhoto" = "Taking photo…";
 "chat.plus.close" = "Close";
+"chat.plus.switchCamera" = "Switch camera";
+"chat.plus.cameraLens" = "Camera lens";
+"chat.plus.frontCamera" = "Front camera";
+"chat.plus.backCamera" = "Back camera";
+"chat.plus.cameraPreview" = "Camera preview";
+"chat.plus.ultraWideLens" = "Ultra-wide";
+"chat.plus.wideLens" = "Wide";
+"chat.plus.telephotoLens" = "Telephoto";
 "chat.plus.chooseFiles" = "Choose files";
 "chat.plus.photoLibrary" = "Photo library";
 "chat.plus.videoOn" = "Video is on";

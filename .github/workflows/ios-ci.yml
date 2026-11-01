@@ -27,8 +27,10 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
+            abort "camera UI test target is required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
+            abort "camera UI tests must be included in the Jarvis scheme" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
@@ -82,7 +84,7 @@ jobs:
           PY
 
   macos:
-    name: iOS Simulator build
+    name: iOS Simulator build and camera UI tests
     needs: linux
     if: needs.linux.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: macos-26
@@ -257,6 +259,23 @@ jobs:
                 "$SCREENSHOT_DIR/lockscreen-tasks-${appearance}-${language}.png"
             done
           done
+      - name: Run camera sheet UI tests and export screenshots
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          RESULT_BUNDLE="$RUNNER_TEMP/camera-ui-tests.xcresult"
+          xcodebuild \
+            -project Jarvis.xcodeproj \
+            -scheme Jarvis \
+            -destination "id=$IOS_SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath "$RESULT_BUNDLE" \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+          xcrun xcresulttool export attachments \
+            --path "$RESULT_BUNDLE" \
+            --output-path "$RUNNER_TEMP/ios-screenshots/camera-ui-tests"
       - name: Pair simulator captures with approved board renders
         run: |
           cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"
@@ -336,7 +355,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, empty/active Background activity, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, camera sheet/video preview UI-test screenshots, open-sidebar, notifications, empty/active Background activity, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.

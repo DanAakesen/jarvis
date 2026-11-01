@@ -1,3 +1,4 @@
+import AVFoundation
 import JarvisCore
 import PhotosUI
 import SwiftUI
@@ -61,12 +62,14 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
+    private let allowCameraInFixture: Bool
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
 
     init(
         client: JarvisClient?,
         fixtureMode: Bool = false,
+        allowCameraInFixture: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
         onNavigate: @escaping (JarvisDestination) -> Void
@@ -77,6 +80,7 @@ struct JarvisChatScreen: View {
             startupError: startupError
         ))
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
+        self.allowCameraInFixture = allowCameraInFixture
         self.onNavigate = onNavigate
     }
 
@@ -179,6 +183,7 @@ struct JarvisChatScreen: View {
                 if let cameraCapture {
                     JarvisChatCameraSheet(
                         camera: cameraCapture,
+                        language: appLanguage,
                         closeTitle: copy(.close),
                         takePhotoTitle: copy(.takePhoto),
                         takingPhotoTitle: copy(.takingPhoto),
@@ -302,6 +307,17 @@ struct JarvisChatScreen: View {
                 .onChange(of: model.streamingText) { _, _ in
                     proxy.scrollTo("conversation-bottom", anchor: .bottom)
                 }
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if isVideoEnabled, let cameraCapture {
+                JarvisCameraPreviewTile(
+                    camera: cameraCapture,
+                    language: appLanguage,
+                    onStop: stopVideo
+                )
+                .padding(.trailing, JarvisDesignTokens.chatHorizontalInset)
+                .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
             }
         }
     }
@@ -460,18 +476,6 @@ struct JarvisChatScreen: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            if isVideoEnabled, let cameraCapture {
-                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    VoiceCameraPreview(session: cameraCapture.session)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: JarvisDesignTokens.chatLivePreviewHeight)
-                        .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
-                        .accessibilityLabel(copy(.videoOn))
-                    Button(copy(.disableVideo), systemImage: "video.slash", action: stopVideo)
-                        .buttonStyle(.glass)
-                }
-                .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-            }
             HStack(alignment: .bottom, spacing: JarvisDesignTokens.chatComposerSpacing) {
                 Button {
                     isPlusMenuPresented.toggle()
@@ -573,8 +577,8 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 isVideoEnabled ? copy(.disableVideo) : copy(.enableVideo),
                 symbol: isVideoEnabled ? "video.slash" : "video",
-                disabled: model.fixtureMode,
-                hint: model.fixtureMode ? copy(.videoUnavailable) : "",
+                disabled: model.fixtureMode && !allowCameraInFixture,
+                hint: model.fixtureMode && !allowCameraInFixture ? copy(.videoUnavailable) : "",
                 action: toggleVideo
             )
             plusMenuButton(
@@ -587,7 +591,8 @@ struct JarvisChatScreen: View {
             plusMenuButton(
                 copy(.camera),
                 symbol: "camera",
-                disabled: model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
+                disabled: (model.fixtureMode && !allowCameraInFixture)
+                    || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount,
                 hint: addAttachmentHint,
                 action: openCameraForPhoto
             )
@@ -687,7 +692,7 @@ struct JarvisChatScreen: View {
     }
 
     private func openCameraForPhoto() {
-        guard !model.fixtureMode else { return }
+        guard !model.fixtureMode || allowCameraInFixture else { return }
         if isScreenSharing { stopScreenSharing() }
         stopCameraAfterPhoto = cameraCapture == nil
         if cameraCapture != nil {
@@ -711,7 +716,7 @@ struct JarvisChatScreen: View {
     }
 
     private func toggleVideo() {
-        guard !model.fixtureMode else { return }
+        guard !model.fixtureMode || allowCameraInFixture else { return }
         if isVideoEnabled {
             stopVideo()
             return
@@ -1023,6 +1028,7 @@ struct JarvisChatScreen: View {
 
 private struct JarvisChatCameraSheet: View {
     let camera: VoiceCameraCapture
+    let language: JarvisAppLanguage
     let closeTitle: String
     let takePhotoTitle: String
     let takingPhotoTitle: String
@@ -1030,36 +1036,244 @@ private struct JarvisChatCameraSheet: View {
     let onCapture: () -> Void
     let onCancel: () -> Void
 
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: language)
+    }
+
     var body: some View {
         ZStack {
             JarvisScreenBackground()
             VoiceCameraPreview(session: camera.session)
                 .ignoresSafeArea()
-            VStack {
+                .accessibilityLabel(copy(.cameraPreview))
+            VStack(spacing: 0) {
                 HStack {
-                    Button(closeTitle, systemImage: "xmark", action: onCancel)
-                        .buttonStyle(.glass)
-                    Spacer()
+                    JarvisCameraOptions(camera: camera, language: language, isDisabled: isCapturingPhoto)
+                    Spacer(minLength: JarvisDesignTokens.chatMessageSpacing)
+                    Button(action: onCancel) {
+                        Image(systemName: "xmark")
+                            .frame(
+                                minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                                minHeight: JarvisDesignTokens.chatMinimumTapTarget
+                            )
+                    }
+                    .buttonStyle(.glass)
+                    .tint(JarvisDesignTokens.secondaryAccent)
+                    .accessibilityLabel(closeTitle)
+                    .accessibilityIdentifier("camera.stop")
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Button(action: onCapture) {
                     if isCapturingPhoto {
                         ProgressView()
-                            .tint(.white)
+                            .tint(JarvisDesignTokens.primaryAccent)
                             .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
                     } else {
                         Circle()
                             .stroke(.white, lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth * 2)
                             .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                            .overlay(Circle().fill(.white).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
+                            .overlay(Circle().fill(JarvisDesignTokens.primaryAccent).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(isCapturingPhoto)
                 .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
+                .accessibilityIdentifier("camera.capture")
                 .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
             }
-            .padding(JarvisDesignTokens.voiceStatusSpacing)
+            .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
+            .padding(.top, JarvisDesignTokens.voiceStatusSpacing)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct JarvisCameraPreviewTile: View {
+    let camera: VoiceCameraCapture
+    let language: JarvisAppLanguage
+    let onStop: () -> Void
+
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: language)
+    }
+
+    var body: some View {
+        VoiceCameraPreview(session: camera.session)
+            .frame(
+                width: JarvisDesignTokens.chatCameraPreviewWidth,
+                height: JarvisDesignTokens.chatCameraPreviewHeight
+            )
+            .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.chatCameraPreviewCornerRadius))
+            .overlay(alignment: .topLeading) {
+                JarvisCameraOptions(
+                    camera: camera,
+                    language: language,
+                    isDisabled: false,
+                    compact: true
+                )
+                .frame(
+                    width: JarvisDesignTokens.chatCameraPreviewWidth - JarvisDesignTokens.chatCameraPreviewControlInset,
+                    height: JarvisDesignTokens.chatCameraPreviewHeight - JarvisDesignTokens.chatCameraPreviewControlInset,
+                    alignment: .topLeading
+                )
+                .padding(JarvisDesignTokens.chatCameraPreviewControlInset / 2)
+            }
+            .overlay(alignment: .topTrailing) {
+                Button(action: onStop) {
+                    Image(systemName: "xmark")
+                        .frame(
+                            minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                            minHeight: JarvisDesignTokens.chatMinimumTapTarget
+                        )
+                }
+                .buttonStyle(.glass)
+                .tint(JarvisDesignTokens.secondaryAccent)
+                .accessibilityLabel(copy(.disableVideo))
+                .accessibilityIdentifier("camera.stop")
+                .padding(JarvisDesignTokens.chatCameraPreviewControlInset / 2)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: JarvisDesignTokens.chatCameraPreviewCornerRadius)
+                    .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+                    .accessibilityHidden(true)
+            }
+            .accessibilityLabel(copy(.videoOn))
+            .accessibilityIdentifier("camera.preview")
+            .accessibilityElement(children: .contain)
+    }
+}
+
+struct JarvisCameraOptions: View {
+    let camera: VoiceCameraCapture
+    let language: JarvisAppLanguage
+    let isDisabled: Bool
+    let compact: Bool
+
+    @State private var selectedPosition: AVCaptureDevice.Position
+    @State private var selectedLens: VoiceCameraLens
+    @State private var cameraErrorPresented = false
+
+    init(
+        camera: VoiceCameraCapture,
+        language: JarvisAppLanguage,
+        isDisabled: Bool,
+        compact: Bool = false
+    ) {
+        self.camera = camera
+        self.language = language
+        self.isDisabled = isDisabled
+        self.compact = compact
+        _selectedPosition = State(initialValue: camera.position)
+        _selectedLens = State(initialValue: camera.lens)
+    }
+
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: language)
+    }
+
+    private func lensTitle(_ lens: VoiceCameraLens) -> String {
+        switch lens {
+        case .ultraWide: copy(.ultraWideLens)
+        case .wide: copy(.wideLens)
+        case .telephoto: copy(.telephotoLens)
+        }
+    }
+
+    var body: some View {
+        Group {
+            if compact {
+                VStack(alignment: .leading, spacing: 0) {
+                    switchCameraControl
+                    Spacer(minLength: 0)
+                    lensControl
+                }
+                .frame(maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    switchCameraControl
+                    lensControl
+                }
+            }
+        }
+        .alert(copy(.cameraUnavailable), isPresented: $cameraErrorPresented) {
+            Button(copy(.close), role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder
+    private var switchCameraControl: some View {
+        if camera.canSwitchCamera {
+            Button(action: switchCamera) {
+                Image(systemName: "arrow.triangle.2.circlepath.camera")
+                    .frame(
+                        minWidth: JarvisDesignTokens.chatMinimumTapTarget,
+                        minHeight: JarvisDesignTokens.chatMinimumTapTarget
+                    )
+            }
+            .buttonStyle(.glass)
+            .tint(JarvisDesignTokens.secondaryAccent)
+            .disabled(isDisabled)
+            .accessibilityLabel(copy(.switchCamera))
+            .accessibilityValue(copy(selectedPosition == .front ? .frontCamera : .backCamera))
+            .accessibilityIdentifier("camera.switch")
+        }
+    }
+
+    @ViewBuilder
+    private var lensControl: some View {
+        if !camera.availableLenses.isEmpty {
+            Menu {
+                ForEach(camera.availableLenses) { lens in
+                    Button {
+                        select(lens)
+                    } label: {
+                        if selectedLens == lens {
+                            Label(lensTitle(lens), systemImage: "checkmark")
+                        } else {
+                            Text(lensTitle(lens))
+                        }
+                    }
+                    .accessibilityLabel(lensTitle(lens))
+                    .accessibilityAddTraits(selectedLens == lens ? .isSelected : [])
+                }
+            } label: {
+                HStack(spacing: JarvisDesignTokens.chatMessageSpacing / 2) {
+                    Image(systemName: "camera.macro")
+                        .accessibilityHidden(true)
+                    Text(lensTitle(selectedLens))
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                .padding(.horizontal, JarvisDesignTokens.chatMessageSpacing)
+            }
+            .buttonStyle(.glass)
+            .tint(JarvisDesignTokens.primaryAccent)
+            .disabled(isDisabled)
+            .accessibilityLabel(copy(.cameraLens))
+            .accessibilityValue(lensTitle(selectedLens))
+            .accessibilityIdentifier("camera.lens")
+        }
+    }
+
+    private func switchCamera() {
+        do {
+            try camera.switchCamera()
+            selectedPosition = camera.position
+            selectedLens = camera.lens
+        } catch {
+            cameraErrorPresented = true
+        }
+    }
+
+    private func select(_ lens: VoiceCameraLens) {
+        do {
+            try camera.selectLens(lens)
+            selectedLens = camera.lens
+        } catch {
+            cameraErrorPresented = true
         }
     }
 }

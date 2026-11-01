@@ -14,6 +14,14 @@
 "chat.plus.takePhoto" = "Tag foto";
 "chat.plus.takingPhoto" = "Tager foto…";
 "chat.plus.close" = "Luk";
+"chat.plus.switchCamera" = "Skift kamera";
+"chat.plus.cameraLens" = "Kameralinse";
+"chat.plus.frontCamera" = "Frontkamera";
+"chat.plus.backCamera" = "Bagkamera";
+"chat.plus.cameraPreview" = "Kameraforhåndsvisning";
+"chat.plus.ultraWideLens" = "Ultravidvinkel";
+"chat.plus.wideLens" = "Vidvinkel";
+"chat.plus.telephotoLens" = "Tele";
 "chat.plus.chooseFiles" = "Vælg filer";
 "chat.plus.photoLibrary" = "Fotobibliotek";
 "chat.plus.videoOn" = "Video er slået til";

@@ -35,6 +35,7 @@ struct ContentView: View {
         let arguments = ProcessInfo.processInfo.arguments
         let sidebarInitiallyOpen = arguments.contains("--screenshot-sidebar-open")
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
+        let cameraUITestMode = arguments.contains("--ui-test-camera")
         let voiceConnectionScreenshot = arguments.contains("--screenshot-voice-connection-lost")
         let voiceScreenshotLanguage = arguments
             .first(where: { $0.hasPrefix("--screenshot-voice-language=") })
@@ -55,6 +56,7 @@ struct ContentView: View {
             .flatMap { $0 == "empty" || $0 == "active" ? $0 : nil }
         self.activityScreenshotState = activityScreenshotState
         let fixtureMode = settingsPreview
+            || cameraUITestMode
             || voiceConnectionScreenshot
             || arguments.contains("--screenshot-chat-fixture")
             || activityScreenshotState != nil
@@ -170,6 +172,7 @@ struct ContentView: View {
                     JarvisChatScreen(
                         client: chatClient,
                         fixtureMode: fixtureMode,
+                        allowCameraInFixture: cameraUITestMode,
                         initialActivitySheet: activityScreenshotState != nil
                             ? .background
                             : (fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
@@ -193,6 +196,7 @@ struct ContentView: View {
                                 JarvisChatScreen(
                                     client: chatClient,
                                     fixtureMode: fixtureMode,
+                                    allowCameraInFixture: cameraUITestMode,
                                     startupError: startupError,
                                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                                 )

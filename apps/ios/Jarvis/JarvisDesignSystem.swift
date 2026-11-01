@@ -126,6 +126,10 @@ enum JarvisDesignTokens {
     static let chatComposerMaximumLines = 5
     static let chatConfirmationSummaryLines = 3
     static let chatPhotoCompressionQuality: CGFloat = 0.88
+    static let chatCameraPreviewWidth: CGFloat = 156
+    static let chatCameraPreviewHeight: CGFloat = 188
+    static let chatCameraPreviewCornerRadius: CGFloat = 22
+    static let chatCameraPreviewControlInset: CGFloat = 8
     static let voiceOrbStrokeWidth: CGFloat = 1.5
     static let voiceOrbListeningPulse: CGFloat = 0.18
     static let voiceOrbThinkingPulse: CGFloat = 0.12

@@ -14,5 +14,8 @@ final class JarvisChatLocalizationTests: XCTestCase {
         XCTAssertEqual(JarvisChatLocalization.string(.enableVideo, language: .en), "Enable video")
         XCTAssertEqual(JarvisChatLocalization.string(.shareScreen, language: .da), "Del skærm")
         XCTAssertEqual(JarvisChatLocalization.string(.voiceLanguage, language: .en), "Voice language")
+        XCTAssertEqual(JarvisChatLocalization.string(.switchCamera, language: .da), "Skift kamera")
+        XCTAssertEqual(JarvisChatLocalization.string(.telephotoLens, language: .en), "Telephoto")
+        XCTAssertEqual(JarvisChatLocalization.string(.cameraPreview, language: .da), "Kameraforhåndsvisning")
     }
 }

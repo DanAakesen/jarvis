@@ -1,3 +1,17 @@
+## Native camera and video controls (P15-47; 1 November 2026)
+
+Follow the approved iPhone camera tile in `docs/ios/design/board.html`: keep
+video as a compact floating preview at the lower-right of the conversation,
+above and clear of the composer, not an inline row or a modal video sheet. The
+still-camera viewfinder remains a full-screen sheet. Both surfaces expose a
+device-discovered front/back switch and a lens menu containing only supported
+wide, ultra-wide or telephoto lenses. Keep the last facing and lens in memory
+for the app session. Secondary controls use the existing stone accent; the photo
+shutter and selected lens use restrained orange, never a large orange fill.
+Every visible or VoiceOver name is localized in Danish and English; do not add
+helper text. The video tile remains a compact overlay and keeps the existing
+composer geometry.
+
 ## Approved runtime test entry (#1350; 29 October 2026)
 
 The existing chat menu will contain Test agent runtime. Dan chooses Current or

@@ -117,6 +117,7 @@ private final class JarvisGateModel: ObservableObject {
     func load() async {
         guard case .loading = presentation else { return }
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
+            ProcessInfo.processInfo.arguments.contains("--ui-test-camera") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-health-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-voice-connection-lost") {
