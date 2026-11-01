@@ -745,7 +745,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("import JarvisCore", design)
         button = design.split("struct JarvisSidebarMenuButton: View {", 1)[1].split("enum JarvisDesignTokens", 1)[0]
         for required in ('@EnvironmentObject private var navigation: JarvisNavigationModel',
-                         'navigation.openSidebar()', '"line.3.horizontal"', "chatMinimumTapTarget",
+                         'navigation.openSidebar()', '"sidebar.trailing"', "chatMinimumTapTarget",
                          "contentShape(Rectangle())", "jarvisToolbarButtonStyle()",
                          "string(.openSidebar, language: language)", '"navigation.openSidebar"'):
             self.assertIn(required, button)

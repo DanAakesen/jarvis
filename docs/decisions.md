@@ -9934,6 +9934,12 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+Comment 6562283849 selects SF Symbol `sidebar.trailing` for the shared sidebar
+launcher on Chat, Health, Notes and Factory. Preserve its no-fill styling,
+44-point target, accessibility identifier and Danish/English labels.
+References: [Apple SF Symbols](https://developer.apple.com/sf-symbols/) and
+[HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
+
 Comment 6562281755 replaces further bisecting after preview build 22 reportedly
 keeps the menu visible but does not open. One reference navigation model is owned
 above ContentView and injected through SwiftUI's environment; menu controls invoke

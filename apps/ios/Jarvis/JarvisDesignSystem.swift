@@ -17,7 +17,7 @@ struct JarvisSidebarMenuButton: View {
         Button {
             navigation.openSidebar()
         } label: {
-            Image(systemName: "line.3.horizontal")
+            Image(systemName: "sidebar.trailing")
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
