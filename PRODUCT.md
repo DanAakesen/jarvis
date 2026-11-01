@@ -371,10 +371,24 @@ the existing authenticated confirmation endpoint, require device authentication,
 and report success or failure in the Now activity sheet. New labels and recovery
 copy follow the Danish-default, English-selectable app language.
 
-The app synchronizes tasks and confirmations from existing backend snapshots and
-events while active. Updates while the app is suspended are not promised: APNs
-device registration, backend delivery and task/approval update or removal pushes
-remain separate work.
+P15-49 (#1498) also starts activities for real background jobs from `/jobs` and
+the job events on `/now/events`. Locking the phone detaches chat observation,
+not server execution; reopening refreshes persisted history/job state and
+reattaches an active turn without resubmitting it. Initial research progress
+window delivery is optional and cannot fail an already accepted job.
+Tracked weather follows the same rule: save its report and recoverable Workspace
+link before display; a missed acknowledgement is delivery failure, not task failure.
+
+Tasks show running, waiting, done, failed or cancelled state on the Lock Screen
+and Dynamic Island. Terminal state remains briefly visible; disappearance from
+the running-only feed is not treated as completion. Disabled iOS Live Activities
+show Danish/English guidance and an Open Settings link without stopping the task.
+Task activities register ActivityKit update tokens with the owner-only backend.
+Remote updates require the protected APNs configuration, database migration and
+signed-device provisioning; absent configuration shows a local-only warning.
+Stale activities explain that Jarvis must be reopened for current state.
+Approval actions remain exclusive to actual pending confirmations in the existing
+authenticated notification flow; approval notification pushes remain separate work.
 
 ## Conversational finding feedback (#1240)
 

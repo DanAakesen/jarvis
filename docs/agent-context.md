@@ -6623,12 +6623,67 @@ system Lock Screen or notification action behavior. The Linux checks are
 project/plist metadata checks in `.github/workflows/ios-ci.yml`; only the Mac
 job compiles the ActivityKit/WidgetKit targets.
 
-Still required for remote updates: an owner-authorized device-registration route
-and storage for APNs/ActivityKit push tokens; a backend APNs sender with a
-protected provider key; pushes on confirmation creation, resolution and expiry;
-Factory task state/activity updates and terminal ActivityKit updates; stale
-notification reconciliation while suspended; and deployed/physical-device
-verification. Do not claim remote updates before those pieces exist.
+P15-49 (#1498) adds automatic background-job activities, task Dynamic Island
+states, owner-authorized ActivityKit token storage and task update/end sending.
+The app detaches chat observation on suspension and refreshes durable
+history/jobs/active turns on return. Initial research Workspace acknowledgement
+is best effort; disconnect must not fail an already persisted job.
+The existing `NSSupportsLiveActivities` flag, WidgetKit target and embedding were
+present; APNs entitlement, token registration and sender were missing.
+
+The Apple background-refresh follow-up registers
+`com.danaakesen.jarvis.task-activity-refresh` at launch and declares the permitted
+identifier and `fetch` background mode. It requests a short `BGAppRefreshTask`
+on backgrounding and after each run; the 15-minute earliest date is not a
+guaranteed interval. Refresh only reconciles existing activities from authenticated
+server state, with bounded requests and expiry/deadline cancellation. It cannot
+start or cancel server jobs, prompt for sign-in, or replace APNs. Exercise scheduler
+launch/expiry on a signed device as well as lock/resume. Background URLSession
+supports file transfers, not persistent SSE; this workflow needs no file transfer.
+Apple documentation: [choosing background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app),
+[BGTaskScheduler](https://developer.apple.com/documentation/backgroundtasks/bgtaskscheduler),
+[BGAppRefreshTaskRequest](https://developer.apple.com/documentation/backgroundtasks/bgapprefreshtaskrequest),
+[background downloads](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background)
+and [ActivityKit push updates](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications).
+
+Run the existing Core tests and metadata step above. Focused coverage is
+`swift test --filter 'JarvisNowFeedClientTests|JarvisWorkspaceClientTests|JarvisFactoryClientTests|JarvisChatClientTests'`.
+Linux can parse but cannot type-check ActivityKit/SwiftUI or render system
+surfaces. Before acceptance, use the ready-PR Mac compile, then a signed iPhone:
+start research with/without a connected Workspace, lock immediately and while
+running, wait for completion/failure, reopen and check persisted state without a
+second submission. Check Lock Screen and all Island sizes, waiting/terminal/stale
+states, da/en disabled-activity guidance and its Settings link, explicit cancel,
+and real confirmation actions only. Provision Push Notifications on the app ID
+and the distribution profile; the widget needs no separate APNs entitlement.
+APNs key/configuration, migration and deployed delivery remain release prerequisites.
+Approval notification pushes and suspended expiry/removal remain separate work.
+
+The task update endpoint is `POST /ios/task-activities` with
+`{taskID, activityID, pushToken, language}`; UUID task IDs select background jobs,
+numeric IDs select Factory tasks. The app sends the actual ActivityKit activity ID
+so token rotation updates one registration. `DELETE /ios/task-activities/:activityId`
+unregisters delivery without cancelling work. Enable the sender only with
+`JARVIS_ACTIVITYKIT_ENABLED=true`, the existing SQL pool, `APNS_TEAM_ID`,
+`APNS_KEY_ID`, protected `APNS_SIGNING_KEY` (ES256 PKCS8 PEM) and explicit
+`APNS_ENVIRONMENT=sandbox|production`. Production must supply the signing key
+through protected configuration/Key Vault, not the repository or client.
+Deploy migrations `0071_activitykit_registrations.sql` and
+`0072_weather_job_results.sql` before enabling delivery/new weather result writes.
+The latter preserves the synchronous forecast contract but allows a saved
+`html_app:` result link to survive a lost Workspace acknowledgement. Saved results
+and display delivery are separate states; rollback refuses to discard those links.
+After the main merge/compile fix, local validation passes the 214-test Core suite,
+56 pipeline tests, project/plist metadata and focused
+backend/contracts checks with backend lint/build. SQL integration is blocked
+locally by the required isolated loopback configuration; migrations/database
+contracts passed CI on `faaf896`, but its iOS Simulator build was skipped.
+The follow-up fixes CI's missing log-event registration with 188 focused backend
+tests and lint/build passing locally. New-head CI remains pending.
+CodeQL Actions reports no alerts;
+Swift database creation failed and JavaScript analysis was skipped for database
+size, so neither analysis is claimed as passed. Source review and secret scans
+are separate checks, not substitutes for the pending Apple/device acceptance.
 
 P15-16 adds `JarvisGatePolicy` to pure-Swift `JarvisCore`; its Linux tests cover
 cold start, the 60-second background threshold, missing/expired sessions, denied

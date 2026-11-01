@@ -1,4 +1,10 @@
 "factory.title" = "Software Factory";
+"factory.liveActivitiesDisabled" = "Live Activities are turned off. Open Settings and allow Live Activities for Jarvis. The task continues on the server.";
+"factory.liveActivityUnavailable" = "The Live Activity could not start. The task continues on the server.";
+"factory.liveActivityLocalOnly" = "The Lock Screen cannot update while the app is suspended. Open Jarvis to fetch the task's current status.";
+"factory.openSettings" = "Open Settings";
+"factory.waiting" = "Waiting";
+"factory.backgroundTask" = "Background task";
 "factory.refresh" = "Refresh";
 "factory.refreshing" = "Refreshing";
 "factory.board" = "Board";

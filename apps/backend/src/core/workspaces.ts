@@ -70,6 +70,7 @@ async function openItem(
   request: FastifyRequest,
   id: string,
   signal: AbortSignal,
+  savedViewId?: string,
 ): Promise<WorkspaceItem> {
   const ownerObjectId = request.server.ownerObjectId;
   const { item, sourceId, payload } = await store.get(ownerObjectId, id, signal);
@@ -100,7 +101,7 @@ async function openItem(
     view = graphView(item, payload);
   }
 
-  const activeViewId = viewId(item, sourceId);
+  const activeViewId = savedViewId ?? viewId(item, sourceId);
   const existing = request.server.workspaceCommands.snapshot(ownerObjectId)
     ?.windows.some((window) => window.viewId === activeViewId) ?? false;
   const command = {
@@ -330,9 +331,14 @@ export function createWorkspacesModule(
             const opening = (async () => {
               const stored = await app.backgroundJobs.details(jobId);
               const job = stored?.details.job;
-              if (!job || job.kind !== 'research' || job.status !== 'done' ||
-                  job.resultId !== `research:${jobId}`) throw new WorkspaceItemNotFound();
-              const item = await openItem(store, htmlArtifacts, imageArtifacts, request, job.resultId, lifecycle.signal);
+              if (!job || job.status !== 'done' || !job.resultId ||
+                  !(job.kind === 'research' && job.resultId === `research:${jobId}` ||
+                    job.kind === 'html_app' && /^html_app:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/u.test(job.resultId))) {
+                throw new WorkspaceItemNotFound();
+              }
+              const item = await openItem(
+                store, htmlArtifacts, imageArtifacts, request, job.resultId, lifecycle.signal, job.viewId,
+              );
               await app.backgroundJobs.setResultDelivery(jobId, 'delivered');
               return item;
             })();
@@ -351,11 +357,11 @@ export function createWorkspacesModule(
             await app.backgroundJobs.setResultDelivery(jobId, workspaceResultDelivery(error)).catch(() => undefined);
           }
           if (error instanceof WorkspaceItemNotFound || error instanceof WorkspaceHtmlArtifactNotFound ||
-              error instanceof WorkspaceArtifactNotFound) return reply.code(404).send({ error: 'Saved research report was not found' });
+              error instanceof WorkspaceArtifactNotFound) return reply.code(404).send({ error: 'Saved report was not found' });
           if (error instanceof ToolRefusal) return reply.code(409).send({ error: error.message });
           if (lifecycle.signal.aborted) return reply.code(499).send({ error: 'Request cancelled' });
-          request.log.warn('folio.research_result_open_failed');
-          return reply.code(503).send({ error: 'Saved research report could not be opened' });
+          request.log.warn('folio.job_result_open_failed');
+          return reply.code(503).send({ error: 'Saved report could not be opened' });
         } finally {
           lifecycle.dispose();
         }

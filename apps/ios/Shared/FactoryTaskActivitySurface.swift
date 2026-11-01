@@ -7,6 +7,11 @@ struct FactoryTaskActivitySurface: View {
     let activity: String?
     let startedAt: Date?
     let language: JarvisAppLanguage
+    var taskTitle: String? = nil
+    var phase: String? = nil
+    var isStale = false
+
+    private var isRunning: Bool { phase == nil || phase == "running" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -20,6 +25,11 @@ struct FactoryTaskActivitySurface: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(factoryTitle)
                         .font(.headline)
+                    if let taskTitle {
+                        Text(taskTitle)
+                            .font(.body)
+                            .lineLimit(2)
+                    }
                     Text(state)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -31,7 +41,7 @@ struct FactoryTaskActivitySurface: View {
                     }
                 }
                 Spacer(minLength: 4)
-                if let startedAt {
+                if isRunning, let startedAt {
                     Text(startedAt, style: .timer)
                         .font(.system(.title3, design: .rounded, weight: .semibold))
                         .monospacedDigit()
@@ -40,12 +50,18 @@ struct FactoryTaskActivitySurface: View {
                         )
                 }
             }
-            ProgressView()
-                .progressViewStyle(.linear)
-                .tint(.orange)
-                .accessibilityLabel(
-                    JarvisFactoryLocalization.string(.activityProgress, language: language)
-                )
+            if isStale {
+                Text(JarvisFactoryLocalization.string(.liveActivityLocalOnly, language: language))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if isRunning {
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .tint(.orange)
+                    .accessibilityLabel(
+                        JarvisFactoryLocalization.string(.activityProgress, language: language)
+                    )
+            }
         }
         .padding(16)
     }

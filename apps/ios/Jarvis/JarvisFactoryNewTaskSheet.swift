@@ -184,7 +184,8 @@ struct JarvisFactoryNewTaskSheet: View {
             submissionsByDraft[draft] = submission
         }
         do {
-            _ = try await client.createTask(submission)
+            let task = try await client.createTask(submission)
+            await JarvisFactoryLiveActivityController.update(task: task, language: language)
             submissionsByDraft[draft] = nil
             onCreated()
         } catch {

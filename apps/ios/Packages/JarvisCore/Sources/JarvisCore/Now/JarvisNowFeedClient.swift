@@ -45,8 +45,54 @@ public final class JarvisNowFeedClient: Sendable {
         }
     }
 
+    public func backgroundTasks() async throws -> [BackgroundTaskRecord] {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get, path: ["jobs"], idempotent: true
+        )
+        guard response.statusCode == 200, response.body.count <= 1024 * 1024,
+              let snapshot = try? JSONDecoder().decode(BackgroundTaskSnapshot.self, from: response.body),
+              snapshot.jobs.count <= 1_000,
+              snapshot.jobs.allSatisfy({
+                  UUID(uuidString: $0.jobId) != nil &&
+                      !$0.title.isEmpty && $0.title.utf16.count <= 80 &&
+                      ($0.detail?.utf16.count ?? 0) <= 120 &&
+                      Self.validTime($0.startedAt) && Self.validTime($0.updatedAt)
+              }) else {
+            throw JarvisNowFeedClientError.invalidResponse
+        }
+        return snapshot.jobs
+    }
+
+    public func registerTaskActivity(
+        taskID: String, activityID: String, pushToken: String, language: JarvisAppLanguage
+    ) async throws {
+        guard UUID(uuidString: taskID) != nil || Self.validID(taskID),
+              activityID.range(of: #"^[A-Za-z0-9-]{1,128}$"#, options: .regularExpression) != nil,
+              pushToken.range(of: #"^(?:[0-9a-f]{2}){32,256}$"#, options: .regularExpression) != nil else {
+            throw JarvisNowFeedClientError.invalidResponse
+        }
+        _ = try await client.performAuthenticatedRequest(
+            method: .post, path: ["ios", "task-activities"],
+            body: JSONEncoder().encode(TaskActivityRegistration(
+                taskID: taskID, activityID: activityID, pushToken: pushToken, language: language.rawValue
+            )),
+            idempotent: true
+        )
+    }
+
     public func resolveConfirmation(id: String, decision: ConfirmationDecision) async throws {
         try await approvals.resolveConfirmation(id: id, decision: decision)
+    }
+
+    private struct BackgroundTaskSnapshot: Decodable {
+        let jobs: [BackgroundTaskRecord]
+    }
+
+    private struct TaskActivityRegistration: Encodable {
+        let taskID: String
+        let activityID: String
+        let pushToken: String
+        let language: String
     }
 
     private static func valid(_ feed: JarvisNowFeed) -> Bool {

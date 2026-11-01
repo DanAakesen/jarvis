@@ -2132,6 +2132,31 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
+  acknowledgement; iOS detaches observation on lock and refreshes persisted
+  history/jobs and active-turn replay on return. Automatic background-job/Factory
+  activities, task Dynamic Island states, da/en Settings recovery and ActivityKit
+  token/update delivery are implemented. Targeted Core tests and metadata checks
+  pass after the main merge: 214 Core tests, iOS metadata and 56 pipeline tests.
+  The merge retains P15-45 Chat/HTML views and UI tests alongside APNs configuration.
+  The compile failure was a cross-file reference to the gate's private language
+  accessor; background tasks now use the sheet's observed language. Updated-head
+  Apple compilation remains pending. Earlier targeted checks
+  pass locally. The Apple follow-up adds discretionary, bounded BGTaskScheduler
+  reconciliation of existing activities; it never owns server execution or streams
+  SSE through background URLSession. CI identified missing log-event registrations;
+  those are fixed, with 188 focused backend tests and lint/build passing locally.
+  Backend focused tests and contract checks pass;
+  SQL integration is blocked locally by missing isolated loopback configuration;
+  migrations/database contracts and Core checks passed CI on `faaf896`.
+  Its iOS Simulator build was skipped; new-head CI remains pending.
+  CodeQL Actions reports no alerts; Swift database creation failed and JavaScript
+  analysis was skipped for database size. Source review covers the changed
+  boundaries; SQL and live delivery remain unverified.
+  Next: ready-PR Apple compilation, APNs
+  configuration/migrations 0071–0072/provisioning and a
+  locked-iPhone trial. No deployment or physical-device acceptance is claimed.
+
 - **P15-34 / #1470:** local voice Live Activity and session-scoped Lock Screen
   Mute/End are implemented with Danish/English copy, measured waveform, native
   widget extension and audio background declaration. Core build, focused tests,

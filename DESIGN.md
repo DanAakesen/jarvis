@@ -3139,6 +3139,14 @@ ActivityKit and WidgetKit provide the system Lock Screen presentation. App
 language comes from `JarvisAppLanguage`; notification action feedback is shown
 in the existing Now activity sheet. Local updates use the existing `/now`
 snapshot/events and Factory task event stream. No APNs delivery or update is
-claimed while the app is suspended; the device registration and backend push
-work remain open. P15-35 separately approves and configures the voice Dynamic
-Island on the same activity; it does not add a task Island or authorize APNs.
+claimed by P15-36 alone. P15-49 (#1498) adds task Dynamic Island content:
+expanded shows the same task surface; compact shows a state symbol and localized
+state; minimal shows the state symbol with a task/state accessibility label.
+Waiting and terminal states have no running progress animation or elapsed timer.
+The actual task title appears below the single Factory/background-task heading.
+Stale state is explicitly labelled rather than implying live progress.
+Activity authorization/configuration failures appear near the workflow in Chat
+and Factory, with Danish/English text and an Open Settings link when disabled.
+No task Approve/Reject controls are fabricated; the existing real-confirmation
+notification owns those actions. APNs task updates require protected configuration
+and device provisioning; physical rendering and delivery remain device checks.

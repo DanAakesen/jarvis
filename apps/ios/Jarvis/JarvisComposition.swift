@@ -41,12 +41,14 @@ enum JarvisComposition {
         accessTokenProvider: any AccessTokenProvider,
         bundle: Bundle = .main,
         session: URLSession = .shared,
-        requestTimeout: Duration = .seconds(30)
+        requestTimeout: Duration = .seconds(30),
+        retryPolicy: RetryPolicy = RetryPolicy()
     ) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: apiBaseURL(bundle: bundle),
-                requestTimeout: requestTimeout
+                requestTimeout: requestTimeout,
+                retryPolicy: retryPolicy
             ),
             transport: URLSessionTransport(session: session),
             tokenStore: try KeychainTokenStore(),
