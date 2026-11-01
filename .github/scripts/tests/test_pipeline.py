@@ -680,6 +680,28 @@ class SafeFailureTests(unittest.TestCase):
         )[0]
         self.assertLess(label.index(".frame("), label.index(".contentShape(Rectangle())"))
 
+    def test_ios_navigation_bisect_runs_all_variants_without_weakening_regression(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        self.assertIn({"path": "JarvisUITests"}, project["targets"]["JarvisUITests"]["sources"])
+        source = (ROOT / "apps/ios/JarvisUITests/NavigationBisectTests.swift").read_text()
+        for variant in "ABCDEF":
+            self.assertEqual(source.count(f'exercise("{variant}", language:'), 2)
+        for required in ("--ui-test-navigation", "--ui-test-navigation-variant=",
+                         "navigation.openSidebar", "navigation.chat", "navigation.bisectState",
+                         "navigation.bisectRoot", "NAVIGATION BISECT", "isHittable == true",
+                         "XCTFail", "app.debugDescription"):
+            self.assertIn(required, source)
+        self.assertEqual(source.count("timeout: 10"), 2)
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("xcodebuild test", capture["run"])
+        self.assertNotIn("-only-testing", capture["run"])
+        self.assertNotIn("-skip-testing", capture["run"])
+        regression = next(step for step in workflow["jobs"]["macos"]["steps"]
+                          if step.get("name") == "Run iPhone navigation regression")
+        self.assertIn("-only-testing:JarvisUITests/NavigationBisectTests", regression["run"])
+
     def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
         fixture = source.split("private static var isNavigationFixture: Bool {", 1)[1].split("\n    }", 1)[0]
@@ -734,7 +756,11 @@ class SafeFailureTests(unittest.TestCase):
 
     def test_ios_navigation_render_dependency_is_read_before_geometry(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        body = source.split("    var body: some View {", 1)[1].split(
+        content = source.split("struct ContentView: View {", 1)[1]
+        body = content.split("    var body: some View {", 1)[1].split(
+            "    private func sidebarShell(", 1
+        )[0]
+        shell = content.split("    private func sidebarShell(", 1)[1].split(
             "    private var themeColorScheme:", 1
         )[0]
         self.assertLess(body.index("let currentNavigation = navigation"),
@@ -745,15 +771,39 @@ class SafeFailureTests(unittest.TestCase):
             self.assertLess(body.index(snapshot), body.index("GeometryReader"))
         geometry = body.split("GeometryReader", 1)[1]
         self.assertNotIn("sidebarDrag.", geometry)
-        self.assertIn("committedProgress - currentDrag.translation", geometry)
+        for argument in ("currentNavigation: currentNavigation", "currentDrag: currentDrag",
+                         "gestureGeneration: gestureGeneration", "committedProgress: committedProgress",
+                         "isDragging: isDragging"):
+            self.assertIn(argument, geometry)
+        self.assertIn("committedProgress - currentDrag.translation", shell)
         self.assertNotIn("navigation.isSidebarOpen", body)
-        self.assertNotIn(".animation(sidebarAnimation", body)
-        tap_catcher = body.split(".onTapGesture(perform: closeSidebar)", 1)[0].rsplit(
+        self.assertNotIn("navigation.isSidebarOpen", shell)
+        self.assertNotIn(".animation(sidebarAnimation", body + shell)
+        tap_catcher = shell.split(".onTapGesture(perform: closeSidebar)", 1)[0].rsplit(
             ".overlay {", 1
         )[1]
-        self.assertIn("if currentNavigation.isSidebarOpen {", tap_catcher)
+        self.assertIn("if currentNavigation.isSidebarOpen, navigationBisectVariant != .C {", tap_catcher)
         self.assertNotIn("progress", tap_catcher)
-        self.assertIn("withAnimation(sidebarAnimation) {\n            navigation.setSidebarOpen(open)", source)
+        self.assertRegex(source, r"withAnimation\(sidebarAnimation\) \{\s+navigation\.setSidebarOpen\(open\)")
+        self.assertIn("if navigationBisectVariant == .D {\n            navigation.setSidebarOpen(open)", source)
+        plain_layout = body.split("if navigationBisectVariant == .E {", 1)[1].split(
+            "} else {", 1
+        )[0]
+        self.assertIn("NavigationBisectWindowShell", plain_layout)
+        self.assertNotIn("GeometryReader", plain_layout)
+        probe = source.split("struct NavigationBisectProbe: View {", 1)[1].split(
+            "private struct NavigationBisectWindowGeometry:", 1
+        )[0]
+        for required in ('@Environment(\\.isEnabled)', ".frame(width: 1, height: 1)",
+                         ".accessibilityElement(children: .ignore)",
+                         ".accessibilityValue(value(isEnabled))", ".allowsHitTesting(false)"):
+            self.assertIn(required, probe)
+        self.assertNotIn(".accessibilityHidden", probe)
+        self.assertNotIn(".hidden()", probe)
+        self.assertIn(r"sidebarDisabled=\(!currentNavigation.isSidebarOpen || !isEnabled)", shell)
+        self.assertIn(r"contentDisabled=\(currentNavigation.isSidebarOpen || !isEnabled)", shell)
+        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        self.assertIn(r"rootDisabled=\(model.shouldCoverContent || !isEnabled)", gate)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")

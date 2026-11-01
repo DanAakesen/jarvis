@@ -127,6 +127,7 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
+    private let showsSidebarToolbarButton: Bool
     let onOpenSidebar: () -> Void
     let onNavigate: (JarvisDestination) -> Void
     private let screenShareBridge = VoiceScreenShareBridge()
@@ -136,6 +137,7 @@ struct JarvisChatScreen: View {
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
+        showsSidebarToolbarButton: Bool = true,
         onOpenSidebar: @escaping () -> Void = {},
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
@@ -145,6 +147,7 @@ struct JarvisChatScreen: View {
             startupError: startupError
         ))
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
+        self.showsSidebarToolbarButton = showsSidebarToolbarButton
         self.onOpenSidebar = onOpenSidebar
         self.onNavigate = onNavigate
     }
@@ -194,15 +197,17 @@ struct JarvisChatScreen: View {
         .navigationTitle("Chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button(action: onOpenSidebar) {
-                    Image(systemName: "line.3.horizontal")
-                        .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        .contentShape(Rectangle())
+            if showsSidebarToolbarButton {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onOpenSidebar) {
+                        Image(systemName: "line.3.horizontal")
+                            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .jarvisToolbarButtonStyle()
+                    .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: appLanguage))
+                    .accessibilityIdentifier("navigation.openSidebar")
                 }
-                .jarvisToolbarButtonStyle()
-                .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: appLanguage))
-                .accessibilityIdentifier("navigation.openSidebar")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

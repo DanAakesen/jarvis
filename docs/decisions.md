@@ -9985,6 +9985,15 @@ derive reveal from committed state plus translation without stored start
 progress. This targets stale shell evaluation, not test timing; causality and
 native recovery are not yet confirmed. No UI test or diagnostics are changed.
 
+The dispatcher authorizes a temporary simulator-fixture CI bisect instead of
+waiting for debugger access. A–F separately test baseline, no edge gesture,
+no tap-catcher, no animation, window-sized plain shell and an outside-toolbar
+launcher. Each has an independent Danish/English test; render and gate probes
+are visually transparent, accessible to automation and noninteractive. Preserve
+the production gates and strict regression tests. A passing variant is isolation
+evidence, not sufficient device acceptance; remove variants after confirming
+the culprit and retaining the fix.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

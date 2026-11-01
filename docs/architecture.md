@@ -1385,6 +1385,12 @@ cancelled drags auto-reset to the committed reveal without activating a blocker.
 Navigation, live drag and recognizer generation are read before the deferred
 geometry closure. Reveal uses committed open state plus live translation;
 the gesture stores no separate starting progress.
+Temporary A–F isolation switches require both simulator execution and
+`--ui-test-navigation`; normal/device launches do not activate them. The bisect
+tests read noninteractive shell/gate accessibility values. Variant E substitutes
+key-window bounds for the shell GeometryReader, and F moves only the Chat menu
+launcher outside its toolbar. These are investigative variants, not a selected
+production change, and are removed after native isolation.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes

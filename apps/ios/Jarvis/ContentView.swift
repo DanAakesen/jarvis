@@ -2,6 +2,114 @@ import JarvisCore
 import SwiftUI
 import UIKit
 
+enum NavigationBisectVariant: String {
+    case A, B, C, D, E, F
+
+    static var current: Self? {
+#if targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        let prefix = "--ui-test-navigation-variant="
+        guard arguments.contains("--ui-test-navigation"),
+              let argument = arguments.first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        return Self(rawValue: String(argument.dropFirst(prefix.count)))
+#else
+        return nil
+#endif
+    }
+}
+
+struct NavigationBisectProbe: View {
+    @Environment(\.isEnabled) private var isEnabled
+    let identifier: String
+    let value: (Bool) -> String
+
+    var body: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(identifier)
+            .accessibilityIdentifier(identifier)
+            .accessibilityValue(value(isEnabled))
+            .allowsHitTesting(false)
+    }
+}
+
+private struct NavigationBisectWindowGeometry: Equatable {
+    let size: CGSize
+    let safeAreaInsets: EdgeInsets
+
+    @MainActor init(window: UIWindow) {
+        size = window.bounds.size
+        let insets = window.safeAreaInsets
+        safeAreaInsets = EdgeInsets(
+            top: insets.top, leading: insets.left,
+            bottom: insets.bottom, trailing: insets.right
+        )
+    }
+}
+
+private struct NavigationBisectWindowShell<Content: View>: View {
+    @State private var geometry: NavigationBisectWindowGeometry?
+    let content: (CGSize, EdgeInsets) -> Content
+
+    var body: some View {
+        let current = geometry ?? UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+            .map { NavigationBisectWindowGeometry(window: $0) }
+        content(current?.size ?? .zero, current?.safeAreaInsets ?? EdgeInsets())
+            .background {
+                NavigationBisectWindowBoundsReader { updated in
+                    if geometry != updated { geometry = updated }
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+    }
+}
+
+private struct NavigationBisectWindowBoundsReader: UIViewRepresentable {
+    let onChange: (NavigationBisectWindowGeometry) -> Void
+
+    func makeUIView(context: Context) -> BoundsView {
+        let view = BoundsView()
+        view.isUserInteractionEnabled = false
+        view.onChange = onChange
+        return view
+    }
+
+    func updateUIView(_ uiView: BoundsView, context: Context) {
+        uiView.onChange = onChange
+        uiView.publishGeometry()
+    }
+
+    final class BoundsView: UIView {
+        var onChange: ((NavigationBisectWindowGeometry) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            publishGeometry()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            publishGeometry()
+        }
+
+        override func safeAreaInsetsDidChange() {
+            super.safeAreaInsetsDidChange()
+            publishGeometry()
+        }
+
+        func publishGeometry() {
+            guard let keyWindow = window?.windowScene?.windows.first(where: \.isKeyWindow) else { return }
+            let updated = NavigationBisectWindowGeometry(window: keyWindow)
+            DispatchQueue.main.async { self.onChange?(updated) }
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -16,6 +124,7 @@ struct ContentView: View {
     private let startupError: String?
     private let fixtureMode: Bool
     private let navigationFixtureMode: Bool
+    private let navigationBisectVariant = NavigationBisectVariant.current
     private let settingsClient: JarvisSettingsClient?
     private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
@@ -149,17 +258,50 @@ struct ContentView: View {
         let gestureGeneration = sidebarGestureGeneration
         let committedProgress: CGFloat = currentNavigation.isSidebarOpen ? 1 : 0
         let isDragging = currentDrag.isActive && currentDrag.generation == gestureGeneration
-        GeometryReader { geometry in
-            let safeAreaInsets = Self.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets)
+        Group {
+            if navigationBisectVariant == .E {
+                NavigationBisectWindowShell { size, safeAreaInsets in
+                    sidebarShell(
+                        size: size, safeAreaInsets: safeAreaInsets,
+                        currentNavigation: currentNavigation, currentDrag: currentDrag,
+                        gestureGeneration: gestureGeneration, committedProgress: committedProgress,
+                        isDragging: isDragging
+                    )
+                }
+            } else {
+                GeometryReader { geometry in
+                    sidebarShell(
+                        size: geometry.size,
+                        safeAreaInsets: Self.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets),
+                        currentNavigation: currentNavigation, currentDrag: currentDrag,
+                        gestureGeneration: gestureGeneration, committedProgress: committedProgress,
+                        isDragging: isDragging
+                    )
+                }
+            }
+        }
+        .ignoresSafeArea(.container)
+        .preferredColorScheme(themeColorScheme)
+    }
+
+    private func sidebarShell(
+        size: CGSize,
+        safeAreaInsets: EdgeInsets,
+        currentNavigation: JarvisNavigationState,
+        currentDrag: SidebarDrag,
+        gestureGeneration: Int,
+        committedProgress: CGFloat,
+        isDragging: Bool
+    ) -> some View {
             let drawerWidth = min(
-                geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
+                size.width * JarvisDesignTokens.sidebarWidthFraction,
                 JarvisDesignTokens.sidebarMaximumWidth
             )
             let progress = isDragging
                 ? min(max(committedProgress - currentDrag.translation / max(drawerWidth, 1), 0), 1)
                 : committedProgress
 
-            ZStack(alignment: .trailing) {
+            return ZStack(alignment: .trailing) {
                 JarvisSidebar(
                     currentDestination: currentNavigation.currentDestination,
                     isOpen: currentNavigation.isSidebarOpen,
@@ -167,7 +309,7 @@ struct ContentView: View {
                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) },
                     onClose: closeSidebar
                 )
-                .frame(width: drawerWidth, height: geometry.size.height)
+                .frame(width: drawerWidth, height: size.height)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .allowsHitTesting(currentNavigation.isSidebarOpen)
 
@@ -191,6 +333,7 @@ struct ContentView: View {
                                 || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
                                 ? .needsYou : nil),
                         startupError: startupError,
+                        showsSidebarToolbarButton: navigationBisectVariant != .F,
                         onOpenSidebar: { setSidebarOpen(true) },
                         onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                     )
@@ -210,6 +353,7 @@ struct ContentView: View {
                                     client: chatClient,
                                     fixtureMode: fixtureMode,
                                     startupError: startupError,
+                                    showsSidebarToolbarButton: navigationBisectVariant != .F,
                                     onOpenSidebar: { setSidebarOpen(true) },
                                     onNavigate: { navigate(to: $0, drawerWidth: drawerWidth) }
                                 )
@@ -278,7 +422,27 @@ struct ContentView: View {
                     GeneratedWorkspaceSheet(presented: presented, runtime: workspaceRuntime)
                 }
                 .allowsHitTesting(!currentNavigation.isSidebarOpen)
-                .frame(width: geometry.size.width, height: geometry.size.height)
+                .frame(width: size.width, height: size.height)
+                .overlay(alignment: .topLeading) {
+                    if navigationBisectVariant == .F,
+                       currentNavigation.currentDestination == .chat {
+                        Button { setSidebarOpen(true) } label: {
+                            Image(systemName: "line.3.horizontal")
+                                .frame(
+                                    width: JarvisDesignTokens.chatMinimumTapTarget,
+                                    height: JarvisDesignTokens.chatMinimumTapTarget
+                                )
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .tint(JarvisDesignTokens.primaryAccent)
+                        .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
+                        .accessibilityIdentifier("navigation.openSidebar")
+                        .padding(.leading, safeAreaInsets.leading + 16)
+                        .padding(.top, safeAreaInsets.top)
+                        .allowsHitTesting(!currentNavigation.isSidebarOpen)
+                    }
+                }
                 .background { JarvisScreenBackground() }
                 .overlay {
                     Color.black
@@ -288,12 +452,12 @@ struct ContentView: View {
                 }
                 .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
                 .overlay {
-                    if currentNavigation.isSidebarOpen {
+                    if currentNavigation.isSidebarOpen, navigationBisectVariant != .C {
                         Color.clear
                             .contentShape(Rectangle())
                             .onTapGesture(perform: closeSidebar)
                             .simultaneousGesture(sidebarDragGesture(
-                                screenWidth: geometry.size.width, drawerWidth: drawerWidth,
+                                screenWidth: size.width, drawerWidth: drawerWidth,
                                 generation: gestureGeneration, startProgress: committedProgress
                             ))
                             .id(gestureGeneration)
@@ -309,12 +473,12 @@ struct ContentView: View {
                 }
                 .accessibilityHidden(currentNavigation.isSidebarOpen)
 
-                if !currentNavigation.isSidebarOpen {
+                if !currentNavigation.isSidebarOpen, navigationBisectVariant != .B {
                     Color.clear
                         .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth)
                         .contentShape(Rectangle())
                         .gesture(sidebarDragGesture(
-                            screenWidth: geometry.size.width, drawerWidth: drawerWidth,
+                            screenWidth: size.width, drawerWidth: drawerWidth,
                             generation: gestureGeneration, startProgress: committedProgress
                         ))
                         .id(gestureGeneration)
@@ -330,7 +494,17 @@ struct ContentView: View {
                     .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.voiceControlBottomInset)
                 }
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .frame(width: size.width, height: size.height)
+            .overlay(alignment: .topLeading) {
+                if let variant = navigationBisectVariant {
+                    NavigationBisectProbe(identifier: "navigation.bisectState") { isEnabled in
+                        "variant=\(variant.rawValue);isSidebarOpen=\(currentNavigation.isSidebarOpen);"
+                            + "sidebarXOffset=\(-drawerWidth * progress);"
+                            + "sidebarDisabled=\(!currentNavigation.isSidebarOpen || !isEnabled);"
+                            + "contentDisabled=\(currentNavigation.isSidebarOpen || !isEnabled)"
+                    }
+                }
+            }
             .background { JarvisScreenBackground() }
             .coordinateSpace(name: "sidebar")
             .clipped()
@@ -343,9 +517,6 @@ struct ContentView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase != .active { setSidebarOpen(false) }
             }
-        }
-        .ignoresSafeArea(.container)
-        .preferredColorScheme(themeColorScheme)
     }
 
     private var themeColorScheme: ColorScheme? {
@@ -356,11 +527,15 @@ struct ContentView: View {
         }
     }
 
-    private static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
-        guard let window = UIApplication.shared.connectedScenes
+    private static var keyWindow: UIWindow? {
+        UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .flatMap(\.windows)
-            .first(where: \.isKeyWindow) else {
+            .first(where: \.isKeyWindow)
+    }
+
+    private static func resolvedSafeAreaInsets(fallback: EdgeInsets) -> EdgeInsets {
+        guard let window = keyWindow else {
             return fallback
         }
         let insets = window.safeAreaInsets
@@ -387,7 +562,7 @@ struct ContentView: View {
                 if state.isActive {
                     guard state.generation == sidebarGestureGeneration else { return }
                     state.translation = value.translation.width
-                    transaction.disablesAnimations = true
+                    if navigationBisectVariant != .D { transaction.disablesAnimations = true }
                     return
                 }
                 guard canBeginSidebarDrag(value, screenWidth: screenWidth,
@@ -397,7 +572,7 @@ struct ContentView: View {
                     isActive: true,
                     generation: sidebarGestureGeneration
                 )
-                transaction.disablesAnimations = true
+                if navigationBisectVariant != .D { transaction.disablesAnimations = true }
             }
             .onEnded { value in
                 guard generation == sidebarGestureGeneration,
@@ -445,8 +620,12 @@ struct ContentView: View {
                 #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
             )
         }
-        withAnimation(sidebarAnimation) {
+        if navigationBisectVariant == .D {
             navigation.setSidebarOpen(open)
+        } else {
+            withAnimation(sidebarAnimation) {
+                navigation.setSidebarOpen(open)
+            }
         }
     }
 
@@ -468,8 +647,12 @@ struct ContentView: View {
             default: break
             }
         }
-        withAnimation(sidebarAnimation) {
+        if navigationBisectVariant == .D {
             navigation.navigate(to: destination)
+        } else {
+            withAnimation(sidebarAnimation) {
+                navigation.navigate(to: destination)
+            }
         }
     }
 

@@ -335,6 +335,20 @@ struct JarvisGateRootView: View {
     @StateObject private var model = JarvisGateModel()
 
     var body: some View {
+        if NavigationBisectVariant.current != nil {
+            ZStack(alignment: .topLeading) {
+                gatedContent
+                NavigationBisectProbe(identifier: "navigation.bisectRoot") { isEnabled in
+                    "shouldCoverContent=\(model.shouldCoverContent);"
+                        + "rootDisabled=\(model.shouldCoverContent || !isEnabled)"
+                }
+            }
+        } else {
+            gatedContent
+        }
+    }
+
+    private var gatedContent: some View {
         Group {
             if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
                 JarvisLockScreenTasksPreview(

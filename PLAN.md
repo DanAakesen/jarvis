@@ -3476,6 +3476,11 @@ Run 41313041566 still fails the first menu tap in both languages, before any
 drag: the open command fires but Chat stays unshifted. The next correction
 captures all shell inputs before deferred geometry and removes transient
 starting progress. Full native confirmation remains pending.
+Run 41315305459 remains red at launch/first menu tap. Use CI as the debugger:
+temporary simulator-fixture A–F variants isolate edge gesture, tap-catcher,
+animation, geometry and toolbar ownership in one bilingual test run. Read actual
+render/root-input probes, retain the winning fix and remove the variants after
+native results; no debugger or human access is required.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

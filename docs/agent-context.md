@@ -6210,6 +6210,13 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 
 ### Standing iOS documentation-first requirement
 
+P15-41's temporary navigation bisect launches only simulator navigation fixtures
+with `--ui-test-navigation-variant=A` through `F`. `NavigationBisectTests` runs
+each variant in Danish and English in the full-scheme CI invocation, independently
+of the existing regression tests. Results print `NAVIGATION BISECT` and include
+noninteractive, visually transparent accessibility probes for shell and gate
+state. Remove the isolation switches after selecting and verifying the fix.
+
 Before implementing any iOS change, read the relevant Apple API documentation
 and Human Interface Guidelines. Prefer the platform API, modifier, or component
 and documented best practice over hand-rolled behavior. Select documentation
