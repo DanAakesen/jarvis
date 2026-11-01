@@ -7,14 +7,18 @@ final class JarvisChatVisibilityTests: XCTestCase {
 
     override func tearDownWithError() throws {
         if (testRun?.failureCount ?? 0) > 0 {
-            let hierarchy = XCUIApplication().debugDescription
-            print("Chat UI failure hierarchy:\n\(hierarchy)")
-            let attachment = XCTAttachment(string: hierarchy)
-            attachment.name = "chat-failure-app-hierarchy"
-            attachment.lifetime = .keepAlways
-            add(attachment)
+            attachFailureHierarchy("teardown")
         }
         try super.tearDownWithError()
+    }
+
+    private func attachFailureHierarchy(_ stage: String) {
+        let hierarchy = XCUIApplication().debugDescription
+        print("Chat UI failure hierarchy (\(stage)):\n\(hierarchy)")
+        let attachment = XCTAttachment(string: hierarchy)
+        attachment.name = "chat-failure-app-hierarchy"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testSentMessageIsVisibleBeforeDelayedReplyInEnglish() {
@@ -48,13 +52,21 @@ final class JarvisChatVisibilityTests: XCTestCase {
 
     private func enterMessage(in app: XCUIApplication) -> XCUIElement {
         let transcript = app.scrollViews["chat-transcript"]
-        XCTAssertTrue(transcript.waitForExistence(timeout: 10))
+        let transcriptExists = transcript.waitForExistence(timeout: 10)
+        if !transcriptExists {
+            attachFailureHierarchy("transcript missing")
+        }
+        XCTAssertTrue(transcriptExists)
         let composer = app.textFields["chat-composer"]
         let ready = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "exists == true AND enabled == true AND hittable == true"),
             object: composer
         )
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        let readiness = XCTWaiter.wait(for: [ready], timeout: 10)
+        if readiness != .completed {
+            attachFailureHierarchy("composer readiness \(readiness)")
+        }
+        XCTAssertEqual(readiness, .completed)
         composer.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
         composer.typeText("Hi Jarvis")

@@ -6507,7 +6507,15 @@ asynchronous animation progress remains above zero; closed Chat must retain inpu
 even if that progress has a residual value. UI-test failures print the complete
 `XCUIApplication.debugDescription` and retain `chat-failure-app-hierarchy` in the
 existing attachment export. This supplements, not relaxes, composer hittability,
-keyboard and immediate-send assertions. PR #1485's broader navigation fix was
+keyboard and immediate-send assertions. Run 41298314966 still fails: Danish's
+transcript assertion has a second login-failure gate window; English and
+failure-recovery time out on an enabled composer in one window. Capture the
+hierarchy before those failed assertions as well as during teardown, keeping
+the existing ten-second deadlines. Shared app/gate/input corrections are
+coordinated on PR #1485, not copied into this branch. Direct
+[XCTAttachment](https://developer.apple.com/documentation/xctest/xctattachment)
+retrieval again failed DNS before the diagnostic edit.
+PR #1485's broader navigation fix was
 still open during this correction; merge main after it lands and verify the
 combined shell in simulator CI. Official `allowsHitTesting(_:)` documentation
 and HIG Gestures retrieval still failed DNS resolution in this sandbox; no

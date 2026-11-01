@@ -723,6 +723,11 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("XCUIApplication().debugDescription", tests)
         self.assertIn('attachment.name = "chat-failure-app-hierarchy"', tests)
         self.assertIn("attachment.lifetime = .keepAlways", tests)
+        entry = tests.split("private func enterMessage", 1)[1].split("private func assertSentMessageIsVisible", 1)[0]
+        self.assertLess(entry.index('attachFailureHierarchy("transcript missing")'), entry.index("XCTAssertTrue(transcriptExists)"))
+        self.assertLess(entry.index('attachFailureHierarchy("composer readiness'), entry.index("XCTAssertEqual(readiness, .completed)"))
+        self.assertIn("transcript.waitForExistence(timeout: 10)", entry)
+        self.assertIn("XCTWaiter.wait(for: [ready], timeout: 10)", entry)
 
     def test_ios_chat_composer_is_outside_transcript_and_respects_keyboard(self):
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()

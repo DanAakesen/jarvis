@@ -3458,6 +3458,14 @@ unchanged. Next validate the simulator result and screenshots; the runtime
 cause is not yet confirmed. PR #1485 remains open and its gate-startup correction
 also failed its input gate; merge main again after that PR lands.
 
+Run 41298314966 still fails before sending: Danish is covered by a login-failure
+gate window; English/failure-recovery time out on an enabled composer with one
+window. Evidence and shared-fix ownership were posted to PR #1485; do not
+duplicate its app/gate/input correction. Chat tests now capture the hierarchy
+before failed transcript/readiness assertions, retaining deadlines and behavior
+checks. Next integrate the shared correction when available and rerun native
+Chat CI; the app fix and successful screenshots remain outstanding.
+
 P15-44 / [#1490](https://github.com/DanAakesen/jarvis/issues/1490) adds immediate
 local sent-message insertion, server-ID reconciliation, pre-acknowledgment draft
 recovery and latest-row scrolling that still runs with Reduce Motion. The native
