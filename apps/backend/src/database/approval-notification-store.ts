@@ -5,6 +5,7 @@ export interface ApprovalNotificationRegistration {
   deviceToken: string;
   language: 'da' | 'en';
   showActions: boolean;
+  timeZone: string;
 }
 
 export interface ApprovalNotificationStore {
@@ -21,6 +22,7 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
         .input('token', sql.VarChar(512), registration.deviceToken)
         .input('language', sql.Char(2), registration.language)
         .input('showActions', sql.Bit, registration.showActions)
+        .input('timeZone', sql.VarChar(64), registration.timeZone)
         .query<{ saved: boolean }>(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
           DECLARE @lockResult int;
@@ -35,7 +37,7 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
             WHERE owner_object_id=@owner AND device_token=@token)
           BEGIN
             UPDATE dbo.approval_notification_registrations
-              SET language=@language, show_actions=@showActions,
+              SET language=@language, show_actions=@showActions, time_zone=@timeZone,
                 expires_at=DATEADD(day, 30, SYSUTCDATETIME())
               WHERE owner_object_id=@owner AND device_token=@token;
             SET @saved=1;
@@ -44,8 +46,8 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
             WHERE owner_object_id=@owner) < 5
           BEGIN
             INSERT dbo.approval_notification_registrations
-              (owner_object_id, device_token, language, show_actions, expires_at)
-              VALUES (@owner, @token, @language, @showActions, DATEADD(day, 30, SYSUTCDATETIME()));
+              (owner_object_id, device_token, language, show_actions, time_zone, expires_at)
+              VALUES (@owner, @token, @language, @showActions, @timeZone, DATEADD(day, 30, SYSUTCDATETIME()));
             SET @saved=1;
           END
           COMMIT TRANSACTION;
@@ -56,7 +58,7 @@ export function createApprovalNotificationStore(pool: sql.ConnectionPool): Appro
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
         .query<ApprovalNotificationRegistration>(`SELECT TOP (5) device_token AS deviceToken,
-          language, show_actions AS showActions
+          language, show_actions AS showActions, time_zone AS timeZone
           FROM dbo.approval_notification_registrations
           WHERE owner_object_id=@owner AND expires_at > SYSUTCDATETIME()
           ORDER BY device_token;`);

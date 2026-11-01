@@ -80,7 +80,8 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
         try? await approvalsClient.registerDeviceToken(
             deviceToken,
             language: language,
-            showActions: settings.showPreviewsSetting != .never
+            showActions: settings.showPreviewsSetting != .never,
+            timeZone: TimeZone.current.identifier
         )
     }
 

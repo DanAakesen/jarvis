@@ -81,7 +81,8 @@ public final class JarvisApprovalsClient: Sendable {
     public func registerDeviceToken(
         _ token: String,
         language: JarvisAppLanguage,
-        showActions: Bool
+        showActions: Bool,
+        timeZone: String
     ) async throws {
         guard Self.validDeviceToken(token) else { throw JarvisApprovalsClientError.invalidResponse }
         let response = try await client.performAuthenticatedRequest(
@@ -90,7 +91,8 @@ public final class JarvisApprovalsClient: Sendable {
             body: try JSONEncoder().encode(DeviceTokenRegistration(
                 deviceToken: token.lowercased(),
                 language: language.rawValue,
-                showActions: showActions
+                showActions: showActions,
+                timeZone: timeZone
             )),
             idempotent: true
         )
@@ -132,6 +134,7 @@ private struct DeviceTokenRegistration: Encodable {
     let deviceToken: String
     let language: String
     let showActions: Bool
+    let timeZone: String
 }
 
 private struct DeviceTokenRemoval: Encodable {

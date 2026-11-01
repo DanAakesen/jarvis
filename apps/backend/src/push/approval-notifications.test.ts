@@ -19,6 +19,7 @@ import {
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 'sig'].join('.')}` };
 const deviceToken = 'ab'.repeat(32);
+const timeZone = 'Europe/Copenhagen';
 const confirmation = {
   id: 'A'.repeat(43),
   actionKind: 'merge' as const,
@@ -70,11 +71,13 @@ describe('APNs approval notifications', () => {
       ...confirmation,
       language: 'en',
       showActions: true,
+      timeZone,
     }).toString());
     const danishPrivate = JSON.parse(approvalNotificationPayload({
       ...confirmation,
       language: 'da',
       showActions: false,
+      timeZone,
     }).toString());
     expect(english.aps).toMatchObject({
       alert: { title: 'Jarvis' },
@@ -82,10 +85,19 @@ describe('APNs approval notifications', () => {
       'thread-id': 'jarvis.approval',
       sound: 'default',
     });
-    expect(english.aps.alert.body).toMatch(/^Merge the changes into main\?\nExpires at .+ UTC$/u);
+    expect(english.aps.alert.body).toMatch(/^Merge the changes into main\?\nExpires at .+ (?:CET|CEST)$/u);
     expect(english.confirmationID).toBe(confirmation.id);
     expect(danishPrivate.aps.category).toBe('jarvis.approval.private');
     expect(danishPrivate.aps.alert.body).toContain('\nUdløber kl. ');
+
+    const sanitized = JSON.parse(approvalNotificationPayload({
+      ...confirmation,
+      summary: 'Line 1\r\nLine 2\u0000',
+      language: 'en',
+      showActions: true,
+      timeZone,
+    }).toString());
+    expect(sanitized.aps.alert.body).toMatch(/^Line 1 {2}Line 2\nExpires at /u);
   });
 
   it('sends a bounded, authenticated APNs alert with the app topic and expires-on header', async () => {
@@ -120,7 +132,7 @@ describe('APNs approval notifications', () => {
 
     await expect(sender.send(
       deviceToken,
-      approvalNotificationPayload({ ...confirmation, language: 'en', showActions: true }),
+      approvalNotificationPayload({ ...confirmation, language: 'en', showActions: true, timeZone }),
       expiresAt,
       new AbortController().signal,
     )).resolves.toEqual({ accepted: true, invalidToken: false });
@@ -144,7 +156,7 @@ describe('APNs approval notifications', () => {
 
   it('registers only valid owner device tokens and supports removal', async () => {
     const f = fixture();
-    const registration = { deviceToken, language: 'da', showActions: true };
+    const registration = { deviceToken, language: 'da', showActions: true, timeZone };
     expect((await f.app.inject({
       method: 'POST',
       url: '/ios/approval-notifications',
@@ -155,6 +167,7 @@ describe('APNs approval notifications', () => {
     for (const invalid of [
       null, [], { ...registration, deviceToken: 'invalid' },
       { ...registration, language: 'fr' }, { ...registration, showActions: 'true' },
+      { ...registration, timeZone: 'not/a-time-zone' },
       { ...registration, unexpected: true },
     ]) {
       expect((await f.app.inject({
@@ -179,12 +192,12 @@ describe('APNs approval notifications', () => {
       method: 'POST',
       url: '/ios/approval-notifications',
       headers,
-      payload: { deviceToken, language: 'en', showActions: true },
+      payload: { deviceToken, language: 'en', showActions: true, timeZone },
     })).statusCode).toBe(403);
     expect(foreign.store.upsert).not.toHaveBeenCalled();
 
     const f = fixture();
-    f.registrations.set(deviceToken, { deviceToken, language: 'en', showActions: true });
+    f.registrations.set(deviceToken, { deviceToken, language: 'en', showActions: true, timeZone });
     const dispatch = createApprovalNotificationDispatcher(
       config.auth.ownerObjectId,
       { store: f.store, sender: { send: f.send } },

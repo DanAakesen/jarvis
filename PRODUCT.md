@@ -10,6 +10,13 @@ Native calendar approval controls and review context are available in both
 languages. CI review evidence uses synthetic calendar confirmations, not live
 calendar writes.
 
+The iPhone approval bar shows only Approve and Decline immediately above Now.
+Each action shows its own pending state. Ask for the system notification
+permission after the owner unlocks the signed-in app, not when the first proposal
+arrives. Once APNs is configured, send one actionable notification when the
+confirmation is created; polling must not create a second local notification.
+Respect notification-preview privacy and the device's language/time zone.
+
 ## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
 
 Read-only diagnostic access covers Jarvis's backend, hosted AI agents, coding
@@ -393,7 +400,8 @@ Remote updates require the protected APNs configuration, database migration and
 signed-device provisioning; absent configuration shows a local-only warning.
 Stale activities explain that Jarvis must be reopened for current state.
 Approval actions remain exclusive to actual pending confirmations in the existing
-authenticated notification flow; approval notification pushes remain separate work.
+authenticated notification flow. P15-51 sends one APNs notification when an
+approval is created; task Live Activity updates remain a separate channel.
 
 ## Conversational finding feedback (#1240)
 

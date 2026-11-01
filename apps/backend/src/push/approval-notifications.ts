@@ -35,6 +35,7 @@ export interface ApprovalNotificationServices {
 export interface ApprovalNotificationPayloadInput extends BrowserConfirmation {
   language: 'da' | 'en';
   showActions: boolean;
+  timeZone: string;
 }
 
 export function loadApprovalNotificationConfig(
@@ -53,12 +54,15 @@ export function approvalNotificationPayload(input: ApprovalNotificationPayloadIn
   if (!confirmationIdPattern.test(input.id) || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
     throw new TypeError('Invalid approval notification');
   }
-  const summary = input.summary.replace(/[\r\n\u0000-\u001f\u007f]/gu, ' ').trim();
+  const summary = Array.from(input.summary, (character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
+  }).join('').trim();
   const boundedSummary = [...summary].slice(0, 240).join('');
   const time = new Intl.DateTimeFormat(input.language === 'da' ? 'da-DK' : 'en-GB', {
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: 'UTC',
+    timeZone: input.timeZone,
     timeZoneName: 'short',
   }).format(expiresAt);
   const expiry = input.language === 'da' ? `Udløber kl. ${time}` : `Expires at ${time}`;
@@ -168,15 +172,27 @@ export async function createApprovalNotificationSender(
 function validateRegistration(value: unknown): ApprovalNotificationRegistration | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   const input = value as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !['deviceToken', 'language', 'showActions'].includes(key)) ||
+  if (Object.keys(input).some((key) => !['deviceToken', 'language', 'showActions', 'timeZone'].includes(key)) ||
       typeof input.deviceToken !== 'string' || !deviceTokenPattern.test(input.deviceToken) ||
       (input.language !== 'da' && input.language !== 'en') ||
-      typeof input.showActions !== 'boolean') return;
+      typeof input.showActions !== 'boolean' ||
+      typeof input.timeZone !== 'string' || input.timeZone.length === 0 || input.timeZone.length > 64 ||
+      !validTimeZone(input.timeZone)) return;
   return {
     deviceToken: input.deviceToken.toLowerCase(),
     language: input.language,
     showActions: input.showActions,
+    timeZone: input.timeZone,
   };
+}
+
+function validTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function createApprovalNotificationDispatcher(
@@ -204,6 +220,7 @@ export function createApprovalNotificationDispatcher(
               ...confirmation,
               language: registration.language,
               showActions: registration.showActions,
+              timeZone: registration.timeZone,
             }),
             expiresAt,
             AbortSignal.timeout(6000),

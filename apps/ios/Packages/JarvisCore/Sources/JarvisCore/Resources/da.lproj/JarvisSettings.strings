@@ -20,7 +20,7 @@
 "settings.saveFailed" = "Kunne ikke gemme. Din ændring er bevaret.";
 "settings.notOwner" = "Kun kontoejeren har adgang.";
 "settings.unavailable" = "Indstillinger er midlertidigt utilgængelige.";
-"settings.notificationsUnavailable" = "Notifikationer kræver endnu APNs-understøttelse.";
+"settings.notificationsUnavailable" = "Godkendelsesnotifikationer kræver APNs-konfiguration på serveren.";
 "settings.offline" = "Offline — kun læsning.";
 "settings.forbidden" = "Adgang nægtet.";
 "settings.readOnly" = "Kun læsning";

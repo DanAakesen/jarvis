@@ -107,7 +107,7 @@ final class JarvisApprovalsClientTests: XCTestCase {
         ])
         let approvals = makeApprovalsClient(transport: transport)
 
-        try await approvals.registerDeviceToken(token, language: .en, showActions: true)
+        try await approvals.registerDeviceToken(token, language: .en, showActions: true, timeZone: "Europe/Copenhagen")
         try await approvals.unregisterDeviceToken(token)
 
         let requests = await transport.recordedRequests()
@@ -122,6 +122,7 @@ final class JarvisApprovalsClientTests: XCTestCase {
         XCTAssertEqual(bodies[0]["deviceToken"] as? String, token)
         XCTAssertEqual(bodies[0]["language"] as? String, "en")
         XCTAssertEqual(bodies[0]["showActions"] as? Bool, true)
+        XCTAssertEqual(bodies[0]["timeZone"] as? String, "Europe/Copenhagen")
         XCTAssertEqual(bodies[1]["deviceToken"] as? String, token)
     }
 
@@ -130,7 +131,12 @@ final class JarvisApprovalsClientTests: XCTestCase {
         let approvals = makeApprovalsClient(transport: transport)
 
         do {
-            try await approvals.registerDeviceToken("not-a-token", language: .da, showActions: true)
+            try await approvals.registerDeviceToken(
+                "not-a-token",
+                language: .da,
+                showActions: true,
+                timeZone: "Europe/Copenhagen"
+            )
             XCTFail("Expected invalid device token rejection")
         } catch {
             XCTAssertEqual(error as? JarvisApprovalsClientError, .invalidResponse)
