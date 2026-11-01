@@ -1393,6 +1393,7 @@ export function createGoogleModule(
     registerServices: (app) => {
       app.decorate('pendingGoogleActions', pendingActions);
       pendingActions.onChanged = () => app.nowEventHub.publish({ type: 'refresh' });
+      pendingActions.onConfirmationPending = app.notifyApproval;
     },
     registerRoutes: async () => {},
   };

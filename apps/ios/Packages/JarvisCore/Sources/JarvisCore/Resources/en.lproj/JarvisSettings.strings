@@ -20,7 +20,7 @@
 "settings.saveFailed" = "Could not save. Your change is kept.";
 "settings.notOwner" = "Only the account owner has access.";
 "settings.unavailable" = "Settings are temporarily unavailable.";
-"settings.notificationsUnavailable" = "Notifications need APNs support first.";
+"settings.notificationsUnavailable" = "Approval alerts require APNs configuration on the server.";
 "settings.offline" = "Offline — read only.";
 "settings.forbidden" = "Access denied.";
 "settings.readOnly" = "Read only";

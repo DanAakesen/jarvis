@@ -55,7 +55,7 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'activitykit_registrations', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
+  'activity', 'activitykit_registrations', 'approval_notification_registrations', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_issue_origins', 'factory_task_submissions',
   'github_app_mint_status', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'owner_reminder_schedules', 'owner_sessions', 'phone_sessions',
@@ -895,8 +895,10 @@ describe('committed domain schema (groups 1-8)', () => {
       await expect(rollbackPool.request().input('id', sql.UniqueIdentifier, jobId)
         .query("UPDATE dbo.background_jobs SET kind = N'research' WHERE job_id = @id;")).rejects.toThrow();
       const down = await readDownMigration('0072_weather_job_results.sql');
+      const newer = await revertNewerThan(rollbackPool, committed, down.name);
       await expect(revertMigration(rollbackPool, committed, down)).rejects.toThrow('Weather job results must be preserved');
       await expect(store.get(jobId)).resolves.toMatchObject({ details: { job: { resultId } } });
+      await expect(applyMigrations(rollbackPool, committed)).resolves.toEqual(newer.map(({ name }) => name));
     }));
 
   it('persists background-job steps, marks interrupted work failed, and prunes after 30 days', async () => {

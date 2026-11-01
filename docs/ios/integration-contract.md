@@ -57,7 +57,7 @@ Draft for the native iPhone app, derived from reading the current backend and we
 
 - `GET /tools` lists them. `POST /tools/:toolName` runs one and returns `{tool, outcome: "ok" or "refused" or "error", result, confirmation}`.
 
-## 7. Approvals from the Lock Screen
+## 7. Approvals from the Lock Screen (P15-51)
 
 Decision (owner, 29 October 2026): approving from the Lock Screen is allowed and must not be blocked.
 
@@ -69,24 +69,23 @@ What exists today, read from `apps/backend/src/core/now.ts`, `owner-interactions
 - The pending confirmation is held in the memory of the one backend instance (the deployment is fixed at one replica), so a restart ends it. The app treats 404 as no longer available.
 - Today the only hook when a confirmation is created is `onConfirmationPending`, and it feeds the in-app event stream, not a push.
 
-Native design (approved in P15-36, 31 October 2026):
+Native design (approved in P15-36, 31 October 2026; polished in P15-51):
 
-- The app mirrors currently pending confirmations from `GET /now` into local notifications while active and refreshes on the existing `/now/events` stream.
-- A notification category offers Approve and Decline, both marked `.authenticationRequired`. The action handler makes one authenticated `POST /now/confirmations/:id` using the existing after-first-unlock Keychain session, with an eight-second request timeout and no retry.
-- The notification names the exact server-provided `summary` and expiry. It never reports success unless the endpoint returns 204; success or failure is shown in the existing Now activity sheet.
-- Only yes/no decisions get actions. Stale notifications are removed on the next successful `/now` snapshot; the server still rejects expired or already-used IDs.
-- These are local notifications, not remote pushes. Updates cannot be guaranteed while the app is suspended.
+- The app registers the `jarvis.approval` category with Approve and Decline actions, both marked `.authenticationRequired`. The handler makes one authenticated `POST /now/confirmations/:id` using the existing Keychain session, with an eight-second timeout and no retry.
+- The standard system notification permission prompt appears after sign-in and device unlock, before any approval exists. Denial prevents APNs registration; it does not block in-app approval.
+- The owner-only `POST /ios/approval-notifications` stores an APNs token, app language, time zone and preview-action preference; `DELETE` removes that device registration. After an approval is persisted/staged, the backend sends one APNs alert with `aps.alert`, `aps.category`, `aps.thread-id`, `aps.sound`, and top-level `confirmationID`. The body contains the bounded server summary and localized absolute expiry. Hidden previews select the no-actions category.
+- There is no local-notification duplicate: `/now` only reconciles old local alerts and stale delivered alerts; foreground remote banners are suppressed while Chat shows the action bar. Own-device decisions dismiss the delivered notification. The backend does not send a second lifecycle push when another device resolves/expires an approval, so a lock-screen alert can remain until refresh; the existing endpoint rejects stale IDs.
+- APNs uses `apns-push-type: alert`, the app bundle topic, priority 10 and the confirmation expiry as the delivery expiration. These are actionable user notifications, not approval Live Activities. Existing task Live Activity updates remain separate.
 
-## 8. New backend work the app needs
+## 8. Backend capabilities and remaining work
 
-| Item | Why |
+| Item | Status |
 |---|---|
-| Device registration endpoint plus a small SQL table | Store APNs device and ActivityKit push tokens per device. |
-| APNs sender in the backend, key held in Key Vault | Deliver approval notifications and task Live Activity updates while the app is suspended. |
-| Push when a confirmation is created | Publish from the existing confirmation-pending hook, carrying only the ID and required notification content. |
-| Update or remove an approval notification when the confirmation resolves or expires | Prevent stale Approve/Decline actions from remaining on the Lock Screen. The route already answers 404 for a stale one. |
-| Factory task Live Activity push updates | Publish validated task state/activity and end updates through the existing task event lifecycle. |
-| Entra mobile redirect (a registration change, not code) | Native sign-in. |
+| APNs token registration and bounded SQL table (migration 0073) | Implemented for up to five owner devices with 30-day refresh. |
+| Actionable approval APNs delivery | Implemented at confirmation creation for core approvals and staged calendar proposals. Requires protected APNs configuration and `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED=true`. |
+| Remove a notification when another device resolves/expires the approval | Not implemented. The app removes stale alerts on its next successful `/now` refresh; the endpoint still rejects stale IDs. |
+| Factory task Live Activity push updates | Implemented separately by P15-49; uses ActivityKit tokens and update/end payloads, not alert notifications. |
+| Entra mobile redirect (a registration change, not code) | Native sign-in configuration. |
 
 The approve and decline route itself needs no change.
 
@@ -164,9 +163,10 @@ this screen.
 | List and delete routines | `GET /routines` returns `{routines}`. The web panel deletes through `DELETE /recipes/:id`, which returns 204. |
 | Read account and sign out | `GET /me` returns the validated owner display name. `DELETE /auth/session` revokes the current session; `DELETE /auth/sessions` revokes all sessions. The existing client removes the device's Keychain token only after the server confirms the revocation. |
 
-Remote notifications remain unavailable: the backend supports web push, but APNs
-device registration and test delivery are not implemented. P15-36 adds only local
-approval notifications and local ActivityKit updates while active. Advanced voice tuning,
+Approval APNs delivery is opt-in through `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED`
+and the existing protected `APNS_TEAM_ID`, `APNS_KEY_ID`, `APNS_SIGNING_KEY` and
+`APNS_ENVIRONMENT` configuration. Task Live Activity updates use the separate
+`JARVIS_ACTIVITYKIT_ENABLED` gate. Advanced voice tuning,
 retrieval thresholds, timeouts and project administration remain web-only in v1.
 The checked-in `docs/ios/design/board.html` does not contain the approved
 `screen=settings` frames referenced by the issue; the implementation follows
