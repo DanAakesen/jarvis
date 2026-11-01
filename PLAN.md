@@ -2137,6 +2137,11 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   history/jobs and active-turn replay on return. Automatic background-job/Factory
   activities, task Dynamic Island states, da/en Settings recovery and ActivityKit
   token/update delivery are implemented. Targeted Core tests and metadata checks
+  pass after the main merge: 214 Core tests, iOS metadata and 56 pipeline tests.
+  The merge retains P15-45 Chat/HTML views and UI tests alongside APNs configuration.
+  The compile failure was a cross-file reference to the gate's private language
+  accessor; background tasks now use the sheet's observed language. Updated-head
+  Apple compilation remains pending. Earlier targeted checks
   pass locally. The Apple follow-up adds discretionary, bounded BGTaskScheduler
   reconciliation of existing activities; it never owns server execution or streams
   SSE through background URLSession. CI identified missing log-event registrations;

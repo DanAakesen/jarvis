@@ -106,7 +106,7 @@ struct JarvisActivitySheet: View {
     }
 
     private var backgroundTaskSection: some View {
-        let language = JarvisAppLanguage.current
+        let language = appLanguage
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             Text(JarvisFactoryLocalization.string(.backgroundTask, language: language))
                 .font(.headline)

@@ -163,6 +163,20 @@ final class JarvisNowFeedClientTests: XCTestCase {
         XCTAssertFalse(activity.contains("await activity.end(nil, dismissalPolicy: .immediate)\n        }"))
     }
 
+    func testBackgroundTaskSheetUsesItsObservedAppLanguage() throws {
+        var repository = URL(fileURLWithPath: #filePath)
+        for _ in 0..<7 { repository.deleteLastPathComponent() }
+        let source = try String(
+            contentsOf: repository.appendingPathComponent("apps/ios/Jarvis/JarvisActivitySheet.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("@AppStorage(JarvisAppLanguage.preferenceKey)"))
+        let section = try XCTUnwrap(source.components(separatedBy: "private var backgroundTaskSection:").last?
+            .components(separatedBy: "private func confirmationSection(").first)
+        XCTAssertTrue(section.contains("let language = appLanguage"))
+        XCTAssertFalse(section.contains("JarvisAppLanguage.current"))
+    }
+
     private func makeClient(transport: any HTTPTransport) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(baseURL: URL(string: "https://fixture.invalid/api")!),

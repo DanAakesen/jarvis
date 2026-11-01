@@ -6553,7 +6553,8 @@ Deploy migrations `0071_activitykit_registrations.sql` and
 The latter preserves the synchronous forecast contract but allows a saved
 `html_app:` result link to survive a lost Workspace acknowledgement. Saved results
 and display delivery are separate states; rollback refuses to discard those links.
-Local validation passes the 210-test Core suite, project/plist metadata and focused
+After the main merge/compile fix, local validation passes the 214-test Core suite,
+56 pipeline tests, project/plist metadata and focused
 backend/contracts checks with backend lint/build. SQL integration is blocked
 locally by the required isolated loopback configuration; migrations/database
 contracts passed CI on `faaf896`, but its iOS Simulator build was skipped.
