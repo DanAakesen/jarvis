@@ -564,10 +564,15 @@ acceptance.
 ## Calendar proposal review (P15-46 / #1494)
 
 Calendar proposals reuse the existing pending-confirmation list and its approval
-controls in web and native clients; there is no new layout or styling. Preserve
+controls in web and native clients; there is no replacement layout or styling.
+Native calendar review sheets use the system large detent, leaving other activity
+sheet detents unchanged. Reuse the shared Danish/English approval labels and
+native glass button styles with at least 44×44-point label targets. Preserve
 the full bounded proposal text for review. Consumed partial or unverified changes
 leave error notices in the existing activity feed, including failed items and a
-warning against repeating completed or unverified writes.
+warning against repeating completed or unverified writes. CI captures the real
+calendar review sheet in Danish/English and light/dark with clearly synthetic
+data and disabled fixture decisions; images are not live-write evidence.
 
 ## Shared control geometry (16 October 2026; local candidate)
 

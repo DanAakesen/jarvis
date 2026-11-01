@@ -9,8 +9,19 @@ SwiftUI navigation, gestures, toolbars and sheets, ActivityKit/Live Activities,
 or AVFoundation capture device discovery; unrelated APIs need not be reviewed.
 If sources cannot be accessed, report that limitation rather than claiming a
 review or attributing unverified guidance to Apple.
+Direct fetch hostname failures do not necessarily block the browser: relevant
+Button, HIG Buttons, presentation-detent and XCTest screenshot pages were read
+through the browser for the P15-46 screenshot follow-up.
 
 ## Suggestion approval checks (P15-46 / #1494)
+
+The existing ready-PR iOS CI artifact includes
+`calendar-change-confirmation-{da,en}-{light,dark}.png` and retained
+`ui-test-attachments/`. Captures use `--screenshot-calendar-change-fixture`
+with `--screenshot-notifications-open` and process-only language/theme launch
+preferences. The calendar fixture is Simulator-only, uses no live backend,
+and visibly explains disabled approval actions. Mac CI must run the XCUI tests
+and captures; Linux parsing/Core checks do not establish rendered acceptance.
 
 From `agents/jarvis`, use the existing `.venv/bin/python -m pytest -q` and
 `.venv/bin/python -m ruff check .`; focused regressions are

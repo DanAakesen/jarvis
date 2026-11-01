@@ -18,6 +18,13 @@ summaries are bounded at 40,000 UTF-16 units without truncating the approved
 details, while other summaries retain their 4,000-unit limit. Existing
 ten-minute expiry and process-local restart limitations remain unchanged.
 
+Native screenshot qualification reuses the existing `FixtureTransport` and
+production approval sheet with one simulator-only synthetic `calendar_change`.
+Launch-argument language/theme preferences do not persist to later captures.
+Fixture decisions remain disabled; the ready-PR iOS job captures Danish/English
+light/dark review and exports retained XCTest attachments in its existing
+screenshot artifact. No production notification or write boundary is changed.
+
 ## Managed turn failure boundaries (#1350; 29 October 2026)
 
 The managed policy transport creates/binds its native conversation immediately

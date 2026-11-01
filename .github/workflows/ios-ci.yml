@@ -155,8 +155,12 @@ jobs:
             -scheme Jarvis \
             -destination "id=$DEVICE_ID" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/JarvisUITests.xcresult" \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/JarvisUITests.xcresult" \
+            --output-path "$SCREENSHOT_DIR/ui-test-attachments"
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
@@ -216,6 +220,14 @@ jobs:
               xcrun simctl io "$DEVICE_ID" screenshot "$sheet_screenshot"
             done
             xcrun simctl ui "$DEVICE_ID" content_size large
+            for language in da en; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-calendar-change-fixture --screenshot-notifications-open \
+                -jarvis.appLanguage "$language" -jarvis.appTheme "$appearance"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot \
+                "$SCREENSHOT_DIR/calendar-change-confirmation-${language}-${appearance}.png"
+            done
             for state in listening thinking speaking; do
               xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                 --screenshot-chat-fixture --screenshot-voice-fixture \
@@ -371,6 +383,12 @@ jobs:
           ### iOS simulator screenshots
 
           [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, empty/active Background activity, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+
+          Calendar review: \`calendar-change-confirmation-{da,en}-{light,dark}.png\` shows
+          the production Needs you sheet with Danish/English Approve and Decline controls.
+          This Simulator-only calendar_change fixture is synthetic: decisions are disabled,
+          no live calendar access or writes occur, and these images do not prove backend execution.
+          \`ui-test-attachments/\` includes retained XCUI screenshots and the export manifest.
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.

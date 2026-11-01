@@ -6,6 +6,9 @@ details still need clarification. Calendar proposals appear in the existing
 approval feed and accept a tap or a later yes/ja against the latest staged change.
 Writes retain the existing approval gate, session checks, expiry and single use.
 Danish and English replies distinguish pending, completed and unverified results.
+Native calendar approval controls and review context are available in both
+languages. CI review evidence uses synthetic calendar confirmations, not live
+calendar writes.
 
 ## Whole-Jarvis diagnostic logs (#1341; owner confirmed 29 October 2026)
 

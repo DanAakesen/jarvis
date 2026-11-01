@@ -1,3 +1,33 @@
+## 1 November 2026 — main merge and bilingual calendar approval evidence (P15-46 / #1494)
+
+Merge current main rather than rewriting branch history. Preserve #1493 Chat
+Markdown/HTML behavior, #1500 bell controls, all existing screenshot steps and
+both conflicting decision entries. The resulting `39a8cc87` merge has two
+parents; merged approval regressions passed locally.
+
+The owner requested Danish/English calendar Approve/Decline screenshots. Reuse
+the existing in-app confirmation sheet, approval localization resources,
+Simulator fixture transport and ready-PR iOS screenshot artifact. Synthetic
+review data is not evidence of a live calendar write; fixture actions stay
+disabled and real writes retain the existing approval gate. Calendar
+confirmations use SwiftUI's native large sheet detent so review and controls
+have room; other activity sheets retain their existing detents.
+
+Before this native follow-up, read these Apple sources through the browser:
+
+- [SwiftUI Button](https://developer.apple.com/documentation/swiftui/button)
+- [HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)
+- [presentationDetents(_:)](https://developer.apple.com/documentation/swiftui/view/presentationdetents(_:))
+- [XCTAttachment.init(screenshot:)](https://developer.apple.com/documentation/xctest/xctattachment/init(screenshot:))
+
+Follow their standard action/label, system style, accessibility, touch-target,
+sheet sizing and screenshot-attachment APIs. No custom approval control or
+system notification action is added, and no deliberate platform deviation is
+identified. Browser retrieval worked despite the direct-fetch hostname failures
+recorded below. These sources support this follow-up, not a claim of source
+review before the original implementation. Mac CI rendering/capture remains
+unverified locally.
+
 ## 1 November 2026 — Apple documentation requirement and P15-46 review
 
 The owner requires relevant Apple API documentation and HIG review before iOS

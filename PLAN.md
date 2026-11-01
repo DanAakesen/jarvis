@@ -20,10 +20,23 @@ passed; these are separate from the local scanner limitations above.
 [PR title logs](https://github.com/DanAakesen/jarvis/actions/runs/41291128460)
 require `P15-46: Bind Jarvis calendar suggestions to change approvals`.
 The available tools cannot edit PR metadata, and the browser is signed out;
-title correction remains outstanding. Full Apple documentation/HIG review
-also remains blocked by direct source access; see the source audit in
-`docs/decisions.md`. Next: correct the title, verify the fresh title gate,
-complete Apple source review and perform live model/device acceptance.
+title correction remains outstanding. Original Apple source review was blocked
+by direct source access; the native screenshot follow-up read relevant Button,
+HIG Buttons, sheet-detent and XCTest documentation through the browser. See the
+source audit in `docs/decisions.md`; this does not establish pre-implementation
+source review for the original work.
+
+Main synchronization: merged `c0c12f6f` in two-parent commit `39a8cc87`,
+retaining #1493 Chat formatting, #1500 bell behavior and both conflicting
+decision-log entries. Merged approval regressions passed: 121 backend tests and
+532 agent tests; backend lint/build and 24 web feed tests also passed.
+Danish/English calendar approval screenshot coverage is implemented in the
+existing Simulator job, with four light/dark captures and retained XCUI
+attachments. Both native approval surfaces reuse localized controls; calendar
+review sheets use the native large detent. Local fixture qualification passed:
+57 pipeline tests, 36 focused Core tests, Swift parsing and fixture typechecking.
+Next: inspect fresh updated-head CI and actual Simulator captures, correct the
+title and verify its gate, and perform live model/device acceptance.
 
 ## Managed policy failure causes (#1373; 30 October 2026)
 
