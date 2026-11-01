@@ -68,25 +68,34 @@ struct JarvisSidebar: View {
             GeometryReader { scrollGeometry in
                 let bottomInset = safeAreaInsets.bottom
                     + JarvisDesignTokens.sidebarVerticalInset
-                    + JarvisDesignTokens.sidebarRowHeight
-                ScrollView {
-                    VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
-                        ForEach(JarvisDestination.sidebarItems) { destination in
-                            sidebarRow(destination)
+                ScrollViewReader { scrollProxy in
+                    ScrollView {
+                        VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
+                            ForEach(JarvisDestination.sidebarItems) { destination in
+                                sidebarRow(destination)
+                                    .id(destination)
+                            }
+                        }
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: max(
+                                0,
+                                scrollGeometry.size.height -
+                                    safeAreaInsets.bottom -
+                                    JarvisDesignTokens.sidebarVerticalInset
+                            ),
+                            alignment: .bottom
+                        )
+                        .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
+                        .padding(.bottom, bottomInset)
+                    }
+                    .scrollIndicators(.hidden)
+                    .onChange(of: isOpen, initial: true) { _, isOpen in
+                        if isOpen {
+                            scrollProxy.scrollTo(currentDestination, anchor: .bottom)
                         }
                     }
-                    .frame(
-                        maxWidth: .infinity,
-                        minHeight: max(
-                            0,
-                            scrollGeometry.size.height - bottomInset
-                        ),
-                        alignment: .bottom
-                    )
-                    .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
-                    .padding(.bottom, bottomInset)
                 }
-                .scrollIndicators(.hidden)
             }
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
