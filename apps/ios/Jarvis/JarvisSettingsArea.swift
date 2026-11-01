@@ -94,7 +94,7 @@ struct JarvisSettingsArea: View {
                     settingsList
                 }
             }
-            .background(Color(uiColor: .systemBackground))
+            .jarvisAmbientBackground()
             .environment(\.locale, language.locale)
             .tint(JarvisDesignTokens.settingsAccent)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -158,7 +158,7 @@ struct JarvisSettingsArea: View {
     }
 
     private var settingsList: some View {
-        List {
+        JarvisList {
             if let error = loadError, response != nil {
                 Text(message(for: error))
                     .foregroundStyle(error == .offline ? Color.secondary : Color.red)
@@ -282,13 +282,13 @@ struct JarvisSettingsArea: View {
             Text(message(for: loadError ?? .offline))
                 .foregroundStyle(.secondary)
             Button(copy(.retry)) { Task { await reload() } }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var loadingSkeleton: some View {
-        List {
+        JarvisList {
             ForEach(loadingSkeletonKeys, id: \.self) { key in
                 HStack {
                     Text(copy(key))

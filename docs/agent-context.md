@@ -6263,6 +6263,25 @@ and cursor-paginated history, a pending confirmation followed by approval, and
 listing and running a tool. `JarvisApprovalsClient` uses the existing `/now`
 routes through the authenticated HTTP client; no app-specific backend is used.
 
+### Health sheet-only logging checks and screenshots (P15-39 / #1480)
+
+Run `swift test --filter JarvisHealthClientTests` and `swift build` from
+`apps/ios/Packages/JarvisCore`, then the Core suite. Run
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py`
+from the repository root for sheet-only layout and screenshot cost-guard checks.
+Linux can parse SwiftUI syntax but cannot compile Apple frameworks or capture
+the simulator.
+
+`--screenshot-health-fixture --screenshot-health-state=track|newlift|empty
+--screenshot-health-language=da|en` uses synthetic `FixtureTransport` data only.
+The existing ready-PR, one-boot Mac job captures these states in light/dark and
+links its artifact beside the approved Health board in the PR comment.
+The Mac job has a 30-minute limit for the combined Chat, sidebar, notifications,
+Factory, and Health captures, upload, and cleanup; it still boots only once.
+Those artifacts and native visual acceptance remain unverified until that job
+runs. The board can be inspected locally with Chromium; that is not simulator
+evidence.
+
 ### Software Factory UI fixture and screenshots (P15-19)
 
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
@@ -6345,14 +6364,41 @@ only for a ready pull request. Manual dispatch runs the Linux checks without
 starting a Mac build. The Mac job uses Xcode 26.6 and
 `CODE_SIGNING_ALLOWED=NO`, boots an available iPhone simulator, launches the app,
 and captures the Chat screen in light and dark appearance plus the open sidebar
-in light appearance. Chat captures use `--screenshot-chat-fixture` to select
-clearly marked synthetic data without a backend; the sidebar capture also uses
+in light and dark appearance. It also captures the anchored plus menu using
+`--screenshot-chat-plus-menu`. Chat captures use `--screenshot-chat-fixture` to
+select clearly marked synthetic data without a backend; sidebar captures also use
 `--screenshot-sidebar-open` to initialize the real navigation shell in its open
 state. It uploads those PNGs as a 14-day workflow artifact and posts or updates
 one pull request comment with the artifact link. GitHub comments cannot display
 files directly from workflow artifacts, so the images are not inline previews;
 open the artifact to view them. This job does not sign, use secrets, or upload
 to TestFlight.
+
+P15-38 adds light/dark Chat, Voice, Notifications (the existing Needs you sheet),
+Factory, Settings, Notes, Health and sidebar comparisons in the same simulator
+boot. Extract the artifact and open `comparisons.html`; each simulator PNG sits
+beside an interactive copy of the checked-in board. The optional board web-orb
+renderer requires network access. `--screenshot-screen=voice|notifications|settings|notes|health`
+only selects synthetic screen states when an existing fixture flag is present.
+Notes/Health reuse their preview transports and Health's fixed reference date;
+Voice fixtures disable automatic session/microphone startup and controls.
+Run `swift test --filter JarvisAmbientBackgroundTests` from
+`apps/ios/Packages/JarvisCore` for main's shared gate palette/glow positions,
+shared-screen and screenshot
+source contracts. These do not compile SwiftUI or replace native visual checks.
+The 1 November main merge preserves Chat's plus-menu capture and current
+Chat/Sidebar/Voice behaviour; `jarvisAmbientBackground()` now uses main's existing
+`JarvisScreenBackground`, as does the gate wrapper. No second renderer is retained.
+
+For P15-29 / #1459, the same boot also captures `notifications-light.png` and
+`notifications-dark.png` using `--screenshot-chat-fixture
+--screenshot-notifications-open`. Compare the Chat bell and the sheet's Done
+button; both use the shared plain toolbar-label style, without an extra glass
+fill. Linux checks cannot verify the rendered toolbar. The #1448 artifact
+([run 41241917037](https://github.com/DanAakesen/jarvis/actions/runs/41241917037))
+has no open-sheet baseline; its light Chat capture is obscured by the gate.
+Usable before/after simulator comparison remains pending; do not treat that
+capture as visual acceptance.
 
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
@@ -6362,6 +6408,10 @@ below. Other enabled destinations remain title-only pages. Banking remains
 disabled and labeled Later. The fixed-behind sidebar opens through a right-side
 drag or the localized VoiceOver action; its shared styling and gesture tokens
 are in `JarvisSidebar.swift`.
+P15-28 returns ended voice sessions to Chat, including when minimized, and resets
+sidebar progress. Focused `JarvisCoreTests` cover the cleared stack, reopened
+sidebar navigation and unchanged navigation for other voice states. SwiftUI
+rendering and real-device voice-end interaction require Apple-target verification.
 
 P15-10 implements the Chat screen in `JarvisChatScreen`; `JarvisChatModel` owns
 screen state and calls the existing chat, Now-feed, approvals and workspace
@@ -6401,18 +6451,46 @@ the routes listed in section 12 of `docs/ios/integration-contract.md`. Pure
 validation, target bounds, memory paging/filtering, dirty tracking and account
 revocation remain in JarvisCore. The app-owned Danish/English language defaults
 to Danish; the shared appearance theme is propagated to the app color scheme.
-Notifications and Health upload credential creation stay disabled because the
-backend lacks APNs support and rejects owner-session credential creation.
+Remote notifications remain unavailable because APNs support is not implemented;
+P15-36 separately adds local approval notifications while active. Health upload
+credential creation stays disabled because the backend rejects owner-session
+credential creation.
 Advanced voice tuning, retrieval thresholds, timeouts and project administration
-remain web-only. Use `--screenshot-settings-fixture` to start the screen with a
-synthetic Settings response; the existing CI workflow remains unchanged and
-captures only its established Chat/sidebar set.
+remain web-only. Use `--screenshot-settings-fixture` to start the screen with a synthetic Settings
+response. The existing CI workflow retains one simulator boot and adds one
+Lock Screen task/approval fixture capture.
 
 Run `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`. These
 checks do not compile SwiftUI. The existing Mac job is the only SwiftUI compile
-check and is gated on a ready pull request; do not add simulator boots, UI tests
-or screenshots to CI. The current screenshot workflow covers only the app's
-main screen and sidebar, so Notes-tab/state screenshots are not produced by CI.
+check and is gated on a ready pull request; keep the single simulator boot and do
+not add UI tests. Notes-tab/state screenshots are not produced by CI.
+
+## P15-36 Lock Screen task and approval surfaces
+
+The app's ActivityKit controller follows real running tasks from the existing
+`/now` feed and Factory task SSE; WidgetKit renders the shared
+`FactoryTaskActivitySurface`. No backend progress fraction exists, so the linear
+track is indeterminate. Local approval notifications sync real `/now`
+confirmations while active, require device authentication for actions and call
+the existing confirmation endpoint. Successful/failed results appear in the Now
+activity sheet. If notification previews are disabled, the category has no
+Approve/Decline actions.
+
+The `--screenshot-lockscreen-task-fixture` plus
+`--screenshot-lockscreen-language=da|en` launch arguments render synthetic
+visual content only. CI captures this shared SwiftUI composition in light/dark
+and Danish/English in the existing single simulator boot; it does not prove the
+system Lock Screen or notification action behavior. The Linux checks are
+`swift build` and `swift test` from `apps/ios/Packages/JarvisCore`, plus the iOS
+project/plist metadata checks in `.github/workflows/ios-ci.yml`; only the Mac
+job compiles the ActivityKit/WidgetKit targets.
+
+Still required for remote updates: an owner-authorized device-registration route
+and storage for APNs/ActivityKit push tokens; a backend APNs sender with a
+protected provider key; pushes on confirmation creation, resolution and expiry;
+Factory task state/activity updates and terminal ActivityKit updates; stale
+notification reconciliation while suspended; and deployed/physical-device
+verification. Do not claim remote updates before those pieces exist.
 
 P15-16 adds `JarvisGatePolicy` to pure-Swift `JarvisCore`; its Linux tests cover
 cold start, the 60-second background threshold, missing/expired sessions, denied
@@ -6501,8 +6579,11 @@ Run `swift test --filter 'VoiceLiveActivityTests|VoiceSessionClientTests'` from
 These cover state projection, localized copy, PCM levels, stale/ended session
 controls, command errors and muted capture, not Apple frameworks.
 The existing ready-PR Mac job builds the extension and captures six synthetic
-Lock Screen states (Danish/English Listening, Speaking, Muted) in the same
-Simulator boot. `--screenshot-voice-activity-fixture` is Simulator-only and uses
+Lock Screen states in the same Simulator boot within the 30-minute job deadline.
+Expanded notification, Factory and voice captures exceeded the previous 20-minute
+limit in run 41259067682 after compilation succeeded; retain all captures and one
+boot. The Live Activity states are Danish/English Listening, Speaking and Muted.
+`--screenshot-voice-activity-fixture` is Simulator-only and uses
 no real microphone, credentials or network. Capture uses Simulator's Lock/Home
 keyboard shortcuts, which require macOS UI automation permission. Compare
 `voice-lock-listening-en.png` with the included `voice-approved-board.png` in the
@@ -6514,6 +6595,23 @@ not affect a replacement session.
 
 ### Native voice screen and audio (P15-11)
 
+P15-40 (#1482) adds End → reopen regression coverage. Run `swift test --filter
+Voice` in `apps/ios/Packages/JarvisCore` to include both protocol and async
+session-client tests (filtering only `VoiceProtocolTests` excludes lifecycle
+tests). The existing ready-PR Mac capture now includes six synthetic Voice PNGs:
+listening, thinking and speaking in light/dark, with board/surfaces links in its
+PR comment and state-specific pairs in `comparisons.html`. `JarvisOrbRenderingTests`
+checks transparent blur margins, radial alpha feathering and opacity-only core
+animation; this source check does not replace inspecting the captured pixels.
+The combined simulator build/capture has a 30-minute job bound: the merged
+Factory, ambient and Voice captures exceeded the former 20-minute bound.
+Simulator-only `--screenshot-voice-fixture` and
+`--screenshot-voice-state=listening|thinking|speaking`, together with the existing
+`--screenshot-chat-fixture`, select the rendered Voice screen without starting
+microphone capture or a voice transport. These images do not verify live audio.
+The Linux runner cannot capture Simulator images or compile Apple UI/audio code;
+the requested images and physical End/start acceptance remain pending those checks.
+
 The approved screen lives in `apps/ios/Jarvis/VoiceScreen.swift`; shared visual
 values are in `JarvisDesignSystem.swift`, and protocol/frame sharing constants
 used by both app and extension are in `apps/ios/Shared/VoiceScreenShareContract.swift`.
@@ -6522,6 +6620,18 @@ used by both app and extension are in `apps/ios/Shared/VoiceScreenShareContract.
 microphone capture and speaker playback use mono 24 kHz; speech-start immediately
 stops queued playback. The session can minimize to a persistent shell bar without
 ending audio or the screen-share monitor.
+
+After an established socket drops, `VoiceScreenModel` shows the localized
+connection-lost surface while `VoiceSessionClient` runs its bounded reconnect
+policy. Retry now cancels the current client and starts another session through
+the same bounded path; stale callbacks are ignored, and End returns to Chat.
+Initial connection failures do not use this surface. Both app-language catalogs
+include its title and actions.
+The ready-PR Mac job launches the synthetic state with
+`--screenshot-voice-connection-lost` and `--screenshot-voice-language=da|en`,
+uploads both simulator captures with the existing screenshot artifact, and links
+the approved surface page in its PR comment. This fixture does not simulate a
+live connection or replace device acceptance.
 
 Camera inspection uses the existing `/screen/frames` handle request; shared
 screen inspection uses the existing description request and sends its result on
@@ -6565,9 +6675,26 @@ The workflow refuses non-main refs, captures `xcodebuild` output rather than
 logging signing identifiers, writes the key with mode 600, and deletes it in
 an always-run cleanup step.
 
+P15-26 retains automatic archive/export signing and the existing secrets.
+After export (including archive/export failure), an always-run main-only step
+uses Ruby's standard OpenSSL/HTTP libraries and the existing API key to list
+App Store Connect certificates and revoke only `DEVELOPMENT` and
+`IOS_DEVELOPMENT` types. All distribution, Mac-specific and unknown types are
+preserved. This deliberately cleans all visible Apple/iOS development
+certificates, including ones predating the run or used by another app; their
+development profiles may need automatic renewal. No certificate/key identifiers,
+JWTs or raw API errors are logged. Listing is paginated and bounded; failure
+is reported rather than treated as success. The API key file is deleted even
+if certificate cleanup fails. No P12/private-key export or profile secrets are
+required. The existing key needs permission to list and revoke certificates;
+verify that on the next owner-started run. If the account is already at its
+limit, the first archive may fail, but final cleanup can free capacity for the
+next run. A hard runner termination may prevent always-run cleanup.
+
 Only the owner starts an upload: **Actions → iOS TestFlight**, select `main`,
 then **Run workflow**. A merge or pull request does not upload anything. The
-first archive and export/upload remain unproven; see the first-run checklist
+certificate-cleanup API permissions and real cleanup remain unverified; see the
+setup checklist
 and disabled `xcrun altool --upload-app` fallback in
 [`docs/ios/build-plan.md`](ios/build-plan.md). Do not run or dispatch this
 workflow while reviewing changes.

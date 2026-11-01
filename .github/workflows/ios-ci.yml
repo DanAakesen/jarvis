@@ -27,15 +27,17 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
+            abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
             abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
             abort "voice activity extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisVoiceActivity" && dependency["embed"] == true }
             abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
             abort "voice activity must share attributes and intents" unless project.dig("targets", "JarvisVoiceActivity", "sources").any? { |source| source["path"] == "Shared" }
             abort "Danish must be the development language" unless project.dig("options", "developmentLanguage") == "da"
+            abort "WidgetKit extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWidgets" && dependency["embed"] == true }
             bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
             abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
             abort "unexpected deployment target" unless project.dig("targets", "Jarvis", "deploymentTarget") == "26.0"
@@ -60,6 +62,10 @@ jobs:
           activity_info = plistlib.loads(Path("apps/ios/VoiceActivity/Info.plist").read_bytes())
           assert activity_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
           assert activity_info["CFBundleDevelopmentRegion"] == "da"
+          widget_info = plistlib.loads(Path("apps/ios/Widgets/Info.plist").read_bytes())
+          assert widget_info["CFBundlePackageType"] == "XPC!"
+          assert widget_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
+          assert widget_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
           app_group = ["group.com.danaakesen.jarvis"]
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
           assert entitlements["com.apple.security.application-groups"] == app_group
@@ -80,7 +86,7 @@ jobs:
     needs: linux
     if: needs.linux.result == 'success' && github.event_name == 'pull_request' && github.event.pull_request.draft == false
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
       issues: write
@@ -148,6 +154,10 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-light.png"
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-chat-fixture --screenshot-chat-plus-menu
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/chat-plus-menu-light.png"
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-light.png"
@@ -155,11 +165,54 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
+          for language in da en; do
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-voice-connection-lost \
+              "--screenshot-voice-language=$language"
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot \
+              "$SCREENSHOT_DIR/voice-connection-lost-${language}-dark.png"
+          done
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-sidebar-open --screenshot-chat-fixture
+          sleep 2
+          xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/sidebar-open-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            for state in listening thinking speaking; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-chat-fixture --screenshot-voice-fixture \
+                "--screenshot-voice-state=$state"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot \
+                "$SCREENSHOT_DIR/voice-${state}-${appearance}.png"
+            done
+            for screen in chat voice notifications settings notes health sidebar; do
+              extra_args=("--screenshot-screen=$screen")
+              if [[ "$screen" == sidebar ]]; then
+                extra_args=("--screenshot-sidebar-open")
+              fi
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-chat-fixture "${extra_args[@]}"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/ambient-${screen}-${appearance}.png"
+            done
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-chat-fixture --screenshot-notifications-open
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
+              for state in track newlift empty; do
+                xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-health-fixture \
+                  "--screenshot-health-state=$state" \
+                  "--screenshot-health-language=$language"
+                sleep 2
+                xcrun simctl io "$DEVICE_ID" screenshot \
+                  "$SCREENSHOT_DIR/health-${state}-${appearance}-${language}.png"
+              done
               for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  --screenshot-chat-fixture \
                   --screenshot-factory-fixture \
                   "--screenshot-factory-state=$state" \
                   "--screenshot-factory-language=$language"
@@ -186,12 +239,79 @@ jobs:
             done
           done
           cp docs/ios/design/hands-free-board.png "$SCREENSHOT_DIR/voice-approved-board.png"
+          for appearance in light dark; do
+            xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            for language in da en; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-lockscreen-task-fixture \
+                "--screenshot-lockscreen-language=$language"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot \
+                "$SCREENSHOT_DIR/lockscreen-tasks-${appearance}-${language}.png"
+            done
+          done
+      - name: Pair simulator captures with approved board renders
+        run: |
+          cp -R docs/ios/design "$RUNNER_TEMP/ios-screenshots/board"
+          python3 - <<'PY'
+          import html
+          import os
+          from pathlib import Path
+          from urllib.parse import urlencode
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "ios-screenshots"
+          sections = []
+          for appearance in ("light", "dark"):
+              for screen in ("chat", "voice", "notifications", "factory", "settings", "notes", "health", "sidebar"):
+                  image = (f"factory-board-{appearance}-da.png" if screen == "factory"
+                           else f"ambient-{screen}-{appearance}.png")
+                  if not (root / image).is_file():
+                      raise SystemExit(f"Missing simulator capture: {image}")
+                  query = {"screen": screen, "theme": appearance, "bare": "screen", "zoom": "fit"}
+                  if screen in ("notifications", "sidebar"):
+                      query["screen"] = "chat"
+                      query["sheet" if screen == "notifications" else "sidebar"] = "activity" if screen == "notifications" else "open"
+                  board = html.escape("board/board.html?" + urlencode(query), quote=True)
+                  title = f"{screen.title()} · {appearance}"
+                  sections.append(f'''<section><h2>{title}</h2><div class="pair">
+                    <figure><figcaption>iPhone simulator · synthetic fixture</figcaption>
+                      <img src="{image}" alt="{title} simulator screenshot"></figure>
+                    <figure><figcaption>Approved concept board · not the running app</figcaption>
+                      <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
+                    </div></section>''')
+              for state in ("listening", "thinking", "speaking"):
+                  image = f"voice-{state}-{appearance}.png"
+                  if not (root / image).is_file():
+                      raise SystemExit(f"Missing simulator capture: {image}")
+                  board = html.escape("board/board.html?" + urlencode({
+                      "screen": "voice", "voice": state, "theme": appearance,
+                      "bare": "screen", "zoom": "fit",
+                  }), quote=True)
+                  title = f"Voice {state} · {appearance}"
+                  sections.append(f'''<section><h2>{title}</h2><div class="pair">
+                    <figure><figcaption>iPhone simulator · synthetic fixture</figcaption>
+                      <img src="{image}" alt="{title} simulator screenshot"></figure>
+                    <figure><figcaption>Approved concept board · not the running app</figcaption>
+                      <iframe src="{board}" title="{title} board render" loading="lazy"></iframe></figure>
+                    </div></section>''')
+          (root / "comparisons.html").write_text('''<!doctype html><html lang="en">
+          <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Shared iPhone background comparisons</title>
+          <style>body{font:16px system-ui;margin:24px;background:#161c24;color:#f3fff9}
+          h1,h2{font-weight:600}.pair{display:flex;flex-wrap:wrap;gap:24px}
+          figure{margin:0}figcaption{margin:8px 0}img,iframe{width:440px;height:956px;
+          border:0;object-fit:contain;background:#07090f}section{margin-bottom:40px}
+          @media(max-width:480px){body{margin:12px}img,iframe{width:100%;max-width:440px}
+          figure{width:100%}}</style><h1>Shared iPhone background comparisons</h1>
+          <p>Simulator captures are on the left; the checked-in board renders on the right.
+          Open this file after extracting the complete artifact. The board is interactive;
+          its optional web orb renderer needs network access.</p>''' + "".join(sections) + "</html>")
       - name: Upload iOS screenshots
         id: screenshots
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-pr-${{ github.event.pull_request.number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ios-screenshots/*.png
+          path: ${{ runner.temp }}/ios-screenshots/
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
@@ -199,6 +319,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+          BOARD_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/ios/design/surfaces.html
         run: |
           set -euo pipefail
           marker='<!-- ios-screenshot-review -->'
@@ -208,12 +329,24 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, sidebar, Factory, and voice Lock Screen screenshots]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.
           Danish/English Listening, Speaking and Muted states are included. Screenshot capture
           does not verify Lock Screen button dispatch or real background audio.
+
+          Compare Health Track workout, New lift, and empty states (Danish/English, light/dark)
+          with the [approved Health board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_HEAD_REF/docs/ios/design/board.html).
+          Voice uses explicitly synthetic listening, thinking, and speaking states
+          (six PNGs: light and dark), not a live microphone or transport session.
+          Compare beside the [approved Voice board](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/board.html)
+          and [approved surfaces](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/ios/design/surfaces.html).
+          Extract the artifact and open \`comparisons.html\` for Chat, Voice, Notifications
+          (Needs you sheet), Factory, Settings, Notes, Health, and sidebar in both appearances.
+          The artifact also includes Danish/English Voice connection-loss captures;
+          compare them with the approved Connection lost surface on the board:
+          [$BOARD_URL]($BOARD_URL). Each simulator capture sits next to its checked-in board render.
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF

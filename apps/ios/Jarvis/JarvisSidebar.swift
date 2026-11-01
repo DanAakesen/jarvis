@@ -1,5 +1,6 @@
 import JarvisCore
 import SwiftUI
+import UIKit
 
 private struct JarvisSidebarButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -11,6 +12,7 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
 
 struct JarvisSidebar: View {
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
+    @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedDestination: JarvisDestination?
     @FocusState private var settingsFocused: Bool
     @State private var hoveredDestination: JarvisDestination?
@@ -29,7 +31,7 @@ struct JarvisSidebar: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Jarvis")
-                    .font(.headline)
+                    .font(.system(size: JarvisDesignTokens.sidebarBrandFontSize, weight: .bold))
                     .foregroundStyle(.primary)
                 Spacer()
                 Button {
@@ -37,21 +39,35 @@ struct JarvisSidebar: View {
                 } label: {
                     Image(systemName: JarvisDestination.settings.symbolName)
                         .font(.system(size: JarvisDesignTokens.sidebarIconSize))
-                        .frame(width: JarvisDesignTokens.sidebarRowHeight, height: JarvisDesignTokens.sidebarRowHeight)
+                        .frame(
+                            width: JarvisDesignTokens.sidebarSettingsButtonSize,
+                            height: JarvisDesignTokens.sidebarSettingsButtonSize
+                        )
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
-                .foregroundStyle(settingsFocused || settingsHovered ? Color.accentColor : Color.primary)
+                .foregroundStyle(
+                    settingsFocused || settingsHovered
+                        ? JarvisDesignTokens.primaryAccent
+                        : Color.primary
+                )
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
             }
-            .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
+            .padding(.leading, JarvisDesignTokens.sidebarHeaderLeadingInset)
+            .padding(.trailing, JarvisDesignTokens.sidebarHeaderTrailingInset)
+
+            Rectangle()
+                .fill(Color(uiColor: .separator))
+                .frame(height: JarvisDesignTokens.sidebarHeaderRuleHeight)
+                .padding(.horizontal, JarvisDesignTokens.sidebarHeaderRuleInset)
+                .padding(.vertical, JarvisDesignTokens.sidebarHeaderRuleVerticalInset)
 
             GeometryReader { scrollGeometry in
                 ScrollView {
                     VStack(spacing: JarvisDesignTokens.sidebarRowSpacing) {
-                        ForEach(Array(JarvisDestination.sidebarItems.reversed())) { destination in
+                        ForEach(JarvisDestination.sidebarItems) { destination in
                             sidebarRow(destination)
                         }
                     }
@@ -67,7 +83,7 @@ struct JarvisSidebar: View {
             }
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
-        .background(Color(uiColor: .systemBackground))
+        .background(JarvisGlassSurface())
         .accessibilityHidden(!isOpen)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
             onClose()
@@ -108,6 +124,6 @@ struct JarvisSidebar: View {
 
     private func rowColor(for destination: JarvisDestination, selected: Bool) -> Color {
         guard destination.isNavigable else { return .secondary }
-        return selected ? Color.accentColor : Color.primary
+        return selected ? JarvisDesignTokens.primaryAccent : Color.primary
     }
 }

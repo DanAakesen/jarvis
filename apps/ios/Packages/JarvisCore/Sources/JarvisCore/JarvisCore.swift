@@ -14,7 +14,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
     case settings
 
     public static let sidebarItems: [JarvisDestination] = [
-        .proactive, .status, .usage, .banking, .softwareFactory, .health, .workspaces, .notes, .chat,
+        .proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .chat,
     ]
 
     public var id: String { rawValue }
@@ -109,6 +109,11 @@ public struct JarvisNavigationState: Equatable {
         path.removeLast()
     }
 
+    public mutating func voiceSessionStateChanged(_ state: VoiceSessionState) {
+        guard state == .ended else { return }
+        navigate(to: .chat)
+    }
+
     public mutating func openSidebar() {
         isSidebarOpen = true
     }
@@ -119,5 +124,37 @@ public struct JarvisNavigationState: Equatable {
 
     public mutating func setSidebarOpen(_ isOpen: Bool) {
         isSidebarOpen = isOpen
+    }
+}
+
+public enum JarvisSidebarGesturePolicy {
+    public static func canBegin(
+        startX: Double,
+        translationX: Double,
+        translationY: Double,
+        screenWidth: Double,
+        drawerWidth: Double,
+        startProgress: Double,
+        openingStartFraction: Double
+    ) -> Bool {
+        guard screenWidth.isFinite,
+              drawerWidth.isFinite,
+              startX.isFinite,
+              translationX.isFinite,
+              translationY.isFinite,
+              startProgress.isFinite,
+              openingStartFraction.isFinite,
+              screenWidth > 0,
+              drawerWidth > 0,
+              (0...1).contains(startProgress),
+              (0...1).contains(openingStartFraction),
+              abs(translationX) > abs(translationY) else {
+            return false
+        }
+
+        if startProgress > 0 {
+            return startX < screenWidth - drawerWidth * startProgress
+        }
+        return startX >= screenWidth * openingStartFraction && translationX < 0
     }
 }

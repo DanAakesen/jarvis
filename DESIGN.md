@@ -1862,7 +1862,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Software Factory is Kanban:** the separate Tasks and Projects list pages are gone (`/factory/tasks` and `/factory/projects` redirect to Kanban and Settings → Projects). Kanban's board strip, just above the board, has the refresh icon, Create project and Create task. **Create project** opens a dialog that lists GitHub App repositories not yet managed, each with Add (the existing manage action). A "Start a new repository" field sends the request to Jarvis in the conversation, because Jarvis creates and registers new projects. Projects are managed in a Projects section in Settings. The full task page, project settings and release pages remain and link back to Kanban and Settings.
 - **Living surfaces:** glass surfaces catch a soft light at the pointer position (mouse and pen only). Pages assemble with a short rise-and-focus entrance, and Kanban columns, cards and Settings sections stagger in. A window Jarvis acts on flashes an orange halo that settles. Reduced motion removes the movement; the light effect is not motion.
 - **Dropdowns:** where Chrome supports styleable selects (`appearance: base-select`), every dropdown opens a glass list with lit hover and selected choices, an orange checkmark and a rotating chevron. Other browsers keep native lists.
-- **Kanban (`/factory/kanban`, first and default in Software Factory; P10-07, 13 October):** reuse the approved glass Task Lens composition with canonical GitHub columns: Backlog, Needs Dan, Ready, In progress, In review, Done. Summary pills count matching issues in In progress, Needs Dan and Done, rather than conflating task and issue state. One actual project is always selected; other filters are local and search waits for a pause in typing. Cards link to the issue and linked PR/checks, show blockers, and add worker/task-state chips plus observed activity, start time, attempts and branch only when supplied. Valid task controls, View details and Open task remain. A slim glass strip directly above the board (19 October, Dan) holds a bare refresh icon on the left and Create project and Create task on the right; the header keeps only the title and the summary pills. The page says nothing while everything works: no repository line, no fetch time, no "connected" message. Only a fault shows, as a small red dot with "Board not connected" beside the refresh icon, and the detail (refresh failed, cached board, GitHub unavailable, last fetched time) sits in its tooltip and the screen-reader text. While a board is retained, a failed refresh shows only this notice and the refresh icon is the retry path; the full error with "Retry board" appears only when no board is loaded. The refresh icon has no fill, border or shadow in any state: hover tints it with the focus colour and turns it a quarter, press turns it further, and while a read is pending it spins, is disabled and is named "Refreshing board…", so the board is never replaced. The filter row reflows by the width of the board itself (5 columns, then 4 with search on its own row, 2, then 1), so nothing runs past the right edge. The Done column's toggle keeps "Closed in the last 14 days" as a tooltip. No task duration is inferred from an overlay lacking finish time. Columns retain their named dots, counts, collapse behavior and existing tint; In progress uses orange and In review the existing review/warning tone. Actual Running tasks retain their orange sheen. Both reduced-motion modes stop the new column pulse. Filtering precedes each explicit 100-card cap.
+- **Kanban (`/factory/kanban`, first and default in Software Factory; P10-07, 13 October):** reuse the approved glass Task Lens composition with canonical GitHub columns: Backlog, Needs Dan, Ready, In progress, In review, Done. Summary pills count matching issues in In progress, Needs Dan and Done, rather than conflating task and issue state. One actual project is always selected; other filters are local and search waits for a pause in typing. Cards link to the issue and linked PR/checks, show blockers, and add worker/task-state chips plus observed activity, start time, attempts and branch only when supplied. Valid task controls, View details and Open task remain. A slim glass strip directly above the board (19 October, Dan) holds a bare refresh icon on the left and Create project and Create task on the right; the header keeps only the title and the summary pills. The page says nothing while everything works: no repository line, no fetch time, no "connected" message. Only a fault shows, as a small red dot with "Board not connected" beside the refresh icon, and the detail (refresh failed, cached board, GitHub unavailable, last fetched time) sits in its tooltip and the screen-reader text. While a board is retained, a failed refresh shows only this notice and the refresh icon is the retry path; the full error with "Retry board" appears only when no board is loaded. The refresh icon has no fill, border or shadow in any state: hover tints it with the focus colour and turns it a quarter, press turns it further, and while a read is pending it spins, is disabled and is named "Refreshing board…", so the board is never replaced. The filter row reflows by the width of the board itself (5 columns, then 4 with search on its own row, 2, then 1), so nothing runs past the right edge. The Done column's toggle keeps "Closed in the last 14 days" as a tooltip. No task duration is inferred from an overlay lacking finish time. Columns retain their named dots, counts, collapse behavior and existing tint; In progress uses orange and In review uses the shared stone secondary tone. Actual Running tasks retain their orange sheen. Both reduced-motion modes stop the new column pulse. Filtering precedes each explicit 100-card cap.
 - **Release trail (Kanban only):** the project and branch, Build/Deploy/release states as named dots, and up to five recent commits as linked dots on a lit line from oldest to newest. The newest commit glows and pulses. Refresh and Open release are compact pills. Without a selected project a dotted placeholder asks for one. The Tasks page keeps its original bar.
 - **Automatic board refresh (#813, 14 October):** finish an in-flight same-scope read before handling automatic invalidations or reconnection. Coalesce them into one follow-up, retaining updates that arrive during that follow-up. Keep the existing short idle debounce, pending controls, mounted cards/scroll/focus and visible failure/recovery states. Missing-issue and requested-task-link navigation stays loading while that scoped work is pending, including the debounce gap; it uses the existing bounded wait, not an extra read or longer acknowledgement budget. Explicit Refresh/Retry and actual scope changes keep their cancellation semantics. This local correction is supported by controlled fixtures, not an attribution of the original released cancellation storm or production acceptance.
 - **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. The shell-owned feed remains mounted across page changes and supplies the P9-120 header attention popover.
@@ -2770,6 +2770,17 @@ one at 700px and narrower.
 
 ## Native iOS colour and Chat look (owner decision, 31 October 2026)
 
+P15-38 / #1478 makes the approved Chat backdrop shared across native screens
+and app-owned sheets. The 1 November reconciliation reuses main's
+`JarvisScreenBackground` in `JarvisDesignSystem.swift`, which already supplies
+the gate's `JarvisGateAmbientBackground` wrapper, instead of the earlier competing
+renderer and decorative orb. Keep main's glow rendering and foreground orbs.
+Shared forms/lists use glass rows, with the board's solid
+surface fallback for Reduce Transparency; the sidebar is glass over the
+full-screen shell backdrop. Geometry and colours live only in the design system.
+Native screenshot comparison and owner acceptance remain pending the ready-PR
+Mac run; Linux source-contract tests are not rendered evidence.
+
 Orange is the primary accent of the iPhone app and stone is the secondary
 (`accent-2`). Dark mode uses `#ffb45c` with `#1d1200` text on primary controls
 and `#c9bfae` for the secondary; light mode uses `#b45f06` with white text and
@@ -2778,6 +2789,10 @@ earlier cyan, so screens use only the token. The orb is unchanged: the real web 
 a cyan rim and an orange and amber glowing tangled centre, with no orbit
 ellipses or tilted circles. This describes the native iPhone app and published
 concept pages; the web app has a separate palette decision below.
+Native screen roots and Sign-in use the shared `JarvisScreenBackground` and
+`JarvisDesignTokens` in `apps/ios/Jarvis/JarvisDesignSystem.swift` for the
+approved light/dark page fills and four ambient colour fields. The sidebar keeps
+the same page fill without the ambient fields.
 
 The web app uses orange as its primary interaction accent and stone as its
 quiet secondary accent. Dark mode uses `#ffb45c` with `#1d1200` text on primary
@@ -2787,9 +2802,10 @@ states; per-user `--theme-accent` overrides remain supported.
 
 No solid orange fills are used anywhere, because large orange areas are too
 harsh on the eyes. Orange appears as small accents, tints and strokes. In Chat
-only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
-replies, tool rows and status lines such as Writing it up are unboxed plain
-text. Phone screens carry no explainer, helper or hint text.
+only the user bubble has a background, a soft orange-tinted glass pill with a
+16% accent tint. Jarvis replies, tool rows and status lines such as Writing it
+up are unboxed plain text. Phone screens carry no explainer, helper or hint
+text.
 
 All concept board screens, the Lock Screen hands-free session, and the Dynamic
 Island on `docs/ios/design/surfaces.html` are approved. P15-34 implements the
@@ -2800,7 +2816,22 @@ activity; expanded has Jarvis, localized voice state, elapsed timer, waveform,
 and Mute/End controls. Stone is secondary; orange remains a restrained accent
 with no large solid fills. System timer updates and audio-derived waveform
 snapshots need no perpetual decorative animation. Lock Screen tasks and
-decisions, and Connection lost remain unapproved.
+decisions and Connection lost are approved separately below.
+
+The notification launcher and activity-sheet Done action use
+`jarvisToolbarButtonStyle()` from `JarvisDesignSystem.swift`. Their labels are
+plain; the native toolbar owns the single system glass surface. Do not add a
+button glass effect, fill or stroke inside that surface. The count badge remains
+a separate semantic indicator (P15-29 / #1459).
+
+All concept board screens and the Lock Screen hands-free session on
+`docs/ios/design/surfaces.html` are approved. P15-34 implements the latter with
+the shared dark-glass/cyan-rim/tangled-amber orb, Jarvis title, localized state,
+elapsed timer, measured waveform and Mute/End controls. Stone is secondary;
+only End has a small orange tint, never a large solid fill. System timer updates
+and audio-derived waveform snapshots need no perpetual decorative animation.
+P15-36 approves the Lock Screen tasks and decisions surface. Connection lost is
+approved and shown without helper text.
 
 ## Native iOS navigation shell (P15-13; 30 October 2026)
 
@@ -2809,9 +2840,20 @@ composition, not literal values. The iPhone shell keeps a plain system
 background sidebar fixed behind the screen; a right-side drag tracks the
 screen's leftward movement, dimming and blur, and a tap or reverse drag closes
 it. The sidebar header places Jarvis left and an icon-only Settings control
-right. Areas are ordered bottom-to-top from Proactive through Chat; Banking is
-disabled and labeled Later. Selection, keyboard focus, pointer hover and press
-change row text/icon styling only, without a row surface or border.
+right, separated from the list by a neutral rule. Its title, settings hit target,
+and row geometry follow the board through `JarvisDesignTokens`. The list follows
+the board's top-to-bottom order from Proactive through Chat and sits at the thumb
+end; Workspaces remains routable but is not a sidebar item. Banking is disabled
+and labeled Later.
+Selection, keyboard focus, pointer hover and press change row text/icon styling
+only, without a row surface or border; the selected destination uses the shared
+orange accent, while the Settings icon uses the same accent on focus/hover. The
+sidebar clears the device's actual top safe area and uses the board's light/dark
+page and ambient color treatment. The revealed-screen tap-to-close surface moves
+with the screen so it cannot intercept sidebar buttons. The right-edge drag is
+simultaneous with screen gestures and its pure-Swift recognition policy is unit
+tested. The simulator artifact includes open-sidebar screenshots in both
+appearances beside the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and
 system scrolling remain the default. The fixed-behind reveal is custom because
@@ -2831,14 +2873,35 @@ During screen sharing, a full-width status bar with Stop stays above the control
 the camera tile remains draggable in the thumb zone.
 
 Use system glass buttons, SF Symbols, semantic colours, type styles, permission
-prompts, sheets and the ReplayKit picker. The custom orb and camera tile are
-needed for the approved voice-focused layout and live camera preview; their
-dimensions, state colours and motion values come from the shared iOS token layer.
+prompts, sheets and the ReplayKit picker. Voice reuses the shared Jarvis orb, with
+state-driven motion and muted/offline treatments. Live captions use a labeled
+glass surface with a dismiss action; the CC control restores a hidden caption
+surface. Orb and caption geometry and motion values come from the shared iOS token
+layer. The camera tile remains custom for its live preview.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
+Ending voice returns to Chat and closes the sidebar through the existing
+progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
+
+After a real realtime drop, Voice replaces its controls with the muted orb,
+“Connection lost” title, and two glass actions. Retry now uses the bounded
+session retry path; End closes the session and returns to Chat. Orange is the
+primary action accent, stone is secondary, and the surface has no explanatory
+copy.
+
+P15-40 (#1482) keeps the cyan-rimmed dark sphere stationary and animates only the
+tangled orange/amber centre. Listening and speaking use stronger centre motion
+than thinking. The filament canvas includes transparent blur margins, and the
+centre fades radially to zero alpha before its bounds; animation changes opacity,
+not rectangular-layer brightness. No square edge may appear inside the sphere.
+Reduced Motion and an inactive scene pause it. Voice reserves the
+orb halo and a separate bottom caption/share/control region, including when
+captions are hidden, so status and caption changes cannot move the orb. Short
+screens reduce its diameter. End uses the shared red action tint with a white
+symbol, not a white fill, in both full-screen and minimized controls.
 
 ## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
@@ -2850,6 +2913,8 @@ opposite alignment and a 24-hour timestamp at each sender/minute group. Only the
 user message has a background, a soft orange-tinted glass pill (see the colour
 and Chat look section above); Jarvis replies and tool rows are unboxed text. The activity sheet reuses the web feed's activity
 categories and shows away mode separately from its persisted activity items.
+A genuinely empty history leaves the transcript clear beside the pinned composer;
+the app does not add a generic empty panel or invent sample messages.
 
 Use SwiftUI's native `ScrollView`, text field, file and photo pickers, sheets,
 system button styles, SF Symbols and semantic type/color. `JarvisDesignTokens`
@@ -2863,9 +2928,16 @@ confirmation decisions. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
-The composer Chat/Voice switch navigates to the native Voice screen. In Chat,
-Share screen stays visibly disabled with an accessibility explanation; screen
-sharing belongs to the Voice screen's broadcast flow.
+The composer Chat/Voice switch navigates to the native Voice screen. The plus
+button opens a native popover above its own hit target with Camera, Attach,
+Enable video, Share screen and Voice language, in the board's bottom-up order.
+The menu reuses the shared glass and geometry tokens and the JarvisCore Danish
+and English Chat catalog. Camera opens a SwiftUI in-app viewfinder with
+AVCapturePhotoOutput; video shows the existing AVCaptureSession preview. ReplayKit
+uses the existing broadcast picker and extension. Camera, video and screen frames
+remain local until a Chat turn includes the image attachment. Voice language
+reads and updates the existing `voice.defaultLanguage` setting and applies to
+the next Chat session; it does not change an active Voice session.
 Synthetic preview and screenshot mode allows one fixture text turn; attachment
 uploads and activity writes are disabled with accessibility explanations, never
 simulated as successful backend actions.
@@ -2940,9 +3012,9 @@ live in `JarvisDesignTokens`; no per-screen color values or decorative orb are
 added.
 
 Orange is a small primary action/accent, with the approved dark/light foreground
-pair; stone remains the shared secondary token and is not hardcoded into a
-Factory element. Selection and task/check state always include text and an icon,
-not color alone. Danish/English copy and date formatting come from `JarvisCore`,
+pair; In review uses the shared stone secondary token through the Factory token
+alias. Selection and task/check state always include text and an icon, not color
+alone. Danish/English copy and date formatting come from `JarvisCore`,
 with the app language defaulting to Danish. System type sizes, appearance,
 VoiceOver labels, and native scrolling remain intact.
 
@@ -2979,8 +3051,9 @@ The Danish/English copy and gate composition remain unchanged.
 ## Native iOS Health dashboard (P15-18; owner-approved 31 October 2026)
 
 The approved composition is one native scroll beneath a Health/refresh title row,
-with a text-only Dashboard/Track workout switcher, a small period menu, and the
-fixed glass search bar above the bottom safe area. Dashboard blocks show Gym,
+with a small period menu and a fixed bottom bar above the bottom safe area.
+P15-39 places the native Dashboard/Track workout segmented pill directly above
+the glass search field and plus button for thumb reach. Dashboard blocks show Gym,
 Run and Steps rings; the selected-period protein, calorie and sleep summary;
 recent sessions; body metric sparklines; a protein chart with a target line; and
 one freshness status. Rows use native navigation for workout, sleep, meals and
@@ -2996,16 +3069,15 @@ Orange is a small primary accent; stone is the secondary token. All visible
 and VoiceOver copy and number/date formatting follow the app-owned Danish/English
 preference.
 
-The checked-in `docs/ios/design/board.html?screen=health&tab=dashboard&lang=en`
-currently renders a blank Health placeholder rather than the approved frames.
-The implementation follows the approved issue description and does not copy
-literal values from that stale local board. The workout segment is disabled,
-while Last lifts and plus are omitted; the shared lift routes from #1423 are
-available on main, but this Dashboard implementation does not expose them. No
-replacement API is implied. The existing iOS
-screenshot hook remains within its three-capture cost guard and does not traverse
-Health, so light/dark Health simulator images and key-state screenshots remain
-unverified for owner review.
+The checked-in `docs/ios/design/board.html?screen=health&tab=track&lang=da`
+shows Exercises and History only. Plus opens **New lift** with name, kg, reps
+and sets and past-exercise quick-add chips; no form or save status sits on the
+tab. Native logging reuses the shared lift routes from #1423. Last lifts remains
+omitted from the Dashboard. The existing one-boot simulator screenshot job now
+includes Track workout, New lift and empty states in both languages and themes,
+with a board link beside the artifact in its PR comment. Linux Chromium review
+covers the board, not native rendering; simulator compilation/captures and owner
+visual review remain pending.
 
 ## Native iOS Workspaces (P15-14; 30 October 2026)
 
@@ -3033,3 +3105,23 @@ never executed.
 The shared native sign-in orb uses a dark glass sphere and orange center without
 orbit or meridian ellipses. The approved Workspaces frame contains no orb, so the
 screen does not add one.
+
+## Native iOS Lock Screen tasks and decisions (P15-36; 31 October 2026)
+
+Follow the approved Lock Screen tasks card in
+`docs/ios/design/surfaces.html`: the Factory Live Activity presents the Factory
+symbol, localized state, actual task activity, elapsed time from `startedAt`,
+and a linear progress track. Since existing task routes provide no numeric
+progress, the track is indeterminate rather than showing an invented fraction.
+The approval notification uses the system Jarvis app icon (the dark glass orb
+with cyan rim and amber tangled centre), server-provided summary and expiry,
+and authentication-required Approve/Decline actions. Orange remains a small
+accent; stone is the secondary token.
+
+ActivityKit and WidgetKit provide the system Lock Screen presentation. App
+language comes from `JarvisAppLanguage`; notification action feedback is shown
+in the existing Now activity sheet. Local updates use the existing `/now`
+snapshot/events and Factory task event stream. No APNs delivery or update is
+claimed while the app is suspended; the device registration and backend push
+work remain open. P15-35 separately approves and configures the voice Dynamic
+Island on the same activity; it does not add a task Island or authorize APNs.

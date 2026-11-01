@@ -54,7 +54,15 @@ TestFlight keychain/Entra configuration require separate verification.
 
 The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
-without ending the session. Language follows the existing `voice.default_language`
+without ending the session. Ending voice, including from the minimized bar, returns
+to Chat with a cleared navigation stack and a usable sidebar.
+Reopening Voice after End connects automatically with a fresh transport and audio
+session. The red End control follows the approved board. The shared dark-glass,
+cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
+more actively when listening or speaking, without overlapping the status.
+Voice status, controls and recovery copy support Danish and English; Reduced
+Motion keeps the centre still.
+Language follows the existing `voice.default_language`
 setting, defaulting to Danish. Microphone capture and speaker playback use the
 existing voice socket contract; speaking over playback interrupts it immediately.
 Camera inspection and screen sharing reuse the web app's existing vision and
@@ -94,6 +102,14 @@ Mute and End actions. Danish is the default and English is supported. Preserve
 the dark-glass orb, cyan rim, amber center, orange as a restrained primary
 accent, and stone as secondary. Simulator captures of compact, minimal and
 expanded beside the approved board are required before acceptance.
+
+## Native voice connection loss (#1476; 31 October 2026)
+
+After an established realtime connection drops, Voice shows a muted orb, the
+“Connection lost” title, and Retry now and End actions. Retry now starts another
+session with the existing bounded reconnect policy; End closes the session and
+returns to Chat. Initial connection failures do not use the lost state. Copy
+follows the app's Danish-default language preference.
 
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
@@ -188,6 +204,14 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+P15-38 / #1478 applies Chat's approved ambient background to every native
+screen and app-owned sheet: one light/dark definition and the same glow positions,
+with glass content surfaces above it. The 1 November reconciliation reuses main's
+`JarvisScreenBackground` (also used by `JarvisGateAmbientBackground`), without
+adding another renderer or decorative orb. Voice and sign-in/lock
+keep their foreground orb over the shared ambient base. This changes no routes,
+notification delivery support or screen functionality.
+
 Chat is the iPhone app's root conversation surface. It streams the existing
 conversation events, pages the existing history cursor, reattaches/cancels
 active turns, sends up to five local attachments, and shows persisted tool
@@ -195,12 +219,19 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
-The composer offers Chat and Voice navigation; voice capture remains out of
-scope. Photos and camera captures remain on-device until send. The existing web
-contract allows documents up to 20 MB and images up to 10 MB per attachment.
-Synthetic fixtures are clearly marked and used only in previews and CI
-screenshots. Native Entra sign-in and ReplayKit broadcast support are separate
-follow-ups; no fake conversation or successful live sign-in is implied.
+The composer offers Chat and Voice navigation and a plus menu anchored above its
+trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
+language. Camera uses an in-app viewfinder and still-photo capture; video and
+ReplayKit screen sharing keep frames local until a Chat turn sends them as image
+attachments. Voice language reads and saves the existing shared setting and
+applies to the next Chat session. The existing web contract allows documents up
+to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
+marked and used only in previews and CI screenshots. Native Entra sign-in remains
+a separate concern; no fake conversation or successful live sign-in is implied.
+
+The notifications toolbar button and its sheet's Done button use one shared
+system-style surface, without stacked button fills or strokes (P15-29 / #1459).
+
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical
@@ -305,6 +336,22 @@ code views and unknown renderers remain non-executable unsupported cards until
 their native presentation is decided. No create action or new backend route is
 introduced. All native Workspaces UI and accessibility copy follows the persisted
 Danish/English app-language preference, defaulting to Danish.
+
+## iPhone Lock Screen tasks and decisions (P15-36)
+
+The approved Lock Screen surface shows an ActivityKit Live Activity for real
+running Factory tasks and an actionable Jarvis notification for real pending
+confirmations. The task surface uses its actual state, activity text and start
+time, tracking at most the five most recently started running tasks. Until the backend exposes measured task progress, the progress track stays
+indeterminate and never presents invented step counts. Approve and Decline use
+the existing authenticated confirmation endpoint, require device authentication,
+and report success or failure in the Now activity sheet. New labels and recovery
+copy follow the Danish-default, English-selectable app language.
+
+The app synchronizes tasks and confirmations from existing backend snapshots and
+events while active. Updates while the app is suspended are not promised: APNs
+device registration, backend delivery and task/approval update or removal pushes
+remain separate work.
 
 ## Conversational finding feedback (#1240)
 
@@ -1781,6 +1828,13 @@ and returns only bounded, sanitized titles. The source does not itself activate 
 scheduler, model call or proactive delivery, and this slice sets no proactive flag.
 
 ## Health migration (approved P12)
+
+Native iPhone Health logging (P15-39 / #1480) uses only the plus-button
+**New lift** sheet, with chips that prefill an exercise's last logged weight,
+reps and sets. **Track workout** contains Exercises and History, or the existing
+empty state, without an inline form, Save button or save-status line.
+The Dashboard/Track workout segmented pill sits in the fixed bottom bar above
+search and plus. Visible and accessibility copy follows Danish/English.
 
 Tool parity is an acceptance requirement for every retained Daily capability,
 not a later convenience. The page and Jarvis chat/voice must use the same

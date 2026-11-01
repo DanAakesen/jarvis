@@ -6,6 +6,7 @@ import UIKit
 @MainActor
 final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var voiceState: VoiceSessionState = .idle
+    @Published private(set) var connectionPresentationState: VoiceConnectionPresentationState = .connected
     @Published private(set) var microphoneDenied = false
     @Published private(set) var signInRequired = false
     @Published private(set) var isAudioReady = false
@@ -21,7 +22,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var camera: VoiceCameraCapture?
     @Published private(set) var photoIsReady = false
 
-    private let audio = VoiceAudioEngine()
+    private let screenshotConnectionLost: Bool
+    private var audio = VoiceAudioEngine()
     private let liveActivity = VoiceLiveActivityController()
     private(set) var liveActivitySessionID: UUID?
     private let screenShareBridge = VoiceScreenShareBridge()
@@ -34,15 +36,32 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var photoForNextTurn: Data?
     private var sessionGeneration = 0
     private var isStarting = false
+    private var connectionPresentationMachine = VoiceConnectionPresentationStateMachine()
     private var isEnding = false
+    private var screenshotState: VoiceSessionState?
 
-    init() {
-        audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
-            Task { @MainActor in
-                guard let self, let client = self.sessionClient else { return }
-                try? await client.playbackCompleted(responseID: responseID, audible: audible)
-            }
+    init(screenshotConnectionLost: Bool = false) {
+        self.screenshotConnectionLost = screenshotConnectionLost
+        if screenshotConnectionLost {
+            connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+            voiceState = .reconnecting(attempt: 3)
         }
+#if targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--screenshot-voice-fixture"),
+           let state = arguments.first(where: { $0.hasPrefix("--screenshot-voice-state=") })?
+            .split(separator: "=").last {
+            switch state {
+            case "listening": voiceState = .listening
+            case "thinking": voiceState = .ready
+            case "speaking": voiceState = .speaking
+            default: break
+            }
+            screenshotState = voiceState
+            isAudioReady = true
+            errorMessage = JarvisVoiceLocalization.string(.preview)
+        }
+#endif
     }
 
     #if targetEnvironment(simulator)
@@ -78,24 +97,32 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
     #endif
 
+    var skipsAutomaticStart: Bool {
+        screenshotConnectionLost
+    }
+
+    var showsConnectionRecovery: Bool {
+        connectionPresentationState == .lost || connectionPresentationState == .retrying
+    }
+
     var statusText: String {
-        if case .reconnecting = voiceState { return "Reconnecting" }
-        if voiceState == .failed || microphoneDenied { return "Offline" }
-        if isMuted { return "Muted" }
-        if !isAudioReady && voiceState == .listening { return "Connecting" }
+        if case .reconnecting = voiceState { return JarvisVoiceLocalization.string(.reconnecting) }
+        if voiceState == .failed || microphoneDenied { return JarvisVoiceLocalization.string(.offline) }
+        if isMuted { return JarvisVoiceLocalization.string(.muted) }
+        if !isAudioReady && voiceState == .listening { return JarvisVoiceLocalization.string(.connecting) }
         switch voiceState {
         case .idle, .connecting:
-            return "Connecting"
+            return JarvisVoiceLocalization.string(.connecting)
         case .ready:
-            return "Thinking"
+            return JarvisVoiceLocalization.string(.thinking)
         case .listening:
-            return "Listening"
+            return JarvisVoiceLocalization.string(.listening)
         case .speaking:
-            return "Speaking"
+            return JarvisVoiceLocalization.string(.speaking)
         case .reconnecting:
-            return "Reconnecting"
+            return JarvisVoiceLocalization.string(.reconnecting)
         case .ended, .failed:
-            return "Offline"
+            return JarvisVoiceLocalization.string(.offline)
         }
     }
 
@@ -109,15 +136,24 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     var canUseControls: Bool {
-        isSessionActive && !microphoneDenied
+        isSessionActive && !microphoneDenied && !isEnding && screenshotState == nil
     }
 
+    var isPreview: Bool { screenshotState != nil }
+
     func start() async {
+        if let screenshotState {
+            voiceState = screenshotState
+            isAudioReady = true
+            return
+        }
         guard !isStarting, !isEnding, sessionClient == nil else { return }
-        isStarting = true
-        defer { isStarting = false }
         sessionGeneration += 1
         let generation = sessionGeneration
+        isStarting = true
+        defer {
+            if sessionGeneration == generation { isStarting = false }
+        }
         liveActivitySessionID = UUID()
         VoiceLiveActivityActions.session = self
         errorMessage = nil
@@ -129,21 +165,28 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             guard let token = try await tokenStore.read() else {
                 throw JarvisClientError.signInRequired
             }
+            guard sessionGeneration == generation else { return }
+            try Task.checkCancellation()
             let httpClient = try JarvisComposition.makeClient(
                 accessTokenProvider: MissingVoiceAccessTokenProvider()
             )
             let language = try await httpClient.voiceDefaultLanguage()
             guard sessionGeneration == generation else { return }
-            guard await VoiceAudioEngine.requestMicrophonePermission() else {
-                guard sessionGeneration == generation else { return }
+            try Task.checkCancellation()
+            let microphoneAllowed = await VoiceAudioEngine.requestMicrophonePermission()
+            guard sessionGeneration == generation else { return }
+            try Task.checkCancellation()
+            guard microphoneAllowed else {
                 microphoneDenied = true
                 voiceState = .failed
                 liveActivitySessionID = nil
+                markRetryFailedIfNeeded()
                 return
             }
             guard sessionGeneration == generation else { return }
             let baseURL = try JarvisComposition.apiBaseURL()
             self.httpClient = httpClient
+            self.audio = VoiceAudioEngine()
             let audio = self.audio
             let client = VoiceSessionClient(
                 baseURL: baseURL,
@@ -164,29 +207,64 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     }
                 }
             )
+            audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
+                Task { @MainActor in
+                    guard let self, self.sessionGeneration == generation else { return }
+                    try? await client.playbackCompleted(responseID: responseID, audible: audible)
+                }
+            }
             sessionClient = client
             try await client.start(accessToken: token, language: language)
             guard sessionGeneration == generation else { return }
+            try Task.checkCancellation()
             startScreenShareMonitoring()
         } catch {
             guard sessionGeneration == generation else { return }
+            isEnding = true
+            defer { isEnding = false }
+            sessionGeneration += 1
+            isStarting = false
             errorMessage = Self.message(for: error)
             if let clientError = error as? JarvisClientError,
                case .signInRequired = clientError {
                 signInRequired = true
             }
             voiceState = .failed
+            markRetryFailedIfNeeded()
             let failedClient = sessionClient
             sessionClient = nil
             liveActivitySessionID = nil
-            if let failedClient { try? await failedClient.end() }
-            await stopAudio()
+            self.httpClient = nil
+            stopAudio()
             await liveActivity.end()
+            if let failedClient { try? await failedClient.end() }
         }
     }
 
     func retryIfNeeded() async {
-        guard microphoneDenied || voiceState == .failed else { return }
+        guard connectionPresentationState != .lost,
+              microphoneDenied || voiceState == .failed else { return }
+        await start()
+    }
+
+    func retryNow() async {
+        guard connectionPresentationState == .lost, !isStarting, !isEnding else { return }
+        connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
+        sessionGeneration += 1
+        let retryGeneration = sessionGeneration
+        isStarting = true
+        defer {
+            if sessionGeneration == retryGeneration { isStarting = false }
+        }
+        let interruptedClient = sessionClient
+        sessionClient = nil
+        liveActivitySessionID = nil
+        stopAudio()
+        await liveActivity.end()
+        if let interruptedClient { try? await interruptedClient.end() }
+        guard sessionGeneration == retryGeneration,
+              connectionPresentationState == .retrying else { return }
+        isStarting = false
         await start()
     }
 
@@ -251,12 +329,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         defer { isEnding = false }
         sessionGeneration += 1
         liveActivitySessionID = nil
+        connectionPresentationState = connectionPresentationMachine.apply(.ended)
+        isStarting = false
         let endingClient = sessionClient
         sessionClient = nil
         voiceState = .ended
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
-        await stopAudio()
+        stopAudio()
         camera?.stop()
         camera = nil
         isCameraEnabled = false
@@ -264,6 +344,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         photoForNextTurn = nil
         photoIsReady = false
         await liveActivity.end()
+        httpClient = nil
+        userCaption = ""
+        assistantCaption = ""
         if let endingClient {
             do {
                 try await endingClient.end()
@@ -281,7 +364,10 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     func startCamera() async {
         guard canUseControls, !isCameraEnabled else { return }
-        guard await VoiceCameraCapture.requestAccess() else {
+        let generation = sessionGeneration
+        let cameraAllowed = await VoiceCameraCapture.requestAccess()
+        guard sessionGeneration == generation, canUseControls else { return }
+        guard cameraAllowed else {
             cameraPermissionDenied = true
             return
         }
@@ -294,14 +380,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             photoIsReady = false
             if let sessionClient { try await sessionClient.setCameraState(on: true) }
         } catch {
+            guard sessionGeneration == generation else { return }
             capture.stop()
             camera = nil
             isCameraEnabled = false
-            errorMessage = "Camera unavailable."
+            errorMessage = JarvisVoiceLocalization.string(.cameraUnavailable)
         }
     }
 
     func stopCamera() async {
+        let generation = sessionGeneration
         camera?.stop()
         camera = nil
         isCameraEnabled = false
@@ -311,6 +399,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             do {
                 try await sessionClient.setCameraState(on: false)
             } catch {
+                guard sessionGeneration == generation else { return }
                 errorMessage = Self.message(for: error)
             }
         }
@@ -318,7 +407,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     func capturePhotoForNextTurn() {
         guard let frame = camera?.capturePhoto() else {
-            errorMessage = "Camera frame unavailable."
+            errorMessage = JarvisVoiceLocalization.string(.frameUnavailable)
             return
         }
         photoForNextTurn = frame
@@ -327,9 +416,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     func setScreenSharing(_ enabled: Bool) async {
         guard enabled != isScreenSharing else { return }
+        let generation = sessionGeneration
         if enabled, isCameraEnabled {
             await stopCamera()
         }
+        guard sessionGeneration == generation, !isEnding else { return }
         isScreenSharing = enabled
     }
 
@@ -350,9 +441,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     func refreshScreenShareState() {
+        guard isSessionActive else { return }
         let isSharing = screenShareBridge.isSharing
         guard isSharing != isScreenSharing else { return }
-        Task { await setScreenSharing(isSharing) }
+        let generation = sessionGeneration
+        Task {
+            guard sessionGeneration == generation else { return }
+            await setScreenSharing(isSharing)
+        }
     }
 
     func requestStopScreenSharing() {
@@ -365,7 +461,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             voiceSessionID = String(sessionID)
             beginAudioIfNeeded()
         case .sessionEnded:
-            Task { await end() }
+            let generation = sessionGeneration
+            Task {
+                guard sessionGeneration == generation else { return }
+                await end()
+            }
         case .transcriptionDelta(let transcript, _):
             userCaption = Self.boundedCaption(transcript)
         case .transcriptionCompleted(let transcript, let itemID):
@@ -382,7 +482,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                     liveActivity.update(state: voiceState, isMuted: isMuted, pcm16: pcm16)
                 }
             } catch {
-                errorMessage = "Audio playback unavailable."
+                errorMessage = JarvisVoiceLocalization.string(.playbackUnavailable)
             }
         case .assistantTranscriptDelta(let text):
             assistantCaption = Self.boundedCaption(assistantCaption + text)
@@ -406,7 +506,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func beginAudioIfNeeded() {
-        guard captureTask == nil else { return }
+        guard screenshotState == nil, captureTask == nil else { return }
         do {
             let stream = try audio.startCapture()
             isAudioReady = true
@@ -433,9 +533,13 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 }
             }
         } catch {
-            errorMessage = "Microphone unavailable."
+            errorMessage = JarvisVoiceLocalization.string(.microphoneUnavailable)
             voiceState = .failed
-            Task { await end() }
+            let generation = sessionGeneration
+            Task {
+                guard sessionGeneration == generation else { return }
+                await end()
+            }
         }
     }
 
@@ -448,7 +552,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
 
-    private func stopAudio() async {
+    private func stopAudio() {
         captureTask?.cancel()
         captureTask = nil
         audio.stop()
@@ -456,10 +560,33 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func receiveSessionState(_ state: VoiceSessionState) {
+        switch state {
+        case .ready, .listening:
+            connectionPresentationState = connectionPresentationMachine.apply(.connected)
+        case .reconnecting:
+            connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+        case .connecting where connectionPresentationState == .lost:
+            connectionPresentationState = connectionPresentationMachine.apply(.retryRequested)
+        case .failed:
+            connectionPresentationState = connectionPresentationMachine.apply(.retryFailed)
+        case .ended:
+            connectionPresentationState = connectionPresentationMachine.apply(.ended)
+        case .idle, .connecting, .speaking:
+            break
+        }
         voiceState = state
         liveActivity.update(state: state, isMuted: isMuted)
         guard state == .failed else { return }
-        Task { await resetFailedSession() }
+        let generation = sessionGeneration
+        Task {
+            guard sessionGeneration == generation else { return }
+            await resetFailedSession()
+        }
+    }
+
+    private func markRetryFailedIfNeeded() {
+        guard connectionPresentationState == .retrying else { return }
+        connectionPresentationState = connectionPresentationMachine.apply(.retryFailed)
     }
 
     private func resetFailedSession() async {
@@ -467,6 +594,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isEnding = true
         defer { isEnding = false }
         sessionGeneration += 1
+        isStarting = false
         liveActivitySessionID = nil
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
@@ -474,15 +602,18 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        let failedClient = sessionClient
         sessionClient = nil
+        httpClient = nil
         voiceSessionID = nil
         responseID = nil
         isMuted = false
         photoForNextTurn = nil
         photoIsReady = false
-        if errorMessage == nil { errorMessage = "Voice unavailable." }
-        await stopAudio()
+        if errorMessage == nil { errorMessage = JarvisVoiceLocalization.string(.unavailable) }
+        stopAudio()
         await liveActivity.end()
+        if let failedClient { try? await failedClient.end() }
     }
 
     private func inspectCameraTurn(_ question: String, itemID: String) {
@@ -516,7 +647,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 try await sessionClient.sendScreenContext(context)
             } catch {
                 guard self.sessionGeneration == generation else { return }
-                errorMessage = "Camera frame unavailable."
+                errorMessage = JarvisVoiceLocalization.string(.frameUnavailable)
                 try? await sessionClient.sendScreenContextUnavailable(
                     itemID: itemID,
                     reason: .visionFailed
@@ -560,31 +691,31 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private static func message(for error: any Error) -> String {
-        guard let error = error as? JarvisClientError else { return "Voice unavailable." }
+        guard let error = error as? JarvisClientError else { return JarvisVoiceLocalization.string(.unavailable) }
         switch error {
         case .signInRequired:
-            return "Sign in required."
+            return JarvisVoiceLocalization.string(.signInError)
         case .notOwner:
-            return "Voice unavailable."
+            return JarvisVoiceLocalization.string(.unavailable)
         case .rateLimited:
-            return "Try again later."
+            return JarvisVoiceLocalization.string(.tryLater)
         case .serviceUnavailable, .networkFailure, .timedOut:
-            return "Voice unavailable."
+            return JarvisVoiceLocalization.string(.unavailable)
         default:
-            return "Voice unavailable."
+            return JarvisVoiceLocalization.string(.unavailable)
         }
     }
 
     private static func visualFailure(_ reason: String) -> String {
         switch reason {
         case "daily_limit", "budget_exhausted":
-            return "Image limit reached."
+            return JarvisVoiceLocalization.string(.imageLimit)
         case "frame_rate_limited":
-            return "Image request limited."
+            return JarvisVoiceLocalization.string(.imageRateLimit)
         case "budget_unavailable":
-            return "Image unavailable."
+            return JarvisVoiceLocalization.string(.imageUnavailable)
         default:
-            return "Image unavailable."
+            return JarvisVoiceLocalization.string(.imageUnavailable)
         }
     }
 }

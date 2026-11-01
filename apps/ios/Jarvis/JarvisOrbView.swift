@@ -4,6 +4,12 @@ enum JarvisOrbActivity: Equatable {
     case idle
     case signingIn
     case calm
+    case listening
+    case thinking
+    case speaking
+    case muted
+    case reconnecting
+    case offline
 }
 
 struct JarvisOrbView: View {
@@ -19,20 +25,43 @@ struct JarvisOrbView: View {
         switch activity {
         case .idle: JarvisDesignTokens.gateIdlePulse
         case .signingIn: JarvisDesignTokens.gateSigningPulse
-        case .calm: 0
+        case .listening: JarvisDesignTokens.voiceOrbListeningPulse
+        case .thinking: JarvisDesignTokens.voiceOrbThinkingPulse
+        case .speaking: JarvisDesignTokens.voiceOrbSpeakingPulse
+        case .calm, .muted, .reconnecting, .offline: 0
         }
     }
 
     private var animationDuration: Double {
-        activity == .signingIn
-            ? JarvisDesignTokens.gateOrbSigningDuration
-            : JarvisDesignTokens.gateOrbIdleDuration
+        switch activity {
+        case .signingIn: JarvisDesignTokens.gateOrbSigningDuration
+        case .listening: JarvisDesignTokens.voiceOrbListeningDuration
+        case .thinking: JarvisDesignTokens.voiceOrbThinkingDuration
+        case .speaking: JarvisDesignTokens.voiceOrbSpeakingDuration
+        default: JarvisDesignTokens.gateOrbIdleDuration
+        }
     }
 
     var body: some View {
         GeometryReader { geometry in
-            let size = geometry.size.width
-            ZStack {
+            if usesStaticFilaments {
+                sphere(size: geometry.size.width, phase: 0)
+            } else {
+                TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !animatesCore)) { timeline in
+                let phase = animatesCore
+                    ? timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / animationDuration
+                    : 0
+                sphere(size: geometry.size.width, phase: phase)
+                }
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .onAppear { pulse = true }
+    }
+
+    private func sphere(size: CGFloat, phase: Double) -> some View {
+        let energy = CGFloat(sin(phase)) * amplitude
+        return ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -66,6 +95,7 @@ struct JarvisOrbView: View {
                         radius: size * JarvisDesignTokens.orbGlassShadowRadiusScale
                     )
                     .shadow(color: JarvisDesignTokens.orbCyan.opacity(0.24), radius: size * 0.14)
+                ZStack {
                 Circle()
                     .fill(
                         RadialGradient(
@@ -86,48 +116,54 @@ struct JarvisOrbView: View {
                 Group {
                     if usesStaticFilaments {
                         staticFilaments
+                            .frame(width: size * 0.42, height: size * 0.42)
                     } else {
-                        Canvas { context, canvasSize in
-                            var glowContext = context
-                            glowContext.addFilter(.blur(radius: canvasSize.width * 0.08))
+                Canvas { context, canvasSize in
+                    let filamentSize = CGSize(width: size * 0.42, height: size * 0.42)
+                    context.translateBy(
+                        x: (canvasSize.width - filamentSize.width) / 2,
+                        y: (canvasSize.height - filamentSize.height) / 2
+                    )
+                    var glowContext = context
+                    glowContext.addFilter(.blur(radius: filamentSize.width * 0.08))
 
-                            for (index, points) in self.filamentCurves.enumerated() {
-                                let path = self.filamentPath(points, size: canvasSize)
-                                let color = self.filamentColors[index % self.filamentColors.count]
-                                glowContext.stroke(
-                                    path,
-                                    with: .color(color.opacity(0.9)),
-                                    lineWidth: canvasSize.width * 0.065
-                                )
-                                context.stroke(
-                                    path,
-                                    with: .color(color.opacity(0.9)),
-                                    lineWidth: canvasSize.width * 0.022
-                                )
-                                context.stroke(
-                                    path,
-                                    with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.82)),
-                                    lineWidth: canvasSize.width * 0.006
-                                )
-                            }
+                    for (index, points) in self.filamentCurves.enumerated() {
+                        let path = self.filamentPath(points, size: filamentSize)
+                        let color = self.filamentColors[index % self.filamentColors.count]
+                        glowContext.stroke(
+                            path,
+                            with: .color(color.opacity(0.9)),
+                            lineWidth: filamentSize.width * 0.065
+                        )
+                        context.stroke(
+                            path,
+                            with: .color(color.opacity(0.9)),
+                            lineWidth: filamentSize.width * 0.022
+                        )
+                        context.stroke(
+                            path,
+                            with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.82)),
+                            lineWidth: filamentSize.width * 0.006
+                        )
+                    }
 
-                            for (index, point) in self.filamentSparks.enumerated() {
-                                let diameter = canvasSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
-                                let rect = CGRect(
-                                    x: point.x * canvasSize.width - diameter / 2,
-                                    y: point.y * canvasSize.height - diameter / 2,
-                                    width: diameter,
-                                    height: diameter
-                                )
-                                context.fill(
-                                    Path(ellipseIn: rect),
-                                    with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
-                                )
-                            }
-                        }
+                    for (index, point) in self.filamentSparks.enumerated() {
+                        let diameter = filamentSize.width * (index.isMultiple(of: 3) ? 0.035 : 0.022)
+                        let rect = CGRect(
+                            x: point.x * filamentSize.width - diameter / 2,
+                            y: point.y * filamentSize.height - diameter / 2,
+                            width: diameter,
+                            height: diameter
+                        )
+                        context.fill(
+                            Path(ellipseIn: rect),
+                            with: .color(JarvisDesignTokens.orbCoreHighlight.opacity(0.9))
+                        )
+                    }
                     }
                 }
-                .frame(width: size * 0.42, height: size * 0.42)
+                }
+                .frame(width: size * 0.7, height: size * 0.7)
                 Circle()
                     .fill(
                         RadialGradient(
@@ -145,16 +181,44 @@ struct JarvisOrbView: View {
                         color: JarvisDesignTokens.orbCore.opacity(JarvisDesignTokens.orbCenterGlowOpacity),
                         radius: size * JarvisDesignTokens.orbCenterGlowRadiusScale
                     )
+                }
+                .opacity(animatesCore ? 0.82 + (sin(phase) + 1) * 0.09 : 1)
+                .mask {
+                    RadialGradient(
+                        stops: [.init(color: .white, location: 0.6), .init(color: .clear, location: 1)],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: size * 0.35
+                    )
+                }
+                .scaleEffect(x: 1 + energy, y: 1 - energy * 0.5)
+                .rotationEffect(.degrees(animatesCore ? sin(phase * 0.7) * 12 : 0))
             }
             .frame(width: size, height: size)
             .scaleEffect(scale)
             .animation(pulseAnimation, value: pulse)
             .animation(pulseAnimation, value: activity)
             .animation(pulseAnimation, value: scenePhase)
-            .accessibilityHidden(true)
+            .saturation(saturation)
+            .grayscale(activity == .offline ? 1 : 0)
+            .brightness(brightness)
+    }
+
+    private var saturation: Double {
+        switch activity {
+        case .muted: 0.35
+        case .reconnecting: 0.6
+        case .offline: 0
+        default: 1
         }
-        .frame(width: diameter, height: diameter)
-        .onAppear { pulse = true }
+    }
+
+    private var brightness: Double {
+        switch activity {
+        case .muted: -0.2
+        case .offline: -0.3
+        default: 0
+        }
     }
 
     private var filamentColors: [Color] {
@@ -252,12 +316,19 @@ struct JarvisOrbView: View {
     }
 
     private var scale: CGFloat {
-        guard !reduceMotion, scenePhase == .active, amplitude > 0 else { return 1 }
+        guard activity == .idle || activity == .signingIn,
+              !reduceMotion, scenePhase == .active, amplitude > 0 else { return 1 }
         return pulse ? 1 + amplitude : 1 - amplitude
     }
 
     private var pulseAnimation: Animation? {
-        guard !reduceMotion, scenePhase == .active, amplitude > 0 else { return nil }
+        guard activity == .idle || activity == .signingIn,
+              !reduceMotion, scenePhase == .active, amplitude > 0 else { return nil }
         return .easeInOut(duration: animationDuration).repeatForever(autoreverses: true)
+    }
+
+    private var animatesCore: Bool {
+        !usesStaticFilaments && !reduceMotion && scenePhase == .active &&
+            (activity == .listening || activity == .thinking || activity == .speaking)
     }
 }

@@ -17,7 +17,7 @@ struct JarvisActivitySheet: View {
                             Text(error)
                         } actions: {
                             Button("Retry") { Task { await model.refreshActivity() } }
-                                .buttonStyle(.glassProminent)
+                                .buttonStyle(.glass)
                                 .disabled(model.fixtureMode)
                                 .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                         }
@@ -62,19 +62,21 @@ struct JarvisActivitySheet: View {
             }
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
+            .jarvisAmbientBackground()
             .navigationTitle(kind.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
-                        .buttonStyle(.glass)
+                        .jarvisToolbarButtonStyle()
                 }
             }
         }
         .task {
-            if model.nowFeed == nil && model.activityError == nil {
-                await model.refreshActivity()
-            }
+            await model.refreshActivity()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisApprovalActionCompleted)) { _ in
+            Task { await model.refreshActivity() }
         }
     }
 

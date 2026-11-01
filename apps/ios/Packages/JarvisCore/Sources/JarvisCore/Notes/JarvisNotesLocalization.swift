@@ -21,6 +21,11 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case settingsTitle = "settings.title"
     case chatTitle = "navigation.chat"
     case voiceTitle = "navigation.voice"
+    case voiceConnectionLost = "voice.connectionLost"
+    case voiceRetryNow = "voice.retryNow"
+    case voiceRetrying = "voice.retrying"
+    case voiceEnd = "voice.end"
+    case voiceConnectionEnd = "voice.connectionEnd"
     case workspacesTitle = "navigation.workspaces"
     case healthTitle = "navigation.health"
     case softwareFactoryTitle = "navigation.softwareFactory"
@@ -112,6 +117,11 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case gateSignedOut = "gate.signedOut"
     case gateFaceIDReason = "gate.faceIDReason"
     case gateFaceIDLabel = "gate.faceIDLabel"
+    case voiceCaptionYou = "voice.captionYou"
+    case voiceCaptionJarvis = "voice.captionJarvis"
+    case voiceCaptionsLabel = "voice.captionsLabel"
+    case voiceHideCaptions = "voice.hideCaptions"
+    case voiceShowCaptions = "voice.showCaptions"
 }
 
 public enum JarvisNotesLocalization {

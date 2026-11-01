@@ -632,7 +632,7 @@ class SafeFailureTests(unittest.TestCase):
             source,
         )
         self.assertIn("    runs-on: macos-26", source)
-        self.assertIn("    timeout-minutes: 20", source)
+        self.assertIn("    timeout-minutes: 30", source)
         self.assertIn("      cancel-in-progress: true", source)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
@@ -641,8 +641,11 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
         self.assertIn("main-light.png", source)
         self.assertIn("main-dark.png", source)
+        self.assertIn("--screenshot-chat-plus-menu", source)
+        self.assertIn("chat-plus-menu-light.png", source)
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
+        self.assertIn("sidebar-open-dark.png", source)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -657,6 +660,7 @@ class SafeFailureTests(unittest.TestCase):
         )
         self.assertEqual(artifact["with"]["retention-days"], 14)
         self.assertEqual(artifact["with"]["if-no-files-found"], "error")
+        self.assertEqual(artifact["with"]["path"], "${{ runner.temp }}/ios-screenshots/")
         comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
         self.assertEqual(comment["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertIn("ARTIFACT_URL", comment["env"])
@@ -668,6 +672,157 @@ class SafeFailureTests(unittest.TestCase):
             "--screenshot-sidebar-open",
             (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
         )
+        self.assertIn(
+            "--screenshot-chat-plus-menu",
+            (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
+        )
+        ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
+        self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
+        self.assertIn("lockscreen-tasks-${appearance}-${language}.png", ios_workflow)
+        capture = next(step for step in job["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("for state in track newlift empty;", capture["run"])
+        self.assertIn("--screenshot-health-fixture", capture["run"])
+        self.assertIn("--screenshot-health-language=$language", capture["run"])
+        self.assertIn("health-${state}-${appearance}-${language}.png", capture["run"])
+        self.assertEqual(capture["run"].count("xcrun simctl boot "), 1)
+        self.assertIn("approved Health board", comment["run"])
+
+    def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
+        area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
+        header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]
+        self.assertNotIn("segmentSwitcher", header_body)
+        bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
+        self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
+        self.assertIn(".pickerStyle(.segmented)", area)
+        self.assertIn("guard !more || !liftsLoading", area)
+        self.assertIn("guard liftLoadID == loadID else { return }", area)
+        log = (ROOT / "apps/ios/Jarvis/JarvisHealthLiftLog.swift").read_text()
+        lists, sheet = log.split("struct JarvisHealthNewLiftSheet", 1)
+        self.assertNotIn("TextField(", lists)
+        self.assertNotIn("copy.text(.save)", lists)
+        self.assertIn("copy.text(.exercises)", lists)
+        self.assertIn("copy.text(.history)", lists)
+        self.assertIn("copy.text(.noLifts)", lists)
+        self.assertIn("copy.text(.pastExercises)", sheet)
+        self.assertIn("client.createLift(submittedDraft)", sheet)
+
+    def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        self.assertEqual(project["options"]["developmentLanguage"], "da")
+        target = project["targets"]["JarvisVoiceActivity"]
+        self.assertEqual(target["type"], "app-extension")
+        self.assertIn({"path": "Shared"}, target["sources"])
+        self.assertIn(
+            {"target": "JarvisVoiceActivity", "embed": True},
+            project["targets"]["Jarvis"]["dependencies"],
+        )
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
+        self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
+        self.assertIn("for state in listening speaking muted", capture["run"])
+        self.assertIn("voice-lock-${state}-${language}.png", capture["run"])
+        self.assertIn("voice-approved-board.png", capture["run"])
+        self.assertTrue((ROOT / "docs/ios/design/hands-free-board.png").is_file())
+        fixture = (ROOT / "apps/ios/Jarvis/VoiceActivityScreenshot.swift").read_text()
+        self.assertTrue(fixture.startswith("#if targetEnvironment(simulator)"))
+
+    def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        subprocess.run(["bash", "-n"], input=capture["run"], text=True, check=True)
+        compare = next(step for step in steps if step.get("name") == "Pair simulator captures with approved board renders")
+        artifact = next(step for step in steps if step.get("name") == "Upload iOS screenshots")
+        self.assertEqual(artifact["with"]["path"], "${{ runner.temp }}/ios-screenshots/")
+        screens = ("chat", "voice", "notifications", "factory", "settings", "notes", "health", "sidebar")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "ios-screenshots"
+            root.mkdir()
+            images = []
+            for appearance in ("light", "dark"):
+                for screen in screens:
+                    name = (f"factory-board-{appearance}-da.png" if screen == "factory"
+                            else f"ambient-{screen}-{appearance}.png")
+                    image = root / name
+                    image.touch()  # File-presence fixtures; these are not simulator screenshots.
+                    images.append(image)
+                for state in ("listening", "thinking", "speaking"):
+                    image = root / f"voice-{state}-{appearance}.png"
+                    image.touch()
+                    images.append(image)
+            env = {**os.environ, "RUNNER_TEMP": directory}
+            subprocess.run(["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env, check=True)
+            gallery = (root / "comparisons.html").read_text()
+            self.assertEqual(gallery.count("<iframe "), 22)
+            for image in images:
+                self.assertIn(f'src="{image.name}"', gallery)
+            self.assertIn("sheet=activity", gallery)
+            self.assertIn("sidebar=open", gallery)
+            for state in ("listening", "thinking", "speaking"):
+                self.assertIn(f"voice={state}", gallery)
+            self.assertTrue((root / "board/board.html").is_file())
+            images[-1].unlink()
+            result = subprocess.run(
+                ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(f"Missing simulator capture: {images[-1].name}", result.stderr)
+            images[-1].touch()
+            images[0].unlink()
+            result = subprocess.run(
+                ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
+                capture_output=True, text=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Missing simulator capture:", result.stderr)
+
+    def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
+        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        style = design.split("func jarvisToolbarButtonStyle()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("buttonStyle(.plain)", style)
+        for surface in (".background(", ".overlay(", ".glassEffect(", ".stroke("):
+            self.assertNotIn(surface, style)
+        for filename in ("JarvisChatScreen.swift", "JarvisActivitySheet.swift"):
+            source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
+            toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
+            with self.subTest(filename=filename):
+                self.assertIn(".jarvisToolbarButtonStyle()", toolbar)
+                self.assertNotIn(".buttonStyle(.glass)", toolbar)
+                self.assertNotIn(".glassEffect(", toolbar)
+        self.assertIn('Button("Done") { dismiss() }', source)
+
+    def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("for appearance in light dark", capture["run"])
+        self.assertIn("--screenshot-chat-fixture --screenshot-notifications-open", capture["run"])
+        self.assertIn("notifications-${appearance}.png", capture["run"])
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn('fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")', content)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn("self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil", chat)
+        self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
+        self.assertIn(".sheet(item: $presentedSheet", chat)
+        self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
+
+    def test_ios_voice_states_have_captures_and_board_comparisons(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        capture = next(step["run"] for step in steps
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        comparison = next(step["run"] for step in steps
+                          if step.get("name") == "Pair simulator captures with approved board renders")
+        self.assertIn("for state in listening thinking speaking", capture)
+        self.assertIn("--screenshot-voice-fixture", capture)
+        self.assertIn("voice-${state}-${appearance}.png", capture)
+        self.assertIn('for state in ("listening", "thinking", "speaking")', comparison)
+        self.assertIn('f"voice-{state}-{appearance}.png"', comparison)
+        self.assertIn('"screen": "voice", "voice": state, "theme": appearance', comparison)
 
     def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
         project = load_workflow(ROOT / "apps/ios/project.yml")

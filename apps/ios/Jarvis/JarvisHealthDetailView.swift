@@ -51,9 +51,7 @@ struct JarvisHealthDetailView: View {
                     Label(failure.title(language: language), systemImage: failure == .offline ? "wifi.slash" : "exclamationmark.triangle")
                 } actions: {
                     Button(copy.text(.retry)) { retryVersion += 1 }
-                        .buttonStyle(.borderedProminent)
-                        .tint(JarvisDesignTokens.healthAccent)
-                        .foregroundStyle(JarvisDesignTokens.healthAccentForeground)
+                        .buttonStyle(.glass)
                         .disabled(loading)
                 }
             } else if unavailable && !isWorkout {
@@ -67,6 +65,7 @@ struct JarvisHealthDetailView: View {
                 detailList(data)
             }
         }
+        .jarvisAmbientBackground()
         .navigationTitle(kind.title(language: language))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -104,7 +103,7 @@ struct JarvisHealthDetailView: View {
         heartRateUnavailable: Bool,
         heartRateFailure: JarvisHealthFailure?
     ) -> some View {
-        List {
+        JarvisList {
             Section(copy.text(.workout)) {
                 let workoutDate = date(row["workout_date"]) ?? date(row["start_at"])
                 healthValue(
@@ -151,7 +150,7 @@ struct JarvisHealthDetailView: View {
                         systemImage: heartRateFailure == .offline ? "wifi.slash" : "exclamationmark.triangle"
                     )
                     Button(copy.text(.retry)) { retryVersion += 1 }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .tint(JarvisDesignTokens.healthAccent)
                         .disabled(loading)
                 }
@@ -179,7 +178,7 @@ struct JarvisHealthDetailView: View {
     }
 
     private func sleepList(_ rows: [[String: JSONValue]]) -> some View {
-        List {
+        JarvisList {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 Section(JarvisHealthLocalization.formattedDate(date(row["sleep_date"]) ?? "", language: language)) {
                     if let hours = row["total_sleep_hours"]?.numberValue ?? row["asleep_hours"]?.numberValue {
@@ -201,7 +200,7 @@ struct JarvisHealthDetailView: View {
     }
 
     private func mealsList(_ rows: [[String: JSONValue]]) -> some View {
-        List {
+        JarvisList {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 Section(row["meal_name"]?.stringValue ?? "\(copy.text(.meals)) \(index + 1)") {
                     if let time = row["occurred_at"]?.stringValue {

@@ -7,10 +7,10 @@ final class JarvisCoreTests: XCTestCase {
         XCTAssertEqual(String(describing: JarvisCore.self), "JarvisCore")
     }
 
-    func testSidebarItemsAreOrderedFromLowestToHighest() {
+    func testSidebarItemsMatchTheApprovedBoardOrder() {
         XCTAssertEqual(
             JarvisDestination.sidebarItems,
-            [.proactive, .status, .usage, .banking, .softwareFactory, .health, .workspaces, .notes, .chat]
+            [.proactive, .status, .usage, .banking, .softwareFactory, .health, .notes, .chat]
         )
     }
 
@@ -46,6 +46,128 @@ final class JarvisCoreTests: XCTestCase {
         navigation.navigate(to: .banking)
         XCTAssertEqual(navigation.currentDestination, .voice)
         XCTAssertEqual(navigation.path, [.voice])
+    }
+
+    func testEveryEnabledSidebarDestinationCanBeSelected() {
+        for destination in JarvisDestination.sidebarItems where destination.isNavigable {
+            var navigation = JarvisNavigationState()
+            navigation.openSidebar()
+
+            navigation.navigate(to: destination)
+
+            XCTAssertEqual(navigation.currentDestination, destination)
+            XCTAssertFalse(navigation.isSidebarOpen)
+        }
+
+        var navigation = JarvisNavigationState()
+        navigation.navigate(to: .settings)
+        XCTAssertEqual(navigation.currentDestination, .settings)
+    }
+
+    func testSidebarGestureOpensFromTheRightEdgeZone() {
+        XCTAssertTrue(JarvisSidebarGesturePolicy.canBegin(
+            startX: 382,
+            translationX: -24,
+            translationY: 2,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0,
+            openingStartFraction: 0.62
+        ))
+        XCTAssertTrue(JarvisSidebarGesturePolicy.canBegin(
+            startX: 243,
+            translationX: -24,
+            translationY: 2,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0,
+            openingStartFraction: 0.62
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.canBegin(
+            startX: 195,
+            translationX: -24,
+            translationY: 2,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0,
+            openingStartFraction: 0.62
+        ))
+    }
+
+    func testSidebarGestureRejectsWrongDirectionAndVerticalMovement() {
+        XCTAssertFalse(JarvisSidebarGesturePolicy.canBegin(
+            startX: 382,
+            translationX: 24,
+            translationY: 2,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0,
+            openingStartFraction: 0.62
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.canBegin(
+            startX: 382,
+            translationX: -4,
+            translationY: 12,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0,
+            openingStartFraction: 0.62
+        ))
+    }
+
+    func testSidebarGestureCanCloseFromTheVisibleScreen() {
+        XCTAssertTrue(JarvisSidebarGesturePolicy.canBegin(
+            startX: 120,
+            translationX: 24,
+            translationY: 2,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0.75,
+            openingStartFraction: 0.62
+        ))
+        XCTAssertFalse(JarvisSidebarGesturePolicy.canBegin(
+            startX: 200,
+            translationX: 24,
+            translationY: 2,
+            screenWidth: 390,
+            drawerWidth: 288,
+            startProgress: 0.75,
+            openingStartFraction: 0.62
+        ))
+    }
+
+    func testEndingVoiceReturnsToChatAndKeepsSidebarNavigationUsable() {
+        for minimized in [false, true] {
+            var navigation = JarvisNavigationState()
+            navigation.navigate(to: .notes)
+            navigation.navigate(to: .voice)
+            if minimized { navigation.navigate(to: .settings) }
+            navigation.openSidebar()
+
+            navigation.voiceSessionStateChanged(.ended)
+
+            XCTAssertEqual(navigation.currentDestination, .chat)
+            XCTAssertTrue(navigation.path.isEmpty)
+            XCTAssertFalse(navigation.isSidebarOpen)
+
+            navigation.openSidebar()
+            XCTAssertTrue(navigation.isSidebarOpen)
+            navigation.navigate(to: .notes)
+            XCTAssertEqual(navigation.path, [.notes])
+            XCTAssertFalse(navigation.isSidebarOpen)
+        }
+    }
+
+    func testOtherVoiceStatesDoNotChangeNavigation() {
+        var navigation = JarvisNavigationState()
+        navigation.navigate(to: .voice)
+        navigation.openSidebar()
+        let original = navigation
+
+        for state: VoiceSessionState in [.idle, .connecting, .ready, .listening, .speaking, .reconnecting(attempt: 1), .failed] {
+            navigation.voiceSessionStateChanged(state)
+            XCTAssertEqual(navigation, original)
+        }
     }
 
     func testNavigationPathRejectsRootDisabledAndDuplicateDestinations() {

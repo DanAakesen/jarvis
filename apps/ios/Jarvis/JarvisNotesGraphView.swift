@@ -109,7 +109,7 @@ struct JarvisNotesGraphView: View {
     }
 
     private var graphList: some View {
-        List {
+        JarvisList {
             ForEach(graph.nodes) { node in
                 Button {
                     selectedNodeID = node.id

@@ -168,7 +168,7 @@ struct JarvisFactoryArea: View {
                 boardContent
             }
         }
-        .background(Color(uiColor: .systemBackground))
+        .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             bottomDock
@@ -445,6 +445,7 @@ struct JarvisFactoryArea: View {
             HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
                 Text(copy.column(id))
                     .font(.headline)
+                    .foregroundStyle(id == .inReview ? JarvisDesignTokens.factorySecondaryAccent : Color.primary)
                 Text(cards.count.formatted(.number.locale(language.locale)))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

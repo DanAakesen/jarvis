@@ -16,6 +16,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var captureContinuation: AsyncStream<Data>.Continuation?
     private var playbackProgress: [String: PlaybackProgress] = [:]
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
+    private var hasCaptureTap = false
 
     init() {
         engine.attach(player)
@@ -29,13 +30,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     func startCapture() throws -> AsyncStream<Data> {
+        try configureSession()
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0,
               let converter = AVAudioConverter(from: inputFormat, to: targetFormat) else {
             throw VoiceAudioEngineError.captureUnavailable
         }
-        try configureSession()
         self.converter = converter
         let stream = AsyncStream<Data>(bufferingPolicy: .bufferingOldest(16)) { continuation in
             lock.lock()
@@ -49,11 +50,13 @@ final class VoiceAudioEngine: @unchecked Sendable {
             self.lock.unlock()
             continuation?.yield(data)
         }
+        hasCaptureTap = true
         engine.prepare()
         do {
             try engine.start()
         } catch {
             input.removeTap(onBus: 0)
+            hasCaptureTap = false
             lock.lock()
             captureContinuation?.finish()
             captureContinuation = nil
@@ -121,13 +124,18 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     func stop() {
-        engine.inputNode.removeTap(onBus: 0)
+        if hasCaptureTap {
+            engine.inputNode.removeTap(onBus: 0)
+            hasCaptureTap = false
+        }
         engine.stop()
         player.stop()
         lock.lock()
         captureContinuation?.finish()
         captureContinuation = nil
         playbackProgress.removeAll()
+        playbackFinished = nil
+        converter = nil
         lock.unlock()
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }

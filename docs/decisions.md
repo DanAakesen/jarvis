@@ -37,6 +37,57 @@ synthetic and compiled out of device builds. Linux Core tests are local evidence
 Apple compilation, actual Lock Screen controls/background audio and the
 Simulator/board screenshot comparison remain pending native acceptance.
 
+## 31 October 2026 — Factory review status uses stone (P15-33 / #1468)
+
+Use the shared stone secondary tone for the Factory In review status in the web
+board and native iOS screen. Reuse the current light/dark palette tokens rather
+than introducing colors; keep unrelated success states unchanged.
+
+## 31 October 2026 — one native iPhone ambient background (P15-38 / #1478)
+
+Superseded in implementation detail on 1 November: Dan requested current main's
+gate backdrop and all current screen behaviour. Reuse `JarvisScreenBackground`,
+which already backs `JarvisGateAmbientBackground`, instead of the first
+P15-38 renderer and decorative orb. Preserve main's Chat plus menu, localization,
+camera/video/screen-sharing and Voice/caption/orb states. Merge main without
+rewriting branch history, keep both documentation entries and all capture/upload
+steps, including the plus-menu screenshot and ambient comparison artifact.
+Fresh native CI and simulator evidence are required for the merged commit.
+
+The subsequent #1465 main merge keeps the corrected drawer gesture, dismiss
+overlay placement, safe-area handling, row order and typography. Retain the
+shared full-screen ambient backdrop beneath the glass sidebar rather than
+reintroducing its per-screen gradient copy. Keep both sidebar/Notifications
+captures and the ambient comparison set in the existing one-boot job.
+
+Use the approved Chat backdrop on every native screen and app-owned sheet,
+as requested after TestFlight build 12. Keep one definition in
+`JarvisDesignSystem.swift`, not per-screen gradient copies: the board's four
+elliptical glows, theme-specific page colours, and subdued static orb.
+Voice and sign-in/lock reuse the same field beneath their foreground orb.
+Cards/list rows and the sidebar use glass, with a solid Reduce Transparency
+fallback. Preserve gate privacy coverage and existing screen behaviour.
+
+Extend the existing ready-PR screenshot hook without another Mac job or
+simulator boot. Package both appearances of all eight requested surfaces with
+`comparisons.html` and the checked-in board so native captures and concept
+renders can be viewed side by side. Notifications means the existing Needs you
+sheet, not a new APNs screen. Preview transports stay synthetic and Voice fixture
+startup never opens the microphone. Linux source contracts and Swift syntax
+parsing are local evidence only; Mac compile/captures, CI green and owner visual
+acceptance remain pending. Main was fetched and was already an ancestor of the
+working branch, so no history rewrite or merge was needed.
+
+## 31 October 2026 — native Chat plus menu (#1462)
+
+Match the approved Chat board with an anchored popover above the composer plus
+button and include Camera, Attach, Enable video, Share screen and Voice language.
+Use the existing AVFoundation camera session and ReplayKit broadcast extension;
+camera, video and screen frames stay on-device until the user sends a Chat turn.
+Persist the language choice through the existing authenticated `/settings`
+contract and apply it to the next Chat session. Add the open-menu state to the
+existing simulator screenshot job without another simulator boot or Mac job.
+
 ## 31 October 2026 — bound native Microsoft sign-in (P15-23 / #1445)
 
 Use a two-minute MSAL callback deadline and the existing localized failed/retry
@@ -64,8 +115,10 @@ owner-session routes only and add no iOS-specific backend path.
 
 The app-owned language preference remains Danish by default and selects all
 Settings copy; the existing shared theme token owns accent/tint, and the saved
-appearance theme updates the app color scheme. Notifications remain disabled
-until APNs registration and test-send support exist. Health credential status is
+appearance theme updates the app color scheme. Remote notifications remain disabled
+until APNs registration and test-send support exist. P15-36 separately authorizes
+local-only actionable approval notifications and local ActivityKit updates while
+active; no suspended-app delivery is claimed. Health credential status is
 read-only because the existing POST requires fresh Microsoft sign-in and
 rejects the stored owner-session token; do not invent a route or persist the
 one-time upload token. Advanced voice tuning, retrieval thresholds, timeouts and
@@ -76,6 +129,20 @@ referenced by the issue. Follow the approved issue concept, do not copy literal
 board values, and record visible differences in the pull request. Keep the
 existing screenshot workflow and Mac-run cost guard unchanged. Linux Core tests
 do not establish SwiftUI compilation or rendered-device acceptance.
+
+## 31 October 2026 — Health logging only in the plus sheet (P15-39 / #1480)
+
+The owner's issue supersedes the dashboard-only P15-18 limitation: enable
+Track workout as Exercises and History only, with the empty state and no inline
+form, Save button or save-status line. Plus opens New lift with chips that
+prefill actual last exercise values. Move the native segmented pill to the
+bottom bar above search and plus, with Danish/English copy.
+
+Reuse version-6 capabilities, the periodless shared lift query and existing
+POST route. Keep failed submissions unchanged for same-key explicit retry.
+Update the approved board and extend the existing one-boot simulator capture
+job, not a new Mac job. Local Linux and board checks cannot establish native
+rendering or owner acceptance; simulator screenshots remain pending CI.
 
 ## 31 October 2026 — build the approved native iPhone Health dashboard (P15-18 / #1430)
 
@@ -117,7 +184,7 @@ extension passes bounded screen JPEGs through the registered App Group. Keep the
 session active when the screen is minimized; do not make Face ID locking change
 voice lifecycle. Background audio, Bluetooth, route changes, call interruption
 handling, microphone recovery after device lock, microphone recovery after a
-phone call, CarPlay, Live Activity and Action Button remain unverified and are
+phone call, voice-session Live Activity and Action Button remain unverified and are
 separate follow-ups requiring a real phone. Linux protocol/contract tests do not
 establish Apple target compilation or device acceptance. The current shell has no
 native sign-in UI, so the screen fails closed when the owner-session token is not
@@ -668,6 +735,17 @@ inset before hiding navigation; keep the earlier height across resize-before-foc
 A fresh short viewport with no prior measurement is ambiguous, so keep navigation
 available. Preserve autofocus and existing controls; no physical iPhone browser
 mode is inferred from the screenshot. This corrects the focus-only #1295 choice.
+
+## 31 October 2026 — detect the iOS keyboard from a short initial viewport (#1295)
+
+The prior equal-shrink tests began with a full-height viewport, but an app opened
+in an already-short viewport has no pre-keyboard height to compare. Keep startup
+autofocus from hiding navigation; after a primary pointer press inside the
+composer, use the unchanged screen height as the fallback keyboard reference.
+Observed viewport expansion or leaving the composer restores navigation. The
+actual App was inspected in Chromium at 390×480 with all viewport heights short;
+the dock hid while the composer remained positioned above the bottom edge and
+returned on expansion. This is simulated evidence, not physical iPhone acceptance.
 
 ## Reserve phone typing space when geometry is inconclusive (#1295; 26 October 2026)
 
@@ -7738,7 +7816,9 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-31 | The iPhone app uses orange as the primary accent and cyan as the secondary accent. Primary orange is `#ffb45c` with dark text `#1d1200` in dark mode and `#b45f06` with white text in light mode. The secondary cyan is the token `accent-2`: `#52dcfa` in dark mode and `#14768d` in light mode. Dan wants the cyan replaced by a better colour later, so builders use only the token and never the literal value. The orb is unchanged: the real web orb with a dark glass sphere, a cyan rim, an orange and amber glowing tangled centre, and no orbit ellipses or tilted circles. | Dan: orange as the primary colour and the current cyan as the secondary, to be improved in time. The web app is not changed by this decision and keeps its own palette. The concept board and the system surfaces page are republished as `docs/ios/design/board.html` and `docs/ios/design/surfaces.html` with this palette. | Superseded by the stone secondary above |
 | 2026-10-31 | The web app shares the orange primary and stone secondary palette: `#ffb45c` with `#1d1200` control text in dark mode and `#b45f06` with white text in light mode; stone is `#c9bfae` in dark mode and `#6f6551` in light mode. Light-theme focus and link text use a deeper orange for 4.5:1 contrast. Existing per-user `--theme-accent` overrides remain supported. The orb's cyan glass edge and listening/voice colors stay unchanged; orange fills remain limited to primary controls and soft tints. | Dan's P15-21 decision on 31 October 2026 aligns web interaction, selection, progress and quiet secondary roles with the approved palette while retaining the separately owned orb and voice appearance. | Confirmed by Dan |
 | 2026-10-31 | Dan approved all concept board screens: Health, Factory, Settings, Notes and Workspaces, together with the Chat, Voice, Sign-in, Face ID lock and App locked screens approved earlier. The approved frames are the visual reference only, and the native iOS standards row still governs how they are built. Builds for Health, Factory and Settings are tracked in #1430, #1431 and #1432. | Each screen has its own builder issue and the owner approves each pull request before it merges. Settings is built after the Sign-in and lock gate, which is merged. The published board is `docs/ios/design/board.html`. | Confirmed by Dan |
-| 2026-10-31 | P15-34 / #1470 approves the local Lock Screen hands-free session. Dynamic Island, Lock Screen tasks and decisions that need APNs, and Connection lost remain To agree and must not be built without approval. | The hands-free card's approval does not authorize other system surfaces or APNs. | Hands-free agreed; other surfaces open |
+| 2026-10-31 | P15-34 / #1470 approves the local Lock Screen hands-free session. Dynamic Island is approved separately in P15-35. Connection lost was approved separately in P15-37, and local Lock Screen tasks and decisions in P15-36. | The hands-free card's approval does not authorize other system surfaces or APNs. APNs push remains a separate backend gap and decision. | Hands-free agreed; APNs out of scope |
+| 2026-10-31 | The Lock Screen tasks and decisions surface is approved for P15-36. Use real running Factory task data and pending confirmations, local ActivityKit updates, and local approval notifications with authenticated Approve/Decline actions; keep measured progress indeterminate because the backend has no numeric progress contract. | Dan's P15-36 issue explicitly approves the Lock Screen tasks card. APNs registration, server delivery, and task/approval lifecycle pushes are not part of this approval and remain required for updates while the app is suspended. | Confirmed by Dan |
+| 2026-10-31 | Build the approved native Voice connection-loss state (P15-37 / #1476): only a real dropped connection shows the muted orb, “Connection lost”, Retry now and End. Retry starts a fresh session using the existing bounded reconnect policy; End closes the session and returns to Chat. Use orange primary and stone secondary glass actions, with Danish-default app-language copy and no helper text. | The existing `VoiceSessionClient` caps automatic reconnects at eight attempts. A user-requested retry starts another bounded session; the pure-Swift presentation state machine tests connected, lost, retrying and ended, including that initial failures are not mislabeled as drops. The iOS simulator PR artifact captures the synthetic state in Danish and English. | Confirmed by issue P15-37 |
 | 2026-10-31 | The iPhone screens contain no explainer, helper, hint or privacy text. Only labels, titles, values, status lines, button text and error messages that need an action appear in the UI. | Dan dislikes descriptive paragraphs inside the phone screens and had them removed from the surfaces page. Builders must not add them back. | Confirmed by Dan |
 | 2026-10-31 | The Chat look is unified. Only the user bubble has a background: a soft orange-tinted glass pill. Jarvis replies, tool rows and status lines such as Writing it up are unboxed plain text. No solid orange fills are used anywhere: large orange areas are too harsh on the eyes, so orange is used for small accents, tints and strokes. | Dan approved this final Chat look on 2026-10-31 after reviewing the board. It applies to every surface that shows conversation text. The build is tracked in #1400 and the rule is repeated in #1430, #1431 and #1432. | Confirmed by Dan |
 | 2026-10-31 | On the Factory board every column is collapsible. Each column header shows a chevron, the title, a count pill and a one-line status detail, and Done starts collapsed. The build is tracked in #1431. | Dan changed the concept board after the first publish. The header is a disclosure button with a VoiceOver label that includes the count and the expanded or collapsed state. | Confirmed by Dan |
@@ -9614,6 +9694,30 @@ environment and starts the first run after merge, then checks the signing
 authorization, archive, export/upload result, rising build number, and
 TestFlight availability. No run is started by this change.
 
+## 31 October 2026 — P15-26 automatic signing with development cleanup
+
+Build 11 hit the development-certificate limit under automatic signing.
+The owner rejected manual distribution signing because they have no Mac to
+export its private key; adding P12/profile secrets would block working uploads.
+Keep the original automatic archive/export and export options, with no new
+secrets or dependencies.
+
+As explicitly authorized in PR #1451, revoke all API-visible `DEVELOPMENT` and
+`IOS_DEVELOPMENT` certificates after every main-only run, including failed
+archive/export. This also removes older/shared Apple/iOS development
+certificates and can invalidate their development profiles. Never revoke
+distribution certificates; preserve Mac-specific and unknown types too.
+Use the existing App Store Connect key, Ruby standard-library ES256/HTTPS,
+bounded full-list pagination and fail-closed type/identifier checks. Withhold
+certificate/key identifiers, tokens and raw diagnostics; report API failures
+without false success. Always delete the local key after the cleanup attempt.
+
+Offline tests verify the signed JWT, development-only deletion, pagination,
+error/privacy handling and unchanged signing workflow. The key's real
+list/revoke permissions and live cleanup remain unverified; no Apple
+certificates are revoked and no upload is dispatched while implementing this.
+The owner requested draft status until live verification.
+
 ## 30 October 2026 — P15-09 Apple adapter boundary
 
 Keep Apple framework implementations in the iOS app target. The URLSession
@@ -9685,3 +9789,63 @@ orange filament core on a black background, with no rings or orbit ellipses
 around it. It replaces the earlier blue-ring icon as the single 1024 by 1024
 RGB PNG in the app icon set. The artwork came from an owner-supplied image.
 Home Screen appearance on a device is not yet verified.
+
+## 1 November 2026 — Combined iOS screenshot job timeout
+
+Keep the one-boot simulator workflow and all screenshot/upload steps, with a
+30-minute job limit instead of 20. Run `41261737993` completed its build,
+captures, upload, and comment, but was marked cancelled at the 20-minute limit
+after adding the sidebar coverage alongside Health. The extra bounded time
+allows the complete evidence set and cleanup without reducing coverage.
+
+## 31 October 2026 — P15-31 iOS sidebar follows the approved board
+
+Owner feedback on TestFlight build 12 requires the native sidebar to match
+`docs/ios/design/board.html`: show the Jarvis title and icon-only Settings
+control, then list Proactive, Status, Usage, Banking, Software Factory, Health,
+Notes and Chat in that top-to-bottom order. Banking remains disabled and labeled
+Later as shown on the board; Workspaces remains routable but is not a sidebar
+entry. The VoiceOver open action remains available, and right-edge drag
+recognition must not block screen controls or the sidebar's navigation buttons.
+
+## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
+
+Done and the notification launcher share `jarvisToolbarButtonStyle()` in
+`JarvisDesignSystem.swift`: plain button labels let the native toolbar own the
+system glass instead of stacking `.glass` button surfaces inside it. Preserve
+the bell count badge, minimum tap target, accessibility label and actions.
+The existing simulator job adds light/dark captures of the real fixture sheet,
+without another Mac job or boot. Linux source checks are not visual acceptance;
+usable before/after simulator screenshots remain pending.
+
+## 31 October 2026 — return ended native voice sessions to Chat (P15-28 / #1458)
+
+Observe voice state at the navigation shell rather than adding separate exit
+callbacks to the full-screen and minimized controls. Only `.ended` clears the
+route stack to Chat; connecting, active and failed states preserve navigation.
+Reset sidebar progress through the existing shell helper so its overlay cannot
+keep intercepting input. Audio, camera and broadcast teardown remain owned by
+`VoiceScreenModel.end()`. Linux navigation tests do not verify SwiftUI rendering
+or real-device interaction.
+
+## 1 November 2026 — native Voice restart and stationary orb (P15-40; #1482)
+
+Follow-up after ambient main (#1479): preserve the tangle's geometry while
+expanding its Canvas for blur margins, feather the entire centre to zero alpha
+before its bounds, and animate opacity rather than rectangular-layer brightness.
+The screenshot artifact pairs all three Voice states in both themes with the
+approved board. Fresh pixel inspection remains required before visual acceptance.
+Run 41264871752 compiled the app successfully but timed out during the combined
+capture at the 20-minute job limit. Increase that existing job's bound to 30
+minutes without dropping upstream captures or adding another Mac job.
+
+Build-14 feedback requires fresh Voice to connect after End without Refresh.
+Invalidate the screen generation before teardown, close the old transport,
+release capture/playback and activate a fresh audio session before reading its
+input format. Reopening the screen auto-starts from ended as well as idle/failed.
+Use the approved board's red End fill and the existing shared cyan-rimmed,
+dark-glass orb with an orange/amber tangled centre; animate the centre, not the
+sphere, with Reduced Motion and inactive-scene pauses. Keep all Voice copy in
+Danish/English resources. Extend the existing ready-PR simulator capture rather
+than adding another Mac job. Synthetic screenshots, Apple compilation and live
+device acceptance remain separate checks; none is established by Linux tests.
