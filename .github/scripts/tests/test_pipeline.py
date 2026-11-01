@@ -721,9 +721,12 @@ class SafeFailureTests(unittest.TestCase):
             project["targets"]["Jarvis"]["dependencies"],
         )
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
+        steps = workflow["jobs"]["macos"]["steps"]
+        boot = next(step for step in steps
+                    if step.get("name") == "Boot iPhone Simulator and run UI tests")
+        capture = next(step for step in steps
+                       if step.get("name") == "Capture simulator review screenshots")
+        self.assertEqual(boot["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
         self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
         self.assertIn("for state in listening speaking muted", capture["run"])
         self.assertIn("voice-lock-${state}-${language}.png", capture["run"])

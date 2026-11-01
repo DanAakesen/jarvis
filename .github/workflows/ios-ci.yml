@@ -122,7 +122,7 @@ jobs:
       - name: Generate Xcode project
         working-directory: apps/ios
         run: xcodegen generate
-      - name: Boot iPhone Simulator and capture screenshots
+      - name: Boot iPhone Simulator and run UI tests
         run: |
           set -euo pipefail
           DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
@@ -163,7 +163,7 @@ jobs:
           else
             echo "::warning::The XCUITest result bundle was not created."
           fi
-      - name: Capture established Factory screenshots
+      - name: Capture simulator review screenshots
         run: |
           set -euo pipefail
           DEVICE_ID="$IOS_SIMULATOR_UDID"
