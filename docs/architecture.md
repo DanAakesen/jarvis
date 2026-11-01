@@ -1561,6 +1561,14 @@ and AVCaptureSession camera capture; session protocol and state remain in
 removes orb and minimization animation; system text styles and VoiceOver labels
 remain available.
 
+End invalidates the screen-model generation before detaching the client, stopping
+capture/playback and deactivating AVAudioSession. Startup, socket, playback and
+permission callbacks from older generations cannot update the next session.
+Every fresh start creates a new audio engine and WebSocket transport; the screen
+auto-starts from idle, ended or failed states. AVAudioSession is activated before
+reading the microphone format. Voice copy uses `JarvisVoiceLocalization` with the
+existing Danish/English `JarvisNotes` resource table and app-language preference.
+
 Voice reads `settings.voice.defaultLanguage` from the existing authenticated
 `GET /settings` route for each new session. Camera frames use the existing
 `POST /screen/frames` handle mode and screen-share frames use its description

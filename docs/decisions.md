@@ -9762,3 +9762,25 @@ Reset sidebar progress through the existing shell helper so its overlay cannot
 keep intercepting input. Audio, camera and broadcast teardown remain owned by
 `VoiceScreenModel.end()`. Linux navigation tests do not verify SwiftUI rendering
 or real-device interaction.
+
+## 1 November 2026 — native Voice restart and stationary orb (P15-40; #1482)
+
+Follow-up after ambient main (#1479): preserve the tangle's geometry while
+expanding its Canvas for blur margins, feather the entire centre to zero alpha
+before its bounds, and animate opacity rather than rectangular-layer brightness.
+The screenshot artifact pairs all three Voice states in both themes with the
+approved board. Fresh pixel inspection remains required before visual acceptance.
+Run 41264871752 compiled the app successfully but timed out during the combined
+capture at the 20-minute job limit. Increase that existing job's bound to 30
+minutes without dropping upstream captures or adding another Mac job.
+
+Build-14 feedback requires fresh Voice to connect after End without Refresh.
+Invalidate the screen generation before teardown, close the old transport,
+release capture/playback and activate a fresh audio session before reading its
+input format. Reopening the screen auto-starts from ended as well as idle/failed.
+Use the approved board's red End fill and the existing shared cyan-rimmed,
+dark-glass orb with an orange/amber tangled centre; animate the centre, not the
+sphere, with Reduced Motion and inactive-scene pauses. Keep all Voice copy in
+Danish/English resources. Extend the existing ready-PR simulator capture rather
+than adding another Mac job. Synthetic screenshots, Apple compilation and live
+device acceptance remain separate checks; none is established by Linux tests.

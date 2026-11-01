@@ -56,6 +56,12 @@ The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
 without ending the session. Ending voice, including from the minimized bar, returns
 to Chat with a cleared navigation stack and a usable sidebar.
+Reopening Voice after End connects automatically with a fresh transport and audio
+session. The red End control follows the approved board. The shared dark-glass,
+cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
+more actively when listening or speaking, without overlapping the status.
+Voice status, controls and recovery copy support Danish and English; Reduced
+Motion keeps the centre still.
 Language follows the existing `voice.default_language`
 setting, defaulting to Danish. Microphone capture and speaker playback use the
 existing voice socket contract; speaking over playback interrupts it immediately.
