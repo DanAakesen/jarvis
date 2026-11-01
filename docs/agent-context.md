@@ -6208,6 +6208,55 @@ acceptance is included. Composer visibility (#1303) remains separately owned.
 
 ## iOS Phase 1c
 
+### Standing iOS documentation-first requirement
+
+Before implementing any iOS change, read the relevant Apple API documentation
+and Human Interface Guidelines. Prefer the platform API, modifier, or component
+and documented best practice over hand-rolled behavior. Select documentation
+for the affected boundary: SwiftUI/UIKit navigation, gestures, toolbars and
+sheets; ActivityKit and Live Activities; or AVFoundation capture device discovery,
+as applicable. In each iOS PR description, list the Apple pages actually consulted
+and each deliberate deviation with its reason. If access is unavailable, disclose
+that limitation; indexed excerpts are not a full-page review and an unverified
+workaround is not an Apple recommendation.
+
+For P15-41, the following indexed Apple guidance was reviewed on 1 November 2026
+after the implementation; direct page retrieval failed in this environment:
+
+- [GestureState](https://developer.apple.com/documentation/swiftui/gesturestate):
+  the system resets transient gesture state when a gesture ends or is cancelled.
+- [NavigationStack](https://developer.apple.com/documentation/swiftui/navigationstack):
+  use the system stack and data-driven path for destinations.
+- [simultaneousGesture](https://developer.apple.com/documentation/swiftui/view/simultaneousgesture(_:including:)):
+  combine gestures only where simultaneous recognition is intentional.
+- [allowsHitTesting](https://developer.apple.com/documentation/swiftui/view/allowshittesting(_:)):
+  explicitly exclude decorative layers from hit testing.
+- [ToolbarItem](https://developer.apple.com/documentation/swiftui/toolbaritem):
+  use system toolbar items and placements for the Chat launcher.
+- HIG [Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures),
+  [Sidebars](https://developer.apple.com/design/human-interface-guidelines/sidebars),
+  [Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars)
+  and [Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets):
+  provide alternatives to gestures, keep navigation discoverable, use platform
+  toolbar conventions, and return to the parent when dismissing a sheet.
+
+Deliberate P15-41 deviations:
+
+- Retain the owner-approved right-side fixed-behind drawer rather than the HIG's
+  leading sidebar/system split-view composition. The requirement explicitly
+  preserves its design. Routing, toolbar controls, drag recognition and transient
+  state still use SwiftUI APIs; the custom generation counter invalidates commands
+  arriving during a drag, not a replacement gesture recognizer or navigation stack.
+- The test-only toolbar helper sends a frame-center `XCUICoordinate` tap instead
+  of requiring `XCUIElement.isHittable` before `tap()`. Run 41286956749 showed
+  invalid activation-point/window snapshots before any interaction. This is an
+  evidence-driven test accommodation, not a documented Apple toolbar defect or
+  recommended production workaround. Real sidebar/sheet transitions remain
+  mandatory; fresh simulator verification is pending.
+- Simulator-only HTTP and voice fixtures replace external services/audio so the
+  repeated navigation sequence is deterministic. They are not device/live-voice
+  acceptance and do not replace production platform APIs.
+
 `apps/ios/Packages/JarvisCore` is a pure-Swift SwiftPM package that builds on
 Linux. Run `swift build` and `swift test` from that directory. Cloud agent setup
 installs Swift 6.2 through the pinned `swift-actions/setup-swift` action.

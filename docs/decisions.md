@@ -9810,6 +9810,15 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+The product owner requires Apple API documentation and HIG review before every
+iOS implementation, platform APIs over hand-rolled equivalents, and a PR list of
+consulted pages and justified deviations. Record this contributor-wide requirement
+in `docs/agent-context.md` under iOS Phase 1c. This PR's review is retrospective
+and limited to indexed Apple guidance because direct page access failed; it does
+not establish full-page review before the earlier commits. The same section lists
+references and the retained right-side drawer, test-only coordinate tapping, and
+offline fixture exceptions with their reasons.
+
 Remove the animation observer's asynchronous progress feedback: its `0.001`
 update tolerance can leave positive reveal progress while the closed drawer's
 tap catcher still intercepts input. Settled progress and accessibility derive
