@@ -2962,8 +2962,10 @@ not add on-screen helper text.
 Dictation uses the system speech recognizer with localized permissions and
 reports unavailable/denied recognition through the existing composer error row.
 It stops when Chat leaves or sends. The Voice action navigates to the native
-Voice screen and is covered by a Simulator UI test. The plus button opens a
-native popover above its own hit target with Camera, Attach,
+Voice screen and is covered by a Simulator UI test. The Plus button opens a
+native popover from the bottom-center of its 44-point target; screenshot fixtures
+present it only after the control is laid out so the popover keeps that anchor.
+The menu contains Camera, Attach,
 Enable video, Share screen and Voice language, in the board's bottom-up order.
 The menu reuses the shared glass and geometry tokens and the JarvisCore Danish
 and English Chat catalog. Voice language uses the stone secondary accent, and

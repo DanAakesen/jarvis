@@ -38,4 +38,28 @@ final class ChatComposerVoiceUITests: XCTestCase {
 
         XCTAssertNotEqual(voiceAction.value as? String, emptyDraftAction)
     }
+
+    func testPlusMenuOpensBesideItsTrigger() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--screenshot-chat-fixture"]
+        app.launch()
+
+        let plusButton = app.buttons["chat.plus"]
+        XCTAssertTrue(plusButton.waitForExistence(timeout: 10))
+        XCTAssertTrue(plusButton.isHittable)
+        plusButton.tap()
+
+        let plusMenu = app.descendants(matching: .any)
+            .matching(identifier: "chat.plusMenu")
+            .firstMatch
+        XCTAssertTrue(plusMenu.waitForExistence(timeout: 10))
+
+        let menuFrame = plusMenu.frame
+        let triggerFrame = plusButton.frame
+        let verticalGap = max(
+            max(triggerFrame.minY - menuFrame.maxY, menuFrame.minY - triggerFrame.maxY),
+            0
+        )
+        XCTAssertLessThan(verticalGap, 160, "Plus menu must stay anchored beside its trigger")
+    }
 }

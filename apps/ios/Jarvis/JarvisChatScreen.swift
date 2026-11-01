@@ -110,7 +110,7 @@ struct JarvisChatScreen: View {
     @State private var attachmentDialog = false
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
-    @State private var isPlusMenuPresented = ProcessInfo.processInfo.arguments.contains("--screenshot-chat-plus-menu")
+    @State private var isPlusMenuPresented = false
     @State private var cameraCapture: VoiceCameraCapture?
     @State private var isVideoEnabled = false
     @State private var stopCameraAfterPhoto = false
@@ -219,6 +219,11 @@ struct JarvisChatScreen: View {
         }
         .task {
             await model.load()
+            if model.fixtureMode,
+               ProcessInfo.processInfo.arguments.contains("--screenshot-chat-plus-menu") {
+                await Task.yield()
+                isPlusMenuPresented = true
+            }
             if let initialActivitySheet {
                 presentedSheet = .activity(initialActivitySheet)
             }
@@ -658,6 +663,7 @@ struct JarvisChatScreen: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("chat.plus")
                     .disabled(model.isSending || isPreparingCamera || dictation.isPreparing || dictation.isRecording)
                     .accessibilityLabel(copy(.plusMenuLabel))
@@ -665,7 +671,7 @@ struct JarvisChatScreen: View {
                     .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
                     .popover(
                         isPresented: $isPlusMenuPresented,
-                        attachmentAnchor: .rect(.bounds),
+                        attachmentAnchor: .point(.bottom),
                         arrowEdge: .bottom
                     ) {
                         plusMenu
@@ -738,7 +744,12 @@ struct JarvisChatScreen: View {
                                 )
                                 .contentShape(Rectangle())
                         }
+                        .frame(
+                            width: JarvisDesignTokens.chatMinimumTapTarget,
+                            height: JarvisDesignTokens.chatMinimumTapTarget
+                        )
                         .buttonStyle(.plain)
+                        .contentShape(Rectangle())
                         .foregroundStyle(.secondary)
                         .disabled(dictation.isPreparing)
                         .accessibilityIdentifier("chat.voiceOrSend")
@@ -801,6 +812,7 @@ struct JarvisChatScreen: View {
             in: .rect(cornerRadius: JarvisDesignTokens.chatPlusMenuRadius)
         )
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat.plusMenu")
     }
 
     private var voiceLanguageMenu: some View {

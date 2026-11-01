@@ -9983,8 +9983,10 @@ draft, and stops when Chat exits or sends. Keep the approved transparent glass
 composer and Now bar, clear header with a soft transcript fade, user-only message
 surface and Danish/English copy. The ready-PR Mac Simulator job tests Voice
 navigation and the action change, and captures before/after states in light and
-dark. Linux checks do not establish SwiftUI rendering, Apple-target compilation,
-or real microphone/speech behavior.
+dark. The Plus menu uses SwiftUI's anchored popover, positioned from the bottom of
+its trigger; fixture screenshots present it after layout. Linux checks do not
+establish SwiftUI rendering, Apple-target compilation, or real microphone/speech
+behavior.
 ## 1 November 2026 — approval expiry grammar and #1501 synchronization (P15-46)
 
 Merge main `32af478` in `c84e6bc` with both parents and decision-log entries

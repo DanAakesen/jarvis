@@ -36,6 +36,8 @@ final class NativeChatLayoutTests: XCTestCase {
         XCTAssertTrue(composer.contains("NavigationLink(value: JarvisDestination.voice)"))
         XCTAssertFalse(composer.contains("onNavigate(.voice)"))
         XCTAssertTrue(composer.contains(#"accessibilityIdentifier("chat.voiceOrSend")"#))
+        XCTAssertTrue(composer.contains("attachmentAnchor: .point(.bottom)"))
+        XCTAssertTrue(screen.contains(#"accessibilityIdentifier("chat.plusMenu")"#))
         XCTAssertFalse(composer.contains("Picker("))
         XCTAssertFalse(screen.contains(".background(.bar)"))
 

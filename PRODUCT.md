@@ -243,8 +243,9 @@ The composer puts its input on the first row and a small plus, dictate and
 voice/send action on the second. With an empty draft the right action opens the
 Voice screen; with text it sends. Dictation uses the system speech recognition
 and microphone permissions to put a Danish or English transcript into the draft;
-it stops when Chat leaves or sends. The plus menu includes Camera, Attach, Enable
-video, Share screen and Voice language. Camera uses an in-app viewfinder and
+it stops when Chat leaves or sends. The plus menu opens beside its Plus trigger
+through a native anchored popover and includes Camera, Attach, Enable video,
+Share screen and Voice language. Camera uses an in-app viewfinder and
 still-photo capture; video and ReplayKit screen sharing keep frames local until
 a Chat turn sends them as image attachments. Voice language reads and saves the
 existing shared setting and applies to the next Chat session. The existing web
