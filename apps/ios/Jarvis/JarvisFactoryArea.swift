@@ -74,6 +74,7 @@ struct JarvisFactoryArea: View {
     let client: JarvisFactoryClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
+    let onOpenSidebar: (() -> Void)?
     let previewState: JarvisFactoryPreviewState?
     let liveUpdatesEnabled: Bool
 
@@ -121,11 +122,13 @@ struct JarvisFactoryArea: View {
         language: JarvisAppLanguage,
         onRetryConfiguration: @escaping () -> Void,
         previewState: JarvisFactoryPreviewState? = nil,
-        liveUpdatesEnabled: Bool = true
+        liveUpdatesEnabled: Bool = true,
+        onOpenSidebar: (() -> Void)? = nil
     ) {
         self.client = client
         self.language = language
         self.onRetryConfiguration = onRetryConfiguration
+        self.onOpenSidebar = onOpenSidebar
         self.previewState = previewState
         self.liveUpdatesEnabled = liveUpdatesEnabled
         _segment = State(initialValue: previewState?.segment ?? .board)
@@ -263,6 +266,9 @@ struct JarvisFactoryArea: View {
 
     private var header: some View {
         HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
+            if let onOpenSidebar {
+                JarvisSidebarMenuButton(language: language, action: onOpenSidebar)
+            }
             Text(copy.text(.title))
                 .font(.title2.weight(.semibold))
                 .lineLimit(1)

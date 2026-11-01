@@ -99,6 +99,7 @@ final class NavigationBisectTests: XCTestCase {
         }
 
         let launcher = app.buttons["navigation.openSidebar"]
+        print("navigation.openSidebar.exists=\(app.buttons["navigation.openSidebar"].exists)")
         let frameReady = NSPredicate { _, _ in
             guard launcher.exists, launcher.isEnabled else { return false }
             let frame = launcher.frame

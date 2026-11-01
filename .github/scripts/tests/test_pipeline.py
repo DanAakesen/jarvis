@@ -718,6 +718,22 @@ class SafeFailureTests(unittest.TestCase):
                           if step.get("name") == "Run iPhone navigation regression")
         self.assertIn("-only-testing:JarvisUITests/NavigationBisectTests", regression["run"])
 
+    def test_ios_destination_headers_have_real_sidebar_launchers(self):
+        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        self.assertIn("import JarvisCore", design)
+        button = design.split("struct JarvisSidebarMenuButton: View {", 1)[1].split("enum JarvisDesignTokens", 1)[0]
+        for required in ('Button(action: action)', '"line.3.horizontal"', "chatMinimumTapTarget",
+                         "contentShape(Rectangle())", "jarvisToolbarButtonStyle()",
+                         "string(.openSidebar, language: language)", '"navigation.openSidebar"'):
+            self.assertIn(required, button)
+        for area in ("Notes", "Health", "Factory"):
+            source = (ROOT / f"apps/ios/Jarvis/Jarvis{area}Area.swift").read_text()
+            self.assertIn("JarvisSidebarMenuButton(language: language, action: onOpenSidebar)", source)
+        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertEqual(shell.count("onOpenSidebar: { setSidebarOpen(true) }"), 5)
+        tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
+        self.assertEqual(tests.count("assertDestinationMenuWorks()"), 4)
+
     def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
         fixture = source.split("private static var isNavigationFixture: Bool {", 1)[1].split("\n    }", 1)[0]

@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 import UIKit
 
@@ -5,6 +6,23 @@ extension View {
     func jarvisToolbarButtonStyle() -> some View {
         // The system toolbar owns the glass surface; the button adds no second fill.
         buttonStyle(.plain)
+    }
+}
+
+struct JarvisSidebarMenuButton: View {
+    let language: JarvisAppLanguage
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "line.3.horizontal")
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                .contentShape(Rectangle())
+        }
+        .jarvisToolbarButtonStyle()
+        .foregroundStyle(JarvisDesignTokens.primaryAccent)
+        .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
+        .accessibilityIdentifier("navigation.openSidebar")
     }
 }
 

@@ -218,7 +218,7 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 
 P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
 screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.
-Chat provides a localized menu launcher as well as the right-edge swipe; tapping
+Chat, Health, Notes and Factory provide localized menu launchers as well as the right-edge swipe; tapping
 the revealed screen closes the sidebar. Interrupted gestures must return to the
 committed open/closed state without an invisible input blocker. The iPhone UI gate
 exercises Chat, Health, Notes, and Factory in Danish and English.

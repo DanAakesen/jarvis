@@ -3542,6 +3542,12 @@ closed render probes; this contradicts the reported init-only history.
 Round three adds root counter controls inside/outside the gate, modal/window
 evidence and permission interruption handling. The initial scheme invocation is
 temporarily bisect-only; restore the full gate before final delivery.
+The missing Chat launcher on main was added in this branch's 8488515; no removal
+commit appears in available main history. Notes/Health/Factory custom headers now
+receive the same committed open callback through a shared no-fill menu button.
+Repeated bilingual tests additionally open/close from each header. The temporary
+first CI invocation now includes both navigation suites; full-scheme restoration
+and native verification remain pending.
 Next: verify the revised
 simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
 on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain

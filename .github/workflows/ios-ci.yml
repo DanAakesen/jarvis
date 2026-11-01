@@ -162,6 +162,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -only-testing:JarvisUITests/NavigationBisectTests \
+            -only-testing:JarvisUITests/NavigationReliabilityTests \
             -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO
           xcrun xcresulttool export attachments \

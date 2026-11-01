@@ -579,6 +579,10 @@ approval notifications. Do not embed a relative phrase in an absolute template.
 
 ## Shared control geometry (16 October 2026; local candidate)
 
+Native iPhone destination headers (Notes, Health, Factory) use the shared
+44-point, no-fill sidebar menu action in the existing orange accent, with localized
+English/Danish labels. Chat retains its native leading toolbar launcher and bell.
+
 Dan's three supplied screenshots identify inconsistent Refresh/Create action
 shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's
 existing glass room, typography, palette and layout; this is an app-wide control

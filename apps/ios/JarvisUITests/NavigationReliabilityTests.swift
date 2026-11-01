@@ -72,6 +72,7 @@ final class NavigationReliabilityTests: XCTestCase {
                 assertChatInputWorks()
 
                 navigate(to: "health")
+                assertDestinationMenuWorks()
                 exerciseSearch("health.search")
                 let healthMode = app.segmentedControls["health.mode"]
                 tap(healthMode.buttons.element(boundBy: 1))
@@ -83,6 +84,7 @@ final class NavigationReliabilityTests: XCTestCase {
                 exerciseSearch("health.search")
 
                 navigate(to: "notes")
+                assertDestinationMenuWorks()
                 exerciseSearch("notes.search")
                 tap(app.buttons["notes.tab.list"])
                 waitFor(app.buttons["notes.tab.list"], key: "isSelected", value: true)
@@ -94,6 +96,7 @@ final class NavigationReliabilityTests: XCTestCase {
                 exerciseSearch("notes.search")
 
                 navigate(to: "softwareFactory")
+                assertDestinationMenuWorks()
                 exerciseSearch("factory.search")
                 tap(app.buttons["factory.segment.releases"])
                 waitFor(app.buttons["factory.segment.releases"], key: "isSelected", value: true)
@@ -166,6 +169,13 @@ final class NavigationReliabilityTests: XCTestCase {
     private func navigate(to destination: String) {
         openByEdge()
         tap(app.buttons["navigation.\(destination)"])
+        waitFor(app.buttons["navigation.chat"], key: "exists", value: false)
+    }
+
+    private func assertDestinationMenuWorks() {
+        tap(app.buttons["navigation.openSidebar"])
+        waitFor(app.buttons["navigation.chat"], key: "isHittable", value: true)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.4)).tap()
         waitFor(app.buttons["navigation.chat"], key: "exists", value: false)
     }
 

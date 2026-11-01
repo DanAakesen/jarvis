@@ -1429,6 +1429,9 @@ Round-three fixture controls sit inside and outside the gate input boundary to
 compare launch-wide interaction against gated content. Root probes include bounded
 native presented-controller/window metadata; AX full-screen frames alone do not
 establish stacking or interception. Production gates and composition are unchanged.
+Chat's real toolbar launcher and Notes/Health/Factory header launchers receive
+ContentView's `setSidebarOpen(true)` callback. Standalone area previews omit the
+header launcher when no callback is supplied; the edge gesture remains available.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes

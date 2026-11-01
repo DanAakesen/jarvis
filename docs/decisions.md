@@ -9934,6 +9934,18 @@ recognition must not block screen controls or the sidebar's navigation buttons.
 
 ## 1 November 2026 — P15-41 sidebar input recovery (#1484)
 
+The missing-button hypothesis describes main, not this PR: 8488515 added Chat's
+real toolbar Button; G CI logs report its existence and executed open writes.
+Available `git log -S` main history has no Chat launcher removal. Add matching
+no-fill, localized 44-point launchers to Notes/Health/Factory custom headers,
+passing the same committed open callback; this gap is not the demonstrated
+first-Chat-tap stale-render failure. Reuse SwiftUI Button and the existing plain
+toolbar style. [Apple Button](https://developer.apple.com/documentation/swiftui/button)
+and [HIG Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)
+are the applicable platform references; direct Apple fetch fails DNS here,
+so native/browser verification remains unavailable locally. No custom gesture
+replacement or new fill is introduced.
+
 Round-three diagnostic scope (owner-authorized): temporarily filter the initial
 scheme test to NavigationBisectTests and restore it before final delivery.
 Run 41327428995's G Danish/English histories include menu writes false→true while

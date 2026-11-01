@@ -414,7 +414,8 @@ struct ContentView: View {
                                 JarvisNotesArea(
                                     client: notesClient,
                                     language: language,
-                                    onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) }
+                                    onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) },
+                                    onOpenSidebar: { setSidebarOpen(true) }
                                 )
                             } else if destination == .health {
                                 JarvisHealthArea(
@@ -424,7 +425,8 @@ struct ContentView: View {
                                     onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
                                     now: fixtureMode ? JarvisHealthPreview.now : Date(),
                                     workoutInitiallySelected: healthScreenshotState != nil,
-                                    presentNewLiftAfterLoading: healthScreenshotState == "newlift"
+                                    presentNewLiftAfterLoading: healthScreenshotState == "newlift",
+                                    onOpenSidebar: { setSidebarOpen(true) }
                                 )
                             } else if destination == .softwareFactory {
                                 JarvisFactoryArea(
@@ -437,7 +439,8 @@ struct ContentView: View {
                                         )
                                     },
                                     previewState: factoryScreenshot?.state,
-                                    liveUpdatesEnabled: !factoryFixtureMode
+                                    liveUpdatesEnabled: !factoryFixtureMode,
+                                    onOpenSidebar: { setSidebarOpen(true) }
                                 )
                             } else if destination == .settings {
                                 JarvisSettingsArea(
