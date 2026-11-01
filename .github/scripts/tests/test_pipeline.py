@@ -645,6 +645,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("chat-plus-menu-light.png", source)
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
+        self.assertIn("sidebar-open-dark.png", source)
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
