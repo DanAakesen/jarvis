@@ -415,7 +415,9 @@ struct JarvisChatScreen: View {
 
     private var composer: some View {
         VStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
-            nowBar
+            if model.shouldShowNowBar {
+                nowBar
+            }
             if isScreenSharing {
                 Label(copy(.screenSharingActive), systemImage: "dot.radiowaves.left.and.right")
                     .font(.footnote)
@@ -626,6 +628,7 @@ struct JarvisChatScreen: View {
             .contentShape(Rectangle())
         }
         .disabled(model.fixtureMode || model.isSending || isPreparingCamera)
+        .tint(JarvisDesignTokens.secondaryAccent)
         .accessibilityLabel(copy(.voiceLanguage))
         .accessibilityValue(copy(model.voiceLanguage == .da ? .danish : .english))
         .accessibilityHint(

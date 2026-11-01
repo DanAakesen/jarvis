@@ -6401,6 +6401,15 @@ has no open-sheet baseline; its light Chat capture is obscured by the gate.
 Usable before/after simulator comparison remains pending; do not treat that
 capture as visual acceptance.
 
+P15-43 keeps the Chat Voice language control on the stone secondary accent and
+insets the plus-menu content by 16 points. Empty Background activity retains the
+no-activity icon and text without empty category or Away-off rows; the composer
+Now bar is omitted until a turn or feed activity exists. The same Simulator boot
+captures `background-activity-empty-{light,dark}.png` and
+`background-activity-active-{light,dark}.png` in the existing artifact using
+`--screenshot-activity-state=empty|active`. These synthetic captures do not
+replace physical-iPhone visual acceptance.
+
 P15-13 replaces the blank root with the navigation shell. `JarvisNavigationState`
 and `JarvisDestination` in `JarvisCore` own the route stack and sidebar state;
 SwiftUI binds them to a native `NavigationStack`. Chat is the root screen; Voice

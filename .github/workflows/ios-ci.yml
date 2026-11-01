@@ -213,6 +213,13 @@ jobs:
               --screenshot-chat-fixture --screenshot-notifications-open
             sleep 2
             xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
+            for state in empty active; do
+              xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                --screenshot-chat-fixture "--screenshot-activity-state=$state"
+              sleep 2
+              xcrun simctl io "$DEVICE_ID" screenshot \
+                "$SCREENSHOT_DIR/background-activity-${state}-${appearance}.png"
+            done
             for language in da en; do
               for state in track newlift empty; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
@@ -342,7 +349,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
+          [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, empty/active Background activity, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.

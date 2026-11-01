@@ -238,6 +238,9 @@ applies to the next Chat session. The existing web contract allows documents up
 to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
 marked and used only in previews and CI screenshots. Native Entra sign-in remains
 a separate concern; no fake conversation or successful live sign-in is implied.
+The activity sheet keeps the no-activity icon and text without empty category rows.
+The composer Now bar appears only while a turn is sending or the feed contains
+background activity.
 
 The notifications toolbar button and its sheet's Done button use one shared
 system-style surface, without stacked button fills or strokes (P15-29 / #1459).
