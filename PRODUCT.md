@@ -54,7 +54,9 @@ TestFlight keychain/Entra configuration require separate verification.
 
 The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
-without ending the session. Language follows the existing `voice.default_language`
+without ending the session. Ending voice, including from the minimized bar, returns
+to Chat with a cleared navigation stack and a usable sidebar.
+Language follows the existing `voice.default_language`
 setting, defaulting to Danish. Microphone capture and speaker playback use the
 existing voice socket contract; speaking over playback interrupts it immediately.
 Camera inspection and screen sharing reuse the web app's existing vision and
@@ -161,8 +163,10 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
 P15-38 / #1478 applies Chat's approved ambient background to every native
-screen and app-owned sheet: one light/dark definition, the same glow positions
-and subdued orb, with glass content surfaces above it. Voice and sign-in/lock
+screen and app-owned sheet: one light/dark definition and the same glow positions,
+with glass content surfaces above it. The 1 November reconciliation reuses main's
+`JarvisScreenBackground` (also used by `JarvisGateAmbientBackground`), without
+adding another renderer or decorative orb. Voice and sign-in/lock
 keep their foreground orb over the shared ambient base. This changes no routes,
 notification delivery support or screen functionality.
 
@@ -173,12 +177,15 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
-The composer offers Chat and Voice navigation; voice capture remains out of
-scope. Photos and camera captures remain on-device until send. The existing web
-contract allows documents up to 20 MB and images up to 10 MB per attachment.
-Synthetic fixtures are clearly marked and used only in previews and CI
-screenshots. Native Entra sign-in and ReplayKit broadcast support are separate
-follow-ups; no fake conversation or successful live sign-in is implied.
+The composer offers Chat and Voice navigation and a plus menu anchored above its
+trigger. The menu includes Camera, Attach, Enable video, Share screen and Voice
+language. Camera uses an in-app viewfinder and still-photo capture; video and
+ReplayKit screen sharing keep frames local until a Chat turn sends them as image
+attachments. Voice language reads and saves the existing shared setting and
+applies to the next Chat session. The existing web contract allows documents up
+to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
+marked and used only in previews and CI screenshots. Native Entra sign-in remains
+a separate concern; no fake conversation or successful live sign-in is implied.
 ## Whole-number meal estimate lists (#1327; 26 October 2026)
 
 Display kcal and all nutrient grams rounded to whole numbers in one canonical

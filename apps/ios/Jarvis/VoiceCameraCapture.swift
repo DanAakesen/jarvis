@@ -6,14 +6,16 @@ import Foundation
 import ImageIO
 import QuartzCore
 
-final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
 
     private let queue = DispatchQueue(label: "com.danaakesen.jarvis.voice-camera")
     private let context = CIContext()
     private let output = AVCaptureVideoDataOutput()
+    private let stillPhotoOutput = AVCapturePhotoOutput()
     private let lock = NSLock()
     private var latestJPEG: Data?
+    private var photoContinuation: CheckedContinuation<Data, any Error>?
     private var lastCapturedAt: CFTimeInterval = 0
 
     static func requestAccess() async -> Bool {
@@ -45,7 +47,9 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                     throw VoiceCameraError.unavailable
                 }
                 let input = try AVCaptureDeviceInput(device: device)
-                guard session.canAddInput(input), session.canAddOutput(output) else {
+                guard session.canAddInput(input),
+                      session.canAddOutput(output),
+                      session.canAddOutput(stillPhotoOutput) else {
                     throw VoiceCameraError.unavailable
                 }
                 session.addInput(input)
@@ -55,6 +59,7 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
                 output.alwaysDiscardsLateVideoFrames = true
                 output.setSampleBufferDelegate(self, queue: queue)
                 session.addOutput(output)
+                session.addOutput(stillPhotoOutput)
                 session.commitConfiguration()
                 session.startRunning()
             } catch {
@@ -73,7 +78,10 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
             session.outputs.forEach { session.removeOutput($0) }
             self.lock.lock()
             self.latestJPEG = nil
+            let continuation = self.photoContinuation
+            self.photoContinuation = nil
             self.lock.unlock()
+            continuation?.resume(throwing: CancellationError())
         }
     }
 
@@ -85,6 +93,48 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
 
     func capturePhoto() -> Data? {
         latestFrame()
+    }
+
+    func captureStillPhoto() async throws -> Data {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                guard self.session.isRunning else {
+                    continuation.resume(throwing: VoiceCameraError.unavailable)
+                    return
+                }
+                self.lock.lock()
+                guard self.photoContinuation == nil else {
+                    self.lock.unlock()
+                    continuation.resume(throwing: VoiceCameraError.unavailable)
+                    return
+                }
+                self.photoContinuation = continuation
+                self.lock.unlock()
+                self.stillPhotoOutput.capturePhoto(
+                    with: AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg]),
+                    delegate: self
+                )
+            }
+        }
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishProcessingPhoto photo: AVCapturePhoto,
+        error: (any Error)?
+    ) {
+        lock.lock()
+        let continuation = photoContinuation
+        photoContinuation = nil
+        lock.unlock()
+        guard let continuation else { return }
+        if let error {
+            continuation.resume(throwing: error)
+        } else if let data = photo.fileDataRepresentation() {
+            continuation.resume(returning: data)
+        } else {
+            continuation.resume(throwing: VoiceCameraError.unavailable)
+        }
     }
 
     func captureOutput(

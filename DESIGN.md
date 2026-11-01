@@ -2771,10 +2771,11 @@ one at 700px and narrower.
 ## Native iOS colour and Chat look (owner decision, 31 October 2026)
 
 P15-38 / #1478 makes the approved Chat backdrop shared across native screens
-and app-owned sheets. `JarvisAmbientBackground` in `JarvisDesignSystem.swift`
-owns the board's four elliptical glows, light/dark base colours and subdued
-background orb. Voice and gates omit the decorative orb because they already
-have a foreground orb. Shared forms/lists use glass rows, with the board's solid
+and app-owned sheets. The 1 November reconciliation reuses main's
+`JarvisScreenBackground` in `JarvisDesignSystem.swift`, which already supplies
+the gate's `JarvisGateAmbientBackground` wrapper, instead of the earlier competing
+renderer and decorative orb. Keep main's glow rendering and foreground orbs.
+Shared forms/lists use glass rows, with the board's solid
 surface fallback for Reduce Transparency; the sidebar is glass over the
 full-screen shell backdrop. Geometry and colours live only in the design system.
 Native screenshot comparison and owner acceptance remain pending the ready-PR
@@ -2788,6 +2789,10 @@ earlier cyan, so screens use only the token. The orb is unchanged: the real web 
 a cyan rim and an orange and amber glowing tangled centre, with no orbit
 ellipses or tilted circles. This describes the native iPhone app and published
 concept pages; the web app has a separate palette decision below.
+Native screen roots and Sign-in use the shared `JarvisScreenBackground` and
+`JarvisDesignTokens` in `apps/ios/Jarvis/JarvisDesignSystem.swift` for the
+approved light/dark page fills and four ambient colour fields. The sidebar keeps
+the same page fill without the ambient fields.
 
 The web app uses orange as its primary interaction accent and stone as its
 quiet secondary accent. Dark mode uses `#ffb45c` with `#1d1200` text on primary
@@ -2797,9 +2802,10 @@ states; per-user `--theme-accent` overrides remain supported.
 
 No solid orange fills are used anywhere, because large orange areas are too
 harsh on the eyes. Orange appears as small accents, tints and strokes. In Chat
-only the user bubble has a background, a soft orange-tinted glass pill. Jarvis
-replies, tool rows and status lines such as Writing it up are unboxed plain
-text. Phone screens carry no explainer, helper or hint text.
+only the user bubble has a background, a soft orange-tinted glass pill with a
+16% accent tint. Jarvis replies, tool rows and status lines such as Writing it
+up are unboxed plain text. Phone screens carry no explainer, helper or hint
+text.
 
 All concept board screens are approved. The five surfaces on
 `docs/ios/design/surfaces.html` marked To agree (the Lock Screen hands-free
@@ -2835,11 +2841,15 @@ During screen sharing, a full-width status bar with Stop stays above the control
 the camera tile remains draggable in the thumb zone.
 
 Use system glass buttons, SF Symbols, semantic colours, type styles, permission
-prompts, sheets and the ReplayKit picker. The custom orb and camera tile are
-needed for the approved voice-focused layout and live camera preview; their
-dimensions, state colours and motion values come from the shared iOS token layer.
+prompts, sheets and the ReplayKit picker. Voice reuses the shared Jarvis orb, with
+state-driven motion and muted/offline treatments. Live captions use a labeled
+glass surface with a dismiss action; the CC control restores a hidden caption
+surface. Orb and caption geometry and motion values come from the shared iOS token
+layer. The camera tile remains custom for its live preview.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
+Ending voice returns to Chat and closes the sidebar through the existing
+progress reset, removing its dimmed, touch-blocking overlay.
 Reduced Motion removes orb/minimization movement, and VoiceOver uses status and
 control labels. The board remains a visual reference only; the rendered app and
 physical-device behavior require separate verification.
@@ -2854,6 +2864,8 @@ opposite alignment and a 24-hour timestamp at each sender/minute group. Only the
 user message has a background, a soft orange-tinted glass pill (see the colour
 and Chat look section above); Jarvis replies and tool rows are unboxed text. The activity sheet reuses the web feed's activity
 categories and shows away mode separately from its persisted activity items.
+A genuinely empty history leaves the transcript clear beside the pinned composer;
+the app does not add a generic empty panel or invent sample messages.
 
 Use SwiftUI's native `ScrollView`, text field, file and photo pickers, sheets,
 system button styles, SF Symbols and semantic type/color. `JarvisDesignTokens`
@@ -2867,9 +2879,16 @@ confirmation decisions. Reduced Motion removes the message-arrival animation;
 system glass materials and opaque system-color fallbacks preserve readability
 when transparency is reduced.
 
-The composer Chat/Voice switch navigates to the native Voice screen. In Chat,
-Share screen stays visibly disabled with an accessibility explanation; screen
-sharing belongs to the Voice screen's broadcast flow.
+The composer Chat/Voice switch navigates to the native Voice screen. The plus
+button opens a native popover above its own hit target with Camera, Attach,
+Enable video, Share screen and Voice language, in the board's bottom-up order.
+The menu reuses the shared glass and geometry tokens and the JarvisCore Danish
+and English Chat catalog. Camera opens a SwiftUI in-app viewfinder with
+AVCapturePhotoOutput; video shows the existing AVCaptureSession preview. ReplayKit
+uses the existing broadcast picker and extension. Camera, video and screen frames
+remain local until a Chat turn includes the image attachment. Voice language
+reads and updates the existing `voice.defaultLanguage` setting and applies to
+the next Chat session; it does not change an active Voice session.
 Synthetic preview and screenshot mode allows one fixture text turn; attachment
 uploads and activity writes are disabled with accessibility explanations, never
 simulated as successful backend actions.

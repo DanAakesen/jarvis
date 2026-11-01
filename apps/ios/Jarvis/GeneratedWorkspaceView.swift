@@ -49,7 +49,7 @@ struct GeneratedWorkspaceSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .presentationBackground { JarvisAmbientBackground() }
+        .presentationBackground { JarvisScreenBackground() }
         .environment(\.locale, language.locale)
     }
 
@@ -735,7 +735,8 @@ private struct GeneratedActionControl: View {
     var body: some View {
         if let title = title, runtime.canPerform(action) {
             Button(title, systemImage: symbol) { onAction(action) }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .foregroundStyle(JarvisDesignTokens.primaryAccent)
                 .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
         } else {
             Label(title ?? text(.actionUnavailable), systemImage: "xmark.circle")

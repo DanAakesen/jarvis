@@ -3451,6 +3451,14 @@ but cannot build the Swift database on Linux. The hosted title gate requires
 `[WIP] P15-38: Move ambient background to design system for consistency`;
 set that canonical title and mark the PR ready to obtain native CI evidence.
 
+1 November review reconciliation: merge current main, reuse its existing
+`JarvisScreenBackground`/gate wrapper rather than the earlier ambient renderer
+and decorative orb, and preserve main's Chat plus menu and current
+Chat/Sidebar/Voice behaviour. Both screenshot sets, the plus-menu capture,
+comparison/upload steps and documentation entries are retained.
+Next: validate and push the merge, then inspect fresh iOS CI and light/dark
+simulator artifacts; earlier green checks are not evidence for the merged head.
+
 P15-24 / [#1447](https://github.com/DanAakesen/jarvis/issues/1447) corrects the
 normal-window-only selection that hid Microsoft authentication beneath the gate.
 The highest eligible visible foreground-active window now hosts sign-in; the
@@ -3459,6 +3467,14 @@ All 18 focused Core presentation/gate tests pass locally, including timeout and
 cancel recovery; `swift build` and all 163 Core tests also pass. Mac compile and
 real-device sheet visibility, successful unlock
 and usable cancellation remain to verify; no TestFlight upload is authorized here.
+
+P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) retains the
+working automatic signing and existing secrets; the rejected manual P12/profile
+approach is removed. An always-run main-only API cleanup revokes only visible
+Apple/iOS development certificates, never distribution certificates. Focused
+offline tests pass. Next: verify the existing key's certificate API permissions
+and live cleanup on an owner-started run. Draft status was requested until then;
+the available browser is signed out, so owner draft conversion remains pending.
 
 ## Factory canonical-status parity (16 October 2026)
 
@@ -3474,3 +3490,11 @@ claimed work, review-ready PRs, task states and other columns. Next: exact-head
 CI, independent PM review and normal gated integration, followed by PM-owned
 rendered acceptance. #811 remains open; this is not historical 502 attribution,
 sustained performance acceptance or permission to resume #717/#741.
+## Native voice end returns to Chat (P15-28 / #1458; 31 October 2026)
+
+- Implemented shell observation of `.ended`, returning fullscreen and minimized
+  voice sessions to the Chat root and resetting sidebar progress.
+- Focused Linux navigation regressions pass: cleared stack, usable sidebar and
+  unchanged navigation for non-ended voice states.
+- Apple-target compilation and real-device End voice/sidebar interaction remain
+  unverified; no deployment or device acceptance is claimed.

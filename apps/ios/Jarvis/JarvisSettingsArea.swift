@@ -282,7 +282,7 @@ struct JarvisSettingsArea: View {
             Text(message(for: loadError ?? .offline))
                 .foregroundStyle(.secondary)
             Button(copy(.retry)) { Task { await reload() } }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

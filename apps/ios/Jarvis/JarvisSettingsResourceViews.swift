@@ -871,7 +871,7 @@ struct JarvisCredentialsSettingsView: View {
                         Button(renewing == credential.name ? copy(.saving) : copy(.renew)) {
                             Task { await renew(credential.name) }
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                         .disabled(readOnly || renewing != nil)
                     }
                 }
