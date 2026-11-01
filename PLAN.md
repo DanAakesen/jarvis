@@ -4,12 +4,14 @@ Implemented shared staging guidance, bounded hosted calendar-offer repair and
 calendar tap approval through the existing feed and single-use action. Focused
 regressions cover propose → yes/ja, direct instructions, older pending proposals,
 failed staging, expiry/replacement, tap replay and owner/agent authorization.
-Local checks passed: 1,234 agent tests, 565 focused backend tests, 33 web tests,
+Local checks passed: 1,234 agent tests, 2,888 expanded backend tests, 33 web tests,
 and 200 native Core tests (an unrelated voice timing failure passed on rerun).
 Affected lint/build checks, synthetic local HTTP approval and secret scanning
-passed; read-only review found no remaining significant issues. Expanded backend
-qualification and CodeQL remain in progress. Live model and native device
-acceptance remain unverified; no deployment is included.
+passed; read-only review found no remaining significant issues. Post-CodeQL
+approval checks passed (105 tests). Python CodeQL found no alerts; JavaScript
+analysis was skipped for database size and Swift database creation failed.
+Implementation and local qualification are complete. Live model and native
+device acceptance remain unverified; no deployment is included.
 
 ## Managed policy failure causes (#1373; 30 October 2026)
 
