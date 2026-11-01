@@ -1499,7 +1499,10 @@ screen-scoped loading, streaming, cursor paging, attachment drafts, cancellation
 reattachment and the persisted voice-language selection. The shared
 `JarvisChatClient` remains responsible for the existing conversation routes and
 SSE contract. The screen refreshes final history after a turn so persisted
-`toolCalls` and attachments replace the streaming presentation.
+`toolCalls` and attachments replace the streaming presentation. Jarvis reply
+strings are parsed as Markdown in SwiftUI; tool rows are unboxed and bounded to
+the assistant column. User text remains plain text and keeps the only message
+surface.
 `ActiveChatTurnSelection` prefers the active turn for the latest displayed
 session and falls back to the first server-ordered turn. `ChatHistoryPagingState`
 preserves the cursor for older loaded pages when a turn refreshes the latest
@@ -1661,8 +1664,7 @@ delivery and lifecycle pushes, none of which this local implementation adds.
 payload models for every renderer, with typed actions and source metadata.
 Validation reports field paths and mirrors the web runtime guards, including
 chart/action limits and the 512 KiB stored HTML artifact bound. Unknown
-renderers and unsupported versions retain their raw JSON; HTML remains
-data-only and no screen or backend path is added. A Linux parity test reads
+renderers and unsupported versions retain their raw JSON. A Linux parity test reads
 `packages/contracts/src/index.js` directly rather than adding exports to the
 contracts package. Decoding can receive the optional trusted Blob host and tool
 registry through `GeneratedViewDecodingContext` in `JSONDecoder.userInfo`. The
@@ -1681,9 +1683,17 @@ event deadline. Unsupported commands are acknowledged as refused with a short
 reason; there is no iOS-specific backend path.
 
 Native renderers cover table, list, detail, text, timeline, chart, task-card,
-status and image; the chart renderer uses the iOS Charts framework with no
-third-party dependency. The undecided HTML-app, knowledge-graph and code types
-and unknown versions render as unsupported cards; supplied HTML is never executed.
+status, image and HTML-app; the chart renderer uses the iOS Charts framework with
+no third-party dependency. HTML-app artifacts use the existing authenticated
+`GET /factory/workspace-artifacts/html/:artifactId` route and are validated as
+`HtmlArtifact` before loading. `GeneratedHTMLAppView` uses a nonpersistent WKWebView,
+injects a CSP that blocks fetch/XHR connections, forms, frames and external scripts
+(HTTPS images are allowed), blocks non-`about:` navigation, and installs no
+script-message handler or file scheme. Scripts therefore have no native app
+bridge or app data access. The web
+`window.jarvis` actions are not implemented on iOS, so in-app ask/pin/link actions
+remain unavailable. Knowledge-graph, code and unknown-version views remain
+unsupported cards.
 The optional `JARVIS_WEB_APP_URL` is restricted to an HTTPS origin and only
 opens the web-app root because the contract has no item deep link. The app uses
 an existing Keychain session when configured; native sign-in remains a separate
