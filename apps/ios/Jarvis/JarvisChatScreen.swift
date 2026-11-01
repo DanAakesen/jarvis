@@ -207,6 +207,7 @@ struct JarvisChatScreen: View {
                     .jarvisToolbarButtonStyle()
                     .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: appLanguage))
                     .accessibilityIdentifier("navigation.openSidebar")
+                    .modifier(NavigationBisectMenuValue())
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -319,7 +320,7 @@ struct JarvisChatScreen: View {
         attachmentPickers
         .jarvisAmbientBackground()
         .onChange(of: composerMode) { _, mode in
-            guard mode == .voice else { return }
+            guard NavigationBisectVariant.current != .K, mode == .voice else { return }
             composerMode = .chat
             onNavigate(.voice)
         }
@@ -680,7 +681,8 @@ struct JarvisChatScreen: View {
                     .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
 #if targetEnvironment(simulator)
                     .background {
-                        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
+                        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation"),
+                           NavigationBisectVariant.current != .I {
                             JarvisInputHitTestingProbe()
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)

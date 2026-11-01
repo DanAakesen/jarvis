@@ -10072,6 +10072,14 @@ the production gates and strict regression tests. A passing variant is isolation
 evidence, not sufficient device acceptance; remove variants after confirming
 the culprit and retaining the fix.
 
+Round-one A–F probes remain closed, with root input available. The closed
+drawer's `sidebarDisabled` describes its expected hit-testing gate, not the
+toolbar button's enabled state. Round two separately reports launcher enablement
+and bounded tagged navigation writes, then isolates decoration, the legacy input
+probe/gate modifier and navigation effects. Independent J launches compare
+element versus coordinate taps; neither establishes VoiceOver activation.
+Native winning-variant selection and cleanup remain pending.
+
 ## 31 October 2026 — Notification toolbar surfaces (P15-29 / #1459)
 
 Done and the notification launcher share `jarvisToolbarButtonStyle()` in

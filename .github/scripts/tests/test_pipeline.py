@@ -686,6 +686,12 @@ class SafeFailureTests(unittest.TestCase):
         source = (ROOT / "apps/ios/JarvisUITests/NavigationBisectTests.swift").read_text()
         for variant in "ABCDEF":
             self.assertEqual(source.count(f'exercise("{variant}", language:'), 2)
+        for variant in "GHIK":
+            self.assertEqual(source.count(f'exercise("{variant}", language:'), 2)
+        self.assertEqual(source.count('exercise("J", language:'), 4)
+        for required in ("[0.0, 0.5, 2.0]", "navigation.bisectWrites",
+                         "launcher.isEnabled=", "launcher.tap()", "observed="):
+            self.assertIn(required, source)
         for required in ("--ui-test-navigation", "--ui-test-navigation-variant=",
                          "navigation.openSidebar", "navigation.chat", "navigation.bisectState",
                          "navigation.bisectRoot", "NAVIGATION BISECT", "isHittable == true",
@@ -750,7 +756,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("value.predictedEndTranslation.width", ended)
         self.assertIn(".id(gestureGeneration)", source)
         binding_setter = source.split("get: { navigation.path },", 1)[1].split(
-            "navigation.closeSidebar()", 1
+            'mutateNavigation("pathBinding.closeSidebar")', 1
         )[0]
         self.assertIn("guard $0 != navigation.path else { return }", binding_setter)
 
@@ -784,8 +790,34 @@ class SafeFailureTests(unittest.TestCase):
         )[1]
         self.assertIn("if currentNavigation.isSidebarOpen, navigationBisectVariant != .C {", tap_catcher)
         self.assertNotIn("progress", tap_catcher)
-        self.assertRegex(source, r"withAnimation\(sidebarAnimation\) \{\s+navigation\.setSidebarOpen\(open\)")
-        self.assertIn("if navigationBisectVariant == .D {\n            navigation.setSidebarOpen(open)", source)
+        self.assertRegex(source, r"withAnimation\(sidebarAnimation\) \{\s+mutateNavigation\(caller\) \{ \$0\.setSidebarOpen\(open\) \}")
+        self.assertIn("if navigationBisectVariant == .D {\n            mutateNavigation(caller) { $0.setSidebarOpen(open) }", source)
+        mutation = source.split("    private func mutateNavigation(", 1)[1].split(
+            "    private func setSidebarOpen(", 1
+        )[0]
+        self.assertLess(mutation.index("let before = navigation.isSidebarOpen"),
+                        mutation.index("mutation(&navigation)"))
+        self.assertLess(mutation.index("mutation(&navigation)"),
+                        mutation.index("navigationWrites.record(tag, before: before, after: navigation.isSidebarOpen)"))
+        for required in ("case A, B, C, D, E, F, G, H, I, J, K",
+                         "#if DEBUG && targetEnvironment(simulator)",
+                         '@StateObject private var navigationWrites: NavigationBisectWrites',
+                         'NavigationBisectProbe(identifier: "navigation.bisectWrites")',
+                         "entries.count > 32", "before=\\(before):after=\\(after)",
+                         'mutateNavigation("pathBinding.setPath")',
+                         'mutateNavigation("pathBinding.closeSidebar")',
+                         '"voiceEnded.stateChanged"', '"voiceEnded.closeSidebar"',
+                         'stage: "prewrite"', 'stage: String = "postwrite"',
+                         'caller: "scenePhase"', 'caller: "accessibility.openSidebar"',
+                         "guard navigationBisectVariant != .K else { return }",
+                         "named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))"):
+            self.assertIn(required, source)
+        for path in ("JarvisDesignSystem.swift", "JarvisOrbView.swift"):
+            decorative = (ROOT / "apps/ios/Jarvis" / path).read_text()
+            self.assertIn("if NavigationBisectVariant.current == .H {", decorative)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn("NavigationBisectVariant.current != .I", chat)
+        self.assertIn("guard NavigationBisectVariant.current != .K, mode == .voice", chat)
         plain_layout = body.split("if navigationBisectVariant == .E {", 1)[1].split(
             "} else {", 1
         )[0]

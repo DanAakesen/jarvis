@@ -19,9 +19,21 @@ final class NavigationBisectTests: XCTestCase {
     func testE_PlainLayoutEnglish() { exercise("E", language: "en") }
     func testF_OutsideToolbarDanish() { exercise("F", language: "da") }
     func testF_OutsideToolbarEnglish() { exercise("F", language: "en") }
+    func testG_WriteHistoryDanish() { exercise("G", language: "da") }
+    func testG_WriteHistoryEnglish() { exercise("G", language: "en") }
+    func testH_NoAmbientDanish() { exercise("H", language: "da") }
+    func testH_NoAmbientEnglish() { exercise("H", language: "en") }
+    func testI_NoInputProbeDanish() { exercise("I", language: "da") }
+    func testI_NoInputProbeEnglish() { exercise("I", language: "en") }
+    func testJ_CenterCoordinateDanish() { exercise("J", language: "da") }
+    func testJ_CenterCoordinateEnglish() { exercise("J", language: "en") }
+    func testJ_ElementTapDanish() { exercise("J", language: "da", elementTap: true) }
+    func testJ_ElementTapEnglish() { exercise("J", language: "en", elementTap: true) }
+    func testK_NoNavigationEffectsDanish() { exercise("K", language: "da") }
+    func testK_NoNavigationEffectsEnglish() { exercise("K", language: "en") }
 
     private func exercise(
-        _ variant: String, language: String,
+        _ variant: String, language: String, elementTap: Bool = false,
         file: StaticString = #filePath, line: UInt = #line
     ) {
         app.launchArguments = [
@@ -54,7 +66,24 @@ final class NavigationBisectTests: XCTestCase {
                  file: file, line: line)
             return
         }
-        launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let method = elementTap ? "element.tap" : "center-coordinate.tap"
+        print("NAVIGATION BISECT \(variant) \(language): method=\(method)")
+        if elementTap {
+            launcher.tap()
+        } else {
+            launcher.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        }
+        if "GHIJK".contains(variant) {
+            let started = ProcessInfo.processInfo.systemUptime
+            for requested in [0.0, 0.5, 2.0] {
+                let remaining = requested - (ProcessInfo.processInfo.systemUptime - started)
+                if remaining > 0 { Thread.sleep(forTimeInterval: remaining) }
+                let sampledState = state
+                let elapsed = ProcessInfo.processInfo.systemUptime - started
+                print("NAVIGATION BISECT \(variant) \(language) method=\(method) "
+                      + "requested=\(requested)s observed=\(elapsed)s: \(sampledState)")
+            }
+        }
 
         result = "FAIL: sidebar"
         let chat = app.buttons["navigation.chat"]
@@ -73,10 +102,14 @@ final class NavigationBisectTests: XCTestCase {
     }
 
     private var state: String {
-        ["navigation.bisectState", "navigation.bisectRoot"].map { identifier in
+        let probes = ["navigation.bisectState", "navigation.bisectRoot", "navigation.bisectWrites"].map { identifier in
             let probe = app.descendants(matching: .any)[identifier].firstMatch
             return "\(identifier)=\(probe.exists ? String(describing: probe.value ?? "no value") : "unavailable")"
         }.joined(separator: "; ")
+        let launcher = app.buttons["navigation.openSidebar"]
+        return probes + "; launcher.exists=\(launcher.exists)"
+            + "; launcher.isEnabled=\(launcher.exists && launcher.isEnabled)"
+            + "; launcher.value=\(launcher.exists ? String(describing: launcher.value ?? "no value") : "unavailable")"
     }
 
     private func fail(_ message: String, file: StaticString, line: UInt) {

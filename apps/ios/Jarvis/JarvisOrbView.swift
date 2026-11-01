@@ -43,6 +43,14 @@ struct JarvisOrbView: View {
     }
 
     var body: some View {
+        if NavigationBisectVariant.current == .H {
+            Color.clear.accessibilityHidden(true)
+        } else {
+            orbBody
+        }
+    }
+
+    private var orbBody: some View {
         GeometryReader { geometry in
             if usesStaticFilaments {
                 sphere(size: geometry.size.width, phase: 0)

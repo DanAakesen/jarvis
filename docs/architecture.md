@@ -1418,6 +1418,11 @@ tests read noninteractive shell/gate accessibility values. Variant E substitutes
 key-window bounds for the shell GeometryReader, and F moves only the Chat menu
 launcher outside its toolbar. These are investigative variants, not a selected
 production change, and are removed after native isolation.
+Round-two G–K adds a bounded, independently observable write-history probe,
+ambient/orb and legacy-probe/gate-modifier isolation, tap-method comparison and
+navigation-effect isolation. Drawer input gating and launcher enablement are
+reported separately. Fixture switches cannot activate in device/release builds;
+authentication and privacy-cover windows remain active during the bisect.
 The opening recognizer lives on a right-edge strip, not the screen controls;
 the dimming layer never accepts input. Opening dismisses the keyboard, and
 leaving the active scene closes the drawer. The app scheme includes

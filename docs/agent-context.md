@@ -6255,6 +6255,12 @@ each variant in Danish and English in the full-scheme CI invocation, independent
 of the existing regression tests. Results print `NAVIGATION BISECT` and include
 noninteractive, visually transparent accessibility probes for shell and gate
 state. Remove the isolation switches after selecting and verifying the fix.
+Round two adds G–K: write history, no ambient decoration, no legacy input probe
+or gate hit-testing modifier, separate element/coordinate taps, and no
+navigation effects. `navigation.bisectWrites` contains only bounded caller tags
+and Boolean/path-state transitions. Timed snapshots report requested and actual
+elapsed times. `element.tap()` is a synthesized touch, not proof of VoiceOver
+accessibility activation. All isolation remains simulator-fixture-only.
 
 Before implementing any iOS change, read the relevant Apple API documentation
 and Human Interface Guidelines. Prefer the platform API, modifier, or component

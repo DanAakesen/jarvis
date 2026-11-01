@@ -305,6 +305,14 @@ struct JarvisScreenBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        if NavigationBisectVariant.current == .H {
+            Color.clear.accessibilityHidden(true)
+        } else {
+            ambientBody
+        }
+    }
+
+    private var ambientBody: some View {
         GeometryReader { geometry in
             let size = geometry.size
             ZStack {

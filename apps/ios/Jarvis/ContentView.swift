@@ -3,10 +3,10 @@ import SwiftUI
 import UIKit
 
 enum NavigationBisectVariant: String {
-    case A, B, C, D, E, F
+    case A, B, C, D, E, F, G, H, I, J, K
 
     static var current: Self? {
-#if targetEnvironment(simulator)
+#if DEBUG && targetEnvironment(simulator)
         let arguments = ProcessInfo.processInfo.arguments
         let prefix = "--ui-test-navigation-variant="
         guard arguments.contains("--ui-test-navigation"),
@@ -15,6 +15,52 @@ enum NavigationBisectVariant: String {
 #else
         return nil
 #endif
+    }
+}
+
+@MainActor
+private final class NavigationBisectWrites: ObservableObject {
+    @Published private(set) var entries: [String] = []
+    private var sequence = 0
+
+    func record(_ tag: String, before: Bool, after: Bool, stage: String = "postwrite") {
+        guard let variant = NavigationBisectVariant.current,
+              [.G, .H, .I, .J, .K].contains(variant) else { return }
+        sequence += 1
+        entries.append("\(sequence):\(stage):caller=\(tag):before=\(before):after=\(after)")
+        if entries.count > 32 { entries.removeFirst(entries.count - 32) }
+    }
+}
+
+private struct NavigationBisectWritesProbe: View {
+    @ObservedObject var writes: NavigationBisectWrites
+
+    var body: some View {
+        NavigationBisectProbe(identifier: "navigation.bisectWrites") { _ in
+            writes.entries.joined(separator: "|")
+        }
+    }
+}
+
+struct NavigationBisectMenuValue: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if NavigationBisectVariant.current != nil {
+            content.accessibilityValue("isEnabled=\(isEnabled);menuDisabled=\(!isEnabled)")
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    @ViewBuilder func navigationBisectGateHitTesting(_ enabled: Bool) -> some View {
+        if NavigationBisectVariant.current == .I {
+            self
+        } else {
+            allowsHitTesting(enabled)
+        }
     }
 }
 
@@ -118,6 +164,7 @@ struct ContentView: View {
     @GestureState private var sidebarDrag = SidebarDrag()
     @StateObject private var workspaceRuntime: WorkspaceRuntime
     @State private var navigation = JarvisNavigationState()
+    @StateObject private var navigationWrites: NavigationBisectWrites
     @StateObject private var voiceModel: VoiceScreenModel
     @State private var sidebarGestureGeneration = 0
     private let chatClient: JarvisClient?
@@ -181,30 +228,40 @@ struct ContentView: View {
             || healthFixtureMode
             || calendarChangeLanguage != nil
         var initialNavigation = JarvisNavigationState()
+        let writes = NavigationBisectWrites()
+        writes.record("init", before: false, after: initialNavigation.isSidebarOpen)
+        func mutateInitial(_ tag: String, _ mutation: (inout JarvisNavigationState) -> Void) {
+            let before = initialNavigation.isSidebarOpen
+            writes.record(tag, before: before, after: before, stage: "prewrite")
+            mutation(&initialNavigation)
+            writes.record(tag, before: before, after: initialNavigation.isSidebarOpen)
+        }
         if sidebarInitiallyOpen {
-            initialNavigation.openSidebar()
+            mutateInitial("init.openSidebar") { $0.openSidebar() }
         }
         if settingsPreview {
-            initialNavigation.navigate(to: .settings)
+            mutateInitial("init.settings") { $0.navigate(to: .settings) }
         }
         if voiceConnectionScreenshot {
-            initialNavigation.navigate(to: .voice)
+            mutateInitial("init.voiceConnection") { $0.navigate(to: .voice) }
         } else if fixtureMode,
                   let screen = arguments.first(where: { $0.hasPrefix("--screenshot-screen=") })?
             .split(separator: "=", maxSplits: 1).last,
                   let destination = ["voice": JarvisDestination.voice, "notes": .notes, "health": .health,
                                      "settings": .settings][String(screen)] {
-            initialNavigation.navigate(to: destination)
+            mutateInitial("init.destination") { $0.navigate(to: destination) }
         }
         if factoryScreenshot != nil {
-            initialNavigation.navigate(to: .softwareFactory)
+            mutateInitial("init.factory") { $0.navigate(to: .softwareFactory) }
         }
-        if healthFixtureMode && !navigationFixtureMode { initialNavigation.navigate(to: .health) }
+        if healthFixtureMode && !navigationFixtureMode {
+            mutateInitial("init.health") { $0.navigate(to: .health) }
+        }
         healthScreenshotState = healthState
         healthScreenshotLanguage = healthLanguage
 #if targetEnvironment(simulator)
         if arguments.contains("--screenshot-voice-fixture") {
-            initialNavigation.navigate(to: .voice)
+            mutateInitial("init.voiceFixture") { $0.navigate(to: .voice) }
         }
 #endif
         self.fixtureMode = fixtureMode
@@ -252,6 +309,7 @@ struct ContentView: View {
             )
         )
         _navigation = State(initialValue: initialNavigation)
+        _navigationWrites = StateObject(wrappedValue: writes)
         _notesClient = State(initialValue: Self.makeNotesClient(fixtureMode: fixtureMode))
         _healthClient = State(initialValue: healthFixtureMode
             ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
@@ -329,8 +387,9 @@ struct ContentView: View {
                         set: {
                             guard $0 != navigation.path else { return }
                             sidebarGestureGeneration += 1
-                            navigation.setPath($0)
-                            navigation.closeSidebar()
+                            let path = $0
+                            mutateNavigation("pathBinding.setPath") { $0.setPath(path) }
+                            mutateNavigation("pathBinding.closeSidebar") { $0.closeSidebar() }
                         }
                     )
                 ) {
@@ -413,11 +472,14 @@ struct ContentView: View {
                 .tint(JarvisDesignTokens.primaryAccent)
                 .task { await workspaceRuntime.run() }
                 .onChange(of: voiceModel.voiceState) { _, state in
-                    navigation.voiceSessionStateChanged(state)
-                    if state == .ended { setSidebarOpen(false) }
+                    guard navigationBisectVariant != .K else { return }
+                    mutateNavigation(state == .ended ? "voiceEnded.stateChanged" : "voiceStateChanged") {
+                        $0.voiceSessionStateChanged(state)
+                    }
+                    if state == .ended { setSidebarOpen(false, caller: "voiceEnded.closeSidebar") }
                 }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
-                    guard destination != nil,
+                    guard navigationBisectVariant != .K, destination != nil,
                           let destination = workspaceRuntime.consumeRequestedDestination() else {
                         return
                     }
@@ -448,6 +510,7 @@ struct ContentView: View {
                         .tint(JarvisDesignTokens.primaryAccent)
                         .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
                         .accessibilityIdentifier("navigation.openSidebar")
+                        .modifier(NavigationBisectMenuValue())
                         .padding(.leading, safeAreaInsets.leading + 16)
                         .padding(.top, safeAreaInsets.top)
                         .allowsHitTesting(!currentNavigation.isSidebarOpen)
@@ -455,12 +518,14 @@ struct ContentView: View {
                 }
                 .background { JarvisScreenBackground() }
                 .overlay {
-                    Color.black
+                    if navigationBisectVariant != .H {
+                      Color.black
                         .opacity(progress * JarvisDesignTokens.screenDimOpacity)
                         .accessibilityHidden(true)
                         .allowsHitTesting(false)
+                    }
                 }
-                .blur(radius: progress * JarvisDesignTokens.screenBlurRadius)
+                .blur(radius: navigationBisectVariant == .H ? 0 : progress * JarvisDesignTokens.screenBlurRadius)
                 .overlay {
                     if currentNavigation.isSidebarOpen, navigationBisectVariant != .C {
                         Color.clear
@@ -479,7 +544,7 @@ struct ContentView: View {
                 .accessibilityAction(
                     named: Text(JarvisNotesLocalization.string(.openSidebar, language: language))
                 ) {
-                    setSidebarOpen(true)
+                    setSidebarOpen(true, caller: "accessibility.openSidebar")
                 }
                 .accessibilityHidden(currentNavigation.isSidebarOpen)
 
@@ -513,6 +578,10 @@ struct ContentView: View {
                             + "sidebarDisabled=\(!currentNavigation.isSidebarOpen || !isEnabled);"
                             + "contentDisabled=\(currentNavigation.isSidebarOpen || !isEnabled)"
                     }
+                    if [.G, .H, .I, .J, .K].contains(variant) {
+                        NavigationBisectWritesProbe(writes: navigationWrites)
+                            .offset(y: 2)
+                    }
                 }
             }
             .background { JarvisScreenBackground() }
@@ -525,7 +594,8 @@ struct ContentView: View {
                 }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active { setSidebarOpen(false) }
+                guard navigationBisectVariant != .K else { return }
+                if phase != .active { setSidebarOpen(false, caller: "scenePhase") }
             }
     }
 
@@ -590,7 +660,7 @@ struct ContentView: View {
                                           drawerWidth: drawerWidth, startProgress: startProgress) else { return }
                 let projectedProgress = startProgress -
                     value.predictedEndTranslation.width / max(drawerWidth, 1)
-                setSidebarOpen(projectedProgress > JarvisDesignTokens.sidebarOpenThreshold)
+                setSidebarOpen(projectedProgress > JarvisDesignTokens.sidebarOpenThreshold, caller: "gesture.ended")
             }
     }
 
@@ -618,7 +688,14 @@ struct ContentView: View {
         )
     }
 
-    private func setSidebarOpen(_ open: Bool) {
+    private func mutateNavigation(_ tag: String, _ mutation: (inout JarvisNavigationState) -> Void) {
+        let before = navigation.isSidebarOpen
+        navigationWrites.record(tag, before: before, after: before, stage: "prewrite")
+        mutation(&navigation)
+        navigationWrites.record(tag, before: before, after: navigation.isSidebarOpen)
+    }
+
+    private func setSidebarOpen(_ open: Bool, caller: String = "menu.openSidebar") {
 #if targetEnvironment(simulator)
         if navigationFixtureMode {
             print("Jarvis navigation command: sidebar=\(navigation.isSidebarOpen) requested=\(open)")
@@ -631,10 +708,10 @@ struct ContentView: View {
             )
         }
         if navigationBisectVariant == .D {
-            navigation.setSidebarOpen(open)
+            mutateNavigation(caller) { $0.setSidebarOpen(open) }
         } else {
             withAnimation(sidebarAnimation) {
-                navigation.setSidebarOpen(open)
+                mutateNavigation(caller) { $0.setSidebarOpen(open) }
             }
         }
     }
@@ -658,16 +735,16 @@ struct ContentView: View {
             }
         }
         if navigationBisectVariant == .D {
-            navigation.navigate(to: destination)
+            mutateNavigation("navigate.\(destination.rawValue)") { $0.navigate(to: destination) }
         } else {
             withAnimation(sidebarAnimation) {
-                navigation.navigate(to: destination)
+                mutateNavigation("navigate.\(destination.rawValue)") { $0.navigate(to: destination) }
             }
         }
     }
 
     private func closeSidebar() {
-        setSidebarOpen(false)
+        setSidebarOpen(false, caller: "closeSidebar")
     }
 
     private static func makeNotesClient(fixtureMode: Bool) -> JarvisNotesClient? {
