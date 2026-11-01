@@ -10468,6 +10468,7 @@ non-navigating item is still unconfirmed.
 The navigation branch now runs its UI classes once in the screenshot step with 60/90 second per-test limits, and ChatComposerUITests is listed there. The camera-sheet test looped over two languages (about 30 seconds each) and would hit that limit, so it now covers English only; the Danish menu title is still matched by the other tests.
 
 
+
 ## 2026-11-01: Sidebar drawer above the page, clipped to the revealed strip (P15-41)
 
 CI run 41351802814 showed the drawer never became hittable after a menu tap and
