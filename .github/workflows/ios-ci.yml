@@ -151,6 +151,10 @@ jobs:
           xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/main-dark.png"
           for appearance in light dark; do
             xcrun simctl ui "$DEVICE_ID" appearance "$appearance"
+            xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+              --screenshot-chat-fixture --screenshot-notifications-open
+            sleep 2
+            xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/notifications-${appearance}.png"
             for language in da en; do
               for state in board needs releases detail release steer newtask empty loading error offline stale reconnecting search; do
                 xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
@@ -185,7 +189,7 @@ jobs:
           $marker
           ### iOS simulator screenshots
 
-          [Download the light, dark, Chat plus menu, sidebar, and Factory screenshots]($ARTIFACT_URL)
+          [Download the light, dark, Chat plus menu, sidebar, notifications, and Factory screenshots]($ARTIFACT_URL)
 
           Captured on $IOS_SIMULATOR_NAME. Screenshots are retained for 14 days.
           EOF
