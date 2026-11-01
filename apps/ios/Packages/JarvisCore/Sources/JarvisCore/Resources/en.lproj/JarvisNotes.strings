@@ -99,3 +99,8 @@
 "gate.signedOut" = "You are signed out";
 "gate.faceIDReason" = "Unlock Jarvis";
 "gate.faceIDLabel" = "Face ID";
+"voice.captionYou" = "You";
+"voice.captionJarvis" = "Jarvis";
+"voice.captionsLabel" = "Voice captions";
+"voice.hideCaptions" = "Hide captions";
+"voice.showCaptions" = "Show captions";

@@ -116,6 +116,11 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case gateSignedOut = "gate.signedOut"
     case gateFaceIDReason = "gate.faceIDReason"
     case gateFaceIDLabel = "gate.faceIDLabel"
+    case voiceCaptionYou = "voice.captionYou"
+    case voiceCaptionJarvis = "voice.captionJarvis"
+    case voiceCaptionsLabel = "voice.captionsLabel"
+    case voiceHideCaptions = "voice.hideCaptions"
+    case voiceShowCaptions = "voice.showCaptions"
 }
 
 public enum JarvisNotesLocalization {
