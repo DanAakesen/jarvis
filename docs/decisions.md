@@ -10613,3 +10613,8 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 ## 2026-11-02 — P15-55: sidebar rows centred as one block
 
 - The navigation rows are one block centred vertically between the header rule and the bottom safe area (`JarvisSidebar`). The bottom safe-area inset moved from inside the scroll content to below the scroll area, so the free space is measured between the two insets and the space above and below the block is equal. Row order, size and spacing are unchanged. If the rows do not fit, the content grows past the minimum height and scrolls from the top. Not compiled here; the iPhone SE and Pro Max screenshots come from iOS CI and need a device check.
+
+## 2026-11-02 P15-55: dictation waveform and plus-menu CI retry
+
+- Dictation shows `JarvisWaveform` between the plus button and the dictate button while listening: a centred line of 48 bars driven by the microphone RMS (about 20 updates per second, newest right). Reduce Motion drops the interpolation. It only exists while listening, so UI-test runs are unaffected. Not compiled here (no Xcode); needs iOS CI and a device check.
+- CI on e7165a3 failed only `testPlusMenuOpensNextToThePlusButton`. The log shows a 69 s "Setting up automation session" for that test (others 1-8 s), which points at a slow simulator rather than a changed `chat.plus` control. The rim is already static in fixture mode. The failed run was re-run on the same commit to confirm; no test was weakened.

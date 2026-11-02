@@ -295,3 +295,32 @@ struct JarvisChip: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
+
+/// Live audio line for dictation: a centred line whose peaks follow the microphone level, newest on the right.
+/// One Canvas, no per-frame work beyond the level updates it is given.
+struct JarvisWaveform: View {
+    let levels: [Float]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Canvas { context, size in
+            guard !levels.isEmpty else { return }
+            let step = size.width / CGFloat(levels.count)
+            var path = Path()
+            for (index, level) in levels.enumerated() {
+                let x = (CGFloat(index) + 0.5) * step
+                let half = max(1, CGFloat(level) * size.height / 2)
+                path.move(to: CGPoint(x: x, y: size.height / 2 - half))
+                path.addLine(to: CGPoint(x: x, y: size.height / 2 + half))
+            }
+            context.stroke(
+                path,
+                with: .color(JarvisDesignTokens.primaryAccent),
+                style: StrokeStyle(lineWidth: max(1.5, step * 0.5), lineCap: .round)
+            )
+        }
+        .frame(height: JarvisDesignTokens.chatMinimumTapTarget)
+        .animation(reduceMotion ? nil : .linear(duration: 0.05), value: levels)
+        .accessibilityHidden(true)
+    }
+}

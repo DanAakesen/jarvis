@@ -668,7 +668,13 @@ struct JarvisChatScreen: View {
 
                 HStack(spacing: 0) {
                     plusMenu
-                    Spacer(minLength: 0)
+                    if dictation.isListening {
+                        JarvisWaveform(levels: dictation.levels)
+                            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
+                            .accessibilityIdentifier("chat.waveform")
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                     dictateButton
                     trailingButton
                 }
