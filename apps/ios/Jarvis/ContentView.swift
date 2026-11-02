@@ -17,6 +17,9 @@ struct ContentView: View {
     private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
     @State private var healthClient: JarvisHealthClient?
+    @State private var usageClient: JarvisUsageClient?
+    @State private var statusClient: JarvisStatusClient?
+    @State private var proactiveClient: JarvisProactiveClient?
     @State private var factoryClient: JarvisFactoryClient?
     private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
     private let factoryFixtureMode: Bool
@@ -122,6 +125,10 @@ struct ContentView: View {
         _healthClient = State(initialValue: healthFixtureMode
             ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
             : Self.makeHealthClient(fixtureMode: fixtureMode))
+        let insightsClient = navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
+        _usageClient = State(initialValue: insightsClient.map { JarvisUsageClient(client: $0) })
+        _statusClient = State(initialValue: insightsClient.map { JarvisStatusClient(client: $0) })
+        _proactiveClient = State(initialValue: insightsClient.map { JarvisProactiveClient(client: $0) })
         _factoryClient = State(initialValue: Self.makeFactoryClient(
             previewState: factoryScreenshot?.state ?? (navigationFixtureMode ? .board : nil),
             fixtureMode: factoryFixtureMode
@@ -286,6 +293,28 @@ struct ContentView: View {
                 workoutInitiallySelected: healthScreenshotState != nil,
                 presentNewLiftAfterLoading: healthScreenshotState == "newlift"
             )
+        } else if destination == .usage {
+            JarvisUsageArea(
+                client: usageClient,
+                language: language,
+                onRetryConfiguration: { remakeInsightsClients() }
+            )
+        } else if destination == .status {
+            JarvisStatusArea(
+                client: statusClient,
+                language: language,
+                onRetryConfiguration: { remakeInsightsClients() },
+                fixedNow: navigationFixtureMode ? JarvisInsightsFixtureTransport.now : nil
+            )
+        } else if destination == .proactive {
+            JarvisProactiveArea(
+                client: proactiveClient,
+                language: language,
+                onRetryConfiguration: { remakeInsightsClients() },
+                addTask: { item in try await addProactiveTask(item) },
+                liveUpdates: !navigationFixtureMode,
+                fixedNow: navigationFixtureMode ? JarvisInsightsFixtureTransport.now : nil
+            )
         } else if destination == .softwareFactory {
             JarvisFactoryArea(
                 client: factoryClient,
@@ -403,6 +432,25 @@ struct ContentView: View {
         if arguments.contains("--screenshot-voice-fixture") { state.navigate(to: .voice) }
 #endif
         return state
+    }
+
+    private static func makeInsightsClient() -> JarvisClient? {
+        try? JarvisComposition.makeClient(accessTokenProvider: JarvisUnavailableAccessTokenProvider())
+    }
+
+    private func remakeInsightsClients() {
+        let client = navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
+        usageClient = client.map { JarvisUsageClient(client: $0) }
+        statusClient = client.map { JarvisStatusClient(client: $0) }
+        proactiveClient = client.map { JarvisProactiveClient(client: $0) }
+    }
+
+    /// "Add to tasks" on a suggestion creates a personal task through the Notes client; the fixtures accept it as is.
+    private func addProactiveTask(_ item: JarvisProactiveItem) async throws {
+        if navigationFixtureMode { return }
+        guard let notesClient else { throw JarvisInsightsError.invalidRequest }
+        let draft = JarvisProactiveLogic.taskDraft(for: item)
+        _ = try await notesClient.createTask(text: draft.text, scope: .personal, due: draft.due, time: draft.time)
     }
 
     private static func makeNotesClient(fixtureMode: Bool) -> JarvisNotesClient? {
