@@ -10580,3 +10580,7 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Cost: one stroked shape redrawn at 12 fps, no mask, blur or shadow. The board's outer glow is left out because it needs an offscreen shadow.
 - The board shows no rim on the Now bar, so it gets none.
 - Composer icons: voice (waveform), dictation (mic) and send (paper plane) are orange primary-accent icons with no background, from `JarvisComposerIconButton`. The trailing slot is voice when the field is empty and send when there is text. `JarvisFilledCircleButton` is removed.
+
+## 2026-11-02 — P15-55: the composer rim does not animate in fixture/UI-test runs
+
+- CI on d6f6300 failed `ChatComposerUITests.testPlusMenuOpensNextToThePlusButton` (then hung past its allowance). `chat.plus` and the camera menu item were not changed; the new rim's endless `TimelineView` and `withAnimation` pulse loop kept XCUITest from ever seeing the app idle. `jarvisRim(isAnimated:)` is false when `model.fixtureMode` is on, so fixture and UI-test runs show a static rim. Real runs keep the sweep and pulse; Reduce Motion still makes both static. Not compiled or run here; needs the iOS UI test job to confirm.

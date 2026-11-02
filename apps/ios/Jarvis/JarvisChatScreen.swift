@@ -677,7 +677,7 @@ struct JarvisChatScreen: View {
             .background {
                 Color.clear
                     .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-                    .jarvisRim(cornerRadius: JarvisDesignTokens.surfaceRadius, state: rimState)
+                    .jarvisRim(cornerRadius: JarvisDesignTokens.surfaceRadius, state: rimState, isAnimated: !model.fixtureMode)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

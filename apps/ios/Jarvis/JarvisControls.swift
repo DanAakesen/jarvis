@@ -87,15 +87,17 @@ struct JarvisRim: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cornerRadius: CGFloat
     let state: JarvisRimState
+    let isAnimated: Bool
     @State private var pulse = 1.0
     @State private var clock = RimClock()
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: cornerRadius, style: .continuous) }
+    private var isStatic: Bool { reduceMotion || !isAnimated }
 
     func body(content: Content) -> some View {
         content.overlay {
-            TimelineView(.animation(minimumInterval: 1.0 / 12, paused: reduceMotion)) { timeline in
-                let angle = reduceMotion ? 0 : clock.advance(to: timeline.date, lap: state.lap)
+            TimelineView(.animation(minimumInterval: 1.0 / 12, paused: isStatic)) { timeline in
+                let angle = isStatic ? 0 : clock.advance(to: timeline.date, lap: state.lap)
                 ZStack {
                     shape.strokeBorder(JarvisDesignTokens.primaryAccent.opacity(0.35), lineWidth: 1)
                     shape.strokeBorder(
@@ -118,13 +120,13 @@ struct JarvisRim: ViewModifier {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
-        .task(id: "\(state)-\(reduceMotion)") { await breathe() }
+        .task(id: "\(state)-\(isStatic)") { await breathe() }
     }
 
     /// Dips the rim at random intervals and depths, so it never ticks like a metronome.
     private func breathe() async {
         pulse = 1
-        guard !reduceMotion else { return }
+        guard !isStatic else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(Double.random(in: 2.5...7)))
             let duration = Double.random(in: 1.2...2.6)
@@ -149,8 +151,9 @@ final class RimClock {
 }
 
 extension View {
-    func jarvisRim(cornerRadius: CGFloat, state: JarvisRimState) -> some View {
-        modifier(JarvisRim(cornerRadius: cornerRadius, state: state))
+    /// `isAnimated` is false for fixture and UI-test runs: endless animation keeps XCUITest from ever seeing the app idle.
+    func jarvisRim(cornerRadius: CGFloat, state: JarvisRimState, isAnimated: Bool = true) -> some View {
+        modifier(JarvisRim(cornerRadius: cornerRadius, state: state, isAnimated: isAnimated))
     }
 }
 
