@@ -116,6 +116,7 @@ jobs:
             JARVIS_ENTRA_API_SCOPE="$JARVIS_ENTRA_API_SCOPE" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1; then
             echo "::error::Archive failed. A sanitised excerpt of the log follows; identifiers are masked."
+            tail -n 25 "$RUNNER_TEMP/archive.log" | sed -E -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' -e 's/%/%25/g' | while IFS= read -r line; do echo "::error::TAIL ${line}"; done || true
             grep -E -i -e 'error:' -e 'Provisioning profile' -e 'No profile' \
               -e 'requires a development team' -e 'Communication with Apple' \
               -e 'No Accounts' -e 'not registered' -e 'No signing certificate' \
