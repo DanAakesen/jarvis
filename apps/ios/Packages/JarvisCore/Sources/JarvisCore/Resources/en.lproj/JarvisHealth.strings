@@ -71,5 +71,6 @@
 "health.save" = "Save";
 "health.saving" = "Saving…";
 "health.saveFailed" = "Could not save. Try again with the same values.";
+"health.vaultPending" = "Saved. The vault copy is pending and will finish automatically. Save again to retry now.";
 "health.cancel" = "Cancel";
 "health.loadMore" = "Load more";
