@@ -95,8 +95,9 @@ struct JarvisTodayGymSheet: View {
                     Section {
                         Label(message.text, systemImage: message.symbol)
                             .foregroundStyle(message.isError ? Color.red : Color.primary)
-                            .accessibilityIdentifier("today.gym.status")
+                            .accessibilityElement(children: .combine)
                             .accessibilityAddTraits(.updatesFrequently)
+                            .accessibilityIdentifier("today.gym.status")
                     }
                 }
             }

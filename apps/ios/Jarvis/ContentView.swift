@@ -286,6 +286,7 @@ struct ContentView: View {
                 fixtureMode: fixtureMode,
                 onChat: { handoff in
                     chatHandoff = handoff
+                    todayOrigin = true
                     navigate(to: .chat)
                 },
                 onVoice: { navigate(to: .voice) }

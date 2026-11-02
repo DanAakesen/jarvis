@@ -299,7 +299,7 @@ struct JarvisTodayActivityCard: View {
         .frame(width: ringSize, height: ringSize)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(copy(.steps))
-        .accessibilityValue("\(display.ringSteps)")
+        .accessibilityValue(Text(verbatim: String(display.ringSteps)))
         .accessibilityIdentifier("today.steps.ring")
     }
 

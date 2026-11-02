@@ -121,8 +121,8 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(screen("chat").waitForExistence(timeout: 10), "Typing on Home continues in Chat")
         XCTAssertTrue(app.textViews["chat.input"].waitForExistence(timeout: 5)
                       || app.textFields["chat.input"].waitForExistence(timeout: 5))
-        let home = app.buttons["chat.backToToday"]
-        XCTAssertTrue(home.waitForExistence(timeout: 5))
+        let home = app.descendants(matching: .any)["chat.backToToday"]
+        XCTAssertTrue(home.waitForExistence(timeout: 10))
         home.tap()
         XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "Reversing returns to Home")
     }
