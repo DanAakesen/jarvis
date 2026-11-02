@@ -16,7 +16,7 @@ const performedAt = new Date('2026-10-30T12:00:00.000Z');
 const updatedAt = new Date('2026-10-30T12:00:00.000Z');
 const input: LiftCreate = {
   idempotencyKey: key, exerciseName: 'Bench press', exerciseKey: 'bench press',
-  weightKg: 80, reps: 4, sets: 3, performedAt: performedAt.toISOString(),
+  weightKg: 80, reps: 4, sets: 3, performedAt: performedAt.toISOString(), workoutId: null,
 };
 const ownerRequest = (objectId = owner) => ({ principal: { objectId }, server: { ownerObjectId: owner } }) as unknown as FastifyRequest;
 const signal = () => new AbortController().signal;
@@ -139,5 +139,56 @@ describe('LiftEntriesStore.update and delete', () => {
     expect(String(f.request.query.mock.calls[0]?.[0])).toContain('SET deleted_at = SYSUTCDATETIME()');
     f.request.query.mockResolvedValueOnce({ recordset: [] });
     await expect(f.store.delete(id, signal())).resolves.toBeNull();
+  });
+});
+
+describe('LiftEntriesStore vault copy', () => {
+  const workoutId = '55555555-5555-4555-8555-555555555555';
+  const withSync = (state: 'synced' | 'pending') => {
+    const f = fixture();
+    const syncLift = vi.fn(async () => state);
+    return { ...f, syncLift, store: LiftEntriesStore.forRequest(f.pool, ownerRequest(), f.changes, { syncLift }) };
+  };
+
+  it('reports synced only when the vault write succeeded and pending otherwise', async () => {
+    for (const state of ['synced', 'pending'] as const) {
+      const f = withSync(state);
+      f.request.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [stored()] });
+      const result = await f.store.create(input, signal());
+      expect(result.entry.vault).toBe(state);
+      expect(f.transaction.commit).toHaveBeenCalledOnce();
+    }
+  });
+
+  it('reports pending without a vault writer and retries the copy on an idempotent replay', async () => {
+    const f = fixture();
+    f.request.query.mockResolvedValueOnce({ recordset: [stored()] });
+    expect((await f.store.create(input, signal())).entry.vault).toBe('pending');
+    const g = withSync('synced');
+    g.request.query.mockResolvedValueOnce({ recordset: [stored()] });
+    expect(await g.store.create(input, signal())).toMatchObject({ replayed: true, entry: { vault: 'synced' } });
+    expect(g.syncLift).toHaveBeenCalledOnce();
+    g.request.query.mockResolvedValueOnce({ recordset: [{ ...stored(), vault_synced_revision: 1 }] });
+    await g.store.create(input, signal());
+    expect(g.syncLift).toHaveBeenCalledOnce();
+  });
+
+  it('links a lift to an owner workout and uses its day, or refuses an unknown workout', async () => {
+    const f = fixture();
+    f.request.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ gym_day: '2026-10-29' }] })
+      .mockResolvedValueOnce({ recordset: [{ ...stored(), workout_id: workoutId, gym_day: '2026-10-29' }] });
+    const result = await f.store.create({ ...input, workoutId }, signal());
+    expect(result.entry.workoutId).toBe(workoutId);
+    expect(f.request.input).toHaveBeenCalledWith('gymDay', sql.Char(10), '2026-10-29');
+    const g = fixture();
+    g.request.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [] });
+    await expect(g.store.create({ ...input, workoutId }, signal())).rejects.toThrow('Workout entry not found.');
+    expect(g.transaction.commit).not.toHaveBeenCalled();
+  });
+
+  it('marks a revision as copied only when it is newer than the recorded one', async () => {
+    const f = fixture();
+    await f.store.markVaultSynced(id, 2, signal());
+    expect(String(f.request.query.mock.calls[0]?.[0])).toContain('vault_synced_revision < @revision');
   });
 });

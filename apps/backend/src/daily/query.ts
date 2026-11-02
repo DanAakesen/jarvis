@@ -24,6 +24,11 @@ import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { presentTrainingTargets } from './training/targets.js';
 import { LiftEntriesStore } from './lifts/lifts-store.js';
 import type { LiftEntriesAccess } from './lifts/lifts-store.js';
+import { WorkoutEntriesStore } from './gym/workouts-store.js';
+import type { WorkoutEntriesAccess } from './gym/workouts-store.js';
+import { createGymLogWriter } from './gym/gym-log.js';
+import { createGymVaultSync, type GymSyncLogger } from './gym/gym-sync.js';
+import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { name as healthName } from './health/value.js';
 export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
@@ -253,7 +258,12 @@ export class DailyQueryService {
 export type DailyFoodLookup = (input: readonly LookupComponent[], request: FastifyRequest, signal: AbortSignal) => Promise<FridaLookup>;
 
 /** Explicit inactive composition: no timer, automatic provider request, route or production registration. */
-export function createDailyData(pool: sql.ConnectionPool, owner: string, now: () => number = Date.now, frida?: Pick<FridaLookupAdapter, 'lookup'>, feeds?: DailyFeedProviders) {
+export interface DailyGymVault {
+  readonly vault: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write'>;
+  readonly logger?: GymSyncLogger;
+}
+
+export function createDailyData(pool: sql.ConnectionPool, owner: string, now: () => number = Date.now, frida?: Pick<FridaLookupAdapter, 'lookup'>, feeds?: DailyFeedProviders, gymVault?: DailyGymVault) {
   const changes = createDailyChanges();
   const checkOwner = (request: FastifyRequest) => {
     if (resolveDailyOwner(request).toLowerCase() !== owner.toLowerCase()) throw new AuthenticationDenied(403);
@@ -266,9 +276,20 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     checkOwner(request);
     return TrainingTargetsStore.forRequest(pool, request);
   };
+  const gymSync = gymVault ? createGymVaultSync({
+    writer: createGymLogWriter({ vault: gymVault.vault }),
+    workouts: WorkoutEntriesStore.forOwner(pool, owner, changes),
+    lifts: LiftEntriesStore.forOwner(pool, owner, changes),
+    ...(gymVault.logger ? { logger: gymVault.logger } : {}),
+    now,
+  }) : undefined;
   const lifts: LiftEntriesAccess = request => {
     checkOwner(request);
-    return LiftEntriesStore.forRequest(pool, request, changes);
+    return LiftEntriesStore.forRequest(pool, request, changes, gymSync);
+  };
+  const workouts: WorkoutEntriesAccess = request => {
+    checkOwner(request);
+    return WorkoutEntriesStore.forRequest(pool, request, changes, gymSync);
   };
   const readers: DailyReaders = {
     health: request => { checkOwner(request); return DailyHealthReadModel.forRequest(pool, request); },
@@ -282,7 +303,8 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     : undefined;
   const feedService = feeds ? createDailyFeeds(pool, owner, changes, feeds, now) : undefined;
   return {
-    query: new DailyQueryService(readers, now, feedService), changes, trainingTargets, lifts,
+    query: new DailyQueryService(readers, now, feedService), changes, trainingTargets, lifts, workouts,
+    ...(gymSync ? { retryGymVault: (signal: AbortSignal) => gymSync.retryPending(signal) } : {}),
     health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
     nutrition,
     coach: (request: FastifyRequest) => { checkOwner(request); return SqlDailyCoachStore.forRequest(pool, request); },
@@ -296,6 +318,8 @@ export interface DailyData {
   changes: DailyChanges;
   trainingTargets?: TrainingTargetsAccess;
   lifts?: LiftEntriesAccess;
+  workouts?: WorkoutEntriesAccess;
+  retryGymVault?: (signal: AbortSignal) => Promise<{ synced: number; pending: number }>;
   health?: (request: FastifyRequest) => Pick<DailyHealthReadModel, 'history' | 'sync'>;
   nutrition?: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'days' | 'feedback' | 'preferences'>;
   coach?: (request: FastifyRequest) => DailyCoachStore;

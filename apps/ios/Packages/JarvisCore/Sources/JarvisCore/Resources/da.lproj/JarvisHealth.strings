@@ -71,5 +71,6 @@
 "health.save" = "Gem";
 "health.saving" = "Gemmer…";
 "health.saveFailed" = "Kunne ikke gemme. Prøv igen med de samme værdier.";
+"health.vaultPending" = "Gemt. Kopien i vaulten afventer og gøres færdig automatisk. Gem igen for at prøve nu.";
 "health.cancel" = "Annuller";
 "health.loadMore" = "Vis flere";
