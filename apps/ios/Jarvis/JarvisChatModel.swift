@@ -448,6 +448,31 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
+    /// Dismisses every item of a group one after another (the backend has one dismiss route per item), then
+    /// reloads once. An item that is already gone counts as dismissed; any other error stops the run and is shown.
+    func dismissActivities(_ items: [NowFeedActivityItem]) async {
+        guard !fixtureMode, let nowClient else { return }
+        let pending = items.filter { !dismissingActivityIDs.contains($0.id) }
+        guard !pending.isEmpty else { return }
+        activityMessage = nil
+        dismissingActivityIDs.formUnion(pending.map(\.id))
+        defer { dismissingActivityIDs.subtract(pending.map(\.id)) }
+        do {
+            for item in pending {
+                do {
+                    try await nowClient.dismissActivity(id: item.id)
+                } catch JarvisNowFeedClientError.activityUnavailable {
+                    continue
+                }
+            }
+            activityMessage = "Activity dismissed."
+            activityError = nil
+        } catch {
+            activityError = message(for: error)
+        }
+        if let feed = try? await nowClient.load() { nowFeed = feed }
+    }
+
     func dismissBackgroundTask(_ task: BackgroundTaskRecord) async {
         guard !fixtureMode, let nowClient, !dismissingBackgroundTaskIDs.contains(task.id) else { return }
         dismissingBackgroundTaskIDs.insert(task.id)

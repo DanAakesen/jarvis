@@ -235,6 +235,7 @@ struct JarvisSheetConfirmButton: View {
 /// X that closes a sheet. It sits on the right, within thumb reach.
 struct JarvisSheetCloseButton: View {
     let title: String
+    var identifier = "sheet.cancel"
     var isDisabled = false
     let action: () -> Void
 
@@ -244,7 +245,7 @@ struct JarvisSheetCloseButton: View {
         }
         .disabled(isDisabled)
         .accessibilityLabel(title)
-        .accessibilityIdentifier("sheet.cancel")
+        .accessibilityIdentifier(identifier)
     }
 }
 
