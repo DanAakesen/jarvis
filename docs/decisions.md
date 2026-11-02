@@ -10558,3 +10558,15 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
   2. The broadcast extension refreshed its active marker and frame file only when ReplayKit delivered a frame, which it does only when the screen changes. On a still screen the 5 s freshness lapsed: Chat showed "Screen sharing stopped" and `latestFrame()` returned nil. The Chat status loop also stopped as soon as the state left busy, so it never recovered.
 - Fix: Chat now uploads the frame to `/screen/frames` (mode `handle`) and sends the turn with `visualContext` (`source` screen or camera, `frameId`, `turnId`). The existing frame store resolves it to the real image for the model, and the context text now says "a live screen share" or "a live camera view", never a picture upload. Chat and Voice also stream sampled frames to `/vision/watch` every 2.6 s (`LiveFrameStreamer`, bounded rate and size, stops on 404 or repeated failure, sends DELETE on stop). The extension keeps a 1 s heartbeat that refreshes the marker and last frame. Old `Screen.jpg`/`Video.jpg` attachments are hidden from the Chat history.
 - Tests: JarvisCore (`LiveFrameStreamerTests`, visual context in `JarvisChatClientTests`), Python `test_image_context.py`, backend `visual-context.test.ts`. Not verified: SwiftUI and the broadcast extension were not compiled here; the stream needs a device check, including the vision budget and the 2.5 s per-source rate limit shared with the per-turn frame upload.
+
+## 2026-11-02 — P15-55: one corner radius, one glass surface, transparent chat header
+
+- Status: accepted (Dan's instructions on PR 1518; not compiled here, needs iOS CI and a device check).
+- Branch state: main (`d2d0e9a`, PR 1517) is already an ancestor of this branch, so there was nothing to merge.
+- The sidebar stays on the right, as it is now.
+- One global corner-radius token, `JarvisDesignTokens.surfaceRadius` (24 pt). The composer, Now bar, bubbles, video and camera tiles, plus-menu, Health panels and activity cards derive from it instead of per-view values.
+- The Now bar is 36 pt high (was 44 pt) and uses the same radius as the composer.
+- The chat header bar is transparent with no line: `jarvisAmbientBackground(transparentNavigationBar: true)` hides the navigation bar background and the top scroll-edge effect is hidden.
+- Every control that floats over content keeps Apple's glass behind the control itself. The header buttons no longer hide their system glass (`sharedBackgroundVisibility(.hidden)` removed). Non-toolbar surfaces use the shared `jarvisGlassSurface(cornerRadius:)` in `JarvisControls.swift`: `glassEffect` (iOS 26 is the deployment target, so no older-OS branch is needed) with a `regularMaterial` fallback under Reduce Transparency.
+- The "Screen sharing stopped." line no longer shows once sharing ends; only starting, live and error states show a status line.
+- Not done yet from Part 1: the remaining screens' ad hoc controls, Usage chips, the Health toggle and burger/plus removal. Which page counts as the main shell for the burger needs Dan's answer, because the sidebar is the only navigation entry.

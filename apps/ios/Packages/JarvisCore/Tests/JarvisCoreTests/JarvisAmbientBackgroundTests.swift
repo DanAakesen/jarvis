@@ -104,7 +104,7 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
                     in: text
                 ).first?.first, name)
                 XCTAssertTrue(
-                    section.contains(".jarvisAmbientBackground()") ||
+                    section.contains(".jarvisAmbientBackground(") ||
                     section.contains("JarvisScreenBackground(") ||
                     section.contains("JarvisGateAmbientBackground(") ||
                     section.contains("JarvisForm {"),

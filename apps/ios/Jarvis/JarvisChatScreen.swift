@@ -219,12 +219,10 @@ struct JarvisChatScreen: View {
                 .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
                 .accessibilityIdentifier("chat.notifications")
             }
-            .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSidebarMenuButton(language: appLanguage)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             await model.load()
@@ -295,7 +293,7 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
-        .jarvisAmbientBackground()
+        .jarvisAmbientBackground(transparentNavigationBar: true)
         .onAppear(perform: refreshScreenSharing)
         .onChange(of: liveSource) { _, _ in updateLiveStream() }
         .task {
@@ -398,7 +396,7 @@ struct JarvisChatScreen: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(.bottom)
-                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(true, for: .top)
                 .scrollEdgeEffectStyle(.soft, for: .bottom)
                 .onChange(of: model.messages.last?.id) { _, _ in
                     scrollToBottom(proxy, animated: !reduceMotion)
@@ -677,9 +675,8 @@ struct JarvisChatScreen: View {
             .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
             .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
             .background {
-                RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
-                    .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatComposerRadius))
+                Color.clear
+                    .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -932,7 +929,7 @@ struct JarvisChatScreen: View {
         case .idle: nil
         case .starting: (copy(.screenShareStarting), "dot.radiowaves.left.and.right", false)
         case .live: (copy(.screenSharingActive), "dot.radiowaves.left.and.right", false)
-        case .stopped: (copy(.screenShareStopped), "stop.circle", false)
+        case .stopped: nil
         case .failed: (copy(.screenShareFailed), "exclamationmark.triangle", true)
         case .extensionMissing: (copy(.screenShareExtensionMissing), "exclamationmark.triangle", true)
         }
@@ -1174,11 +1171,12 @@ struct JarvisChatScreen: View {
                     .font(.caption.weight(.semibold))
                     .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.nowBarHeight)
             .padding(.horizontal, JarvisDesignTokens.chatGlassInset)
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
         .accessibilityLabel("Background activity, \(model.nowTitle)")
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
     }

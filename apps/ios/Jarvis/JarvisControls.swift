@@ -4,6 +4,35 @@ import SwiftUI
 /// icon-only, SF Symbols, 44 pt hit targets and the system glass or prominent styles.
 /// HIG: Buttons, Toolbars, Sheets, Toggles, Pickers. API: ButtonStyle.glass, ToolbarContent, Label, LabelStyle.iconOnly.
 
+/// The one glass surface for anything that floats over content: Now bar, composer, pills, search, floating buttons.
+/// Uses Apple's glass (`glassEffect`, iOS 26, the app's deployment target) and falls back to a solid system
+/// material when Reduce Transparency is on. Toolbar items get the same glass from the system toolbar, so the
+/// navigation bar itself stays transparent while each control keeps its own glass capsule or circle.
+/// API: View.glassEffect(_:in:), Glass, Shape, AccessibilityEnvironment reduceTransparency.
+struct JarvisGlassSurface: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var cornerRadius: CGFloat?
+
+    private var shape: AnyShape {
+        if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
+    }
+
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background(.regularMaterial, in: shape)
+        } else {
+            content.glassEffect(.regular, in: shape)
+        }
+    }
+}
+
+extension View {
+    /// Glass behind a floating control. Pass a radius for a rounded rectangle, or none for a capsule.
+    func jarvisGlassSurface(cornerRadius: CGFloat? = nil) -> some View {
+        modifier(JarvisGlassSurface(cornerRadius: cornerRadius))
+    }
+}
+
 /// Icon-only glass button for toolbars and floating controls.
 struct JarvisIconButton: View {
     let title: String
