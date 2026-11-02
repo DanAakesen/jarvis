@@ -181,7 +181,7 @@ struct JarvisComposerIconButton: View {
         .disabled(isDisabled)
         .accessibilityLabel(title)
         .accessibilityHint(hint)
-        .accessibilityIdentifier("sheet.cancel")
+        .accessibilityIdentifier(identifier)
     }
 }
 

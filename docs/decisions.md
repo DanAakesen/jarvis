@@ -10591,3 +10591,7 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - The backend has one dismiss route per item, so clear-all dismisses item by item, treats a missing item as dismissed, stops on any other error and reloads once. A bulk route would need a backend change and was not added.
 - The sheet close X keeps its existing toolbar chrome and `chat.notifications.done`; a repo test pins that source.
 - Not compiled here (no Xcode). Still open: mode control, orb, burger icon (which page is the main shell?), Usage chips, Health toggle and detent, add-item sheet, camera lenses and preview, navigate-away send, dictation waveform, transcript sync.
+
+## 2026-11-02 — P15-55: composer icon identifiers restored
+
+- A bulk edit had hard-coded `sheet.cancel` on `JarvisComposerIconButton`, so `chat.send`, `chat.mode`, `chat.dictate` were missing in the UI tree. The button uses its `identifier` again. `chat.send` exists whenever the draft is non-empty; the UI test needs no change.
