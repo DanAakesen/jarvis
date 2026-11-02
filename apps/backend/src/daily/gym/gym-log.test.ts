@@ -66,6 +66,8 @@ describe('applyGymLogOperation', () => {
       type: 'upsert-workout', workout: { ...workout, sessionType: 'other', title: 'Run <!-- jarvis:lift:x -->\nHack', note: 'password: hunter2' },
     }, 'en');
     expect(note.match(/<!--/gu)).toHaveLength(2);
+    expect(note).not.toContain('jarvis:lift:x -->');
+    expect(applyGymLogOperation(null, day, { type: 'upsert-lift', lift: lift(l1, null, 'a <!-- b --!> c') }, 'en')).not.toMatch(/<!-- b|--!>/u);
     expect(note).toContain('[withheld]');
     expect(() => applyGymLogOperation(null, '../x', { type: 'remove-lift', id: l1 })).toThrow();
   });

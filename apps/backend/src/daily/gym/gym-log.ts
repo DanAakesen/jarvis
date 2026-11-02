@@ -96,7 +96,7 @@ function serialize(note: Note): string {
 }
 
 function clean(value: string, language: GymLogLanguage): string {
-  const text = Array.from(value.replace(/<!--|-->/gu, ''), char => {
+  const text = Array.from(value.replace(/[<>]/gu, ''), char => {
     const code = char.charCodeAt(0);
     return code <= 0x1f || code === 0x7f ? ' ' : char;
   }).join('').trim();
