@@ -10596,3 +10596,8 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - The chat/voice carry-over is a `matchedGeometryEffect` namespace (composer and orb). Reduce Motion turns the geometry match off and leaves a cross-fade. The rim and greeting shimmer are static in fixture runs so XCUITest can go idle.
 - `.github/scripts/tests/test_pipeline.py` now allows exactly one leading toolbar item on Chat: the Home button that appears only when Chat was opened from Home.
 
+
+## 2026-11-02 — P15-57: sidebar rows are centred, not bottom-weighted (#1523)
+
+- Status: accepted from the updated board (`docs/ios/design/today.html`, 3955205a); not compiled or run on this runner.
+- `JarvisSidebar` (shown on every page) centres the rows as one block in the free space below the header, with equal space above and below. If the rows do not fit, the list scrolls from the top. The bottom safe area is excluded from that space.

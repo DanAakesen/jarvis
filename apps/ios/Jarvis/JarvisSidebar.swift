@@ -203,16 +203,17 @@ struct JarvisSidebar: View {
                             sidebarRow(destination)
                         }
                     }
+                    .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
+                    .padding(.vertical, JarvisDesignTokens.sidebarVerticalInset)
                     .frame(
                         maxWidth: .infinity,
                         minHeight: scrollGeometry.size.height,
-                        alignment: .bottom
+                        alignment: .center
                     )
-                    .padding(.horizontal, JarvisDesignTokens.sidebarHorizontalInset)
-                    .padding(.bottom, safeAreaInsets.bottom + JarvisDesignTokens.sidebarVerticalInset)
                 }
                 .scrollIndicators(.hidden)
             }
+            .padding(.bottom, safeAreaInsets.bottom)
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
