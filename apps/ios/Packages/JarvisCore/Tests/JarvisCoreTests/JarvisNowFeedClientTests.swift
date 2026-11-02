@@ -27,6 +27,27 @@ final class JarvisNowFeedClientTests: XCTestCase {
         XCTAssertEqual(feed.confirmations.last?.summary, summary)
     }
 
+    func testDismissesFailedBackgroundTaskThroughJobsRoute() async throws {
+        let id = "00000000-0000-0000-0000-000000000001"
+        let scenario = Data(
+            """
+            {"version":1,"interactions":[{"method":"POST","path":"/api/jobs/\(id)/dismiss",
+            "response":{"statusCode":200,"body":{"dismissedJobIds":["\(id)"]}}}]}
+            """.utf8
+        )
+        let transport = try FixtureTransport(scenario: scenario)
+        let now = JarvisNowFeedClient(client: try makeClient(transport: transport))
+        try await now.dismissBackgroundTask(id: id)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+        do {
+            try await now.dismissBackgroundTask(id: "not-a-job")
+            XCTFail("Expected invalid ID")
+        } catch {
+            XCTAssertEqual(error as? JarvisNowFeedClientError, .invalidActivityID)
+        }
+    }
+
     func testLoadsFeedDismissesActivityAndResolvesConfirmation() async throws {
         let scenario = Data(
             """

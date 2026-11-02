@@ -67,7 +67,7 @@
 "workspace.generatedView" = "Generated view";
 "workspace.unsupportedVersion" = "Unsupported version";
 "workspace.unsupportedView" = "Unsupported view";
-"workspace.tableSize" = "Table with %d columns and %d rows";
+"workspace.tableSize" = "Table with %ld columns and %ld rows";
 "workspace.noChartData" = "No chart data";
 "workspace.baseline" = "Baseline";
 "workspace.xAxis" = "X";
@@ -79,7 +79,7 @@
 "workspace.chartArea" = "Area chart";
 "workspace.chartSummary" = "%@. %@";
 "workspace.chartNoValues" = "%@, no values";
-"workspace.chartPoints" = "%@, %d points";
+"workspace.chartPoints" = "%@, %ld points";
 "workspace.chartRange" = "%@, from %@ to %@";
 "workspace.imageUnavailable" = "Image unavailable";
 "workspace.loadingImage" = "Loading image";

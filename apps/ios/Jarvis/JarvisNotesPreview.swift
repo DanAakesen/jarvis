@@ -10,6 +10,7 @@ import SwiftUI
             onRetryConfiguration: {}
         )
     }
+    .environmentObject(JarvisNavigationModel())
     .environment(\.locale, JarvisAppLanguage.da.locale)
 }
 
@@ -21,6 +22,7 @@ import SwiftUI
             onRetryConfiguration: {}
         )
     }
+    .environmentObject(JarvisNavigationModel())
     .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 

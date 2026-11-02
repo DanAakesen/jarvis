@@ -1389,16 +1389,74 @@ WebSocket adapter against the #1391 core seam.
 
 ### iOS navigation shell
 
-`JarvisCore` owns the pure-Swift destination list, navigation path, and sidebar
-open/closed state; Linux tests cover path normalization, navigation, and the
-sidebar state and gesture-recognition policy. The SwiftUI target binds that state
-to `NavigationStack`, keeps the tap-to-close region with the moving screen, and
-renders the fixed-behind sidebar and title-only placeholders for unbuilt
-destinations. P15-10 replaces the Chat root placeholder with the native chat
-screen and P15-11 replaces the Voice placeholder with the native voice screen.
-The shell observes voice state changes; `.ended` resets navigation to Chat and
-closes the sidebar using the existing progress/animation reset. Other voice states
-leave navigation unchanged.
+`JarvisCore` owns the pure-Swift destination/path normalization and sidebar state.
+P15-41 wraps this value in `JarvisNavigationModel`, an observable MainActor
+reference in `apps/ios/Shared`. GateRoot owns its StateObject above ContentView's
+sign-out identity boundary and injects it through the environment. Shared target
+membership also supports the menu component compiled by the Voice Activity
+extension. Chat's top-right toolbar and Health/Notes/Factory headers call
+`navigation.openSidebar(caller: .menu)` directly. Previews supply the same environment model;
+screenshot launch destinations initialize it before ContentView is installed.
+
+ContentView binds the model path to NavigationStack. The gate root renders the
+conditional trailing drawer and dim tap-close region as its last ZStack child at
+zIndex(1000), outside ContentView, its GeometryReader/NavigationStack and the
+content's blur, identity and input modifiers. Root-level app-theme preference
+governs the sibling drawer. A root `onGeometryChange` modifier refreshes UIKit
+window bounds on layout changes; the existing UIKit safe-area helper supplies
+drawer insets without a GeometryReader enclosing the drawer.
+ContentView applies voice restore/minimize and fixture side effects through the
+model's synchronous `navigationRequested` event before the route is written,
+including selection of the current Voice destination and normalized
+path-binding destination changes during native back navigation. This replaces the
+concurrent `622dc0f` destination-change observer and duplicate drawer wrapper;
+that commit remains in branch history. Native transitions honor
+reduced motion. There are no persistent reveal offsets, animation callbacks,
+drag-generation IDs or open-path hit-testing toggles. The narrow right-edge
+gesture commits only after a completed opening swipe; cancellation leaves the
+committed model unchanged. Opening dismisses the keyboard. Navigation and voice
+ending close the drawer; leaving the active scene also closes it. No bisect
+variants or native input probes remain.
+
+Comment 6562637427 temporarily restores screenshot-readable diagnostics in device
+preview builds: an always-visible, noninteractive bottom badge shows the Boolean,
+button-only tap count, last static writer tag and last three requested
+before/after writes (including no-ops). No content, credentials or account data
+are recorded. All navigation commands have caller tags to distinguish input
+delivery, state resets and layering. Remove the badge/diagnostic recording before
+merge after native evidence is captured. A root zIndex does not surpass the
+gate's alert-level UIWindow or system presentations: privacy/auth covers remain
+intact and the drawer is omitted while content must be covered.
+
+The app scheme includes `JarvisUITests`. The simulator-only navigation fixture
+exercises real views and offline voice transports. `SidebarNavigationTests`
+requires the actual drawer to exist and be hittable within two seconds in Danish
+and English, including separate five-second startup persistence cases.
+Both CI invocations select only this class at the owner's request. The broader
+`NavigationReliabilityTests` remains available for bottom controls, sheets and
+voice; focused CI success alone does not qualify that coverage or device recovery.
+Navigation fixtures initialize the gate as unlocked before its first render and
+do not construct real authentication/notification clients. Background privacy
+cover handling remains active. Gate teardown disables window input before hiding
+it, and loading explicitly synchronizes the overlay with the committed gate state.
+Gate and sidebar accessibility containers preserve their children's hidden
+states. The shell ignores container safe areas, not the keyboard region, and
+composer glass is noninteractive. Failure tests retain screenshots and AX trees.
+Sign-in changes only the session-owned Chat/destination content identity, not
+ContentView or the NavigationStack. Sign-out explicitly resets the environment
+navigation model without replacing its reference.
+Workspace state is explicitly cleared with a fresh event client and stale-run
+generation guards; prior voice resources end without forcing a Chat route.
+Chat detaches its transport when removed and resumes suspended observation when
+returning. Only real sign-out retains a full shell reset; the gate covers content
+before credential/resource teardown and keeps failures covered.
+Content clients still fail closed without a Keychain session and cannot open
+interactive Microsoft authentication. Their existing per-request token reads
+pick up a fresh gate-created session without replacing the client.
+The plain-style Chat menu label explicitly defines its existing 44-point hit
+region with `contentShape(Rectangle())`, matching the bell's interaction boundary.
+CI retains both scheme and dedicated navigation result bundles on
+failure, including failures before screenshot capture completes.
 No iOS-specific backend routes are added.
 
 ### iOS Notes area (P15-12)

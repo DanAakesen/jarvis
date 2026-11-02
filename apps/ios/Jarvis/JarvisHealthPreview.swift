@@ -11,6 +11,7 @@ import SwiftUI
             now: JarvisHealthPreview.now
         )
     }
+    .environmentObject(JarvisNavigationModel())
     .environment(\.locale, JarvisAppLanguage.da.locale)
 }
 
@@ -23,6 +24,7 @@ import SwiftUI
             now: JarvisHealthPreview.now
         )
     }
+    .environmentObject(JarvisNavigationModel())
     .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 

@@ -35,8 +35,11 @@ struct JarvisActivitySheet: View {
                                 .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
                         }
                     } else if let feed = model.nowFeed {
+                        let presentation = model.backgroundPresentation
+                        let showsRoutineJobs = kind == .background
                         let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty ||
-                            !feed.items.isEmpty || !model.backgroundTasks.isEmpty
+                            !feed.items.isEmpty || (showsRoutineJobs && !model.backgroundTasks.isEmpty) ||
+                            !presentation.actionable.isEmpty || !presentation.quiet.isEmpty
                         if let error = model.activityError {
                             HStack {
                                 Text(error)
@@ -64,14 +67,19 @@ struct JarvisActivitySheet: View {
                         if !feed.running.isEmpty {
                             runningSection(feed.running)
                         }
-                        if !model.backgroundTasks.isEmpty {
-                            backgroundTaskSection
+                        if showsRoutineJobs {
+                            if !model.backgroundTasks.isEmpty { backgroundTaskSection }
+                        } else if !presentation.actionable.isEmpty {
+                            failedTaskSection(presentation.actionable)
                         }
                         ForEach(NowFeedActivityCategory.allCases, id: \.self) { category in
                             let items = feed.items.filter { $0.category == category }
                             if !items.isEmpty {
                                 activitySection(category, items: items)
                             }
+                        }
+                        if !presentation.quiet.isEmpty {
+                            quietFailureGroup(presentation.quiet)
                         }
                         if !hasActivity {
                             ContentUnavailableView("No activity", systemImage: "checkmark.circle")
@@ -97,6 +105,7 @@ struct JarvisActivitySheet: View {
                             .foregroundStyle(JarvisDesignTokens.secondaryAccent)
                             .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                     }
+                        .accessibilityIdentifier("chat.notifications.done")
                         .jarvisToolbarButtonStyle()
                         .accessibilityLabel(copy(.done))
                 }
@@ -129,6 +138,55 @@ struct JarvisActivitySheet: View {
                 Divider()
             }
         }
+    }
+
+    private func failedTaskSection(_ tasks: [BackgroundTaskRecord]) -> some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+            Text(copy(.needsFailedTitle))
+                .font(.headline)
+            ForEach(tasks) { task in
+                failedTaskRow(task)
+            }
+        }
+    }
+
+    private func quietFailureGroup(_ tasks: [BackgroundTaskRecord]) -> some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                ForEach(tasks) { task in
+                    failedTaskRow(task)
+                }
+            }
+            .padding(.top, JarvisDesignTokens.chatMessageSpacing)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(copy(.failedChecksTitle)).font(.headline)
+                Text(String(format: copy(.failedChecksSummary), tasks.count))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(JarvisDesignTokens.chatGlassInset)
+        .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+    }
+
+    private func failedTaskRow(_ task: BackgroundTaskRecord) -> some View {
+        HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.title).font(.body)
+                if let detail = task.detail {
+                    Text(detail).font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            Button(model.dismissingBackgroundTaskIDs.contains(task.id) ? copy(.dismissing) : copy(.dismiss)) {
+                Task { await model.dismissBackgroundTask(task) }
+            }
+            .buttonStyle(.glass)
+            .disabled(model.fixtureMode || model.dismissingBackgroundTaskIDs.contains(task.id))
+            .accessibilityLabel(String(format: copy(.dismissLabel), task.title))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func confirmationSection(_ confirmations: [PendingConfirmation]) -> some View {

@@ -16,7 +16,8 @@ struct VoiceScreenView: View {
     @State private var cameraDragOrigin: CGSize = .zero
     @State private var isDraggingCamera = false
     @State private var showsCameraViewfinder = false
-    @State private var showsScreenSharePicker = false
+    @State private var screenSharePickerToken = 0
+    @State private var screenShareProblem: String?
     @State private var captionsHidden = false
 
     var body: some View {
@@ -131,10 +132,26 @@ struct VoiceScreenView: View {
                 .presentationDragIndicator(.visible)
             }
         }
-        .sheet(isPresented: $showsScreenSharePicker, onDismiss: model.refreshScreenShareState) {
-            VoiceScreenSharePicker()
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
+        .background {
+            VoiceSystemBroadcastPicker(
+                accessibilityLabel: JarvisVoiceLocalization.string(.broadcastPicker),
+                presentationToken: screenSharePickerToken
+            )
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .alert(
+            JarvisVoiceLocalization.string(.shareScreen),
+            isPresented: Binding(
+                get: { screenShareProblem != nil },
+                set: { if !$0 { screenShareProblem = nil } }
+            )
+        ) {
+            Button(JarvisVoiceLocalization.string(.close), role: .cancel) {}
+        } message: {
+            Text(screenShareProblem ?? "")
         }
     }
 
@@ -309,6 +326,7 @@ struct VoiceScreenView: View {
                 ) {
                     Task { await model.toggleMute() }
                 }
+                .accessibilityIdentifier("voice.mic")
             }
 
             Menu {
@@ -334,7 +352,11 @@ struct VoiceScreenView: View {
                     }
                 } else {
                     Button(JarvisVoiceLocalization.string(.shareScreen), systemImage: "rectangle.on.rectangle") {
-                        showsScreenSharePicker = true
+                        if VoiceBroadcastExtension.isInstalled {
+                            screenSharePickerToken += 1
+                        } else {
+                            screenShareProblem = JarvisVoiceLocalization.string(.screenShareUnavailable)
+                        }
                     }
                 }
             } label: {
@@ -380,6 +402,7 @@ struct VoiceScreenView: View {
                     onEnd()
                 }
             }
+            .accessibilityIdentifier("voice.end")
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
@@ -649,19 +672,6 @@ private struct VoicePhotoViewfinder: View {
     }
 }
 
-private struct VoiceScreenSharePicker: View {
-    var body: some View {
-        VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
-            Text(JarvisVoiceLocalization.string(.shareScreen))
-                .font(.title2.weight(.semibold))
-            VoiceSystemBroadcastPicker(accessibilityLabel: JarvisVoiceLocalization.string(.broadcastPicker))
-                .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .jarvisAmbientBackground()
-    }
-}
-
 struct VoiceMiniBar: View {
     @ObservedObject var model: VoiceScreenModel
     let onRestore: () -> Void
@@ -679,6 +689,7 @@ struct VoiceMiniBar: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("\(JarvisVoiceLocalization.string(.restore)). \(model.statusText)")
+            .accessibilityIdentifier("voice.mini.restore")
 
             Button {
                 Task { await model.toggleMute() }
@@ -689,6 +700,8 @@ struct VoiceMiniBar: View {
             .buttonStyle(.glass)
             .disabled(!model.canUseControls)
             .accessibilityLabel(JarvisVoiceLocalization.string(model.isMuted ? .unmute : .mute))
+            .accessibilityIdentifier("voice.mini.mic")
+            .accessibilityAddTraits(model.isMuted ? .isSelected : [])
 
             Button {
                 Task { await model.end() }
@@ -700,6 +713,7 @@ struct VoiceMiniBar: View {
             .buttonStyle(.glassProminent)
             .tint(JarvisDesignTokens.voiceEndActionColor)
             .accessibilityLabel(JarvisVoiceLocalization.string(.end))
+            .accessibilityIdentifier("voice.mini.end")
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceScreenShareBarHeight / 2))

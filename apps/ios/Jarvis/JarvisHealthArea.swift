@@ -358,6 +358,7 @@ struct JarvisHealthArea: View {
 
     private var header: some View {
         HStack {
+            JarvisSidebarMenuButton(language: language)
             Text(copy.text(.title))
                 .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.primary)
@@ -384,6 +385,7 @@ struct JarvisHealthArea: View {
             Text(copy.text(.trackWorkout)).tag(true)
         }
         .pickerStyle(.segmented)
+        .accessibilityIdentifier("health.mode")
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
         .onChange(of: trackWorkout) { _, _ in searchText = "" }
     }
@@ -429,6 +431,7 @@ struct JarvisHealthArea: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .accessibilityLabel(copy.text(.search))
+                    .accessibilityIdentifier("health.search")
                 if !searchText.isEmpty {
                     Button {
                         searchText = ""
@@ -457,6 +460,7 @@ struct JarvisHealthArea: View {
             .buttonStyle(.glass)
             .disabled(!liftsAvailable || liftsLoading)
             .accessibilityLabel(copy.text(liftsAvailable ? .newLift : .unavailable))
+            .accessibilityIdentifier("health.plus")
         }
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
     }

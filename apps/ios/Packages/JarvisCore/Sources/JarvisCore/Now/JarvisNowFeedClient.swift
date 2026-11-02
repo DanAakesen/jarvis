@@ -63,6 +63,19 @@ public final class JarvisNowFeedClient: Sendable {
         return snapshot.jobs
     }
 
+    public func dismissBackgroundTask(id: String) async throws {
+        guard UUID(uuidString: id) != nil else { throw JarvisNowFeedClientError.invalidActivityID }
+        do {
+            let response = try await client.performAuthenticatedRequest(
+                method: .post, path: ["jobs", id.lowercased(), "dismiss"], idempotent: false
+            )
+            guard response.statusCode == 200 else { throw JarvisNowFeedClientError.invalidResponse }
+        } catch let error as JarvisClientError {
+            if case .httpStatus(404) = error { throw JarvisNowFeedClientError.activityUnavailable }
+            throw error
+        }
+    }
+
     public func registerTaskActivity(
         taskID: String, activityID: String, pushToken: String, language: JarvisAppLanguage
     ) async throws {

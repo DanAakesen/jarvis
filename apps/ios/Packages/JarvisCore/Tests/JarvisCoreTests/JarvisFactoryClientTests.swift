@@ -120,6 +120,17 @@ final class JarvisFactoryClientTests: XCTestCase {
         await assertConsumed(transport)
     }
 
+    func testIssueNumberFormatsTakeIntegersNotObjects() {
+        // `%@` with an Int argument crashed the Factory board when a card had a blocker.
+        for key in [JarvisFactoryLocalizationKey.blockedBy, .issueNumber] {
+            for language in [JarvisAppLanguage.da, .en] {
+                let format = JarvisFactoryLocalization.string(key, language: language)
+                XCTAssertFalse(format.contains("%@"), "\(key.rawValue) must not use %@ for an Int")
+                XCTAssertTrue(String(format: format, 3).contains("#3"))
+            }
+        }
+    }
+
     func testFactoryPresentationAndCopyAreCompleteInBothLanguages() throws {
         for key in JarvisFactoryLocalizationKey.allCases {
             XCTAssertNotEqual(JarvisFactoryLocalization.string(key, language: .da), key.rawValue)
