@@ -119,23 +119,14 @@ struct JarvisFactoryNewTaskSheet: View {
             .navigationTitle(copy.text(.newTask))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(copy.text(.cancel)) { dismiss() }
-                        .accessibilityIdentifier("sheet.cancel")
-                        .disabled(creating)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await createTask() }
-                    } label: {
-                        if creating {
-                            ProgressView()
-                        } else {
-                            Text(copy.text(.createTask))
-                        }
-                    }
-                    .disabled(creating || savingPolicy || policySaveFailed || !isValidDraft)
-                }
+                JarvisSheetToolbar(
+                    confirmTitle: copy.text(.createTask),
+                    closeTitle: copy.text(.cancel),
+                    isWorking: creating,
+                    isConfirmDisabled: savingPolicy || policySaveFailed || !isValidDraft,
+                    onConfirm: { Task { await createTask() } },
+                    onClose: { dismiss() }
+                )
             }
             .environment(\.locale, language.locale)
             .onChange(of: selectedProjectID) { _, projectID in

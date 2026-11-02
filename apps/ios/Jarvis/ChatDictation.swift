@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import JarvisCore
 import Speech
 
 /// On-device-first speech-to-text for the Chat composer's dictate button.
@@ -10,6 +11,7 @@ final class ChatDictation: ObservableObject {
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    private var transcript = DictationTranscript(base: "")
 
     static func requestAccess() async -> Bool {
         let speech = await withCheckedContinuation { continuation in
@@ -45,12 +47,12 @@ final class ChatDictation: ObservableObject {
         try engine.start()
         isListening = true
 
-        let prefix = base.isEmpty || base.hasSuffix(" ") ? base : base + " "
+        transcript = DictationTranscript(base: base)
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let finished = result?.isFinal == true || error != nil
             Task { @MainActor in
-                if let text { update(prefix + text) }
+                if let text, let self { update(self.transcript.update(text)) }
                 if finished { self?.stop() }
             }
         }

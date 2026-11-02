@@ -157,19 +157,19 @@ struct JarvisHealthNewLiftSheet: View {
             .navigationTitle(copy.text(.newLift))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(copy.text(.cancel)) { dismiss() }.disabled(saving)
-                        .accessibilityIdentifier("sheet.cancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(copy.text(saving ? .saving : .save)) {
+                JarvisSheetToolbar(
+                    confirmTitle: copy.text(.save),
+                    closeTitle: copy.text(.cancel),
+                    isWorking: saving,
+                    isConfirmDisabled: client == nil || (submittedDraft ?? draft) == nil,
+                    onConfirm: {
                         submittedDraft = submittedDraft ?? draft
                         saving = true
                         failed = false
                         saveVersion += 1
-                    }
-                    .disabled(saving || client == nil || (submittedDraft ?? draft) == nil)
-                }
+                    },
+                    onClose: { dismiss() }
+                )
             }
         }
         .environment(\.locale, language.locale)

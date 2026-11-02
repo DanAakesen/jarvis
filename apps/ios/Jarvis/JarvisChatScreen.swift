@@ -753,7 +753,7 @@ struct JarvisChatScreen: View {
             .accessibilityIdentifier("chat.stop")
             .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
         } else if model.canSend {
-            trailingDisc(symbol: "arrow.up", isSend: true, action: {
+            JarvisFilledCircleButton(systemImage: "arrow.up", action: {
                 dictation.stop()
                 sendMessage()
             })
@@ -1507,10 +1507,13 @@ private struct JarvisChatCameraSheet: View {
     var body: some View {
         VStack {
             HStack {
-                Button(closeTitle, systemImage: "xmark", action: onCancel)
-                    .buttonStyle(.glass)
-                    .accessibilityIdentifier("camera.close")
                 Spacer()
+                JarvisIconButton(
+                    title: closeTitle,
+                    systemImage: "xmark",
+                    identifier: "camera.close",
+                    action: onCancel
+                )
             }
             Spacer()
             lensButtons
