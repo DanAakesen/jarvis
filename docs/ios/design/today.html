@@ -2508,7 +2508,6 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
           <hr class="sb-rule">
           <nav class="sb-list" aria-label="Areas">
             <div class="sb-rows" id="sb-rows">
-              <button class="sb-row" type="button" data-area="today"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg><span>Today</span></button>
               <button class="sb-row" type="button" data-area="proactive"><svg class="ic" aria-hidden="true"><use href="#i-proactive"/></svg><span>Proactive</span></button>
               <button class="sb-row" type="button" data-area="status"><svg class="ic" aria-hidden="true"><use href="#i-status"/></svg><span>Status</span></button>
               <button class="sb-row" type="button" data-area="usage"><svg class="ic" aria-hidden="true"><use href="#i-usage"/></svg><span>Usage</span></button>
@@ -2748,7 +2747,6 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   const LARGE = { notes: true, area: true, hub: true };
   /* Areas that exist on the web app. Only chat, voice and notes are drawn here; the rest open a placeholder page. */
   const AREAS = {
-    today: { label: 'Today', screen: 'today' },
     home: { label: 'Home', screen: 'today' },
     chat: { label: 'Chat', screen: 'chat' },
     factory: { label: 'Software Factory', hub: true, re: /\b(software factory|factory)\b/ },
@@ -4280,7 +4278,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   function syncSidebar() {
     const cur = currentArea();
     $$('.sb-row[data-area]', sidebar).forEach(r => {
-      if (r.dataset.area === cur || (r.dataset.area === 'home' && cur === 'today')) r.setAttribute('aria-current', 'page'); else r.removeAttribute('aria-current');
+      if (r.dataset.area === (cur === 'today' ? 'home' : cur)) r.setAttribute('aria-current', 'page'); else r.removeAttribute('aria-current');
     });
   }
   function setSidebar(open, o = {}) {
@@ -7641,7 +7639,6 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   }
   function applyLang() {
     const row = (a, t) => { const s = $('.sb-row[data-area="' + a + '"] span'); if (s) s.textContent = t; };
-    row('today', L('Today', 'I dag'));
     row('home', L('Home', 'Hjem'));
     $('#view-today').setAttribute('aria-label', L('Today', 'I dag'));
     if (onToday()) $('#nav-title').textContent = L('Today', 'I dag');
