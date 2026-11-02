@@ -349,6 +349,25 @@ final class JarvisChatClientTests: XCTestCase {
         ])
     }
 
+    func testSteerTurnPostsFollowUpAndReportsNoActiveTurn() async throws {
+        let transport = FakeChatTransport([
+            .response(jsonResponse(status: 202, body: ["id": "43"])),
+            .response(HTTPResponse(statusCode: 409)),
+        ])
+        let chat = makeChatClient(transport: transport)
+
+        let steered = try await chat.steerTurn(sessionId: "12", text: "Hurtigere", language: .da)
+        let idle = try await chat.steerTurn(sessionId: "12", text: "Hurtigere", language: .da)
+
+        XCTAssertTrue(steered)
+        XCTAssertFalse(idle)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.url.path), [
+            "/api/conversation/sessions/12/steer",
+            "/api/conversation/sessions/12/steer",
+        ])
+    }
+
     func testUploadsOneMultipartAttachmentWithinSizeLimit() async throws {
         let transport = FakeChatTransport([
             .response(jsonResponse(status: 201, body: [

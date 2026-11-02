@@ -100,6 +100,8 @@ enum JarvisDesignTokens {
     static let sidebarOpenThreshold: CGFloat = 0.5
     static let sidebarCloseThreshold: CGFloat = 0.3
     static let sidebarBrandFontSize: CGFloat = 22
+    /// Blur on the front page when the sidebar is fully open; it grows with the swipe.
+    static let sidebarPageBlurRadius: CGFloat = 8
     static let sidebarSettingsButtonSize: CGFloat = 44
     static let sidebarHeaderLeadingInset: CGFloat = 26
     static let sidebarHeaderTrailingInset: CGFloat = 10
@@ -139,6 +141,10 @@ enum JarvisDesignTokens {
     static let chatVideoTileHeight: CGFloat = 208
     static let chatVideoTileRadius: CGFloat = surfaceRadius
     static let nowBarHeight: CGFloat = 36
+    /// The small core shown in the assistant's bubble while its answer is on the way.
+    static let chatMiniCoreSize: CGFloat = 28
+    /// How far the composer rim's pulse travels outwards before it fades.
+    static let rimRippleReach: CGFloat = 7
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
@@ -164,7 +170,8 @@ enum JarvisDesignTokens {
     static let voiceOrbListeningDuration: Double = 2.8
     static let voiceOrbThinkingDuration: Double = 1.5
     static let voiceOrbSpeakingDuration: Double = 0.9
-    static let voiceControlDiameter: CGFloat = 52
+    /// Floating glass buttons share the chat header button size everywhere.
+    static let voiceControlDiameter: CGFloat = chatMinimumTapTarget
     static let voiceControlSpacing: CGFloat = 16
     static let voiceControlBottomInset: CGFloat = 24
     static let voiceCameraTileWidth: CGFloat = 122
@@ -285,10 +292,6 @@ enum JarvisDesignTokens {
     static let gateSigningPulse: CGFloat = 0.09
     static let gateOrbIdleDuration: Double = 3.2
     static let gateOrbSigningDuration: Double = 0.9
-    static let orbGlass = Color(red: 0.075, green: 0.11, blue: 0.16)
-    static let orbGlassHighlight = Color(red: 0.26, green: 0.34, blue: 0.42)
-    static let orbGlassShadow = Color(red: 0.025, green: 0.04, blue: 0.06)
-    static let orbGlassShadowColor = Color.black.opacity(0.38)
     /// The board's light glass fill (`--g-fill-bar`): white in light, deep blue-grey in dark.
     static let glassFill = adaptiveColor(
         light: UIColor(white: 1, alpha: 0.44),
@@ -299,25 +302,9 @@ enum JarvisDesignTokens {
         light: UIColor(red: 1, green: 150.0 / 255, blue: 40.0 / 255, alpha: 1),
         dark: UIColor(red: 1, green: 205.0 / 255, blue: 120.0 / 255, alpha: 1)
     )
-    static let orbCyan = adaptiveColor(
-        light: UIColor(red: 42.0 / 255, green: 164.0 / 255, blue: 194.0 / 255, alpha: 1),
-        dark: UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 1)
-    )
-    static let orbGlassEdge = orbCyan.opacity(0.82)
-    static let orbGlassCenter = UnitPoint(x: 0.35, y: 0.27)
-    static let orbGlassStartRadiusScale: CGFloat = 0.02
-    static let orbGlassEndRadiusScale: CGFloat = 0.8
-    static let orbGlassEdgeWidthScale: CGFloat = 0.008
-    static let orbGlassShadowRadiusScale: CGFloat = 0.09
     static let orbCore = Color(red: 1, green: 0.34, blue: 0.12)
     static let orbCoreHighlight = Color(red: 1, green: 0.69, blue: 0.28)
-    static let orbCoreHighlightCenter = UnitPoint(x: 0.34, y: 0.24)
-    static let orbCoreCenter = UnitPoint(x: 0.5, y: 0.5)
     static let orbCoreEdgeOpacity: Double = 0.2
-    static let orbCoreGlowRadiusScale: CGFloat = 0.24
-    static let orbCenterSizeScale: CGFloat = 0.065
-    static let orbCenterGlowOpacity: Double = 0.86
-    static let orbCenterGlowRadiusScale: CGFloat = 0.09
 
     private static func adaptiveColor(light: UIColor, dark: UIColor) -> Color {
         Color(uiColor: UIColor { traits in

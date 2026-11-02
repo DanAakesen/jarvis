@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "Lås Jarvis op med Face ID.";
+"NSLocationWhenInUseUsageDescription" = "Jarvis bruger din omtrentlige placering til vejret, hvor du er.";

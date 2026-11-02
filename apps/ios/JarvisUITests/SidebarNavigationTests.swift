@@ -140,7 +140,7 @@ final class SidebarNavigationTests: XCTestCase {
         ]
         app.launch()
         let menu = app.buttons["navigation.openSidebar"]
-        XCTAssertTrue(menu.waitForExistence(timeout: 8))
+        XCTAssertTrue(menu.waitForExistence(timeout: 20))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 

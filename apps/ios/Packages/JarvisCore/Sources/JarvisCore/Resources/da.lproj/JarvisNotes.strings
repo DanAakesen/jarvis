@@ -149,3 +149,6 @@
 "notes.overview" = "Overblik";
 "notes.openTasks" = "Åbne opgaver";
 "notes.doneTasks" = "Klaret";
+"voice.sentPhoto" = "Foto sendt";
+"voice.sentVideo" = "Video sendt";
+"voice.sentScreen" = "Skærmdeling sendt";

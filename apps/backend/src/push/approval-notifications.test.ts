@@ -12,6 +12,8 @@ import {
   approvalNotificationPayload,
   createApprovalNotificationDispatcher,
   createApprovalNotificationSender,
+  createReplyNotificationDispatcher,
+  replyNotificationPayload,
   loadApprovalNotificationConfig,
   type ApprovalNotificationSender,
 } from './approval-notifications.js';
@@ -209,5 +211,32 @@ describe('APNs approval notifications', () => {
     const payload = JSON.parse(f.send.mock.calls[0]![1].toString());
     expect(payload.aps.category).toBe('jarvis.approval');
     expect(payload.confirmationID).toBe(confirmation.id);
+  });
+});
+
+describe('chat reply notifications', () => {
+  it('builds a bounded single-line alert that carries the session and message', () => {
+    const payload = JSON.parse(replyNotificationPayload({
+      sessionId: 's1', messageId: 'm1', language: 'da', text: `Hej\n${'x'.repeat(400)}`,
+    }).toString());
+    expect(payload.aps.alert.body.startsWith('Hej x')).toBe(true);
+    expect([...payload.aps.alert.body]).toHaveLength(160);
+    expect(payload).toMatchObject({ sessionID: 's1', messageID: 'm1', aps: { category: 'jarvis.reply' } });
+  });
+  it('sends to each registered device in its language and removes invalid tokens', async () => {
+    const registrations: ApprovalNotificationRegistration[] = [
+      { deviceToken, language: 'da', showActions: true, timeZone },
+      { deviceToken: 'cd'.repeat(32), language: 'en', showActions: true, timeZone },
+    ];
+    const removed: string[] = [];
+    const store = {
+      list: async () => registrations,
+      remove: async (_owner: string, token: string) => { removed.push(token); },
+    } as unknown as ApprovalNotificationStore;
+    const send = vi.fn(async (token: string) => ({ accepted: token === deviceToken, invalidToken: token !== deviceToken }));
+    const notify = createReplyNotificationDispatcher('owner', { store, sender: { send } }, { warn: vi.fn() });
+    notify({ sessionId: 's1', messageId: 'm1', text: 'Svar', language: 'da' });
+    await vi.waitFor(() => expect(removed).toEqual(['cd'.repeat(32)]));
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

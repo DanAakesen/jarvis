@@ -6857,7 +6857,7 @@ after reconnect remain unverified.
 `JarvisVoiceActivity` is the embedded WidgetKit extension. The app and extension
 compile the same attributes, intents and Danish/English intent metadata from
 `apps/ios/Shared`; view copy lives in the `VoiceLiveActivity` Core resources.
-The extension reuses `JarvisOrbView` and `JarvisDesignSystem`. No App Group,
+The extension reuses `JarvisMiniCoreView` and `JarvisDesignSystem`. No App Group,
 push entitlement, push token or backend registration is required. Signed builds
 need provisioning for `com.danaakesen.jarvis.voiceactivity`; the existing
 owner-started automatic signing workflow is unchanged.

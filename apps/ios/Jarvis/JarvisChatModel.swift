@@ -80,6 +80,8 @@ final class JarvisChatModel: ObservableObject {
     @Published var isLoadingOlder = false
     @Published var isSending = false
     private var optimisticMessageID: String?
+    private var steeringMessageIDs: [String] = []
+    private var thinkingPhrase = ""
     @Published var isCancelling = false
     @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
     @Published var dismissingActivityIDs = Set<String>()
@@ -99,6 +101,7 @@ final class JarvisChatModel: ObservableObject {
     private let updatesClient: JarvisWorkspaceClient?
     private let settingsClient: JarvisSettingsClient?
     private let factoryClient: JarvisFactoryClient?
+    private let deviceLocation = JarvisDeviceLocation()
     private let watchClient: VisionWatchClient?
     private var liveStreamTask: Task<Void, Never>?
     private var historyPaging = ChatHistoryPagingState()
@@ -176,7 +179,7 @@ final class JarvisChatModel: ObservableObject {
         if let task = backgroundTasks.first(where: { $0.status == .running }) {
             return task.detail ?? task.title
         }
-        return nowFeed?.awayMode == true ? "Away mode" : "Background activity"
+        return nowFeed?.items.first?.title ?? "Background activity"
     }
 
     func load() async {
@@ -198,6 +201,7 @@ final class JarvisChatModel: ObservableObject {
         }
         isLoading = false
         await loadVoiceLanguage()
+        if !fixtureMode, let settingsClient { _ = await deviceLocation.sync(using: settingsClient) }
         await refreshActivity()
 
         await reattachActiveTurnIfNeeded()
@@ -310,15 +314,24 @@ final class JarvisChatModel: ObservableObject {
     }
 
     func send(visualFrame: PendingVisualFrame? = nil) {
-        guard !isSending, canSend else { return }
+        guard canSend else { return }
+        if isSending {
+            steer()
+            return
+        }
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
         isCancelling = false
         actionError = nil
-        statusLine = "Thinking…"
         streamingText = ""
         let text = draft
         let attachments = pendingAttachments
+        thinkingPhrase = ChatThinkingPhrase.phrase(
+            forRequest: text,
+            hasImage: visualFrame != nil || attachments.contains { $0.contentType.hasPrefix("image/") },
+            language: appLanguage
+        )
+        statusLine = thinkingPhrase
         let optimisticID = "local-\(UUID().uuidString)"
         optimisticMessageID = optimisticID
         addOrReplace(JarvisChatRow(
@@ -329,6 +342,32 @@ final class JarvisChatModel: ObservableObject {
         ))
         draft = ""
         sendTask = Task { await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame) }
+    }
+
+    /// The composer stays active while Jarvis answers: a follow-up joins the running turn instead of waiting for it.
+    private func steer() {
+        let text = draft
+        guard let client, let sessionID, activeMessageID != nil else {
+            actionError = JarvisChatLocalization.string(.followUpUnavailable, language: appLanguage)
+            return
+        }
+        draft = ""
+        let followUpID = "local-\(UUID().uuidString)"
+        addOrReplace(JarvisChatRow(
+            id: followUpID, role: .dan, text: text, at: ISO8601DateFormatter().string(from: Date())
+        ))
+        steeringMessageIDs.append(followUpID)
+        Task {
+            do {
+                if try await client.steerTurn(sessionId: sessionID, text: text, language: language) { return }
+                actionError = JarvisChatLocalization.string(.followUpUnavailable, language: appLanguage)
+            } catch {
+                actionError = message(for: error)
+            }
+            steeringMessageIDs.removeAll { $0 == followUpID }
+            messages.removeAll { $0.id == followUpID }
+            if draft.isEmpty { draft = text }
+        }
     }
 
     func cancel() async {
@@ -413,8 +452,12 @@ final class JarvisChatModel: ObservableObject {
             for try await event in updatesClient.events() {
                 try Task.checkCancellation()
                 switch event {
-                case .pendingConfirmationsChanged, .activityChanged:
+                case .pendingConfirmationsChanged:
                     await refreshActivity()
+                case .activityChanged:
+                    await refreshActivity()
+                    // Replies that finish while the user is in voice or screen sharing must show up without a message.
+                    if !isSending { await refreshHistory() }
                 case .workspaceReady:
                     await refreshActivity()
                     await reattachActiveTurnIfNeeded()
@@ -560,7 +603,7 @@ final class JarvisChatModel: ObservableObject {
 
         do {
             var attachmentIDs: [String] = []
-            if !attachments.isEmpty { statusLine = "Uploading attachments…" }
+            if !attachments.isEmpty { statusLine = JarvisChatLocalization.string(.thinkingAttachments, language: appLanguage) }
             for attachment in attachments {
                 if let uploaded = uploadedAttachmentIDs[attachment.id] {
                     attachmentIDs.append(uploaded)
@@ -571,12 +614,12 @@ final class JarvisChatModel: ObservableObject {
                 }
             }
             if sessionID == nil {
-                statusLine = "Thinking…"
+                statusLine = thinkingPhrase
                 let session = try await client.createSession(language: language)
                 sessionID = session.id
                 language = session.language
             }
-            statusLine = "Thinking…"
+            statusLine = thinkingPhrase
             guard let sessionID else { throw JarvisClientError.invalidRequest }
             var visualContext: ChatVisualContext?
             if let visualFrame {
@@ -594,6 +637,7 @@ final class JarvisChatModel: ObservableObject {
             uploadedAttachmentIDs = [:]
             try await consume(events)
             discardOptimisticMessage()
+            discardSteeringPlaceholders()
             await refreshHistory()
             isSending = false
         } catch is CancellationError {
@@ -615,6 +659,13 @@ final class JarvisChatModel: ObservableObject {
 
     /// Removes the local placeholder once the server's copy arrived or the turn failed.
     /// A sent message is never put back in the composer.
+    private func discardSteeringPlaceholders() {
+        guard !steeringMessageIDs.isEmpty else { return }
+        let ids = Set(steeringMessageIDs)
+        steeringMessageIDs = []
+        messages.removeAll { ids.contains($0.id) }
+    }
+
     private func discardOptimisticMessage() {
         guard let id = optimisticMessageID else { return }
         optimisticMessageID = nil
@@ -678,7 +729,7 @@ final class JarvisChatModel: ObservableObject {
             language = turn.language
             activeMessageID = turn.messageId
             isSending = true
-            statusLine = "Reconnecting…"
+            statusLine = JarvisChatLocalization.string(.thinkingReconnecting, language: appLanguage)
             sendTask = Task { await reattach(turn) }
             actionError = nil
         } catch {
