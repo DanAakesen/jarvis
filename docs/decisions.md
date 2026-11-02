@@ -10521,3 +10521,10 @@ The temporary navigation trace (`debug.navigation.trace`, `debugWrites`, `debugS
 ## 2026-11-02: Camera sheet always renders its controls; voice entry points (P15-54 follow-up)
 
 CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`) shows the `.large` sheet window present (402×812 at y=62) but with no exposed children, so `camera.shutter` never existed. The sheet is now built whether or not a capture device exists (a placeholder `VoiceCameraCapture` stands in), its controls are laid out in a plain `VStack` with the preview and background behind it as hidden decoration, and the shutter and lens buttons are disabled instead of absent when the session has no input. The test also checks a `camera.lens.wide` button and that no mode picker exists. This is the best reading of the tree; it is not run here and needs the next iOS CI run. Voice entry points found in code: the composer voice button (`chat.mode`) and the mini bar restore button. The Live Activity intents do not open the app (`openAppWhenRun = false`), there is no URL scheme or notification deep link to voice, and the backend `navigate` page list has no voice page, so those paths do not exist. `VoiceEntryPointUITests` covers both real entry points, and a JarvisCore test covers voice navigation from each state. The reported "Navigating to voice failed" is not reproduced; the cause is unconfirmed.
+
+## 2026-11-02 — P15-54: voice start survives view-task cancellation
+
+- Status: accepted (Dan: the composer voice button is the only voice entry point).
+- `VoiceScreenModel.start()` now runs the session start in an unstructured task. Cancelling the voice screen's `.task` (for example when the host re-renders) no longer turns `Task.checkCancellation()` into a failed session. Generation checks still cancel a superseded start.
+- No `%d`/`%@` mismatch exists in the voice screen: its strings have no format placeholders, and `LocalizedFormatStringTests` covers the voice tables.
+- `VoiceEntryPointUITests` asserts the mic control is hittable after tapping the composer button, in Danish and English. Not run: no Xcode here.

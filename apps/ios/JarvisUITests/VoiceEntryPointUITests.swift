@@ -51,7 +51,10 @@ final class VoiceEntryPointUITests: XCTestCase {
     private func assertVoiceScreenShown() {
         let screen = app.descendants(matching: .any).matching(identifier: "screen.voice").firstMatch
         XCTAssertTrue(screen.waitForExistence(timeout: 10), "Navigating to voice must show the voice screen")
-        XCTAssertTrue(app.buttons["voice.mic"].waitForExistence(timeout: 10), "The voice controls must be visible")
+        let mic = app.buttons["voice.mic"]
+        XCTAssertTrue(mic.waitForExistence(timeout: 10), "The voice controls must be visible")
+        XCTAssertTrue(mic.isHittable, "A started voice session must show a usable microphone control")
+        XCTAssertFalse(app.buttons["chat.mode"].exists, "The voice screen must replace the chat composer")
     }
 
     private func minimizeVoice() {

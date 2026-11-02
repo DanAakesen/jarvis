@@ -142,6 +142,10 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     var isPreview: Bool { screenshotState != nil }
 
     func start() async {
+        await Task { @MainActor in await self.performStart() }.value
+    }
+
+    private func performStart() async {
 #if targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
             guard sessionClient == nil else { return }
