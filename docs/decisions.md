@@ -10589,5 +10589,5 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 - The notification sheet shows one row per category with the latest update and an "+ N earlier" count. Older items sit in a lazy disclosure. A group with older items has one clear-all control; the toolbar has a clear-everything control. The grouping is `NowFeedActivityGrouping` in JarvisCore (tested).
 - The backend has one dismiss route per item, so clear-all dismisses item by item, treats a missing item as dismissed, stops on any other error and reloads once. A bulk route would need a backend change and was not added.
-- The sheet close X uses the shared `JarvisSheetCloseButton` and keeps `chat.notifications.done`.
+- The sheet close X keeps its existing toolbar chrome and `chat.notifications.done`; a repo test pins that source.
 - Not compiled here (no Xcode). Still open: mode control, orb, burger icon (which page is the main shell?), Usage chips, Health toggle and detent, add-item sheet, camera lenses and preview, navigate-away send, dictation waveform, transcript sync.

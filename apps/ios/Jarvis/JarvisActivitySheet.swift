@@ -99,9 +99,15 @@ struct JarvisActivitySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    JarvisSheetCloseButton(
-                        title: copy(.done), identifier: "chat.notifications.done", action: { dismiss() }
-                    )
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                    }
+                        .accessibilityIdentifier("chat.notifications.done")
+                        .jarvisToolbarButtonStyle()
+                        .accessibilityLabel(copy(.done))
                 }
                 if let items = model.nowFeed?.items, items.count > 1 {
                     ToolbarItem(placement: .topBarLeading) {
