@@ -6330,7 +6330,7 @@ before its GeometryReader closure; rendering uses that snapshot, while actions
 mutate the same persisted state. Full native navigation remains unverified.
 Its 45-minute limit accommodates
 both the existing captures and the new repeated UI sequence. The
-`--ui-test-navigation` fixture is simulator-only and needs no live credentials,
+`--ui-test-navigation` fixture is simulator-only (it also serves the Usage, Status and Proactive fixtures; see `InsightsPagesTests`) and needs no live credentials,
 audio device, or backend; device authorization is unchanged.
 Linux can parse Swift and run Core/pipeline tests, but cannot execute XCUITest.
 Run 41286956749 compiled successfully; all three UI tests failed before the first
