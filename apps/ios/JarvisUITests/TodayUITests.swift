@@ -122,7 +122,10 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(app.textViews["chat.input"].waitForExistence(timeout: 5)
                       || app.textFields["chat.input"].waitForExistence(timeout: 5))
         let home = app.descendants(matching: .any)["chat.backToToday"]
-        XCTAssertTrue(home.waitForExistence(timeout: 10))
+        if !home.waitForExistence(timeout: 10) {
+            XCTFail("chat.backToToday missing. \(String(app.debugDescription.prefix(6000)))")
+            return
+        }
         home.tap()
         XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "Reversing returns to Home")
     }

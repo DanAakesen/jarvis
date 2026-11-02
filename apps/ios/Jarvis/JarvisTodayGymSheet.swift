@@ -91,14 +91,16 @@ struct JarvisTodayGymSheet: View {
                             .accessibilityIdentifier("today.gym.sets")
                     }
                 }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if let message = statusMessage {
-                    Section {
-                        Label(message.text, systemImage: message.symbol)
-                            .foregroundStyle(message.isError ? Color.red : Color.primary)
-                            .accessibilityElement(children: .combine)
-                            .accessibilityAddTraits(.updatesFrequently)
-                            .accessibilityIdentifier("today.gym.status")
-                    }
+                    Label(message.text, systemImage: message.symbol)
+                        .foregroundStyle(message.isError ? Color.red : Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .padding(.horizontal)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAddTraits(.updatesFrequently)
+                        .accessibilityIdentifier("today.gym.status")
                 }
             }
             .navigationTitle(copy(.gymLog))
