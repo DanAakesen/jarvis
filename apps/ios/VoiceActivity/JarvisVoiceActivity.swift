@@ -139,7 +139,7 @@ private struct VoiceActivityOrbView: View {
     let status: String
 
     var body: some View {
-        JarvisOrbView(activity: .calm, diameter: diameter, usesStaticFilaments: true)
+        JarvisMiniCoreView(activity: .calm, diameter: diameter, isStatic: true)
             .frame(width: diameter, height: diameter)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(VoiceLiveActivityCopy.title.text(language: language))
@@ -185,9 +185,9 @@ struct VoiceLockScreenView: View {
     var body: some View {
         VStack(spacing: JarvisDesignTokens.liveActivitySpacing) {
             HStack(spacing: JarvisDesignTokens.rowSpacing) {
-                JarvisOrbView(
+                JarvisMiniCoreView(
                     activity: .calm, diameter: JarvisDesignTokens.liveActivityOrbSize,
-                    usesStaticFilaments: true
+                    isStatic: true
                 )
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
                     Text(text(.title)).font(.headline).foregroundStyle(.white)

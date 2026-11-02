@@ -494,10 +494,10 @@ struct JarvisChatScreen: View {
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatMessageSpacing) {
                 if messageID == "streaming" && model.streamingText.isEmpty {
-                    JarvisOrbView(
+                    JarvisMiniCoreView(
                         activity: .thinking,
                         diameter: JarvisDesignTokens.chatMiniCoreSize,
-                        usesStaticFilaments: model.fixtureMode || reduceMotion
+                        isStatic: model.fixtureMode || reduceMotion
                     )
                     .accessibilityHidden(true)
                 }

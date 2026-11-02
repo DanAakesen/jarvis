@@ -595,7 +595,7 @@ private struct VoiceOrbView: View {
     let diameter: CGFloat
     let onMinimize: () -> Void
 
-    private var activity: JarvisOrbActivity {
+    private var activity: JarvisMiniCoreActivity {
         if isMuted { return .muted }
         switch state {
         case .listening: return .listening
@@ -608,7 +608,7 @@ private struct VoiceOrbView: View {
     }
 
     var body: some View {
-        JarvisOrbView(activity: activity, diameter: diameter)
+        JarvisMiniCoreView(activity: activity, diameter: diameter)
             .frame(
                 width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
                 height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2

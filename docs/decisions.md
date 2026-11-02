@@ -10639,4 +10639,4 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Weather uses the device: `JarvisDeviceLocation` asks for When In Use permission, reverse-geocodes one coarse fix and saves city and coordinates (rounded to 0.01 degrees) into the existing home-location setting that the weather tool reads.
 - Voice photos taken while live video is off now reach the assistant on the next turn, and sent photos, video frames and screen frames show in the voice transcript area.
 - Unverified: SwiftUI compilation, UI tests and APNs delivery need the Mac job and protected configuration.
-
+- Orb unification (P15-59, Dan's follow-up): `JarvisOrbView` (glass sphere, cyan rim, rotated/bent rendering) is deleted. `JarvisMiniCoreView` (amber filament tangle on a transparent canvas, uniform breathing, steady under Reduce Motion) replaces it in the gate/Face ID screens (2 call sites in `JarvisGateRootView`: sign-in and lock), Voice (`VoiceOrbView`), the chat streaming bubble, the lock-screen notification preview and both Voice Live Activity views. Settings and Factory render no orb. The sphere-only design tokens are removed. Not compiled on a device here.

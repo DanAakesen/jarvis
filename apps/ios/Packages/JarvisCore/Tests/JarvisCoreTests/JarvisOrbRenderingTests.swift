@@ -1,36 +1,46 @@
 import Foundation
 import XCTest
 
+/// Source-level guards for the single shared mini-core mark (the SwiftUI target cannot be built on Linux).
 final class JarvisOrbRenderingTests: XCTestCase {
-    func testLockScreenNotificationFixtureUsesAnAppIconSizedOrb() throws {
+    private func source(_ path: String) throws -> String {
         var repository = URL(fileURLWithPath: #filePath)
         for _ in 0..<7 { repository.deleteLastPathComponent() }
-        let source = try String(
-            contentsOf: repository.appendingPathComponent("apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift"),
-            encoding: .utf8
-        )
-        XCTAssertTrue(source.contains("JarvisOrbView(activity: .calm, diameter: 38)"))
+        return try String(contentsOf: repository.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    func testLockScreenNotificationFixtureUsesAnAppIconSizedMiniCore() throws {
+        let source = try source("apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift")
+        XCTAssertTrue(source.contains("JarvisMiniCoreView(activity: .calm, diameter: 38)"))
         XCTAssertTrue(source.contains(".frame(width: 38, height: 38)"))
     }
 
-    func testCoreGlowHasTransparentMarginAndFadesBeforeItsBounds() throws {
-        var repository = URL(fileURLWithPath: #filePath)
-        for _ in 0..<7 { repository.deleteLastPathComponent() }
-        let source = try String(
-            contentsOf: repository.appendingPathComponent("apps/ios/Jarvis/JarvisOrbView.swift"),
-            encoding: .utf8
-        )
-        let core = try XCTUnwrap(source.components(separatedBy: "Canvas { context, canvasSize in").last?
-            .components(separatedBy: ".frame(width: size, height: size)").first)
-        XCTAssertTrue(core.contains("CGSize(width: size * 0.42, height: size * 0.42)"))
-        XCTAssertTrue(core.contains("(canvasSize.width - filamentSize.width) / 2"))
-        XCTAssertTrue(core.contains("(canvasSize.height - filamentSize.height) / 2"))
-        XCTAssertTrue(core.contains(".frame(width: size * 0.7, height: size * 0.7)"))
-        XCTAssertTrue(core.contains(".init(color: .clear, location: 1)"))
-        XCTAssertTrue(core.contains("endRadius: size * 0.35"))
+    func testEveryOrbSurfaceUsesTheOneMiniCoreView() throws {
+        let files = [
+            "apps/ios/Jarvis/JarvisGateRootView.swift", "apps/ios/Jarvis/VoiceScreen.swift",
+            "apps/ios/Jarvis/JarvisChatScreen.swift", "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift",
+            "apps/ios/VoiceActivity/JarvisVoiceActivity.swift",
+        ]
+        for file in files {
+            let text = try source(file)
+            XCTAssertTrue(text.contains("JarvisMiniCoreView("), file)
+            XCTAssertFalse(text.contains("JarvisOrbView"), file)
+        }
+        let repository = URL(fileURLWithPath: #filePath)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repository.deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appendingPathComponent("apps/ios/Jarvis/JarvisOrbView.swift").path
+        ))
+    }
+
+    func testMiniCoreIsFilamentsOnTransparentCanvasWithoutRotationOrBending() throws {
+        let core = try source("apps/ios/Jarvis/JarvisMiniCoreView.swift")
+        XCTAssertTrue(core.contains("Canvas { context, size in"))
+        XCTAssertTrue(core.contains(".scaleEffect(1 + CGFloat(wave) * amplitude)"))
+        XCTAssertFalse(core.contains("rotationEffect"))
+        XCTAssertFalse(core.contains("scaleEffect(x:"))
         XCTAssertFalse(core.contains(".brightness("), "Core animation must preserve transparent pixels")
-        let mask = try XCTUnwrap(core.range(of: ".mask {"))
-        let scale = try XCTUnwrap(core.range(of: ".scaleEffect(1 + energy)"))
-        XCTAssertLessThan(mask.lowerBound, scale.lowerBound, "The feathered core must animate as one layer")
+        XCTAssertFalse(core.contains("orbGlass"), "The old glass sphere is gone")
     }
 }

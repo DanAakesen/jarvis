@@ -442,7 +442,7 @@ private struct JarvisGateSurface: View {
         return false
     }
 
-    private var orbActivity: JarvisOrbActivity {
+    private var orbActivity: JarvisMiniCoreActivity {
         if presentation == .signIn(.signingIn) { return .signingIn }
         if presentation == .loading { return .calm }
         return .idle
@@ -491,7 +491,7 @@ private struct JarvisGateSurface: View {
 
             if isSignIn {
                 GeometryReader { geometry in
-                    JarvisOrbView(activity: orbActivity)
+                    JarvisMiniCoreView(activity: orbActivity)
                         .accessibilityHidden(true)
                         .position(
                             x: geometry.size.width / 2,
@@ -521,7 +521,7 @@ private struct JarvisGateSurface: View {
             } else {
                 VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
                     Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
-                    JarvisOrbView(activity: orbActivity)
+                    JarvisMiniCoreView(activity: orbActivity)
                         .accessibilityHidden(true)
 
                     if isLocked {
