@@ -1564,6 +1564,34 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
 .hmain > .ic.t-idle { color: var(--text-muted); }
 .hmain .hl b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .hdet-acts .hrow { min-height: 50px; }
+/* Today, Calendar, Mail (P15-56). Same hub chrome; tint on icon and text only. */
+.hrow.read > .ic:first-child { color: var(--text-muted); }
+.hrow.read b { font-weight: 400; }
+.hrow.unread b { font-weight: 700; }
+.hwx { display: flex; align-items: center; gap: 14px; margin: 6px 16px 0; padding: 16px 20px; border-radius: 26px; background: var(--fill-group); }
+.hwx > .ic { width: 40px; height: 40px; color: var(--accent); stroke-width: 1.5; }
+.hwx b { display: block; font-size: 34px; line-height: 38px; font-weight: 300; }
+.hwx small { color: var(--text-muted); font-size: 15px; }
+.cday { position: relative; margin: 6px 16px 0; height: calc(var(--hrs) * 56px + 16px); border-radius: 26px; background: var(--fill-group); }
+.cday .chr { position: absolute; left: 0; right: 0; top: calc(8px + var(--r) * 56px); height: 0; }
+.cday .chr span { position: absolute; left: 14px; top: -8px; width: 40px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cday .chr::after { content: ""; position: absolute; left: 58px; right: 0; top: 0; height: .5px; background: var(--sep); }
+.cev { position: absolute; left: 62px; right: 10px; top: calc(8px + var(--t) * 56px + 1px); height: calc(var(--d) * 56px - 2px); min-height: 30px; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 3px 12px; border: 0; border-radius: 14px; background: color-mix(in srgb, var(--text) 12%, transparent); color: var(--text); font: inherit; text-align: left; cursor: pointer; overflow: hidden; }
+.cev b { font-size: 15px; font-weight: 600; line-height: 19px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cev small { color: var(--text-muted); font-size: 12px; line-height: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cev.short small { display: none; }
+.cev[data-pend] small { color: var(--warn); }
+.cev:active b { color: var(--accent); }
+.cev:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.cev:disabled { opacity: .5; cursor: default; }
+.cnow { position: absolute; left: 54px; right: 8px; top: calc(8px + var(--t) * 56px - 1px); height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
+.cnow::before { content: ""; position: absolute; left: -4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.hmsg { display: grid; gap: 4px; padding: 12px 16px; }
+.hmsg header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 15px; font-weight: 600; }
+.hmsg time { flex: none; color: var(--text-muted); font-size: 13px; font-weight: 400; }
+.hmsg p { margin: 0; font-size: 16px; line-height: 22px; white-space: pre-line; }
+#hstate-b[data-ico] { width: 52px; padding: 0; }
+#hstate-b[data-ico] .ic { width: 22px; height: 22px; }
 @media (prefers-reduced-motion: reduce) {
   .hsw, .hsw::after { transition: none !important; }
   .hsave .ic.spin { animation: none; }
@@ -1609,6 +1637,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L8 6.5H5a2 2 0 0 0-2 2V18a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3.5"/></symbol>
     <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
     <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 8V6a2 2 0 0 1 2-2h2"/><path d="M17 4h2a2 2 0 0 1 2 2v2"/><path d="M21 16v2a2 2 0 0 1-2 2h-2"/><path d="M7 20H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.5"/><path d="M12 19v2.5"/><path d="m4.9 4.9 1.8 1.8"/><path d="m17.3 17.3 1.8 1.8"/><path d="M2.5 12H5"/><path d="M19 12h2.5"/><path d="m4.9 19.1 1.8-1.8"/><path d="m17.3 6.7 1.8-1.8"/></symbol>
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16.5" rx="3"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/><path d="M3 10h18"/></symbol>
     <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="19" height="15" rx="3"/><path d="m3 7 9 6.5L21 7"/></symbol>
@@ -1671,6 +1700,13 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     <button class="ctl-btn ctls-btn" id="ctls-btn" type="button" aria-expanded="false" aria-controls="ctl-panel" aria-haspopup="true" title="Review controls: composer, turn, Now bar, Proposed, zoom, keyboard, Say">Controls<svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg></button>
   </div>
   <div class="board-ctls" id="ctl-panel" role="group" aria-label="Review controls" hidden>
+    <div class="ctl" role="group" aria-label="Phone width" title="Phone width in points. Also ?width=390|430">
+      <div class="seg">
+        <label><input type="radio" name="width" value="390"><span>390</span></label>
+        <label><input type="radio" name="width" value="430"><span>430</span></label>
+        <label><input type="radio" name="width" value="440"><span>440</span></label>
+      </div>
+    </div>
     <div class="ctl" role="group" aria-label="Zoom" title="Zoom">
       <div class="seg">
         <label><input type="radio" name="zoom" value="fit"><span>Fit</span></label>
@@ -1808,6 +1844,62 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
           <option value="notes:conflict">Notes: Conflict</option>
           <option value="notes:newnote">Notes: New note</option>
           <option value="tasks:newtask">Notes: New task</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-today" title="Today overview. Also ?screen=today&state=default|empty|loading|error|offline|search, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Today</span>
+        <select id="today-sel">
+          <option value="">Today: choose</option>
+          <option value="today:default">Today: Overview</option>
+          <option value="today:search">Today: Search</option>
+          <option value="today:empty">Today: Empty</option>
+          <option value="today:loading">Today: Loading</option>
+          <option value="today:error">Today: Error</option>
+          <option value="today:offline">Today: Offline</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-calendar" title="Calendar. Also ?screen=calendar&tab=day|week&state=default|empty|loading|error|offline|search|detail|move|create, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Calendar</span>
+        <select id="calendar-sel">
+          <option value="">Calendar: choose</option>
+          <option value="day:default">Calendar: Day</option>
+          <option value="week:default">Calendar: Week</option>
+          <option value="day:detail">Calendar: Event detail</option>
+          <option value="day:move">Calendar: Move (asks approval)</option>
+          <option value="day:pending">Calendar: Move waiting</option>
+          <option value="day:create">Calendar: New event</option>
+          <option value="day:search">Calendar: Search</option>
+          <option value="day:empty">Calendar: Empty</option>
+          <option value="week:empty">Calendar: Week empty</option>
+          <option value="day:loading">Calendar: Loading</option>
+          <option value="day:error">Calendar: Error</option>
+          <option value="day:offline">Calendar: Offline</option>
+        </select>
+        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </label>
+    </div>
+    <div class="ctl" id="ctl-mail" title="Mail. Also ?screen=mail&tab=inbox|drafts&state=default|empty|loading|error|offline|search|detail|send|edit, plus &lang=en">
+      <label class="sel">
+        <span class="sr">Mail</span>
+        <select id="mail-sel">
+          <option value="">Mail: choose</option>
+          <option value="inbox:default">Mail: Inbox</option>
+          <option value="drafts:default">Mail: Drafts</option>
+          <option value="inbox:detail">Mail: Thread with draft</option>
+          <option value="inbox:send">Mail: Approve reply</option>
+          <option value="inbox:edit">Mail: Edit draft</option>
+          <option value="inbox:search">Mail: Search</option>
+          <option value="inbox:empty">Mail: Inbox empty</option>
+          <option value="drafts:empty">Mail: No drafts</option>
+          <option value="inbox:loading">Mail: Loading</option>
+          <option value="inbox:error">Mail: Error</option>
+          <option value="inbox:offline">Mail: Offline</option>
         </select>
         <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
       </label>
@@ -2242,6 +2334,9 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
           <hr class="sb-rule">
           <nav class="sb-list" aria-label="Areas">
             <div class="sb-rows" id="sb-rows">
+              <button class="sb-row" type="button" data-area="today"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg><span>Today</span></button>
+              <button class="sb-row" type="button" data-area="calendar"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg><span>Calendar</span></button>
+              <button class="sb-row" type="button" data-area="mail"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg><span>Mail</span></button>
               <button class="sb-row" type="button" data-area="proactive"><svg class="ic" aria-hidden="true"><use href="#i-proactive"/></svg><span>Proactive</span></button>
               <button class="sb-row" type="button" data-area="status"><svg class="ic" aria-hidden="true"><use href="#i-status"/></svg><span>Status</span></button>
               <button class="sb-row" type="button" data-area="usage"><svg class="ic" aria-hidden="true"><use href="#i-usage"/></svg><span>Usage</span></button>
@@ -2413,6 +2508,15 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
         <tr><th scope="row">One board across all projects</th><td class="st">Proposed</td><td>Needs new backend (Proposed). Today the web shows one project at a time, so the app does the same with the project chips.</td></tr>
       </tbody>
     </table>
+    <h2 id="notes-today-h">Today, Calendar and Mail</h2>
+    <table>
+      <tbody>
+        <tr><th scope="row">Today: weather, next events, approvals, open tasks, latest proactive notice</th><td class="st">Proposed</td><td>Sample content. Needs new backend (Proposed): a calendar read, a mail read and a combined overview route; tasks, approvals and proactive notices reuse existing sources.</td></tr>
+        <tr><th scope="row">Calendar day and week, event detail, create</th><td class="st">Proposed</td><td>Needs new backend (Proposed): calendar list and create routes. Dates and times follow the app language.</td></tr>
+        <tr><th scope="row">Move event, send drafted reply</th><td class="st">Proposed</td><td>Both stage an approval first; the check mark only requests it. Reuses the existing approval flow.</td></tr>
+        <tr><th scope="row">Mail inbox summary, thread and drafts</th><td class="st">Proposed</td><td>Needs new backend (Proposed): mail read and draft routes.</td></tr>
+      </tbody>
+    </table>
     <h2 id="notes-settings-h">Settings</h2>
     <table>
       <tbody>
@@ -2487,7 +2591,10 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     status: { label: 'Status', ph: true, re: /\bstatus\b/ },
     proactive: { label: 'Proactive', ph: true, re: /\bproactive\b/ },
     settings: { label: 'Settings', hub: true, re: /\bsettings?\b/ },
-    banking: { label: 'Banking', later: true, re: /\bbanking\b/ }
+    banking: { label: 'Banking', later: true, re: /\bbanking\b/ },
+    today: { label: 'Today', hub: true, re: /\b(today|my day)\b/ },
+    calendar: { label: 'Calendar', hub: true, re: /\b(calendar|agenda)\b/ },
+    mail: { label: 'Mail', hub: true, re: /\b(mail|inbox|emails?)\b/ }
   };
   const USER_LINE = 'Remind me to call the dentist tomorrow at 9.';
   const VOICE = {
@@ -2505,6 +2612,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   const state = {
     theme: pick(params.get('theme'), ['light', 'dark'], matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
     zoom: pick(params.get('zoom'), ['fit', 'full'], 'fit'),
+    width: pick(params.get('width'), ['390', '430', '440'], '440'),
     screen: startHub ? 'hub' : startArea ? 'area' : pick(startScreen, ['chat', 'voice', 'notes'], 'chat'),
     area: startHub || startArea,
     voice: pick(params.get('voice'), Object.keys(VOICE), 'idle'),
@@ -2540,6 +2648,13 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   }
   function applyTheme() { document.documentElement.dataset.theme = state.theme; syncRadios('theme', state.theme); }
   function applyZoom() { syncRadios('zoom', state.zoom); fit(); }
+  function applyWidth() {
+    DEVICE.w = +state.width;
+    device.style.setProperty('--w', DEVICE.w + 'px');
+    syncRadios('width', state.width);
+    fit();
+  }
+  $$('input[name="width"]').forEach(i => i.addEventListener('change', () => { state.width = i.value; applyWidth(); }));
   $$('input[name="theme"]').forEach(i => i.addEventListener('change', () => { state.theme = i.value; applyTheme(); }));
   $$('input[name="zoom"]').forEach(i => i.addEventListener('change', () => { state.zoom = i.value; applyZoom(); }));
   new ResizeObserver(fit).observe(stage);
@@ -5037,6 +5152,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   applyTheme();
   applyGlass();
   if (state.bare) document.documentElement.dataset.bare = state.bare;
+  applyWidth();
   applyZoom();
   renderKeys();
   seedTimes();
@@ -6210,9 +6326,12 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   const AR = {
     health: { title: () => L('Health', 'Sundhed'), tabs: () => [['dashboard', L('Dashboard', 'Overblik')], ['track', L('Track workout', 'Log træning')]] },
     factory: { title: () => L('Software Factory', 'Softwarefabrik'), tabs: () => [['board', L('Board', 'Tavle')], ['needs', L('Needs Dan', 'Kræver Dan')], ['releases', L('Releases', 'Udgivelser')]] },
+    today: { title: () => L('Today', 'I dag'), tabs: () => [] },
+    calendar: { title: () => L('Calendar', 'Kalender'), tabs: () => [['day', L('Day', 'Dag')], ['week', L('Week', 'Uge')]] },
+    mail: { title: () => L('Mail', 'Mail'), tabs: () => [['inbox', L('Inbox', 'Indbakke')], ['drafts', L('Drafts', 'Udkast')]] },
     settings: { title: () => L('Settings', 'Indstillinger'), tabs: () => [['general', L('General', 'Generelt')], ['models', L('Models', 'Modeller')], ['health', L('Health', 'Sundhed')], ['account', L('Account', 'Konto')]] }
   };
-  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, shut: { done: true }, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
+  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general', today: 'today', calendar: 'day', mail: 'inbox' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, shut: { done: true }, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
   const tab = () => S.tabs[S.area];
   const offline = () => S.st === 'offline';
   const NOW = new Date(2026, 9, 30, 9, 41);
@@ -6512,11 +6631,172 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     return all.length ? grp(all.map(r => r.h)) : '';
   }
 
+  /* TODAY, CALENDAR and MAIL (P15-56). Sample data. Moving an event and sending a reply wait for Dan's approval. */
+  const NEWA = { today: 1, calendar: 1, mail: 1 };
+  const isNew = () => !!NEWA[S.area];
+  const pad2 = n => String(n).padStart(2, '0');
+  const hm = h => new Intl.DateTimeFormat(loc(), { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(2026, 9, 30, Math.floor(h + 1e-6), Math.round(((h + 1e-6) % 1) * 60)));
+  const rng = (s, e) => hm(s) + '–' + hm(e);
+  const wdf = (d, o) => new Intl.DateTimeFormat(loc(), o).format(d);
+  const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const iso = d => d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  const fromIso = v => { const p = v.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+  const toH = v => { const p = v.split(':').map(Number); return p[0] + p[1] / 60; };
+  const toT = h => pad2(Math.floor(h + 1e-6)) + ':' + pad2(Math.round(((h + 1e-6) % 1) * 60));
+  const weekDays = d => { const m = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)); return [0, 1, 2, 3, 4, 5, 6].map(i => new Date(m.getFullYear(), m.getMonth(), m.getDate() + i)); };
+  const TODAY = D(10, 30), NOWH = 9 + 41 / 60, H0 = 8, H1 = 20;
+  const pend = () => '<span class="hst pau">' + esc(L('Pending', 'Afventer')) + '</span>';
+  const seedCE = () => [
+    { id: 1, d: D(10, 26), s: 9, e: 10, t: ['Planning', 'Planlægning'], w: 'Teams' },
+    { id: 2, d: D(10, 27), s: 17, e: 18, t: ['Gym', 'Træning'], w: 'Fitness World' },
+    { id: 3, d: D(10, 28), s: 13, e: 13.5, t: ['Call with the accountant', 'Opkald til revisor'], w: '' },
+    { id: 11, d: D(10, 30), s: 9, e: 9.5, t: ['Stand-up', 'Stand-up'], w: 'Teams' },
+    { id: 12, d: D(10, 30), s: 10, e: 11, t: ['Dentist', 'Tandlæge'], w: 'Nørregade 12' },
+    { id: 13, d: D(10, 30), s: 12, e: 13, t: ['Lunch with Maria', 'Frokost med Maria'], w: 'Café Vega' },
+    { id: 14, d: D(10, 30), s: 14, e: 15, t: ['Design review', 'Designreview'], w: 'Teams', mv: { d: D(10, 30), s: 15, e: 16 } },
+    { id: 15, d: D(10, 31), s: 17.5, e: 19.5, t: ['Dinner with Maria', 'Middag med Maria'], w: 'Café Vega' }
+  ];
+  const seedTH = () => [
+    { id: 1, f: 'Maria Holm', s: ['Dinner on Saturday', 'Middag lørdag'], tm: { h: 8 + 52 / 60 }, un: true, need: true,
+      m: [{ f: 'Maria Holm', tm: { h: 8 + 52 / 60 }, b: ['Are you free for dinner on Saturday at 17:30? I booked a table at Café Vega.', 'Har du tid til middag lørdag kl. 17.30? Jeg har booket bord på Café Vega.'] }],
+      dr: { x: ['Hi Maria,\n\nSaturday at 17:30 works. See you at Café Vega.\n\nDan', 'Hej Maria,\n\nLørdag kl. 17.30 passer fint. Vi ses på Café Vega.\n\nDan'] } },
+    { id: 2, f: 'Aarhus Tandlæge', s: ['Your appointment on Friday', 'Din tid på fredag'], tm: { h: 8 + 10 / 60 }, un: true,
+      m: [{ f: 'Aarhus Tandlæge', tm: { h: 8 + 10 / 60 }, b: ['Your appointment is booked for Friday at 10:00. Reply to this message to change it.', 'Din tid er booket til fredag kl. 10.00. Svar på denne mail, hvis den skal ændres.'] }] },
+    { id: 3, f: 'GitHub', s: ['Checks passed on the Health PR', 'Tjek bestået på Health-PR'], tm: { h: 7.5 },
+      m: [{ f: 'GitHub', tm: { h: 7.5 }, b: ['All checks have passed.', 'Alle tjek er bestået.'] }] },
+    { id: 4, f: 'Nordlys Energi', s: ['Your October invoice', 'Din oktoberfaktura'], tm: { l: ['Yesterday', 'I går'] },
+      m: [{ f: 'Nordlys Energi', tm: { l: ['Yesterday', 'I går'] }, b: ['Your invoice for October is ready. The amount is due on 14 November.', 'Din faktura for oktober er klar. Beløbet forfalder den 14. november.'] }] },
+    { id: 5, f: 'Søren Lind', s: ['Sprint review notes', 'Noter fra sprintreview'], tm: { l: ['Mon', 'Man'] }, need: true,
+      m: [{ f: 'Søren Lind', tm: { l: ['Mon', 'Man'] }, b: ['The notes are in the shared folder. Tell me if I missed anything.', 'Noterne ligger i den delte mappe. Sig til, hvis jeg har glemt noget.'] }] }
+  ];
+  const TK = [['Send the invoice to Atlas', 'Send faktura til Atlas'], ['Book the dentist follow-up', 'Book opfølgning hos tandlæge'], ['Review the Health PR', 'Gennemgå Health-PR']];
+  let CE = seedCE(), TH = seedTH();
+  const resetNew = () => { CE = seedCE(); TH = seedTH(); S.day = TODAY; };
+  S.day = TODAY;
+  const et = e => P(e.t);
+  const tmx = t => (t.h != null ? hm(t.h) : P(t.l));
+  const dtx = t => (Array.isArray(t.dr.x) ? P(t.dr.x) : t.dr.x);
+  const dayEv = d => CE.filter(e => sameDay(e.d, d)).sort((a, b) => a.s - b.s);
+  const evRow = (e, day) => hrow({ icon: 'i-calendar', b: et(e), s: esc(day ? wdf(e.d, { weekday: 'short', day: 'numeric', month: 'short' }) : e.w || ''), v: e.mv ? pend() : esc(rng(e.s, e.e)), go: true, attr: 'data-ev="' + e.id + '"' });
+  const thRow = t => hrow({ icon: 'i-mail', b: t.f, s: esc(P(t.s)), v: esc(tmx(t.tm)), go: true, attr: 'data-th="' + t.id + '"' }).replace('class="hrow"', 'class="hrow ' + (t.un ? 'unread' : 'read') + '"');
+  const drRow = t => hrow({ icon: 'i-pencil', b: 'Re: ' + P(t.s), s: esc(L('To ', 'Til ') + t.f), v: pend(), go: true, attr: 'data-th="' + t.id + '"' });
+  const todayItems = () => {
+    const next = dayEv(TODAY).filter(e => e.e > NOWH).slice(0, 3);
+    const need = CE.filter(e => e.mv).map(e => ({ k: et(e), h: hrow({ icon: 'i-calendar', b: et(e), s: esc(L('Move to ', 'Flyttes til ') + rng(e.mv.s, e.mv.e)), v: pend(), go: true, attr: 'data-ev="' + e.id + '"' }) }))
+      .concat(TH.filter(t => t.dr).map(t => ({ k: 'Re: ' + P(t.s) + ' ' + t.f, h: drRow(t) })));
+    const tasks = TK.map(t => ({ k: P(t), h: hrow({ div: true, icon: 'i-checklist', b: P(t) }) }));
+    const nt = [{ k: L('Rain from 15:00', 'Regn fra 15.00'), h: hrow({ div: true, icon: 'i-proactive', b: L('Rain from 15:00', 'Regn fra 15.00'), s: esc(L('Proactive · 09:12', 'Proaktiv · 09:12')) }) }];
+    return { next: next.map(e => ({ k: et(e), h: evRow(e) })), need, tasks, nt };
+  };
+  function todayPane() {
+    if (S.st === 'empty') return '';
+    const r = todayItems();
+    const wx = '<div class="hwx" role="group" aria-label="' + esc(L('Weather', 'Vejr')) + '">' + ic('i-cloud') + '<div><b>' + esc(num(14, 0) + '°') + '</b><small>' + esc(L('Cloudy · High 16° · Low 9°', 'Skyet · Højst 16° · Lavest 9°')) + '</small></div></div>';
+    return wx + (r.next.length ? hd(L('Next up', 'Næste')) + grp(r.next.map(x => x.h)) : '') +
+      (r.need.length ? hd(L('Approvals', 'Godkendelser')) + grp(r.need.map(x => x.h)) : '') +
+      hd(L('Open tasks', 'Åbne opgaver')) + grp(r.tasks.map(x => x.h)) +
+      hd(L('Latest notice', 'Seneste meddelelse')) + grp(r.nt.map(x => x.h));
+  }
+  function todaySearch(q) {
+    const r = todayItems(), all = r.next.concat(r.need, r.tasks, r.nt).filter(x => x.k.toLowerCase().includes(q));
+    return all.length ? grp(all.map(x => x.h)) : '';
+  }
+  function dayPane() {
+    const ev = S.st === 'empty' ? [] : dayEv(S.day);
+    if (!ev.length) return '';
+    let g = '';
+    for (let h = H0; h <= H1; h++) g += '<div class="chr" style="--r:' + (h - H0) + '"><span>' + hm(h) + '</span></div>';
+    const blocks = ev.map(e => '<button class="cev' + (e.e - e.s < 0.75 ? ' short' : '') + '" type="button" data-ev="' + e.id + '"' + (e.mv ? ' data-pend="1"' : '') + ' style="--t:' + (e.s - H0) + ';--d:' + (Math.min(e.e, H1) - e.s) + '"><b>' + esc(et(e)) + '</b><small>' + esc(rng(e.s, e.e) + (e.mv ? ' · ' + L('Pending', 'Afventer') : '')) + '</small></button>').join('');
+    const now = sameDay(S.day, TODAY) ? '<i class="cnow" aria-hidden="true" style="--t:' + (NOWH - H0) + '"></i>' : '';
+    return '<div class="cday" style="--hrs:' + (H1 - H0) + '" role="group" aria-label="' + esc(wdf(S.day, { weekday: 'long', day: 'numeric', month: 'long' })) + '">' + g + blocks + now + '</div>';
+  }
+  function weekPane() {
+    if (S.st === 'empty') return '';
+    return weekDays(S.day).map(d => { const ev = dayEv(d); return ev.length ? hd(wdf(d, { weekday: 'long', day: 'numeric', month: 'short' })) + grp(ev.map(e => evRow(e))) : ''; }).join('');
+  }
+  function calSearch(q) {
+    const all = CE.filter(e => (et(e) + ' ' + e.w).toLowerCase().includes(q)).sort((a, b) => a.d - b.d || a.s - b.s);
+    return all.length ? grp(all.map(e => evRow(e, true))) : '';
+  }
+  function inboxPane() {
+    if (S.st === 'empty' || !TH.length) return '';
+    const un = TH.filter(t => t.un).length, nd = TH.filter(t => t.need).length, dr = TH.filter(t => t.dr).length;
+    return hd(L('Summary', 'Overblik')) + grp([hrow({ div: true, icon: 'i-mail', b: L('Unread', 'Ulæste'), v: String(un), c: 'acc' }), hrow({ div: true, icon: 'i-pencil', b: L('Needs a reply', 'Kræver svar'), v: String(nd) }), hrow({ div: true, icon: 'i-clock', b: L('Drafts waiting', 'Udkast venter'), v: String(dr) })]) +
+      hd(L('Inbox', 'Indbakke')) + grp(TH.map(thRow));
+  }
+  function draftsPane() {
+    const d = TH.filter(t => t.dr);
+    return S.st === 'empty' || !d.length ? '' : grp(d.map(drRow));
+  }
+  function mailSearch(q) {
+    const all = TH.filter(t => (t.f + ' ' + P(t.s) + ' ' + t.m.map(m => P(m.b)).join(' ')).toLowerCase().includes(q));
+    return all.length ? grp(all.map(thRow)) : '';
+  }
+  const msg = (f, tm, body) => '<li class="hmsg"><header><span>' + esc(f) + '</span><time>' + esc(tm) + '</time></header><p>' + esc(body) + '</p></li>';
+  function evDetail(e) {
+    $('#hdet-title').textContent = et(e);
+    $('#hdet-meta').textContent = wdf(e.d, { weekday: 'long', day: 'numeric', month: 'long' }) + ' · ' + rng(e.s, e.e);
+    $('#hdet-st').textContent = e.mv ? L('Awaiting approval', 'Afventer godkendelse') : '';
+    const acts = e.mv ? [hrow({ icon: 'i-x-circle', b: L('Withdraw request', 'Træk anmodning tilbage'), dng: true, attr: 'data-act="unmove"' })] : [hrow({ icon: 'i-calendar', b: L('Move', 'Flyt'), go: true, attr: 'data-act="move"' })];
+    const rows = [[L('When', 'Hvornår'), wdf(e.d, { day: 'numeric', month: 'short' }) + ', ' + rng(e.s, e.e)]];
+    if (e.w) rows.push([L('Where', 'Hvor'), e.w]);
+    rows.push([L('Calendar', 'Kalender'), L('Personal', 'Privat')]);
+    return '<div class="hdet-acts">' + grp(acts) + '</div>' + (e.mv ? hd(L('Move request', 'Anmodning om flytning')) + dlist([[L('From', 'Fra'), rng(e.s, e.e)], [L('To', 'Til'), wdf(e.mv.d, { day: 'numeric', month: 'short' }) + ', ' + rng(e.mv.s, e.mv.e)]]) : '') + hd(L('Details', 'Detaljer')) + dlist(rows);
+  }
+  function thDetail(t) {
+    $('#hdet-title').textContent = P(t.s);
+    $('#hdet-meta').textContent = t.f + ' · ' + tmx(t.tm);
+    $('#hdet-st').textContent = t.dr ? L('Awaiting approval', 'Afventer godkendelse') : '';
+    let h = '<ul class="group">' + t.m.map(m => msg(m.f, tmx(m.tm), P(m.b))).join('') + '</ul>';
+    if (t.dr) h += hd(L('Draft reply', 'Udkast til svar')) + '<ul class="group">' + msg('Jarvis', L('Draft', 'Udkast'), dtx(t)) + '</ul>' +
+      '<div class="hdet-acts" style="margin-top:22px">' + grp([hrow({ icon: 'i-tick', b: L('Approve and send', 'Godkend og send'), go: true, attr: 'data-act="send"' }), hrow({ icon: 'i-pencil', b: L('Edit draft', 'Redigér udkast'), go: true, attr: 'data-act="edit"' }), hrow({ icon: 'i-trash', b: L('Discard draft', 'Kassér udkast'), dng: true, attr: 'data-act="discard"' })]) + '</div>';
+    else h += '<div class="hdet-acts" style="margin-top:22px">' + grp([hrow({ icon: 'i-pencil', b: L('Draft a reply', 'Skriv svarudkast'), go: true, attr: 'data-act="draft"' })]) + '</div>';
+    return h;
+  }
+  function evAct(id, a, from) {
+    const e = CE.find(k => k.id === id);
+    if (!e || offline()) return;
+    if (a === 'move') { openSheet('move', { id, from: from || document.activeElement }); return; }
+    if (a === 'unmove') { delete e.mv; toast(L('Request withdrawn', 'Anmodning trukket tilbage')); }
+    render(); if (detOpen) paintDetail();
+  }
+  function thAct(id, a, from) {
+    const t = TH.find(k => k.id === id);
+    if (!t || offline()) return;
+    if (a === 'send') { openSheet('send', { id, from: from || document.activeElement }); return; }
+    if (a === 'edit') { openSheet('draft', { id, from: from || document.activeElement }); return; }
+    if (a === 'draft') {
+      const n = t.f.split(' ')[0];
+      t.dr = { x: ['Hi ' + n + ',\n\nThanks, I will get back to you today.\n\nDan', 'Hej ' + n + ',\n\nTak, jeg vender tilbage i dag.\n\nDan'] };
+      toast(L('Draft ready for approval', 'Udkast klar til godkendelse'));
+    } else if (a === 'discard') {
+      const old = t.dr; t.dr = null;
+      toast(L('Draft discarded', 'Udkast kasseret'), () => { t.dr = old; render(); if (detOpen) paintDetail(); });
+    }
+    render(); if (detOpen) paintDetail();
+  }
+  const evOk = () => { const d = $('#hs-evd').value, s = $('#hs-evs').value, e = $('#hs-eve').value; return !!d && !!s && !!e && s < e; };
+  function evForm(e, titled) {
+    return (titled ? '<ul class="group">' + nf(L('Title', 'Titel'), '<input id="hs-evt" type="text" maxlength="120" autocomplete="off">') + '</ul>' : '<ul class="group">' + hrow({ div: true, b: et(e) }) + '</ul>') +
+      '<ul class="group">' + nf(L('Date', 'Dato'), '<input id="hs-evd" type="date" value="' + iso(e.d) + '">') + nf(L('Start', 'Start'), '<input id="hs-evs" type="time" value="' + toT(e.s) + '">') + nf(L('End', 'Slut'), '<input id="hs-eve" type="time" value="' + toT(e.e) + '">') + '</ul>';
+  }
+  function sendReply(id) {
+    const t = TH.find(k => k.id === id);
+    if (!t || !t.dr) return;
+    t.m.push({ f: 'Dan', tm: { h: NOWH }, b: [dtx(t), dtx(t)] }); t.dr = null; t.need = false;
+    closeSheet(true); render(); if (detOpen) paintDetail();
+    toast(L('Reply sent', 'Svar sendt'));
+  }
+
   /* Render */
   function showState(icon, text, btn, act) {
     $('#hstate-ic').setAttribute('href', '#' + icon);
     $('#hstate-t').textContent = text;
-    const b = $('#hstate-b'); b.hidden = !btn; if (btn) { b.textContent = btn; b.dataset.act = act || ''; }
+    const b = $('#hstate-b'); b.hidden = !btn; b.removeAttribute('data-ico'); b.removeAttribute('aria-label');
+    if (btn) {
+      if (isNew() && act === 'retry') { b.dataset.ico = '1'; b.innerHTML = ic('i-retry'); b.setAttribute('aria-label', btn); } else b.textContent = btn;
+      b.dataset.act = act || '';
+    }
     $('#hstate').hidden = false;
   }
   function banner() {
@@ -6545,6 +6825,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       seg.innerHTML = tabs.map(t => '<button type="button" role="tab" data-v="' + t[0] + '">' + esc(t[1]) + '</button>').join('');
     }
     seg.setAttribute('aria-label', ar.title());
+    seg.hidden = !tabs.length;
     setSeg(seg, tabs.findIndex(t => t[0] === tb));
     sIn.placeholder = L('Search', 'Søg'); sIn.setAttribute('aria-label', L('Search', 'Søg'));
     $('#h-clear').hidden = !S.q; $('#h-clear').setAttribute('aria-label', L('Clear', 'Ryd'));
@@ -6557,13 +6838,16 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if (!sr && !blocked()) {
       if (a === 'health' && tb === 'dashboard') cs = ['period', Object.keys(PER).map(k => [k, perName(k)]), S.period];
       else if (a === 'factory') cs = ['proj', PROJ.map((n, i) => [String(i), n]), String(S.proj)];
+      else if (a === 'calendar' && tb === 'day') cs = ['day', weekDays(S.day).map(d => [iso(d), wdf(d, { weekday: 'short', day: 'numeric' })]), iso(S.day)];
     }
     chips.hidden = !cs; pane.toggleAttribute('data-chips', !!cs);
     chips.innerHTML = cs ? cs[1].map(c => '<button class="nchip glass" data-flat type="button" data-ch="' + cs[0] + ':' + c[0] + '" aria-pressed="' + (c[0] === cs[2]) + '">' + esc(c[1]) + '</button>').join('') : '';
-    chips.setAttribute('aria-label', a === 'factory' ? L('Project', 'Projekt') : L('Period', 'Periode'));
-    const plus = $('#hplus'), pl = a === 'health' ? [L('New lift', 'Nyt løft'), 'i-plus'] : a === 'factory' ? [L('New task', 'Ny opgave'), 'i-plus'] : tb === 'models' ? [L('Add deployment', 'Tilføj udrulning'), 'i-plus'] : tb === 'health' ? [L('Create credential', 'Opret nøgle'), 'i-plus'] : [L('Add', 'Tilføj'), 'i-plus'];
+    const onChip = $('[aria-pressed="true"]', chips);
+    if (cs && onChip && a === 'calendar') chips.scrollLeft = Math.max(0, onChip.offsetLeft - (chips.clientWidth - onChip.offsetWidth) / 2);
+    chips.setAttribute('aria-label', a === 'factory' ? L('Project', 'Projekt') : a === 'calendar' ? L('Day', 'Dag') : L('Period', 'Periode'));
+    const plus = $('#hplus'), pl = a === 'health' ? [L('New lift', 'Nyt løft'), 'i-plus'] : a === 'factory' ? [L('New task', 'Ny opgave'), 'i-plus'] : a === 'calendar' ? [L('New event', 'Ny aftale'), 'i-plus'] : tb === 'models' ? [L('Add deployment', 'Tilføj udrulning'), 'i-plus'] : tb === 'health' ? [L('Create credential', 'Opret nøgle'), 'i-plus'] : [L('Add', 'Tilføj'), 'i-plus'];
     plus.setAttribute('aria-label', pl[0]); plus.title = pl[0];
-    plus.disabled = offline() || blocked() || (a === 'settings' && tb !== 'models' && tb !== 'health'); plus.hidden = sr;
+    plus.disabled = offline() || blocked() || (a === 'settings' && tb !== 'models' && tb !== 'health'); plus.hidden = sr || a === 'today' || a === 'mail';
     pane.hidden = true; pane.innerHTML = '';
     $('#hskel').hidden = st !== 'loading'; $('#hstate').hidden = true;
     if (st === 'error') showState('i-offline', L('Could not load', 'Kunne ikke hentes'), L('Try again', 'Prøv igen'), 'retry');
@@ -6571,9 +6855,20 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     else if (st === 'loading') { /* skeleton */ }
     else if (sr) {
       let h = '';
-      if (q) h = a === 'health' ? (tb === 'dashboard' ? dashSearch(q) : trackSearch(q)) : a === 'factory' ? factSearch(q) : setSearch(q);
+      if (q) h = a === 'today' ? todaySearch(q) : a === 'calendar' ? calSearch(q) : a === 'mail' ? mailSearch(q) : a === 'health' ? (tb === 'dashboard' ? dashSearch(q) : trackSearch(q)) : a === 'factory' ? factSearch(q) : setSearch(q);
       if (q && !h) showState('i-search', L('No results', 'Ingen resultater'));
       else if (h) { pane.innerHTML = h; pane.hidden = false; }
+    } else if (a === 'today') {
+      const h = todayPane();
+      if (!h) showState('i-sun', L('Nothing today', 'Intet i dag')); else { pane.innerHTML = h; pane.hidden = false; }
+    } else if (a === 'calendar') {
+      const h = tb === 'day' ? dayPane() : weekPane();
+      if (!h) showState('i-calendar', tb === 'day' ? L('No events', 'Ingen aftaler') : L('Nothing this week', 'Intet i denne uge'));
+      else { pane.innerHTML = h; pane.hidden = false; }
+    } else if (a === 'mail') {
+      const h = tb === 'inbox' ? inboxPane() : draftsPane();
+      if (!h) showState(tb === 'inbox' ? 'i-mail' : 'i-pencil', tb === 'inbox' ? L('Inbox is empty', 'Indbakken er tom') : L('No drafts', 'Ingen udkast'));
+      else { pane.innerHTML = h; pane.hidden = false; }
     } else if (a === 'health' && tb === 'dashboard') {
       if (st === 'empty') showState('i-health', L('No health data', 'Ingen sundhedsdata'));
       else { pane.innerHTML = dashPane(); pane.hidden = false; }
@@ -6625,6 +6920,14 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
         hd(L('Timeline', 'Tidslinje')) + '<ul class="group">' + ev.map(e => '<li class="htl"><time>' + e[0] + '</time><span>' + esc(e[1]) + '</span></li>').join('') + '</ul>';
       if (x.st !== 'idle' && x.st !== 'attn') h += hd(L('Usage', 'Forbrug')) + dlist([[L('Tokens', 'Tokens'), num(184, 0) + ' k'], [L('Time', 'Tid'), '27 min'], [L('Disk', 'Disk'), '312 MB']]) +
         hd(L('Artifacts', 'Artefakter')) + grp([hrow({ div: true, icon: 'i-notes', b: L('Run log', 'Kørselslog'), v: '42 KB' }), hrow({ div: true, icon: 'i-notes', b: L('Test report', 'Testrapport'), v: '18 KB' })]);
+    } else if (DT.kind === 'ev') {
+      const e = CE.find(k => k.id === DT.id);
+      if (!e) { closeDetail(true); return; }
+      h = evDetail(e);
+    } else if (DT.kind === 'th') {
+      const t = TH.find(k => k.id === DT.id);
+      if (!t) { closeDetail(true); return; }
+      h = thDetail(t);
     } else {
       const r = REL.find(k => k.id === DT.id);
       if (!r) { closeDetail(true); return; }
@@ -6641,6 +6944,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   function openDetail(kind, id, from) {
     closeMenu();
     DT = { kind, id, from: from || document.activeElement };
+    if (kind === 'th') { const t = TH.find(k => k.id === id); if (t) t.un = false; }
     paintDetail();
     if (!DT) return;
     $('#hdet-scroll').scrollTop = 0;
@@ -6663,6 +6967,8 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     const b = e.target.closest('button');
     if (!b || !DT) return;
     if (b.dataset.jt) { DT = { kind: 'task', id: +b.dataset.jt, from: DT.from }; paintDetail(); $('#hdet-scroll').scrollTop = 0; refocus('#hdet-back'); return; }
+    if (b.dataset.act && DT.kind === 'ev') { evAct(DT.id, b.dataset.act, b); return; }
+    if (b.dataset.act && DT.kind === 'th') { thAct(DT.id, b.dataset.act, b); return; }
     if (b.dataset.act && DT.kind === 'task') { const a = b.dataset.act, id = DT.id; taskAct(id, a, b); if (a === 'pause' || a === 'recover') refocus('[data-act="' + (a === 'recover' ? 'steer' : 'pause') + '"]'); }
   });
 
@@ -6707,6 +7013,10 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     else if (k === 'newtask') ok = v('#hs-title');
     else if (k === 'deploy') ok = v('#hs-name');
     else if (k === 'cred') ok = v('#hs-label');
+    else if (k === 'create') ok = v('#hs-evt') && evOk();
+    else if (k === 'move') { const e = CE.find(x => x.id === shk.o.id); ok = !!e && evOk() && !offline() && (iso(e.d) !== $('#hs-evd').value || toT(e.s) !== $('#hs-evs').value || toT(e.e) !== $('#hs-eve').value); }
+    else if (k === 'send') ok = !offline();
+    else if (k === 'draft') ok = v('#hs-draft');
     $('#hsh-ok').disabled = !ok;
   }
   function openSheet(kind, o) {
@@ -6734,6 +7044,21 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
         '<ul class="group"><li class="nf ta"><textarea id="hs-req" aria-label="' + esc(L('Request', 'Anmodning')) + '" placeholder="' + esc(L('Request', 'Anmodning')) + '" spellcheck="false"></textarea></li></ul>' +
         '<ul class="group">' + nf(L('Agent', 'Agent'), segHtml('hs-ag', [['codex', 'Codex'], ['copilot', 'Copilot']], 'copilot')) + nf(L('On completion', 'Ved færdig'), segHtml('hs-pol', [['pr', L('Deliver PR', 'Lever PR')], ['none', L('No deploy', 'Ingen udrulning')]], 'pr')) + '</ul>';
       setSeg($('#hs-ag'), 1); setSeg($('#hs-pol'), 0);
+    } else if (kind === 'create') {
+      ttl.textContent = L('New event', 'Ny aftale'); ok.setAttribute('aria-label', L('Create', 'Opret'));
+      body.innerHTML = evForm({ d: S.day, s: 15, e: 16 }, true);
+    } else if (kind === 'move') {
+      const e = CE.find(x => x.id === o.id);
+      ttl.textContent = L('Move event', 'Flyt aftale'); ok.setAttribute('aria-label', L('Ask for approval', 'Bed om godkendelse'));
+      body.innerHTML = evForm(e, false);
+    } else if (kind === 'send') {
+      const t = TH.find(x => x.id === o.id);
+      ttl.textContent = L('Send reply', 'Send svar'); ok.setAttribute('aria-label', L('Approve and send', 'Godkend og send'));
+      body.innerHTML = dlist([[L('To', 'Til'), t.f], [L('Subject', 'Emne'), 'Re: ' + P(t.s)]]) + '<ul class="group">' + msg('Jarvis', L('Draft', 'Udkast'), dtx(t)) + '</ul>';
+    } else if (kind === 'draft') {
+      const t = TH.find(x => x.id === o.id);
+      ttl.textContent = L('Edit draft', 'Redigér udkast'); ok.setAttribute('aria-label', L('Save', 'Gem'));
+      body.innerHTML = '<textarea class="hsteer" id="hs-draft" aria-label="' + esc(L('Reply', 'Svar')) + '" spellcheck="false">' + esc(dtx(t)) + '</textarea>';
     } else if (kind === 'deploy') {
       ttl.textContent = L('Add deployment', 'Tilføj udrulning');
       body.innerHTML = '<ul class="group">' + nf(L('Name', 'Navn'), '<input id="hs-name" type="text" maxlength="60" autocomplete="off">') + nf(L('Region', 'Region'), '<input id="hs-region" type="text" maxlength="40" autocomplete="off" value="East US">') + '</ul>';
@@ -6750,7 +7075,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     scrim.hidden = false; void scrim.offsetWidth; scrim.classList.add('on');
     sh.classList.add('open');
     if (kind === 'lift') bits('hs'); else okState();
-    const f = $('#hs-name') || $('#hs-steer') || $('#hs-title') || $('#hs-label') || $('#hsh-x');
+    const f = $('#hs-name') || $('#hs-evt') || $('#hs-draft') || $('#hs-steer') || $('#hs-title') || $('#hs-label') || $('#hsh-x');
     f.focus({ preventScroll: true });
     if (f !== $('#hsh-x')) { shk.kb = true; kbd(true); }
   }
@@ -6772,6 +7097,19 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       if (o.id) { const l = LIFTS.find(x => x.id === o.id); if (l) Object.assign(l, { n: nm, kg: +f.kg, reps: +f.reps, sets: +f.sets }); }
       else LIFTS.push({ id: seq++, n: nm, kg: +f.kg, reps: +f.reps, sets: +f.sets, d: D(10, 30) });
       closeSheet(true); render(); toast(L('Logged', 'Logget'));
+    } else if (k === 'create') {
+      const d = fromIso($('#hs-evd').value);
+      CE.push({ id: seq++, d, s: toH($('#hs-evs').value), e: toH($('#hs-eve').value), t: [$('#hs-evt').value.trim(), $('#hs-evt').value.trim()], w: '' });
+      S.day = d; closeSheet(true); render(); toast(L('Event created', 'Aftale oprettet'));
+    } else if (k === 'move') {
+      const e = CE.find(x => x.id === o.id);
+      if (e) e.mv = { d: fromIso($('#hs-evd').value), s: toH($('#hs-evs').value), e: toH($('#hs-eve').value) };
+      closeSheet(true); render(); if (detOpen) paintDetail(); toast(L('Approval requested', 'Godkendelse anmodet'));
+    } else if (k === 'send') sendReply(o.id);
+    else if (k === 'draft') {
+      const t = TH.find(x => x.id === o.id);
+      if (t && t.dr) t.dr.x = $('#hs-draft').value.trim();
+      closeSheet(true); render(); if (detOpen) paintDetail(); toast(L('Draft saved', 'Udkast gemt'));
     } else if (k === 'steer') { closeSheet(); toast(L('Steering sent', 'Styring sendt')); }
     else if (k === 'newtask') {
       const t = $('#hs-title').value.trim();
@@ -6792,6 +7130,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if (key === 'name' && known(v) && !f.kg && !f.reps && !f.sets) prefill(pre, v); else bits(pre);
     if (pre === 'hf' && S.save === 'ok') { S.save = ''; paintSave(); }
   }
+  sh.addEventListener('change', () => okState());
   sh.addEventListener('input', e => { if (shk && shk.kind === 'lift') onForm('hs', e.target.id, e.target.value); okState(); });
   sh.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.type !== 'number') { e.preventDefault(); submit(); } });
   sh.addEventListener('click', e => {
@@ -6853,6 +7192,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if (plusBtn.disabled) return;
     if (S.area === 'health') openSheet('lift', { from: plusBtn });
     else if (S.area === 'factory') openSheet('newtask', { from: plusBtn });
+    else if (S.area === 'calendar') openSheet('create', { from: plusBtn });
     else if (tab() === 'models') openSheet('deploy', { from: plusBtn });
     else if (tab() === 'health') openSheet('cred', { from: plusBtn });
   });
@@ -6882,10 +7222,12 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       if (li.dataset.k === 'task') openDetail('task', +li.dataset.id, b); else if (!offline()) openSheet('lift', { id: +li.dataset.id, from: b });
       return;
     }
+    if ((b = t.closest('[data-ev]'))) { openDetail('ev', +b.dataset.ev, b); return; }
+    if ((b = t.closest('[data-th]'))) { openDetail('th', +b.dataset.th, b); return; }
     if ((b = t.closest('[data-rel]'))) { openDetail('rel', b.dataset.rel, b); return; }
     if ((b = t.closest('[data-ch]'))) {
       const c = b.dataset.ch.split(':');
-      if (c[0] === 'period') S.period = c[1]; else S.proj = +c[1];
+      if (c[0] === 'period') S.period = c[1]; else if (c[0] === 'day') S.day = fromIso(c[1]); else S.proj = +c[1];
       render(); refocus('[data-ch="' + b.dataset.ch + '"]'); return;
     }
     if ((b = t.closest('[data-tab]'))) { setTab(b.dataset.tab); return; }
@@ -6991,8 +7333,9 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     closeMenu(); if (shOpen) closeSheet(true); if (detOpen) closeDetail(true);
     curArea = area;
     Object.assign(S, { area, st: 'default', q: '', searching: false, save: '', shut: { done: true }, f: { name: '', kg: '', reps: '', sets: '' } });
+    resetNew();
     S.tabs[area] = tb; sIn.value = '';
-    if (state === 'search') { S.searching = true; S.q = area === 'health' ? L('bench', 'bænk') : area === 'factory' ? L('reconnect', 'genforbindelse') : 'model'; sIn.value = S.q; }
+    if (state === 'search') { S.searching = true; S.q = area === 'today' ? 'review' : area === 'calendar' ? 'review' : area === 'mail' ? 'maria' : area === 'health' ? L('bench', 'bænk') : area === 'factory' ? L('reconnect', 'genforbindelse') : 'model'; sIn.value = S.q; }
     else if (['empty', 'loading', 'error', 'offline', 'stale', 'forbidden', 'saving', 'savefail'].includes(state)) S.st = state;
     if (area === 'health' && (state === 'saving' || state === 'savefail')) {
       S.f = { name: L('Bench press', 'Bænkpres'), kg: '80', reps: '4', sets: '3' };
@@ -7001,7 +7344,10 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     }
     kbd(S.searching);
     render();
-    if (state === 'detail') openDetail('task', 412, null);
+    if (area === 'calendar' && (state === 'detail' || state === 'pending' || state === 'move')) { openDetail('ev', state === 'pending' ? 14 : 12, null); if (state === 'move') openSheet('move', { id: 12 }); }
+    else if (area === 'calendar' && state === 'create') openSheet('create');
+    else if (area === 'mail' && ['detail', 'send', 'edit'].includes(state)) { openDetail('th', 1, null); if (state !== 'detail') openSheet(state === 'send' ? 'send' : 'draft', { id: 1 }); }
+    else if (state === 'detail') openDetail('task', 412, null);
     else if (state === 'release') openDetail('rel', 'r3', null);
     else if (state === 'steer') openSheet('steer', { id: 412 });
     else if (state === 'newtask') openSheet('newtask');
@@ -7013,7 +7359,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if (window.jvShowScreen) window.jvShowScreen('hub', area);
     apply(area, tb, state);
   }
-  [['health', '#health-sel'], ['factory', '#factory-sel'], ['settings', '#settings-sel']].forEach(a => {
+  [['today', '#today-sel'], ['calendar', '#calendar-sel'], ['mail', '#mail-sel'], ['health', '#health-sel'], ['factory', '#factory-sel'], ['settings', '#settings-sel']].forEach(a => {
     const s = $(a[1]);
     if (s) s.addEventListener('change', () => { if (!s.value) return; const v = s.value.split(':'); go(a[0], v[0], v[1]); });
   });

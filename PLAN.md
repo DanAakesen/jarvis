@@ -1,3 +1,28 @@
+## P15-56 — Today, Calendar and Mail board pages (#1521)
+
+Designed Today, Calendar and Mail on the approved concept board
+(`docs/ios/design/board.html`; no Swift). Each page is a hub area with the same
+chrome as Health and Factory, opens from the sidebar (which stays on the right)
+and from `?screen=today|calendar|mail`, and shows default, loading, empty,
+error with retry, offline and search states in Danish (default) and English,
+light and dark. The board gained a phone width control (`?width=390|430|440`).
+Chromium sweep of every state, theme, language and 390/430 width found no
+script errors or horizontal overflow. Native builds, live calendar and mail
+data, backend routes and owner visual review remain pending.
+
+Apple documentation used: Human Interface Guidelines for
+[Materials](https://developer.apple.com/design/human-interface-guidelines/materials),
+[Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars),
+[Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets),
+[Lists and tables](https://developer.apple.com/design/human-interface-guidelines/lists-and-tables),
+[Calendars](https://developer.apple.com/design/human-interface-guidelines/calendars),
+[Segmented controls](https://developer.apple.com/design/human-interface-guidelines/segmented-controls),
+[Loading](https://developer.apple.com/design/human-interface-guidelines/loading),
+[Offline](https://developer.apple.com/design/human-interface-guidelines/offline),
+[Layout](https://developer.apple.com/design/human-interface-guidelines/layout),
+[Color](https://developer.apple.com/design/human-interface-guidelines/color) and
+[Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
+
 ## P15-51 — approval flow polish (#1504)
 
 Implemented separate per-decision progress, a buttons-only Chat action row above
