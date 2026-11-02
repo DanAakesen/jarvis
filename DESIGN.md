@@ -579,6 +579,26 @@ approval notifications. Do not embed a relative phrase in an absolute template.
 
 ## Shared control geometry (16 October 2026; local candidate)
 
+Native iPhone destination headers (Notes, Health, Factory) use the shared
+44-point, no-fill sidebar menu action in the existing orange accent, with localized
+English/Danish labels. Chat uses separate native trailing ToolbarItems for the
+bell and menu, separated by a fixed ToolbarSpacer to prevent a shared glass
+capsule. The menu is outermost at the far right, matching the right-side drawer.
+All these launchers use SF Symbol `sidebar.trailing`, not a hamburger, with
+the existing `navigation.openSidebar` identifier and Danish/English labels.
+References: [Apple SF Symbols](https://developer.apple.com/sf-symbols/) and
+[HIG Toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
+Separation uses [ToolbarSpacer](https://developer.apple.com/documentation/swiftui/toolbarspacer).
+P15-41 renders that drawer at the gate root, above content modifiers, as a
+topmost conditional overlay with a dim tap-close
+region and trailing move transition (opacity for reduced motion), rather than
+shifting/blurring the foreground. Header geometry, drawer content and palette
+remain unchanged; rendered device acceptance is still pending.
+Comment 6562637427 adds a temporary noninteractive bottom diagnostics badge to
+device previews showing open/tap/writer metadata. This is investigative UI, not
+an approved permanent visual change; remove it before merge. Keep the
+authentication/privacy cover intact.
+
 Dan's three supplied screenshots identify inconsistent Refresh/Create action
 shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's
 existing glass room, typography, palette and layout; this is an app-wide control
@@ -2866,9 +2886,16 @@ only, without a row surface or border; the selected destination uses the shared
 orange accent, while the Settings icon uses the same accent on focus/hover. The
 sidebar clears the device's actual top safe area and uses the board's light/dark
 page and ambient color treatment. The revealed-screen tap-to-close surface moves
-with the screen so it cannot intercept sidebar buttons. The right-edge drag is
-simultaneous with screen gestures and its pure-Swift recognition policy is unit
-tested. The simulator artifact includes open-sidebar screenshots in both
+with the screen so it cannot intercept sidebar buttons. P15-41 confines opening
+drags to the right-edge strip and closing drags to the revealed screen; normal
+screen controls no longer share a full-screen drawer recognizer. Chat's native
+toolbar also exposes the localized menu action. The sidebar composition,
+settling spring, dimming, and blur are unchanged.
+The navigation shell retains keyboard safe-area avoidance; decorative composer
+glass never receives input. Accessibility containment keeps the closed drawer
+and decorations out of the exposed screen's control tree without changing layout.
+The pure-Swift recognition
+policy remains unit tested. The simulator artifact includes open-sidebar screenshots in both
 appearances beside the chat captures.
 
 SwiftUI `NavigationStack`, system typography and colors, native SF Symbols and

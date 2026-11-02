@@ -10,7 +10,145 @@ private struct JarvisSidebarButtonStyle: ButtonStyle {
     }
 }
 
+/// Reveal container at the app root: the drawer sits behind the page and the page slides sideways to
+/// uncover it. It renders from the root-owned navigation model only (committed state plus the transient
+/// swipe progress), so no screen, sheet, or voice state can leave the page offset or a tap-catcher behind.
+struct JarvisSidebarReveal<Page: View>: View {
+    @EnvironmentObject private var navigation: JarvisNavigationModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @GestureState private var isDraggingClosed = false
+    @GestureState private var isDraggingOpen = false
+    private let isEnabled: Bool
+    private let page: Page
+
+    /// `isEnabled` is false while the sign-in or privacy gate covers the app: the drawer and edge strip are inert.
+    init(isEnabled: Bool = true, @ViewBuilder page: () -> Page) {
+        self.isEnabled = isEnabled
+        self.page = page()
+    }
+
+    /// No animation while a finger is down (the offset must track it exactly); a spring on release,
+    /// starting from the presented progress.
+    private var animation: Animation? {
+        reduceMotion || navigation.dragProgress != nil ? nil : .spring(
+            response: JarvisDesignTokens.sidebarSpringResponse,
+            dampingFraction: JarvisDesignTokens.sidebarSpringDamping
+        )
+    }
+
+    // Translation is read in the global space: the views these gestures sit on move with the page,
+    // so a local space would feed the page offset back into the drag and make it jump.
+    private func closeSwipe(drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance, coordinateSpace: .global)
+            .updating($isDraggingClosed) { _, state, _ in state = true }
+            .onChanged { value in
+                guard abs(value.translation.width) >= abs(value.translation.height) || navigation.dragProgress != nil
+                else { return }
+                navigation.updateDrag(progress: 1 - Double(value.translation.width / max(drawerWidth, 1)))
+            }
+            .onEnded { value in
+                guard JarvisSidebarGesturePolicy.shouldClose(
+                    translationX: Double(value.translation.width),
+                    translationY: Double(value.translation.height),
+                    velocityX: Double(value.velocity.width),
+                    drawerWidth: Double(drawerWidth),
+                    closeThreshold: Double(JarvisDesignTokens.sidebarCloseThreshold)
+                ) else {
+                    navigation.cancelDrag()
+                    return
+                }
+                navigation.closeSidebar()
+            }
+    }
+
+    private func openSwipe(drawerWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: JarvisDesignTokens.sidebarGestureMinimumDistance, coordinateSpace: .global)
+            .updating($isDraggingOpen) { _, state, _ in state = true }
+            .onChanged { value in
+                guard scenePhase == .active, !navigation.isSidebarOpen,
+                      abs(value.translation.width) >= abs(value.translation.height) || navigation.dragProgress != nil
+                else { return }
+                navigation.updateDrag(progress: -Double(value.translation.width / max(drawerWidth, 1)))
+            }
+            .onEnded { value in
+                guard scenePhase == .active, !navigation.isSidebarOpen,
+                      JarvisSidebarGesturePolicy.shouldOpen(
+                        translationX: Double(value.translation.width),
+                        translationY: Double(value.translation.height),
+                        velocityX: Double(value.velocity.width),
+                        drawerWidth: Double(drawerWidth),
+                        openThreshold: Double(JarvisDesignTokens.sidebarOpenThreshold)
+                      ) else {
+                    navigation.cancelDrag()
+                    return
+                }
+                navigation.openSidebar()
+            }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let drawerWidth = min(
+                geometry.size.width * JarvisDesignTokens.sidebarWidthFraction,
+                JarvisDesignTokens.sidebarMaximumWidth
+            )
+            let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0
+            ZStack(alignment: .trailing) {
+                page
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .allowsHitTesting(progress == 0)
+                    .overlay {
+                        if progress > 0 {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture { navigation.closeSidebar() }
+                                .gesture(closeSwipe(drawerWidth: drawerWidth))
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .shadow(color: .black.opacity(JarvisDesignTokens.screenDimOpacity * Double(progress)), radius: 14)
+                    .offset(x: -drawerWidth * progress)
+
+                // Above the page in z-order and clipped to the strip the page has uncovered: the drawer looks
+                // revealed, yet no page layer can sit over its rows and swallow their taps.
+                if progress > 0 {
+                    JarvisSidebar(
+                        currentDestination: navigation.currentDestination,
+                        safeAreaInsets: ContentView.resolvedSafeAreaInsets(fallback: geometry.safeAreaInsets),
+                        onNavigate: { navigation.navigate(to: $0) }
+                    )
+                    .frame(width: drawerWidth, height: geometry.size.height)
+                    .background { JarvisScreenBackground() }
+                    .frame(width: drawerWidth * progress, height: geometry.size.height, alignment: .trailing)
+                    .clipped()
+                }
+
+                // Full-height trailing strip above every page layer. It is narrow so the toolbar button beside
+                // it stays tappable, and its high-priority drag wins over scrolling beneath it.
+                if isEnabled && (progress == 0 || isDraggingOpen) {
+                    Color.clear
+                        .frame(width: JarvisDesignTokens.sidebarEdgeGestureWidth, height: geometry.size.height)
+                        .contentShape(Rectangle())
+                        .highPriorityGesture(openSwipe(drawerWidth: drawerWidth))
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            .animation(animation, value: progress)
+            .onChange(of: isDraggingClosed) { _, dragging in
+                if !dragging { navigation.cancelDrag() }
+            }
+            .onChange(of: isDraggingOpen) { _, dragging in
+                if !dragging { navigation.cancelDrag() }
+            }
+        }
+        .ignoresSafeArea(.container)
+    }
+}
+
 struct JarvisSidebar: View {
+    @EnvironmentObject private var navigation: JarvisNavigationModel
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedDestination: JarvisDestination?
@@ -18,10 +156,8 @@ struct JarvisSidebar: View {
     @State private var hoveredDestination: JarvisDestination?
     @State private var settingsHovered = false
     let currentDestination: JarvisDestination
-    let isOpen: Bool
     let safeAreaInsets: EdgeInsets
     let onNavigate: (JarvisDestination) -> Void
-    let onClose: () -> Void
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -39,6 +175,7 @@ struct JarvisSidebar: View {
                 } label: {
                     Image(systemName: JarvisDestination.settings.symbolName)
                         .font(.system(size: JarvisDesignTokens.sidebarIconSize))
+                        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
                         .frame(
                             width: JarvisDesignTokens.sidebarSettingsButtonSize,
                             height: JarvisDesignTokens.sidebarSettingsButtonSize
@@ -46,11 +183,6 @@ struct JarvisSidebar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(JarvisSidebarButtonStyle())
-                .foregroundStyle(
-                    settingsFocused || settingsHovered
-                        ? JarvisDesignTokens.primaryAccent
-                        : Color.primary
-                )
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
@@ -84,9 +216,11 @@ struct JarvisSidebar: View {
         }
         .padding(.top, safeAreaInsets.top + JarvisDesignTokens.sidebarVerticalInset)
         .background(JarvisGlassSurface())
-        .accessibilityHidden(!isOpen)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("navigation.sidebar")
+        .accessibilityAddTraits(.isModal)
         .accessibilityAction(named: Text(JarvisNotesLocalization.string(.closeSidebar, language: language))) {
-            onClose()
+            navigation.closeSidebar()
         }
         .environment(\.locale, language.locale)
     }
@@ -102,6 +236,7 @@ struct JarvisSidebar: View {
             HStack(spacing: JarvisDesignTokens.sidebarRowLabelSpacing) {
                 Image(systemName: destination.symbolName)
                     .font(.system(size: JarvisDesignTokens.sidebarIconSize))
+                    .foregroundStyle(destination.isNavigable ? JarvisDesignTokens.secondaryAccent : Color.secondary)
                     .frame(width: JarvisDesignTokens.sidebarIconColumnWidth)
                 Text(destination.localizedTitle(language: language))
                     .font(.body.weight(isHighlighted ? .semibold : .regular))
@@ -117,6 +252,7 @@ struct JarvisSidebar: View {
         }
         .buttonStyle(JarvisSidebarButtonStyle())
         .disabled(!destination.isNavigable)
+        .accessibilityIdentifier("navigation.\(destination.rawValue)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .focused($focusedDestination, equals: destination)
         .onHover { hoveredDestination = $0 ? destination : nil }

@@ -53,6 +53,7 @@ private final class JarvisGateOverlay {
 
     func update(visible: Bool, model: JarvisGateModel) {
         guard visible else {
+            window?.isUserInteractionEnabled = false
             window?.isHidden = true
             window = nil
             return
@@ -81,6 +82,7 @@ private final class JarvisGateOverlay {
 private final class JarvisGateModel: ObservableObject {
     @Published private(set) var presentation: JarvisGatePresentation = .loading
     @Published private(set) var contentEpoch = 0
+    @Published private(set) var signOutGeneration = 0
     @Published private var isPrivacyCoverVisible = true
 
     private let policy = JarvisGatePolicy()
@@ -89,12 +91,29 @@ private final class JarvisGateModel: ObservableObject {
     private let client: JarvisClient?
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
+    private var isSigningOut = false
+
+    private static var isNavigationFixture: Bool {
+#if targetEnvironment(simulator)
+        ProcessInfo.processInfo.arguments.contains("--ui-test-navigation")
+#else
+        false
+#endif
+    }
 
     var shouldCoverContent: Bool {
         presentation != .unlocked || isPrivacyCoverVisible
     }
 
     init() {
+        if Self.isNavigationFixture {
+            tokenStore = nil
+            provider = nil
+            client = nil
+            presentation = .unlocked
+            isPrivacyCoverVisible = false
+            return
+        }
         tokenStore = try? KeychainTokenStore()
         if let provider = try? MicrosoftAccessTokenProvider(),
            let client = try? JarvisComposition.makeClient(accessTokenProvider: provider) {
@@ -175,7 +194,7 @@ private final class JarvisGateModel: ObservableObject {
                 Task { await authenticate() }
             } else {
                 isPrivacyCoverVisible = false
-                if presentation == .unlocked {
+                if presentation == .unlocked, !Self.isNavigationFixture {
                     Task {
                         await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
                     }
@@ -192,7 +211,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signIn() async {
-        guard presentation != .signIn(.signingIn) else { return }
+        guard !isSigningOut, presentation != .signIn(.signingIn) else { return }
         presentation = .signIn(.signingIn)
         guard let client else {
             presentation = .signIn(.failed)
@@ -214,6 +233,11 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func signOut() async {
+        guard !Self.isNavigationFixture, !isSigningOut else { return }
+        isSigningOut = true
+        defer { isSigningOut = false }
+        presentation = .loading
+        refreshOverlay()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
@@ -222,6 +246,7 @@ private final class JarvisGateModel: ObservableObject {
             try await tokenStore?.delete()
             try provider?.signOut()
             contentEpoch += 1
+            signOutGeneration += 1
             presentation = .signIn(.idle)
         } catch {
             presentation = .signIn(.denied)
@@ -254,6 +279,7 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func clientRequestedSignIn() {
+        guard !Self.isNavigationFixture else { return }
         switch presentation {
         case .unlocked, .lock:
             sessionExpired()
@@ -319,42 +345,92 @@ private final class JarvisGateModel: ObservableObject {
 
 struct JarvisGateRootView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @StateObject private var model = JarvisGateModel()
+    @StateObject private var navigation = JarvisNavigationModel(
+        initialState: ContentView.initialNavigation(),
+        dismissKeyboard: {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil
+            )
+        }
+    )
 
     var body: some View {
-        Group {
-            if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
-                JarvisLockScreenTasksPreview(
-                    language: JarvisAppLanguage(
-                        rawValue: ProcessInfo.processInfo.arguments
-                            .first(where: { $0.hasPrefix("--screenshot-lockscreen-language=") })?
-                            .replacingOccurrences(of: "--screenshot-lockscreen-language=", with: "") ?? ""
-                    ) ?? .default
-                )
-            } else {
-                ContentView()
+        JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {
+            Group {
+                if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
+                    JarvisLockScreenTasksPreview(
+                        language: JarvisAppLanguage(
+                            rawValue: ProcessInfo.processInfo.arguments
+                                .first(where: { $0.hasPrefix("--screenshot-lockscreen-language=") })?
+                                .replacingOccurrences(of: "--screenshot-lockscreen-language=", with: "") ?? ""
+                        ) ?? .default
+                    )
+                } else {
+                    ContentView(sessionEpoch: model.contentEpoch)
+                }
             }
-        }
-            .id(model.contentEpoch)
+            // Only sign-out discards the shell; sign-in resets session content explicitly.
+            .id(model.signOutGeneration)
+            // Gating applies to the page only; the root drawer and edge strip stay outside it.
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
+            .accessibilityElement(children: .contain)
             .accessibilityHidden(model.shouldCoverContent)
-            .task {
-                model.refreshOverlay()
-                await model.load()
+        }
+        .environmentObject(navigation)
+        // The drawer sits outside ContentView, so the stored theme must be applied at the root as well.
+        .preferredColorScheme(storedTheme == "light" ? .light : storedTheme == "dark" ? .dark : nil)
+        .overlay(alignment: .bottom) {
+            JarvisNavigationDebugLine(navigation: navigation)
+        }
+        .task {
+            model.refreshOverlay()
+            await model.load()
+            model.refreshOverlay()
+        }
+        .onChange(of: model.signOutGeneration) { _, _ in
+            navigation.reset()
+        }
+        .onChange(of: model.shouldCoverContent) { _, covered in
+            if covered { navigation.closeSidebar() }
+            model.refreshOverlay()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            model.scenePhaseChanged(phase)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisSignInRequired).receive(on: DispatchQueue.main)) { _ in
+            model.clientRequestedSignIn()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
+            Task { await model.signOut() }
+        }
+    }
+}
+
+/// TEMPORARY: always-visible navigation state for on-device diagnosis. Remove once item navigation works.
+private struct JarvisNavigationDebugLine: View {
+    @ObservedObject var navigation: JarvisNavigationModel
+
+    private var summary: String {
+        "path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(summary)
+            ForEach(Array(navigation.debugWrites.enumerated()), id: \.offset) { _, line in
+                Text(line)
             }
-            .onChange(of: model.shouldCoverContent) { _, _ in
-                model.refreshOverlay()
-            }
-            .onChange(of: scenePhase) { _, phase in
-                model.scenePhaseChanged(phase)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .jarvisSignInRequired).receive(on: DispatchQueue.main)) { _ in
-                model.clientRequestedSignIn()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
-                Task { await model.signOut() }
-            }
+        }
+        .font(.system(size: 9, design: .monospaced))
+        .padding(4)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(([summary] + navigation.debugWrites).joined(separator: " | "))
+        .accessibilityIdentifier("debug.navigation.trace")
     }
 }
 

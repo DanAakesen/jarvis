@@ -142,6 +142,26 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     var isPreview: Bool { screenshotState != nil }
 
     func start() async {
+#if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
+            guard sessionClient == nil else { return }
+            let client = VoiceSessionClient(
+                baseURL: URL(string: "https://fixture.example.invalid")!,
+                transport: VoiceActivityScreenshotSocket()
+            )
+            sessionClient = client
+            do {
+                try await client.start(accessToken: "fixture.voice", language: .da)
+                voiceState = .listening
+                isAudioReady = true
+            } catch {
+                sessionClient = nil
+                voiceState = .failed
+                errorMessage = Self.message(for: error)
+            }
+            return
+        }
+#endif
         if let screenshotState {
             voiceState = screenshotState
             isAudioReady = true
@@ -323,7 +343,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isMinimized = false
     }
 
-    func end() async {
+    func end(returnToChat: Bool = true) async {
         guard !isEnding else { return }
         isEnding = true
         defer { isEnding = false }
@@ -333,7 +353,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isStarting = false
         let endingClient = sessionClient
         sessionClient = nil
-        voiceState = .ended
+        voiceState = returnToChat ? .ended : .idle
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
         stopAudio()
@@ -357,7 +377,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         sessionClient = nil
         voiceSessionID = nil
         responseID = nil
-        voiceState = .ended
+        voiceState = returnToChat ? .ended : .idle
         isMuted = false
         isMinimized = false
     }

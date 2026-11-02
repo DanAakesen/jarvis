@@ -39,6 +39,8 @@
 	<string>Jarvis uses the camera when you choose Camera or Enable video in Chat, or share a frame during a voice conversation. Images stay on this device until you send them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jarvis uses the microphone for voice conversations.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Jarvis uses speech recognition to turn what you say into text when you tap Dictate in Chat.</string>
 	<key>JARVIS_ENTRA_CLIENT_ID</key>
 	<string>$(JARVIS_ENTRA_CLIENT_ID)</string>
 	<key>JARVIS_ENTRA_AUTHORITY_URL</key>

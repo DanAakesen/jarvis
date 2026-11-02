@@ -47,9 +47,11 @@ final class WorkspaceRuntime: ObservableObject {
     @Published private(set) var presentedView: PresentedWorkspaceView?
     @Published private(set) var requestedDestination: JarvisDestination?
 
-    private let workspaceClient: JarvisWorkspaceClient?
+    private let client: JarvisClient?
+    private var workspaceClient: JarvisWorkspaceClient?
     private var knownViews: [String: GeneratedView] = [:]
     private var trustedBlobHost: String?
+    private var sessionGeneration = 0
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(
@@ -58,6 +60,7 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     init(client: JarvisClient?, webAppURL: URL?) {
+        self.client = client
         workspacesClient = client.map(JarvisWorkspacesClient.init(client:))
         workspaceClient = client.map { JarvisWorkspaceClient(client: $0) }
         self.webAppURL = webAppURL
@@ -66,15 +69,19 @@ final class WorkspaceRuntime: ObservableObject {
 
     func run() async {
         guard let workspaceClient else { return }
+        let generation = sessionGeneration
         do {
             for try await event in workspaceClient.events() {
+                guard !Task.isCancelled, generation == sessionGeneration else { return }
                 switch event {
                 case .workspaceReady(_, let host):
                     trustedBlobHost = host
                     do {
                         try await registerCurrentSnapshot()
+                        guard !Task.isCancelled, generation == sessionGeneration else { return }
                         connectionStatus = .connected
                     } catch {
+                        guard !Task.isCancelled, generation == sessionGeneration else { return }
                         updateConnectionStatus(for: error)
                     }
                 case .workspaceCommand(let command, let expiresAtMilliseconds, let host):
@@ -85,10 +92,22 @@ final class WorkspaceRuntime: ObservableObject {
                     break
                 }
             }
+            guard !Task.isCancelled, generation == sessionGeneration else { return }
             connectionStatus = .offline
         } catch {
+            guard !Task.isCancelled, generation == sessionGeneration else { return }
             updateConnectionStatus(for: error)
         }
+    }
+
+    func resetSession() {
+        sessionGeneration += 1
+        workspaceClient = client.map { JarvisWorkspaceClient(client: $0) }
+        knownViews.removeAll()
+        trustedBlobHost = nil
+        presentedView = nil
+        requestedDestination = nil
+        connectionStatus = workspaceClient == nil ? .unavailable : .connecting
     }
 
     func consumeRequestedDestination() -> JarvisDestination? {
@@ -99,11 +118,15 @@ final class WorkspaceRuntime: ObservableObject {
     func userDismissedView() {
         guard presentedView != nil else { return }
         presentedView = nil
+        let generation = sessionGeneration
         Task {
+            guard generation == sessionGeneration else { return }
             do {
                 try await registerCurrentSnapshot()
+                guard generation == sessionGeneration else { return }
                 connectionStatus = .connected
             } catch {
+                guard generation == sessionGeneration else { return }
                 updateConnectionStatus(for: error)
             }
         }
@@ -155,10 +178,13 @@ final class WorkspaceRuntime: ObservableObject {
         case .move, .resize:
             return false
         }
+        let generation = sessionGeneration
         Task {
+            guard generation == sessionGeneration else { return }
             do {
                 try await registerCurrentSnapshot()
             } catch {
+                guard generation == sessionGeneration else { return }
                 updateConnectionStatus(for: error)
             }
         }
@@ -171,6 +197,7 @@ final class WorkspaceRuntime: ObservableObject {
         trustedBlobHost: String?
     ) async {
         guard let workspaceClient else { return }
+        let generation = sessionGeneration
         let result = apply(command, trustedBlobHost: trustedBlobHost ?? self.trustedBlobHost)
         do {
             try await WorkspaceCommandProcessor().acknowledge(
@@ -180,14 +207,18 @@ final class WorkspaceRuntime: ObservableObject {
                 using: workspaceClient
             ) { _, _ in result }
         } catch {
+            guard !Task.isCancelled, generation == sessionGeneration else { return }
             updateConnectionStatus(for: error)
             return
         }
+        guard !Task.isCancelled, generation == sessionGeneration else { return }
         if result == .applied {
             do {
                 try await registerCurrentSnapshot()
+                guard !Task.isCancelled, generation == sessionGeneration else { return }
                 connectionStatus = .connected
             } catch {
+                guard !Task.isCancelled, generation == sessionGeneration else { return }
                 updateConnectionStatus(for: error)
             }
         }

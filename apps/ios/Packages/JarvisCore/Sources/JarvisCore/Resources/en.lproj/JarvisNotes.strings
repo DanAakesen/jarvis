@@ -144,3 +144,4 @@
 "voice.captionsLabel" = "Voice captions";
 "voice.hideCaptions" = "Hide captions";
 "voice.showCaptions" = "Show captions";
+"voice.screenShareUnavailable" = "Screen sharing is unavailable: this build does not include the Jarvis broadcast extension.";
