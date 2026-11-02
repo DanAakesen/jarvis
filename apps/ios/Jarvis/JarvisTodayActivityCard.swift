@@ -19,7 +19,7 @@ struct JarvisTodayActivityCard: View {
         switch session {
         case .chest: JarvisDesignTokens.primaryAccent
         case .back: JarvisDesignTokens.secondaryAccent
-        case .arms: JarvisDesignTokens.orbCyan
+        case .arms: Color.cyan
         case .legs: JarvisDesignTokens.ambientGreen
         case .cardio: JarvisDesignTokens.ambientBlue
         }
