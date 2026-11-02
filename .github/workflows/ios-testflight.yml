@@ -120,7 +120,7 @@ jobs:
               -e 'requires a development team' -e 'Communication with Apple' \
               -e 'No Accounts' -e 'not registered' -e 'No signing certificate' \
               -e 'Automatic signing' -e 'entitlement' -e 'capabilit' \
-              -e 'App Store Connect' -e 'authentication' -e 'not authorized' \
+              -e 'App Store Connect' -e 'authentication' -e 'not authorized' -e 'failed' -e 'fatal' -e 'cannot' -e 'Undefined' -e 'Invalid' -e 'duplicate' -e 'Segmentation' -e 'crash' -e 'unable' -e 'missing' \
               -e 'bundle identifier' -e 'App ID' -e 'cloud signing' \
               "$RUNNER_TEMP/archive.log" \
               | sed -E \
@@ -130,7 +130,7 @@ jobs:
                 -e 's/%/%25/g' \
                 -e 's/^[[:space:]]+//' \
               | awk '!seen[$0]++' \
-              | head -n 40 \
+              | head -n 80 \
               | while IFS= read -r line; do
                   echo "::error::${line}"
                 done || true
@@ -183,7 +183,7 @@ jobs:
                 -e 's/%/%25/g' \
                 -e 's/^[[:space:]]+//' \
               | awk '!seen[$0]++' \
-              | head -n 40 \
+              | head -n 80 \
               | while IFS= read -r line; do
                   echo "::error::${line}"
                 done || true
