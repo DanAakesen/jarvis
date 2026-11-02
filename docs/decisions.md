@@ -10504,3 +10504,7 @@ not confirmed: the screen swap runs with animations off (`transaction(value:)`),
 a whole-screen layout; the debug `shown` report is published after the view update and only when it changed. The menu
 test keeps the 2 s existence check and gives the geometry checks a separate 6 s allowance, because each snapshot can
 take about a second on a loaded simulator.
+
+## 2026-11-02: Sidebar item tap crash was a Factory format string (confirmed)
+
+The crash report in the CI `ios-scheme` xcresult (run 41370702750) shows `EXC_BAD_ACCESS` in `String(format:)` called from `JarvisFactoryBoardRow.rowContent` (`JarvisFactoryArea.swift:791`). `factory.blockedBy` and `factory.issueNumber` used `%@` but were given `Int` values, so the Factory board crashed whenever a fixture card had a blocker. Both strings now use `%ld` in Danish and English. The earlier navigation workarounds were not the cause. CI already uploads crash reports inside the xcresult artifact.
