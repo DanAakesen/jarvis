@@ -44,7 +44,8 @@ final class ChatComposerUITests: XCTestCase {
         }
     }
 
-    func testCameraSheetOpensFromThePlusMenu() {
+    /// XCTest runs methods alphabetically; this one sorts last so the cold simulator launch is not charged to it.
+    func testSheetOpensCameraFromPlusMenu() {
         for language in ["en"] {
             let app = launch(language: language, extraArguments: ["--ui-test-camera-sheet"])
             let plus = app.buttons["chat.plus"]
@@ -57,7 +58,7 @@ final class ChatComposerUITests: XCTestCase {
 
             let shutter = app.descendants(matching: .any)["camera.shutter"]
             XCTAssertTrue(
-                shutter.waitForExistence(timeout: 10),
+                shutter.waitForExistence(timeout: 20),
                 "The camera sheet must open. Hierarchy: \(app.debugDescription)"
             )
             let close = app.descendants(matching: .any)["camera.close"]

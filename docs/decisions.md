@@ -10513,3 +10513,7 @@ take about a second on a loaded simulator.
 ## 2026-11-02: Sidebar item tap crash was a Factory format string (confirmed)
 
 The crash report in the CI `ios-scheme` xcresult (run 41370702750) shows `EXC_BAD_ACCESS` in `String(format:)` called from `JarvisFactoryBoardRow.rowContent` (`JarvisFactoryArea.swift:791`). `factory.blockedBy` and `factory.issueNumber` used `%@` but were given `Int` values, so the Factory board crashed whenever a fixture card had a blocker. Both strings now use `%ld` in Danish and English. The earlier navigation workarounds were not the cause. CI already uploads crash reports inside the xcresult artifact.
+
+## 2026-11-02: Camera-sheet UI test failure was cold-start timing, not the sheet (P15-52)
+
+CI run 41361929416 (head fef8913): `testCameraSheetOpensFromThePlusMenu` ran first in the class and first in the whole UI run, so it paid the cold simulator launch (about 80 s to start the automation session). It tapped the camera item at 109 s, and the app's accessibility log shows the sheet's `PresentationHostingController` `ViewDidAppear` at 117.5 s, but the 120 s per-test allowance expired while it was waiting for `camera.shutter` ("exceeded execution time allowance"). XCTest then restarted and ran the other tests, which passed. The earlier 39 s failure at line 58 was most likely the same slowness against a 5 s wait. The test is renamed `testSheetOpensCameraFromPlusMenu` so it sorts after the other two tests (XCTest runs alphabetically), and its shutter wait is 20 s. Not run on a Mac since; confirm on the next CI run.
