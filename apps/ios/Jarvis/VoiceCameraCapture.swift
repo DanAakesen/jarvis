@@ -80,6 +80,22 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
         return VoiceCameraLens.allCases.filter { types.contains($0.deviceType) }
     }
 
+    /// Zoom factor of a lens relative to the wide camera, as the stock Camera app labels it (0.5, 1, 2, 3, 5).
+    static func magnification(of lens: VoiceCameraLens, position: AVCaptureDevice.Position) -> Double {
+        switch lens {
+        case .ultraWide: return 0.5
+        case .wide: return 1
+        case .telephoto:
+            guard let wide = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: position),
+                  let tele = AVCaptureDevice.default(.builtInTelephotoCamera, for: .video, position: position) else {
+                return 2
+            }
+            let ratio = tan(Double(wide.activeFormat.videoFieldOfView) * .pi / 360)
+                / tan(Double(tele.activeFormat.videoFieldOfView) * .pi / 360)
+            return max(2, ratio.rounded())
+        }
+    }
+
     static func hasCamera(position: AVCaptureDevice.Position) -> Bool {
         !availableLenses(position: position).isEmpty
     }

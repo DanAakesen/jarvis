@@ -274,8 +274,7 @@ struct JarvisChatScreen: View {
                         takingPhotoTitle: copy(.takingPhoto),
                         isCapturingPhoto: isCapturingPhoto,
                         onCapture: captureCameraPhoto,
-                        onCancel: cancelCameraPhoto,
-                        onVideo: switchCameraSheetToVideo
+                        onCancel: cancelCameraPhoto
                     )
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
@@ -1058,14 +1057,6 @@ struct JarvisChatScreen: View {
         stopCameraAfterPhoto = false
     }
 
-    private func switchCameraSheetToVideo() {
-        guard cameraCapture != nil else { return }
-        stopCameraAfterPhoto = false
-        isCapturingPhoto = false
-        presentedSheet = nil
-        isVideoEnabled = true
-    }
-
     private func cancelCameraPhoto() {
         photoCaptureID = UUID()
         isCapturingPhoto = false
@@ -1316,123 +1307,47 @@ struct JarvisChatScreen: View {
     .environmentObject(JarvisNavigationModel())
 }
 
-private struct JarvisCameraControls: View {
+/// Camera state shared by the video-tile controls and the camera sheet, so flipping or changing lens updates both.
+@MainActor
+@Observable
+private final class JarvisCameraControlsModel {
     let camera: VoiceCameraCapture
-    let language: JarvisAppLanguage
-    var usesTorch = false
-    @State private var flash: AVCaptureDevice.FlashMode = .auto
-    @State private var torchOn = false
-    @State private var position: AVCaptureDevice.Position
-    @State private var lens: VoiceCameraLens
-    @State private var lenses: [VoiceCameraLens]
+    var flash: AVCaptureDevice.FlashMode
+    var torchOn = false
+    var position: AVCaptureDevice.Position
+    var lens: VoiceCameraLens
+    var lenses: [VoiceCameraLens]
 
-    init(camera: VoiceCameraCapture, language: JarvisAppLanguage, usesTorch: Bool = false) {
+    init(camera: VoiceCameraCapture) {
         self.camera = camera
-        self.language = language
-        self.usesTorch = usesTorch
-        _flash = State(initialValue: camera.flashMode)
-        _position = State(initialValue: camera.position)
-        _lens = State(initialValue: camera.lens)
-        _lenses = State(initialValue: VoiceCameraCapture.availableLenses(position: camera.position))
+        flash = camera.flashMode
+        position = camera.position
+        lens = camera.lens
+        lenses = VoiceCameraCapture.availableLenses(position: camera.position)
     }
 
-    private func copy(_ key: JarvisChatLocalizationKey) -> String {
-        JarvisChatLocalization.string(key, language: language)
+    var flipTarget: AVCaptureDevice.Position { position == .front ? .back : .front }
+
+    func toggleFlash() {
+        flash = flash == .auto ? .on : (flash == .on ? .off : .auto)
+        camera.flashMode = flash
     }
 
-    private var lightSymbol: String {
-        if usesTorch { return torchOn ? "bolt.fill" : "bolt.slash" }
-        switch flash {
-        case .on: return "bolt.fill"
-        case .off: return "bolt.slash"
-        default: return "bolt.badge.automatic"
-        }
+    func toggleTorch() {
+        torchOn.toggle()
+        camera.setTorch(torchOn)
     }
 
-    private var lightLabel: String {
-        if usesTorch { return copy(torchOn ? .torchOff : .torchOn) }
-        switch flash {
-        case .on: return copy(.flashOn)
-        case .off: return copy(.flashOff)
-        default: return copy(.flashAuto)
-        }
-    }
-
-    private func toggleLight() {
-        if usesTorch {
-            torchOn.toggle()
-            camera.setTorch(torchOn)
-        } else {
-            flash = flash == .auto ? .on : (flash == .on ? .off : .auto)
-            camera.flashMode = flash
-        }
-    }
-
-    private var flipTarget: AVCaptureDevice.Position { position == .front ? .back : .front }
-
-    var body: some View {
-        HStack(spacing: 6) {
-            if usesTorch ? camera.hasTorch : camera.hasFlash {
-                Button(action: toggleLight) {
-                    control { Image(systemName: lightSymbol) }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(lightLabel)
-                .accessibilityIdentifier("camera.flash")
-            }
-            if VoiceCameraCapture.hasCamera(position: flipTarget) {
-                Button(action: flip) {
-                    control { Image(systemName: "camera.rotate") }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.flipCamera))
-                .accessibilityIdentifier("camera.flip")
-            }
-            if lenses.count > 1 {
-                Menu {
-                    Picker(copy(.cameraLens), selection: lensSelection) {
-                        ForEach(lenses) { option in
-                            Text(copy(option.localizationKey)).tag(option)
-                        }
-                    }
-                } label: {
-                    control { Text(shortTitle(lens)).font(.caption.weight(.semibold)) }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.cameraLens))
-                .accessibilityValue(copy(lens.localizationKey))
-                .accessibilityIdentifier("camera.lens")
-            }
-        }
-    }
-
-    private func control<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .foregroundStyle(.white)
-            .frame(minWidth: 34, minHeight: 34)
-            .background(.black.opacity(0.5), in: Capsule())
-            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .contentShape(Rectangle())
-    }
-
-    private func shortTitle(_ lens: VoiceCameraLens) -> String {
-        switch lens {
-        case .ultraWide: "0.5×"
-        case .wide: "1×"
-        case .telephoto: "2×"
-        }
-    }
-
-    private var lensSelection: Binding<VoiceCameraLens> {
-        Binding(get: { lens }, set: { select(position: position, lens: $0) })
-    }
-
-    private func flip() {
+    func flip() {
         let target = flipTarget
         let available = VoiceCameraCapture.availableLenses(position: target)
         let preferred = available.contains(lens) ? lens : (available.contains(.wide) ? .wide : available.first)
         guard let preferred else { return }
         select(position: target, lens: preferred)
+    }
+
+    func select(lens newLens: VoiceCameraLens) {
+        select(position: position, lens: newLens)
     }
 
     private func select(position newPosition: AVCaptureDevice.Position, lens newLens: VoiceCameraLens) {
@@ -1447,10 +1362,95 @@ private struct JarvisCameraControls: View {
             lens = camera.lens
         }
     }
+
+    func magnificationTitle(_ option: VoiceCameraLens) -> String {
+        let factor = VoiceCameraCapture.magnification(of: option, position: position)
+        let number = factor.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(factor)) : String(factor)
+        return number + "×"
+    }
 }
 
-private enum CameraSheetMode { case photo, video }
+private struct JarvisCameraControls: View {
+    let language: JarvisAppLanguage
+    var usesTorch = false
+    @State private var model: JarvisCameraControlsModel
 
+    init(camera: VoiceCameraCapture, language: JarvisAppLanguage, usesTorch: Bool = false) {
+        self.language = language
+        self.usesTorch = usesTorch
+        _model = State(initialValue: JarvisCameraControlsModel(camera: camera))
+    }
+
+    private func copy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: language)
+    }
+
+    private var lightSymbol: String {
+        if usesTorch { return model.torchOn ? "bolt.fill" : "bolt.slash" }
+        switch model.flash {
+        case .on: return "bolt.fill"
+        case .off: return "bolt.slash"
+        default: return "bolt.badge.automatic"
+        }
+    }
+
+    private var lightLabel: String {
+        if usesTorch { return copy(model.torchOn ? .torchOff : .torchOn) }
+        switch model.flash {
+        case .on: return copy(.flashOn)
+        case .off: return copy(.flashOff)
+        default: return copy(.flashAuto)
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if usesTorch ? model.camera.hasTorch : model.camera.hasFlash {
+                Button(action: usesTorch ? model.toggleTorch : model.toggleFlash) {
+                    control { Image(systemName: lightSymbol) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(lightLabel)
+                .accessibilityIdentifier("camera.flash")
+            }
+            if VoiceCameraCapture.hasCamera(position: model.flipTarget) {
+                Button(action: model.flip) {
+                    control { Image(systemName: "camera.rotate") }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy(.flipCamera))
+                .accessibilityIdentifier("camera.flip")
+            }
+            if model.lenses.count > 1 {
+                Menu {
+                    Picker(copy(.cameraLens), selection: Binding(get: { model.lens }, set: { model.select(lens: $0) })) {
+                        ForEach(model.lenses) { option in
+                            Text(copy(option.localizationKey)).tag(option)
+                        }
+                    }
+                } label: {
+                    control { Text(model.magnificationTitle(model.lens)).font(.caption.weight(.semibold)) }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy(.cameraLens))
+                .accessibilityValue(copy(model.lens.localizationKey))
+                .accessibilityIdentifier("camera.lens")
+            }
+        }
+    }
+
+    private func control<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .foregroundStyle(.white)
+            .frame(minWidth: 34, minHeight: 34)
+            .background(.black.opacity(0.5), in: Capsule())
+            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .contentShape(Rectangle())
+    }
+}
+
+/// Picture-only camera. Like the stock Camera app, the lens buttons sit just above the shutter row, with flash
+/// and switch camera on either side of the shutter, so every control is within thumb reach.
 private struct JarvisChatCameraSheet: View {
     let camera: VoiceCameraCapture
     let language: JarvisAppLanguage
@@ -1461,8 +1461,46 @@ private struct JarvisChatCameraSheet: View {
     let isCapturingPhoto: Bool
     let onCapture: () -> Void
     let onCancel: () -> Void
-    let onVideo: () -> Void
-    @State private var mode = CameraSheetMode.photo
+    @State private var model: JarvisCameraControlsModel
+
+    init(
+        camera: VoiceCameraCapture,
+        language: JarvisAppLanguage,
+        copyText: @escaping (JarvisChatLocalizationKey) -> String,
+        closeTitle: String,
+        takePhotoTitle: String,
+        takingPhotoTitle: String,
+        isCapturingPhoto: Bool,
+        onCapture: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.camera = camera
+        self.language = language
+        self.copyText = copyText
+        self.closeTitle = closeTitle
+        self.takePhotoTitle = takePhotoTitle
+        self.takingPhotoTitle = takingPhotoTitle
+        self.isCapturingPhoto = isCapturingPhoto
+        self.onCapture = onCapture
+        self.onCancel = onCancel
+        _model = State(initialValue: JarvisCameraControlsModel(camera: camera))
+    }
+
+    private var flashSymbol: String {
+        switch model.flash {
+        case .on: "bolt.fill"
+        case .off: "bolt.slash"
+        default: "bolt.badge.automatic"
+        }
+    }
+
+    private var flashLabel: String {
+        switch model.flash {
+        case .on: copyText(.flashOn)
+        case .off: copyText(.flashOff)
+        default: copyText(.flashAuto)
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -1475,40 +1513,92 @@ private struct JarvisChatCameraSheet: View {
                         .buttonStyle(.glass)
                         .accessibilityIdentifier("camera.close")
                     Spacer()
-                    JarvisCameraControls(camera: camera, language: language)
                 }
                 Spacer()
-                Picker(copyText(.cameraMode), selection: $mode) {
-                    Text(copyText(.modePhoto)).tag(CameraSheetMode.photo)
-                    Text(copyText(.modeVideo)).tag(CameraSheetMode.video)
+                if model.lenses.count > 1 {
+                    lensButtons
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 220)
-                .accessibilityIdentifier("camera.mode")
-                .onChange(of: mode) { _, newMode in
-                    if newMode == .video { onVideo() }
-                }
-                Button(action: onCapture) {
-                    if isCapturingPhoto {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                    } else {
-                        Circle()
-                            .stroke(.white, lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth * 2)
-                            .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                            .overlay(Circle().fill(.white).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
+                HStack {
+                    sideControl(visible: camera.hasFlash) {
+                        Button(action: model.toggleFlash) {
+                            sideControlLabel(systemImage: flashSymbol)
+                        }
+                        .accessibilityLabel(flashLabel)
+                        .accessibilityIdentifier("camera.flash")
+                    }
+                    shutter
+                    sideControl(visible: VoiceCameraCapture.hasCamera(position: model.flipTarget)) {
+                        Button(action: model.flip) {
+                            sideControlLabel(systemImage: "camera.rotate")
+                        }
+                        .accessibilityLabel(copyText(.flipCamera))
+                        .accessibilityIdentifier("camera.flip")
                     }
                 }
-                .buttonStyle(.plain)
-                .disabled(isCapturingPhoto)
-                .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
-                .accessibilityIdentifier("camera.shutter")
                 .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
             }
             .padding(JarvisDesignTokens.voiceStatusSpacing)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat.cameraSheet")
+    }
+
+    private var lensButtons: some View {
+        HStack(spacing: 10) {
+            ForEach(model.lenses) { option in
+                let selected = option == model.lens
+                Button { model.select(lens: option) } label: {
+                    Text(model.magnificationTitle(option))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : .white)
+                        .frame(width: 52, height: 52)
+                        .background(.black.opacity(selected ? 0.7 : 0.45), in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copyText(option.localizationKey))
+                .accessibilityValue(model.magnificationTitle(option))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("camera.lens.\(option.rawValue)")
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    private var shutter: some View {
+        Button(action: onCapture) {
+            if isCapturingPhoto {
+                ProgressView()
+                    .tint(.white)
+                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
+            } else {
+                Circle()
+                    .stroke(.white, lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth * 2)
+                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
+                    .overlay(Circle().fill(.white).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isCapturingPhoto)
+        .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
+        .accessibilityIdentifier("camera.shutter")
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private func sideControl<Content: View>(visible: Bool, @ViewBuilder _ content: () -> Content) -> some View {
+        Group {
+            if visible { content().buttonStyle(.plain) } else { Color.clear }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func sideControlLabel(systemImage: String) -> some View {
+        Image(systemName: systemImage)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: 52, height: 52)
+            .background(.black.opacity(0.45), in: Circle())
+            .contentShape(Circle())
     }
 }

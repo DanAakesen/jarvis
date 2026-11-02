@@ -67,7 +67,7 @@
 "workspace.generatedView" = "Genereret visning";
 "workspace.unsupportedVersion" = "Versionen understøttes ikke";
 "workspace.unsupportedView" = "Visningen understøttes ikke";
-"workspace.tableSize" = "Tabel med %d kolonner og %d rækker";
+"workspace.tableSize" = "Tabel med %ld kolonner og %ld rækker";
 "workspace.noChartData" = "Ingen diagramdata";
 "workspace.baseline" = "Grundlinje";
 "workspace.xAxis" = "X";
@@ -79,7 +79,7 @@
 "workspace.chartArea" = "Arealdiagram";
 "workspace.chartSummary" = "%@. %@";
 "workspace.chartNoValues" = "%@, ingen værdier";
-"workspace.chartPoints" = "%@, %d punkter";
+"workspace.chartPoints" = "%@, %ld punkter";
 "workspace.chartRange" = "%@, fra %@ til %@";
 "workspace.imageUnavailable" = "Billedet er ikke tilgængeligt";
 "workspace.loadingImage" = "Indlæser billede";

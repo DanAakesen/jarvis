@@ -382,9 +382,6 @@ struct JarvisGateRootView: View {
         .environmentObject(navigation)
         // The drawer sits outside ContentView, so the stored theme must be applied at the root as well.
         .preferredColorScheme(storedTheme == "light" ? .light : storedTheme == "dark" ? .dark : nil)
-        .overlay(alignment: .bottom) {
-            JarvisNavigationDebugLine(navigation: navigation)
-        }
         .task {
             model.refreshOverlay()
             await model.load()
@@ -406,31 +403,6 @@ struct JarvisGateRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
             Task { await model.signOut() }
         }
-    }
-}
-
-/// TEMPORARY: always-visible navigation state for on-device diagnosis. Remove once item navigation works.
-private struct JarvisNavigationDebugLine: View {
-    @ObservedObject var navigation: JarvisNavigationModel
-
-    private var summary: String {
-        "path=\(navigation.path.map(\.rawValue)) current=\(navigation.currentDestination.rawValue) shown=\(navigation.debugShown) open=\(navigation.isSidebarOpen) reveal=\(String(format: "%.2f", navigation.revealProgress))"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(summary)
-            ForEach(Array(navigation.debugWrites.enumerated()), id: \.offset) { _, line in
-                Text(line)
-            }
-        }
-        .font(.system(size: 9, design: .monospaced))
-        .padding(4)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(([summary] + navigation.debugWrites).joined(separator: " | "))
-        .accessibilityIdentifier("debug.navigation.trace")
     }
 }
 

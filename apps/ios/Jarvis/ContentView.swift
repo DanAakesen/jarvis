@@ -170,7 +170,6 @@ struct ContentView: View {
                                 onNavigate: { navigate(to: $0) }
                             )
                             .id(sessionEpoch)
-                            .onAppear { navigation.debugDestinationShown(.chat) }
                         } else {
                             destinationView(destination)
                                 .id(sessionEpoch)
@@ -250,7 +249,6 @@ struct ContentView: View {
     private func destinationView(_ destination: JarvisDestination) -> some View {
         destinationContent(destination)
             .id(destination)
-            .onAppear { navigation.debugDestinationShown(destination) }
     }
 
     @ViewBuilder
@@ -470,6 +468,12 @@ private struct JarvisDestinationHost<Content: View>: View {
 
     var body: some View {
         content(navigation.currentDestination)
+            .overlay(alignment: .topLeading) {
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityElement()
+                    .accessibilityIdentifier("screen.\(navigation.currentDestination.rawValue)")
+            }
             // The screen swap is one plain pass: the drawer's spring must not also animate a whole-screen layout.
             .transaction(value: navigation.currentDestination) { $0.animation = nil }
     }

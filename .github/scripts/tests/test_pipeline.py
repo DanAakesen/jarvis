@@ -864,8 +864,10 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("#selector(UIResponder.resignFirstResponder)", gate)
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
         self.assertRegex(model, r"func openSidebar\(\) \{\s+dismissKeyboard\(\)\s+"
-                                r"write\(\"openSidebar\"\) \{ \$0\.openSidebar\(\) \}")
-        self.assertNotIn("openTapCount", model)  # TEMPORARY debugWrites/debugShown allowed until Dan confirms
+                                r"write \{ \$0\.openSidebar\(\) \}")
+        self.assertNotIn("openTapCount", model)
+        self.assertNotIn("debugWrites", model)
+        self.assertNotIn("debug.navigation.trace", gate)
         self.assertIn("overlay.windowLevel = .alert + 1", gate)
         self.assertIn("override var canBecomeKey: Bool { false }", gate)
         self.assertNotIn("JarvisInputHitTestingProbe", chat)
@@ -895,7 +897,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertRegex(model, r"(?s)func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
                                r".*?guard path != state\.path else \{.*?\}\s+"
                                r"let update = JarvisNavigationPathUpdate\(path: path, from: state\).*?"
-                               r"write\(.*?\) \{ \$0 = update\.state \}")
+                               r"write \{ \$0 = update\.state \}")
 
     def test_ios_navigation_reference_ownership_and_plain_conditional_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
@@ -905,7 +907,7 @@ class SafeFailureTests(unittest.TestCase):
         )[0]
         model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
         self.assertIn("@MainActor\nfinal class JarvisNavigationModel: ObservableObject", model)
-        self.assertEqual(model.count("@Published"), 4)  # state, dragProgress, two TEMPORARY debug fields
+        self.assertEqual(model.count("@Published"), 2)  # state, dragProgress
         self.assertIn("@Published private(set) var state: JarvisNavigationState", model)
         for derived in ("var path: [JarvisDestination] { state.path }",
                         "var isSidebarOpen: Bool { state.isSidebarOpen }",
@@ -986,7 +988,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()", model)
         navigate = model.split("func navigate(to destination:", 1)[1].split("func voiceSessionStateChanged", 1)[0]
         self.assertLess(navigate.index("navigationRequested.send((from: currentDestination, to: destination))"),
-                        navigate.index('write("navigate('))
+                        navigate.index('write {'))
         self.assertNotIn("guard destination != currentDestination", navigate)
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertIn(".onReceive(navigation.navigationRequested)", content)

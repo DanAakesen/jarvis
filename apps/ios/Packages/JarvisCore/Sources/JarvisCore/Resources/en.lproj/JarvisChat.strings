@@ -44,7 +44,7 @@
 "chat.screenShareFailed" = "Screen sharing did not start. Try again.";
 "chat.screenShareExtensionMissing" = "Screen sharing is unavailable: this build does not include the Jarvis broadcast extension.";
 "chat.failedChecksTitle" = "Other failed checks";
-"chat.failedChecksSummary" = "%d failed in the background. No action needed.";
+"chat.failedChecksSummary" = "%ld failed in the background. No action needed.";
 "chat.dismiss" = "Dismiss";
 "chat.dismissing" = "Dismissing…";
 "chat.dismissLabel" = "Dismiss %@";
@@ -62,9 +62,6 @@
 "chat.camera.flash.off" = "Flash: off";
 "chat.camera.torch.on" = "Turn light on";
 "chat.camera.torch.off" = "Turn light off";
-"chat.camera.mode" = "Camera mode";
-"chat.camera.mode.photo" = "Photo";
-"chat.camera.mode.video" = "Video";
 "chat.composer.dictate" = "Dictate";
 "chat.composer.stopDictate" = "Stop dictation";
 "chat.composer.dictateUnavailable" = "Dictation is not available. Check microphone and speech recognition permissions.";
