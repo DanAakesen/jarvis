@@ -32,8 +32,8 @@
 "factory.emptyNeedsDan" = "Intet afventer Dan";
 "factory.emptyReleases" = "Ingen udgivelser";
 "factory.noSearchResults" = "Ingen søgeresultater";
-"factory.issueNumber" = "Sag #%@";
-"factory.blockedBy" = "Afventer #%@";
+"factory.issueNumber" = "Sag #%ld";
+"factory.blockedBy" = "Afventer #%ld";
 "factory.inProgress" = "I gang";
 "factory.inReview" = "Til gennemgang";
 "factory.ready" = "Klar";
