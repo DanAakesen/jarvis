@@ -19,7 +19,7 @@ enum JarvisGlass {
 /// material when Reduce Transparency is on. Toolbar items get the same glass from the system toolbar, so the
 /// navigation bar itself stays transparent while each control keeps its own glass capsule or circle.
 /// API: View.glassEffect(_:in:), Glass, Shape, AccessibilityEnvironment reduceTransparency.
-struct JarvisGlassSurface: ViewModifier {
+struct JarvisGlassBackground: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var cornerRadius: CGFloat?
 
@@ -39,7 +39,7 @@ struct JarvisGlassSurface: ViewModifier {
 extension View {
     /// Glass behind a floating control. Pass a radius for a rounded rectangle, or none for a capsule.
     func jarvisGlassSurface(cornerRadius: CGFloat? = nil) -> some View {
-        modifier(JarvisGlassSurface(cornerRadius: cornerRadius))
+        modifier(JarvisGlassBackground(cornerRadius: cornerRadius))
     }
 }
 
