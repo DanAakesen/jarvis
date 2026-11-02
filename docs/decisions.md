@@ -10609,3 +10609,7 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Two separate items. "Enable video" / "Aktivér video" is a toggle with on/off state and starts or stops live video (`startCamera`/`stopCamera`). "Camera" / "Kamera" takes one photo and sends it with the next turn. It works with video on or off.
 - With video off, `beginPhotoSession` runs the camera only for the viewfinder: nothing is streamed and the session is not told video is on. The viewfinder sheet's `onDismiss` calls `endPhotoSession`, which releases the camera. Turning video on during a photo session replaces the temporary capture.
 - Not compiled here (no Xcode).
+
+## 2026-11-02 — P15-55: sidebar rows centred as one block
+
+- The navigation rows are one block centred vertically between the header rule and the bottom safe area (`JarvisSidebar`). The bottom safe-area inset moved from inside the scroll content to below the scroll area, so the free space is measured between the two insets and the space above and below the block is equal. Row order, size and spacing are unchanged. If the rows do not fit, the content grows past the minimum height and scrolls from the top. Not compiled here; the iPhone SE and Pro Max screenshots come from iOS CI and need a device check.
