@@ -74,6 +74,7 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case save = "health.save"
     case saving = "health.saving"
     case saveFailed = "health.saveFailed"
+    case vaultPending = "health.vaultPending"
     case cancel = "health.cancel"
     case loadMore = "health.loadMore"
 }

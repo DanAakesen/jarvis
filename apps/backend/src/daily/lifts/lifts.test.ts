@@ -10,7 +10,7 @@ describe('parseLiftCreate', () => {
       ok: true,
       value: {
         idempotencyKey: key, exerciseName: 'Bench press', exerciseKey: 'bench press',
-        weightKg: 80.25, reps: 4, sets: 3, performedAt: '2026-10-30T12:00:00.000Z',
+        weightKg: 80.25, reps: 4, sets: 3, performedAt: '2026-10-30T12:00:00.000Z', workoutId: null,
       },
     });
   });
