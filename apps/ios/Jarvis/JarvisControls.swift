@@ -58,10 +58,10 @@ enum JarvisRimState {
     /// Seconds for one lap of the light sweep.
     var lap: Double {
         switch self {
-        case .idle: 40
-        case .typing: 14
-        case .thinking: 7
-        case .listening: 8
+        case .idle: 16
+        case .typing: 8
+        case .thinking: 4
+        case .listening: 5
         }
     }
 
@@ -100,8 +100,11 @@ struct JarvisRim: ViewModifier {
                 if isStatic {
                     rim(angle: 0)
                 } else {
-                    TimelineView(.animation(minimumInterval: 1.0 / 12)) { timeline in
-                        rim(angle: clock.advance(to: timeline.date, lap: state.lap))
+                    TimelineView(.animation(minimumInterval: 1.0 / 15)) { timeline in
+                        ZStack {
+                            rim(angle: clock.advance(to: timeline.date, lap: state.lap))
+                            ripple(at: timeline.date)
+                        }
                     }
                 }
             }
@@ -132,6 +135,16 @@ struct JarvisRim: ViewModifier {
         .opacity(state.opacity * pulse)
     }
 
+    /// A faint copy of the border that radiates outwards and fades, once every few seconds.
+    private func ripple(at date: Date) -> some View {
+        let period = state == .thinking ? 2.4 : 3.6
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+        return shape
+            .inset(by: -JarvisDesignTokens.rimRippleReach * phase)
+            .stroke(JarvisDesignTokens.primaryAccent, lineWidth: 1)
+            .opacity((1 - phase) * 0.3 * state.opacity)
+    }
+
     /// Dips the rim at random intervals and depths, so it never ticks like a metronome.
     private func breathe() async {
         pulse = 1
@@ -153,10 +166,41 @@ final class RimClock {
     private var last: Date?
 
     func advance(to now: Date, lap: Double) -> Double {
-        if let last { angle = (angle + now.timeIntervalSince(last) / lap * 360).truncatingRemainder(dividingBy: 360) }
+        if let last {
+            let t = now.timeIntervalSinceReferenceDate
+            // Two slow, unrelated waves make the sweep speed up and slow down without a fixed rhythm.
+            let speed = 1 + 0.55 * sin(t / 2.3) + 0.25 * sin(t / 0.9 + 1)
+            angle = (angle + now.timeIntervalSince(last) / lap * 360 * speed).truncatingRemainder(dividingBy: 360)
+        }
         last = now
         return angle
     }
+}
+
+/// Sweeps a soft highlight across placeholder text while an answer is on the way. Steady under Reduce Motion.
+struct JarvisShimmer: ViewModifier {
+    let isActive: Bool
+    @State private var phase: CGFloat = -0.5
+
+    func body(content: Content) -> some View {
+        if isActive {
+            content
+                .foregroundStyle(LinearGradient(
+                    colors: [.secondary, JarvisDesignTokens.primaryAccent, .secondary],
+                    startPoint: UnitPoint(x: phase - 0.4, y: 0.5),
+                    endPoint: UnitPoint(x: phase + 0.4, y: 0.5)
+                ))
+                .onAppear {
+                    withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { phase = 1.5 }
+                }
+        } else {
+            content
+        }
+    }
+}
+
+extension View {
+    func jarvisShimmer(isActive: Bool) -> some View { modifier(JarvisShimmer(isActive: isActive)) }
 }
 
 extension View {
@@ -213,6 +257,33 @@ struct JarvisIconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.glass)
+        .disabled(isDisabled)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier ?? "")
+    }
+}
+
+/// Icon button for rows that already sit on a glass surface and for toolbars (which own their glass): one
+/// 44 pt target with the secondary accent and no background of its own, so it never doubles the glass behind it.
+struct JarvisInlineIconButton: View {
+    let title: String
+    let systemImage: String
+    var identifier: String?
+    var isDisabled = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(JarvisDesignTokens.secondaryAccent.opacity(isDisabled ? 0.4 : 1))
+                .frame(
+                    width: JarvisDesignTokens.chatMinimumTapTarget,
+                    height: JarvisDesignTokens.chatMinimumTapTarget
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .disabled(isDisabled)
         .accessibilityLabel(title)
         .accessibilityIdentifier(identifier ?? "")

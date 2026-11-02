@@ -36,9 +36,8 @@ struct JarvisActivitySheet: View {
                         }
                     } else if let feed = model.nowFeed {
                         let presentation = model.backgroundPresentation
-                        let showsRoutineJobs = kind == .background
                         let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty ||
-                            !feed.items.isEmpty || (showsRoutineJobs && !model.backgroundTasks.isEmpty) ||
+                            !feed.items.isEmpty || !model.backgroundTasks.isEmpty ||
                             !presentation.actionable.isEmpty || !presentation.quiet.isEmpty
                         if let error = model.activityError {
                             HStack {
@@ -67,11 +66,10 @@ struct JarvisActivitySheet: View {
                         if !feed.running.isEmpty {
                             runningSection(feed.running)
                         }
-                        if showsRoutineJobs {
-                            if !model.backgroundTasks.isEmpty { backgroundTaskSection }
-                        } else if !presentation.actionable.isEmpty {
+                        if !presentation.actionable.isEmpty {
                             failedTaskSection(presentation.actionable)
                         }
+                        if !model.backgroundTasks.isEmpty { backgroundTaskSection }
                         ForEach(NowFeedActivityCategory.allCases, id: \.self) { category in
                             let items = feed.items.filter { $0.category == category }
                             if !items.isEmpty {
@@ -94,8 +92,7 @@ struct JarvisActivitySheet: View {
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
             .jarvisAmbientBackground()
-            .navigationTitle(hasCalendarConfirmation && kind == .needsYou && appLanguage == .da
-                             ? "Afventer dig" : kind.title)
+            .navigationTitle(copy(.activityTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -111,7 +108,7 @@ struct JarvisActivitySheet: View {
                 }
                 if let items = model.nowFeed?.items, items.count > 1 {
                     ToolbarItem(placement: .topBarLeading) {
-                        JarvisIconButton(
+                        JarvisInlineIconButton(
                             title: copy(.clearAll),
                             systemImage: "trash",
                             identifier: "activity.clearAll",
@@ -181,7 +178,7 @@ struct JarvisActivitySheet: View {
     }
 
     private func failedTaskRow(_ task: BackgroundTaskRecord) -> some View {
-        HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
+        HStack(alignment: .center, spacing: JarvisDesignTokens.chatComposerSpacing) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title).font(.body)
                 if let detail = task.detail {
@@ -192,7 +189,11 @@ struct JarvisActivitySheet: View {
             Button(model.dismissingBackgroundTaskIDs.contains(task.id) ? copy(.dismissing) : copy(.dismiss)) {
                 Task { await model.dismissBackgroundTask(task) }
             }
-            .buttonStyle(.glass)
+            .buttonStyle(.plain)
+            .font(.body.weight(.medium))
+            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .contentShape(Rectangle())
             .disabled(model.fixtureMode || model.dismissingBackgroundTaskIDs.contains(task.id))
             .accessibilityLabel(String(format: copy(.dismissLabel), task.title))
         }
@@ -321,7 +322,7 @@ struct JarvisActivitySheet: View {
     private func groupRow(_ group: NowFeedActivityGroup) -> some View {
         let busy = group.items.contains { model.dismissingActivityIDs.contains($0.id) }
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
+            HStack(alignment: .center, spacing: JarvisDesignTokens.chatComposerSpacing) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(group.latest.title).font(.body)
                     HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -337,14 +338,14 @@ struct JarvisActivitySheet: View {
                 if busy {
                     ProgressView()
                 } else if group.olderCount > 0 {
-                    JarvisIconButton(
+                    JarvisInlineIconButton(
                         title: String(format: copy(.clearGroupLabel), group.category.title),
                         systemImage: "trash",
                         identifier: "activity.clear.\(group.id)",
                         isDisabled: model.fixtureMode
                     ) { Task { await model.dismissActivities(group.items) } }
                 } else {
-                    JarvisIconButton(
+                    JarvisInlineIconButton(
                         title: String(format: copy(.dismissLabel), group.latest.title),
                         systemImage: "xmark",
                         identifier: "activity.dismiss.\(group.latest.id)",
@@ -356,13 +357,13 @@ struct JarvisActivitySheet: View {
                 DisclosureGroup {
                     LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                         ForEach(group.items.dropFirst(), id: \.id) { item in
-                            HStack(alignment: .top) {
+                            HStack(alignment: .center) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(item.title).font(.callout)
                                     Text(timeString(item.at)).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer(minLength: 0)
-                                JarvisIconButton(
+                                JarvisInlineIconButton(
                                     title: String(format: copy(.dismissLabel), item.title),
                                     systemImage: "xmark",
                                     identifier: "activity.dismiss.\(item.id)",

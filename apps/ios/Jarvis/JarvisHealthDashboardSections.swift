@@ -11,7 +11,7 @@ struct JarvisHealthRingsSection: View {
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
     var body: some View {
-        JarvisHealthPanel(title: copy.text(.activity)) {
+        JarvisPageHeroCard(title: copy.text(.activity)) {
             HStack(alignment: .top, spacing: JarvisDesignTokens.healthRowSpacing) {
                 ring(
                     label: copy.text(.gym),
@@ -74,6 +74,16 @@ struct JarvisHealthRingsSection: View {
             format: copy.text(.target),
             locale: language.locale,
             formatNumber(target, language: language)
+        )
+    }
+
+    func phraseInput(isToday: Bool) -> JarvisHealthPagePhrase.Input {
+        JarvisHealthPagePhrase.Input(
+            isToday: isToday,
+            gymDone: Int(workoutCount(.gym) ?? 0),
+            gymTarget: JarvisHealthLogic.scaledWeeklyTarget(data.trainingTargets?.targets.gymSessionsPerWeek, days: period.dayCount),
+            steps: stepCount,
+            stepsTarget: scaledStepsTarget
         )
     }
 

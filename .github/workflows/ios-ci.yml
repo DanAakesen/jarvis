@@ -486,6 +486,18 @@ jobs:
             gh api --method POST --input "$payload_file" \
               "repos/$GITHUB_REPOSITORY/issues"
           fi
+      - name: Summarize failing UI tests
+        if: always() && steps.capture.outputs.result == 'failure'
+        run: |
+          result="$RUNNER_TEMP/ios-scheme.xcresult"
+          {
+            echo "### Failing iOS UI tests"
+            if [[ -d "$result" ]] && xcrun xcresulttool get test-results summary --path "$result" > "$RUNNER_TEMP/ios-test-summary.json" 2>/dev/null; then
+              jq -r '(.testFailures // []) | if length == 0 then "No failing test names were found in the result bundle." else .[] | "- `\(.testName // "unknown")`: \(.failureText // "no message")" end' "$RUNNER_TEMP/ios-test-summary.json"
+            else
+              echo "The test result bundle could not be read; see the xcodebuild log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Fail the run when UI tests fail
         if: always() && steps.capture.outputs.result == 'failure'
         run: exit 1

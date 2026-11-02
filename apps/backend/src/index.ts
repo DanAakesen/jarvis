@@ -140,6 +140,7 @@ import { createActivityPushSender, loadActivityKitConfig } from './push/activity
 import { createApprovalNotificationStore } from './database/approval-notification-store.js';
 import {
   createApprovalNotificationDispatcher,
+  createReplyNotificationDispatcher,
   createApprovalNotificationSender,
   loadApprovalNotificationConfig,
 } from './push/approval-notifications.js';
@@ -191,6 +192,9 @@ try {
     : undefined;
   const notifyApproval = approvalNotifications
     ? createApprovalNotificationDispatcher(config.auth.ownerObjectId, approvalNotifications, logger)
+    : undefined;
+  const notifyReply = approvalNotifications
+    ? createReplyNotificationDispatcher(config.auth.ownerObjectId, approvalNotifications, logger)
     : undefined;
   if (config.healthUploadEnabled && !database) {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED requires the existing SQL pool');
@@ -1000,6 +1004,7 @@ try {
       pool: database?.pool,
       ownerObjectId: config.auth.ownerObjectId,
       feedsEnabled: config.dailyFeedsEnabled === true,
+      ...(vaultClient ? { gymVault: { vault: vaultClient, logger } } : {}),
       ...(config.dailyFeedsEnabled ? { feeds: {
         ...(googleApiClient ? { google: googleApiClient } : {}),
         ...(dailyMailSemantic ? { semantic: dailyMailSemantic } : {}),
@@ -1231,6 +1236,7 @@ try {
     ...(activityKit ? { activityKit } : {}),
     ...(approvalNotifications ? { approvalNotifications } : {}),
     ...(notifyApproval ? { notifyApproval } : {}),
+    ...(notifyReply ? { notifyReply } : {}),
     ...(vaultModule && config.foundryProjectEndpoint && credential ? {
       onEmbeddingModelChanged: async (jobs) => {
         if (activeEmbeddingReindex) {

@@ -133,6 +133,26 @@ public final class JarvisChatClient: Sendable {
         )
     }
 
+    /// Adds a follow-up message to the turn that is still running, so the user can steer it mid-answer.
+    /// Returns false when no turn is active any more and the text must be sent as a normal turn instead.
+    public func steerTurn(sessionId: String, text: String, language: ChatLanguage) async throws -> Bool {
+        guard Self.validID(sessionId) else { throw JarvisChatClientError.invalidResponse }
+        try validateTurn(text: text, attachmentIds: [], screenContext: nil)
+        do {
+            let response = try await client.performAuthenticatedRequest(
+                method: .post,
+                path: ["conversation", "sessions", sessionId, "steer"],
+                body: try encode(SteerTurnRequest(text: text, language: language)),
+                idempotent: false
+            )
+            guard response.statusCode == 202 else { throw JarvisChatClientError.invalidResponse }
+            return true
+        } catch let error as JarvisClientError {
+            if case .httpStatus(409) = error { return false }
+            throw error
+        }
+    }
+
     public func cancelTurn(sessionId: String, messageId: String) async throws -> Bool {
         guard Self.validID(sessionId), Self.validID(messageId) else {
             throw JarvisChatClientError.invalidResponse
@@ -502,6 +522,11 @@ private struct SendTurnRequest: Encodable {
     let attachmentIds: [String]?
     let screenContext: String?
     let visualContext: ChatVisualContext?
+}
+
+private struct SteerTurnRequest: Encodable {
+    let text: String
+    let language: ChatLanguage
 }
 
 private struct ActiveTurnsResponse: Decodable {

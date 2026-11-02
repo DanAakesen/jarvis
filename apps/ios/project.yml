@@ -91,7 +91,7 @@ targets:
     sources:
       - path: VoiceActivity
       - path: Shared
-      - path: Jarvis/JarvisOrbView.swift
+      - path: Jarvis/JarvisMiniCoreView.swift
       - path: Jarvis/JarvisDesignSystem.swift
     dependencies:
       - package: JarvisCore

@@ -78,6 +78,28 @@ export function approvalNotificationPayload(input: ApprovalNotificationPayloadIn
   }));
 }
 
+export interface ReplyNotificationInput {
+  sessionId: string;
+  messageId: string;
+  text: string;
+  language: 'da' | 'en';
+}
+
+const replyCategory = 'jarvis.reply';
+
+export function replyNotificationPayload(input: ReplyNotificationInput): Buffer {
+  const text = Array.from(input.text, (character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
+  }).join('').replace(/\s+/gu, ' ').trim();
+  const body = [...text].slice(0, 160).join('') || (input.language === 'da' ? 'Nyt svar fra Jarvis' : 'New reply from Jarvis');
+  return Buffer.from(JSON.stringify({
+    aps: { alert: { title: 'Jarvis', body }, category: replyCategory, 'thread-id': replyCategory, sound: 'default' },
+    sessionID: input.sessionId,
+    messageID: input.messageId,
+  }));
+}
+
 export async function createApprovalNotificationSender(
   config: ApnsConfig,
   now: () => number = Date.now,
@@ -235,6 +257,35 @@ export function createApprovalNotificationDispatcher(
         }
       }));
     })().catch(() => logger.warn('approval_notification.delivery_unavailable'));
+  };
+}
+
+/** Pushes a finished chat reply so it reaches the owner while the app is in the background. */
+export function createReplyNotificationDispatcher(
+  owner: string,
+  services: ApprovalNotificationServices,
+  logger: Pick<FastifyBaseLogger, 'warn'>,
+  now: () => number = Date.now,
+): (reply: ReplyNotificationInput) => void {
+  return (reply) => {
+    void (async () => {
+      const registrations = await services.store.list(owner);
+      const expiresAt = now() + 60 * 60_000;
+      await Promise.all(registrations.map(async (registration) => {
+        try {
+          const result = await services.sender.send(
+            registration.deviceToken,
+            replyNotificationPayload({ ...reply, language: registration.language }),
+            expiresAt,
+            AbortSignal.timeout(6000),
+          );
+          if (result.invalidToken) await services.store.remove(owner, registration.deviceToken);
+          else if (!result.accepted) logger.warn('reply_notification.push_not_accepted');
+        } catch {
+          logger.warn('reply_notification.push_unavailable');
+        }
+      }));
+    })().catch(() => logger.warn('reply_notification.delivery_unavailable'));
   };
 }
 

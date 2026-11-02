@@ -942,6 +942,7 @@ return {
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
+            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text, language: turnLanguage });
             logChatLatency(request, 'turn_complete', turnStartedAt);
             if (visualContext) {
               request.log.info({

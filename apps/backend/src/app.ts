@@ -70,6 +70,7 @@ import { registerWebSocketPlugin } from './websocket.js';
 import { registerActivityKitRoutes, type ActivityKitServices } from './push/activitykit-routes.js';
 import {
   registerApprovalNotificationRoutes,
+  type ReplyNotificationInput,
   type ApprovalNotificationServices,
 } from './push/approval-notifications.js';
 import type { BrowserConfirmation } from './core/owner-interactions.js';
@@ -78,6 +79,7 @@ export interface BuildAppOptions {
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
   readonly notifyApproval?: (confirmation: BrowserConfirmation) => void;
+  readonly notifyReply?: (reply: ReplyNotificationInput) => void;
   readonly managedRuntime?: import('./core/managed-runtime-routes.js').ManagedRuntimeServices;
   /** Supplied only after managed definition, settings and application-policy verification. */
   readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
@@ -190,6 +192,7 @@ declare module 'fastify' {
     browserAgent: BrowserAgent | null;
     ownerInteractions: OwnerInteractionService | null;
     notifyApproval: (confirmation: BrowserConfirmation) => void;
+    notifyReply: (reply: ReplyNotificationInput) => void;
     awayModeStore: AwayModeStore | null;
     phoneSessionStore: PhoneSessionStore | null;
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
@@ -266,6 +269,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
+  app.decorate('notifyReply', options.notifyReply ?? (() => {}));
   app.decorate('backendLogsConfigured', config.backendLogs !== undefined);
   app.decorate('backendLogAuthorizationProbe', options.backendLogAuthorizationProbe ?? null);
   app.decorate('awayModeStore', options.awayModeStore ?? null);

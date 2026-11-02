@@ -22,6 +22,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var errorMessage: String?
     @Published private(set) var camera: VoiceCameraCapture?
     @Published private(set) var photoIsReady = false
+    /// Images and video frames handed to the assistant this session, newest last, shown with the transcript.
+    @Published private(set) var sentMedia: [VoiceSentMedia] = []
 
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
@@ -370,6 +372,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
+        sentMedia = []
         await liveActivity.end()
         httpClient = nil
         userCaption = ""
@@ -570,7 +573,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             userCaption = Self.boundedCaption(transcript)
         case .transcriptionCompleted(let transcript, let itemID):
             userCaption = Self.boundedCaption(transcript)
-            if isCameraEnabled, let itemID { inspectCameraTurn(transcript, itemID: itemID) }
+            if (isCameraEnabled || photoForNextTurn != nil), let itemID { inspectCameraTurn(transcript, itemID: itemID) }
             else if isScreenSharing { inspectScreenTurn() }
         case .responseCreated(let id):
             responseID = id
@@ -717,14 +720,15 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func inspectCameraTurn(_ question: String, itemID: String) {
-        guard let camera, let sessionClient, let httpClient, let voiceSessionID,
-              let jpeg = photoForNextTurn ?? camera.latestFrame() else {
+        guard let sessionClient, let httpClient, let voiceSessionID,
+              let jpeg = photoForNextTurn ?? camera?.latestFrame() else {
             Task { try? await sessionClient?.sendScreenContextUnavailable(
                 itemID: itemID,
                 reason: .captureFailed
             ) }
             return
         }
+        record(media: photoForNextTurn == nil ? .video : .photo, jpeg: jpeg)
         photoForNextTurn = nil
         photoIsReady = false
         let generation = sessionGeneration
@@ -756,6 +760,10 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
 
+    private func record(media kind: VoiceSentMedia.Kind, jpeg: Data) {
+        sentMedia = Array((sentMedia + [VoiceSentMedia(kind: kind, jpeg: jpeg)]).suffix(3))
+    }
+
     private func inspectScreenTurn() {
         guard let httpClient, let voiceSessionID, let sessionClient,
               let jpeg = screenShareBridge.latestFrame() else {
@@ -763,6 +771,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             Task { try? await sessionClient?.sendScreenContextUnavailable(reason: .captureFailed) }
             return
         }
+        record(media: .screen, jpeg: jpeg)
         let generation = sessionGeneration
         Task { @MainActor in
             do {
@@ -828,4 +837,12 @@ private struct MissingVoiceAccessTokenProvider: AccessTokenProvider {
     func requestSignIn() async {
         NotificationCenter.default.post(name: .jarvisSignInRequired, object: nil)
     }
+}
+
+struct VoiceSentMedia: Identifiable {
+    enum Kind { case photo, video, screen }
+
+    let id = UUID()
+    let kind: Kind
+    let jpeg: Data
 }
