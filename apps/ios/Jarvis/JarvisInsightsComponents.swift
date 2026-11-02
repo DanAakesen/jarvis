@@ -99,22 +99,28 @@ struct JarvisInsightsStateView: View {
     private var title: String {
         if let message { return message }
         switch kind {
-        case .loading: jarvisInsightsText(.loading, language)
-        case .empty: emptyTitle
-        case .failure(let failure): jarvisInsightsText(failure.localizationKey, language)
+        case .loading: return jarvisInsightsText(.loading, language)
+        case .empty: return emptyTitle
+        case .failure(let failure): return jarvisInsightsText(failure.localizationKey, language)
         }
     }
 
     private var systemImage: String {
         switch kind {
-        case .loading: "hourglass"
-        case .empty: "tray"
+        case .loading:
+            return "hourglass"
+        case .empty:
+            return "tray"
         case .failure(let failure):
             switch failure {
-            case .offline, .timedOut: "wifi.slash"
-            case .signInRequired: "person.crop.circle.badge.exclamationmark"
-            case .unavailable, .notConfigured: "slash.circle"
-            default: "exclamationmark.triangle"
+            case .offline, .timedOut:
+                return "wifi.slash"
+            case .signInRequired:
+                return "person.crop.circle.badge.exclamationmark"
+            case .unavailable, .notConfigured:
+                return "slash.circle"
+            default:
+                return "exclamationmark.triangle"
             }
         }
     }
