@@ -109,6 +109,7 @@ struct JarvisChatScreen: View {
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
     @State private var cameraCapture: VoiceCameraCapture?
+    @State private var placeholderCamera = VoiceCameraCapture()
     @State private var isVideoEnabled = false
     @State private var stopCameraAfterPhoto = false
     @State private var isCapturingPhoto = false
@@ -264,22 +265,21 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             case .camera:
-                if let cameraCapture {
-                    JarvisChatCameraSheet(
-                        camera: cameraCapture,
-                        language: appLanguage,
-                        copyText: copy,
-                        closeTitle: copy(.close),
-                        takePhotoTitle: copy(.takePhoto),
-                        takingPhotoTitle: copy(.takingPhoto),
-                        isCapturingPhoto: isCapturingPhoto,
-                        onCapture: captureCameraPhoto,
-                        onCancel: cancelCameraPhoto
-                    )
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
-                }
+                // Always built, so the shutter and lens buttons exist even without a capture device.
+                JarvisChatCameraSheet(
+                    camera: cameraCapture ?? placeholderCamera,
+                    language: appLanguage,
+                    copyText: copy,
+                    closeTitle: copy(.close),
+                    takePhotoTitle: copy(.takePhoto),
+                    takingPhotoTitle: copy(.takingPhoto),
+                    isCapturingPhoto: isCapturingPhoto,
+                    onCapture: captureCameraPhoto,
+                    onCancel: cancelCameraPhoto
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -1502,50 +1502,52 @@ private struct JarvisChatCameraSheet: View {
         }
     }
 
+    private var hasDevice: Bool { !camera.session.inputs.isEmpty }
+
     var body: some View {
-        ZStack {
-            JarvisScreenBackground()
-            VoiceCameraPreview(session: camera.session)
-                .ignoresSafeArea()
-            VStack {
-                HStack {
-                    Button(closeTitle, systemImage: "xmark", action: onCancel)
-                        .buttonStyle(.glass)
-                        .accessibilityIdentifier("camera.close")
-                    Spacer()
-                }
+        VStack {
+            HStack {
+                Button(closeTitle, systemImage: "xmark", action: onCancel)
+                    .buttonStyle(.glass)
+                    .accessibilityIdentifier("camera.close")
                 Spacer()
-                if model.lenses.count > 1 {
-                    lensButtons
-                }
-                HStack {
-                    sideControl(visible: camera.hasFlash) {
-                        Button(action: model.toggleFlash) {
-                            sideControlLabel(systemImage: flashSymbol)
-                        }
-                        .accessibilityLabel(flashLabel)
-                        .accessibilityIdentifier("camera.flash")
-                    }
-                    shutter
-                    sideControl(visible: VoiceCameraCapture.hasCamera(position: model.flipTarget)) {
-                        Button(action: model.flip) {
-                            sideControlLabel(systemImage: "camera.rotate")
-                        }
-                        .accessibilityLabel(copyText(.flipCamera))
-                        .accessibilityIdentifier("camera.flip")
-                    }
-                }
-                .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
             }
-            .padding(JarvisDesignTokens.voiceStatusSpacing)
+            Spacer()
+            lensButtons
+            HStack {
+                sideControl(visible: camera.hasFlash) {
+                    Button(action: model.toggleFlash) {
+                        sideControlLabel(systemImage: flashSymbol)
+                    }
+                    .accessibilityLabel(flashLabel)
+                    .accessibilityIdentifier("camera.flash")
+                }
+                shutter
+                sideControl(visible: VoiceCameraCapture.hasCamera(position: model.flipTarget)) {
+                    Button(action: model.flip) {
+                        sideControlLabel(systemImage: "camera.rotate")
+                    }
+                    .accessibilityLabel(copyText(.flipCamera))
+                    .accessibilityIdentifier("camera.flip")
+                }
+            }
+            .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("chat.cameraSheet")
+        .padding(JarvisDesignTokens.voiceStatusSpacing)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            ZStack {
+                JarvisScreenBackground()
+                VoiceCameraPreview(session: camera.session)
+            }
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
+        }
     }
 
     private var lensButtons: some View {
         HStack(spacing: 10) {
-            ForEach(model.lenses) { option in
+            ForEach(model.lenses.isEmpty ? [VoiceCameraLens.wide] : model.lenses) { option in
                 let selected = option == model.lens
                 Button { model.select(lens: option) } label: {
                     Text(model.magnificationTitle(option))
@@ -1556,6 +1558,7 @@ private struct JarvisChatCameraSheet: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .disabled(!hasDevice)
                 .accessibilityLabel(copyText(option.localizationKey))
                 .accessibilityValue(model.magnificationTitle(option))
                 .accessibilityAddTraits(selected ? .isSelected : [])
@@ -1579,7 +1582,7 @@ private struct JarvisChatCameraSheet: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(isCapturingPhoto)
+        .disabled(isCapturingPhoto || !hasDevice)
         .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
         .accessibilityIdentifier("camera.shutter")
         .frame(maxWidth: .infinity)

@@ -60,6 +60,11 @@ final class ChatComposerUITests: XCTestCase {
                 shutter.waitForExistence(timeout: 10),
                 "The camera sheet must open. Hierarchy: \(app.debugDescription)"
             )
+            XCTAssertTrue(
+                app.descendants(matching: .any)["camera.lens.wide"].exists,
+                "A lens button must be shown even without a capture device"
+            )
+            XCTAssertFalse(app.descendants(matching: .any)["camera.mode"].exists, "The camera is picture-only")
             let close = app.descendants(matching: .any)["camera.close"]
             XCTAssertTrue(close.exists)
             close.tap()

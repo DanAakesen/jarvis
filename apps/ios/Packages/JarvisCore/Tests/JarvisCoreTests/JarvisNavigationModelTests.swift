@@ -20,7 +20,7 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(model.contains("var path: [JarvisDestination] { state.path }"))
         XCTAssertTrue(model.contains("var isSidebarOpen: Bool { state.isSidebarOpen }"))
         XCTAssertTrue(model.contains("var currentDestination: JarvisDestination { state.currentDestination }"))
-        XCTAssertTrue(model.contains("dismissKeyboard()\n        write(\"openSidebar\") { $0.openSidebar() }"))
+        XCTAssertTrue(model.contains("dismissKeyboard()\n        write { $0.openSidebar() }"))
         XCTAssertTrue(model.contains("guard path != state.path else {"))
         XCTAssertTrue(model.contains("let update = JarvisNavigationPathUpdate(path: path, from: state)"))
         XCTAssertTrue(model.contains("{ $0 = update.state }"))
@@ -92,7 +92,7 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(model.contains("let navigationRequested = PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()"))
         XCTAssertFalse(model.contains("guard destination != currentDestination"))
         XCTAssertLessThan(try XCTUnwrap(model.range(of: "navigationRequested.send")).lowerBound,
-                          try XCTUnwrap(model.range(of: "write(\"navigate(")).lowerBound)
+                          try XCTUnwrap(model.range(of: "write { $0.navigate(to: destination) }")).lowerBound)
         let content = try source("Jarvis/ContentView.swift")
         XCTAssertTrue(content.contains(".onReceive(navigation.navigationRequested) { request in\n            prepareNavigation(to: request.to, from: request.from)"))
         XCTAssertFalse(content.contains(".onChange(of: navigation.currentDestination)"))
@@ -103,6 +103,23 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(content.contains("if navigationFixtureMode"))
         XCTAssertTrue(content.contains("workspaceRuntime.resetSession()"))
         XCTAssertTrue(content.contains("await voiceModel.end(returnToChat: false)"))
+    }
+
+    func testVoiceOpensFromEveryEntryStateAndIsNotASidebarItem() {
+        XCTAssertFalse(JarvisDestination.sidebarItems.contains(.voice))
+        XCTAssertTrue(JarvisDestination.voice.isNavigable)
+        for open in [false, true] {
+            for start in [JarvisDestination.chat, .settings, .softwareFactory] {
+                var state = JarvisNavigationState()
+                state.navigate(to: start)
+                if open { state.openSidebar() }
+                state.navigate(to: .voice)
+                XCTAssertEqual(state.currentDestination, .voice, "from \(start) open=\(open)")
+                XCTAssertFalse(state.isSidebarOpen)
+                state.navigate(to: .chat)
+                XCTAssertEqual(state.currentDestination, .chat)
+            }
+        }
     }
 
     func testBackPathEmitsVoiceRestoreDestinationBeforeModelWrite() throws {
@@ -125,7 +142,7 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(setter.contains("JarvisNavigationPathUpdate(path: path, from: state)"))
         XCTAssertTrue(setter.contains("if let request = update.navigationRequest"))
         XCTAssertLessThan(try XCTUnwrap(setter.range(of: "navigationRequested.send(request)")).lowerBound,
-                          try XCTUnwrap(setter.range(of: "write(\"setPath(binding)")).lowerBound)
+                          try XCTUnwrap(setter.range(of: "write { $0 = update.state }")).lowerBound)
     }
 
     func testEquivalentNormalizedBackPathsKeepOpenDrawerAndEmitNoEvent() {
