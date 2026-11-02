@@ -19,6 +19,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case languageDanish = "language.danish"
     case languageEnglish = "language.english"
     case settingsTitle = "settings.title"
+    case todayTitle = "navigation.today"
     case chatTitle = "navigation.chat"
     case voiceTitle = "navigation.voice"
     case voiceConnectionLost = "voice.connectionLost"

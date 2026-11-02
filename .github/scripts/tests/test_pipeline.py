@@ -761,7 +761,9 @@ class SafeFailureTests(unittest.TestCase):
                         chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
         ui_tests = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
         self.assertIn("XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX", ui_tests)
-        self.assertNotIn("ToolbarItem(placement: .topBarLeading)", chat)
+        # Only the Home button shown when Chat was opened from Today may sit on the leading side.
+        self.assertEqual(chat.count("ToolbarItem(placement: .topBarLeading)"), 1)
+        self.assertIn("if let onBackToToday {\n                ToolbarItem(placement: .topBarLeading)", chat)
         self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
         self.assertNotIn("onOpenSidebar", chat)
         self.assertNotIn("showsSidebarToolbarButton", chat)

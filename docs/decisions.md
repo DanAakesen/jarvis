@@ -10595,6 +10595,16 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - UI tests use `JarvisInsightsFixtureTransport` behind `--ui-test-navigation` with a fixed clock, no polling and no stale timer, so XCUITest can go idle.
 - The Apple documentation site could not be fetched in this environment; the PR lists the pages the design follows.
 
+## 2026-11-02 — P15-57: Today (Home) page and chat/voice transition (#1523)
+
+- Status: accepted from the issue; not compiled or run here (no Xcode on this runner). Needs the iOS CI job and a device check against `docs/ios/design/today.html`.
+- Home is a normal pushed destination (`.today`); `JarvisNavigationState()` still defaults to Chat so existing fixtures and tests keep starting on Chat. Normal launches, and sign-out, go to Home. The `--ui-test-today` argument (simulator only, with `--ui-test-navigation`) starts on Home with fixed fixture data.
+- No calendar-list route exists for the phone, so Next up reads a `JarvisTodayCalendarSource`; production binds the unavailable source and shows "Calendar unavailable". Nothing is invented.
+- Gym logs save through the existing vault notes path (`POST /notes`, `Personal/Gym log/…`), behind the `JarvisGymLogStore` protocol. The unavailable store never reports success; an unconfirmed write locks Save so it cannot be duplicated.
+- Steps come from HealthKit (read-only); workouts come from saved Gym logs. Hourly bars are a running total for 06:00–22:00; future hours are disabled. The target line is 8,000.
+- Bars below 44 pt wide (14d and 30d) keep a full-height 44 pt+ hit area and are individually reachable by VoiceOver with a caption and value, which is the accessible alternative.
+- The chat/voice carry-over is a `matchedGeometryEffect` namespace (composer and orb). Reduce Motion turns the geometry match off and leaves a cross-fade. The rim and greeting shimmer are static in fixture runs so XCUITest can go idle.
+- `.github/scripts/tests/test_pipeline.py` now allows exactly one leading toolbar item on Chat: the Home button that appears only when Chat was opened from Home.
 
 ## 2026-11-02 — P15-55: notifications grouped per category (iOS)
 

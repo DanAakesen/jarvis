@@ -1387,6 +1387,30 @@ WebSocket adapter against the #1391 core seam.
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
+### iOS Home (Today) page
+
+P15-57 adds `JarvisDestination.today` ("Home" / "Hjem", `house`) as the last sidebar row and the
+launch page: `ContentView.initialNavigation` starts on Home unless a fixture or screenshot run asks for
+another page, and `JarvisNavigationModel.reset()` (sign-out) returns to Home. The pure logic lives in
+`JarvisCore/Today` (time-of-day greeting, range aggregation, step and workout aggregation, selection/reset,
+gym-log note format and the `JarvisTodayCalendarSource`, `JarvisTodayStepsSource` and `JarvisGymLogStore`
+protocols) so Linux CI tests it; Danish/English copy is the `JarvisToday` strings table. The app target adds
+`JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet`, `JarvisTodayModel`, and
+`JarvisHealthKitStepsSource` (read-only `HKStatisticsCollectionQuery`; entitlement
+`com.apple.developer.healthkit` and a localized `NSHealthShareUsageDescription`).
+
+Data: tasks come from `GET /vault/tasks` and note correlation from `GET /notes` through the existing
+`JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Gym log/<date>-<time>-<session>.md`
+and read back with `GET /notes?directory=Personal/Gym log`; steps come from HealthKit. No backend route exists
+that lists calendar entries for the phone, so Next up shows "Calendar unavailable" through
+`JarvisUnavailableCalendarSource` instead of inventing entries.
+
+Transitions: Today, Chat and Voice swap with a continuity transition. `JarvisCarryOver` shares one namespace through
+the environment; the composer and the orb use `matchedGeometryEffect`, driven by an animation that
+`JarvisDestinationHost` supplies only for swaps among those three pages (every other swap stays unanimated).
+With Reduce Motion the geometry match is off and the swap is a short cross-fade. Typing on Home hands the text to
+Chat; Chat then shows a Home button, and minimizing or ending Voice returns to the page it was opened from.
+
 ### iOS navigation shell
 
 `JarvisCore` owns the pure-Swift destination/path normalization and sidebar state.

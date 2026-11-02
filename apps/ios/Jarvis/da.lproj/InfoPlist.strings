@@ -1,2 +1,3 @@
 "NSFaceIDUsageDescription" = "Lås Jarvis op med Face ID.";
 "NSLocationWhenInUseUsageDescription" = "Jarvis bruger din omtrentlige placering til vejret, hvor du er.";
+"NSHealthShareUsageDescription" = "Jarvis læser dit skridttal for at vise det på Hjem. Intet skrives til Sundhed eller uploades.";
