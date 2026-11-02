@@ -349,7 +349,7 @@ struct JarvisHealthArea: View {
         }
         .sheet(isPresented: $newWorkoutPresented) {
             JarvisHealthNewWorkoutSheet(
-                logger: workoutLogger,
+                logger: workoutLogger ?? client,
                 language: language,
                 onSaved: { refreshVersion += 1 }
             )

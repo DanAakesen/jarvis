@@ -56,14 +56,14 @@ final class JarvisPagePhraseTests: XCTestCase {
     }
 
     func testWorkoutTypesMatchThePlanAndAreLocalized() {
-        XCTAssertEqual(JarvisWorkoutType.allCases.count, 6)
+        XCTAssertEqual(JarvisWorkoutSessionType.allCases.count, 6)
         for language in JarvisAppLanguage.allCases {
-            for type in JarvisWorkoutType.allCases {
+            for type in JarvisWorkoutSessionType.allCases {
                 XCTAssertNotEqual(
                     JarvisHealthLocalization.string(type.localizationKey, language: language), type.localizationKey.rawValue
                 )
             }
         }
-        XCTAssertFalse(JarvisWorkoutDraft(idempotencyKey: UUID(), type: .cardio, durationMinutes: 0).isValid)
+        XCTAssertFalse(JarvisWorkoutDraft(idempotencyKey: UUID(), sessionType: .cardio, startedAt: Date(), durationMinutes: 0).isValid)
     }
 }

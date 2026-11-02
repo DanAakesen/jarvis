@@ -9,6 +9,9 @@ export interface LiftEntry {
   readonly deletedAt: string | null;
   readonly updatedAt: string;
   readonly revision: number;
+  readonly workoutId: string | null;
+  readonly gymDay: string | null;
+  readonly vaultSyncedRevision: number | null;
 }
 
 export interface LiftCreate {
@@ -19,6 +22,7 @@ export interface LiftCreate {
   readonly reps: number;
   readonly sets: number;
   readonly performedAt: string;
+  readonly workoutId: string | null;
 }
 
 export type LiftPatch = Readonly<Partial<Pick<LiftCreate, 'exerciseName' | 'weightKg' | 'reps' | 'sets'>>>;
@@ -86,7 +90,7 @@ function parseNumericFields(value: Record<string, unknown>) {
 }
 
 export function parseLiftCreate(value: unknown, now: () => number = Date.now): LiftParse {
-  if (!isRecord(value) || Object.keys(value).some(key => !['idempotencyKey', ...fields, 'performedAt'].includes(key)) ||
+  if (!isRecord(value) || Object.keys(value).some(key => !['idempotencyKey', ...fields, 'performedAt', 'workoutId'].includes(key)) ||
       !uuid.test(String(value.idempotencyKey ?? ''))) {
     return { ok: false, reason: 'Send an idempotency key and valid lift values.' };
   }
@@ -96,11 +100,15 @@ export function parseLiftCreate(value: unknown, now: () => number = Date.now): L
   if (!numbers.ok) return numbers;
   const performedAt = value.performedAt === undefined ? new Date(now()).toISOString() : parsePerformedAt(value.performedAt);
   if (!performedAt) return { ok: false, reason: 'Performed time must be a valid ISO timestamp.' };
+  if (value.workoutId !== undefined && value.workoutId !== null && !uuid.test(String(value.workoutId))) {
+    return { ok: false, reason: 'Workout must be a valid entry id.' };
+  }
   return {
     ok: true,
     value: {
       idempotencyKey: String(value.idempotencyKey).toLowerCase(), ...name,
       weightKg: numbers.weightKg, reps: numbers.reps, sets: numbers.sets, performedAt,
+      workoutId: typeof value.workoutId === 'string' ? value.workoutId.toLowerCase() : null,
     },
   };
 }
@@ -147,4 +155,9 @@ export function presentLiftEntry(entry: LiftEntry) {
     updatedAt: entry.updatedAt,
     revision: entry.revision,
   };
+}
+
+export function presentLiftWrite(entry: LiftEntry) {
+  const synced = entry.vaultSyncedRevision !== null && entry.vaultSyncedRevision >= entry.revision;
+  return { ...presentLiftEntry(entry), workoutId: entry.workoutId, vault: synced ? 'synced' as const : 'pending' as const };
 }

@@ -1,17 +1,17 @@
 import JarvisCore
 import SwiftUI
 
-/// Log a workout. Saving goes through `JarvisWorkoutLogging`; with no logger (the endpoint from issue 1529 is not
-/// wired yet) the sheet cannot save and says so.
+/// Log a workout. Saving goes through `JarvisWorkoutLogging`, which `JarvisHealthClient` implements.
 struct JarvisHealthNewWorkoutSheet: View {
     let logger: (any JarvisWorkoutLogging)?
     let language: JarvisAppLanguage
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var type: JarvisWorkoutType = .chestTricepsCore
+    @State private var type: JarvisWorkoutSessionType = .chestTricepsCore
     @State private var duration = ""
     @State private var submissionID = UUID()
+    @State private var startedAt = Date()
     @State private var submittedDraft: JarvisWorkoutDraft?
     @State private var saving = false
     @State private var failed = false
@@ -22,7 +22,9 @@ struct JarvisHealthNewWorkoutSheet: View {
         let trimmed = duration.trimmingCharacters(in: .whitespacesAndNewlines)
         let minutes = trimmed.isEmpty ? nil : Int(trimmed)
         guard trimmed.isEmpty || minutes != nil else { return nil }
-        let value = JarvisWorkoutDraft(idempotencyKey: submissionID, type: type, durationMinutes: minutes)
+        let value = JarvisWorkoutDraft(
+            idempotencyKey: submissionID, sessionType: type, startedAt: startedAt, durationMinutes: minutes
+        )
         return value.isValid ? value : nil
     }
 
@@ -31,7 +33,7 @@ struct JarvisHealthNewWorkoutSheet: View {
             JarvisForm {
                 Section(copy.text(.workoutType)) {
                     Picker(copy.text(.workoutType), selection: $type) {
-                        ForEach(JarvisWorkoutType.allCases) { item in
+                        ForEach(JarvisWorkoutSessionType.allCases) { item in
                             Text(copy.text(item.localizationKey)).tag(item)
                         }
                     }
