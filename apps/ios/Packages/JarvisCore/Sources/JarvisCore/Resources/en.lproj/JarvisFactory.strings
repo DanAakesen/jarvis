@@ -32,8 +32,8 @@
 "factory.emptyNeedsDan" = "Nothing needs Dan";
 "factory.emptyReleases" = "No releases";
 "factory.noSearchResults" = "No search results";
-"factory.issueNumber" = "Issue #%@";
-"factory.blockedBy" = "Blocked by #%@";
+"factory.issueNumber" = "Issue #%ld";
+"factory.blockedBy" = "Blocked by #%ld";
 "factory.inProgress" = "In progress";
 "factory.inReview" = "In review";
 "factory.ready" = "Ready";

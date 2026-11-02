@@ -51,15 +51,21 @@ final class SidebarNavigationTests: XCTestCase {
         let sidebar = app.descendants(matching: .any).matching(identifier: "navigation.sidebar").firstMatch
         XCTAssertFalse(sidebar.exists)
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        // Two seconds for the drawer to appear. Geometry checks follow with their own allowance, because each
+        // XCUITest snapshot can take about a second on a loaded simulator.
+        XCTAssertTrue(
+            sidebar.waitForExistence(timeout: 2),
+            "A physical menu tap must expose a visible, interactive drawer within two seconds. Navigation trace: \(navigationTrace)"
+        )
         let opened = NSPredicate { _, _ in
             sidebar.exists && !sidebar.frame.isEmpty
                 && self.app.frame.contains(sidebar.frame)
                 && self.app.buttons["navigation.chat"].isHittable
         }
         XCTAssertEqual(
-            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: opened, object: sidebar)], timeout: 2),
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: opened, object: sidebar)], timeout: 6),
             .completed,
-            "A physical menu tap must expose a visible, interactive drawer within two seconds. Navigation trace: \(navigationTrace)"
+            "The drawer must be on screen with tappable rows. Navigation trace: \(navigationTrace)"
         )
         XCTAssertTrue(sidebar.exists)
         XCTAssertTrue(app.buttons["navigation.chat"].isHittable)

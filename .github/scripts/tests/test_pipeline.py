@@ -712,7 +712,7 @@ class SafeFailureTests(unittest.TestCase):
                          'XCTAssertTrue(app.buttons["navigation.chat"].isHittable)'):
             self.assertIn(required, source)
         opened = source.split("menu.coordinate(withNormalizedOffset:", 1)[1]
-        self.assertIn("timeout: 2", opened)
+        self.assertIn("sidebar.waitForExistence(timeout: 2)", opened)
         self.assertNotIn("timeout: 10", opened)
         self.assertNotIn("Thread.sleep", opened)
         self.assertNotIn("--ui-test-navigation-variant", source)
