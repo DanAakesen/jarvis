@@ -297,8 +297,11 @@ struct JarvisChatScreen: View {
         attachmentPickers
         .jarvisAmbientBackground()
         .onAppear(perform: refreshScreenSharing)
-        .task(id: screenShare.isBusy) {
-            while screenShare.isBusy && !Task.isCancelled {
+        .onChange(of: liveSource) { _, _ in updateLiveStream() }
+        .task {
+            // Keep observing for the whole time the screen is shown: a share that restarts, or a heartbeat that
+            // briefly lapses, must not leave the status stuck on "stopped".
+            while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 refreshScreenSharing()
             }
@@ -316,6 +319,7 @@ struct JarvisChatScreen: View {
         .onDisappear {
             dictation.stop()
             model.suspendObservation()
+            model.stopLiveStream()
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
         }
@@ -1101,28 +1105,35 @@ struct JarvisChatScreen: View {
 
     private func sendMessage() {
         guard !model.isSending, model.canSend else { return }
-        let hasPendingVisualCapture = model.pendingAttachments.contains {
-            $0.name == "Video.jpg" || $0.name == "Screen.jpg"
-        }
-        if (isVideoEnabled || isScreenSharing) && !hasPendingVisualCapture {
-            guard model.pendingAttachments.count < ChatAttachmentLimits.maximumCount else {
-                model.actionError = copy(.attachmentLimitReached)
-                return
-            }
-            let frame = isScreenSharing ? screenShareBridge.latestFrame() : cameraCapture?.capturePhoto()
+        if let source = liveSource {
+            let frame = source == .screen ? screenShareBridge.latestFrame() : cameraCapture?.latestFrame()
             guard let frame else {
-                model.actionError = copy(isScreenSharing ? .screenFrameUnavailable : .cameraFrameUnavailable)
+                model.actionError = copy(source == .screen ? .screenFrameUnavailable : .cameraFrameUnavailable)
                 return
             }
-            let attachmentCount = model.pendingAttachments.count
-            model.addAttachment(
-                name: isScreenSharing ? "Screen.jpg" : "Video.jpg",
-                contentType: "image/jpeg",
-                data: frame
-            )
-            guard model.pendingAttachments.count == attachmentCount + 1 else { return }
+            model.send(visualFrame: PendingVisualFrame(source: source, jpeg: frame))
+            return
         }
         model.send()
+    }
+
+    /// The live input Jarvis is receiving, if any: a screen share or the camera video.
+    private var liveSource: VoiceScreenSource? {
+        if isScreenSharing { return .screen }
+        if isVideoEnabled { return .camera }
+        return nil
+    }
+
+    private func updateLiveStream() {
+        switch liveSource {
+        case .screen?:
+            model.startLiveStream(source: .screen) { VoiceScreenShareBridge().latestFrame() }
+        case .camera?:
+            guard let camera = cameraCapture else { return }
+            model.startLiveStream(source: .camera) { camera.latestFrame() }
+        case nil:
+            model.stopLiveStream()
+        }
     }
 
     private var addAttachmentHint: String {

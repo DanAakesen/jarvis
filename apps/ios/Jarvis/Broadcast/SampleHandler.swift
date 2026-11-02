@@ -10,6 +10,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private let fileManager = FileManager.default
     private let context = CIContext()
     private var lastFrameTime: TimeInterval = 0
+    private var heartbeat: DispatchSourceTimer?
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         guard let containerURL = VoiceScreenShareContract.containerURL() else { return }
@@ -23,9 +24,30 @@ final class SampleHandler: RPBroadcastSampleHandler {
             to: containerURL.appendingPathComponent(VoiceScreenShareContract.activeFileName),
             options: .atomic
         )
+        startHeartbeat(in: containerURL)
+    }
+
+    /// ReplayKit only delivers frames when the screen changes. Without this timer the marker and the last frame
+    /// go stale on a still screen, the app reports "stopped" and Jarvis stops receiving the unchanged screen.
+    private func startHeartbeat(in containerURL: URL) {
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+        timer.schedule(deadline: .now() + 1, repeating: VoiceScreenShareContract.heartbeatInterval)
+        timer.setEventHandler { [fileManager] in
+            let now = Date()
+            for name in [VoiceScreenShareContract.activeFileName, VoiceScreenShareContract.frameFileName] {
+                let url = containerURL.appendingPathComponent(name)
+                if fileManager.fileExists(atPath: url.path) {
+                    try? fileManager.setAttributes([.modificationDate: now], ofItemAtPath: url.path)
+                }
+            }
+        }
+        heartbeat = timer
+        timer.resume()
     }
 
     override func broadcastFinished() {
+        heartbeat?.cancel()
+        heartbeat = nil
         guard let containerURL = VoiceScreenShareContract.containerURL() else { return }
         try? fileManager.removeItem(
             at: containerURL.appendingPathComponent(VoiceScreenShareContract.activeFileName)

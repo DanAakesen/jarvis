@@ -4,6 +4,14 @@ import { normalizeVisualContext, persistedVisualContext, visualContextText } fro
 const visual = { source: 'camera', capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
 
 describe('visual provenance boundary', () => {
+  it('names a live screen share or live camera view and never a picture upload', () => {
+    const screen = visualContextText({ source: 'screen', capturedAt: '2026-11-02T10:00:00.000Z', frameId: 'f1' });
+    const camera = visualContextText({ source: 'camera', capturedAt: '2026-11-02T10:00:00.000Z', frameId: 'f1' });
+    expect(screen).toContain('a live screen share');
+    expect(camera).toContain('a live camera view');
+    for (const text of [screen, camera]) expect(text).toContain('never a picture or file upload');
+  });
+
   it('accepts description-free handles but never promotes their persisted metadata to cached evidence', () => {
     const context = { source: 'camera' as const, capturedAt: visual.capturedAt, frameId: 'private_frame' };
     expect(normalizeVisualContext(context)).toEqual(context);

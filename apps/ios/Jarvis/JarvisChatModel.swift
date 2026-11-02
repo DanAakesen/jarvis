@@ -18,7 +18,12 @@ struct JarvisChatRow: Identifiable, Equatable {
         at = message.at
         interrupted = message.interrupted
         toolCalls = message.toolCalls
-        attachments = message.attachments
+        attachments = message.attachments.filter { !Self.isLiveFrame($0) }
+    }
+
+    /// Frames from older live sessions were stored as attachments; they are never shown in the history.
+    private static func isLiveFrame(_ attachment: ChatHistoryAttachment) -> Bool {
+        attachment.name == "Screen.jpg" || attachment.name == "Video.jpg"
     }
 
     init(id: String, role: ConversationRole, text: String, at: String) {
@@ -40,6 +45,12 @@ struct JarvisChatRow: Identifiable, Equatable {
         toolCalls = []
         attachments = []
     }
+}
+
+/// A live screen-share or camera frame sent with a turn. It reaches the model as labelled live input, not a file.
+struct PendingVisualFrame {
+    let source: VoiceScreenSource
+    let jpeg: Data
 }
 
 struct PendingChatAttachment: Identifiable {
@@ -88,6 +99,8 @@ final class JarvisChatModel: ObservableObject {
     private let updatesClient: JarvisWorkspaceClient?
     private let settingsClient: JarvisSettingsClient?
     private let factoryClient: JarvisFactoryClient?
+    private let watchClient: VisionWatchClient?
+    private var liveStreamTask: Task<Void, Never>?
     private var historyPaging = ChatHistoryPagingState()
     private var sessionID: String?
     private var language: ChatLanguage
@@ -113,6 +126,7 @@ final class JarvisChatModel: ObservableObject {
         updatesClient = client.map { JarvisWorkspaceClient(client: $0) }
         settingsClient = client.map { JarvisSettingsClient(client: $0) }
         factoryClient = client.map { JarvisFactoryClient(client: $0) }
+        watchClient = client.map { VisionWatchClient(client: $0) }
         if let client { JarvisFactoryLiveActivityController.configure(client: client) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
@@ -264,7 +278,41 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
-    func send() {
+    /// Creates the chat session on demand so a live stream can start before the first message.
+    private func liveSessionID() async -> String? {
+        if let sessionID { return sessionID }
+        guard let client, !fixtureMode,
+              let session = try? await client.createSession(language: language) else { return nil }
+        if sessionID == nil {
+            sessionID = session.id
+            language = session.language
+        }
+        return sessionID
+    }
+
+    /// Keeps sending sampled frames of a live screen share or camera while it lasts, so Jarvis receives a
+    /// continuous stream and `watch_for` has a real source. Rate and size are bounded by `LiveFrameStreamer`.
+    func startLiveStream(source: VoiceScreenSource, capture: @escaping @Sendable () async -> Data?) {
+        stopLiveStream()
+        guard let watchClient, !fixtureMode else { return }
+        liveStreamTask = Task { [weak self] in
+            guard let sessionID = await self?.liveSessionID(), !Task.isCancelled else { return }
+            let feedId = UUID().uuidString
+            await LiveFrameStreamer(
+                source: source,
+                capture: capture,
+                post: { try await watchClient.post(sessionId: sessionID, source: source, jpeg: $0, feedId: feedId) }
+            ).run()
+            await Task { await watchClient.stop(sessionId: sessionID, source: source, feedId: feedId) }.value
+        }
+    }
+
+    func stopLiveStream() {
+        liveStreamTask?.cancel()
+        liveStreamTask = nil
+    }
+
+    func send(visualFrame: PendingVisualFrame? = nil) {
         guard !isSending, canSend else { return }
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
@@ -283,7 +331,7 @@ final class JarvisChatModel: ObservableObject {
             at: ISO8601DateFormatter().string(from: Date())
         ))
         draft = ""
-        sendTask = Task { await sendTurn(text: text, attachments: attachments) }
+        sendTask = Task { await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame) }
     }
 
     func cancel() async {
@@ -476,7 +524,11 @@ final class JarvisChatModel: ObservableObject {
         )
     }
 
-    private func sendTurn(text: String, attachments: [PendingChatAttachment]) async {
+    private func sendTurn(
+        text: String,
+        attachments: [PendingChatAttachment],
+        visualFrame: PendingVisualFrame?
+    ) async {
         guard let client else {
             isSending = false
             discardOptimisticMessage(restoring: text)
@@ -504,10 +556,17 @@ final class JarvisChatModel: ObservableObject {
             }
             statusLine = "Thinking…"
             guard let sessionID else { throw JarvisClientError.invalidRequest }
+            var visualContext: ChatVisualContext?
+            if let visualFrame {
+                visualContext = try await client.uploadVisualFrame(
+                    sessionId: sessionID, source: visualFrame.source, jpeg: visualFrame.jpeg, question: text
+                )
+            }
             let events = try await client.sendTurn(
                 sessionId: sessionID,
                 text: text,
-                attachmentIds: attachmentIDs
+                attachmentIds: attachmentIDs,
+                visualContext: visualContext
             )
             pendingAttachments = []
             uploadedAttachmentIDs = [:]

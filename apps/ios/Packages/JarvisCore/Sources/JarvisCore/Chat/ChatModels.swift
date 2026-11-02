@@ -190,3 +190,21 @@ public struct ContinuousChatClock: ChatClock {
         try await Task.sleep(for: duration)
     }
 }
+
+/// A live frame that travels with a chat turn. `source` tells the model whether the input is a live screen share
+/// or a live camera view; it is never sent as a file attachment.
+public struct ChatVisualContext: Codable, Equatable, Sendable {
+    public let source: VoiceScreenSource
+    public let capturedAt: String
+    public let question: String?
+    public let turnId: String
+    public let frameId: String
+
+    public init(source: VoiceScreenSource, capturedAt: String, question: String?, turnId: String, frameId: String) {
+        self.source = source
+        self.capturedAt = capturedAt
+        self.question = question
+        self.turnId = turnId
+        self.frameId = frameId
+    }
+}

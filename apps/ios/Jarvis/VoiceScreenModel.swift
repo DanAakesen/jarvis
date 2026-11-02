@@ -32,6 +32,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var sessionClient: VoiceSessionClient?
     private var httpClient: JarvisClient?
     private var voiceSessionID: String?
+    private var liveStreamTask: Task<Void, Never>?
     private var responseID: String?
     private var photoForNextTurn: Data?
     private var sessionGeneration = 0
@@ -365,6 +366,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
         await liveActivity.end()
@@ -401,6 +403,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             try capture.start()
             camera = capture
             isCameraEnabled = true
+            updateLiveStream()
             photoIsReady = false
             if let sessionClient { try await sessionClient.setCameraState(on: true) }
         } catch {
@@ -417,6 +420,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera?.stop()
         camera = nil
         isCameraEnabled = false
+        updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
         if let sessionClient {
@@ -446,6 +450,36 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
         guard sessionGeneration == generation, !isEnding else { return }
         isScreenSharing = enabled
+        updateLiveStream()
+    }
+
+    /// Streams sampled frames of the live screen share or camera for the whole voice session, so Jarvis keeps
+    /// receiving them and `watch_for` has a real source. The input is labelled as live screen or live camera.
+    private func updateLiveStream() {
+        liveStreamTask?.cancel()
+        liveStreamTask = nil
+        guard let httpClient, let voiceSessionID else { return }
+        let source: VoiceScreenSource
+        let capture: @Sendable () async -> Data?
+        if isScreenSharing {
+            source = .screen
+            capture = { VoiceScreenShareBridge().latestFrame() }
+        } else if isCameraEnabled, let camera {
+            source = .camera
+            capture = { camera.latestFrame() }
+        } else {
+            return
+        }
+        let watch = VisionWatchClient(client: httpClient)
+        liveStreamTask = Task {
+            let feedId = UUID().uuidString
+            await LiveFrameStreamer(
+                source: source,
+                capture: capture,
+                post: { try await watch.post(sessionId: voiceSessionID, source: source, jpeg: $0, feedId: feedId) }
+            ).run()
+            await Task { await watch.stop(sessionId: voiceSessionID, source: source, feedId: feedId) }.value
+        }
     }
 
     func startScreenShareMonitoring() {
@@ -483,6 +517,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         switch message {
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
+            updateLiveStream()
             beginAudioIfNeeded()
         case .sessionEnded:
             let generation = sessionGeneration
@@ -626,6 +661,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        updateLiveStream()
         let failedClient = sessionClient
         sessionClient = nil
         httpClient = nil
