@@ -3136,7 +3136,7 @@ with a board link beside the artifact in its PR comment. Linux Chromium review
 covers the board, not native rendering; simulator compilation/captures and owner
 visual review remain pending.
 
-## iPhone Today, Calendar and Mail (P15-56; 2 November 2026)
+## iPhone Calendar and Mail (P15-56; 2 November 2026)
 
 The board (`docs/ios/design/board.html?screen=today|calendar|mail`) shows three
 new hub areas that reuse the shared control language: glass behind floating
@@ -3144,8 +3144,6 @@ controls, a transparent header with no line, one corner radius, check mark and X
 for sheet actions, and icon-only retry. Orange stays text and icon tint; the
 only filled surfaces are the neutral grouped lists and event blocks.
 
-- **Today:** weather, next calendar items, approvals (event moves and mail
-  drafts waiting), open tasks and the latest proactive notice. No segment.
 - **Calendar:** Day (hour timeline, day chips, now marker) and Week (grouped by
   day). Plus creates an event. Event detail offers Move, which opens a sheet
   whose check mark asks for approval; the event then shows Pending until
@@ -3154,7 +3152,7 @@ only filled surfaces are the neutral grouped lists and event blocks.
   the Jarvis draft; Approve and send opens a preview sheet whose check mark
   sends, Edit draft saves, Discard offers Undo.
 
-Every page has default, loading, empty, error with retry, offline and search
+Today keeps a disabled sidebar slot only; Dan will design it with the dispatcher. Every page has default, loading, empty, error with retry, offline and search
 states with identical Danish and English strings, in light and dark, at phone
 widths 390 and 430 (`?width=`). The board controls list each state. Native
 rendering, live data and owner visual review are pending.

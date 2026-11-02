@@ -1564,14 +1564,11 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
 .hmain > .ic.t-idle { color: var(--text-muted); }
 .hmain .hl b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .hdet-acts .hrow { min-height: 50px; }
-/* Today, Calendar, Mail (P15-56). Same hub chrome; tint on icon and text only. */
+/* Calendar, Mail (P15-56). Same hub chrome; tint on icon and text only. */
 .hrow.read > .ic:first-child { color: var(--text-muted); }
 .hrow.read b { font-weight: 400; }
 .hrow.unread b { font-weight: 700; }
-.hwx { display: flex; align-items: center; gap: 14px; margin: 6px 16px 0; padding: 16px 20px; border-radius: 26px; background: var(--fill-group); }
-.hwx > .ic { width: 40px; height: 40px; color: var(--accent); stroke-width: 1.5; }
-.hwx b { display: block; font-size: 34px; line-height: 38px; font-weight: 300; }
-.hwx small { color: var(--text-muted); font-size: 15px; }
+
 .cday { position: relative; margin: 6px 16px 0; height: calc(var(--hrs) * 56px + 16px); border-radius: 26px; background: var(--fill-group); }
 .cday .chr { position: absolute; left: 0; right: 0; top: calc(8px + var(--r) * 56px); height: 0; }
 .cday .chr span { position: absolute; left: 14px; top: -8px; width: 40px; color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
@@ -1844,21 +1841,6 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
           <option value="notes:conflict">Notes: Conflict</option>
           <option value="notes:newnote">Notes: New note</option>
           <option value="tasks:newtask">Notes: New task</option>
-        </select>
-        <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
-      </label>
-    </div>
-    <div class="ctl" id="ctl-today" title="Today overview. Also ?screen=today&state=default|empty|loading|error|offline|search, plus &lang=en">
-      <label class="sel">
-        <span class="sr">Today</span>
-        <select id="today-sel">
-          <option value="">Today: choose</option>
-          <option value="today:default">Today: Overview</option>
-          <option value="today:search">Today: Search</option>
-          <option value="today:empty">Today: Empty</option>
-          <option value="today:loading">Today: Loading</option>
-          <option value="today:error">Today: Error</option>
-          <option value="today:offline">Today: Offline</option>
         </select>
         <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
       </label>
@@ -2334,7 +2316,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
           <hr class="sb-rule">
           <nav class="sb-list" aria-label="Areas">
             <div class="sb-rows" id="sb-rows">
-              <button class="sb-row" type="button" data-area="today"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg><span>Today</span></button>
+              <button class="sb-row" type="button" data-area="today" disabled><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg><span>Today</span><small>Later</small></button>
               <button class="sb-row" type="button" data-area="calendar"><svg class="ic" aria-hidden="true"><use href="#i-calendar"/></svg><span>Calendar</span></button>
               <button class="sb-row" type="button" data-area="mail"><svg class="ic" aria-hidden="true"><use href="#i-mail"/></svg><span>Mail</span></button>
               <button class="sb-row" type="button" data-area="proactive"><svg class="ic" aria-hidden="true"><use href="#i-proactive"/></svg><span>Proactive</span></button>
@@ -2508,10 +2490,9 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
         <tr><th scope="row">One board across all projects</th><td class="st">Proposed</td><td>Needs new backend (Proposed). Today the web shows one project at a time, so the app does the same with the project chips.</td></tr>
       </tbody>
     </table>
-    <h2 id="notes-today-h">Today, Calendar and Mail</h2>
+    <h2 id="notes-calendar-h">Calendar and Mail</h2>
     <table>
       <tbody>
-        <tr><th scope="row">Today: weather, next events, approvals, open tasks, latest proactive notice</th><td class="st">Proposed</td><td>Sample content. Needs new backend (Proposed): a calendar read, a mail read and a combined overview route; tasks, approvals and proactive notices reuse existing sources.</td></tr>
         <tr><th scope="row">Calendar day and week, event detail, create</th><td class="st">Proposed</td><td>Needs new backend (Proposed): calendar list and create routes. Dates and times follow the app language.</td></tr>
         <tr><th scope="row">Move event, send drafted reply</th><td class="st">Proposed</td><td>Both stage an approval first; the check mark only requests it. Reuses the existing approval flow.</td></tr>
         <tr><th scope="row">Mail inbox summary, thread and drafts</th><td class="st">Proposed</td><td>Needs new backend (Proposed): mail read and draft routes.</td></tr>
@@ -2592,7 +2573,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     proactive: { label: 'Proactive', ph: true, re: /\bproactive\b/ },
     settings: { label: 'Settings', hub: true, re: /\bsettings?\b/ },
     banking: { label: 'Banking', later: true, re: /\bbanking\b/ },
-    today: { label: 'Today', hub: true, re: /\b(today|my day)\b/ },
+    today: { label: 'Today', later: true, re: /\b(today|my day)\b/ },
     calendar: { label: 'Calendar', hub: true, re: /\b(calendar|agenda)\b/ },
     mail: { label: 'Mail', hub: true, re: /\b(mail|inbox|emails?)\b/ }
   };
@@ -6326,12 +6307,11 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   const AR = {
     health: { title: () => L('Health', 'Sundhed'), tabs: () => [['dashboard', L('Dashboard', 'Overblik')], ['track', L('Track workout', 'Log træning')]] },
     factory: { title: () => L('Software Factory', 'Softwarefabrik'), tabs: () => [['board', L('Board', 'Tavle')], ['needs', L('Needs Dan', 'Kræver Dan')], ['releases', L('Releases', 'Udgivelser')]] },
-    today: { title: () => L('Today', 'I dag'), tabs: () => [] },
     calendar: { title: () => L('Calendar', 'Kalender'), tabs: () => [['day', L('Day', 'Dag')], ['week', L('Week', 'Uge')]] },
     mail: { title: () => L('Mail', 'Mail'), tabs: () => [['inbox', L('Inbox', 'Indbakke')], ['drafts', L('Drafts', 'Udkast')]] },
     settings: { title: () => L('Settings', 'Indstillinger'), tabs: () => [['general', L('General', 'Generelt')], ['models', L('Models', 'Modeller')], ['health', L('Health', 'Sundhed')], ['account', L('Account', 'Konto')]] }
   };
-  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general', today: 'today', calendar: 'day', mail: 'inbox' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, shut: { done: true }, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
+  const S = { area: AR[params.get('screen')] ? params.get('screen') : 'health', tabs: { health: 'dashboard', factory: 'board', settings: 'general', calendar: 'day', mail: 'inbox' }, st: 'default', q: '', searching: false, period: 'week', proj: 0, shut: { done: true }, save: '', f: { name: '', kg: '', reps: '', sets: '' } };
   const tab = () => S.tabs[S.area];
   const offline = () => S.st === 'offline';
   const NOW = new Date(2026, 9, 30, 9, 41);
@@ -6631,8 +6611,8 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     return all.length ? grp(all.map(r => r.h)) : '';
   }
 
-  /* TODAY, CALENDAR and MAIL (P15-56). Sample data. Moving an event and sending a reply wait for Dan's approval. */
-  const NEWA = { today: 1, calendar: 1, mail: 1 };
+  /* CALENDAR and MAIL (P15-56; Today is not designed yet). Sample data. Moving an event and sending a reply wait for Dan's approval. */
+  const NEWA = { calendar: 1, mail: 1 };
   const isNew = () => !!NEWA[S.area];
   const pad2 = n => String(n).padStart(2, '0');
   const hm = h => new Intl.DateTimeFormat(loc(), { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(2026, 9, 30, Math.floor(h + 1e-6), Math.round(((h + 1e-6) % 1) * 60)));
@@ -6680,27 +6660,6 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
   const evRow = (e, day) => hrow({ icon: 'i-calendar', b: et(e), s: esc(day ? wdf(e.d, { weekday: 'short', day: 'numeric', month: 'short' }) : e.w || ''), v: e.mv ? pend() : esc(rng(e.s, e.e)), go: true, attr: 'data-ev="' + e.id + '"' });
   const thRow = t => hrow({ icon: 'i-mail', b: t.f, s: esc(P(t.s)), v: esc(tmx(t.tm)), go: true, attr: 'data-th="' + t.id + '"' }).replace('class="hrow"', 'class="hrow ' + (t.un ? 'unread' : 'read') + '"');
   const drRow = t => hrow({ icon: 'i-pencil', b: 'Re: ' + P(t.s), s: esc(L('To ', 'Til ') + t.f), v: pend(), go: true, attr: 'data-th="' + t.id + '"' });
-  const todayItems = () => {
-    const next = dayEv(TODAY).filter(e => e.e > NOWH).slice(0, 3);
-    const need = CE.filter(e => e.mv).map(e => ({ k: et(e), h: hrow({ icon: 'i-calendar', b: et(e), s: esc(L('Move to ', 'Flyttes til ') + rng(e.mv.s, e.mv.e)), v: pend(), go: true, attr: 'data-ev="' + e.id + '"' }) }))
-      .concat(TH.filter(t => t.dr).map(t => ({ k: 'Re: ' + P(t.s) + ' ' + t.f, h: drRow(t) })));
-    const tasks = TK.map(t => ({ k: P(t), h: hrow({ div: true, icon: 'i-checklist', b: P(t) }) }));
-    const nt = [{ k: L('Rain from 15:00', 'Regn fra 15.00'), h: hrow({ div: true, icon: 'i-proactive', b: L('Rain from 15:00', 'Regn fra 15.00'), s: esc(L('Proactive · 09:12', 'Proaktiv · 09:12')) }) }];
-    return { next: next.map(e => ({ k: et(e), h: evRow(e) })), need, tasks, nt };
-  };
-  function todayPane() {
-    if (S.st === 'empty') return '';
-    const r = todayItems();
-    const wx = '<div class="hwx" role="group" aria-label="' + esc(L('Weather', 'Vejr')) + '">' + ic('i-cloud') + '<div><b>' + esc(num(14, 0) + '°') + '</b><small>' + esc(L('Cloudy · High 16° · Low 9°', 'Skyet · Højst 16° · Lavest 9°')) + '</small></div></div>';
-    return wx + (r.next.length ? hd(L('Next up', 'Næste')) + grp(r.next.map(x => x.h)) : '') +
-      (r.need.length ? hd(L('Approvals', 'Godkendelser')) + grp(r.need.map(x => x.h)) : '') +
-      hd(L('Open tasks', 'Åbne opgaver')) + grp(r.tasks.map(x => x.h)) +
-      hd(L('Latest notice', 'Seneste meddelelse')) + grp(r.nt.map(x => x.h));
-  }
-  function todaySearch(q) {
-    const r = todayItems(), all = r.next.concat(r.need, r.tasks, r.nt).filter(x => x.k.toLowerCase().includes(q));
-    return all.length ? grp(all.map(x => x.h)) : '';
-  }
   function dayPane() {
     const ev = S.st === 'empty' ? [] : dayEv(S.day);
     if (!ev.length) return '';
@@ -6825,7 +6784,6 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
       seg.innerHTML = tabs.map(t => '<button type="button" role="tab" data-v="' + t[0] + '">' + esc(t[1]) + '</button>').join('');
     }
     seg.setAttribute('aria-label', ar.title());
-    seg.hidden = !tabs.length;
     setSeg(seg, tabs.findIndex(t => t[0] === tb));
     sIn.placeholder = L('Search', 'Søg'); sIn.setAttribute('aria-label', L('Search', 'Søg'));
     $('#h-clear').hidden = !S.q; $('#h-clear').setAttribute('aria-label', L('Clear', 'Ryd'));
@@ -6847,7 +6805,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     chips.setAttribute('aria-label', a === 'factory' ? L('Project', 'Projekt') : a === 'calendar' ? L('Day', 'Dag') : L('Period', 'Periode'));
     const plus = $('#hplus'), pl = a === 'health' ? [L('New lift', 'Nyt løft'), 'i-plus'] : a === 'factory' ? [L('New task', 'Ny opgave'), 'i-plus'] : a === 'calendar' ? [L('New event', 'Ny aftale'), 'i-plus'] : tb === 'models' ? [L('Add deployment', 'Tilføj udrulning'), 'i-plus'] : tb === 'health' ? [L('Create credential', 'Opret nøgle'), 'i-plus'] : [L('Add', 'Tilføj'), 'i-plus'];
     plus.setAttribute('aria-label', pl[0]); plus.title = pl[0];
-    plus.disabled = offline() || blocked() || (a === 'settings' && tb !== 'models' && tb !== 'health'); plus.hidden = sr || a === 'today' || a === 'mail';
+    plus.disabled = offline() || blocked() || (a === 'settings' && tb !== 'models' && tb !== 'health'); plus.hidden = sr || a === 'mail';
     pane.hidden = true; pane.innerHTML = '';
     $('#hskel').hidden = st !== 'loading'; $('#hstate').hidden = true;
     if (st === 'error') showState('i-offline', L('Could not load', 'Kunne ikke hentes'), L('Try again', 'Prøv igen'), 'retry');
@@ -6855,12 +6813,9 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     else if (st === 'loading') { /* skeleton */ }
     else if (sr) {
       let h = '';
-      if (q) h = a === 'today' ? todaySearch(q) : a === 'calendar' ? calSearch(q) : a === 'mail' ? mailSearch(q) : a === 'health' ? (tb === 'dashboard' ? dashSearch(q) : trackSearch(q)) : a === 'factory' ? factSearch(q) : setSearch(q);
+      if (q) h = a === 'calendar' ? calSearch(q) : a === 'mail' ? mailSearch(q) : a === 'health' ? (tb === 'dashboard' ? dashSearch(q) : trackSearch(q)) : a === 'factory' ? factSearch(q) : setSearch(q);
       if (q && !h) showState('i-search', L('No results', 'Ingen resultater'));
       else if (h) { pane.innerHTML = h; pane.hidden = false; }
-    } else if (a === 'today') {
-      const h = todayPane();
-      if (!h) showState('i-sun', L('Nothing today', 'Intet i dag')); else { pane.innerHTML = h; pane.hidden = false; }
     } else if (a === 'calendar') {
       const h = tb === 'day' ? dayPane() : weekPane();
       if (!h) showState('i-calendar', tb === 'day' ? L('No events', 'Ingen aftaler') : L('Nothing this week', 'Intet i denne uge'));
@@ -7335,7 +7290,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     Object.assign(S, { area, st: 'default', q: '', searching: false, save: '', shut: { done: true }, f: { name: '', kg: '', reps: '', sets: '' } });
     resetNew();
     S.tabs[area] = tb; sIn.value = '';
-    if (state === 'search') { S.searching = true; S.q = area === 'today' ? 'review' : area === 'calendar' ? 'review' : area === 'mail' ? 'maria' : area === 'health' ? L('bench', 'bænk') : area === 'factory' ? L('reconnect', 'genforbindelse') : 'model'; sIn.value = S.q; }
+    if (state === 'search') { S.searching = true; S.q = area === 'calendar' ? 'review' : area === 'mail' ? 'maria' : area === 'health' ? L('bench', 'bænk') : area === 'factory' ? L('reconnect', 'genforbindelse') : 'model'; sIn.value = S.q; }
     else if (['empty', 'loading', 'error', 'offline', 'stale', 'forbidden', 'saving', 'savefail'].includes(state)) S.st = state;
     if (area === 'health' && (state === 'saving' || state === 'savefail')) {
       S.f = { name: L('Bench press', 'Bænkpres'), kg: '80', reps: '4', sets: '3' };
@@ -7359,7 +7314,7 @@ button.hrow:focus-visible b, .hmain:focus-visible b { color: var(--accent); text
     if (window.jvShowScreen) window.jvShowScreen('hub', area);
     apply(area, tb, state);
   }
-  [['today', '#today-sel'], ['calendar', '#calendar-sel'], ['mail', '#mail-sel'], ['health', '#health-sel'], ['factory', '#factory-sel'], ['settings', '#settings-sel']].forEach(a => {
+  [['calendar', '#calendar-sel'], ['mail', '#mail-sel'], ['health', '#health-sel'], ['factory', '#factory-sel'], ['settings', '#settings-sel']].forEach(a => {
     const s = $(a[1]);
     if (s) s.addEventListener('change', () => { if (!s.value) return; const v = s.value.split(':'); go(a[0], v[0], v[1]); });
   });

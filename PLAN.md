@@ -1,9 +1,9 @@
-## P15-56 — Today, Calendar and Mail board pages (#1521)
+## P15-56 — Calendar and Mail board pages (#1521)
 
-Designed Today, Calendar and Mail on the approved concept board
-(`docs/ios/design/board.html`; no Swift). Each page is a hub area with the same
+Designed Calendar and Mail on the approved concept board
+(`docs/ios/design/board.html`; no Swift). Today is deliberately not designed here (Dan will design it with the dispatcher); its sidebar row is a disabled slot. Each page is a hub area with the same
 chrome as Health and Factory, opens from the sidebar (which stays on the right)
-and from `?screen=today|calendar|mail`, and shows default, loading, empty,
+and from `?screen=calendar|mail`, and shows default, loading, empty,
 error with retry, offline and search states in Danish (default) and English,
 light and dark. The board gained a phone width control (`?width=390|430|440`).
 Chromium sweep of every state, theme, language and 390/430 width found no
