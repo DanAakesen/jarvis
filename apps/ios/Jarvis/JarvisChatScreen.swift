@@ -125,7 +125,10 @@ struct JarvisChatScreen: View {
     let onNavigate: (JarvisDestination) -> Void
     private let handoff: JarvisChatHandoff?
     private let onHandoffConsumed: () -> Void
-    private let onBackToToday: (() -> Void)?
+    @EnvironmentObject private var navigation: JarvisNavigationModel
+    private var onBackToToday: (() -> Void)? {
+        navigation.cameFromToday ? { navigation.navigate(to: .today) } : nil
+    }
     private let screenShareBridge = VoiceScreenShareBridge()
 
     init(
@@ -135,7 +138,6 @@ struct JarvisChatScreen: View {
         startupError: String? = nil,
         handoff: JarvisChatHandoff? = nil,
         onHandoffConsumed: @escaping () -> Void = {},
-        onBackToToday: (() -> Void)? = nil,
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
         let chatModel = JarvisChatModel(
@@ -149,7 +151,6 @@ struct JarvisChatScreen: View {
         self.onNavigate = onNavigate
         self.handoff = handoff
         self.onHandoffConsumed = onHandoffConsumed
-        self.onBackToToday = onBackToToday
     }
 
     private var renderedRows: [RenderedChatRow] {

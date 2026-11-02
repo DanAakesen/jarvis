@@ -7,6 +7,8 @@ final class JarvisNavigationModel: ObservableObject {
     @Published private(set) var state: JarvisNavigationState
     /// Finger-tracked reveal progress (0...1) while a swipe is in flight; nil whenever no swipe is active.
     @Published private(set) var dragProgress: Double?
+    /// True while Chat or Voice is open and was reached from Home. Set just before the published state changes.
+    private(set) var cameFromToday = false
     private var lastProgrammaticNavigation = Date.distantPast
     let navigationRequested = PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()
     private let dismissKeyboard: () -> Void
@@ -62,6 +64,7 @@ final class JarvisNavigationModel: ObservableObject {
 
     func navigate(to destination: JarvisDestination) {
         lastProgrammaticNavigation = Date()
+        updateCameFromToday(to: destination)
         // Content owns voice/fixture side effects; deliver before changing the route.
         if destination.isNavigable {
             navigationRequested.send((from: currentDestination, to: destination))
@@ -76,7 +79,17 @@ final class JarvisNavigationModel: ObservableObject {
     func reset() {
         dragProgress = nil
         state = JarvisNavigationState()
+        cameFromToday = false
         state.navigate(to: .today)
+    }
+
+    private func updateCameFromToday(to destination: JarvisDestination) {
+        let current = currentDestination
+        if destination == .chat || destination == .voice {
+            cameFromToday = current == .today || (cameFromToday && (current == .chat || current == .voice))
+        } else {
+            cameFromToday = false
+        }
     }
 
     private func write(_ change: (inout JarvisNavigationState) -> Void) {

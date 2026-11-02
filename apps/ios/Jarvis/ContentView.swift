@@ -11,7 +11,6 @@ struct ContentView: View {
     @StateObject private var voiceModel: VoiceScreenModel
     @StateObject private var todayModel: JarvisTodayModel
     @Namespace private var carryOver
-    @State private var todayOrigin = false
     @State private var chatHandoff: JarvisChatHandoff?
     private let chatClient: JarvisClient?
     private let startupError: String?
@@ -181,7 +180,6 @@ struct ContentView: View {
                                 startupError: startupError,
                                 handoff: chatHandoff,
                                 onHandoffConsumed: { chatHandoff = nil },
-                                onBackToToday: todayOrigin ? { navigate(to: .today) } : nil,
                                 onNavigate: { navigate(to: $0) }
                             )
                             .id(sessionEpoch)
@@ -276,8 +274,8 @@ struct ContentView: View {
                 model: voiceModel,
                 language: voiceScreenshotLanguage ?? language,
                 fixtureMode: fixtureMode && !navigationFixtureMode,
-                onMinimize: { navigate(to: todayOrigin ? .today : .chat) },
-                onEnd: { navigate(to: todayOrigin ? .today : .chat) }
+                onMinimize: { navigate(to: navigation.cameFromToday ? .today : .chat) },
+                onEnd: { navigate(to: navigation.cameFromToday ? .today : .chat) }
             )
         } else if destination == .today {
             JarvisTodayScreen(
@@ -286,7 +284,6 @@ struct ContentView: View {
                 fixtureMode: fixtureMode,
                 onChat: { handoff in
                     chatHandoff = handoff
-                    todayOrigin = true
                     navigate(to: .chat)
                 },
                 onVoice: { navigate(to: .voice) }
@@ -374,11 +371,6 @@ struct ContentView: View {
     }
 
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
-        if destination != .chat && destination != .voice {
-            todayOrigin = false
-        } else if previous == .today {
-            todayOrigin = true
-        }
         if destination == .voice {
             voiceModel.restore()
         } else if previous == .voice && voiceModel.isSessionActive {
