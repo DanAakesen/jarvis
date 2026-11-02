@@ -10623,3 +10623,8 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 - PC bridge job: `BrowserExecutorTests.Browser_executor_falls_back_to_cdp_when_extension_is_disconnected` failed in `FakeCdpTarget.DisposeAsync` (`ObjectDisposedException` on the HttpListener). It is a test-teardown race in code this PR does not touch, so it is treated as flaky and re-run.
 - iOS UI job: `testSentMessageBubbleIsVisibleAboveComposer` hung past its 2 minute allowance (a different test than on e7165a3; the plus-menu test passed). Both hangs are idle-wait symptoms. `JarvisRim` no longer builds a `TimelineView` at all when static (fixture or Reduce Motion), instead of a paused one, so nothing can schedule frames in UI-test runs. Not verifiable without Xcode; the next iOS CI run is the check.
+
+## 2026-11-02 P15-55: Voice orb versus the board's chat-bubble mini core
+
+- Checked `JarvisOrbView` (dark glass sphere, cyan rim, orange/amber tangled centre) against the board's `.working-core` / `drawMini` mark. The Voice screen already renders `JarvisOrbView` through `VoiceOrbView`, the same view the gate and lock-screen preview use, so Voice matches Dan's description and nothing is drawn twice. No change made.
+- Difference noted: the board's mini core is only the amber tangle on a transparent canvas, with no sphere or rim, and the iOS chat bubble does not draw a mini mark (status text is the bubble text). If the chat bubble should show the mark, it must reuse `JarvisOrbView` at about 24 pt rather than add a second drawing. Not compiled or compared on a device here.
