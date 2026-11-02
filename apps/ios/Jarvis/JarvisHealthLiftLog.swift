@@ -159,6 +159,7 @@ struct JarvisHealthNewLiftSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(copy.text(.cancel)) { dismiss() }.disabled(saving)
+                        .accessibilityIdentifier("sheet.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(copy.text(saving ? .saving : .save)) {

@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 import UIKit
 
@@ -5,6 +6,25 @@ extension View {
     func jarvisToolbarButtonStyle() -> some View {
         // The system toolbar owns the glass surface; the button adds no second fill.
         buttonStyle(.plain)
+    }
+}
+
+struct JarvisSidebarMenuButton: View {
+    @EnvironmentObject private var navigation: JarvisNavigationModel
+    let language: JarvisAppLanguage
+
+    var body: some View {
+        Button {
+            navigation.openSidebar()
+        } label: {
+            Image(systemName: "sidebar.trailing")
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                .contentShape(Rectangle())
+        }
+        .jarvisToolbarButtonStyle()
+        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+        .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
+        .accessibilityIdentifier("navigation.openSidebar")
     }
 }
 
@@ -76,7 +96,9 @@ enum JarvisDesignTokens {
     static let sidebarMaximumWidth: CGFloat = 320
     static let sidebarGestureStartFraction: CGFloat = 0.62
     static let sidebarGestureMinimumDistance: CGFloat = 8
+    static let sidebarEdgeGestureWidth: CGFloat = 20
     static let sidebarOpenThreshold: CGFloat = 0.5
+    static let sidebarCloseThreshold: CGFloat = 0.3
     static let sidebarBrandFontSize: CGFloat = 22
     static let sidebarSettingsButtonSize: CGFloat = 44
     static let sidebarHeaderLeadingInset: CGFloat = 26
@@ -109,6 +131,11 @@ enum JarvisDesignTokens {
     static let chatComposerRadius: CGFloat = 24
     static let chatComposerSpacing: CGFloat = 10
     static let chatComposerIconSize: CGFloat = 20
+    static let chatComposerSendDiameter: CGFloat = 34
+    static let chatComposerTextInset: CGFloat = 14
+    static let chatVideoTileWidth: CGFloat = 132
+    static let chatVideoTileHeight: CGFloat = 176
+    static let chatVideoTileRadius: CGFloat = 24
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16

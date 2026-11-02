@@ -633,7 +633,7 @@ class SafeFailureTests(unittest.TestCase):
             workflow["jobs"]["macos"]["if"],
         )
         self.assertIn("    runs-on: macos-26", source)
-        self.assertIn("    timeout-minutes: 30", source)
+        self.assertIn("    timeout-minutes: 45", source)
         self.assertIn("      cancel-in-progress: true", source)
         self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
         self.assertNotIn("xlarge", source)
@@ -647,6 +647,358 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
         self.assertIn("sidebar-open-dark.png", source)
+
+    def test_ios_navigation_regression_gates_the_build_and_retains_results(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        target = project["targets"]["JarvisUITests"]
+        self.assertEqual(target["type"], "bundle.ui-testing")
+        self.assertEqual(target["dependencies"], [{"target": "Jarvis"}])
+        self.assertEqual(project["schemes"]["Jarvis"]["test"]["targets"], ["JarvisUITests"])
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        steps = workflow["jobs"]["macos"]["steps"]
+        self.assertFalse([step for step in steps if step.get("name") == "Run iPhone navigation regression"],
+                         "the navigation tests run once, in the capture step, to stay inside the time budget")
+        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertEqual(capture["run"].count("xcodebuild test"), 1)
+        self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
+        self.assertNotIn("-skip-testing", capture["run"])
+        self.assertIn("-test-timeouts-enabled YES", capture["run"])
+        self.assertIn("-maximum-test-execution-time-allowance 150", capture["run"])
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult"', capture["run"])
+        gate = next(step for step in steps if step.get("name") == "Fail the run when UI tests fail")
+        self.assertIn("steps.capture.outputs.result == 'failure'", gate["if"])
+        self.assertNotIn("schedule", gate["if"])
+        scheme_evidence = next(step for step in steps if step.get("name") == "Upload iPhone app scheme test results")
+        self.assertEqual(scheme_evidence["if"], "always()")
+        self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
+        self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
+
+    def test_ios_chat_launcher_hit_shape_covers_its_plain_button_label(self):
+        source = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        button = source.split("struct JarvisSidebarMenuButton: View {", 1)[1].split(
+            "enum JarvisDesignTokens", 1
+        )[0]
+        label = button.split("} label: {", 1)[1].split(
+            ".jarvisToolbarButtonStyle()", 1
+        )[0]
+        self.assertLess(label.index(".frame("), label.index(".contentShape(Rectangle())"))
+        self.assertIn("width: JarvisDesignTokens.chatMinimumTapTarget", label)
+        self.assertIn("height: JarvisDesignTokens.chatMinimumTapTarget", label)
+        self.assertIn("static let chatMinimumTapTarget: CGFloat = 44", source)
+        self.assertIn("buttonStyle(.plain)", source)
+
+    def test_ios_physical_menu_tap_opens_real_drawer_within_two_seconds(self):
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        self.assertIn({"path": "JarvisUITests"}, project["targets"]["JarvisUITests"]["sources"])
+        source = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
+        for language in ("Danish", "English"):
+            self.assertIn(f"func testPhysicalMenuTapOpensSidebarWithinTwoSecondsIn{language}()", source)
+        for required in ('assertPhysicalMenuTap(language: "da")',
+                         'assertPhysicalMenuTap(language: "en", startupDelay: 5)',
+                         "--ui-test-navigation", "-AppleLanguages", "-AppleLocale",
+                         "menu.isEnabled && menu.isHittable", "Open sidebar", "Åbn sidemenu",
+                         "XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)",
+                         "XCTAssertLessThan(menu.frame.midY",
+                         "XCTAssertGreaterThanOrEqual(menu.frame.width, 43.5)",
+                         "XCTAssertGreaterThanOrEqual(menu.frame.height, 43.5)",
+                         'app.buttons["chat.notifications"]', "XCTAssertTrue(bell.isHittable)",
+                         'app.descendants(matching: .any).matching(identifier: "navigation.sidebar").firstMatch',
+                         "XCTAssertFalse(sidebar.exists)",
+                         "menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()",
+                         "sidebar.exists && !sidebar.frame.isEmpty",
+                         "self.app.frame.contains(sidebar.frame)",
+                         'self.app.buttons["navigation.chat"].isHittable',
+                         "XCTAssertTrue(sidebar.exists)",
+                         'XCTAssertTrue(app.buttons["navigation.chat"].isHittable)'):
+            self.assertIn(required, source)
+        opened = source.split("menu.coordinate(withNormalizedOffset:", 1)[1]
+        self.assertIn("sidebar.waitForExistence(timeout: 2)", opened)
+        self.assertNotIn("timeout: 10", opened)
+        self.assertNotIn("Thread.sleep", opened)
+        self.assertNotIn("--ui-test-navigation-variant", source)
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        self.assertIn("xcodebuild test", capture["run"])
+        self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
+        self.assertNotIn("-skip-testing", capture["run"])
+        reliability = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
+        for required in ("testRepeatedNavigationInDanish", "testRepeatedNavigationInEnglish",
+                         "testShortDragAndBackgroundInterruptionRecover",
+                         "testMenuRemainsHittableFiveSecondsAfterLaunchInDanish",
+                         "testMenuRemainsHittableFiveSecondsAfterLaunchInEnglish",
+                         "for iteration in 1...3", "assertChatInputWorks()", "openByEdge()",
+                         "assertDestinationMenuWorks()", "exerciseSearch(", "startVoice()",
+                         "minimizeVoice()", 'app.buttons["voice.end"]',
+                         'app.buttons["voice.mini.end"]'):
+            self.assertIn(required, reliability)
+
+    def test_ios_destination_headers_have_real_sidebar_launchers(self):
+        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
+        self.assertIn("import JarvisCore", design)
+        button = design.split("struct JarvisSidebarMenuButton: View {", 1)[1].split("enum JarvisDesignTokens", 1)[0]
+        for required in ('@EnvironmentObject private var navigation: JarvisNavigationModel',
+                         'navigation.openSidebar()', '"sidebar.trailing"', "chatMinimumTapTarget",
+                         "contentShape(Rectangle())", "jarvisToolbarButtonStyle()",
+                         "string(.openSidebar, language: language)", '"navigation.openSidebar"'):
+            self.assertIn(required, button)
+        self.assertRegex(button, r"Button \{\s+navigation\.openSidebar\(\)\s+\} label:")
+        self.assertNotIn("let action", button)
+        for area in ("Notes", "Health", "Factory"):
+            source = (ROOT / f"apps/ios/Jarvis/Jarvis{area}Area.swift").read_text()
+            self.assertIn("JarvisSidebarMenuButton(language: language)", source)
+            self.assertNotIn("onOpenSidebar", source)
+        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertNotIn("openSidebarFromButton", shell)
+        self.assertNotIn("onOpenSidebar", shell)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertNotIn("ToolbarItemGroup(placement: .topBarTrailing)", chat)
+        self.assertEqual(chat.count("ToolbarItem(placement: .topBarTrailing)"), 2)
+        self.assertIn("ToolbarSpacer(.fixed, placement: .topBarTrailing)", chat)
+        self.assertLess(chat.index('.accessibilityIdentifier("chat.notifications")'),
+                        chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"))
+        self.assertLess(chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"),
+                        chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
+        ui_tests = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
+        self.assertIn("XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX", ui_tests)
+        self.assertNotIn("ToolbarItem(placement: .topBarLeading)", chat)
+        self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
+        self.assertNotIn("onOpenSidebar", chat)
+        self.assertNotIn("showsSidebarToolbarButton", chat)
+        tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
+        self.assertEqual(tests.count("assertDestinationMenuWorks()"), 5)
+
+    def test_ios_sign_in_preserves_shell_and_sign_out_resets_shared_navigation(self):
+        root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        self.assertNotIn(".id(model.contentEpoch)", root)
+        self.assertIn(".id(model.signOutGeneration)", root)
+        self.assertIn("ContentView(sessionEpoch: model.contentEpoch)", root)
+        sign_in = root.split("func signIn() async {", 1)[1].split("func beginSignIn()", 1)[0]
+        self.assertIn("contentEpoch += 1", sign_in)
+        self.assertNotIn("signOutGeneration += 1", sign_in)
+        sign_out = root.split("func signOut() async {", 1)[1].split("func retryUnlock()", 1)[0]
+        self.assertLess(sign_out.index("refreshOverlay()"), sign_out.index("tokenStore?.delete()"))
+        self.assertIn("signOutGeneration += 1", sign_out)
+        for clearing in ("tokenStore?.delete()", "provider?.signOut()", "command: .end"):
+            self.assertIn(clearing, sign_out)
+        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn("@StateObject private var navigation = JarvisNavigationModel(", root)
+        self.assertRegex(root, r"\.onChange\(of: model\.signOutGeneration\) \{ _, _ in\s+navigation\.reset\(\)")
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertRegex(model, r"func reset\(\) \{\s+(note\(\"reset\"\)\s+)?dragProgress = nil\s+state = JarvisNavigationState\(\)")
+        self.assertNotIn("NavigationLaunchLifecycle", shell)
+        self.assertNotIn("navigationWrites", shell)
+        self.assertEqual(shell.count(".id(sessionEpoch)"), 2)
+        self.assertIn(".task(id: sessionEpoch)", shell)
+        self.assertIn("workspaceRuntime.resetSession()", shell)
+        self.assertIn("voiceModel.end(returnToChat: false)", shell)
+        self.assertIn("JarvisUnavailableAccessTokenProvider()", shell)
+        tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
+        for required in ("testMenuRemainsHittableFiveSecondsAfterLaunchInDanish",
+                         "testMenuRemainsHittableFiveSecondsAfterLaunchInEnglish",
+                         "startupDelay: 5", "Thread.sleep(forTimeInterval: startupDelay)",
+                         "XCTAssertTrue(menu.exists)", "XCTAssertTrue(menu.isHittable)",
+                         "menu.tap()", "assertSidebarOpen()"):
+            self.assertIn(required, tests)
+
+    def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
+        source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        fixture = source.split("private static var isNavigationFixture: Bool {", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("#if targetEnvironment(simulator)", fixture)
+        self.assertIn('#else\n        false', fixture)
+        initialization = source.split("    init() {", 1)[1].split("tokenStore = try?", 1)[0]
+        self.assertIn("if Self.isNavigationFixture", initialization)
+        for state in ("tokenStore = nil", "provider = nil", "client = nil",
+                      "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
+            self.assertIn(state, initialization)
+        self.assertIn("await model.load()\n            model.refreshOverlay()", source)
+        teardown = source.split("guard visible else {", 1)[1].split("return", 1)[0]
+        self.assertLess(teardown.index("isUserInteractionEnabled = false"), teardown.index("isHidden = true"))
+
+    def test_ios_screenshot_navigation_initializes_model_above_content(self):
+        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        root = gate.split("struct JarvisGateRootView: View {", 1)[1]
+        self.assertLess(root.index("initialState: ContentView.initialNavigation()"),
+                        root.index("ContentView(sessionEpoch: model.contentEpoch)"))
+        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        initialization = shell.split("    static func initialNavigation(", 1)[1].split(
+            "    private static func makeNotesClient(", 1
+        )[0]
+        for flag in ("--screenshot-sidebar-open", "--screenshot-settings-fixture",
+                     "--screenshot-voice-connection-lost", "--screenshot-screen=",
+                     "--screenshot-health-fixture", "--screenshot-voice-fixture",
+                     "--screenshot-calendar-change-fixture", "--screenshot-chat-fixture",
+                     "--screenshot-factory-fixture", "--screenshot-activity-state=empty",
+                     "--screenshot-activity-state=active"):
+            self.assertIn(flag, initialization)
+        self.assertIn("JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)", initialization)
+        self.assertIn("state.openSidebar()", initialization)
+        for destination in ("settings", "voice", "health", "softwareFactory"):
+            self.assertIn(f"state.navigate(to: .{destination})", initialization)
+        self.assertIn("state.navigate(to: destination)", initialization)
+        self.assertIn("return state", initialization)
+        self.assertNotIn("navigation.reset()", shell)
+        self.assertNotIn("navigation = JarvisNavigationModel", shell)
+
+    def test_ios_navigation_input_boundaries_preserve_children_and_keyboard(self):
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
+        self.assertIn(".ignoresSafeArea(.container)", content)
+        self.assertNotIn(".allowsHitTesting(", content)
+        self.assertIn(".allowsHitTesting(!model.shouldCoverContent)", gate)
+        for source, hidden in ((content, ".accessibilityHidden(navigation.isSidebarOpen)"),
+                               (gate, ".accessibilityHidden(model.shouldCoverContent)")):
+            self.assertLess(source.index(".accessibilityElement(children: .contain)"),
+                            source.index(hidden))
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        self.assertLess(sidebar.index(".accessibilityElement(children: .contain)"),
+                        sidebar.index('.accessibilityIdentifier("navigation.sidebar")'))
+        self.assertIn(".accessibilityAddTraits(.isModal)", sidebar)
+        self.assertNotIn(".allowsHitTesting(", sidebar.split("struct JarvisSidebar: View {", 1)[1])
+        self.assertNotIn(".accessibilityHidden(!isOpen)", sidebar)
+        self.assertIn("navigation.closeSidebar()", sidebar)
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        composer_background = chat.split(".fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)", 1)[1].split("            }", 1)[0]
+        self.assertIn(".allowsHitTesting(false)", composer_background)
+        self.assertIn(".accessibilityHidden(true)", composer_background)
+        self.assertIn("#selector(UIResponder.resignFirstResponder)", gate)
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertRegex(model, r"func openSidebar\(\) \{\s+dismissKeyboard\(\)\s+"
+                                r"write\(\"openSidebar\"\) \{ \$0\.openSidebar\(\) \}")
+        self.assertNotIn("openTapCount", model)  # TEMPORARY debugWrites/debugShown allowed until Dan confirms
+        self.assertIn("overlay.windowLevel = .alert + 1", gate)
+        self.assertIn("override var canBecomeKey: Bool { false }", gate)
+        self.assertNotIn("JarvisInputHitTestingProbe", chat)
+
+    def test_ios_sidebar_swipes_use_global_space_strip_and_commit_only_when_completed(self):
+        source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        self.assertFalse((ROOT / "apps/ios/Jarvis/JarvisSidebarEdgeOpener.swift").exists())
+        self.assertNotIn("JarvisSidebarEdgeOpener", source)
+        for obsolete in ("@GestureState", ".updating(", ".onChanged(", "predictedEndTranslation",
+                         "sidebarDrag", "sidebarGestureGeneration", ".id(gestureGeneration)",
+                         ".simultaneousGesture"):
+            self.assertNotIn(obsolete, source)
+        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
+            "struct JarvisSidebar: View {", 1
+        )[0]
+        self.assertEqual(reveal.count("coordinateSpace: .global"), 2)
+        self.assertIn(".highPriorityGesture(openSwipe(drawerWidth: drawerWidth))", reveal)
+        self.assertIn("JarvisDesignTokens.sidebarEdgeGestureWidth", reveal)
+        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil : .spring(", reveal)
+        self.assertIn("JarvisSidebarGesturePolicy.shouldOpen(", reveal)
+        self.assertIn("JarvisSidebarGesturePolicy.shouldClose(", reveal)
+        self.assertIn("navigation.updateDrag(progress:", reveal)
+        self.assertIn("navigation.cancelDrag()", reveal)
+        self.assertLess(reveal.index("page\n"), reveal.index(".highPriorityGesture("))
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertRegex(model, r"(?s)func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
+                               r".*?guard path != state\.path else \{.*?\}\s+"
+                               r"let update = JarvisNavigationPathUpdate\(path: path, from: state\).*?"
+                               r"write\(.*?\) \{ \$0 = update\.state \}")
+
+    def test_ios_navigation_reference_ownership_and_plain_conditional_overlay(self):
+        source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        content = source.split("struct ContentView: View {", 1)[1]
+        shell = content.split("    private func sidebarShell(", 1)[1].split(
+            "    private var themeColorScheme:", 1
+        )[0]
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertIn("@MainActor\nfinal class JarvisNavigationModel: ObservableObject", model)
+        self.assertEqual(model.count("@Published"), 4)  # state, dragProgress, two TEMPORARY debug fields
+        self.assertIn("@Published private(set) var state: JarvisNavigationState", model)
+        for derived in ("var path: [JarvisDestination] { state.path }",
+                        "var isSidebarOpen: Bool { state.isSidebarOpen }",
+                        "var currentDestination: JarvisDestination { state.currentDestination }"):
+            self.assertIn(derived, model)
+        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", content)
+        self.assertNotIn("@State private var navigation", content)
+        self.assertNotIn("@StateObject private var navigation", content)
+        self.assertIn("JarvisDestinationHost(navigation: navigation)", shell)
+        self.assertNotIn("path: Binding", shell)
+        self.assertIn("navigation.voiceSessionStateChanged(state)", shell)
+        self.assertIn("guard appliedSessionEpoch == sessionEpoch else { return }", shell)
+        self.assertIn("workspaceRuntime.consumeRequestedDestination()", shell)
+        self.assertIn("navigation.navigate(to: destination)", source)
+        self.assertIn("$0.navigate(to: destination)", model)
+        self.assertIn("$0.voiceSessionStateChanged(voiceState)", model)
+        self.assertNotIn(".overlay(alignment: .trailing)", shell)
+        self.assertNotIn("JarvisSidebar(", source)
+        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
+        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
+            "struct JarvisSidebar: View {", 1
+        )[0]
+        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", reveal)
+        self.assertIn("let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0", reveal)
+        self.assertRegex(reveal, r"if progress > 0 \{\s+JarvisSidebar\(")
+        self.assertLess(reveal.index("page\n"), reveal.index("JarvisSidebar("))
+        self.assertIn(".frame(width: drawerWidth * progress, height: geometry.size.height, alignment: .trailing)", reveal)
+        self.assertIn(".offset(x: -drawerWidth * progress)", reveal)
+        self.assertIn(".allowsHitTesting(progress == 0)", reveal)
+        self.assertIn(".onTapGesture { navigation.closeSidebar() }", reveal)
+        self.assertIn(".gesture(closeSwipe(drawerWidth: drawerWidth))", reveal)
+        self.assertIn(".frame(width: drawerWidth, height: geometry.size.height)", reveal)
+        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil", reveal)
+        self.assertIn("navigation.cancelDrag()", reveal)
+        self.assertEqual(sidebar.count("JarvisSidebar("), 1)
+        self.assertNotIn("JarvisSidebarDrawerLayer", sidebar)
+        gate_root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text().split(
+            "struct JarvisGateRootView: View {", 1)[1]
+        self.assertIn("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {", gate_root)
+        self.assertLess(gate_root.index("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {"), gate_root.index(".id(model.signOutGeneration)"))
+        self.assertLess(gate_root.index(".id(model.signOutGeneration)"),
+                        gate_root.index(".environmentObject(navigation)"))
+        self.assertLess(gate_root.index(".blur(radius: model.shouldCoverContent"),
+                        gate_root.index(".environmentObject(navigation)"))
+        self.assertIn("if phase != .active", shell)
+        self.assertIn("transaction.disablesAnimations = true", shell)
+        self.assertIn("withTransaction(transaction) { navigation.closeSidebar() }", shell)
+        for obsolete in (".offset(", ".blur(", "committedProgress", "currentDrag",
+                        "navigationWrites", "mutateNavigation", "NavigationLaunchLifecycle"):
+            self.assertNotIn(obsolete, source)
+        root = gate_root
+        self.assertEqual(root.count("@StateObject private var navigation"), 1)
+        self.assertLess(root.index("@StateObject private var navigation"),
+                        root.index("var body: some View"))
+        self.assertLess(root.index("@StateObject private var navigation"),
+                        root.index(".id(model.signOutGeneration)"))
+        self.assertIn(".environmentObject(navigation)", root)
+        self.assertIn("initialState: ContentView.initialNavigation()", root)
+        self.assertIn(".allowsHitTesting(!model.shouldCoverContent)", root)
+        self.assertIn(".accessibilityHidden(model.shouldCoverContent)", root)
+        self.assertIn("if covered { navigation.closeSidebar() }", root)
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        for target in ("Jarvis", "JarvisVoiceActivity"):
+            self.assertIn({"path": "Shared"}, project["targets"][target]["sources"])
+        for path in ("Shared/NavigationBisectVariant.swift", "JarvisUITests/NavigationBisectTests.swift",
+                     "Jarvis/JarvisInputHitTestingProbe.swift"):
+            self.assertFalse((ROOT / "apps/ios" / path).exists(), path)
+        for directory in ("Jarvis", "Shared", "JarvisUITests"):
+            for path in (ROOT / "apps/ios" / directory).rglob("*.swift"):
+                runtime = path.read_text()
+                for obsolete in ("NavigationBisect", "JarvisInputHitTestingProbe",
+                                "navigation.bisect", "Jarvis launch lifecycle:",
+                                "Jarvis gate startup:", "Jarvis navigation command:"):
+                    self.assertNotIn(obsolete, runtime, str(path))
+
+    def test_ios_root_drawer_preserves_content_owned_navigation_side_effects(self):
+        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
+        self.assertIn("PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()", model)
+        navigate = model.split("func navigate(to destination:", 1)[1].split("func voiceSessionStateChanged", 1)[0]
+        self.assertLess(navigate.index("navigationRequested.send((from: currentDestination, to: destination))"),
+                        navigate.index('write("navigate('))
+        self.assertNotIn("guard destination != currentDestination", navigate)
+        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
+        self.assertIn(".onReceive(navigation.navigationRequested)", content)
+        self.assertNotIn(".onChange(of: navigation.currentDestination)", content)
+        self.assertIn("prepareNavigation(to: request.to, from: request.from)", content)
+        preparation = content.split("private func prepareNavigation(", 1)[1].split(
+            "static func initialNavigation(", 1
+        )[0]
+        for behavior in ("voiceModel.restore()", "previous == .voice && voiceModel.isSessionActive",
+                        "voiceModel.minimize()", "if navigationFixtureMode", "case .notes:",
+                        "case .health:", "case .softwareFactory:"):
+            self.assertIn(behavior, preparation)
 
     def test_ios_ui_test_failure_is_nonblocking_but_reported(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -668,7 +1020,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("gh api --method PATCH", tracker["run"])
         self.assertIn("gh api --method POST", tracker["run"])
         self.assertIn("state: \"open\"", tracker["run"])
-        nightly_failure = next(step for step in job["steps"] if step.get("name") == "Fail the nightly run when UI tests fail")
+        nightly_failure = next(step for step in job["steps"] if step.get("name") == "Fail the run when UI tests fail")
         self.assertIn("steps.capture.outputs.result == 'failure'", nightly_failure["if"])
 
     def test_ios_screenshots_upload_and_update_single_pr_comment(self):
@@ -698,7 +1050,7 @@ class SafeFailureTests(unittest.TestCase):
         )
         self.assertIn(
             "--screenshot-chat-plus-menu",
-            (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text(),
+            (ROOT / ".github/workflows/ios-ci.yml").read_text(),
         )
         ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
         self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
@@ -864,7 +1216,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('-jarvis.appLanguage "$language" -jarvis.appTheme "$appearance"', capture)
         self.assertIn("calendar-change-confirmation-${language}-${appearance}.png", capture)
         self.assertEqual(capture.count('xcrun simctl boot "$DEVICE_ID"'), 1)
-        self.assertIn('-resultBundlePath "$RUNNER_TEMP/JarvisUITests.xcresult"', capture)
+        self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult"', capture)
+        self.assertIn('--path "$RUNNER_TEMP/ios-scheme.xcresult"', capture)
         self.assertIn("xcrun xcresulttool export attachments", capture)
         self.assertIn('--output-path "$SCREENSHOT_DIR/ui-test-attachments"', capture)
         self.assertNotIn("defaults write", capture)
@@ -873,9 +1226,13 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("calendar-change-confirmation-{da,en}-{light,dark}.png", comment)
         self.assertIn("do not prove backend execution", comment)
         content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        simulator = content.split("#if targetEnvironment(simulator)", 1)[1].split("#else", 1)[0]
+        initialization = content.split(
+            "init(client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0)", 1
+        )[1]
+        simulator, device = initialization.split("#if targetEnvironment(simulator)", 1)[1].split("#else", 1)
         self.assertIn("--screenshot-calendar-change-fixture", simulator)
         self.assertIn("UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey)", simulator)
+        self.assertIn("let calendarChangeLanguage: JarvisAppLanguage? = nil", device.split("#endif", 1)[0])
         self.assertIn("|| calendarChangeLanguage != nil", content)
         fixture = (ROOT / "apps/ios/Jarvis/JarvisFixtureScenario.swift").read_text()
         self.assertIn('"actionKind": "calendar_change"', fixture)

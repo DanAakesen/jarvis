@@ -3523,6 +3523,115 @@ rename waits for all of them. The rows above keep their original working titles.
 
 ## P15 — iOS app
 
+P15-41 / [#1484](https://github.com/DanAakesen/jarvis/issues/1484): sidebar input
+recovery and repeated bilingual iPhone navigation tests are implemented, with
+results retained by the existing iOS gate. Run 41286956749 compiled the app and
+tests, but all three tests stopped at the initial toolbar `isHittable` query
+before tapping or navigating. The test now sends a physical tap within a
+validated toolbar frame and still requires the real sidebar/sheet transition.
+Run 41291487261 then stopped at the initial Chat input check; retained evidence
+identifies a login gate covering Chat in Danish and gate-host transition warnings
+in the other launches. A follow-up initializes offline navigation fixtures
+unlocked before rendering and explicitly synchronizes gate-window dismissal.
+Run 41294736529 still fails launch input hittability, also seen on PR #1491.
+The next correction isolates accessibility/input boundaries and restores keyboard
+safe-area handling, with native fixture hit-test diagnostics. Repeated input
+assertions remain intact; the shared touch blocker is not yet proven.
+Run 41298280795 advances past English/short-drag input checks, but Danish still
+shows a login gate at launch and sidebar waits fail with missing row elements.
+The follow-up removes the gesture completion dependency on resettable
+`@GestureState` and gives the sidebar its own accessibility container.
+Unchanged path-binding writes no longer close the drawer; bounded-content
+startup/command diagnostics distinguish the remaining launch and activation paths.
+Run 41304146202 passes launch input checks in both languages and all three
+short-drag/background recovery cycles, but both repeated-navigation tests fail
+their first menu-button tap. The follow-up defines the plain launcher's full
+44-point label hit shape and retains the earlier full-scheme result bundle on
+failure. Run 41308630589 still fails both first menu taps; retained app logs prove
+the open command fires, while interruption recovery passes. The next correction
+reads navigation in `ContentView.body` before its deferred geometry closure and
+uses that snapshot for all shell rendering. Native confirmation remains pending.
+The final input correction removes the drag-progress tap-catcher fallback and
+uses `withAnimation` for committed sidebar commands; UI tests remain unchanged.
+Run 41313041566 still fails the first menu tap in both languages, before any
+drag: the open command fires but Chat stays unshifted. The next correction
+captures all shell inputs before deferred geometry and removes transient
+starting progress. Full native confirmation remains pending.
+Run 41315305459 remains red at launch/first menu tap. Use CI as the debugger:
+temporary simulator-fixture A–F variants isolate edge gesture, tap-catcher,
+animation, geometry and toolbar ownership in one bilingual test run. Read actual
+render/root-input probes, retain the winning fix and remove the variants after
+native results; no debugger or human access is required.
+Round one A–F fails with closed-state probes. Round two G–K records bounded
+caller-tagged writes, isolates ambient/input-probe/navigation-effect code and
+compares element and coordinate taps with requested 0/0.5/2-second snapshots.
+Actual sampling times are printed because accessibility queries can take time.
+Round-two CI initially fails compilation: the Voice Activity extension shares
+orb/design-system sources but not ContentView. Move the variant enum into Shared
+to restore target visibility. Run 41327428995 compiles but fails navigation.
+G logs in both languages record menu prewrite/postwrite false→true despite stale
+closed render probes; this contradicts the reported init-only history.
+Round three adds root counter controls inside/outside the gate, modal/window
+evidence and permission interruption handling. The initial scheme invocation is
+temporarily bisect-only; restore the full gate before final delivery.
+The missing Chat launcher on main was added in this branch's 8488515; no removal
+commit appears in available main history. Notes/Health/Factory custom headers now
+receive the same committed open callback through a shared no-fill menu button.
+Repeated bilingual tests additionally open/close from each header. The temporary
+first CI invocation now includes both navigation suites; full-scheme restoration
+and native verification remain pending.
+Run 41333021582 remains red with one initializer/installed state owner. All four
+root-counter tests pass and report no alerts/sheets. Move Chat's menu beside the
+bell in the trailing toolbar. Independently observed button-only tap counts and
+all-variant write histories now distinguish action delivery from stale rendering;
+post-tap frames/hittability and five-second top-right placement remain asserted.
+Comment 6561353007 keeps the shell and navigation host installed across sign-in,
+resets only session-owned screen content, clears/reconnects workspace state and
+ends the prior voice resources without routing back to Chat. A full shell reset
+remains sign-out-only for data clearing. Bounded launch counters distinguish
+initializer re-evaluation from installed StateObject identity changes; the
+five-second Danish/English menu tests require existence, hittability and real
+sidebar opening on Chat and the destination headers. These changes do not explain
+G's epoch-zero stale render; exact-head simulator qualification remains pending.
+Local validation passes 19 focused iOS pipeline checks, 78 Swift core
+session/navigation checks and parsing of all edited Swift files. Linux cannot
+verify the new XCUI tests or rendered menu recovery.
+Preview build 22 reportedly keeps the top-right menu visible but tapping still
+does not open. Comment 6562281755 authorizes replacing the view-local shell state
+with a reference model owned above ContentView, direct environment-model button
+actions and a topmost conditional drawer. This is implemented; all bisect/probes
+are removed. Local checks pass 20 focused pipeline tests, 65 Core/source tests
+and parsing of 14 changed Swift files. Qualify
+with bilingual two-second visible-drawer tests. iOS CI runs only that class per
+owner instruction; the retained broader regression still requires verification.
+Keep the owner's TestFlight workflow unchanged. Native compilation/device
+confirmation remain pending; this ownership change is not yet proven recovery.
+Preview build 23 (cad7cd0) reportedly still shows no drawer after a tap.
+Comment 6562637427 requests a gate-root last-child drawer at zIndex(1000),
+outside content modifiers, and a temporary device-visible badge with Boolean,
+button count and last three static caller-tagged writes. Preserve privacy/auth
+protection and the icon/separate-toolbar fixes; TestFlight remains untouched.
+Reconciled the concurrent `622dc0f` implementation on top of its preserved
+history. One privacy-gated root drawer and one temporary Release badge remain;
+static three-request tracing records no-ops and counts only menu Button taps.
+Same-Voice navigation side effects, root theme and UIKit-window geometry refresh
+are retained. Integrated checks pass 21 focused iOS pipeline tests, 61 Core/source
+tests and parsing of all eight changed Swift files. Native/device behavior remains
+unverified.
+Current Python CI has two main-only TestFlight guard assertions conflicting
+with the owner's temporary branch exception. Do not weaken those tests or edit
+the workflow; the owner plans to revert the exception before merge.
+Next: capture exact-head native/device evidence, remove temporary diagnostics,
+verify the revised
+simulator gate, retain before/after UI-test evidence, and verify build-18 recovery
+on an iPhone before TestFlight. Repeated UI behavior and device acceptance remain
+unverified.
+The reconciled root-layer change passes 21 iOS pipeline checks, 64 Core/source
+tests and parsing of eight changed Swift files. Review caught and fixed native
+back navigation failing to restore minimized Voice; normalized path updates now
+dispatch destination effects before writing state. Native execution remains
+pending, and the temporary badge is a pre-merge removal item.
+
 Preparation is done and the owner authorised the foundation phase on 30 October 2026.
 Every screen needs the owner's approval before it is built or shipped.
 
