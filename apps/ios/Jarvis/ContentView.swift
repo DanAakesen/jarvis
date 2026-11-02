@@ -9,6 +9,10 @@ struct ContentView: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     @StateObject private var workspaceRuntime: WorkspaceRuntime
     @StateObject private var voiceModel: VoiceScreenModel
+    @StateObject private var todayModel: JarvisTodayModel
+    @Namespace private var carryOver
+    @State private var todayOrigin = false
+    @State private var chatHandoff: JarvisChatHandoff?
     private let chatClient: JarvisClient?
     private let startupError: String?
     private let fixtureMode: Bool
@@ -118,7 +122,15 @@ struct ContentView: View {
                 webAppURL: webAppURL ?? JarvisComposition.makeWebAppURL()
             )
         )
-        _notesClient = State(initialValue: Self.makeNotesClient(fixtureMode: fixtureMode))
+        let todayNotesClient = Self.makeNotesClient(fixtureMode: fixtureMode)
+        _notesClient = State(initialValue: todayNotesClient)
+        _todayModel = StateObject(wrappedValue: JarvisTodayModel(
+            dependencies: Self.makeTodayDependencies(
+                notes: todayNotesClient,
+                fixtureMode: fixtureMode,
+                fixtureData: navigationFixtureMode && arguments.contains("--ui-test-today")
+            )
+        ))
         _healthClient = State(initialValue: healthFixtureMode
             ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
             : Self.makeHealthClient(fixtureMode: fixtureMode))
@@ -167,6 +179,9 @@ struct ContentView: View {
                                         || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
                                         ? .needsYou : nil),
                                 startupError: startupError,
+                                handoff: chatHandoff,
+                                onHandoffConsumed: { chatHandoff = nil },
+                                onBackToToday: todayOrigin ? { navigate(to: .today) } : nil,
                                 onNavigate: { navigate(to: $0) }
                             )
                             .id(sessionEpoch)
@@ -177,6 +192,7 @@ struct ContentView: View {
                     }
                 }
                 .tint(JarvisDesignTokens.primaryAccent)
+                .environment(\.jarvisCarryOver, carryOver)
                 .task(id: sessionEpoch) {
                     if appliedSessionEpoch != sessionEpoch {
                         workspaceRuntime.resetSession()
@@ -260,8 +276,19 @@ struct ContentView: View {
                 model: voiceModel,
                 language: voiceScreenshotLanguage ?? language,
                 fixtureMode: fixtureMode && !navigationFixtureMode,
-                onMinimize: { navigate(to: .chat) },
-                onEnd: { navigate(to: .chat) }
+                onMinimize: { navigate(to: todayOrigin ? .today : .chat) },
+                onEnd: { navigate(to: todayOrigin ? .today : .chat) }
+            )
+        } else if destination == .today {
+            JarvisTodayScreen(
+                model: todayModel,
+                language: language,
+                fixtureMode: fixtureMode,
+                onChat: { handoff in
+                    chatHandoff = handoff
+                    navigate(to: .chat)
+                },
+                onVoice: { navigate(to: .voice) }
             )
         } else if destination == .chat {
             JarvisChatScreen(
@@ -346,6 +373,11 @@ struct ContentView: View {
     }
 
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
+        if destination != .chat && destination != .voice {
+            todayOrigin = false
+        } else if previous == .today {
+            todayOrigin = true
+        }
         if destination == .voice {
             voiceModel.restore()
         } else if previous == .voice && voiceModel.isSessionActive {
@@ -368,9 +400,11 @@ struct ContentView: View {
         var state = JarvisNavigationState()
 #if targetEnvironment(simulator)
         let navigationFixture = arguments.contains("--ui-test-navigation")
+        let todayFixture = navigationFixture && arguments.contains("--ui-test-today")
         let calendarFixture = arguments.contains("--screenshot-calendar-change-fixture")
 #else
         let navigationFixture = false
+        let todayFixture = false
         let calendarFixture = false
 #endif
         let fixtureMode = navigationFixture || calendarFixture
@@ -381,6 +415,10 @@ struct ContentView: View {
             || arguments.contains("--screenshot-health-fixture")
             || arguments.contains("--screenshot-activity-state=empty")
             || arguments.contains("--screenshot-activity-state=active")
+        // Home is the launch page. Fixture and screenshot runs keep their own start page unless they ask for Home.
+        if todayFixture || !(navigationFixture || arguments.contains(where: { $0.hasPrefix("--screenshot") })) {
+            state.navigate(to: .today)
+        }
         if arguments.contains("--screenshot-sidebar-open") { state.openSidebar() }
         if arguments.contains("--screenshot-settings-fixture") { state.navigate(to: .settings) }
         if arguments.contains("--screenshot-voice-connection-lost") {
@@ -403,6 +441,25 @@ struct ContentView: View {
         if arguments.contains("--screenshot-voice-fixture") { state.navigate(to: .voice) }
 #endif
         return state
+    }
+
+    private static func makeTodayDependencies(
+        notes: JarvisNotesClient?,
+        fixtureMode: Bool,
+        fixtureData: Bool
+    ) -> JarvisTodayDependencies {
+        var dependencies = JarvisTodayDependencies()
+        dependencies.notes = notes
+        if fixtureData {
+            let fixture = JarvisTodayFixture.make()
+            dependencies.fixture = fixture
+            dependencies.now = { fixture.now }
+            dependencies.gym = JarvisFixtureGymLogStore()
+        } else if !fixtureMode {
+            dependencies.steps = JarvisHealthKitStepsSource()
+            if let notes { dependencies.gym = JarvisVaultGymLogStore(client: notes) }
+        }
+        return dependencies
     }
 
     private static func makeNotesClient(fixtureMode: Bool) -> JarvisNotesClient? {
@@ -473,17 +530,31 @@ private struct JarvisPlaceholderView: View {
 /// ContentView's GeometryReader closure are not a reliable subscription, so the screen could stay on Chat.
 private struct JarvisDestinationHost<Content: View>: View {
     @ObservedObject var navigation: JarvisNavigationModel
-    @ViewBuilder let content: (JarvisDestination) -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var shown: JarvisDestination
+    let content: (JarvisDestination) -> Content
+
+    init(navigation: JarvisNavigationModel, @ViewBuilder content: @escaping (JarvisDestination) -> Content) {
+        _navigation = ObservedObject(wrappedValue: navigation)
+        _shown = State(initialValue: navigation.currentDestination)
+        self.content = content
+    }
 
     var body: some View {
-        content(navigation.currentDestination)
+        let current = navigation.currentDestination
+        let carriesOver = JarvisCarryOver.applies(from: shown, to: current)
+        content(current)
             .overlay(alignment: .topLeading) {
                 Color.clear
                     .frame(width: 1, height: 1)
                     .accessibilityElement()
-                    .accessibilityIdentifier("screen.\(navigation.currentDestination.rawValue)")
+                    .accessibilityIdentifier("screen.\(current.rawValue)")
             }
-            // The screen swap is one plain pass: the drawer's spring must not also animate a whole-screen layout.
-            .transaction(value: navigation.currentDestination) { $0.animation = nil }
+            // Most screen swaps are one plain pass: the drawer's spring must not also animate a whole-screen layout.
+            // Today, Chat and Voice swap with a continuity transition instead.
+            .transaction(value: current) {
+                $0.animation = carriesOver ? JarvisCarryOver.animation(reduceMotion: reduceMotion) : nil
+            }
+            .onChange(of: current) { _, destination in shown = destination }
     }
 }

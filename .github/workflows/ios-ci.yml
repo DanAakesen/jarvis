@@ -166,6 +166,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -only-testing:JarvisUITests/SidebarNavigationTests \
             -only-testing:JarvisUITests/ChatComposerUITests \
+            -only-testing:JarvisUITests/TodayUITests \
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 120 \

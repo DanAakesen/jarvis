@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "Lås Jarvis op med Face ID.";
+"NSHealthShareUsageDescription" = "Jarvis læser dit skridttal for at vise det på Hjem. Intet skrives til Sundhed eller uploades.";

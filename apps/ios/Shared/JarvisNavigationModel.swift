@@ -76,6 +76,7 @@ final class JarvisNavigationModel: ObservableObject {
     func reset() {
         dragProgress = nil
         state = JarvisNavigationState()
+        state.navigate(to: .today)
     }
 
     private func write(_ change: (inout JarvisNavigationState) -> Void) {

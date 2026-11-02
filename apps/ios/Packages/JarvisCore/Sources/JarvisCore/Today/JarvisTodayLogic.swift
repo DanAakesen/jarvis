@@ -155,7 +155,7 @@ public enum JarvisTodayActivity {
             var running = steps.hourly.prefix(firstHour).reduce(0, +)
             return (firstHour...lastHour).map { hour in
                 let enabled = hour <= currentHour
-                if enabled { running += steps.hourly[hour] }
+                if enabled, steps.hourly.indices.contains(hour) { running += steps.hourly[hour] }
                 let label = hourText(hour)
                 return JarvisStepBar(
                     id: hour - firstHour,
