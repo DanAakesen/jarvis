@@ -77,6 +77,18 @@ describe('committed SQL manifest', () => {
     expect(down.sql).toContain('Workout lift history must be retained');
     expect(down.sql).toContain('DROP TABLE daily.lift_entries;');
   });
+  it('stores owner workout entries and the lift vault sync state with a guarded reverse batch', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0074_daily_gym_log.sql');
+    expect(migration?.sql).toContain('CREATE TABLE daily.workout_entries');
+    expect(migration?.sql).toContain("'chest_triceps_core', 'back_biceps_core', 'arms_shoulders', 'legs_core', 'cardio', 'other'");
+    expect(migration?.sql).toContain('UNIQUE (owner_object_id, idempotency_key)');
+    expect(migration?.sql).toContain('vault_synced_revision bigint NULL');
+    expect(migration?.sql).toContain('ALTER TABLE daily.lift_entries ADD');
+    const down = await readDownMigration('0074_daily_gym_log.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('Workout log history must be retained');
+    expect(down.sql).toContain('DROP TABLE daily.workout_entries;');
+  });
   it('tracks scoped GitHub App mint recovery while retaining unresolved legacy alerts', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0062_github_app_mint_recovery.sql');
     expect(migration?.sql).toContain('github_app_scope_key char(64)');
@@ -358,6 +370,7 @@ describe('committed SQL manifest', () => {
       '0071_activitykit_registrations.sql',
       '0072_weather_job_results.sql',
       '0073_approval_notification_registrations.sql',
+      '0074_daily_gym_log.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

@@ -20,6 +20,7 @@ import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
 import { dailyFeedRoutes } from './feeds/routes.js';
 import { liftRoutes } from './routes/lifts.js';
+import { workoutRoutes } from './routes/workouts.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources, trainingTargets?: TrainingTargetsAccess): readonly BackendModule[] {
@@ -49,6 +50,21 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (data.lifts) await app.register(liftRoutes(data.lifts));
+        if (data.workouts) await app.register(workoutRoutes(data.workouts));
+        if (data.retryGymVault) {
+          const retry = data.retryGymVault;
+          const lifetime = new AbortController();
+          let timer: NodeJS.Timeout | undefined;
+          let running = false;
+          const tick = () => {
+            if (running) return;
+            running = true;
+            void retry(AbortSignal.any([lifetime.signal, AbortSignal.timeout(60_000)])).catch(() => undefined)
+              .finally(() => { running = false; });
+          };
+          app.addHook('onReady', async () => { timer = setInterval(tick, 5 * 60_000); timer.unref(); setTimeout(tick, 30_000).unref(); });
+          app.addHook('onClose', async () => { clearInterval(timer); lifetime.abort(); });
+        }
         if (connector) await app.register(dailyMcpRoutes(data.query, connector));
         const unsubscribe = data.changes.subscribe(change => {
           if (change.owner.toLowerCase() === app.ownerObjectId.toLowerCase()) app.nowEventHub.publish({ type: 'refresh' });
