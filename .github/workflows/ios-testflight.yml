@@ -88,6 +88,13 @@ jobs:
           umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+      - name: Revoke stale development certificates before archive
+        timeout-minutes: 5
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ruby .github/scripts/testflight_certificate_cleanup.rb
       - name: Archive with automatic signing
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -202,7 +209,7 @@ jobs:
             echo "This TestFlight build is a preview; it does not create a release tag."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Revoke development certificates
-        if: always() && github.ref == 'refs/heads/main'
+        if: always()
         timeout-minutes: 5
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
