@@ -55,7 +55,10 @@ final class ChatComposerUITests: XCTestCase {
             XCTAssertTrue(camera.isEnabled)
             camera.tap()
 
-            XCTAssertTrue(app.buttons["camera.shutter"].waitForExistence(timeout: 5))
+            XCTAssertTrue(
+                app.buttons["camera.shutter"].waitForExistence(timeout: 5),
+                "Camera sheet did not show its shutter. Accessibility tree:\n\(app.debugDescription)"
+            )
             XCTAssertTrue(app.buttons["camera.close"].exists)
             app.buttons["camera.close"].tap()
             XCTAssertTrue(app.buttons["camera.shutter"].waitForNonExistence(timeout: 5))
