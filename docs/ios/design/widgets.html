@@ -1,0 +1,1801 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Jarvis for iPhone · system surfaces</title>
+<style>
+/* Tokens match the concept board (ios-lab), which copies the brand colours from apps/web/src/styles.css. */
+:root, .force-light {
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+  color-scheme: light;
+  --page: #f6f0e6;
+  --text: #17202a;
+  --text-muted: #5c564f;
+  --accent: #b45f06;
+  --accent-2: #6f6551;
+  --accent-text: #fff;
+  --record-stop: #e5383b;
+  --orb-listening: #2aa4c2;
+  --orb-thinking: #e8a23a;
+  --orb-in-a: rgb(10 46 62 / 88%);
+  --orb-in-b: rgb(10 46 62 / 72%);
+  --ambient:
+    radial-gradient(60% 36% at 12% 10%, rgb(20 118 141 / 24%), transparent 70%),
+    radial-gradient(54% 34% at 94% 20%, rgb(232 162 58 / 30%), transparent 70%),
+    radial-gradient(70% 38% at 24% 98%, rgb(45 179 93 / 18%), transparent 70%),
+    radial-gradient(54% 30% at 92% 80%, rgb(47 128 237 / 16%), transparent 70%);
+  --sep: rgb(60 50 30 / 16%);
+  --g-fill: rgb(255 255 255 / 30%);
+  --g-fill-bar: rgb(255 255 255 / 44%);
+  --g-sat: 1.7;
+  --g-shadow: 0 10px 30px rgb(60 45 20 / 16%), 0 1px 3px rgb(60 45 20 / 12%);
+  --g-solid: #efe8dc;
+  --rim-hi: rgb(255 255 255 / 100%);
+  --rim-mid: rgb(255 255 255 / 60%);
+  --rim-lo: rgb(70 55 30 / 14%);
+  --sheen: rgb(255 255 255 / 50%);
+  --board-bg: #e4ddd0;
+  --board-bar: #f1ebe0;
+  --board-text: #17202a;
+  --board-muted: #4f4a44;
+  --board-rule: #c9bfae;
+  --focus: #6f6551;
+}
+:root[data-theme="dark"], .force-dark {
+  color-scheme: dark;
+  --page: #07090f;
+  --text: #f3fff9;
+  --text-muted: #c0ccd2;
+  --accent: #ffb45c;
+  --accent-2: #c9bfae;
+  --accent-text: #1d1200;
+  --orb-listening: #52dcfa;
+  --orb-thinking: #ffb45c;
+  --orb-in-a: rgb(8 40 56 / 62%);
+  --orb-in-b: rgb(6 30 44 / 46%);
+  --ambient:
+    radial-gradient(60% 36% at 12% 10%, rgb(82 220 250 / 30%), transparent 70%),
+    radial-gradient(54% 34% at 94% 20%, rgb(255 180 92 / 26%), transparent 70%),
+    radial-gradient(70% 38% at 24% 98%, rgb(61 220 132 / 16%), transparent 70%),
+    radial-gradient(54% 30% at 92% 80%, rgb(59 139 255 / 20%), transparent 70%);
+  --sep: rgb(226 246 255 / 14%);
+  --g-fill: rgb(255 255 255 / 7%);
+  --g-fill-bar: rgb(16 22 30 / 36%);
+  --g-shadow: 0 12px 34px rgb(0 0 0 / 42%), 0 1px 3px rgb(0 0 0 / 30%);
+  --g-solid: #161c24;
+  --rim-hi: rgb(255 255 255 / 85%);
+  --rim-mid: rgb(255 255 255 / 34%);
+  --rim-lo: rgb(255 255 255 / 5%);
+  --sheen: rgb(255 255 255 / 13%);
+}
+:root[data-theme="dark"] {
+  --board-bg: #03060a;
+  --board-bar: #0b1118;
+  --board-text: #f3fff9;
+  --board-muted: #b7c4ca;
+  --board-rule: rgb(226 246 255 / 14%);
+  --focus: #8be9ff;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: var(--board-bg); color: var(--board-text); font: 15px/1.45 var(--font-body); -webkit-font-smoothing: antialiased; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Board chrome */
+.head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 12px 20px; background: var(--board-bar); border-bottom: 1px solid var(--board-rule); }
+.head h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.2px; }
+.head p { flex: 1 1 340px; margin: 0; color: var(--board-muted); font-size: 13px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--board-rule); border-radius: 10px; background: color-mix(in srgb, var(--board-text) 5%, transparent); }
+.seg label { position: relative; display: block; }
+.seg input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.seg span { display: grid; place-items: center; min-height: 28px; padding: 0 12px; border-radius: 8px; color: var(--board-muted); font-size: 12px; font-weight: 600; }
+.seg input:checked + span { background: var(--board-text); color: var(--board-bg); }
+.seg input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (pointer: coarse) { .seg span { min-height: 44px; } }
+
+.gallery { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 40px 30px; padding: 26px 20px 56px; }
+.fig { --s: .68; --fw: 393px; --fh: 852px; width: calc(var(--fw) * var(--s)); margin: 0; }
+.fig.land { --fw: 852px; --fh: 393px; }
+@media (max-width: 700px) { .fig.land { --s: .4 !important; } }
+.fig.card { --fh: 452px; }
+.fig.sheet { --fh: 660px; }
+.frame { position: relative; width: calc(var(--fw) * var(--s)); height: calc(var(--fh) * var(--s)); }
+.fig figcaption { margin-top: 12px; }
+.fig h2 { margin: 0 0 3px; font-size: 14px; font-weight: 650; }
+.fig p { margin: 0; color: var(--board-muted); font-size: 13px; line-height: 1.45; }
+.fig p + p { margin-top: 5px; }
+.fig.agreed { order: 0; }
+.fig.todo { order: 1; }
+.fig .st { font-weight: 650; color: var(--board-text, inherit); }
+.fig .st.ok::before { content: "\2713\00a0"; }
+.fig .st.ask::before { content: "?\00a0"; }
+
+/* Screen illustrations (393 x 852 points, scaled down) */
+.screen {
+  position: absolute; left: 0; top: 0; width: var(--fw); height: var(--fh); overflow: hidden; isolation: isolate;
+  transform: scale(var(--s)); transform-origin: 0 0; border-radius: 56px;
+  background: var(--page); color: var(--text); font: 17px/1.3 var(--font-body); -webkit-font-smoothing: antialiased;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--board-text) 14%, transparent);
+}
+.screen::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--ambient); }
+.screen.card { border-radius: 34px; }
+.screen.wide { border-radius: 46px; }
+.screen.pure { background: #000; }
+.island { position: absolute; z-index: 50; top: 11px; left: 50%; width: 126px; height: 37px; margin-left: -63px; border-radius: 19px; background: #000; }
+.home { position: absolute; z-index: 51; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--text); opacity: .55; }
+.sbar { position: absolute; z-index: 45; top: 0; left: 0; right: 0; height: 59px; display: flex; align-items: center; justify-content: space-between; padding: 0 30px 0 50px; font-size: 17px; font-weight: 600; }
+.batt { position: relative; width: 27px; height: 13px; border-radius: 4px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 45%, transparent); }
+.batt::before { content: ""; position: absolute; inset: 2px 7px 2px 2px; border-radius: 2px; background: var(--text); }
+.ic { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Liquid glass, frosted base (same recipe as the board) */
+.glass { position: relative; background: var(--g-fill); box-shadow: var(--g-shadow); -webkit-backdrop-filter: blur(16px) saturate(var(--g-sat)); backdrop-filter: blur(16px) saturate(var(--g-sat)); }
+.glass::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: radial-gradient(120% 160% at 8% -20%, var(--sheen), transparent 55%); }
+.glass::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from 215deg, var(--rim-hi), var(--rim-lo) 26%, transparent 48%, var(--rim-mid) 72%, var(--rim-hi));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.bar-fill { background: var(--g-fill-bar); }
+@media (prefers-reduced-transparency: reduce) { .glass { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--g-solid); } }
+
+/* Orb (small renditions of the real orb) */
+.mo {
+  --c: var(--orb-listening); --d: 40px; position: relative; flex: none; display: block; width: var(--d); height: var(--d); overflow: hidden; border-radius: 50%;
+  background: radial-gradient(circle at 50% 46%, var(--orb-in-b), var(--orb-in-a) 82%);
+  box-shadow: inset 0 0 0 max(1px, calc(var(--d) / 28)) color-mix(in srgb, var(--c) 82%, transparent), inset 0 0 calc(var(--d) * .3) color-mix(in srgb, var(--c) 34%, transparent);
+}
+.mo::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(ellipse 44% 28% at 31% 19%, rgb(255 255 255 / 42%), transparent 72%); }
+/* 2D fallback (no WebGL): amber glowing core in the centre of the dark glass sphere */
+.mo::before { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: radial-gradient(circle, rgb(255 196 104 / 95%) 0, rgb(255 170 70 / 55%) 34%, rgb(255 150 50 / 14%) 66%, transparent 76%); filter: blur(calc(var(--d) / 60)); }
+.mo[data-state="lost"]::before { filter: grayscale(.85) blur(calc(var(--d) / 60)); opacity: .7; }
+/* Real orb (orb-web.js): a canvas 1.6x the sphere, as on the board; the script adds .gl once it draws */
+.mo-gl { position: absolute; left: -30%; top: -30%; width: 160%; height: 160%; pointer-events: none; }
+.mo.gl { overflow: visible; background: none; box-shadow: none; }
+.mo.gl::before, .mo.gl::after { display: none; }
+.mo.gl:not(.halo .mo)::before { display: block; inset: -26%; z-index: -1; background: radial-gradient(circle, color-mix(in srgb, var(--c) 38%, transparent) 0, color-mix(in srgb, var(--c) 12%, transparent) 50%, transparent 70%); filter: blur(calc(var(--d) / 8)); opacity: .8; }
+.mo[data-state="thinking"], .mo[data-state="speaking"], .mo[data-state="needs"] { --c: var(--orb-thinking); }
+.mo[data-state="lost"] { --c: #8d98a1; opacity: .8; }
+.halo { position: relative; display: grid; place-items: center; flex: none; }
+.halo::before { content: ""; position: absolute; inset: -22%; border-radius: 50%; filter: blur(12px); background: radial-gradient(circle, color-mix(in srgb, var(--c, var(--orb-listening)) 44%, transparent) 0, color-mix(in srgb, var(--c, var(--orb-listening)) 14%, transparent) 48%, transparent 70%); }
+.halo[data-state="lost"]::before { opacity: .35; }
+@keyframes turn { to { transform: rotate(360deg); } }
+
+/* Live waveform */
+.wave { --tone: var(--orb-thinking); display: flex; align-items: center; justify-content: space-between; height: 30px; }
+.wave i { display: block; width: 4px; height: 30px; border-radius: 2px; background: var(--tone); transform: scaleY(var(--h)); animation: wv 1.6s ease-in-out infinite; animation-delay: calc(var(--n) * -.13s); }
+.bars { --tone: var(--orb-thinking); display: flex; align-items: center; gap: 2.5px; height: 18px; }
+.bars i { display: block; width: 3px; height: 18px; border-radius: 2px; background: var(--tone); transform: scaleY(var(--h)); animation: wv 1.4s ease-in-out infinite; animation-delay: calc(var(--n) * -.23s); }
+@keyframes wv { 0%, 100% { transform: scaleY(var(--h)); } 50% { transform: scaleY(calc(var(--h) * .45 + .1)); } }
+@media (prefers-reduced-motion: reduce) { .wave i, .bars i { animation: none; } }
+
+/* Live Activity, notification, buttons */
+.la { position: absolute; left: 16px; right: 16px; bottom: 150px; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 28px; background: var(--g-fill-bar); }
+.la-top { display: flex; align-items: center; gap: 12px; }
+.la-txt { display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.2; }
+.la-txt b { font-size: 17px; font-weight: 650; }
+.la-txt span { margin-top: 2px; font-size: 13px; color: var(--text-muted); }
+.la-time { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.la-btns { display: flex; gap: 10px; }
+.la-btn { display: flex; flex: 1; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: 23px; font-size: 16px; font-weight: 600; }
+.la-btn.end { background: color-mix(in srgb, var(--record-stop) 80%, transparent); color: #fff; }
+.app-ico { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.track { height: 8px; overflow: hidden; border-radius: 4px; background: color-mix(in srgb, var(--text) 16%, transparent); }
+.track i { display: block; height: 100%; border-radius: 4px; background: var(--orb-thinking); }
+.ls-date { position: absolute; top: 96px; left: 0; right: 0; text-align: center; font-size: 20px; font-weight: 600; opacity: .88; }
+.ls-time { position: absolute; top: 122px; left: 0; right: 0; text-align: center; font-size: 100px; font-weight: 700; letter-spacing: -3px; line-height: 1.05; }
+.ls-ctl { position: absolute; bottom: 56px; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; }
+.ls-ctl.l { left: 44px; }
+.ls-ctl.r { right: 44px; }
+.ls-ctl .ic { width: 24px; height: 24px; }
+.stack { position: absolute; left: 16px; right: 16px; bottom: 140px; display: flex; flex-direction: column; gap: 10px; }
+.stack .la { position: relative; left: auto; right: auto; bottom: auto; }
+.note { display: grid; grid-template-columns: 38px 1fr auto; column-gap: 12px; padding: 14px 16px 0; border-radius: 28px; background: var(--g-fill-bar); }
+.note b { align-self: center; font-size: 16px; font-weight: 650; }
+.note-when { align-self: center; font-size: 13px; color: var(--text-muted); }
+.note-body { grid-column: 2 / 4; margin: 2px 0 12px; font-size: 15px; line-height: 1.3; }
+.note-acts { grid-column: 1 / 4; margin: 0 -16px; display: flex; }
+.note-acts span { display: block; flex: 1 1 0; text-align: center; padding: 12px 16px; border-top: 1px solid var(--sep); font-size: 16px; font-weight: 500; color: var(--accent); }
+.note-acts span + span { border-left: 1px solid var(--sep); }
+
+/* Dynamic Island states */
+.isl-demo { display: flex; flex-direction: column; align-items: center; gap: 34px; padding: 34px 16px; background: linear-gradient(165deg, #1b2733, #090d12); }
+.isl-demo::before { display: none; }
+.isl-row { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.isl-lab { font-size: 13px; color: var(--text-muted); text-align: center; }
+.isl-c { display: flex; align-items: center; justify-content: space-between; width: 232px; height: 37px; padding: 0 14px; border-radius: 19px; background: #000; }
+.isl-pair { display: flex; align-items: center; gap: 8px; }
+.isl-p { display: flex; align-items: center; justify-content: flex-end; width: 126px; height: 37px; padding: 0 14px; border-radius: 19px; background: #000; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--orb-thinking); }
+.isl-m { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 50%; background: #000; }
+.isl-x { display: flex; flex-direction: column; gap: 12px; width: 361px; padding: 18px; border-radius: 46px; background: #000; }
+.isl-x .la-btn { background: rgb(255 255 255 / 14%); height: 44px; }
+.isl-x .la-btn.end { background: var(--record-stop); }
+
+/* Widgets and controls sheet */
+.sheet { display: flex; flex-direction: column; gap: 18px; padding: 22px 20px; }
+.sheet-sec { display: flex; flex-direction: column; gap: 8px; }
+.sec-label { font-size: 13px; color: var(--text-muted); }
+.wrow { display: flex; gap: 16px; }
+.wg { position: relative; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; padding: 16px; border-radius: 30px; background: var(--g-fill-bar); }
+.wg.sm { width: 158px; height: 158px; }
+.wg.md { width: 332px; height: 158px; }
+.wg strong { font-size: 15px; font-weight: 650; line-height: 1.2; }
+.wg small { display: block; margin-top: 2px; font-size: 13px; color: var(--text-muted); line-height: 1.25; }
+.wg .big { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -2px; }
+.wrow.lsw { align-items: center; gap: 14px; }
+.cw { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--g-fill-bar); }
+.cw svg.ring { position: absolute; width: 64px; height: 64px; transform: rotate(-90deg); fill: none; stroke-width: 5; }
+.cw { position: relative; }
+.rw { display: flex; flex-direction: column; justify-content: center; width: 158px; height: 64px; padding: 0 14px; border-radius: 18px; background: var(--g-fill-bar); }
+.rw strong { font-size: 14px; font-weight: 650; }
+.rw small { font-size: 12px; color: var(--text-muted); }
+.inline-w { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.ctl { display: flex; flex-direction: column; justify-content: space-between; width: 158px; height: 74px; padding: 12px 14px; border-radius: 22px; background: var(--g-fill-bar); }
+.ctl span { font-size: 14px; font-weight: 600; }
+.ctl .ic { color: var(--accent); }
+
+/* StandBy */
+.sb { display: grid; grid-template-columns: 1fr 1.25fr; align-items: center; height: 100%; padding: 0 56px; }
+.sb-orb { display: grid; place-items: center; }
+.sb-txt { display: flex; flex-direction: column; gap: 6px; }
+.sb-name { font-size: 22px; font-weight: 600; color: var(--text-muted); }
+.sb-state { font-size: 60px; font-weight: 700; letter-spacing: -1.5px; line-height: 1.05; }
+.sb-timer { font-size: 36px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+
+/* Sign-in and connection lost */
+.centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 80px 36px 90px; text-align: center; }
+.centre h3 { margin: 18px 0 0; font-size: 34px; font-weight: 700; letter-spacing: -.8px; }
+.centre p { max-width: 300px; margin: 0; font-size: 17px; color: var(--text-muted); }
+.si-btn { display: grid; place-items: center; width: 100%; max-width: 320px; height: 54px; margin-top: 18px; border-radius: 27px; font-size: 17px; font-weight: 650; background: color-mix(in srgb, var(--accent) 78%, transparent); color: var(--accent-text); }
+.centre p.fine { margin-top: 4px; font-size: 14px; }
+.si-ico { display: grid; place-items: center; width: 92px; height: 92px; border-radius: 50%; background: var(--g-fill-bar); color: var(--accent); }
+.si-ico .ic { width: 44px; height: 44px; stroke-width: 1.5; }
+.si-alt { margin-top: 10px; padding: 8px 16px; font-size: 17px; font-weight: 600; color: var(--accent); }
+.centre.up { padding-bottom: 240px; }
+.nav-title { position: absolute; top: 59px; left: 0; right: 0; height: 44px; display: grid; place-items: center; font-size: 17px; font-weight: 600; }
+.rc-pill { position: absolute; top: 116px; left: 50%; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; transform: translateX(-50%); border-radius: 20px; font-size: 15px; font-weight: 600; white-space: nowrap; background: var(--g-fill-bar); }
+.rc-btns { display: flex; gap: 10px; width: 100%; max-width: 320px; margin-top: 18px; }
+
+/* =====================================================================
+   Widgets, controls and Live Activity (concept)
+   ===================================================================== */
+html[data-tint="stone"]  { --tint-d: #eadfce; --tint-l: #4a4034; }
+html[data-tint="orange"] { --tint-d: #ffbd70; --tint-l: #8f4d00; }
+html[data-tint="cyan"]   { --tint-d: #9be8fb; --tint-l: #0b6277; }
+html[data-tint="green"]  { --tint-d: #a9f0c2; --tint-l: #1d6b3a; }
+:root { --tint-d: #eadfce; --tint-l: #4a4034; }
+:root, .force-light {
+  --tint: var(--tint-l);
+  --tbase: rgb(255 255 255 / 66%);
+  --w-std: linear-gradient(160deg, #fffdf8, #f4ecdd);
+  --w-sh: 0 8px 20px rgb(60 45 20 / 18%);
+  --wall:
+    radial-gradient(70% 42% at 12% 10%, rgb(20 118 141 / 46%), transparent 70%),
+    radial-gradient(60% 38% at 92% 22%, rgb(232 162 58 / 56%), transparent 70%),
+    radial-gradient(70% 42% at 28% 96%, rgb(45 179 93 / 34%), transparent 70%),
+    radial-gradient(60% 34% at 94% 84%, rgb(47 128 237 / 32%), transparent 70%), #e9dfcb;
+  --wb-hi: rgb(60 50 30 / 9%);
+}
+:root[data-theme="dark"], .force-dark {
+  --tint: var(--tint-d);
+  --tbase: rgb(14 16 20 / 74%);
+  --w-std: linear-gradient(160deg, #1a222c, #10161d);
+  --w-sh: 0 8px 22px rgb(0 0 0 / 46%);
+  --wall:
+    radial-gradient(70% 42% at 12% 10%, rgb(82 220 250 / 34%), transparent 70%),
+    radial-gradient(60% 38% at 92% 22%, rgb(255 180 92 / 32%), transparent 70%),
+    radial-gradient(70% 42% at 28% 96%, rgb(61 220 132 / 22%), transparent 70%),
+    radial-gradient(60% 34% at 94% 84%, rgb(59 139 255 / 26%), transparent 70%), #080b11;
+  --wb-hi: rgb(255 255 255 / 10%);
+}
+
+/* Board chrome */
+.head { position: relative; z-index: 60; }
+@media (min-width: 900px) { .head { position: sticky; top: 0; } }
+.head .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; flex: 1 1 100%; }
+.tools .grp { display: inline-flex; align-items: center; gap: 6px; color: var(--board-muted); font-size: 12px; font-weight: 600; }
+.tools button, .pills button { min-height: 28px; padding: 0 12px; border: 1px solid var(--board-rule); border-radius: 8px; background: none; color: var(--board-text); font: 600 12px var(--font-body); cursor: pointer; }
+.tools button:hover, .pills button:hover { background: color-mix(in srgb, var(--board-text) 8%, transparent); }
+.tools button:active, .pills button:active { transform: scale(.97); }
+@media (pointer: coarse) { .tools button, .pills button { min-height: 44px; } }
+.nav { display: flex; flex-wrap: wrap; gap: 4px 14px; flex: 1 1 100%; font-size: 13px; }
+.nav a { color: var(--board-text); font-weight: 600; text-underline-offset: 3px; }
+.tintseg { display: none; }
+html[data-wm="tint"] .tintseg { display: inline-flex; }
+.wsec { padding: 28px 20px 8px; scroll-margin-top: 130px; }
+.wsec-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; max-width: 1240px; margin: 0 auto 14px; }
+.wsec-h h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -.3px; }
+.pills { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.pills button[aria-pressed="true"] { background: var(--board-text); color: var(--board-bg); border-color: var(--board-text); }
+.wbody { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 22px 30px; max-width: 1240px; margin: 0 auto; }
+.stage { position: relative; isolation: isolate; display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: center; gap: 26px 22px; padding: 26px 22px; border-radius: 30px; max-width: 100%; }
+.stage::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--wall); }
+.stage[data-m="tint"]::before, .hs[data-m="tint"]::before { filter: saturate(.1) brightness(.82); }
+.wcell { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 100%; }
+.wlab { font-size: 12px; color: var(--board-muted); }
+.wnote { flex: 1 1 280px; max-width: 420px; color: var(--board-muted); font-size: 13px; line-height: 1.5; }
+.wnote h3 { margin: 0 0 4px; color: var(--board-text); font-size: 14px; font-weight: 650; }
+.wnote p { margin: 0 0 8px; }
+.wnote b { color: var(--board-text); }
+.wmat { display: grid; gap: 22px 22px; grid-template-columns: repeat(auto-fill, minmax(338px, max-content)); justify-content: center; }
+.mgrid { display: flex; flex-wrap: wrap; gap: 20px 24px; justify-content: center; }
+.ptitle { margin: 24px auto 10px; max-width: 1240px; font-size: 14px; font-weight: 650; }
+#toast { position: fixed; z-index: 90; left: 50%; bottom: 18px; max-width: calc(100vw - 32px); padding: 10px 16px; transform: translate(-50%, 20px); opacity: 0; pointer-events: none; border-radius: 12px; background: var(--board-text); color: var(--board-bg); font-size: 13px; font-weight: 600; transition: opacity .18s, transform .18s; }
+#toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+
+/* Widget base (real points; a 393pt iPhone) */
+.w {
+  --wr: 24px; --w-fg: var(--text); --w-fg2: var(--text-muted); --w-ac: var(--accent); --w-bg: var(--w-std);
+  --w-chip: color-mix(in srgb, var(--text) 10%, transparent); --w-bad: var(--record-stop);
+  position: relative; flex: none; width: 158px; height: 158px; padding: 14px; overflow: hidden; isolation: isolate; text-align: left;
+  border-radius: var(--wr); background: var(--w-bg); color: var(--w-fg); box-shadow: var(--w-sh);
+  font: 400 13px/1.25 var(--font-body); -webkit-font-smoothing: antialiased; user-select: none;
+}
+.w.m { width: 338px; }
+.w.l { width: 338px; height: 354px; }
+.w .ic { width: 16px; height: 16px; stroke-width: 2; }
+.w .ph { margin: 0; font-weight: 600; letter-spacing: -.2px; }
+.w.s .ph { font-size: 15px; line-height: 19px; }
+.w.m .ph { font-size: 17px; line-height: 22px; }
+.w.l .ph { font-size: 20px; line-height: 25px; }
+.w .k { color: var(--w-ac); }
+.w .mut { color: var(--w-fg2); }
+.w .fix { animation: wfade .22s ease-out; }
+@keyframes wfade { from { opacity: .0; } to { opacity: 1; } }
+.w[data-m="tint"] {
+  --w-bg: color-mix(in srgb, var(--tint) 15%, var(--tbase)); --w-fg: color-mix(in srgb, var(--tint) 82%, transparent);
+  --w-fg2: color-mix(in srgb, var(--tint) 58%, transparent); --w-ac: var(--tint);
+  --w-chip: color-mix(in srgb, var(--tint) 18%, transparent); --w-bad: var(--tint);
+}
+.w[data-m="tint"] .k { font-weight: 700; }
+.w[data-m="tint"] .mo { filter: grayscale(1) brightness(1.25); }
+.w[data-m="glass"] { --wr: 30px; --w-bg: var(--g-fill-bar); -webkit-backdrop-filter: blur(22px) saturate(var(--g-sat)); backdrop-filter: blur(22px) saturate(var(--g-sat)); }
+.w[data-m="glass"]::after {
+  content: ""; position: absolute; inset: 0; z-index: 5; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from 215deg, var(--rim-hi), var(--rim-lo) 26%, transparent 48%, var(--rim-mid) 72%, var(--rim-hi));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+@media (prefers-reduced-transparency: reduce) { .w[data-m="glass"] { -webkit-backdrop-filter: none; backdrop-filter: none; --w-bg: var(--g-solid); } }
+.w.dim .body { opacity: .66; }
+.w .row { display: flex; align-items: center; }
+
+/* Widget buttons: 36pt visible, 44pt hit area */
+.wb {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none; min-width: 36px; height: 36px; padding: 0 11px;
+  border: 0; border-radius: 12px; background: var(--w-chip); color: var(--w-fg); font: 600 13px/1 var(--font-body); white-space: nowrap; cursor: pointer;
+  transition: transform .12s ease, background .12s ease;
+}
+.wb::after { content: ""; position: absolute; inset: -4px; }
+.wb:active, .wb.pressed { transform: scale(.94); background: color-mix(in srgb, var(--w-fg) 22%, transparent); }
+.wb.pri { background: color-mix(in srgb, var(--w-ac) 20%, transparent); color: var(--w-ac); }
+.wb.pri:active { background: color-mix(in srgb, var(--w-ac) 34%, transparent); }
+.wb.mic { width: 44px; height: 44px; padding: 0; border-radius: 14px; }
+.wb.mic::after { inset: 0; }
+.wb.mic .ic { width: 20px; height: 20px; }
+.wb[aria-disabled="true"] { opacity: .42; cursor: default; pointer-events: none; }
+.wb.bad { color: var(--w-bad); background: color-mix(in srgb, var(--w-bad) 16%, transparent); }
+.wb.ok { color: var(--w-ac); background: color-mix(in srgb, var(--w-ac) 16%, transparent); }
+.wb.fill { flex: 1 1 0; min-width: 0; }
+.wb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.spin { animation: turn .9s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } .wb { transition: none; } .w .fix { animation: none; } }
+
+/* Freshness, skeleton, chips */
+.fr { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; line-height: 14px; color: var(--w-fg2); white-space: nowrap; }
+.fr i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--w-ac); }
+.fr .ic { width: 12px; height: 12px; flex: none; }
+.fr.stale { color: var(--w-ac); }
+.fr .t { overflow: hidden; text-overflow: ellipsis; }
+.fr.btn { position: relative; padding: 0; border: 0; background: none; font: inherit; font-size: 11px; cursor: pointer; }
+.fr.btn::after { content: ""; position: absolute; inset: -15px -8px; }
+.sk { display: block; border-radius: 6px; background: color-mix(in srgb, var(--w-fg) 14%, transparent); animation: shim 1.5s ease-in-out infinite; }
+@keyframes shim { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--w-chip); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.chip .ic { width: 12px; height: 12px; }
+.chip.ac { color: var(--w-ac); background: color-mix(in srgb, var(--w-ac) 16%, transparent); }
+.cnt { position: absolute; top: -5px; right: -7px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--w-ac) 24%, var(--g-solid)); color: var(--w-ac); font: 700 11px/18px var(--font-body); text-align: center; }
+.ob { position: relative; flex: none; display: grid; place-items: center; }
+.tap { position: relative; cursor: pointer; }
+
+/* Jarvis Now */
+.nw { display: flex; flex-direction: column; height: 100%; }
+.nw .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.nw .grow { flex: 1; min-height: 0; }
+.nw.sm .ph { margin-top: 8px; }
+.nw.sm .grow { display: flex; flex-direction: column; }
+.nw.md { flex-direction: row; gap: 14px; }
+.nw.md .rail { display: flex; flex-direction: column; justify-content: space-between; align-items: center; flex: none; width: 52px; }
+.nw.md .main { display: flex; flex-direction: column; justify-content: space-between; flex: 1; min-width: 0; }
+.nw.lg .hd { display: flex; align-items: flex-start; gap: 12px; }
+.nw.lg .hd .ph { flex: 1; min-width: 0; padding-top: 2px; }
+.nw .list { display: flex; flex-direction: column; margin: 10px 0 8px; }
+.nx { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 0; border: 0; border-top: 1px solid var(--sep); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.nx:first-child { border-top: 0; }
+.nx:active { opacity: .6; }
+.nx .g { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 10px; background: var(--w-chip); }
+.nx .g.ac { color: var(--w-ac); background: color-mix(in srgb, var(--w-ac) 16%, transparent); }
+.nx .g .ic { width: 16px; height: 16px; }
+.nx .tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.nx b { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.nx small { overflow: hidden; font-size: 12px; color: var(--w-fg2); text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.nx .go { color: var(--w-fg2); }
+.nx .go .ic { width: 14px; height: 14px; }
+.ask { display: flex; align-items: center; gap: 10px; width: 100%; height: 44px; padding: 0 6px 0 14px; border: 0; border-radius: 14px; background: var(--w-chip); color: var(--w-fg2); font: 400 15px var(--font-body); text-align: left; cursor: pointer; }
+.ask span { flex: 1; }
+.ask .ic { width: 20px; height: 20px; color: var(--w-ac); }
+.ask:active { background: color-mix(in srgb, var(--w-fg) 20%, transparent); }
+.nw .empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; font-size: 14px; color: var(--w-fg2); }
+
+/* Factory board widget */
+.fw { display: flex; flex-direction: column; height: 100%; margin: -4px; padding: 0; }
+.fw .hd { display: flex; align-items: center; gap: 8px; min-height: 26px; padding: 0 2px; }
+.fw .hd b { flex: 1; font-size: 14px; font-weight: 650; }
+.pipe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; }
+.pc { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; min-width: 0; height: 40px; padding: 0 8px; border: 0; border-radius: 10px; background: var(--w-chip); color: var(--w-fg); font: inherit; text-align: left; cursor: pointer; }
+.pc:active { background: color-mix(in srgb, var(--w-fg) 22%, transparent); }
+.pc { position: relative; }
+.pc::after { content: ""; position: absolute; inset: -5px 0; }
+.pc .n { font-size: 17px; font-weight: 700; line-height: 18px; font-variant-numeric: tabular-nums; }
+.pc .l { max-width: 100%; overflow: hidden; font-size: 10px; line-height: 12px; color: var(--w-fg2); text-overflow: ellipsis; white-space: nowrap; }
+.pc.ac .n { color: var(--w-ac); }
+.pc.bad .n { color: var(--w-bad); }
+.pc.z .n { color: var(--w-fg2); font-weight: 600; }
+.fw .rows { display: flex; flex-direction: column; margin-top: 4px; }
+.tr { display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 2px; border-top: 1px solid var(--sep); }
+.tr:first-child { border-top: 0; }
+.tr .tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.tr b { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.tr small { display: flex; align-items: center; gap: 4px; overflow: hidden; font-size: 11.5px; color: var(--w-fg2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tr small .t { overflow: hidden; text-overflow: ellipsis; }
+.tr small.ac { color: var(--w-ac); }
+.tr small.bad { color: var(--w-bad); }
+.tr small .ic { width: 12px; height: 12px; flex: none; }
+.tr .acts { display: flex; align-items: center; gap: 6px; flex: none; }
+.fw .ft { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding: 0 2px; }
+
+/* Health and gym widget */
+.hw { display: flex; height: 100%; }
+.hw.md { gap: 14px; }
+.rings { position: relative; flex: none; display: grid; place-items: center; }
+.rings svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); fill: none; }
+.rings .bg { stroke: color-mix(in srgb, var(--w-fg) 14%, transparent); }
+.rings .pg { stroke-linecap: round; transition: stroke-dashoffset .6s ease; }
+.rings .r-st { stroke: var(--w-ac); }
+.rings .r-gy { stroke: color-mix(in srgb, var(--w-ac) 62%, var(--w-fg)); }
+.rings .r-rn { stroke: var(--w-fg2); }
+.rings .ctr { display: flex; flex-direction: column; align-items: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.rings .ctr b { font-size: 15px; font-weight: 700; letter-spacing: -.3px; }
+.rings .ctr small { margin-top: 2px; font-size: 9.5px; color: var(--w-fg2); }
+@media (prefers-reduced-motion: reduce) { .rings .pg { transition: none; } }
+.hw .col { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 4px; }
+.hw .hd { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 20px; }
+.hw .hd b { font-size: 13px; font-weight: 650; }
+.hw .legend { display: flex; gap: 8px; font-size: 10.5px; color: var(--w-fg2); font-variant-numeric: tabular-nums; }
+.hw .legend span { display: inline-flex; align-items: center; gap: 3px; }
+.hw .legend .ic { width: 11px; height: 11px; }
+.hw .btns { display: flex; gap: 8px; margin-top: auto; }
+
+/* Lock Screen accessories (vibrant: white, opacity carries hierarchy) */
+.axw { position: relative; color: var(--text); font: 400 12px/1.2 var(--font-body); }
+.ac-c, .ac-r { position: relative; display: flex; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--text) 16%, transparent); overflow: hidden; }
+.ac-c { width: 76px; height: 76px; align-items: center; justify-content: center; }
+.ac-r { width: 172px; height: 76px; padding: 10px 12px; border-radius: 22px; flex-direction: column; justify-content: center; gap: 3px; }
+.ac-c .rings { width: 76px; height: 76px; }
+.ac-c .rings .bg { stroke: color-mix(in srgb, var(--text) 26%, transparent); }
+.ac-c .rings .pg { stroke: var(--text); }
+.ac-c .rings .ctr b { font-size: 15px; }
+.ac-c .rings .ctr small { color: color-mix(in srgb, var(--text) 70%, transparent); }
+.ac-c .mo { filter: grayscale(1) brightness(1.4); }
+.ac-c .cnt { top: 6px; right: 6px; background: var(--text); color: var(--page); }
+.ac-r b { font-size: 13px; font-weight: 650; }
+.ac-r .ln { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ac-r .ln .ic { width: 12px; height: 12px; }
+.ac-r .bar { flex: 1; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--text) 28%, transparent); overflow: hidden; }
+.ac-r .bar i { display: block; height: 100%; border-radius: 3px; background: var(--text); }
+.ac-r.now { flex-direction: row; align-items: center; gap: 10px; }
+.ac-r.now .tx { font-size: 13px; font-weight: 600; line-height: 16px; }
+.ac-r.now .tx .mut { display: block; font-size: 11.5px; font-weight: 500; color: color-mix(in srgb, var(--text) 66%, transparent); }
+.ac-r.now .mo { filter: grayscale(1) brightness(1.4); }
+.ac-i { display: inline-flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 600; }
+.ac-i .ic { width: 15px; height: 15px; }
+.ac-c.dim, .ac-r.dim { opacity: .6; }
+.ac-c .sk, .ac-r .sk { background: color-mix(in srgb, var(--text) 26%, transparent); }
+.ac-st { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 11px; color: color-mix(in srgb, var(--text) 80%, transparent); }
+.ac-st .ic { width: 14px; height: 14px; }
+
+/* Home Screen and Lock Screen mocks */
+.hs .hb { position: absolute; z-index: 2; top: 68px; left: 27px; display: flex; flex-direction: column; gap: 22px; }
+.hs .hr { display: flex; gap: 22px; }
+.appr { display: flex; justify-content: space-between; width: 338px; }
+.appi { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 15px; color: color-mix(in srgb, var(--text) 80%, transparent); background: color-mix(in srgb, var(--text) 12%, transparent); }
+.appi.j { background: #0a141b; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%); }
+.dots { position: absolute; left: 0; right: 0; bottom: 118px; display: flex; justify-content: center; gap: 8px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: color-mix(in srgb, var(--text) 30%, transparent); }
+.dots i.on { background: var(--text); }
+.dock { position: absolute; left: 14px; right: 14px; bottom: 26px; display: flex; justify-content: space-between; height: 88px; padding: 14px 18px; border-radius: 36px; background: color-mix(in srgb, var(--text) 10%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.hs-wall::before { background: var(--wall) !important; }
+.launch { position: absolute; inset: 0; z-index: 70; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: #05080d; color: #f3fff9; opacity: 0; pointer-events: none; transform: scale(.9); border-radius: inherit; transition: opacity .22s, transform .22s; }
+.launch.on { opacity: 1; pointer-events: auto; transform: none; }
+.launch b { font-size: 22px; font-weight: 650; }
+.launch .wave { width: 120px; }
+@media (prefers-reduced-motion: reduce) { .launch { transition: none; transform: none; } }
+.ls .lsi { position: absolute; top: 66px; left: 0; right: 0; display: flex; justify-content: center; }
+.ls .ls-date { top: 98px; font-size: 18px; }
+.ls .ls-time { top: 120px; font-size: 92px; }
+.ls .lsa { position: absolute; top: 262px; left: 28px; display: flex; align-items: center; gap: 8px; }
+.ls-ctl.btn { border: 0; color: var(--text); cursor: pointer; font: inherit; transition: transform .12s; }
+.ls-ctl.btn:active, .ls-ctl.btn.pressed { transform: scale(.92); }
+.ls-ctl.btn.busy .ic { animation: turn .9s linear infinite; }
+.ls-ctl.btn.done { color: var(--accent); }
+.ls-ctl.btn.err { color: var(--record-stop); }
+.ls-ctl.btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .ls-ctl.btn.busy .ic { animation: none; } }
+
+/* Controls */
+.cm { display: contents; }
+.ct { position: relative; display: flex; flex: none; align-items: center; justify-content: center; gap: 10px; width: 72px; height: 72px; padding: 0; border: 0; border-radius: 26px; color: var(--text); font: inherit; text-align: left; cursor: pointer; background: var(--g-fill-bar); transition: transform .12s, background .15s; }
+.ct.w2 { width: 160px; justify-content: flex-start; padding: 0 14px; }
+.ct .ic { width: 26px; height: 26px; flex: none; color: var(--accent); stroke-width: 1.9; }
+.ct .tx { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.ct .tx b { overflow: hidden; font-size: 14px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.ct .tx small { overflow: hidden; font-size: 12px; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.ct:active, .ct.pressed { transform: scale(.94); background: color-mix(in srgb, var(--text) 24%, transparent); }
+.ct.busy .ic { animation: turn .9s linear infinite; }
+.ct.done { background: color-mix(in srgb, var(--accent) 20%, var(--g-fill-bar)); }
+.ct.err .ic, .ct.err .tx small { color: var(--record-stop); }
+.ct[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.ct[aria-disabled="true"] .ic { color: var(--text-muted); }
+.ct:focus-visible, .ls-ctl.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ct.busy .ic { animation: none; } .ct, .ls-ctl.btn { transition: none; } }
+.ccg { position: absolute; z-index: 2; top: 68px; left: 27px; right: 27px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; justify-items: center; }
+.ccg .ph1, .ccg .ph2 { border-radius: 28px; background: var(--g-fill); }
+.ccg .ph1 { width: 72px; height: 72px; }
+.ccg .ph2 { grid-column: span 2; width: 100%; height: 160px; }
+.ccg .cc-t { grid-column: 1 / -1; justify-self: start; margin-top: 8px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.cs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, max-content)); gap: 14px; }
+.cs-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.ab-btn { position: absolute; left: -6px; top: 160px; z-index: 5; width: 8px; height: 44px; padding: 0; border: 0; border-radius: 4px; background: var(--board-muted); cursor: pointer; transition: transform .12s; }
+.ab-btn::after { content: ""; position: absolute; inset: -6px -10px; }
+.ab-btn:active, .ab-btn.pressed { transform: translateX(3px); background: var(--accent); }
+.ab-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ab-list { position: absolute; z-index: 2; top: 120px; left: 16px; right: 16px; display: flex; flex-direction: column; border-radius: 26px; overflow: hidden; background: var(--g-fill-bar); }
+.ab-row { display: flex; align-items: center; gap: 14px; min-height: 60px; padding: 0 18px; border: 0; border-top: 1px solid var(--sep); background: none; color: var(--text); font: 500 17px var(--font-body); text-align: left; cursor: pointer; }
+.ab-row:first-child { border-top: 0; }
+.ab-row .ic { color: var(--accent); }
+.ab-row .tick { margin-left: auto; width: 22px; color: var(--accent); }
+.ab-row .tick .ic { color: var(--accent); }
+.ab-row[aria-checked="false"] .tick { visibility: hidden; }
+.ab-h { position: absolute; z-index: 2; top: 90px; left: 34px; font-size: 13px; font-weight: 600; text-transform: none; color: var(--text-muted); }
+.island.res { width: 236px; height: 46px; margin-left: -118px; top: 9px; display: flex; align-items: center; gap: 10px; padding: 0 16px; color: #f3fff9; font-size: 14px; font-weight: 600; }
+.island.res .ic { color: var(--orb-thinking); width: 20px; height: 20px; }
+
+/* Live Activity upgrade */
+.la2 { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px 14px; border-radius: 28px; background: var(--g-fill-bar); color: var(--text); font-family: var(--font-body); }
+.la2 .hd { display: flex; align-items: center; gap: 12px; }
+.la2 .tx { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.2; }
+.la2 .tx small { font-size: 12px; color: var(--text-muted); }
+.la2 .tx b { overflow: hidden; font-size: 17px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.la2 .tx span { overflow: hidden; margin-top: 2px; font-size: 13px; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.la2 .tm { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.la2 .ph-chip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border-radius: 12px; background: color-mix(in srgb, var(--text) 12%, transparent); font-size: 12px; font-weight: 650; }
+.la2 .ph-chip.ac { color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.la2 .ph-chip.bad { color: var(--record-stop); background: color-mix(in srgb, var(--record-stop) 16%, transparent); }
+.la2 .ph-chip .ic { width: 13px; height: 13px; }
+.la2 .btns { display: flex; gap: 10px; }
+.lb { position: relative; display: flex; flex: 1; align-items: center; justify-content: center; gap: 8px; height: 44px; border: 0; border-radius: 14px; background: color-mix(in srgb, var(--text) 14%, transparent); color: var(--text); font: 600 15px var(--font-body); cursor: pointer; transition: transform .12s; }
+.lb:active { transform: scale(.97); }
+.lb.pri { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.lb.ok { color: var(--accent); }
+.lb.bad { color: var(--record-stop); }
+.lb.sm { flex: none; width: 56px; }
+.lb[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.lb:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lb .ic { width: 18px; height: 18px; }
+.la2.dark { background: #000; color: #f3fff9; --text: #f3fff9; --text-muted: #b9c4ca; --accent: #ffb45c; --record-stop: #ff6b6e; }
+.isl-c2 { display: flex; align-items: center; justify-content: space-between; width: 232px; height: 37px; padding: 0 14px 0 10px; border-radius: 19px; background: #000; color: #f3fff9; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.isl-c2 .r { display: inline-flex; align-items: center; gap: 5px; color: var(--orb-thinking); }
+.isl-c2 .r .ic { width: 15px; height: 15px; }
+.isl-m2 { position: relative; display: grid; place-items: center; width: 37px; height: 37px; border-radius: 50%; background: #000; }
+.isl-x2 { width: 361px; border-radius: 46px; padding: 16px 18px 18px; }
+.la-stage { display: flex; flex-direction: column; align-items: center; gap: 26px; padding: 22px 16px; }
+.isl-demo { overflow: visible; }
+
+/* Mount points, shared states and layout details */
+.wm { display: contents; }
+.w .empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 0; text-align: center; font-size: 14px; color: var(--w-fg2); }
+.w .empty .ic { width: 22px; height: 22px; color: var(--w-ac); }
+.ph.dim { opacity: .66; }
+.w.pad12 { padding: 12px; }
+.nw.sm .ph, .nw.md .ph, .nw.lg .hd .ph { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.nw.sm .ph { -webkit-line-clamp: 3; }
+.nw.md .ph { -webkit-line-clamp: 2; }
+.nw.lg .hd .ph { -webkit-line-clamp: 3; }
+.nw.lg .list { flex: 1; min-height: 0; margin: 8px 0; }
+.nw.lg .row { gap: 8px; }
+.nw.lg .fr { margin-top: 6px; }
+.nw.md .main .nx { min-height: 46px; }
+.fw.md .pc { height: 32px; }
+.fw.md .tr { height: 44px; }
+.fw.md .rows { margin-top: 0; }
+.fw.md .ft { height: 14px; }
+.fw.lg .tr { height: 50px; }
+.fw .pc.sk { border-radius: 10px; }
+.hw .ph { flex: none; font-size: 13.5px; line-height: 17px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.hw.md .col .ph { margin: 2px 0; font-size: 14px; line-height: 18px; }
+.hw.sm { flex-direction: column; gap: 4px; }
+.hw.sm .r1 { display: flex; align-items: center; gap: 10px; }
+.hw.sm .r1 .c1 { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; font-size: 11px; color: var(--w-fg2); font-variant-numeric: tabular-nums; }
+.hw.sm .ph { font-size: 13px; line-height: 16px; }
+.hw .btns .wb { padding: 0 6px; gap: 4px; font-size: 12.5px; }
+.hw .btns .wb span { overflow: hidden; text-overflow: ellipsis; }
+.hw.md .btns .wb:nth-child(2) { flex: 1.35; }
+.hw.md .btns .wb:nth-child(2) .ic { display: none; }
+.hw.sm .r1 .c1 .fr { max-width: 100%; }
+.nowgrid { display: flex; flex-wrap: wrap; justify-content: center; gap: 26px 22px; }
+.nowgrid > .col { display: flex; flex-direction: column; gap: 22px; }
+.nowgrid .pair { display: flex; flex-wrap: wrap; justify-content: center; gap: 22px; }
+.hw .legend { margin: 0 0 2px; }
+.ccg .ct.w2 { grid-column: span 2; width: 100%; }
+.cs-row .ls-ctl, .cs-grid .ls-ctl { position: relative; left: auto; right: auto; bottom: auto; }
+.cs-row .ls-ctl .ic { width: 24px; height: 24px; }
+.ct.pressed .tx small { color: var(--text); }
+.ls .la2.abs { position: absolute; left: 16px; right: 16px; bottom: 150px; }
+.la2 .tx span.wrap { white-space: normal; font-size: 12px; line-height: 15px; }
+.la2 .side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.la2 .lb .ic.spin, .ls-ctl .spin { animation: turn .9s linear infinite; }
+.sbwrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 48px; transform: scale(1.9); }
+.sb-night { background: #000 !important; }
+.sb-night::before { display: none; }
+.sb-night .sbwrap { filter: grayscale(1) sepia(1) hue-rotate(-52deg) saturate(6) brightness(.62); }
+.wnote code { font: 12px ui-monospace, Consolas, monospace; color: var(--board-text); }
+.stage .wcell .wlab { color: var(--text-muted); }
+.stage[data-m] .wlab.lead { flex: 1 1 100%; }
+.mrow { display: flex; flex-wrap: wrap; gap: 22px 30px; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .la2 .lb .ic.spin, .ls-ctl .spin { animation: none; } }
+
+button.axb { display: block; padding: 0; border: 0; border-radius: 22px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+button.axb:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+button.axb:active { opacity: .6; }
+button.appi { padding: 0; border: 0; cursor: pointer; }
+button.appi:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.launch .wb { --w-chip: rgb(255 255 255 / 14%); --w-fg: #f3fff9; --w-ac: #ffb45c; }
+.launch .wave { height: 36px; }
+.sbscr::before { display: none; }
+.sbscr .w { background: none !important; box-shadow: none; }
+.stage .wlab { color: var(--text-muted); }
+.ls .lsa { gap: 8px; }
+.ls .ls-date, .ls .ls-time { z-index: 1; }
+.fig.la-fig { --fh: 480px; }
+.cs-pair { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.cs-pair .wcell .wlab:empty { display: none; }
+.cs-pair .wcell { gap: 4px; }
+.sbtog { display: flex; gap: 6px; margin-top: 8px; }
+
+.lacard { width: 361px; max-width: 100%; }
+.ac-c .rings .r-gy { stroke: color-mix(in srgb, var(--text) 72%, transparent); }
+.ac-c .rings .r-rn { stroke: color-mix(in srgb, var(--text) 48%, transparent); }
+
+/* Narrow screens */
+@media (max-width: 560px) {
+  .wsec { padding: 22px 12px 6px; }
+  .stage { padding: 16px 10px; gap: 20px 10px; }
+  .wbody { gap: 18px 14px; }
+  .w.m, .w.l { width: min(338px, calc(100vw - 44px)); }
+  .stage .w.m, .stage .w.l { width: min(338px, calc(100vw - 44px)); }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path d="M3 3l18 18"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+    <symbol id="i-flash" viewBox="0 0 24 24"><path d="M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z"/><path d="M6 6h12"/><path d="M12 12h.01"/></symbol>
+    <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/><path d="M5 12.859a10 10 0 0 1 5.17-2.69"/><path d="M19 12.859a10 10 0 0 0-2.007-1.523"/><path d="M2 8.82a15 15 0 0 1 4.177-2.643"/><path d="M22 8.82a15 15 0 0 0-11.288-3.764"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="i-scan-face" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 4v16l14-8z"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.4 2.6a2 2 0 0 1 3 3L12.4 14.6l-4 1 1-4Z"/></symbol>
+    <symbol id="i-task" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="3"/><path d="M8 12h8"/><path d="M12 8v8"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+    <symbol id="i-lift" viewBox="0 0 24 24"><path d="M6.5 6.5v11"/><path d="M17.5 6.5v11"/><path d="M3.5 9v6"/><path d="M20.5 9v6"/><path d="M6.5 12h11"/></symbol>
+    <symbol id="i-run" viewBox="0 0 24 24"><path d="M22 12h-2.5a2 2 0 0 0-1.9 1.5l-2.4 8.4a.25.25 0 0 1-.5 0L9.2 2.2a.25.25 0 0 0-.5 0l-2.4 8.4A2 2 0 0 1 4.5 12H2"/></symbol>
+    <symbol id="i-steps" viewBox="0 0 24 24"><path d="M4 16v-2.4C4 11.5 5.5 9.4 7 9.4c1.9 0 3 1.6 3 4V16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"/><path d="M20 20v-2.4c0-2.1-1.5-4.2-3-4.2-1.9 0-3 1.6-3 4V20a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2Z" transform="translate(0 -4)"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+    <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+    <symbol id="i-pr" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></symbol>
+    <symbol id="i-spin" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19 14c1.5-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
+  </defs>
+</svg>
+
+<header class="head">
+  <h1>Jarvis for iPhone: system surfaces</h1>
+  <p>Widgets, controls and Live Activities first, then the system screens. Sample content only; field names follow the app models. Danish is the default language.</p>
+  <div class="tools">
+    <div class="seg" role="radiogroup" aria-label="Theme">
+      <label><input type="radio" name="theme" value="dark" checked><span>Dark</span></label>
+      <label><input type="radio" name="theme" value="light"><span>Light</span></label>
+    </div>
+    <div class="seg" role="radiogroup" aria-label="Widget language">
+      <label><input type="radio" name="lang" value="da" checked><span>Dansk</span></label>
+      <label><input type="radio" name="lang" value="en"><span>English</span></label>
+    </div>
+    <div class="seg" role="radiogroup" aria-label="Rendering mode">
+      <label><input type="radio" name="wm" value="full" checked><span>Standard</span></label>
+      <label><input type="radio" name="wm" value="tint"><span>Tinted</span></label>
+      <label><input type="radio" name="wm" value="glass"><span>Glass</span></label>
+    </div>
+    <div class="seg tintseg" role="radiogroup" aria-label="Tint colour">
+      <label><input type="radio" name="tint" value="stone" checked><span>Stone</span></label>
+      <label><input type="radio" name="tint" value="orange"><span>Orange</span></label>
+      <label><input type="radio" name="tint" value="cyan"><span>Cyan</span></label>
+      <label><input type="radio" name="tint" value="green"><span>Green</span></label>
+    </div>
+    <div class="seg" role="radiogroup" aria-label="Result of widget actions">
+      <label><input type="radio" name="act" value="ok" checked><span>Actions succeed</span></label>
+      <label><input type="radio" name="act" value="fail"><span>Actions fail</span></label>
+    </div>
+    <button type="button" id="b-push">Simulate push</button>
+    <button type="button" id="b-reset">Reset</button>
+  </div>
+  <nav class="nav" aria-label="Sections">
+    <a href="#home">Home Screen</a><a href="#now">Jarvis Now</a><a href="#factory">Factory board</a><a href="#health">Health and gym</a><a href="#lock">Lock Screen</a><a href="#controls">Controls</a><a href="#liveactivity">Live Activity</a><a href="#states">All states</a><a href="#modes">Render modes</a><a href="#screens">System screens</a>
+  </nav>
+</header>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="wroot"></div>
+<div class="wsec" id="screens"><div class="wsec-h"><h2>System screens</h2></div></div>
+
+<main class="gallery">
+
+  <figure class="fig todo">
+    <div class="frame" role="img" aria-label="Concept: iPhone Lock Screen with a Jarvis Live Activity during a hands-free session. It shows the on-the-move state, a live waveform, a 12 minute timer, and Mute and End buttons.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span></span><span class="batt"></span></div>
+        <div class="ls-date">Thursday 29 October</div>
+        <div class="ls-time">17:42</div>
+        <div class="la glass">
+          <div class="la-top">
+            <span class="halo" style="--c: var(--orb-listening)"><span class="mo" data-state="listening" style="--d:46px"></span></span>
+            <div class="la-txt"><b>Jarvis</b><span>Listening</span></div>
+            <span class="la-time">12:04</span>
+          </div>
+          <div class="wave" data-n="26"></div>
+          <div class="la-btns">
+            <span class="la-btn glass"><svg class="ic"><use href="#i-mic-off"/></svg>Mute</span>
+            <span class="la-btn end"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+          </div>
+        </div>
+        <div class="ls-ctl l glass"><svg class="ic"><use href="#i-flash"/></svg></div>
+        <div class="ls-ctl r glass"><svg class="ic"><use href="#i-camera"/></svg></div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Lock Screen: hands-free session</h2>
+      <p class="st ask">To agree</p>
+      <p>Keeps a running voice session visible, with Mute and End on the Lock Screen. Decision: do you want this?</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig todo">
+    <div class="frame" role="img" aria-label="Concept: three Dynamic Island states for Jarvis. Compact shows the orb and a waveform. Minimal shows only the orb beside another activity. Expanded shows the orb, a timer, a waveform, and Mute and End buttons.">
+      <div class="screen card force-dark isl-demo" aria-hidden="true">
+        <div class="isl-row">
+          <div class="isl-c"><span class="mo" data-state="listening" style="--d:22px"></span><span class="bars" data-n="5"></span></div>
+          <span class="isl-lab">Compact: you are in another app</span>
+        </div>
+        <div class="isl-row">
+          <div class="isl-pair"><div class="isl-p">4:20</div><div class="isl-m"><span class="mo" data-state="listening" style="--d:26px"></span></div></div>
+          <span class="isl-lab">Minimal: another activity shares the island</span>
+        </div>
+        <div class="isl-row">
+          <div class="isl-x">
+            <div class="la-top">
+              <span class="mo" data-state="speaking" style="--d:40px"></span>
+              <div class="la-txt"><b>Jarvis</b><span>Speaking</span></div>
+              <span class="la-time">12:04</span>
+            </div>
+            <div class="wave" data-n="26" style="--tone: var(--orb-thinking)"></div>
+            <div class="la-btns">
+              <span class="la-btn"><svg class="ic"><use href="#i-mic-off"/></svg>Mute</span>
+              <span class="la-btn end"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+            </div>
+          </div>
+          <span class="isl-lab">Expanded: press and hold the island</span>
+        </div>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Dynamic Island</h2>
+      <p class="st ask">To agree</p>
+      <p>The same Live Activity as the Lock Screen, shown in the island while you are in another app. Decision: do you want this?</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig todo">
+    <div class="frame" role="img" aria-label="Concept: iPhone Lock Screen with a Jarvis notification asking to merge a change into main, with Approve and Decline actions.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span></span><span class="batt"></span></div>
+        <div class="ls-date">Thursday 29 October</div>
+        <div class="ls-time">17:42</div>
+        <div class="stack">
+          <div class="note glass">
+            <span class="mo" data-state="thinking" style="--d:38px"></span>
+            <b>Jarvis</b><span class="note-when">now</span>
+            <p class="note-body" style="margin-block: 2px 12px">Merge "Update help page text" into main? Expires in 5 minutes.</p>
+            <div class="note-acts"><span>Approve</span><span>Decline</span></div>
+          </div>
+        </div>
+        <div class="ls-ctl l glass"><span class="mo" data-state="listening" style="--d:28px"></span></div>
+        <div class="ls-ctl r glass"><svg class="ic"><use href="#i-camera"/></svg></div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Lock Screen: approval notification</h2>
+      <p class="st ask">To agree</p>
+      <p>"Approve this merge?" notification with Approve and Decline. The Factory Live Activity now lives in the Live Activity section above. This needs push notifications (APNs), which the backend doesn't have yet. Decision: do you want this, and when?</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig agreed">
+    <div class="frame" role="img" aria-label="Concept: Jarvis sign-in screen with the orb, the name Jarvis, a Continue with Microsoft button, and a note that a Face ID lock is offered right after sign-in.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="centre">
+          <span class="halo" style="width:168px;height:168px"><span class="mo" data-state="listening" style="--d:168px"></span></span>
+          <h3>Jarvis</h3>
+          <span class="si-btn glass">Continue with Microsoft</span>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Sign-in</h2>
+      <p class="st ok">Agreed</p>
+      <p>One Microsoft sign-in, then the session stays in the Keychain.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig agreed">
+    <div class="frame" role="img" aria-label="Concept: Jarvis screen offered right after the first sign-in. A face-scan icon sits above the title Lock Jarvis with Face ID, a short explanation, a Turn on Face ID button and a Not now option.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="centre">
+          <span class="si-ico glass"><svg class="ic"><use href="#i-scan-face"/></svg></span>
+          <h3 style="font-size:30px">Lock Jarvis with Face ID</h3>
+          <span class="si-btn glass">Turn on Face ID</span>
+          <span class="si-alt">Not now</span>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>First sign-in: Face ID lock</h2>
+      <p class="st ok">Agreed</p>
+      <p>Offered once after the first sign-in. The passcode works when Face ID doesn't.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig agreed">
+    <div class="frame" role="img" aria-label="Concept: Jarvis locked screen. A lock icon, the text Jarvis is locked and an Unlock with Face ID button sit above a strip showing the voice session still running, with a 12 minute timer and Mute and End buttons.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="centre up">
+          <span class="si-ico glass"><svg class="ic"><use href="#i-lock"/></svg></span>
+          <h3 style="font-size:30px">Jarvis is locked</h3>
+          <span class="si-btn glass">Unlock with Face ID</span>
+        </div>
+        <div class="la glass" style="bottom:56px">
+          <div class="la-top">
+            <span class="halo" style="--c: var(--orb-listening)"><span class="mo" data-state="listening" style="--d:46px"></span></span>
+            <div class="la-txt"><b>Jarvis</b><span>Listening</span></div>
+            <span class="la-time">12:04</span>
+          </div>
+          <div class="la-btns">
+            <span class="la-btn glass"><svg class="ic"><use href="#i-mic-off"/></svg>Mute</span>
+            <span class="la-btn end"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+          </div>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>App locked</h2>
+      <p class="st ok">Agreed</p>
+      <p>A cover shows until Face ID succeeds. A running voice session is not cut off.</p>
+    </figcaption>
+  </figure>
+
+  <figure class="fig todo">
+    <div class="frame" role="img" aria-label="Concept: Jarvis voice screen after losing connection. A pill says Reconnecting, attempt 3 of 8, the orb is dimmed, and Retry now and End buttons are shown.">
+      <div class="screen" aria-hidden="true">
+        <i class="island"></i>
+        <div class="sbar"><span>17:42</span><span class="batt"></span></div>
+        <div class="nav-title">Voice</div>
+        <div class="rc-pill glass"><svg class="ic"><use href="#i-wifi-off"/></svg>Reconnecting · attempt 3 of 8</div>
+        <div class="centre">
+          <span class="halo" data-state="lost" style="--c:#8d98a1;width:200px;height:200px"><span class="mo" data-state="lost" style="--d:200px"></span></span>
+          <h3 style="font-size:26px">Connection lost</h3>
+          <div class="rc-btns">
+            <span class="la-btn glass">Retry now</span>
+            <span class="la-btn glass"><svg class="ic"><use href="#i-stop"/></svg>End</span>
+          </div>
+        </div>
+        <i class="home"></i>
+      </div>
+    </div>
+    <figcaption>
+      <h2>Connection lost</h2>
+      <p class="st ask">To agree</p>
+      <p>What Voice shows when the signal drops: dimmed orb, reconnect attempts, Retry and End. Decision: is this the wording and behaviour you want?</p>
+    </figcaption>
+  </figure>
+
+</main>
+
+<script src="orb-web.js"></script>
+<script>
+const H =  [.35, .5, .7, .55, .9, .6, .4, .8, 1, .7, .45, .6, .85, .5, .35, .65, .9, .55, .4, .3, .5, .75, .6, .4, .55, .35];
+document.querySelectorAll('[data-n]').forEach((el) => {
+  for (let i = 0; i < Number(el.dataset.n); i += 1) {
+    const bar = document.createElement('i');
+    bar.style.setProperty('--h', H[i % H.length]);
+    bar.style.setProperty('--n', i);
+    el.append(bar);
+  }
+});
+document.querySelectorAll('input[name="theme"]').forEach((input) => {
+  input.addEventListener('change', () => { document.documentElement.dataset.theme = input.value; });
+});
+
+/* Real Jarvis orb on every .mo: GL instances are shared per state and size tier and copied into each orb's own 2D canvas. */
+(() => {
+  if (!window.JarvisOrbGL) { window.JarvisOrbs = { scan() {} }; return; }
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  const COLORS = {
+    dark: ['#52dcfa', '#ffb45c', 1], light: ['#14768d', '#c98a3a', 1.18], lost: ['#8d98a1', '#a79a88', 1.1]
+  };
+  const gls = {};
+  const getGl = (state, big) => {
+    const key = state + (big ? 'L' : 'S');
+    if (key in gls) return gls[key];
+    let g = null;
+    try {
+      const canvas = document.createElement('canvas');
+      const inst = window.JarvisOrbGL.create(canvas);
+      const px = big ? 576 : 192;
+      inst.resize(px, 1);
+      g = { canvas, inst, theme: '' };
+    } catch (e) { g = null; }
+    return (gls[key] = g);
+  };
+  const visible = new Set();
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => { en.isIntersecting ? visible.add(en.target) : visible.delete(en.target); });
+    dirty = true;
+    kick();
+  }, { rootMargin: '120px' });
+  let dirty = true, raf = 0, last = 0;
+  const t0 = performance.now();
+  const themeOf = (el) => el.closest('.force-dark') ? 'dark' : el.closest('.force-light') ? 'light' : document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+
+  let prepared = [];
+  const seen = new WeakSet();
+  /* .still orbs (widgets) are drawn once, as WidgetKit renders a static image; the rest animate while visible. */
+  function scan(rootEl) {
+    (rootEl || document).querySelectorAll('.mo').forEach((el) => {
+      if (seen.has(el)) return;
+      seen.add(el);
+      const d = parseFloat(getComputedStyle(el).getPropertyValue('--d')) || el.getBoundingClientRect().width || 40;
+      const canvas = document.createElement('canvas');
+      canvas.className = 'mo-gl';
+      canvas.setAttribute('aria-hidden', 'true');
+      const side = Math.round(d * 1.6 * Math.min(window.devicePixelRatio || 1, 2));
+      canvas.width = canvas.height = side;
+      el.prepend(canvas);
+      const o = { el, canvas, ctx: canvas.getContext('2d'), big: d >= 100, state: el.dataset.state || 'listening', still: el.classList.contains('still') };
+      prepared.push(o);
+      if (o.still) { try { drawOne(o, 4); } catch (e) { /* keep the CSS fallback */ } } else io.observe(el);
+    });
+  }
+  window.JarvisOrbs = { scan };
+
+  function drawOne(o, t) {
+    o.state = o.el.dataset.state || o.state;
+    const g = getGl(o.state === 'needs' ? 'speaking' : o.state, o.big);
+    if (!g) return false;
+    const lost = o.state === 'lost', th = lost ? 'lost' : themeOf(o.el);
+    if (g.theme !== th) {
+      const [cy, au, ex] = COLORS[th];
+      g.inst.setColors(cy, au);
+      g.inst.setExposure(ex);
+      g.theme = th;
+    }
+    const s = o.state;
+    const input = s === 'listening' ? .22 + .3 * Math.abs(Math.sin(t * 3.1)) * (.55 + .45 * Math.sin(t * .8)) : 0;
+    const playback = s === 'speaking' ? .35 + .45 * Math.abs(Math.sin(t * 6.3) * Math.sin(t * 1.9 + .4)) : 0;
+    g.inst.frame(t, { awake: lost ? .3 : 1, state: lost ? 'idle' : s, playback, input, reducedMotion: calm.matches });
+    const c = o.ctx;
+    c.clearRect(0, 0, o.canvas.width, o.canvas.height);
+    c.drawImage(g.canvas, 0, 0, o.canvas.width, o.canvas.height);
+    o.el.classList.add('gl');
+    return true;
+  }
+
+  function tick(now) {
+    raf = 0;
+    if (document.hidden || !visible.size) return;
+    const animate = !calm.matches;
+    if (animate || dirty) {
+      if (!animate || now - last >= 33) {
+        last = now;
+        dirty = false;
+        const t = animate ? (now - t0) / 1000 : 4;
+        prepared = prepared.filter((o) => o.el.isConnected || (visible.delete(o.el), false));
+        prepared.forEach((o) => { if (!o.still && visible.has(o.el)) drawOne(o, t); });
+      }
+    }
+    if (animate) raf = requestAnimationFrame(tick);
+  }
+  function kick() { if (!raf) raf = requestAnimationFrame(tick); }
+
+  /* Static widget orbs only need a redraw when the theme or render mode changes. */
+  function redrawStill() {
+    prepared = prepared.filter((o) => o.el.isConnected);
+    prepared.forEach((o) => { if (o.still) { try { drawOne(o, 4); } catch (e) { /* keep fallback */ } } });
+  }
+  scan(document);
+  document.addEventListener('visibilitychange', kick);
+  calm.addEventListener('change', () => { dirty = true; kick(); });
+  new MutationObserver(() => { dirty = true; kick(); redrawStill(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-wm'] });
+  window.JarvisOrbs.redraw = redrawStill;
+})();
+</script>
+<script>
+/* ===== Widgets, controls and Live Activity: strings, data, renderers ===== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const root = document.documentElement;
+const lang = () => root.dataset.lang || 'da';
+/* Every widget string: [da, en]. %x tokens are values; {braces} mark orange words. */
+const D = {
+  mic: ['Tal med Jarvis', 'Talk to Jarvis'], ask: ['Spørg Jarvis…', 'Ask Jarvis…'], askAria: ['Spørg Jarvis', 'Ask Jarvis'],
+  listening: ['Lytter…', 'Listening…'], opening: ['Åbner…', 'Opening…'],
+  open: ['Åbn', 'Open'], approve: ['Godkend', 'Approve'], pause: ['Sæt på pause', 'Pause'], resume: ['Genoptag', 'Resume'], retry: ['Prøv igen', 'Try again'],
+  sending: ['Sender…', 'Sending…'], approved: ['Godkendt', 'Approved'], pauseReq: ['Pause afventer', 'Pause requested'], paused: ['Sat på pause', 'Paused'],
+  resumed: ['Genoptaget', 'Resumed'], notDone: ['Ikke gennemført', 'Not completed'], retrying: ['Prøver igen…', 'Retrying…'],
+  running: ['Kører', 'Running'], needs: ['Afventer Dan', 'Needs Dan'], review: ['Gennemgang', 'In review'], failed: ['Fejlet', 'Failed'], done: ['Færdig', 'Done'],
+  crashed: ['Sessionen sluttede uventet', 'Session ended unexpectedly'], inReview: ['PR %x · checks kører', 'PR %x · checks running'],
+  noTasks: ['Ingen opgaver', 'No tasks'], newTask: ['Ny opgave', 'New task'], nothingNew: ['Intet nyt', 'Nothing new'],
+  expires: ['Udløber kl. %x', 'Expires at %x'], merge: ['Fletning', 'Merge'],
+  upd: ['Opdateret %x', 'Updated %x'], staleS: ['Tidligere · %x', 'Earlier · %x'], stale: ['Viser tidligere data · %x', 'Showing earlier data · %x'],
+  offline: ['Offline · %x', 'Offline · %x'], loading: ['Indlæser', 'Loading'], err: ['Kunne ikke hente data', 'Couldn’t load data'], refresh: ['Opdater', 'Refresh'],
+  factory: ['Software Factory', 'Software Factory'], health: ['Sundhed', 'Health'], board: ['Opgavetavle', 'Task board'],
+  logLift: ['Log løft', 'Log lift'], logWorkout: ['Log træning', 'Log workout'], saving: ['Gemmer…', 'Saving…'], saved: ['Gemt', 'Saved'], notSaved: ['Ikke gemt', 'Not saved'],
+  cancel: ['Annuller', 'Cancel'], noData: ['Ingen data', 'No data'], openHealth: ['Åbn Sundhed', 'Open Health'], streak: ['%n uger i træk', '%n-week streak'], streakS: ['%n uger', '%n wks'],
+  steps: ['Skridt', 'Steps'], lifts: ['Løft', 'Lifts'], runs: ['Løb', 'Runs'], today: ['i dag', 'today'],
+  pNeed1: ['{1 godkendelse} venter på dig', '{1 approval} waits for you'], pNeedN: ['{%n godkendelser} venter på dig', '{%n approvals} wait for you'],
+  pFail1: ['{1 opgave} fejlede', '{1 task} failed'], pFailN: ['{%n opgaver} fejlede', '{%n tasks} failed'],
+  pRun1: ['{1 opgave} kører', '{1 task} running'], pRunN: ['{%n opgaver} kører', '{%n tasks} running'],
+  quiet: ['Roligt, Dan. {Intet} afventer dig.', 'All quiet, Dan. {Nothing} needs you.'],
+  hPh: ['{Træning} %g af %t. {%s skridt} til målet.', '{Workouts} %g of %t. {%s steps} to go.'],
+  hPhDone: ['{Ugens træning} er klaret. {%s skridt} til målet.', '{Workouts} done. {%s steps} to go.'],
+  hPhGoal: ['{Skridtmålet} er nået. {%g af %t} træninger.', '{Step goal} reached. {%g of %t} workouts.'],
+  hPhS: ['{%s skridt} til målet.', '{%s steps} to go.'], hPhSGoal: ['{Skridtmålet} er nået.', '{Step goal} reached.'],
+  relNote: ['Release er klar', 'Release is ready'], relSub: ['Seneste build er klar', 'Latest build is ready'],
+  tokNote: ['GitHub-token udløber', 'GitHub token expiring'], tokSub: ['Om 3 dage', 'In 3 days'],
+  ctlNote: ['Hurtig note', 'Quick note'], ctlNoteS: ['Diktér', 'Dictate'], ctlNoteB: ['Lytter…', 'Listening…'], ctlNoteD: ['Gemt', 'Saved'],
+  ctlTask: ['Hurtig opgave', 'Quick task'], ctlTaskS: ['Til Factory', 'To Factory'], ctlTaskB: ['Opretter…', 'Creating…'], ctlTaskD: ['Oprettet', 'Created'],
+  ctlTalk: ['Tal med Jarvis', 'Talk to Jarvis'], ctlTalkS: ['Stemme', 'Voice'], ctlTalkB: ['Åbner…', 'Opening…'], ctlTalkD: ['Åbnet', 'Opened'],
+  ctlErr: ['Ikke gemt', 'Not saved'], ctlOut: ['Log ind', 'Sign in'],
+  laTitle: ['Software Factory', 'Software Factory'], laDone: ['Opgaven er færdig', 'Task finished'],
+  laMerge: ['Flet «%x» ind i main?', 'Merge “%x” into main?'],
+  laLocal: ['Låseskærmen kan ikke opdateres, mens appen er suspenderet. Åbn Jarvis for at hente opgavens aktuelle status.', 'The Lock Screen cannot update while the app is suspended. Open Jarvis to fetch the task’s current status.'],
+  laStale: ['Forældet', 'Outdated'], abTitle: ['Handlingsknap', 'Action Button'],
+  wRunningAct: ['Kører checks', 'Running checks'], wWriting: ['Skriver tests', 'Writing tests'],
+  axNow: ['%n venter', '%n waiting'], axRun: ['%n kører', '%n running'], axAll: ['Roligt', 'All quiet'], axStep: ['%s til målet', '%s to go']
+};
+const t = (k, v) => {
+  const e = D[k];
+  if (!e) { console.error('missing string', k); return k; }
+  let s = e[lang() === 'da' ? 0 : 1];
+  if (v) for (const x in v) s = s.split('%' + x).join(v[x]);
+  return s;
+};
+const num = (n) => n.toLocaleString(lang() === 'da' ? 'da-DK' : 'en-US');
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const acc = (s) => s.replace(/\{([^}]+)\}/g, '<span class="k">$1</span>');
+const plain = (s) => s.replace(/[{}]/g, '');
+const ic = (n, c = '') => `<svg class="ic ${c}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+const mm = (sec) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
+const hm = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+const T0 = Date.now();
+const el = (base) => `<span class="el" data-el="${base}">${mm(base + (Date.now() - T0) / 1000)}</span>`;
+const orb = (d, st) => `<span class="ob" style="width:${d}px;height:${d}px"><span class="mo still" data-state="${st}" style="--d:${d}px"></span></span>`;
+
+/* Sample data, shaped like FactoryTask / PendingConfirmation / NowFeed / JarvisHealthTargets. */
+const SEED = () => ({
+  now: 17 * 60 + 42, upd: 17 * 60 + 42, stale: 17 * 60 + 12, gst: 'live', fail: false, push: 0,
+  tasks: [
+    { id: 128, title: 'Fix login redirect', col: 'needs_dan', agent: 'copilot', confirm: { kind: 'merge', expires: '17:47' }, pr: 131 },
+    { id: 490, title: 'Add CSV export', col: 'in_progress', agent: 'copilot', act: 'wWriting', el: 724 },
+    { id: 493, title: 'Update help page text', col: 'in_progress', agent: 'codex', act: 'wRunningAct', el: 240 },
+    { id: 477, title: 'Refresh token fix', col: 'failed', agent: 'copilot' },
+    { id: 488, title: 'Dependency bump', col: 'in_review', agent: 'codex', pr: 134 }
+  ],
+  items: [{ icon: 'up', ac: 1, t: 'relNote', s: 'relSub' }, { icon: 'key', ac: 0, t: 'tokNote', s: 'tokSub' }],
+  acts: {}, ctl: { note: { phase: 'idle' }, task: { phase: 'idle' }, talk: { phase: 'idle' } }, ab: 'talk',
+  health: { steps: 6420, stepsGoal: 8000, gym: 3, gymGoal: 4, run: 1, runGoal: 2, streak: 6, lift: { ex: 'Squat', kg: 100, reps: 5, sets: 3 } },
+  lift: { phase: 'idle' }, la: { phase: 'running', sub: '', stale: false, act: null }
+});
+let S = SEED();
+const LAK = { running: { phase: 'running', sub: '', stale: false }, merge: { phase: 'waiting', sub: 'merge', stale: false }, paused: { phase: 'waiting', sub: 'paused', stale: false }, done: { phase: 'done', sub: '', stale: false }, failed: { phase: 'failed', sub: '', stale: false }, stale: { phase: 'running', sub: '', stale: true } };
+
+const agg = () => {
+  const c = { run: 0, needs: 0, rev: 0, fail: 0 };
+  S.tasks.forEach((k) => { if (k.col === 'in_progress') c.run++; else if (k.col === 'needs_dan') c.needs++; else if (k.col === 'in_review') c.rev++; else if (k.col === 'failed') c.fail++; });
+  return c;
+};
+const ZERO = { run: 0, needs: 0, rev: 0, fail: 0 };
+const agent = (k) => (k.agent === 'codex' ? 'Codex' : 'Copilot');
+const orbState = (st, c) => (st === 'error' || st === 'offline' || st === 'stale' ? 'lost' : st === 'loading' ? 'idle' : c.needs ? 'needs' : c.run ? 'thinking' : 'idle');
+
+function fresh(st, short, tiny) {
+  if (st === 'stale') return `<button class="fr btn stale" data-do="refresh" aria-label="${t('refresh')}">${ic('refresh')}<span class="t">${tiny ? hm(S.stale) : t(short ? 'staleS' : 'stale', { x: hm(S.stale) })}</span></button>`;
+  if (st === 'offline') return `<span class="fr stale" ${tiny ? `aria-label="${esc(t('offline', { x: hm(S.upd) }))}"` : ''}>${ic('wifi-off')}<span class="t">${tiny ? hm(S.upd) : t('offline', { x: hm(S.upd) })}</span></span>`;
+  if (st === 'loading') return `<span class="fr">${ic('spin', 'spin')}<span class="t">${t('loading')}</span></span>`;
+  if (st === 'error') return `<button class="fr btn stale" data-do="refresh">${ic('refresh')}<span class="t">${t('retry')}</span></button>`;
+  return `<span class="fr"><i></i><span class="t">${tiny ? hm(S.upd) : t('upd', { x: hm(S.upd) })}</span></span>`;
+}
+const sk = (n, h = 14, ws = [100, 86, 58]) => Array.from({ length: n }, (_, i) => `<span class="sk" style="height:${h}px;width:${ws[i % ws.length]}%;margin:${Math.round(h / 3)}px 0"></span>`).join('');
+const btn = (cls, icon, label, data, o = {}) =>
+  `<button class="wb ${cls}" ${data} ${o.dis ? 'aria-disabled="true" tabindex="-1"' : ''} aria-label="${esc(o.aria || label)}">${icon ? ic(icon, o.spin ? 'spin' : '') : ''}${o.only ? '' : `<span>${label}</span>`}</button>`;
+
+/* ---------- Jarvis Now ---------- */
+function nowPhrase(c, sz) {
+  const parts = [];
+  if (c.needs) parts.push(t(c.needs === 1 ? 'pNeed1' : 'pNeedN', { n: c.needs }));
+  if (c.fail) parts.push(t(c.fail === 1 ? 'pFail1' : 'pFailN', { n: c.fail }));
+  if (c.run) parts.push(t(c.run === 1 ? 'pRun1' : 'pRunN', { n: c.run }));
+  if (!parts.length) return t('quiet');
+  if (sz === 's') return parts.slice(0, 2).map((p) => p + '.').join(' ');
+  return parts[0] + ', Dan. ' + parts.slice(1, sz === 'm' ? 2 : 3).map((p) => p + '.').join(' ');
+}
+function nowPool() {
+  const p = [];
+  S.tasks.filter((k) => k.col === 'needs_dan').forEach((k) => p.push({ icon: 'merge', ac: 1, title: k.title, sub: t('merge') + ' · ' + t('expires', { x: k.confirm.expires }) }));
+  S.tasks.filter((k) => k.col === 'failed').forEach((k) => p.push({ icon: 'alert', ac: 0, title: k.title, sub: t('failed') + ' · ' + t('crashed') }));
+  S.tasks.filter((k) => k.col === 'in_progress').forEach((k) => p.push({ icon: 'play', ac: 0, title: k.title, sub: agent(k) + ' · ' + t(k.act) + (k.paused ? '' : ' · ' + el(k.el)) }));
+  S.items.forEach((i) => p.push({ icon: i.icon, ac: i.ac, title: t(i.t), sub: t(i.s) }));
+  return p;
+}
+const nxRow = (it) => `<button class="nx" data-do="open" data-label="${esc(it.title)}"><span class="g ${it.ac ? 'ac' : ''}">${ic(it.icon)}</span><span class="tx"><b>${esc(it.title)}</b><small>${it.sub}</small></span><span class="go">${ic('chev')}</span></button>`;
+
+function nowW(sz, st) {
+  const live = st !== 'empty' && st !== 'loading' && st !== 'error';
+  const c = live ? agg() : ZERO, off = st === 'offline';
+  const os = orbState(st, c);
+  const pool = live ? nowPool() : [];
+  const dim = st === 'stale' ? 'dim' : '';
+  const mic = btn('mic', 'mic', t('mic'), 'data-do="mic"', { dis: off, only: true });
+  let phrase;
+  if (st === 'loading') phrase = `<div class="ph">${sk(sz === 's' ? 3 : 2, sz === 'l' ? 18 : 14)}</div>`;
+  else if (st === 'error') phrase = `<p class="ph">${t('err')}</p>`;
+  else phrase = `<p class="ph ${dim}">${acc(nowPhrase(c, sz))}</p>`;
+  const fr = fresh(st === 'empty' ? 'live' : st, sz === 's');
+  if (sz === 's') return { cls: '', label: 'Jarvis Now', html: `<div class="nw sm"><div class="top">${orb(36, os)}${mic}</div><div class="grow">${phrase}</div>${fr}</div>` };
+  if (sz === 'm') {
+    const row = st === 'loading' ? `<span class="sk" style="height:30px;width:100%"></span>` : pool[0] ? nxRow(pool[0]) : '';
+    return { cls: '', label: 'Jarvis Now', html: `<div class="nw md"><div class="rail">${orb(52, os)}${mic}</div><div class="main">${phrase}${row}${fr}</div></div>` };
+  }
+  let list;
+  if (st === 'loading') list = [0, 1, 2].map(() => `<div class="nx"><span class="sk" style="width:30px;height:30px;border-radius:10px"></span><span class="tx" style="gap:4px"><span class="sk" style="height:13px;width:70%"></span><span class="sk" style="height:11px;width:45%"></span></span></div>`).join('');
+  else if (st === 'error') list = `<div class="empty">${ic('alert')}${btn('pri', 'refresh', t('retry'), 'data-do="refresh"')}</div>`;
+  else if (!pool.length) list = `<div class="empty">${ic('check')}<span>${t('nothingNew')}</span></div>`;
+  else list = pool.slice(0, 3).map(nxRow).join('');
+  const ask = `<button class="ask" data-do="ask" ${off ? 'aria-disabled="true" tabindex="-1"' : ''} aria-label="${t('askAria')}"><span>${t('ask')}</span>${ic('up')}</button>`;
+  return { cls: '', label: 'Jarvis Now', html: `<div class="nw lg"><div class="hd">${orb(52, os)}${phrase}</div><div class="list">${list}</div><div class="row">${ask}${mic}</div>${fr}</div>` };
+}
+
+/* ---------- Factory board ---------- */
+const COLS = [['run', 'running', 'ac'], ['needs', 'needs', 'ac'], ['rev', 'review', ''], ['fail', 'failed', 'bad']];
+function pipeHTML(c, st) {
+  if (st === 'loading') return `<div class="pipe">${COLS.map(() => '<span class="pc sk"></span>').join('')}</div>`;
+  return `<div class="pipe">${COLS.map(([k, l, cl]) => `<button class="pc ${c[k] ? cl : 'z'}" data-do="col" data-label="${t(l)}"><span class="n">${c[k]}</span><span class="l">${t(l)}</span></button>`).join('')}</div>`;
+}
+const ORDER = { needs_dan: 0, in_progress: 1, failed: 2, in_review: 3, done: 4 };
+function rowHTML(k, dis) {
+  const a = S.acts[k.id];
+  const open = btn('', 'open', t('open'), `data-do="open" data-label="${esc(k.title)}"`, { only: true });
+  const small = (cl, icon, txt) => `<small class="${cl}">${icon ? ic(icon, icon === 'spin' ? 'spin' : '') : ''}<span class="t">${txt}</span></small>`;
+  let sub, acts;
+  if (a && a.phase === 'pending') {
+    sub = small('', 'spin', t(a.kind === 'approve' ? 'sending' : a.kind === 'pause' ? 'pauseReq' : a.kind === 'retry' ? 'retrying' : 'sending'));
+    acts = btn('', 'spin', t('sending'), '', { dis: true, only: true, spin: true });
+  } else if (a && a.phase === 'ok') {
+    sub = small('ac', 'check', t(a.kind === 'approve' ? 'approved' : a.kind === 'pause' ? 'paused' : a.kind === 'resume' ? 'resumed' : 'running'));
+    acts = open;
+  } else if (a && a.phase === 'failed') {
+    sub = small('bad', 'alert', t('notDone'));
+    acts = btn('bad', 'refresh', t('retry'), `data-do="act" data-k="${a.kind}" data-id="${k.id}"`) + open;
+  } else if (k.col === 'needs_dan') {
+    sub = small('ac', 'clock', t('expires', { x: k.confirm.expires }));
+    acts = btn('pri', 'check', t('approve'), `data-do="act" data-k="approve" data-id="${k.id}"`, { dis }) + open;
+  } else if (k.col === 'in_progress') {
+    sub = small('', '', `${agent(k)} · ${k.paused ? t('paused') : t(k.act) + ' · ' + el(k.el)}`);
+    acts = (k.paused ? btn('pri', 'play', t('resume'), `data-do="act" data-k="resume" data-id="${k.id}"`, { dis }) : btn('', 'pause', t('pause'), `data-do="act" data-k="pause" data-id="${k.id}"`, { dis, only: true })) + open;
+  } else if (k.col === 'failed') {
+    sub = small('bad', 'alert', t('failed') + ' · ' + t('crashed'));
+    acts = btn('bad', 'refresh', t('retry'), `data-do="act" data-k="retry" data-id="${k.id}"`, { dis, only: true }) + open;
+  } else if (k.col === 'in_review') {
+    sub = small('', 'pr', t('inReview', { x: '#' + k.pr }));
+    acts = open;
+  } else {
+    sub = small('ac', 'check', t('done'));
+    acts = open;
+  }
+  return `<div class="tr"><span class="tx"><b>${esc(k.title)}</b>${sub}</span><span class="acts">${acts}</span></div>`;
+}
+function factoryW(sz, st) {
+  const live = st !== 'empty' && st !== 'loading' && st !== 'error';
+  const c = live || st === 'loading' ? agg() : ZERO, dis = st === 'stale' || st === 'offline';
+  const os = orbState(st, c);
+  const n = sz === 'm' ? 2 : 5;
+  const tasks = live ? [...S.tasks].sort((a, b) => ORDER[a.col] - ORDER[b.col]).slice(0, n) : [];
+  const fr = fresh(st === 'empty' ? 'live' : st, sz === 'm');
+  let body;
+  if (st === 'loading') body = Array.from({ length: n }, () => `<div class="tr"><span class="tx" style="gap:5px"><span class="sk" style="height:13px;width:62%"></span><span class="sk" style="height:11px;width:40%"></span></span><span class="sk" style="width:80px;height:36px;border-radius:12px"></span></div>`).join('');
+  else if (st === 'error') body = `<div class="empty">${ic('alert')}<span>${t('err')}</span>${btn('pri', 'refresh', t('retry'), 'data-do="refresh"')}</div>`;
+  else if (st === 'empty') body = `<div class="empty"><span>${t('noTasks')}</span>${btn('pri', 'plus', t('newTask'), 'data-do="newtask"')}</div>`;
+  else body = tasks.map((k) => rowHTML(k, dis)).join('');
+  const pipe = st === 'error' ? '' : pipeHTML(c, st);
+  const rows = st === 'error' || st === 'empty' ? body : `<div class="rows">${body}</div>`;
+  if (sz === 'm') return { cls: 'pad12', label: t('factory'), html: `<div class="fw md">${pipe}${rows}<div class="ft">${fr}</div></div>` };
+  return { cls: 'pad12', label: t('factory'), html: `<div class="fw lg"><div class="hd">${orb(24, os)}<b>${t('factory')}</b>${fr}</div>${pipe}${rows}</div>` };
+}
+
+/* ---------- Health and gym ---------- */
+function rings(size, sw, ctr) {
+  const h = S.health, v = [h.steps / h.stepsGoal, h.gym / h.gymGoal, h.run / h.runGoal];
+  const r1 = (size - sw) / 2, rs = [r1, r1 - sw - 2, r1 - 2 * (sw + 2)], cl = ['r-st', 'r-gy', 'r-rn'];
+  const c = size / 2;
+  const g = rs.map((r, i) => { const C = 2 * Math.PI * r; return `<circle class="bg" cx="${c}" cy="${c}" r="${r}" stroke-width="${sw}"/><circle class="pg ${cl[i]}" cx="${c}" cy="${c}" r="${r}" stroke-width="${sw}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - Math.min(1, v[i]))).toFixed(1)}"/>`; }).join('');
+  return `<span class="rings" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true">${g}</svg>${ctr || ''}</span>`;
+}
+function healthPhrase(sz) {
+  const h = S.health, left = Math.max(0, h.stepsGoal - h.steps), s = num(left);
+  if (sz === 's') return t(left ? 'hPhS' : 'hPhSGoal', { s });
+  if (!left) return t('hPhGoal', { g: h.gym, t: h.gymGoal });
+  return t(h.gym >= h.gymGoal ? 'hPhDone' : 'hPh', { g: h.gym, t: h.gymGoal, s });
+}
+function liftBtns(sz, off) {
+  const L = S.lift, h = S.health.lift, s = sz === 's';
+  const lab = s ? `${h.kg} kg ${h.reps}×${h.sets}` : `${h.ex} ${h.kg} kg · ${h.reps}×${h.sets}`;
+  if (L.phase === 'armed') return btn('pri fill', s ? '' : 'check', lab, 'data-do="liftgo"', { aria: `${t('logLift')}: ${lab}` }) + btn('', 'x', t('cancel'), 'data-do="liftcancel"', { only: true });
+  if (L.phase === 'pending') return btn('fill', 'spin', t('saving'), '', { dis: true, spin: true, only: s, aria: t('saving') });
+  if (L.phase === 'ok') return btn('ok fill', 'check', t('saved'), '', { dis: true, only: s, aria: t('saved') });
+  if (L.phase === 'failed') return btn('bad fill', 'alert', t('notSaved'), 'data-do="liftgo"', { only: s, aria: t('notSaved') + ' – ' + t('retry') }) + btn('', 'refresh', t('retry'), 'data-do="liftgo"', { only: true });
+  return btn('pri fill', 'lift', t('logLift'), 'data-do="lift"', { dis: off, only: s }) + btn('fill', 'run', t('logWorkout'), 'data-do="workout"', { dis: off, only: s });
+}
+function healthW(sz, st) {
+  const h = S.health, off = st === 'offline';
+  const ok = st !== 'empty' && st !== 'loading' && st !== 'error';
+  const dim = st === 'stale' ? 'dim' : '';
+  const fr = fresh(st, true, sz === 's');
+  const legend = `<span>${ic('steps')}${num(h.steps)}</span><span>${ic('lift')}${h.gym}/${h.gymGoal}</span><span>${ic('run')}${h.run}/${h.runGoal}</span>`;
+  const chip = `<span class="chip ac">${ic('flame')}${t(sz === 's' ? 'streakS' : 'streak', { n: h.streak })}</span>`;
+  if (sz === 's') {
+    let inner;
+    if (st === 'loading') inner = `<div class="r1"><span class="sk" style="width:56px;height:56px;border-radius:50%"></span><span class="sk" style="height:20px;width:60px"></span></div>${sk(2, 12, [100, 60])}`;
+    else if (st === 'error') inner = `<div class="empty">${ic('alert')}<span>${t('err')}</span></div><div class="btns">${btn('pri fill', 'refresh', t('retry'), 'data-do="refresh"')}</div>`;
+    else if (st === 'empty') inner = `<div class="empty"><span>${t('noData')}</span></div><div class="btns">${btn('pri fill', 'heart', t('openHealth'), 'data-do="openhealth"', { only: true })}</div>`;
+    else inner = `<div class="r1">${rings(56, 6)}<div class="c1">${chip}<span>${fr}</span></div></div><p class="ph ${dim}">${acc(healthPhrase('s'))}</p><div class="btns">${liftBtns('s', off)}</div>`;
+    return { cls: 'pad12', label: t('health'), html: `<div class="hw sm">${inner}</div>` };
+  }
+  const ctr = `<span class="ctr"><b>${num(h.steps)}</b><small>${t('steps')}</small></span>`;
+  let side;
+  if (st === 'loading') side = `<div class="hd"><span class="sk" style="height:14px;width:60px"></span></div>${sk(2, 12, [100, 70])}<div class="btns"><span class="sk" style="height:36px;flex:1;border-radius:12px"></span><span class="sk" style="height:36px;flex:1;border-radius:12px"></span></div>`;
+  else if (st === 'error') side = `<div class="empty">${ic('alert')}<span>${t('err')}</span>${btn('pri', 'refresh', t('retry'), 'data-do="refresh"')}</div>`;
+  else if (st === 'empty') side = `<div class="empty"><span>${t('noData')}</span>${btn('pri', 'heart', t('openHealth'), 'data-do="openhealth"')}</div>`;
+  else side = `<div class="hd"><b>${t('health')}</b>${chip}</div><p class="ph ${dim}">${acc(healthPhrase('m'))}</p><div class="legend">${legend}</div><div class="btns">${liftBtns('m', off)}</div>`;
+  const rg = st === 'loading' ? `<span class="sk" style="width:112px;height:112px;border-radius:50%;margin-top:9px"></span>` : st === 'empty' || st === 'error' ? rings0(112) : rings(112, 10, ctr);
+  return { cls: '', label: t('health'), html: `<div class="hw md"><div style="display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;flex:none">${rg}${fr}</div><div class="col">${side}</div></div>` };
+}
+function rings0(size) {
+  const sw = 10, r1 = (size - sw) / 2, rs = [r1, r1 - sw - 2, r1 - 2 * (sw + 2)];
+  return `<span class="rings" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true">${rs.map((r) => `<circle class="bg" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-width="${sw}"/>`).join('')}</svg></span>`;
+}
+</script>
+<script>
+/* ===== Widgets, part 2: accessories, controls, Live Activity, page, behaviour ===== */
+Object.assign(D, {
+  date: ['mandag 2. november', 'Monday 2 November'], ctlLbl: ['Jarvis', 'Jarvis']
+});
+let GST = 'live', FAIL = false;
+const pct = (v) => Math.round(Math.min(1, v) * 100);
+
+/* ---------- Lock Screen accessories ---------- */
+function axHTML(kind, st) {
+  const live = st !== 'empty' && st !== 'loading' && st !== 'error';
+  const c = live ? agg() : ZERO, h = S.health;
+  const dim = st === 'stale' || st === 'offline' ? ' dim' : '';
+  const left = Math.max(0, h.stepsGoal - h.steps);
+  const wrap = (inner, label, to) => `<button class="axb axw" type="button" data-do="open" data-label="${esc(to)}" aria-label="${esc(label)}">${inner}</button>`;
+  const pool = live ? nowPool() : [];
+  if (kind.startsWith('now')) {
+    const os = orbState(st, c);
+    const l1 = !live ? (st === 'error' ? t('err') : st === 'empty' ? t('axAll') : '') : c.needs ? t('axNow', { n: c.needs }) : c.run ? t('axRun', { n: c.run }) : t('axAll');
+    const l2 = st === 'offline' ? t('offline', { x: hm(S.upd) }) : st === 'stale' ? t('staleS', { x: hm(S.stale) }) : live && pool[0] ? pool[0].title : '';
+    if (kind === 'now-c') {
+      const inner = st === 'loading' ? `<span class="sk" style="width:40px;height:40px;border-radius:50%"></span>` : st === 'error' ? ic('alert') : `${orb(42, os)}${live && c.needs ? `<span class="cnt">${c.needs}</span>` : ''}`;
+      return wrap(`<div class="ac-c${dim}">${inner}</div>`, `Jarvis: ${l1 || t('loading')}`, 'Jarvis');
+    }
+    if (kind === 'now-r') {
+      const tx = st === 'loading' ? `<span class="tx" style="flex:1"><span class="sk" style="height:12px;width:80%;margin-bottom:6px"></span><span class="sk" style="height:10px;width:55%"></span></span>` : `<span class="tx">${esc(l1)}<span class="mut">${esc(l2)}</span></span>`;
+      return wrap(`<div class="ac-r now${dim}">${st === 'error' ? ic('alert') : orb(36, os)}${tx}</div>`, `Jarvis: ${l1} ${l2}`.trim(), 'Jarvis');
+    }
+    const icon = st === 'loading' ? 'spin' : st === 'error' ? 'alert' : st === 'offline' ? 'wifi-off' : st === 'stale' ? 'refresh' : c.needs ? 'clock' : c.run ? 'play' : 'check';
+    const txt = st === 'stale' ? hm(S.stale) : st === 'loading' ? '…' : st === 'error' ? '–' : l1;
+    return wrap(`<span class="ac-i${dim}">${ic(icon, icon === 'spin' ? 'spin' : '')}${esc(txt)}</span>`, `Jarvis: ${txt}`, 'Jarvis');
+  }
+  const ok = st !== 'empty' && st !== 'loading' && st !== 'error';
+  if (kind === 'health-c') {
+    const inner = st === 'loading' ? `<span class="sk" style="width:60px;height:60px;border-radius:50%"></span>` : st === 'error' ? ic('alert') : st === 'empty' ? ic('heart') : rings(76, 5);
+    return wrap(`<div class="ac-c${dim}">${inner}</div>`, `${t('health')}: ${h.gym}/${h.gymGoal}`, t('health'));
+  }
+  if (kind === 'health-r') {
+    const ln = (icon, v, label) => `<span class="ln">${ic(icon)}<span class="bar"><i style="width:${pct(v)}%"></i></span>${label}</span>`;
+    const inner = st === 'loading' ? `<span class="sk" style="height:12px;width:50%"></span><span class="sk" style="height:8px;width:90%"></span><span class="sk" style="height:8px;width:75%"></span>` : st === 'error' ? `<b>${t('health')}</b><span class="ln">${ic('alert')}${t('err')}</span>` : st === 'empty' ? `<b>${t('health')}</b><span class="ln">${t('noData')}</span>` : `<b>${t('health')}</b>${ln('steps', h.steps / h.stepsGoal, num(h.steps))}${ln('lift', h.gym / h.gymGoal, h.gym + '/' + h.gymGoal)}`;
+    return wrap(`<div class="ac-r${dim}">${inner}</div>`, `${t('health')}: ${num(h.steps)} ${t('steps')}, ${h.gym}/${h.gymGoal}`, t('health'));
+  }
+  const icon = st === 'loading' ? 'spin' : st === 'error' ? 'alert' : st === 'offline' ? 'wifi-off' : st === 'stale' ? 'refresh' : 'lift';
+  const txt = st === 'loading' ? '…' : st === 'error' ? '–' : st === 'empty' ? t('noData') : `${h.gym}/${h.gymGoal} · ${t('axStep', { s: num(left) })}`;
+  return wrap(`<span class="ac-i${dim}">${ic(icon, icon === 'spin' ? 'spin' : '')}${esc(txt)}</span>`, `${t('health')}: ${txt}`, t('health'));
+}
+
+/* ---------- Controls ---------- */
+const CT = {
+  note: { ic: 'note', k: 'ctlNote', s: 'ctlNoteS', b: 'ctlNoteB', d: 'ctlNoteD' },
+  task: { ic: 'task', k: 'ctlTask', s: 'ctlTaskS', b: 'ctlTaskB', d: 'ctlTaskD' },
+  talk: { ic: 'mic', k: 'ctlTalk', s: 'ctlTalkS', b: 'ctlTalkB', d: 'ctlTalkD' }
+};
+function ctlHTML(id, kind, force, side) {
+  const c = CT[id], ph = force || S.ctl[id].phase, pressed = ph === 'pressed', p = pressed ? 'idle' : ph;
+  const icon = p === 'busy' ? 'spin' : p === 'done' ? 'check' : p === 'err' ? 'alert' : p === 'signedout' ? 'lock' : c.ic;
+  const sub = p === 'busy' ? t(c.b) : p === 'done' ? t(c.d) : p === 'err' ? t('ctlErr') : p === 'signedout' ? t('ctlOut') : t(c.s);
+  const cls = `${p}${pressed ? ' pressed' : ''}`, label = `${t(c.k)}, ${sub}`;
+  const open = force ? 'div role="img"' : `button type="button" data-do="ctl" data-id="${id}" ${p === 'idle' ? '' : 'aria-disabled="true"'}`;
+  const end = force ? 'div' : 'button';
+  if (kind === 'ls') return `<${open} class="ls-ctl btn glass ${side} ${cls}" aria-label="${esc(label)}">${ic(icon, icon === 'spin' ? 'spin' : '')}</${end}>`;
+  if (kind === 'tile1') return `<${open} class="ct ${cls}" aria-label="${esc(label)}">${ic(icon)}</${end}>`;
+  return `<${open} class="ct w2 ${cls}" aria-label="${esc(label)}">${ic(icon)}<span class="tx"><b>${t(c.k)}</b><small>${sub}</small></span></${end}>`;
+}
+const AB = ['note', 'task', 'talk'];
+function abList() {
+  return `<div class="ab-h">${t('abTitle')}</div><div class="ab-list" role="radiogroup" aria-label="${t('abTitle')}">${AB.map((id) => `<button type="button" role="radio" class="ab-row" aria-checked="${S.ab === id}" data-do="abset" data-id="${id}">${ic(CT[id].ic)}<span>${t(CT[id].k)}</span><span class="tick">${ic('check')}</span></button>`).join('')}</div>`;
+}
+function abIsland() {
+  const c = CT[S.ab], p = S.ctl[S.ab].phase;
+  if (p === 'idle') return '<i class="island"></i>';
+  const icon = p === 'busy' ? 'spin' : p === 'done' ? 'check' : 'alert';
+  return `<i class="island res">${ic(icon, p === 'busy' ? 'spin' : '')}<span>${p === 'busy' ? t(c.b) : p === 'done' ? t(c.d) : t('ctlErr')}</span></i>`;
+}
+
+/* ---------- Live Activity and Dynamic Island ---------- */
+const laKey = (L) => (L.stale ? 'stale' : L.phase === 'waiting' ? (L.sub || 'merge') : L.phase);
+function laHTML(kind, fixedKey, abs) {
+  const live = !fixedKey, L = S.la, key = fixedKey || laKey(L);
+  const pend = live && L.pend ? L.pend : '', err = live && L.err ? L.err : '';
+  const merge = key === 'merge', fail = key === 'failed';
+  const task = merge ? 'Fix login redirect' : fail ? 'Refresh token fix' : 'Update help page text';
+  const ag = merge || fail ? 'Copilot' : 'Codex';
+  const M = {
+    running: { os: 'thinking', sub: `${ag} · ${t('wRunningAct')}`, chip: ['', 'play', t('running')], tm: el(240), g: el(240), gi: 'play' },
+    merge: { os: 'needs', sub: t('laMerge', { x: task }), wrap: 1, chip: ['ac', 'clock', '17:47'], tm: '', g: '17:47', gi: 'clock', cl: t('expires', { x: '17:47' }) },
+    paused: { os: 'idle', sub: `${ag} · ${t('paused')}`, chip: ['', 'pause', t('paused')], tm: mm(252), g: mm(252), gi: 'pause' },
+    done: { os: 'idle', sub: t('laDone'), chip: ['ac', 'check', t('done')], tm: mm(318), g: mm(318), gi: 'check' },
+    failed: { os: 'lost', sub: `${ag} · ${t('crashed')}`, chip: ['bad', 'alert', t('failed')], tm: '', g: '', gi: 'alert' },
+    stale: { os: 'lost', sub: t('laLocal'), wrap: 1, chip: ['', 'refresh', t('laStale')], tm: '', g: '', gi: 'refresh' }
+  }[key];
+  const lbl = `${t('laTitle')}: ${task}`;
+  if (kind === 'compact') return `<button class="axb" type="button" style="border-radius:19px" data-do="open" data-label="${esc(task)}" aria-label="${esc(lbl)}"><div class="isl-c2">${orb(22, M.os)}<span class="r">${ic(M.gi)}${M.g}</span></div></button>`;
+  if (kind === 'minimal') return `<button class="axb" type="button" style="border-radius:50%" data-do="open" data-label="${esc(task)}" aria-label="${esc(lbl)}"><span class="isl-m2">${orb(24, M.os)}</span></button>`;
+  const openB = `<button class="lb sm" type="button" data-do="open" data-label="${esc(task)}" aria-label="${t('open')}">${ic('open')}</button>`;
+  const act = (k, cls, icon, label) => {
+    if (pend === k) return `<button class="lb ${cls}" type="button" aria-disabled="true">${ic('spin', 'spin')}<span>${t('sending')}</span></button>`;
+    if (err === k) return `<button class="lb bad" type="button" data-do="la" data-k="${k}">${ic('alert')}<span>${t('notDone')}</span></button>`;
+    return `<button class="lb ${cls}" type="button" data-do="la" data-k="${k}">${ic(icon)}<span>${label}</span></button>`;
+  };
+  const full = `<button class="lb" type="button" data-do="open" data-label="${esc(task)}">${ic('open')}<span>${t('open')}</span></button>`;
+  const btns = { running: act('pause', '', 'pause', t('pause')) + openB, merge: act('approve', 'pri', 'check', t('approve')) + openB, paused: act('resume', 'pri', 'play', t('resume')) + openB, done: full, failed: act('retry', 'pri', 'refresh', t('retry')) + openB, stale: full }[key];
+  const hd = `<div class="hd">${orb(46, M.os)}<span class="tx"><small>${t('laTitle')}</small><b>${esc(task)}</b><span class="${M.wrap ? 'wrap' : ''}">${esc(M.sub)}</span></span><span class="side">${M.tm ? `<span class="tm">${M.tm}</span>` : ''}<span class="ph-chip ${M.chip[0]}"${M.cl ? ` aria-label="${esc(M.cl)}"` : ''}>${ic(M.chip[1])}${M.chip[2]}</span></span></div>`;
+  const cls = kind === 'expanded' ? 'la2 dark isl-x2' : `la2 glass${abs ? ' abs' : fixedKey ? ' lacard' : ''}`;
+  return `<div class="${cls}" role="group" aria-label="${esc(lbl)}" lang="${lang()}">${hd}<div class="btns">${btns}</div></div>`;
+}
+
+/* ---------- Mount rendering ---------- */
+const OV = {
+  work: () => { S.tasks = S.tasks.filter((k) => k.col === 'in_progress' || k.col === 'in_review'); S.items = []; },
+  pend: () => { S.acts = { 128: { kind: 'approve', phase: 'pending' }, 490: { kind: 'pause', phase: 'pending' } }; },
+  ok: () => { S.acts = { 128: { kind: 'approve', phase: 'ok' }, 490: { kind: 'pause', phase: 'ok' } }; },
+  fail: () => { S.acts = { 128: { kind: 'approve', phase: 'failed' }, 490: { kind: 'pause', phase: 'failed' } }; },
+  armed: () => { S.lift.phase = 'armed'; },
+  lpend: () => { S.lift.phase = 'pending'; },
+  lok: () => { S.lift.phase = 'ok'; S.health.gym += 1; },
+  lfail: () => { S.lift.phase = 'failed'; }
+};
+function mountHTML(m) {
+  const ov = m.dataset.ov;
+  if (!ov) return mountHTML0(m);
+  const keep = S;
+  S = JSON.parse(JSON.stringify(S));
+  try { OV[ov](); return mountHTML0(m); } finally { S = keep; }
+}
+function mountHTML0(m) {
+  const d = m.dataset, st = d.st || GST;
+  if (d.w) {
+    const r = ({ now: nowW, factory: factoryW, health: healthW })[d.w](d.sz, st);
+    return `<div class="w ${d.sz} ${r.cls}" lang="${lang()}" role="group" aria-label="${esc(r.label)}">${r.html}</div>`;
+  }
+  if (d.ax) return axHTML(d.ax, st);
+  if (d.ctl) return ctlHTML(d.ctl, d.kind, d.force || '', d.side || '');
+  if (d.la) return laHTML(d.la, d.lak || '', d.abs);
+  if (d.dt !== undefined) return `<div class="ls-date">${t('date')}</div>`;
+  if (d.ab === 'list') return abList();
+  if (d.ab === 'isl') return abIsland();
+  return '';
+}
+let MOUNTS = [];
+const scanOrbs = (m) => { if (window.JarvisOrbs) window.JarvisOrbs.scan(m); };
+function stamp() {
+  $$('.w, .stage, .hs').forEach((e) => { const s = e.closest('[data-wm]'); e.dataset.m = s ? s.dataset.wm : 'full'; });
+}
+function updateTimers() {
+  const s = (Date.now() - T0) / 1000;
+  $$('.el[data-el]').forEach((e) => { e.textContent = mm(Math.max(0, Number(e.dataset.el) + s)); });
+}
+function focusKey() {
+  const a = document.activeElement;
+  if (!a || !a.dataset || !a.dataset.do) return null;
+  const m = a.closest('.wm');
+  return m ? { i: MOUNTS.indexOf(m), d: a.dataset.do, id: a.dataset.id || '', k: a.dataset.k || '' } : null;
+}
+function restoreFocus(f) {
+  if (!f || f.i < 0) return;
+  const m = MOUNTS[f.i];
+  const q = [...m.querySelectorAll('[data-do]')];
+  const hit = q.find((e) => e.dataset.do === f.d && (e.dataset.id || '') === f.id && (e.dataset.k || '') === f.k) || q.find((e) => e.dataset.do === f.d && (e.dataset.id || '') === f.id);
+  if (hit && hit !== document.activeElement) hit.focus({ preventScroll: true });
+}
+function renderAll(o = {}) {
+  const f = focusKey(), changed = [];
+  MOUNTS.forEach((m) => {
+    if (m.hasAttribute('data-fixed') && !o.all) return;
+    if (m.closest('[data-lazy]:not([data-on])')) return;
+    const h = mountHTML(m);
+    if (m._h === h) return;
+    m._h = h;
+    m.innerHTML = h;
+    changed.push(m);
+    if (o.fade) { const c = m.querySelector('.w > *'); if (c) c.classList.add('fix'); }
+  });
+  stamp(); updateTimers();
+  changed.forEach(scanOrbs);
+  restoreFocus(f);
+  syncPills();
+}
+function syncPills() {
+  const k = laKey(S.la);
+  $$('[data-pla]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pla === k)));
+}
+
+/* ---------- Page ---------- */
+const mw = (w, sz, x = '') => `<div class="wm" data-w="${w}" data-sz="${sz}" ${x}></div>`;
+const mx = (a, x = '') => `<div class="wm" data-ax="${a}" ${x}></div>`;
+const mc = (id, kind, x = '') => `<div class="wm" data-ctl="${id}" data-kind="${kind}" ${x}></div>`;
+const ml = (kind, x = '') => `<div class="wm" data-la="${kind}" ${x}></div>`;
+const cellOf = (mount, lab, fixed) => `<div class="wcell"${fixed ? ' inert' : ''}>${mount}<span class="wlab">${lab}</span></div>`;
+const SZL = { s: 'Small · 158 × 158 pt', m: 'Medium · 338 × 158 pt', l: 'Large · 338 × 354 pt' };
+const STS = [['live', 'Live'], ['stale', 'Stale'], ['loading', 'Loading'], ['empty', 'Empty'], ['error', 'Error'], ['offline', 'Offline']];
+const pills = (attr, items, cur, aria) => `<div class="pills" role="group" aria-label="${aria}">${items.map(([v, l]) => `<button type="button" data-${attr}="${v}" aria-pressed="${v === cur}">${l}</button>`).join('')}</div>`;
+const sec = (id, h, pill, body, lazy) => `<section class="wsec" id="${id}"${lazy ? ' data-lazy' : ''}><div class="wsec-h"><h2>${h}</h2>${pill || ''}</div>${body}</section>`;
+const app = (n) => `<span class="appi">${ic(n)}</span>`;
+const jarv = `<button class="appi j" type="button" data-do="open" data-label="Jarvis" aria-label="Jarvis">${orb(44, 'idle')}</button>`;
+const apps = (...x) => `<div class="appr">${x.join('')}</div>`;
+const dock = `<div class="dots"><i class="on"></i><i></i><i></i></div><div class="dock">${app('code')}${app('flash')}${app('camera')}${app('scan-face')}</div>`;
+function phone(cap, desc, inner, o = {}) {
+  return `<figure class="fig" style="--s:${o.s || .8}${o.fh ? `;--fh:${o.fh}px` : ''}"><div class="frame"><div class="screen hs hs-wall${o.ls ? ' ls' : ''}">${o.island || '<i class="island"></i>'}<div class="sbar"><span>${o.ls ? '' : '17:42'}</span><span class="batt"></span></div>${inner}<i class="home"></i><div class="launch" inert></div></div>${o.frame || ''}</div><figcaption><h2>${cap}</h2><p>${desc}</p></figcaption></figure>`;
+}
+const N = {
+  now: `<h3>Refresh strategy</h3>
+    <p><b>Push:</b> the backend sends a WidgetKit push (<code>WidgetPushHandler</code>) when <code>NowFeed</code> or a <code>FactoryTask</code> / <code>PendingConfirmation</code> changes. The phrase, orb state and the next three things are rebuilt from the new snapshot.</p>
+    <p><b>App Intent:</b> the mic runs an App Intent that opens Jarvis and starts voice. Widgets cannot take text, so Ask Jarvis deep-links into chat.</p>
+    <p><b>Schedule:</b> a fallback entry about every 15 min. Times and timers use <code>Text(date, style:)</code> and tick without reloads. After the last known update the widget shows the stale design.</p>`,
+  factory: `<h3>Refresh strategy</h3>
+    <p><b>Push:</b> reloads whenever a <code>FactoryTask</code> changes column (<code>needs_dan</code>, <code>in_progress</code>, <code>in_review</code>, <code>failed</code>) or a <code>PendingConfirmation</code> is created or expires.</p>
+    <p><b>App Intent:</b> Approve, Pause, Resume and Retry are <code>Button(intent:)</code>. The intent writes a pending entry first, calls the API without opening the app, then reloads the timeline with confirmed or failed. Failed rows keep a retry.</p>
+    <p><b>Schedule:</b> fallback about every 15 min. Approve on the Lock Screen should require authentication.</p>`,
+  health: `<h3>Refresh strategy</h3>
+    <p><b>No push:</b> health data lives on the phone. HealthKit background delivery and a schedule reload the timeline; goals come from <code>JarvisHealthTargets</code>. The streak has no model field, so it is derived on the phone.</p>
+    <p><b>App Intent:</b> Log lift is two steps (arm, then confirm) because a widget tap fires at once. It maps to <code>createLift(JarvisLiftDraft)</code> with an idempotency key. Log workout opens the app (<code>health.trackWorkout</code>); no create endpoint exists yet.</p>`,
+  lock: `<h3>Lock Screen accessories</h3>
+    <p>Accessories render in vibrant monochrome, so hierarchy comes from opacity and shape, not colour. Circular is about 76 × 76 pt and rectangular about 172 × 76 pt. Tapping opens the app.</p>
+    <p><b>Refresh:</b> Now follows the push and schedule of the Home Screen widget. Health follows HealthKit delivery and a schedule.</p>`,
+  controls: `<h3>Controls</h3>
+    <p>iOS 18 <code>ControlWidget</code> buttons run an App Intent from Control Centre, the Lock Screen or the Action Button. The busy indicator is drawn by the system; custom Saved and Created text needs a <code>ControlValueProvider</code> and <code>reloadControls</code>, with no timing guarantee.</p>
+    <p>Quick note and Quick task need dictation or an open-app capture step. Talk to Jarvis needs the app in the foreground to start a session.</p>`,
+  la: `<h3>Refresh strategy</h3>
+    <p><b>Push:</b> ActivityKit push-to-update tokens carry <code>ContentState</code> (<code>state</code>, <code>activity</code>, <code>phase</code>: running, waiting, done, failed, cancelled). <code>FactoryTaskActivityAttributes</code> holds <code>taskID</code>, <code>title</code>, <code>startedAt</code>, <code>language</code> and <code>factoryTitle</code>.</p>
+    <p><b>App Intent:</b> Pause, Resume, Approve and Retry are <code>LiveActivityIntent</code>s and run in the app process. The timer is <code>Text(timerInterval:)</code> and needs no updates.</p>
+    <p>Without a push token the activity goes stale while the app is suspended and offers Open only.</p>`,
+  states: `<p>Every widget in its loading, empty, error, offline and stale states. Stale keeps the data dimmed with a tap-to-refresh time; actions are disabled while stale or offline.</p>`,
+  modes: `<p>iOS 18 tinted mode recolours the whole widget with one tint: use <code>widgetAccentedRenderingMode</code> and a luminance-only orb image. Glass is the iOS 26 Liquid Glass look. Orange stays the accent in Standard.</p>`
+};
+function build() {
+  const hs1 = phone('Page 1', 'Now medium, Now small, Health small and Health medium.', `<div class="hb">${mw('now', 'm')}<div class="hr">${mw('now', 's')}${mw('health', 's')}</div>${mw('health', 'm')}${apps(app('camera'), app('clock'), app('note'), jarv)}</div>${dock}`);
+  const hs2 = phone('Page 2', 'Now large and the Factory board.', `<div class="hb">${mw('now', 'l')}${mw('factory', 'm')}${apps(app('code'), app('flash'), app('heart'), jarv)}</div>${dock}`);
+  const hs3 = phone('Page 3', 'Factory large with the two small widgets.', `<div class="hb">${mw('factory', 'l')}<div class="hr">${mw('now', 's')}${mw('health', 's')}</div>${apps(app('camera'), app('clock'), app('note'), jarv)}</div>${dock}`);
+  const home = sec('home', 'Home Screen', pills('pst', STS, GST, 'Widget state'), `<div class="wbody">${hs1}${hs2}${hs3}</div>`);
+
+  const sb = `<figure class="fig land" style="--s:.72"><div class="frame"><div class="screen pure sbscr force-dark" id="sbscr"><div class="sbwrap">${mw('now', 's')}${mw('health', 's')}</div></div></div><figcaption><h2>StandBy</h2><p>Small widgets scale up and drop their background. Night mode turns them red.</p><div class="sbtog">${pills('sb', [['day', 'Day'], ['night', 'Night']], 'day', 'StandBy mode')}</div></figcaption></figure>`;
+  const fx = (w, z, ov, lab) => cellOf(mw(w, z, `data-ov="${ov}" data-st="live" data-fixed`), lab, 1);
+  const now = sec('now', 'Jarvis Now', pills('pst', STS, GST, 'Widget state'), `<div class="wbody"><div class="stage"><div class="nowgrid"><div class="col">${cellOf(mw('now', 'm'), SZL.m)}<div class="pair">${cellOf(mw('now', 's'), 'Small · 158 × 158 pt')}${fx('now', 's', 'work', 'Small · working')}</div></div>${cellOf(mw('now', 'l'), SZL.l)}</div></div>${sb}<div class="wnote">${N.now}</div></div>`);
+  const fac = sec('factory', 'Factory board', pills('pst', STS, GST, 'Widget state'), `<div class="wbody"><div class="stage"><div class="nowgrid"><div class="col">${cellOf(mw('factory', 'm'), SZL.m)}${fx('factory', 'm', 'pend', 'Medium · after tap: sending')}</div>${cellOf(mw('factory', 'l'), SZL.l)}<div class="col">${fx('factory', 'm', 'ok', 'Medium · after tap: confirmed')}${fx('factory', 'm', 'fail', 'Medium · after tap: failed, retry')}</div></div></div><div class="wnote">${N.factory}</div></div>`);
+  const hea = sec('health', 'Health and gym', pills('pst', STS, GST, 'Widget state'), `<div class="wbody"><div class="stage"><div class="nowgrid">${cellOf(mw('health', 's'), SZL.s)}${cellOf(mw('health', 'm'), SZL.m)}<div class="pair">${fx('health', 's', 'armed', 'Small · lift armed')}${fx('health', 's', 'lpend', 'Small · saving')}${fx('health', 's', 'lok', 'Small · saved')}${fx('health', 's', 'lfail', 'Small · not saved')}</div></div></div><div class="wnote">${N.health}</div></div>`);
+
+  const lsA = phone('Lock Screen A', 'Jarvis Now accessories; Quick note and Talk controls.', `<div class="lsi">${mx('now-i')}</div><div class="wm" data-dt></div><div class="ls-time">17:42</div><div class="lsa">${mx('now-r')}${mx('now-c')}${mx('health-c')}</div>${mc('note', 'ls', 'data-side="l"')}${mc('talk', 'ls', 'data-side="r"')}`, { ls: 1 });
+  const lsB = phone('Lock Screen B', 'Health accessories; Quick task and Talk controls.', `<div class="lsi">${mx('health-i')}</div><div class="wm" data-dt></div><div class="ls-time">17:42</div><div class="lsa">${mx('health-r')}${mx('health-c')}${mx('now-c')}</div>${mc('task', 'ls', 'data-side="l"')}${mc('talk', 'ls', 'data-side="r"')}`, { ls: 1 });
+  const AXS = [['now-c', 'Now · circular'], ['now-r', 'Now · rectangular'], ['now-i', 'Now · inline'], ['health-c', 'Health · circular'], ['health-r', 'Health · rectangular'], ['health-i', 'Health · inline']];
+  const lock = sec('lock', 'Lock Screen', pills('pst', STS, GST, 'Widget state'), `<div class="wbody">${lsA}${lsB}<div class="stage" style="flex-direction:column;align-items:flex-start">${AXS.map(([a, l]) => cellOf(mx(a), l)).join('')}</div><div class="wnote">${N.lock}</div></div>`);
+
+  const cc = phone('Control Centre', 'Quick note, Quick task and Talk to Jarvis as controls.', `<div class="ccg"><i class="ph2"></i><i class="ph1"></i><i class="ph1"></i><i class="ph2"></i><i class="ph1"></i><i class="ph1"></i>${mc('note', 'tile')}${mc('task', 'tile')}${mc('talk', 'tile1')}<i class="ph1"></i><i class="ph1"></i><i class="ph1"></i></div>`, { fh: 640 });
+  const ab = phone('Action Button', 'Pick the control, then press the side button.', `<div class="wm" data-ab="list"></div>`, { island: '<div class="wm" data-ab="isl"></div>', fh: 400, frame: `<button class="ab-btn" type="button" data-do="abpress" aria-label="Action Button"></button>` });
+  const CPH = [['idle', 'Idle'], ['pressed', 'Pressed'], ['busy', 'Busy'], ['done', 'Done'], ['err', 'Failed'], ['signedout', 'Signed out']];
+  const spec = AB.map((id) => `<div class="cs-row">${CPH.map(([p, l]) => `<div class="cs-pair">${cellOf(mc(id, 'tile', `data-force="${p}" data-fixed`), l, 1)}${cellOf(mc(id, 'ls', `data-force="${p}" data-fixed data-side="l"`), '', 1)}</div>`).join('')}</div>`).join('');
+  const ctl = sec('controls', 'Controls', '', `<div class="wbody">${cc}${ab}<div class="stage" style="flex-direction:column;align-items:flex-start">${spec}</div><div class="wnote">${N.controls}</div></div>`);
+
+  const LAP = [['running', 'Running'], ['merge', 'Needs approval'], ['paused', 'Paused'], ['done', 'Done'], ['failed', 'Failed'], ['stale', 'Stale']];
+  const lsLA = phone('Lock Screen', 'Factory Live Activity with approve and pause.', `<div class="wm" data-dt></div><div class="ls-time">17:42</div>${ml('card', 'data-abs="1"')}`, { ls: 1 });
+  const isl = `<figure class="fig card la-fig" style="--s:.9"><div class="frame"><div class="screen card force-dark isl-demo"><div class="isl-row"><span class="isl-lab">Compact</span>${ml('compact')}</div><div class="isl-row"><span class="isl-lab">Minimal</span>${ml('minimal')}</div><div class="isl-row"><span class="isl-lab">Expanded</span>${ml('expanded')}</div></div></div><figcaption><h2>Dynamic Island</h2><p>Pick a phase above, or use the buttons.</p></figcaption></figure>`;
+  const la = sec('liveactivity', 'Live Activity', pills('pla', LAP, 'running', 'Live Activity phase'), `<div class="wbody">${lsLA}${isl}<div class="wnote">${N.la}</div></div>`);
+
+  const WS = [['now', 's'], ['now', 'm'], ['now', 'l'], ['factory', 'm'], ['factory', 'l'], ['health', 's'], ['health', 'm']];
+  const NM = { now: 'Jarvis Now', factory: 'Factory board', health: 'Health and gym' };
+  const mat = WS.map(([w, z]) => `<h3 class="ptitle">${NM[w]} · ${z === 's' ? 'small' : z === 'm' ? 'medium' : 'large'}</h3><div class="mrow"><div class="stage">${STS.map(([v, l]) => cellOf(mw(w, z, `data-st="${v}" data-fixed`), l, 1)).join('')}</div></div>`).join('')
+    + AXS.map(([a, l]) => `<h3 class="ptitle">${l}</h3><div class="mrow"><div class="stage">${STS.map(([v, s]) => cellOf(mx(a, `data-st="${v}" data-fixed`), s, 1)).join('')}</div></div>`).join('')
+    + `<h3 class="ptitle">Live Activity</h3><div class="mrow"><div class="stage">${LAP.map(([k, l]) => cellOf(ml('card', `data-lak="${k}" data-fixed`), l, 1)).join('')}</div></div><div class="mrow"><div class="stage">${LAP.map(([k, l]) => cellOf(ml('compact', `data-lak="${k}" data-fixed`), l, 1)).join('')}</div></div>`;
+  const states = sec('states', 'All states', '', `<div class="wbody"><div class="wnote" style="flex-basis:100%;max-width:none">${N.states}</div></div>${mat}`, 1);
+
+  const MD = [['full', 'Standard'], ['tint', 'Tinted'], ['glass', 'Glass']];
+  const mrows = MD.map(([md, ml_]) => ['dark', 'light'].map((th) => `<div class="stage force-${th}" data-wm="${md}"><span class="wlab lead">${ml_} · ${th === 'dark' ? 'Dark' : 'Light'}</span>${cellOf(mw('now', 's', 'data-st="live" data-fixed'), 'Now', 1)}${cellOf(mw('health', 's', 'data-st="live" data-fixed'), 'Health', 1)}${cellOf(mw('now', 'm', 'data-st="live" data-fixed'), 'Now', 1)}${cellOf(mw('factory', 'm', 'data-st="live" data-fixed'), 'Factory', 1)}${cellOf(mw('health', 'm', 'data-st="live" data-fixed'), 'Health', 1)}</div>`).join('')).join('');
+  const modes = sec('modes', 'Render modes', '', `<div class="wbody"><div class="wnote" style="flex-basis:100%;max-width:none">${N.modes}</div></div><div class="mrow" style="margin-top:14px">${mrows}</div>`, 1);
+  return home + now + fac + hea + lock + ctl + la + states + modes;
+}
+</script>
+<script>
+/* ===== Widgets, part 3: behaviour ===== */
+let toastT, lastSrc = null, liftT;
+function toast(msg) {
+  const e = $('#toast');
+  e.textContent = msg; e.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('on'), 2400);
+}
+const isScreen = (n) => n.classList && n.classList.contains('screen');
+const screenOf = (n) => (isScreen(n) ? n : n.closest('.screen') || (n.closest('.frame') && n.closest('.frame').querySelector('.screen')));
+function launch(src, kind, label) {
+  const scr = screenOf(src), l = scr && scr.querySelector(':scope > .launch');
+  if (!l) { toast(`Opens Jarvis: ${label}`); return; }
+  lastSrc = isScreen(src) ? null : src;
+  const mic = kind === 'mic';
+  l.innerHTML = `${orb(96, mic ? 'listening' : 'idle')}<b>${esc(label)}</b>${mic ? '<div class="wave"></div>' : ''}<button type="button" class="wb" data-do="unlaunch">${ic('x')}<span>${t('cancel')}</span></button>`;
+  const w = $('.wave', l);
+  if (w) for (let i = 0; i < 22; i += 1) { const b = document.createElement('i'); b.style.setProperty('--h', H[i % H.length]); b.style.setProperty('--n', i); w.append(b); }
+  scanOrbs(l);
+  l.inert = false; l.classList.add('on');
+  $('button', l).focus({ preventScroll: true });
+}
+function unlaunch(l) {
+  l.classList.remove('on'); l.inert = true;
+  if (lastSrc && lastSrc.isConnected) lastSrc.focus({ preventScroll: true });
+}
+const later = (fn, ms) => setTimeout(fn, ms);
+
+/* Factory row actions: pending, then confirmed or failed. */
+function applyAct(kind, k) {
+  if (kind === 'approve') k.col = 'done';
+  else if (kind === 'pause') k.paused = true;
+  else if (kind === 'resume') k.paused = false;
+  else if (kind === 'retry') { k.col = 'in_progress'; k.act = 'wRunningAct'; k.el = -(Date.now() - T0) / 1000; k.paused = false; }
+}
+function doAct(kind, id) {
+  const k = S.tasks.find((x) => x.id === id), cur = S.acts[id];
+  if (!k || (cur && cur.phase === 'pending')) return;
+  S.acts[id] = { kind, phase: 'pending' }; renderAll();
+  later(() => {
+    if (FAIL) {
+      S.acts[id] = { kind, phase: 'failed' }; renderAll();
+      later(() => { if (S.acts[id] && S.acts[id].phase === 'failed') { delete S.acts[id]; renderAll(); } }, 8000);
+      return;
+    }
+    S.acts[id] = { kind, phase: 'ok' }; S.upd = S.now; renderAll();
+    later(() => { applyAct(kind, k); delete S.acts[id]; renderAll(); }, 1400);
+  }, 900);
+}
+
+/* Controls: idle, busy, then done or failed. Talk hands over to the app. */
+function ctl(id, src) {
+  const c = S.ctl[id];
+  if (c.phase !== 'idle') return;
+  const scr = screenOf(src) || src;
+  c.phase = 'busy'; renderAll();
+  if (id === 'talk') { later(() => { c.phase = 'idle'; renderAll(); launch(scr, 'mic', t('listening')); }, 650); return; }
+  later(() => {
+    c.phase = FAIL ? 'err' : 'done'; renderAll();
+    later(() => { c.phase = 'idle'; renderAll(); }, FAIL ? 2200 : 1800);
+  }, 1100);
+}
+
+function laAct(k) {
+  const L = S.la;
+  if (L.pend) return;
+  L.pend = k; L.err = null; renderAll();
+  later(() => {
+    L.pend = null;
+    if (FAIL) { L.err = k; renderAll(); later(() => { if (L.err === k) { L.err = null; renderAll(); } }, 2500); return; }
+    if (k === 'pause') { L.phase = 'waiting'; L.sub = 'paused'; }
+    else if (k === 'approve') { L.phase = 'done'; L.sub = ''; }
+    else { L.phase = 'running'; L.sub = ''; }
+    renderAll();
+  }, 900);
+}
+
+function refresh(b) {
+  const m = b.closest('.wm');
+  if (!m || m.hasAttribute('data-fixed')) return;
+  m.dataset.st = 'loading'; renderAll();
+  later(() => { m.dataset.st = 'live'; S.upd = S.now; renderAll({ fade: true }); }, 800);
+}
+
+function liftTo(p) { S.lift.phase = p; renderAll(); }
+function liftGo() {
+  liftTo('pending');
+  later(() => {
+    if (FAIL) { liftTo('failed'); clearTimeout(liftT); liftT = later(() => { if (S.lift.phase === 'failed') liftTo('idle'); }, 8000); return; }
+    S.health.gym += 1; liftTo('ok');
+    later(() => liftTo('idle'), 1600);
+  }, 900);
+}
+
+/* Simulated backend pushes. */
+const PUSHES = [
+  ['Push: new approval, #495', () => { S.tasks.unshift({ id: 495, title: 'Add dark mode toggle', col: 'needs_dan', agent: 'copilot', confirm: { kind: 'merge', expires: '17:58' }, pr: 136 }); }],
+  ['Push: #493 is in review, Live Activity updated', () => { const k = S.tasks.find((x) => x.id === 493); k.col = 'in_review'; k.pr = 135; S.la.phase = 'done'; S.la.sub = ''; }],
+  ['Push: #490 failed', () => { const k = S.tasks.find((x) => x.id === 490); k.col = 'failed'; }],
+  ['Push: everything resolved', () => { S.tasks.forEach((k) => { k.col = 'done'; }); S.items = []; }]
+];
+function pushStep() {
+  const n = S.push;
+  if (n >= PUSHES.length) { S = SEED(); toast('Back to the sample data'); }
+  else { PUSHES[n][1](); S.push = n + 1; S.acts = {}; S.now += 2; S.upd = S.now; toast(PUSHES[n][0]); }
+  renderAll({ all: true, fade: true });
+}
+function resetAll() {
+  S = SEED(); GST = 'live';
+  MOUNTS.forEach((m) => { if (!m.hasAttribute('data-fixed')) delete m.dataset.st; });
+  $$('[data-pst]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pst === 'live')));
+  $$('.launch.on').forEach(unlaunch);
+  toast('Back to the sample data');
+  renderAll({ all: true });
+}
+
+document.addEventListener('click', (e) => {
+  const ps = e.target.closest('[data-pst]');
+  if (ps) {
+    const s = ps.closest('.wsec');
+    $$('[data-pst]', s).forEach((b) => b.setAttribute('aria-pressed', String(b === ps)));
+    $$('.wm:not([data-fixed])', s).forEach((m) => { if (m.dataset.w || m.dataset.ax) m.dataset.st = ps.dataset.pst; });
+    renderAll(); return;
+  }
+  const pl = e.target.closest('[data-pla]');
+  if (pl) { S.la = Object.assign({ pend: null, err: null }, LAK[pl.dataset.pla]); renderAll(); return; }
+  const sb = e.target.closest('[data-sb]');
+  if (sb) {
+    $$('[data-sb]').forEach((b) => b.setAttribute('aria-pressed', String(b === sb)));
+    $('#sbscr').classList.toggle('sb-night', sb.dataset.sb === 'night'); return;
+  }
+  const b = e.target.closest('[data-do]');
+  if (!b || b.getAttribute('aria-disabled') === 'true' || b.closest('[inert]')) return;
+  const d = b.dataset;
+  switch (d.do) {
+    case 'mic': launch(b, 'mic', t('listening')); break;
+    case 'ask': launch(b, 'ask', t('askAria')); break;
+    case 'open': case 'col': launch(b, 'open', d.label || 'Jarvis'); break;
+    case 'newtask': launch(b, 'open', t('newTask')); break;
+    case 'openhealth': launch(b, 'open', t('openHealth')); break;
+    case 'workout': launch(b, 'open', t('logWorkout')); break;
+    case 'refresh': refresh(b); break;
+    case 'act': doAct(d.k, Number(d.id)); break;
+    case 'lift': S.lift.phase = 'armed'; renderAll(); clearTimeout(liftT); liftT = later(() => { if (S.lift.phase === 'armed') liftTo('idle'); }, 6000); break;
+    case 'liftcancel': liftTo('idle'); break;
+    case 'liftgo': liftGo(); break;
+    case 'ctl': ctl(d.id, b); break;
+    case 'abset': S.ab = d.id; renderAll(); break;
+    case 'abpress': ctl(S.ab, b); break;
+    case 'la': laAct(d.k); break;
+    case 'unlaunch': unlaunch(b.closest('.launch')); break;
+    default: break;
+  }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $$('.launch.on').forEach(unlaunch); });
+
+function syncUrl() {
+  try {
+    const u = new URL(location.href);
+    const set = (k, v, def) => (v === def ? u.searchParams.delete(k) : u.searchParams.set(k, v));
+    set('lang', lang(), 'da'); set('theme', root.dataset.theme, 'dark'); set('wm', root.dataset.wm, 'full');
+    set('tint', root.dataset.tint, 'stone'); set('act', FAIL ? 'fail' : 'ok', 'ok');
+    history.replaceState(null, '', u);
+  } catch (err) { /* file URLs may refuse; the board still works */ }
+}
+const radio = (n, v) => { const i = $(`input[name="${n}"][value="${v}"]`); if (i) i.checked = true; };
+(function init() {
+  const P = new URLSearchParams(location.search);
+  const pick = (k, ok, def) => (ok.includes(P.get(k)) ? P.get(k) : def);
+  root.dataset.lang = pick('lang', ['da', 'en'], 'da');
+  root.dataset.theme = pick('theme', ['dark', 'light'], 'dark');
+  root.dataset.wm = pick('wm', ['full', 'tint', 'glass'], 'full');
+  root.dataset.tint = pick('tint', ['stone', 'orange', 'cyan', 'green'], 'stone');
+  GST = pick('state', STS.map((s) => s[0]), 'live');
+  FAIL = P.get('act') === 'fail';
+  radio('lang', lang()); radio('theme', root.dataset.theme); radio('wm', root.dataset.wm); radio('tint', root.dataset.tint); radio('act', FAIL ? 'fail' : 'ok');
+  $('#wroot').innerHTML = build();
+  MOUNTS = $$('.wm');
+  renderAll({ all: true });
+  const io = new IntersectionObserver((es) => {
+    es.forEach((en) => {
+      if (!en.isIntersecting) return;
+      en.target.setAttribute('data-on', ''); io.unobserve(en.target);
+      renderAll({ all: true });
+    });
+  }, { rootMargin: '700px 0px' });
+  $$('[data-lazy]').forEach((s) => io.observe(s));
+  $$('input[name="lang"]').forEach((i) => i.addEventListener('change', () => { root.dataset.lang = i.value; syncUrl(); renderAll({ all: true }); }));
+  $$('input[name="theme"]').forEach((i) => i.addEventListener('change', () => { root.dataset.theme = i.value; syncUrl(); }));
+  $$('input[name="wm"]').forEach((i) => i.addEventListener('change', () => { root.dataset.wm = i.value; stamp(); syncUrl(); }));
+  $$('input[name="tint"]').forEach((i) => i.addEventListener('change', () => { root.dataset.tint = i.value; syncUrl(); }));
+  $$('input[name="act"]').forEach((i) => i.addEventListener('change', () => { FAIL = i.value === 'fail'; syncUrl(); }));
+  $('#b-push').addEventListener('click', pushStep);
+  $('#b-reset').addEventListener('click', resetAll);
+  setInterval(updateTimers, 1000);
+  if (location.hash) { const t0 = $(location.hash); if (t0) t0.scrollIntoView(); }
+})();
+</script>
+</body>
+</html>
