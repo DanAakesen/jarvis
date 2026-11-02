@@ -225,6 +225,9 @@ final class JarvisTodayModel: ObservableObject {
             }
         }
         if let error = error as? JarvisGymLogError, error == .unavailable { return .unavailable }
+        if let error = error as? JarvisClientError, error == .networkFailure || error == .timedOut {
+            return .offline
+        }
         if let error = error as? URLError,
            [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed].contains(error.code) {
             return .offline
