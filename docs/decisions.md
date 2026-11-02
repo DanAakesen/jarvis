@@ -10596,8 +10596,46 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - The chat/voice carry-over is a `matchedGeometryEffect` namespace (composer and orb). Reduce Motion turns the geometry match off and leaves a cross-fade. The rim and greeting shimmer are static in fixture runs so XCUITest can go idle.
 - `.github/scripts/tests/test_pipeline.py` now allows exactly one leading toolbar item on Chat: the Home button that appears only when Chat was opened from Home.
 
+## 2026-11-02 — P15-55: notifications grouped per category (iOS)
 
-## 2026-11-02 — P15-57: sidebar rows are centred, not bottom-weighted (#1523)
+- The notification sheet shows one row per category with the latest update and an "+ N earlier" count. Older items sit in a lazy disclosure. A group with older items has one clear-all control; the toolbar has a clear-everything control. The grouping is `NowFeedActivityGrouping` in JarvisCore (tested).
+- The backend has one dismiss route per item, so clear-all dismisses item by item, treats a missing item as dismissed, stops on any other error and reloads once. A bulk route would need a backend change and was not added.
+- The sheet close X keeps its existing toolbar chrome and `chat.notifications.done`; a repo test pins that source.
+- Not compiled here (no Xcode). Still open: mode control, orb, burger icon (which page is the main shell?), Usage chips, Health toggle and detent, add-item sheet, camera lenses and preview, navigate-away send, dictation waveform, transcript sync.
 
-- Status: accepted from the updated board (`docs/ios/design/today.html`, 3955205a); not compiled or run on this runner.
-- `JarvisSidebar` (shown on every page) centres the rows as one block in the free space below the header, with equal space above and below. If the rows do not fit, the list scrolls from the top. The bottom safe area is excluded from that space.
+## 2026-11-02 — P15-55: composer icon identifiers restored
+
+- A bulk edit had hard-coded `sheet.cancel` on `JarvisComposerIconButton`, so `chat.send`, `chat.mode`, `chat.dictate` were missing in the UI tree. The button uses its `identifier` again. `chat.send` exists whenever the draft is non-empty; the UI test needs no change.
+
+## 2026-11-02 — P15-55: build 44 slice (draft, Now bar status, title, voice image message)
+
+- A sent message is never restored to the composer. Cancelling the send task on navigate-away used to put the text back; `discardOptimisticMessage` no longer restores.
+- The Now bar no longer shows thinking or tool status and is not shown just because a turn is sending. The status line ("Thinking…", tool status) is the text of the Jarvis bubble until real text streams in.
+- The chat header has no title.
+- Voice shows an image message only for real failures (`daily_limit`, `budget_exhausted`, `budget_unavailable`). The caption path, `frame_rate_limited` and `frame_unavailable` are expected in a continuous stream and are silent.
+- Not done yet from the build 44 list: reply push notification (1), merged Notifications sheet (4), dictation waveform (6), Camera vs single photo in Voice (8), Live Activity audio line and buttons (10, 11), sidebar blur (12) and the page-by-page application of the shared layer (13). Nothing was compiled (no Xcode).
+
+## 2026-11-02 — P15-55: Voice menu has "Enable video" and "Camera" (item 8)
+
+- Two separate items. "Enable video" / "Aktivér video" is a toggle with on/off state and starts or stops live video (`startCamera`/`stopCamera`). "Camera" / "Kamera" takes one photo and sends it with the next turn. It works with video on or off.
+- With video off, `beginPhotoSession` runs the camera only for the viewfinder: nothing is streamed and the session is not told video is on. The viewfinder sheet's `onDismiss` calls `endPhotoSession`, which releases the camera. Turning video on during a photo session replaces the temporary capture.
+- Not compiled here (no Xcode).
+
+## 2026-11-02 — P15-55: sidebar rows centred as one block
+
+- The navigation rows are one block centred vertically between the header rule and the bottom safe area (`JarvisSidebar`). The bottom safe-area inset moved from inside the scroll content to below the scroll area, so the free space is measured between the two insets and the space above and below the block is equal. Row order, size and spacing are unchanged. If the rows do not fit, the content grows past the minimum height and scrolls from the top. Not compiled here; the iPhone SE and Pro Max screenshots come from iOS CI and need a device check.
+
+## 2026-11-02 P15-55: dictation waveform and plus-menu CI retry
+
+- Dictation shows `JarvisWaveform` between the plus button and the dictate button while listening: a centred line of 48 bars driven by the microphone RMS (about 20 updates per second, newest right). Reduce Motion drops the interpolation. It only exists while listening, so UI-test runs are unaffected. Not compiled here (no Xcode); needs iOS CI and a device check.
+- CI on e7165a3 failed only `testPlusMenuOpensNextToThePlusButton`. The log shows a 69 s "Setting up automation session" for that test (others 1-8 s), which points at a slow simulator rather than a changed `chat.plus` control. The rim is already static in fixture mode. The failed run was re-run on the same commit to confirm; no test was weakened.
+
+## 2026-11-02 P15-55: CI on cd256f5
+
+- PC bridge job: `BrowserExecutorTests.Browser_executor_falls_back_to_cdp_when_extension_is_disconnected` failed in `FakeCdpTarget.DisposeAsync` (`ObjectDisposedException` on the HttpListener). It is a test-teardown race in code this PR does not touch, so it is treated as flaky and re-run.
+- iOS UI job: `testSentMessageBubbleIsVisibleAboveComposer` hung past its 2 minute allowance (a different test than on e7165a3; the plus-menu test passed). Both hangs are idle-wait symptoms. `JarvisRim` no longer builds a `TimelineView` at all when static (fixture or Reduce Motion), instead of a paused one, so nothing can schedule frames in UI-test runs. Not verifiable without Xcode; the next iOS CI run is the check.
+
+## 2026-11-02 P15-55: Voice orb versus the board's chat-bubble mini core
+
+- Checked `JarvisOrbView` (dark glass sphere, cyan rim, orange/amber tangled centre) against the board's `.working-core` / `drawMini` mark. The Voice screen already renders `JarvisOrbView` through `VoiceOrbView`, the same view the gate and lock-screen preview use, so Voice matches Dan's description and nothing is drawn twice. No change made.
+- Difference noted: the board's mini core is only the amber tangle on a transparent canvas, with no sphere or rim, and the iOS chat bubble does not draw a mini mark (status text is the bubble text). If the chat bubble should show the mark, it must reuse `JarvisOrbView` at about 24 pt rather than add a second drawing. Not compiled or compared on a device here.

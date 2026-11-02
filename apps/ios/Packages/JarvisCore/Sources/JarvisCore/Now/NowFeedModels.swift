@@ -69,6 +69,45 @@ public struct NowFeedActivityItem: Codable, Equatable, Sendable {
     public let at: String
 }
 
+/// Proactive notifications of one category collapsed into one row: the latest update, how many older ones sit
+/// behind it, and every item so the group can be dismissed or cleared.
+public struct NowFeedActivityGroup: Equatable, Identifiable, Sendable {
+    public let category: NowFeedActivityCategory
+    /// Newest first.
+    public let items: [NowFeedActivityItem]
+    public var id: String { category.rawValue }
+    public var latest: NowFeedActivityItem { items[0] }
+    public var olderCount: Int { items.count - 1 }
+}
+
+public enum NowFeedActivityGrouping {
+    /// One group per category that has items, in category order. Items inside a group are newest first;
+    /// items whose time cannot be read keep their feed order after the dated ones.
+    public static func groups(_ items: [NowFeedActivityItem]) -> [NowFeedActivityGroup] {
+        NowFeedActivityCategory.allCases.compactMap { category in
+            let inCategory = items.enumerated().filter { $0.element.category == category }
+            guard !inCategory.isEmpty else { return nil }
+            let sorted = inCategory.sorted { lhs, rhs in
+                switch (date(lhs.element.at), date(rhs.element.at)) {
+                case let (l?, r?): l != r ? l > r : lhs.offset < rhs.offset
+                case (_?, nil): true
+                case (nil, _?): false
+                case (nil, nil): lhs.offset < rhs.offset
+                }
+            }
+            return NowFeedActivityGroup(category: category, items: sorted.map(\.element))
+        }
+    }
+
+    private static func date(_ value: String) -> Date? {
+        let plain = ISO8601DateFormatter()
+        if let date = plain.date(from: value) { return date }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions.insert(.withFractionalSeconds)
+        return fractional.date(from: value)
+    }
+}
+
 public struct NowFeedRunningTask: Codable, Equatable, Sendable {
     public let id: String
     public let title: String

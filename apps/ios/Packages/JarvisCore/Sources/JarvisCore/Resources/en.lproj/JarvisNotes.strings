@@ -117,6 +117,7 @@
 "voice.minimize" = "Minimize voice";
 "voice.restore" = "Restore voice screen";
 "voice.orb" = "Jarvis voice";
+"voice.enableVideo" = "Enable video";
 "voice.camera" = "Camera";
 "voice.stopCamera" = "Stop camera";
 "voice.cameraSettings" = "Open camera settings";

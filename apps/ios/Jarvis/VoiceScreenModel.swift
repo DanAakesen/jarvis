@@ -14,6 +14,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var isCaptionsEnabled = false
     @Published private(set) var isMinimized = false
     @Published private(set) var isCameraEnabled = false
+    private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
     @Published private(set) var isScreenSharing = false
     @Published private(set) var userCaption = ""
@@ -398,6 +399,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return
         }
         cameraPermissionDenied = false
+        if isPhotoSession {
+            camera?.stop()
+            camera = nil
+            isPhotoSession = false
+        }
         let capture = VoiceCameraCapture()
         do {
             try capture.start()
@@ -412,6 +418,41 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             camera = nil
             isCameraEnabled = false
             errorMessage = JarvisVoiceLocalization.string(.cameraUnavailable)
+        }
+    }
+
+    /// Camera for a single photo while live video is off. Nothing is streamed and the session is not told that
+    /// video is on; `endPhotoSession` releases the camera again.
+    func beginPhotoSession() async -> Bool {
+        guard canUseControls else { return false }
+        if camera != nil { return true }
+        let generation = sessionGeneration
+        let allowed = await VoiceCameraCapture.requestAccess()
+        guard sessionGeneration == generation, canUseControls else { return false }
+        guard allowed else {
+            cameraPermissionDenied = true
+            return false
+        }
+        cameraPermissionDenied = false
+        let capture = VoiceCameraCapture()
+        do {
+            try capture.start()
+        } catch {
+            capture.stop()
+            errorMessage = JarvisVoiceLocalization.string(.cameraUnavailable)
+            return false
+        }
+        camera = capture
+        isPhotoSession = true
+        return true
+    }
+
+    func endPhotoSession() {
+        guard isPhotoSession else { return }
+        isPhotoSession = false
+        if !isCameraEnabled {
+            camera?.stop()
+            camera = nil
         }
     }
 
@@ -551,12 +592,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         case .responseCancelled:
             audio.stopPlayback()
             responseID = nil
-        case .visualContext(_, let path, let reason):
-            if path == "caption", let reason {
-                errorMessage = Self.visualFailure(reason)
-            }
+        case .visualContext:
+            // The caption path is a working fallback, not a failure.
+            break
         case .screenContextUnavailable(_, let reason):
-            if let reason { errorMessage = Self.visualFailure(reason) }
+            if let reason, let message = Self.visualFailure(reason) { errorMessage = message }
         case .speechStarted:
             break
         case .unknown:
@@ -766,16 +806,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
 
-    private static func visualFailure(_ reason: String) -> String {
+    /// Only real failures reach the user. A rate-limited or momentarily missing frame in a continuous stream is
+    /// expected, and unknown reasons are not shown as "image unavailable" while the image still works.
+    static func visualFailure(_ reason: String) -> String? {
         switch reason {
         case "daily_limit", "budget_exhausted":
             return JarvisVoiceLocalization.string(.imageLimit)
-        case "frame_rate_limited":
-            return JarvisVoiceLocalization.string(.imageRateLimit)
         case "budget_unavailable":
             return JarvisVoiceLocalization.string(.imageUnavailable)
         default:
-            return JarvisVoiceLocalization.string(.imageUnavailable)
+            return nil
         }
     }
 }

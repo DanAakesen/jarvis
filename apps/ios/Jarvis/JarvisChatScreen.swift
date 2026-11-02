@@ -197,7 +197,7 @@ struct JarvisChatScreen: View {
         .overlay(alignment: .topTrailing) {
             videoTile
         }
-        .navigationTitle("Chat")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let onBackToToday {
@@ -412,9 +412,10 @@ struct JarvisChatScreen: View {
                         ForEach(renderedRows) { row in
                             messageRow(row)
                         }
-                        if !model.streamingText.isEmpty {
+                        if model.isSending || !model.streamingText.isEmpty {
                             messageBubble(
-                                text: model.streamingText,
+                                text: model.streamingText.isEmpty
+                                    ? (model.statusLine ?? "Thinking…") : model.streamingText,
                                 role: .jarvis,
                                 interrupted: false,
                                 messageID: "streaming"
@@ -701,7 +702,13 @@ struct JarvisChatScreen: View {
 
                 HStack(spacing: 0) {
                     plusMenu
-                    Spacer(minLength: 0)
+                    if dictation.isListening {
+                        JarvisWaveform(levels: dictation.levels)
+                            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
+                            .accessibilityIdentifier("chat.waveform")
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                     dictateButton
                     trailingButton
                 }
@@ -1171,13 +1178,8 @@ struct JarvisChatScreen: View {
             Task { await model.refreshActivity() }
         } label: {
             HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                if model.isSending {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
-                        .accessibilityHidden(true)
-                }
+                Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
+                    .accessibilityHidden(true)
                 Text(model.nowTitle)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1)
