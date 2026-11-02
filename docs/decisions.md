@@ -10494,3 +10494,13 @@ stayed on Chat, with both the path push and the `currentDestination` switch. The
 body; ContentView read it only inside its `GeometryReader` closure, which is not a reliable subscription. The root
 screen is now built by `JarvisDestinationHost`, which holds the model as `@ObservedObject`. This is the best reading
 of the code, not reproduced; confirm on the next preview build.
+
+## 2026-11-02: Item tap crash/hang after the host change (P15-41)
+
+CI on e636f8b: the Danish item test lost the app connection and the English one logged "Unable to monitor event loop"
+after tapping Software Factory, so the screen now renders but the app stalls or dies. No recursive update, force
+unwrap or main-thread loop was found by reading the code; the likely trigger is the render pass itself. Mitigations,
+not confirmed: the screen swap runs with animations off (`transaction(value:)`), so the drawer spring no longer animates
+a whole-screen layout; the debug `shown` report is published after the view update and only when it changed. The menu
+test keeps the 2 s existence check and gives the geometry checks a separate 6 s allowance, because each snapshot can
+take about a second on a loaded simulator.

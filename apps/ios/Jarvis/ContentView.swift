@@ -470,5 +470,7 @@ private struct JarvisDestinationHost<Content: View>: View {
 
     var body: some View {
         content(navigation.currentDestination)
+            // The screen swap is one plain pass: the drawer's spring must not also animate a whole-screen layout.
+            .transaction(value: navigation.currentDestination) { $0.animation = nil }
     }
 }
