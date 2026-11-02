@@ -1,7 +1,7 @@
 import Foundation
 import JarvisCore
 
-enum JarvisTodayFailure: Equatable {
+enum JarvisTodayFailure: Equatable, Error {
     case unavailable
     case offline
     case failed
