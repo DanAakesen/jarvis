@@ -452,11 +452,20 @@ private struct JarvisPlaceholderView: View {
     let language: JarvisAppLanguage
 
     var body: some View {
-        Color.clear
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .jarvisAmbientBackground()
-            .navigationTitle(destination.localizedTitle(language: language))
-            .navigationBarTitleDisplayMode(.inline)
+        VStack(spacing: 0) {
+            HStack {
+                Text(destination.localizedTitle(language: language))
+                    .font(.title2.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                JarvisSidebarMenuButton(language: language)
+            }
+            .padding(.horizontal)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .jarvisAmbientBackground()
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

@@ -10528,3 +10528,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - `VoiceScreenModel.start()` now runs the session start in an unstructured task. Cancelling the voice screen's `.task` (for example when the host re-renders) no longer turns `Task.checkCancellation()` into a failed session. Generation checks still cancel a superseded start.
 - No `%d`/`%@` mismatch exists in the voice screen: its strings have no format placeholders, and `LocalizedFormatStringTests` covers the voice tables.
 - `VoiceEntryPointUITests` asserts the mic control is hittable after tapping the composer button, in Danish and English. Not run: no Xcode here.
+
+## 2026-11-02 — P15-54: placeholder destinations keep the sidebar button
+
+- Status: accepted.
+- CI on 0d162a8 failed `testEverySidebarItemShowsItsScreen*` at the step that reopens the sidebar: after Proactive (a title-only placeholder) the screen had no `navigation.openSidebar` button, so the user could not leave it. This was an app bug, not a test-query problem.
+- `JarvisPlaceholderView` now shows its title and `JarvisSidebarMenuButton` in a top row, like the other destinations. The test is unchanged. Not run: no Xcode here.
