@@ -10603,3 +10603,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - The chat header has no title.
 - Voice shows an image message only for real failures (`daily_limit`, `budget_exhausted`, `budget_unavailable`). The caption path, `frame_rate_limited` and `frame_unavailable` are expected in a continuous stream and are silent.
 - Not done yet from the build 44 list: reply push notification (1), merged Notifications sheet (4), dictation waveform (6), Camera vs single photo in Voice (8), Live Activity audio line and buttons (10, 11), sidebar blur (12) and the page-by-page application of the shared layer (13). Nothing was compiled (no Xcode).
+
+## 2026-11-02 — P15-55: Voice menu has "Enable video" and "Camera" (item 8)
+
+- Two separate items. "Enable video" / "Aktivér video" is a toggle with on/off state and starts or stops live video (`startCamera`/`stopCamera`). "Camera" / "Kamera" takes one photo and sends it with the next turn. It works with video on or off.
+- With video off, `beginPhotoSession` runs the camera only for the viewfinder: nothing is streamed and the session is not told video is on. The viewfinder sheet's `onDismiss` calls `endPhotoSession`, which releases the camera. Turning video on during a photo session replaces the temporary capture.
+- Not compiled here (no Xcode).

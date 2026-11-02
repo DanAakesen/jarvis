@@ -122,7 +122,7 @@ struct VoiceScreenView: View {
                 Task { await model.retryIfNeeded() }
             }
         }
-        .sheet(isPresented: $showsCameraViewfinder) {
+        .sheet(isPresented: $showsCameraViewfinder, onDismiss: { model.endPhotoSession() }) {
             if let camera = model.camera {
                 VoicePhotoViewfinder(camera: camera) {
                     model.capturePhotoForNextTurn()
@@ -330,22 +330,26 @@ struct VoiceScreenView: View {
             }
 
             Menu {
-                if model.isCameraEnabled {
-                    Button(JarvisVoiceLocalization.string(.stopCamera), systemImage: "video.slash") {
-                        Task { await model.stopCamera() }
-                    }
-                    Button(JarvisVoiceLocalization.string(.viewfinder), systemImage: "camera") {
-                        showsCameraViewfinder = true
-                    }
-                } else if model.cameraPermissionDenied {
+                if model.cameraPermissionDenied {
                     Button(JarvisVoiceLocalization.string(.cameraSettings), systemImage: "gearshape") {
                         model.openSettings()
                     }
-                } else {
-                    Button(JarvisVoiceLocalization.string(.camera), systemImage: "video") {
-                        Task { await model.startCamera() }
+                }
+                Toggle(isOn: Binding(
+                    get: { model.isCameraEnabled },
+                    set: { enabled in
+                        Task { enabled ? await model.startCamera() : await model.stopCamera() }
+                    }
+                )) {
+                    Label(JarvisVoiceLocalization.string(.enableVideo), systemImage: "video")
+                }
+                .accessibilityIdentifier("voice.enableVideo")
+                Button(JarvisVoiceLocalization.string(.camera), systemImage: "camera") {
+                    Task {
+                        if await model.beginPhotoSession() { showsCameraViewfinder = true }
                     }
                 }
+                .accessibilityIdentifier("voice.photo")
                 if model.isScreenSharing {
                     Button(JarvisVoiceLocalization.string(.stopSharing), systemImage: "stop.circle") {
                         model.requestStopScreenSharing()

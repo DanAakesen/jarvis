@@ -14,6 +14,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var isCaptionsEnabled = false
     @Published private(set) var isMinimized = false
     @Published private(set) var isCameraEnabled = false
+    private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
     @Published private(set) var isScreenSharing = false
     @Published private(set) var userCaption = ""
@@ -398,6 +399,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return
         }
         cameraPermissionDenied = false
+        if isPhotoSession {
+            camera?.stop()
+            camera = nil
+            isPhotoSession = false
+        }
         let capture = VoiceCameraCapture()
         do {
             try capture.start()
@@ -412,6 +418,41 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             camera = nil
             isCameraEnabled = false
             errorMessage = JarvisVoiceLocalization.string(.cameraUnavailable)
+        }
+    }
+
+    /// Camera for a single photo while live video is off. Nothing is streamed and the session is not told that
+    /// video is on; `endPhotoSession` releases the camera again.
+    func beginPhotoSession() async -> Bool {
+        guard canUseControls else { return false }
+        if camera != nil { return true }
+        let generation = sessionGeneration
+        let allowed = await VoiceCameraCapture.requestAccess()
+        guard sessionGeneration == generation, canUseControls else { return false }
+        guard allowed else {
+            cameraPermissionDenied = true
+            return false
+        }
+        cameraPermissionDenied = false
+        let capture = VoiceCameraCapture()
+        do {
+            try capture.start()
+        } catch {
+            capture.stop()
+            errorMessage = JarvisVoiceLocalization.string(.cameraUnavailable)
+            return false
+        }
+        camera = capture
+        isPhotoSession = true
+        return true
+    }
+
+    func endPhotoSession() {
+        guard isPhotoSession else { return }
+        isPhotoSession = false
+        if !isCameraEnabled {
+            camera?.stop()
+            camera = nil
         }
     }
 
