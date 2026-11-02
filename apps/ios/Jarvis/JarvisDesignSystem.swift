@@ -427,18 +427,31 @@ struct JarvisForm<Content: View>: View {
     }
 }
 
-struct JarvisList<Content: View>: View {
+struct JarvisList<Head: View, Content: View>: View {
+    private let head: Head
     private let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    /// `head` is the page's headline and hero: the first row, with no glass behind it.
+    init(@ViewBuilder head: () -> Head, @ViewBuilder content: () -> Content) {
+        self.head = head()
         self.content = content()
     }
 
     var body: some View {
         List {
+            head
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets())
             content.listRowBackground(JarvisGlassSurface())
         }
         .scrollContentBackground(.hidden)
+    }
+}
+
+extension JarvisList where Head == EmptyView {
+    init(@ViewBuilder content: () -> Content) {
+        self.init(head: { EmptyView() }, content: content)
     }
 }
 

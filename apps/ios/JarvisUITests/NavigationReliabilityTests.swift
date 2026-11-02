@@ -44,6 +44,64 @@ final class NavigationReliabilityTests: XCTestCase {
         attachScreenshot("Menu after five-second startup and destinations (\(language))")
     }
 
+    func testSharedPageHeaderInDanishAndEnglish() {
+        for language in ["da", "en"] {
+            launch(language: language)
+            defer { app.terminate() }
+            let pages: [(destination: String, actions: [String])] = [
+                ("health", ["health.refresh", "health.plus"]),
+                ("notes", ["notes.refresh", "notes.plus"]),
+                ("softwareFactory", ["factory.refresh", "factory.plus"]),
+            ]
+            for page in pages {
+                navigate(to: page.destination)
+                let title = app.staticTexts["page.title"]
+                waitFor(title, key: "exists", value: true)
+                XCTAssertFalse(title.label.isEmpty, "\(page.destination) [\(language)] needs a title")
+                XCTAssertGreaterThanOrEqual(title.frame.height, 32, "Title is bold and about 32 pt")
+                let menu = app.buttons["navigation.openSidebar"]
+                for identifier in page.actions {
+                    let button = app.buttons[identifier]
+                    waitFor(button, key: "isHittable", value: true)
+                    XCTAssertGreaterThanOrEqual(button.frame.width, 44)
+                    XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+                    XCTAssertGreaterThan(button.frame.minX, title.frame.minX, "Buttons sit on the right of the title")
+                    XCTAssertLessThan(button.frame.maxX, menu.frame.minX + 1, "The sidebar button closes the row")
+                    XCTAssertLessThan(abs(button.frame.midY - menu.frame.midY), 4, "Buttons are level with each other")
+                    XCTAssertLessThan(abs(title.frame.midY - menu.frame.midY), 24, "Title is level with the buttons")
+                }
+                attachScreenshot("Page header \(page.destination) (\(language))")
+                openByEdge()
+                tap(app.buttons["navigation.chat"])
+                waitFor(app.buttons["navigation.chat"], key: "exists", value: false)
+            }
+        }
+    }
+
+    func testFactoryRowsHeaderAndDock() {
+        launch(language: "en")
+        defer { app.terminate() }
+        navigate(to: "softwareFactory")
+        let github = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "factory.row.github."))
+            .firstMatch
+        waitFor(github, key: "exists", value: true)
+        XCTAssertGreaterThanOrEqual(github.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(github.frame.height, 44)
+        XCTAssertEqual(github.label.hasPrefix("Open in GitHub"), true)
+
+        let group = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "factory.column.")).firstMatch
+        waitFor(group, key: "isHittable", value: true)
+        XCTAssertGreaterThan(group.frame.maxX, app.frame.maxX - 40, "Group header spans the width, chevron far right")
+        group.tap()
+        group.tap()
+        XCTAssertTrue(group.exists)
+
+        let segment = app.buttons["factory.segment.board"]
+        let search = app.textFields["factory.search"]
+        XCTAssertGreaterThanOrEqual(search.frame.minY - segment.frame.maxY, 12, "Space between the segments and the search")
+    }
+
     func testShortDragAndBackgroundInterruptionRecover() {
         launch(language: "da")
         for _ in 0..<3 {
@@ -108,6 +166,10 @@ final class NavigationReliabilityTests: XCTestCase {
                 tap(healthMode.buttons.element(boundBy: 1))
                 waitFor(healthMode.buttons.element(boundBy: 1), key: "isSelected", value: true)
                 tap(app.buttons["health.plus"])
+                tap(app.buttons["health.logLift"])
+                cancelSheet()
+                tap(app.buttons["health.plus"])
+                tap(app.buttons["health.logWorkout"])
                 cancelSheet()
                 tap(healthMode.buttons.element(boundBy: 0))
                 waitFor(healthMode.buttons.element(boundBy: 0), key: "isSelected", value: true)

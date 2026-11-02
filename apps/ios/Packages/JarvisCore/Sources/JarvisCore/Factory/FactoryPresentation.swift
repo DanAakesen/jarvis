@@ -154,6 +154,8 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case tasks = "factory.tasks"
     case task = "factory.task"
     case stageTasks = "factory.stageTasks"
+    case expanded = "factory.expanded"
+    case collapsed = "factory.collapsed"
 }
 
 public enum JarvisFactoryLocalization {

@@ -151,3 +151,5 @@
 "factory.tasks" = "tasks";
 "factory.task" = "task";
 "factory.stageTasks" = "Tasks by stage";
+"factory.expanded" = "Expanded";
+"factory.collapsed" = "Collapsed";
