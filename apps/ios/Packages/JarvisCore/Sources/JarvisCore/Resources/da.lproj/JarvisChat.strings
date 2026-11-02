@@ -48,6 +48,9 @@
 "chat.dismiss" = "Afvis";
 "chat.dismissing" = "Afviser…";
 "chat.dismissLabel" = "Afvis %@";
+"chat.clearAll" = "Ryd alle";
+"chat.clearGroupLabel" = "Ryd alle %@";
+"chat.groupMore" = "+ %ld ældre";
 "chat.backgroundTaskDismissed" = "Afvist.";
 "chat.needsFailedTitle" = "Mislykket og kræver dig";
 "chat.camera.flip" = "Skift kamera";

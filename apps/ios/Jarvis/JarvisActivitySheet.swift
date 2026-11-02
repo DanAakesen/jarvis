@@ -109,6 +109,16 @@ struct JarvisActivitySheet: View {
                         .jarvisToolbarButtonStyle()
                         .accessibilityLabel(copy(.done))
                 }
+                if let items = model.nowFeed?.items, items.count > 1 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        JarvisIconButton(
+                            title: copy(.clearAll),
+                            systemImage: "trash",
+                            identifier: "activity.clearAll",
+                            isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
+                        ) { Task { await model.dismissActivities(items) } }
+                    }
+                }
             }
         }
         .task {
@@ -292,36 +302,84 @@ struct JarvisActivitySheet: View {
         }
     }
 
+    /// One row per category: the latest update, a count of older ones, and a disclosure for the rest. The older
+    /// items load lazily so a list of 100 stays cheap, and the group can be cleared with one control.
     private func activitySection(
         _ category: NowFeedActivityCategory,
         items: [NowFeedActivityItem]
     ) -> some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+        let group = NowFeedActivityGrouping.groups(items).first
+        return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             Text(category.title)
                 .font(.headline)
-            ForEach(items, id: \.id) { item in
-                HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
-                    VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                        Text(item.title)
-                            .font(.body)
-                        Text(timeString(item.at))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Button(model.dismissingActivityIDs.contains(item.id) ? "Dismissing…" : "Dismiss") {
-                        Task { await model.dismissActivity(item) }
-                    }
-                    .buttonStyle(.glass)
-                    .disabled(model.fixtureMode || model.dismissingActivityIDs.contains(item.id))
-                    .accessibilityLabel("Dismiss \(item.title)")
-                    .accessibilityHint(model.fixtureMode ? "Dismissal is disabled with fixture data." : "")
-                }
-                .padding(JarvisDesignTokens.chatGlassInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+            if let group {
+                groupRow(group)
             }
         }
+    }
+
+    private func groupRow(_ group: NowFeedActivityGroup) -> some View {
+        let busy = group.items.contains { model.dismissingActivityIDs.contains($0.id) }
+        return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+            HStack(alignment: .top, spacing: JarvisDesignTokens.chatComposerSpacing) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(group.latest.title).font(.body)
+                    HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                        Text(timeString(group.latest.at))
+                        if group.olderCount > 0 {
+                            Text(String(format: copy(.groupMore), group.olderCount))
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if busy {
+                    ProgressView()
+                } else if group.olderCount > 0 {
+                    JarvisIconButton(
+                        title: String(format: copy(.clearGroupLabel), group.category.title),
+                        systemImage: "trash",
+                        identifier: "activity.clear.\(group.id)",
+                        isDisabled: model.fixtureMode
+                    ) { Task { await model.dismissActivities(group.items) } }
+                } else {
+                    JarvisIconButton(
+                        title: String(format: copy(.dismissLabel), group.latest.title),
+                        systemImage: "xmark",
+                        identifier: "activity.dismiss.\(group.latest.id)",
+                        isDisabled: model.fixtureMode
+                    ) { Task { await model.dismissActivity(group.latest) } }
+                }
+            }
+            if group.olderCount > 0 {
+                DisclosureGroup {
+                    LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                        ForEach(group.items.dropFirst(), id: \.id) { item in
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.title).font(.callout)
+                                    Text(timeString(item.at)).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                                JarvisIconButton(
+                                    title: String(format: copy(.dismissLabel), item.title),
+                                    systemImage: "xmark",
+                                    identifier: "activity.dismiss.\(item.id)",
+                                    isDisabled: model.fixtureMode || model.dismissingActivityIDs.contains(item.id)
+                                ) { Task { await model.dismissActivity(item) } }
+                            }
+                        }
+                    }
+                    .padding(.top, JarvisDesignTokens.chatMessageSpacing)
+                } label: {
+                    Text(String(format: copy(.groupMore), group.olderCount))
+                }
+            }
+        }
+        .padding(JarvisDesignTokens.chatGlassInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
     }
 
     private func timeString(_ value: String) -> String {

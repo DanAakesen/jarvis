@@ -48,6 +48,9 @@
 "chat.dismiss" = "Dismiss";
 "chat.dismissing" = "Dismissing…";
 "chat.dismissLabel" = "Dismiss %@";
+"chat.clearAll" = "Clear all";
+"chat.clearGroupLabel" = "Clear all %@";
+"chat.groupMore" = "+ %ld earlier";
 "chat.backgroundTaskDismissed" = "Dismissed.";
 "chat.needsFailedTitle" = "Failed and needs you";
 "chat.camera.flip" = "Switch camera";

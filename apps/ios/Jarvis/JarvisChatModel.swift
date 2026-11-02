@@ -147,7 +147,7 @@ final class JarvisChatModel: ObservableObject {
     }
 
     var shouldShowNowBar: Bool {
-        isSending || !backgroundTasks.isEmpty || nowFeed.map {
+        !backgroundTasks.isEmpty || nowFeed.map {
             activeConfirmation != nil ||
                 !$0.running.isEmpty ||
                 !$0.items.isEmpty
@@ -169,9 +169,6 @@ final class JarvisChatModel: ObservableObject {
     var nowTitle: String {
         if activeConfirmation != nil {
             return "Waiting for approval"
-        }
-        if isSending {
-            return statusLine ?? "Thinking…"
         }
         if let task = nowFeed?.running.first {
             return task.activity.isEmpty ? task.title : task.activity
@@ -448,6 +445,31 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
+    /// Dismisses every item of a group one after another (the backend has one dismiss route per item), then
+    /// reloads once. An item that is already gone counts as dismissed; any other error stops the run and is shown.
+    func dismissActivities(_ items: [NowFeedActivityItem]) async {
+        guard !fixtureMode, let nowClient else { return }
+        let pending = items.filter { !dismissingActivityIDs.contains($0.id) }
+        guard !pending.isEmpty else { return }
+        activityMessage = nil
+        dismissingActivityIDs.formUnion(pending.map(\.id))
+        defer { dismissingActivityIDs.subtract(pending.map(\.id)) }
+        do {
+            for item in pending {
+                do {
+                    try await nowClient.dismissActivity(id: item.id)
+                } catch JarvisNowFeedClientError.activityUnavailable {
+                    continue
+                }
+            }
+            activityMessage = "Activity dismissed."
+            activityError = nil
+        } catch {
+            activityError = message(for: error)
+        }
+        if let feed = try? await nowClient.load() { nowFeed = feed }
+    }
+
     func dismissBackgroundTask(_ task: BackgroundTaskRecord) async {
         guard !fixtureMode, let nowClient, !dismissingBackgroundTaskIDs.contains(task.id) else { return }
         dismissingBackgroundTaskIDs.insert(task.id)
@@ -531,7 +553,7 @@ final class JarvisChatModel: ObservableObject {
     ) async {
         guard let client else {
             isSending = false
-            discardOptimisticMessage(restoring: text)
+            discardOptimisticMessage()
             actionError = startupError ?? "Chat is unavailable."
             return
         }
@@ -579,12 +601,12 @@ final class JarvisChatModel: ObservableObject {
             activeMessageID = nil
             statusLine = nil
             streamingText = ""
-            discardOptimisticMessage(restoring: text)
+            discardOptimisticMessage()
         } catch {
             isSending = false
             activeMessageID = nil
             statusLine = nil
-            discardOptimisticMessage(restoring: text)
+            discardOptimisticMessage()
             if !Task.isCancelled { actionError = message(for: error) }
             streamingText = ""
         }
@@ -592,12 +614,11 @@ final class JarvisChatModel: ObservableObject {
     }
 
     /// Removes the local placeholder once the server's copy arrived or the turn failed.
-    /// The draft is restored only when the server never acknowledged the message.
-    private func discardOptimisticMessage(restoring text: String? = nil) {
+    /// A sent message is never put back in the composer.
+    private func discardOptimisticMessage() {
         guard let id = optimisticMessageID else { return }
         optimisticMessageID = nil
         messages.removeAll { $0.id == id }
-        if let text, draft.isEmpty { draft = text }
     }
 
     private func loadVoiceLanguage() async {

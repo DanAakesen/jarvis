@@ -116,6 +116,7 @@
 "voice.minimize" = "Minimer samtale";
 "voice.restore" = "Gendan samtaleskærm";
 "voice.orb" = "Jarvis-stemmesamtale";
+"voice.enableVideo" = "Aktivér video";
 "voice.camera" = "Kamera";
 "voice.stopCamera" = "Stop kamera";
 "voice.cameraSettings" = "Åbn kameraindstillinger";

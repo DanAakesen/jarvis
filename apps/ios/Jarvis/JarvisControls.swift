@@ -96,31 +96,40 @@ struct JarvisRim: ViewModifier {
 
     func body(content: Content) -> some View {
         content.overlay {
-            TimelineView(.animation(minimumInterval: 1.0 / 12, paused: isStatic)) { timeline in
-                let angle = isStatic ? 0 : clock.advance(to: timeline.date, lap: state.lap)
-                ZStack {
-                    shape.strokeBorder(JarvisDesignTokens.primaryAccent.opacity(0.35), lineWidth: 1)
-                    shape.strokeBorder(
-                        AngularGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .clear, location: 0.52),
-                                .init(color: JarvisDesignTokens.primaryAccent, location: 0.78),
-                                .init(color: JarvisDesignTokens.rimGlint, location: 0.94),
-                                .init(color: .clear, location: 1),
-                            ],
-                            center: .center,
-                            angle: .degrees(angle)
-                        ),
-                        lineWidth: state.width
-                    )
+            Group {
+                if isStatic {
+                    rim(angle: 0)
+                } else {
+                    TimelineView(.animation(minimumInterval: 1.0 / 12)) { timeline in
+                        rim(angle: clock.advance(to: timeline.date, lap: state.lap))
+                    }
                 }
-                .opacity(state.opacity * pulse)
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
         .task(id: "\(state)-\(isStatic)") { await breathe() }
+    }
+
+    private func rim(angle: Double) -> some View {
+        ZStack {
+            shape.strokeBorder(JarvisDesignTokens.primaryAccent.opacity(0.35), lineWidth: 1)
+            shape.strokeBorder(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 0.52),
+                        .init(color: JarvisDesignTokens.primaryAccent, location: 0.78),
+                        .init(color: JarvisDesignTokens.rimGlint, location: 0.94),
+                        .init(color: .clear, location: 1),
+                    ],
+                    center: .center,
+                    angle: .degrees(angle)
+                ),
+                lineWidth: state.width
+            )
+        }
+        .opacity(state.opacity * pulse)
     }
 
     /// Dips the rim at random intervals and depths, so it never ticks like a metronome.
@@ -293,5 +302,34 @@ struct JarvisChip: View {
         .buttonStyle(.glass)
         .tint(isSelected ? JarvisDesignTokens.primaryAccent : nil)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// Live audio line for dictation: a centred line whose peaks follow the microphone level, newest on the right.
+/// One Canvas, no per-frame work beyond the level updates it is given.
+struct JarvisWaveform: View {
+    let levels: [Float]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Canvas { context, size in
+            guard !levels.isEmpty else { return }
+            let step = size.width / CGFloat(levels.count)
+            var path = Path()
+            for (index, level) in levels.enumerated() {
+                let x = (CGFloat(index) + 0.5) * step
+                let half = max(1, CGFloat(level) * size.height / 2)
+                path.move(to: CGPoint(x: x, y: size.height / 2 - half))
+                path.addLine(to: CGPoint(x: x, y: size.height / 2 + half))
+            }
+            context.stroke(
+                path,
+                with: .color(JarvisDesignTokens.primaryAccent),
+                style: StrokeStyle(lineWidth: max(1.5, step * 0.5), lineCap: .round)
+            )
+        }
+        .frame(height: JarvisDesignTokens.chatMinimumTapTarget)
+        .animation(reduceMotion ? nil : .linear(duration: 0.05), value: levels)
+        .accessibilityHidden(true)
     }
 }
