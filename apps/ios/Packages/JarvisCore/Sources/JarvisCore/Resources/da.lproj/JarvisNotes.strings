@@ -2,6 +2,7 @@
 "language.danish" = "Dansk";
 "language.english" = "Engelsk";
 "settings.title" = "Indstillinger";
+"navigation.today" = "Hjem";
 "navigation.chat" = "Chat";
 "navigation.voice" = "Stemme";
 "voice.connectionLost" = "Forbindelsen blev afbrudt";
