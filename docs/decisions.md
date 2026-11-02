@@ -10595,3 +10595,11 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 ## 2026-11-02 — P15-55: composer icon identifiers restored
 
 - A bulk edit had hard-coded `sheet.cancel` on `JarvisComposerIconButton`, so `chat.send`, `chat.mode`, `chat.dictate` were missing in the UI tree. The button uses its `identifier` again. `chat.send` exists whenever the draft is non-empty; the UI test needs no change.
+
+## 2026-11-02 — P15-55: build 44 slice (draft, Now bar status, title, voice image message)
+
+- A sent message is never restored to the composer. Cancelling the send task on navigate-away used to put the text back; `discardOptimisticMessage` no longer restores.
+- The Now bar no longer shows thinking or tool status and is not shown just because a turn is sending. The status line ("Thinking…", tool status) is the text of the Jarvis bubble until real text streams in.
+- The chat header has no title.
+- Voice shows an image message only for real failures (`daily_limit`, `budget_exhausted`, `budget_unavailable`). The caption path, `frame_rate_limited` and `frame_unavailable` are expected in a continuous stream and are silent.
+- Not done yet from the build 44 list: reply push notification (1), merged Notifications sheet (4), dictation waveform (6), Camera vs single photo in Voice (8), Live Activity audio line and buttons (10, 11), sidebar blur (12) and the page-by-page application of the shared layer (13). Nothing was compiled (no Xcode).

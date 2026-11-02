@@ -551,12 +551,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         case .responseCancelled:
             audio.stopPlayback()
             responseID = nil
-        case .visualContext(_, let path, let reason):
-            if path == "caption", let reason {
-                errorMessage = Self.visualFailure(reason)
-            }
+        case .visualContext:
+            // The caption path is a working fallback, not a failure.
+            break
         case .screenContextUnavailable(_, let reason):
-            if let reason { errorMessage = Self.visualFailure(reason) }
+            if let reason, let message = Self.visualFailure(reason) { errorMessage = message }
         case .speechStarted:
             break
         case .unknown:
@@ -766,16 +765,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
 
-    private static func visualFailure(_ reason: String) -> String {
+    /// Only real failures reach the user. A rate-limited or momentarily missing frame in a continuous stream is
+    /// expected, and unknown reasons are not shown as "image unavailable" while the image still works.
+    static func visualFailure(_ reason: String) -> String? {
         switch reason {
         case "daily_limit", "budget_exhausted":
             return JarvisVoiceLocalization.string(.imageLimit)
-        case "frame_rate_limited":
-            return JarvisVoiceLocalization.string(.imageRateLimit)
         case "budget_unavailable":
             return JarvisVoiceLocalization.string(.imageUnavailable)
         default:
-            return JarvisVoiceLocalization.string(.imageUnavailable)
+            return nil
         }
     }
 }
