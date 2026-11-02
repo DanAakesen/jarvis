@@ -10628,3 +10628,15 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 - Checked `JarvisOrbView` (dark glass sphere, cyan rim, orange/amber tangled centre) against the board's `.working-core` / `drawMini` mark. The Voice screen already renders `JarvisOrbView` through `VoiceOrbView`, the same view the gate and lock-screen preview use, so Voice matches Dan's description and nothing is drawn twice. No change made.
 - Difference noted: the board's mini core is only the amber tangle on a transparent canvas, with no sphere or rim, and the iOS chat bubble does not draw a mini mark (status text is the bubble text). If the chat bubble should show the mark, it must reuse `JarvisOrbView` at about 24 pt rather than add a second drawing. Not compiled or compared on a device here.
+
+## 2026-11-02 P15-59: Build 45 fixes (live chat, voice media, orb, controls, location)
+
+- Chat stays event driven: the composer is never disabled while Jarvis answers. A message sent mid-turn goes to the existing `POST /conversation/sessions/:id/steer` route (`JarvisChatClient.steerTurn`) and joins the running turn; a 409 means no turn is active and the text returns to the composer. `.activityChanged` refreshes history when no turn of this client is streaming, so replies finished during voice or screen sharing appear unprompted.
+- The backend pushes every finished chat reply with `createReplyNotificationDispatcher`, reusing the approval-notification device registrations and APNs sender (`jarvis.reply` category, 160 character body). The app suppresses it in the foreground; it only matters when backgrounded. It follows `JARVIS_APPROVAL_NOTIFICATIONS_ENABLED` and needs the same protected APNs configuration.
+- Thinking text is localized and context aware (`ChatThinkingPhrase`) and lives in the assistant bubble with a shimmer and the shared `JarvisOrbView` mini core; the Now bar never shows it. The voice orb drops its rotation and non-uniform scale so it is the same mark as the mini core, only larger.
+- The Now bar is the last element above the composer: screen-share status and errors sit above it, pending attachments sit inside the composer, and the static Away/Idle title is gone. The background sheet and the bell sheet are one `ActivitySheetKind.activity` area.
+- Floating glass buttons use the chat header size (`chatMinimumTapTarget`, 44 pt). Rows already on glass and toolbars use `JarvisInlineIconButton` (no second background).
+- Weather uses the device: `JarvisDeviceLocation` asks for When In Use permission, reverse-geocodes one coarse fix and saves city and coordinates (rounded to 0.01 degrees) into the existing home-location setting that the weather tool reads.
+- Voice photos taken while live video is off now reach the assistant on the next turn, and sent photos, video frames and screen frames show in the voice transcript area.
+- Unverified: SwiftUI compilation, UI tests and APNs delivery need the Mac job and protected configuration.
+

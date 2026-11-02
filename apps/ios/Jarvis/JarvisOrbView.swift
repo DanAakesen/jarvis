@@ -191,8 +191,7 @@ struct JarvisOrbView: View {
                         endRadius: size * 0.35
                     )
                 }
-                .scaleEffect(x: 1 + energy, y: 1 - energy * 0.5)
-                .rotationEffect(.degrees(animatesCore ? sin(phase * 0.7) * 12 : 0))
+                .scaleEffect(1 + energy)
             }
             .frame(width: size, height: size)
             .scaleEffect(scale)

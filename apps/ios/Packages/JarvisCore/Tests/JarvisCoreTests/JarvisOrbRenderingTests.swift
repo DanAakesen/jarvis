@@ -30,7 +30,7 @@ final class JarvisOrbRenderingTests: XCTestCase {
         XCTAssertTrue(core.contains("endRadius: size * 0.35"))
         XCTAssertFalse(core.contains(".brightness("), "Core animation must preserve transparent pixels")
         let mask = try XCTUnwrap(core.range(of: ".mask {"))
-        let scale = try XCTUnwrap(core.range(of: ".scaleEffect(x:"))
+        let scale = try XCTUnwrap(core.range(of: ".scaleEffect(1 + energy)"))
         XCTAssertLessThan(mask.lowerBound, scale.lowerBound, "The feathered core must animate as one layer")
     }
 }

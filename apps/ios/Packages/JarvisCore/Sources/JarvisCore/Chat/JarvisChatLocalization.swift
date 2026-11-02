@@ -72,6 +72,18 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case groupMore = "chat.groupMore"
     case backgroundTaskDismissed = "chat.backgroundTaskDismissed"
     case needsFailedTitle = "chat.needsFailedTitle"
+    case activityTitle = "chat.activity.title"
+    case followUpUnavailable = "chat.followUpUnavailable"
+    case thinkingGeneric = "chat.thinking.generic"
+    case thinkingWeather = "chat.thinking.weather"
+    case thinkingCalendar = "chat.thinking.calendar"
+    case thinkingMail = "chat.thinking.mail"
+    case thinkingSearch = "chat.thinking.search"
+    case thinkingCode = "chat.thinking.code"
+    case thinkingImage = "chat.thinking.image"
+    case thinkingAttachments = "chat.thinking.attachments"
+    case thinkingReconnecting = "chat.thinking.reconnecting"
+    case thinkingFollowUp = "chat.thinking.followUp"
 }
 
 public enum JarvisChatLocalization {

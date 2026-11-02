@@ -6,12 +6,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
+/// One area for approvals, background work and notifications.
 enum ActivitySheetKind: String, Identifiable {
-    case background
-    case needsYou
+    case activity
 
     var id: String { rawValue }
-    var title: String { self == .background ? "Background activity" : "Needs you" }
 }
 
 private enum ChatSheet: Identifiable {
@@ -191,7 +190,7 @@ struct JarvisChatScreen: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    presentedSheet = .activity(.needsYou)
+                    presentedSheet = .activity(.activity)
                 } label: {
                     ZStack {
                         Image(systemName: "bell")
@@ -493,11 +492,22 @@ struct JarvisChatScreen: View {
             style: .continuous
         )
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            messageText(text, role: role, messageID: messageID)
-                .font(.body)
-                .foregroundStyle(.primary)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .center, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                if messageID == "streaming" && model.streamingText.isEmpty {
+                    JarvisOrbView(
+                        activity: .thinking,
+                        diameter: JarvisDesignTokens.chatMiniCoreSize,
+                        usesStaticFilaments: model.fixtureMode || reduceMotion
+                    )
+                    .accessibilityHidden(true)
+                }
+                messageText(text, role: role, messageID: messageID)
+                    .font(.body)
+                    .foregroundStyle(messageID == "streaming" && model.streamingText.isEmpty ? .secondary : .primary)
+                    .jarvisShimmer(isActive: messageID == "streaming" && model.streamingText.isEmpty && !reduceMotion && !model.fixtureMode)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             if interrupted {
                 Text("Interrupted")
                     .font(.caption)
@@ -598,9 +608,6 @@ struct JarvisChatScreen: View {
             if let confirmation = model.activeConfirmation {
                 approvalBar(confirmation)
             }
-            if model.shouldShowNowBar {
-                nowBar
-            }
             if let status = screenShareStatus {
                 Label(status.text, systemImage: status.symbol)
                     .font(.footnote)
@@ -624,41 +631,45 @@ struct JarvisChatScreen: View {
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
             }
-            if !model.pendingAttachments.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                        ForEach(model.pendingAttachments) { attachment in
-                            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                                Image(systemName: attachment.contentType.hasPrefix("image/") ? "photo" : "doc")
-                                    .accessibilityHidden(true)
-                                Text(attachment.name)
-                                    .lineLimit(1)
-                                Button {
-                                    model.removeAttachment(attachment)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(model.isSending)
-                                .accessibilityLabel("Remove \(attachment.name)")
-                            }
-                            .font(.caption)
-                            .padding(JarvisDesignTokens.chatMessageSpacing)
-                            .jarvisGlassSurface()
-                        }
-                    }
-                    .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-                }
-                .scrollIndicators(.hidden)
+            if model.shouldShowNowBar {
+                nowBar
             }
             VStack(spacing: 0) {
+                if !model.pendingAttachments.isEmpty {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                            ForEach(model.pendingAttachments) { attachment in
+                                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                    Image(systemName: attachment.contentType.hasPrefix("image/") ? "photo" : "doc")
+                                        .accessibilityHidden(true)
+                                    Text(attachment.name)
+                                        .lineLimit(1)
+                                    Button {
+                                        model.removeAttachment(attachment)
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(model.isSending)
+                                    .accessibilityLabel("Remove \(attachment.name)")
+                                }
+                                .font(.caption)
+                                .padding(JarvisDesignTokens.chatMessageSpacing)
+                                .jarvisGlassSurface()
+                            }
+                        }
+                        .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
+                        .padding(.top, JarvisDesignTokens.chatComposerSpacing / 2)
+                    }
+                    .scrollIndicators(.hidden)
+                }
                 TextField(copy(.messagePlaceholder), text: $model.draft, axis: .vertical)
                     .font(.body)
                     .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
                     .focused($composerFocused)
                     .submitLabel(.send)
                     .onSubmit(sendMessage)
-                    .disabled(model.isSending || model.fixtureTurnUnavailable)
+                    .disabled(model.fixtureTurnUnavailable)
                     .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
                     .padding(.top, JarvisDesignTokens.chatComposerTextInset)
                     .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
@@ -704,7 +715,7 @@ struct JarvisChatScreen: View {
             title: copy(dictation.isListening ? .stopDictation : .dictate),
             systemImage: dictation.isListening ? "stop.circle.fill" : "mic",
             identifier: "chat.dictate",
-            isDisabled: model.isSending || model.fixtureMode,
+            isDisabled: model.fixtureMode,
             action: toggleDictation
         )
     }
@@ -734,7 +745,7 @@ struct JarvisChatScreen: View {
     /// One slot, one size: Voice while the field is empty, Send once there is text, Stop while Jarvis answers.
     @ViewBuilder
     private var trailingButton: some View {
-        if model.isSending {
+        if model.isSending && !model.canSend {
             Button {
                 Task { await model.cancel() }
             } label: {
@@ -1088,8 +1099,8 @@ struct JarvisChatScreen: View {
     }
 
     private func sendMessage() {
-        guard !model.isSending, model.canSend else { return }
-        if let source = liveSource {
+        guard model.canSend else { return }
+        if !model.isSending, let source = liveSource {
             let frame = source == .screen ? screenShareBridge.latestFrame() : cameraCapture?.latestFrame()
             guard let frame else {
                 model.actionError = copy(source == .screen ? .screenFrameUnavailable : .cameraFrameUnavailable)
@@ -1139,7 +1150,7 @@ struct JarvisChatScreen: View {
 
     private var nowBar: some View {
         Button {
-            presentedSheet = .activity(.background)
+            presentedSheet = .activity(.activity)
             Task { await model.refreshActivity() }
         } label: {
             HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {

@@ -100,6 +100,8 @@ enum JarvisDesignTokens {
     static let sidebarOpenThreshold: CGFloat = 0.5
     static let sidebarCloseThreshold: CGFloat = 0.3
     static let sidebarBrandFontSize: CGFloat = 22
+    /// Blur on the front page when the sidebar is fully open; it grows with the swipe.
+    static let sidebarPageBlurRadius: CGFloat = 8
     static let sidebarSettingsButtonSize: CGFloat = 44
     static let sidebarHeaderLeadingInset: CGFloat = 26
     static let sidebarHeaderTrailingInset: CGFloat = 10
@@ -139,6 +141,10 @@ enum JarvisDesignTokens {
     static let chatVideoTileHeight: CGFloat = 208
     static let chatVideoTileRadius: CGFloat = surfaceRadius
     static let nowBarHeight: CGFloat = 36
+    /// The small core shown in the assistant's bubble while its answer is on the way.
+    static let chatMiniCoreSize: CGFloat = 28
+    /// How far the composer rim's pulse travels outwards before it fades.
+    static let rimRippleReach: CGFloat = 7
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
@@ -164,7 +170,8 @@ enum JarvisDesignTokens {
     static let voiceOrbListeningDuration: Double = 2.8
     static let voiceOrbThinkingDuration: Double = 1.5
     static let voiceOrbSpeakingDuration: Double = 0.9
-    static let voiceControlDiameter: CGFloat = 52
+    /// Floating glass buttons share the chat header button size everywhere.
+    static let voiceControlDiameter: CGFloat = chatMinimumTapTarget
     static let voiceControlSpacing: CGFloat = 16
     static let voiceControlBottomInset: CGFloat = 24
     static let voiceCameraTileWidth: CGFloat = 122

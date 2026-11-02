@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "Unlock Jarvis with Face ID.";
+"NSLocationWhenInUseUsageDescription" = "Jarvis uses your approximate location for local weather.";
