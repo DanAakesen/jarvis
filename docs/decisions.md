@@ -10479,3 +10479,32 @@ element is queried without a type, the container is no longer required to be
 hittable (its rows are), and per-test time allowances are 120/150 s because a
 cold simulator launch took 38 s. Unconfirmed on device until the next preview
 build; the temporary debug line stays until Dan confirms.
+
+## 2026-11-02: Root screen chosen from the navigation model, not a NavigationStack path (P15-41)
+
+CI trace after tapping a sidebar item was `path=[softwareFactory] current=softwareFactory shown=-`: the model
+was correct but the stack never pushed the destination. The visible root screen is now selected directly from
+`navigation.currentDestination` inside a plain `NavigationStack` (kept only for nested pushes such as Factory task
+detail), so a root destination cannot be dropped by a path push. Unconfirmed on device until the next preview build.
+
+## 2026-11-02: Root screen host observes the navigation model directly (P15-41)
+
+CI on f5a5d64 showed `current=softwareFactory shown=chat open=false`: the model and drawer updated but the screen
+stayed on Chat, with both the path push and the `currentDestination` switch. The drawer reads the model in its own
+body; ContentView read it only inside its `GeometryReader` closure, which is not a reliable subscription. The root
+screen is now built by `JarvisDestinationHost`, which holds the model as `@ObservedObject`. This is the best reading
+of the code, not reproduced; confirm on the next preview build.
+
+## 2026-11-02: Item tap crash/hang after the host change (P15-41)
+
+CI on e636f8b: the Danish item test lost the app connection and the English one logged "Unable to monitor event loop"
+after tapping Software Factory, so the screen now renders but the app stalls or dies. No recursive update, force
+unwrap or main-thread loop was found by reading the code; the likely trigger is the render pass itself. Mitigations,
+not confirmed: the screen swap runs with animations off (`transaction(value:)`), so the drawer spring no longer animates
+a whole-screen layout; the debug `shown` report is published after the view update and only when it changed. The menu
+test keeps the 2 s existence check and gives the geometry checks a separate 6 s allowance, because each snapshot can
+take about a second on a loaded simulator.
+
+## 2026-11-02: Sidebar item tap crash was a Factory format string (confirmed)
+
+The crash report in the CI `ios-scheme` xcresult (run 41370702750) shows `EXC_BAD_ACCESS` in `String(format:)` called from `JarvisFactoryBoardRow.rowContent` (`JarvisFactoryArea.swift:791`). `factory.blockedBy` and `factory.issueNumber` used `%@` but were given `Int` values, so the Factory board crashed whenever a fixture card had a blocker. Both strings now use `%ld` in Danish and English. The earlier navigation workarounds were not the cause. CI already uploads crash reports inside the xcresult artifact.

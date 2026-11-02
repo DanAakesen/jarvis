@@ -38,8 +38,14 @@ final class JarvisNavigationModel: ObservableObject {
         dragProgress = nil
     }
 
+    /// Called from a view's onAppear: skip redundant writes and publish after the current view update,
+    /// so reporting what is shown can never feed back into the render that reported it.
     func debugDestinationShown(_ destination: JarvisDestination) {
-        debugShown = destination.rawValue
+        guard debugShown != destination.rawValue else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.debugShown != destination.rawValue else { return }
+            self.debugShown = destination.rawValue
+        }
     }
 
     func openSidebar() {

@@ -712,7 +712,7 @@ class SafeFailureTests(unittest.TestCase):
                          'XCTAssertTrue(app.buttons["navigation.chat"].isHittable)'):
             self.assertIn(required, source)
         opened = source.split("menu.coordinate(withNormalizedOffset:", 1)[1]
-        self.assertIn("timeout: 2", opened)
+        self.assertIn("sidebar.waitForExistence(timeout: 2)", opened)
         self.assertNotIn("timeout: 10", opened)
         self.assertNotIn("Thread.sleep", opened)
         self.assertNotIn("--ui-test-navigation-variant", source)
@@ -914,8 +914,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", content)
         self.assertNotIn("@State private var navigation", content)
         self.assertNotIn("@StateObject private var navigation", content)
-        self.assertIn("get: { navigation.path }", shell)
-        self.assertIn("navigation.setPath($0)", shell)
+        self.assertIn("JarvisDestinationHost(navigation: navigation)", shell)
+        self.assertNotIn("path: Binding", shell)
         self.assertIn("navigation.voiceSessionStateChanged(state)", shell)
         self.assertIn("guard appliedSessionEpoch == sessionEpoch else { return }", shell)
         self.assertIn("workspaceRuntime.consumeRequestedDestination()", shell)
