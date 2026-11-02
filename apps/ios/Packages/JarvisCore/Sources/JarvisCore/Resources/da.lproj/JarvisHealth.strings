@@ -73,3 +73,17 @@
 "health.saveFailed" = "Kunne ikke gemme. Prøv igen med de samme værdier.";
 "health.cancel" = "Annuller";
 "health.loadMore" = "Vis flere";
+"health.overview" = "Overblik";
+"health.log" = "Log";
+"health.logLift" = "Log løft";
+"health.logWorkout" = "Log træning";
+"health.newWorkout" = "Ny træning";
+"health.workoutType" = "Type";
+"health.workoutDuration" = "Varighed (min.)";
+"health.workoutUnavailable" = "Træning kan ikke gemmes endnu.";
+"health.workoutType.chestTricepsCore" = "Bryst + triceps + core";
+"health.workoutType.backBicepsCore" = "Ryg + biceps + core";
+"health.workoutType.armsShoulders" = "Arme + skuldre";
+"health.workoutType.legsCore" = "Ben + core";
+"health.workoutType.cardio" = "Cardio";
+"health.workoutType.other" = "Andet";

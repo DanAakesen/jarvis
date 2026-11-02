@@ -149,6 +149,11 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case historyTruncated = "factory.historyTruncated"
     case sandbox = "factory.sandbox"
     case jarvisModel = "factory.jarvisModel"
+    case openInGitHub = "factory.openInGitHub"
+    case pipeline = "factory.pipeline"
+    case tasks = "factory.tasks"
+    case task = "factory.task"
+    case stageTasks = "factory.stageTasks"
 }
 
 public enum JarvisFactoryLocalization {

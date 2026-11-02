@@ -73,3 +73,17 @@
 "health.saveFailed" = "Could not save. Try again with the same values.";
 "health.cancel" = "Cancel";
 "health.loadMore" = "Load more";
+"health.overview" = "Overview";
+"health.log" = "Log";
+"health.logLift" = "Log lift";
+"health.logWorkout" = "Log workout";
+"health.newWorkout" = "New workout";
+"health.workoutType" = "Type";
+"health.workoutDuration" = "Duration (min)";
+"health.workoutUnavailable" = "Workouts can't be saved yet.";
+"health.workoutType.chestTricepsCore" = "Chest + triceps + core";
+"health.workoutType.backBicepsCore" = "Back + biceps + core";
+"health.workoutType.armsShoulders" = "Arms + shoulders";
+"health.workoutType.legsCore" = "Legs + core";
+"health.workoutType.cardio" = "Cardio";
+"health.workoutType.other" = "Other";
