@@ -167,7 +167,7 @@ struct JarvisActivitySheet: View {
             }
         }
         .padding(JarvisDesignTokens.chatGlassInset)
-        .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+        .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
     }
 
     private func failedTaskRow(_ task: BackgroundTaskRecord) -> some View {
@@ -253,7 +253,7 @@ struct JarvisActivitySheet: View {
                 }
                 .padding(JarvisDesignTokens.chatGlassInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
             }
         }
     }
@@ -275,7 +275,7 @@ struct JarvisActivitySheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(JarvisDesignTokens.chatGlassInset)
-                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
             }
         }
     }
@@ -288,7 +288,7 @@ struct JarvisActivitySheet: View {
                 .font(.body)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(JarvisDesignTokens.chatGlassInset)
-                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
         }
     }
 
@@ -319,7 +319,7 @@ struct JarvisActivitySheet: View {
                 }
                 .padding(JarvisDesignTokens.chatGlassInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
             }
         }
     }

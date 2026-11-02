@@ -289,6 +289,16 @@ enum JarvisDesignTokens {
     static let orbGlassHighlight = Color(red: 0.26, green: 0.34, blue: 0.42)
     static let orbGlassShadow = Color(red: 0.025, green: 0.04, blue: 0.06)
     static let orbGlassShadowColor = Color.black.opacity(0.38)
+    /// The board's light glass fill (`--g-fill-bar`): white in light, deep blue-grey in dark.
+    static let glassFill = adaptiveColor(
+        light: UIColor(white: 1, alpha: 0.44),
+        dark: UIColor(red: 16.0 / 255, green: 22.0 / 255, blue: 30.0 / 255, alpha: 0.36)
+    )
+    /// The warm glint at the end of the composer rim's sweep.
+    static let rimGlint = adaptiveColor(
+        light: UIColor(red: 1, green: 150.0 / 255, blue: 40.0 / 255, alpha: 1),
+        dark: UIColor(red: 1, green: 205.0 / 255, blue: 120.0 / 255, alpha: 1)
+    )
     static let orbCyan = adaptiveColor(
         light: UIColor(red: 42.0 / 255, green: 164.0 / 255, blue: 194.0 / 255, alpha: 1),
         dark: UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 1)

@@ -10570,3 +10570,13 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Every control that floats over content keeps Apple's glass behind the control itself. The header buttons no longer hide their system glass (`sharedBackgroundVisibility(.hidden)` removed). Non-toolbar surfaces use the shared `jarvisGlassSurface(cornerRadius:)` in `JarvisControls.swift`: `glassEffect` (iOS 26 is the deployment target, so no older-OS branch is needed) with a `regularMaterial` fallback under Reduce Transparency.
 - The "Screen sharing stopped." line no longer shows once sharing ends; only starting, live and error states show a status line.
 - Not done yet from Part 1: the remaining screens' ad hoc controls, Usage chips, the Health toggle and burger/plus removal. Which page counts as the main shell for the burger needs Dan's answer, because the sidebar is the only navigation entry.
+
+## 2026-11-02 — P15-55: clear glass, composer rim and orange composer icons (Dan, PR 1518)
+
+- Status: accepted; not compiled here, needs iOS CI and a device check against `docs/ios/design/board.html`.
+- Glass: the board's glass is clear with a light fill (`--g-fill-bar`). `JarvisGlass.surface(tint:)` is now `Glass.clear` with `JarvisDesignTokens.glassFill` (white 44% light, blue-grey 36% dark), replacing `.regular` for the composer, Now bar, bubbles, chips and activity cards. Reduce Transparency still falls back to a material.
+- Composer rim: `jarvisRim` in the shared layer follows the board's `data-cs` states (idle 0.4 opacity, 1.5 pt, 40 s lap; typing 0.9, 2 pt, 14 s; listening 0.9, 2 pt, 8 s; thinking 1.0, 3 pt, 7 s). The earlier agreement (P14-32, DESIGN.md) is a thin 2 pt rim, no hover rim, and a steady rim under reduced motion; that is kept. Colour is the orange primary accent with a warm glint, not the web's teal.
+- Pulse: random 2.5–7 s gaps, random 1.2–2.6 s duration and random depth (0.1–0.25, thinking 0.25–0.5), never periodic. Reduce Motion gives a static rim with no sweep and no pulse.
+- Cost: one stroked shape redrawn at 12 fps, no mask, blur or shadow. The board's outer glow is left out because it needs an offscreen shadow.
+- The board shows no rim on the Now bar, so it gets none.
+- Composer icons: voice (waveform), dictation (mic) and send (paper plane) are orange primary-accent icons with no background, from `JarvisComposerIconButton`. The trailing slot is voice when the field is empty and send when there is text. `JarvisFilledCircleButton` is removed.

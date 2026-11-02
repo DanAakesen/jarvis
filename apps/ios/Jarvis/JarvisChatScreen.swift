@@ -515,7 +515,7 @@ struct JarvisChatScreen: View {
                         }
                     }
                     .glassEffect(
-                        .regular.tint(JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
+                        JarvisGlass.surface(tint: JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
                         in: userBubbleShape
                     )
                     .overlay {
@@ -643,7 +643,7 @@ struct JarvisChatScreen: View {
                             }
                             .font(.caption)
                             .padding(JarvisDesignTokens.chatMessageSpacing)
-                            .glassEffect(.regular, in: .capsule)
+                            .jarvisGlassSurface()
                         }
                     }
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
@@ -677,6 +677,7 @@ struct JarvisChatScreen: View {
             .background {
                 Color.clear
                     .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                    .jarvisRim(cornerRadius: JarvisDesignTokens.surfaceRadius, state: rimState)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -685,23 +686,20 @@ struct JarvisChatScreen: View {
         }
     }
 
+    private var rimState: JarvisRimState {
+        if model.isSending { return .thinking }
+        if dictation.isListening { return .listening }
+        return model.canSend ? .typing : .idle
+    }
+
     private var dictateButton: some View {
-        Button(action: toggleDictation) {
-            Image(systemName: dictation.isListening ? "stop.circle.fill" : "mic")
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
-                .foregroundStyle(
-                    dictation.isListening ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent
-                )
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(model.isSending || model.fixtureMode)
-        .accessibilityLabel(copy(dictation.isListening ? .stopDictation : .dictate))
-        .accessibilityIdentifier("chat.dictate")
+        JarvisComposerIconButton(
+            title: copy(dictation.isListening ? .stopDictation : .dictate),
+            systemImage: dictation.isListening ? "stop.circle.fill" : "mic",
+            identifier: "chat.dictate",
+            isDisabled: model.isSending || model.fixtureMode,
+            action: toggleDictation
+        )
     }
 
     private func toggleDictation() {
@@ -754,45 +752,27 @@ struct JarvisChatScreen: View {
             .accessibilityIdentifier("chat.stop")
             .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
         } else if model.canSend {
-            JarvisFilledCircleButton(systemImage: "arrow.up", action: {
-                dictation.stop()
-                sendMessage()
-            })
-            .accessibilityLabel(copy(.sendMessage))
-            .accessibilityIdentifier("chat.send")
-            .accessibilityHint(sendHint)
+            JarvisComposerIconButton(
+                title: copy(.sendMessage),
+                systemImage: "paperplane.fill",
+                identifier: "chat.send",
+                hint: sendHint,
+                action: {
+                    dictation.stop()
+                    sendMessage()
+                }
+            )
         } else {
-            trailingDisc(symbol: "waveform", isSend: false, action: {
-                dictation.stop()
-                onNavigate(.voice)
-            })
-            .accessibilityLabel(copy(.voiceMode))
-            .accessibilityIdentifier("chat.mode")
+            JarvisComposerIconButton(
+                title: copy(.voiceMode),
+                systemImage: "waveform",
+                identifier: "chat.mode",
+                action: {
+                    dictation.stop()
+                    onNavigate(.voice)
+                }
+            )
         }
-    }
-
-    private func trailingDisc(symbol: String, isSend: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 4, weight: .bold))
-                .foregroundStyle(
-                    isSend ? JarvisDesignTokens.primaryAccentForeground : JarvisDesignTokens.secondaryAccent
-                )
-                .frame(
-                    width: JarvisDesignTokens.chatComposerSendDiameter,
-                    height: JarvisDesignTokens.chatComposerSendDiameter
-                )
-                .background(
-                    isSend ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent.opacity(0.16),
-                    in: Circle()
-                )
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
