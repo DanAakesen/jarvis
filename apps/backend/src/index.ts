@@ -1000,6 +1000,7 @@ try {
       pool: database?.pool,
       ownerObjectId: config.auth.ownerObjectId,
       feedsEnabled: config.dailyFeedsEnabled === true,
+      ...(vaultClient ? { gymVault: { vault: vaultClient, logger } } : {}),
       ...(config.dailyFeedsEnabled ? { feeds: {
         ...(googleApiClient ? { google: googleApiClient } : {}),
         ...(dailyMailSemantic ? { semantic: dailyMailSemantic } : {}),

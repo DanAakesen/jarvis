@@ -6997,3 +6997,12 @@ branches before merging. The XCUITest suite continues to run on PRs and retain
 its screenshots, but a UI-test failure is a warning rather than a merge gate;
 the same suite runs nightly on `main` and opens or updates one tracking issue
 when it fails.
+
+## iOS Home (Today) fixture run (P15-57)
+
+`TodayUITests` launches with `--ui-test-navigation --ui-test-today` (simulator only). That run starts on Home with
+fixed data (2 November 2026, 14:30, 6,300 steps, four calendar entries, three tasks, two gym logs) and a stub gym
+store, so no HealthKit prompt, network or live credentials are needed. Rim and greeting shimmer stay static so
+XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs keep their own start page.
+`ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
+

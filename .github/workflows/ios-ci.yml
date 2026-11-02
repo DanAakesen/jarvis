@@ -166,6 +166,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -only-testing:JarvisUITests/SidebarNavigationTests \
             -only-testing:JarvisUITests/ChatComposerUITests \
+            -only-testing:JarvisUITests/TodayUITests \
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 120 \
@@ -488,7 +489,27 @@ jobs:
           fi
       - name: Fail the run when UI tests fail
         if: always() && steps.capture.outputs.result == 'failure'
-        run: exit 1
+        run: |
+          {
+            echo "### Failing UI tests"
+            echo '```'
+            xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/ios-scheme.xcresult" 2>/dev/null | python3 -c "$SUMMARY_SCRIPT" || echo "xcresult summary unavailable"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+        env:
+          SUMMARY_SCRIPT: |
+            import json, sys
+            def walk(node, path):
+                name = path + [node.get("name", "")]
+                if node.get("nodeType") == "Test Case" and node.get("result") == "Failed":
+                    print("/".join(name[-2:]))
+                if node.get("nodeType") == "Failure Message":
+                    print("   " + node.get("name", "")[:600])
+                for child in node.get("children", []):
+                    walk(child, name)
+            for root in json.load(sys.stdin).get("testNodes", []):
+                walk(root, [])
       - name: Shut down iPhone Simulator
         if: always()
         run: |

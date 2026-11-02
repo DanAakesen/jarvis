@@ -11,6 +11,7 @@ import { NutritionTargetsStore, type NutritionTargetsAccess } from './nutrition/
 import { resolveDailyOwner } from './owner.js';
 import { createDailyData } from './query.js';
 import type { DailyFeedProviders } from './feeds/service.js';
+import type { DailyGymVault } from './query.js';
 
 export interface DailyCompositionOptions {
   /** The trusted server switch (JARVIS_DAILY_ENABLED). Anything other than true composes nothing. */
@@ -22,6 +23,8 @@ export interface DailyCompositionOptions {
   /** Separate default-off switch; an empty provider set reports not configured rather than empty coverage. */
   readonly feedsEnabled?: boolean;
   readonly feeds?: DailyFeedProviders;
+  /** The vault client for the Gym log copy. Without it saved entries stay pending and are never reported as copied. */
+  readonly gymVault?: DailyGymVault;
 }
 
 const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
@@ -38,7 +41,7 @@ export function composeDaily(options: DailyCompositionOptions): BackendModule | 
   if (!uuid.test(options.ownerObjectId)) throw new ConfigurationError('The Daily owner must be a UUID');
   const { pool } = options;
   const data = createDailyData(pool, options.ownerObjectId, Date.now, new FridaLookupAdapter(),
-    options.feedsEnabled === true ? options.feeds ?? {} : undefined);
+    options.feedsEnabled === true ? options.feeds ?? {} : undefined, options.gymVault);
   // createDailyData applies this check to its own accessors; the two composed here get the same one.
   const owned = (request: FastifyRequest) => {
     if (resolveDailyOwner(request).toLowerCase() !== options.ownerObjectId.toLowerCase()) throw new AuthenticationDenied(403);

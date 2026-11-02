@@ -1,1 +1,2 @@
 "NSFaceIDUsageDescription" = "Unlock Jarvis with Face ID.";
+"NSHealthShareUsageDescription" = "Jarvis reads your step count to show it on Home. Nothing is written to Health or uploaded.";

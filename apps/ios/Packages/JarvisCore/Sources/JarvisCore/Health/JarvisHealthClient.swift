@@ -157,7 +157,8 @@ public final class JarvisHealthClient: Sendable {
         return try decode(response.body)
     }
 
-    public func createLift(_ draft: JarvisLiftDraft) async throws {
+    @discardableResult
+    public func createLift(_ draft: JarvisLiftDraft) async throws -> JarvisVaultState {
         guard draft.isValid else { throw JarvisClientError.invalidRequest }
         let response = try await client.performAuthenticatedRequest(
             method: .post,
@@ -172,12 +173,57 @@ public final class JarvisHealthClient: Sendable {
         guard UUID(uuidString: result.entry.id) != nil else {
             throw JarvisHealthClientError.invalidResponse
         }
+        return result.entry.vault ?? .pending
     }
 
     private struct LiftEnvelope: Decodable {
         let entry: Entry
-        struct Entry: Decodable { let id: String }
+        struct Entry: Decodable {
+            let id: String
+            let vault: JarvisVaultState?
+        }
     }
+
+    /// Saves a workout. The entry is kept even when `vault` is `.pending`; repeating the same draft retries the copy.
+    public func createWorkout(_ draft: JarvisWorkoutDraft) async throws -> JarvisWorkoutEntry {
+        guard draft.isValid else { throw JarvisClientError.invalidRequest }
+        let response = try await client.performAuthenticatedRequest(
+            method: .post,
+            path: ["daily", "workouts"],
+            body: try JSONEncoder().encode(draft),
+            idempotent: false
+        )
+        guard response.statusCode == 200 || response.statusCode == 201 else {
+            throw JarvisHealthClientError.invalidResponse
+        }
+        let result: WorkoutEnvelope = try decode(response.body)
+        guard result.entry.isValid else { throw JarvisHealthClientError.invalidResponse }
+        return result.entry
+    }
+
+    /// Lists recent workouts for the Health and Home pages; `days` is 7, 14 or 30 when set.
+    public func recentWorkouts(days: Int? = nil, limit: Int = 50) async throws -> [JarvisWorkoutEntry] {
+        guard (1...100).contains(limit), days.map({ [7, 14, 30].contains($0) }) ?? true else {
+            throw JarvisClientError.invalidRequest
+        }
+        var query = [URLQueryItem(name: "limit", value: String(limit))]
+        if let days { query.append(URLQueryItem(name: "days", value: String(days))) }
+        let response = try await client.performAuthenticatedRequest(
+            method: .get,
+            path: ["daily", "workouts"],
+            queryItems: query,
+            idempotent: true
+        )
+        guard response.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
+        let result: WorkoutListEnvelope = try decode(response.body)
+        guard result.items.count <= limit, result.items.allSatisfy(\.isValid) else {
+            throw JarvisHealthClientError.invalidResponse
+        }
+        return result.items
+    }
+
+    private struct WorkoutEnvelope: Decodable { let entry: JarvisWorkoutEntry }
+    private struct WorkoutListEnvelope: Decodable { let items: [JarvisWorkoutEntry] }
 
     public func query(_ query: JarvisHealthQuery) async throws -> JarvisHealthQueryResult {
         let body: Data
