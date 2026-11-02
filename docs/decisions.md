@@ -10618,3 +10618,8 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 - Dictation shows `JarvisWaveform` between the plus button and the dictate button while listening: a centred line of 48 bars driven by the microphone RMS (about 20 updates per second, newest right). Reduce Motion drops the interpolation. It only exists while listening, so UI-test runs are unaffected. Not compiled here (no Xcode); needs iOS CI and a device check.
 - CI on e7165a3 failed only `testPlusMenuOpensNextToThePlusButton`. The log shows a 69 s "Setting up automation session" for that test (others 1-8 s), which points at a slow simulator rather than a changed `chat.plus` control. The rim is already static in fixture mode. The failed run was re-run on the same commit to confirm; no test was weakened.
+
+## 2026-11-02 P15-55: CI on cd256f5
+
+- PC bridge job: `BrowserExecutorTests.Browser_executor_falls_back_to_cdp_when_extension_is_disconnected` failed in `FakeCdpTarget.DisposeAsync` (`ObjectDisposedException` on the HttpListener). It is a test-teardown race in code this PR does not touch, so it is treated as flaky and re-run.
+- iOS UI job: `testSentMessageBubbleIsVisibleAboveComposer` hung past its 2 minute allowance (a different test than on e7165a3; the plus-menu test passed). Both hangs are idle-wait symptoms. `JarvisRim` no longer builds a `TimelineView` at all when static (fixture or Reduce Motion), instead of a paused one, so nothing can schedule frames in UI-test runs. Not verifiable without Xcode; the next iOS CI run is the check.

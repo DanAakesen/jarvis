@@ -96,31 +96,40 @@ struct JarvisRim: ViewModifier {
 
     func body(content: Content) -> some View {
         content.overlay {
-            TimelineView(.animation(minimumInterval: 1.0 / 12, paused: isStatic)) { timeline in
-                let angle = isStatic ? 0 : clock.advance(to: timeline.date, lap: state.lap)
-                ZStack {
-                    shape.strokeBorder(JarvisDesignTokens.primaryAccent.opacity(0.35), lineWidth: 1)
-                    shape.strokeBorder(
-                        AngularGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .clear, location: 0.52),
-                                .init(color: JarvisDesignTokens.primaryAccent, location: 0.78),
-                                .init(color: JarvisDesignTokens.rimGlint, location: 0.94),
-                                .init(color: .clear, location: 1),
-                            ],
-                            center: .center,
-                            angle: .degrees(angle)
-                        ),
-                        lineWidth: state.width
-                    )
+            Group {
+                if isStatic {
+                    rim(angle: 0)
+                } else {
+                    TimelineView(.animation(minimumInterval: 1.0 / 12)) { timeline in
+                        rim(angle: clock.advance(to: timeline.date, lap: state.lap))
+                    }
                 }
-                .opacity(state.opacity * pulse)
             }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
         .task(id: "\(state)-\(isStatic)") { await breathe() }
+    }
+
+    private func rim(angle: Double) -> some View {
+        ZStack {
+            shape.strokeBorder(JarvisDesignTokens.primaryAccent.opacity(0.35), lineWidth: 1)
+            shape.strokeBorder(
+                AngularGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: .clear, location: 0.52),
+                        .init(color: JarvisDesignTokens.primaryAccent, location: 0.78),
+                        .init(color: JarvisDesignTokens.rimGlint, location: 0.94),
+                        .init(color: .clear, location: 1),
+                    ],
+                    center: .center,
+                    angle: .degrees(angle)
+                ),
+                lineWidth: state.width
+            )
+        }
+        .opacity(state.opacity * pulse)
     }
 
     /// Dips the rim at random intervals and depths, so it never ticks like a metronome.
