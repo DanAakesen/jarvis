@@ -67,6 +67,9 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case dismiss = "chat.dismiss"
     case dismissing = "chat.dismissing"
     case dismissLabel = "chat.dismissLabel"
+    case clearAll = "chat.clearAll"
+    case clearGroupLabel = "chat.clearGroupLabel"
+    case groupMore = "chat.groupMore"
     case backgroundTaskDismissed = "chat.backgroundTaskDismissed"
     case needsFailedTitle = "chat.needsFailedTitle"
 }

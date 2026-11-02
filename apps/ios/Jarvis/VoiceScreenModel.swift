@@ -14,6 +14,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var isCaptionsEnabled = false
     @Published private(set) var isMinimized = false
     @Published private(set) var isCameraEnabled = false
+    private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
     @Published private(set) var isScreenSharing = false
     @Published private(set) var userCaption = ""
@@ -32,6 +33,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private var sessionClient: VoiceSessionClient?
     private var httpClient: JarvisClient?
     private var voiceSessionID: String?
+    private var liveStreamTask: Task<Void, Never>?
     private var responseID: String?
     private var photoForNextTurn: Data?
     private var sessionGeneration = 0
@@ -365,6 +367,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
         await liveActivity.end()
@@ -396,11 +399,17 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return
         }
         cameraPermissionDenied = false
+        if isPhotoSession {
+            camera?.stop()
+            camera = nil
+            isPhotoSession = false
+        }
         let capture = VoiceCameraCapture()
         do {
             try capture.start()
             camera = capture
             isCameraEnabled = true
+            updateLiveStream()
             photoIsReady = false
             if let sessionClient { try await sessionClient.setCameraState(on: true) }
         } catch {
@@ -412,11 +421,47 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
 
+    /// Camera for a single photo while live video is off. Nothing is streamed and the session is not told that
+    /// video is on; `endPhotoSession` releases the camera again.
+    func beginPhotoSession() async -> Bool {
+        guard canUseControls else { return false }
+        if camera != nil { return true }
+        let generation = sessionGeneration
+        let allowed = await VoiceCameraCapture.requestAccess()
+        guard sessionGeneration == generation, canUseControls else { return false }
+        guard allowed else {
+            cameraPermissionDenied = true
+            return false
+        }
+        cameraPermissionDenied = false
+        let capture = VoiceCameraCapture()
+        do {
+            try capture.start()
+        } catch {
+            capture.stop()
+            errorMessage = JarvisVoiceLocalization.string(.cameraUnavailable)
+            return false
+        }
+        camera = capture
+        isPhotoSession = true
+        return true
+    }
+
+    func endPhotoSession() {
+        guard isPhotoSession else { return }
+        isPhotoSession = false
+        if !isCameraEnabled {
+            camera?.stop()
+            camera = nil
+        }
+    }
+
     func stopCamera() async {
         let generation = sessionGeneration
         camera?.stop()
         camera = nil
         isCameraEnabled = false
+        updateLiveStream()
         photoForNextTurn = nil
         photoIsReady = false
         if let sessionClient {
@@ -446,6 +491,36 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
         guard sessionGeneration == generation, !isEnding else { return }
         isScreenSharing = enabled
+        updateLiveStream()
+    }
+
+    /// Streams sampled frames of the live screen share or camera for the whole voice session, so Jarvis keeps
+    /// receiving them and `watch_for` has a real source. The input is labelled as live screen or live camera.
+    private func updateLiveStream() {
+        liveStreamTask?.cancel()
+        liveStreamTask = nil
+        guard let httpClient, let voiceSessionID else { return }
+        let source: VoiceScreenSource
+        let capture: @Sendable () async -> Data?
+        if isScreenSharing {
+            source = .screen
+            capture = { VoiceScreenShareBridge().latestFrame() }
+        } else if isCameraEnabled, let camera {
+            source = .camera
+            capture = { camera.latestFrame() }
+        } else {
+            return
+        }
+        let watch = VisionWatchClient(client: httpClient)
+        liveStreamTask = Task {
+            let feedId = UUID().uuidString
+            await LiveFrameStreamer(
+                source: source,
+                capture: capture,
+                post: { try await watch.post(sessionId: voiceSessionID, source: source, jpeg: $0, feedId: feedId) }
+            ).run()
+            await Task { await watch.stop(sessionId: voiceSessionID, source: source, feedId: feedId) }.value
+        }
     }
 
     func startScreenShareMonitoring() {
@@ -483,6 +558,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         switch message {
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
+            updateLiveStream()
             beginAudioIfNeeded()
         case .sessionEnded:
             let generation = sessionGeneration
@@ -516,12 +592,11 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         case .responseCancelled:
             audio.stopPlayback()
             responseID = nil
-        case .visualContext(_, let path, let reason):
-            if path == "caption", let reason {
-                errorMessage = Self.visualFailure(reason)
-            }
+        case .visualContext:
+            // The caption path is a working fallback, not a failure.
+            break
         case .screenContextUnavailable(_, let reason):
-            if let reason { errorMessage = Self.visualFailure(reason) }
+            if let reason, let message = Self.visualFailure(reason) { errorMessage = message }
         case .speechStarted:
             break
         case .unknown:
@@ -626,6 +701,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         camera = nil
         isCameraEnabled = false
         isScreenSharing = false
+        updateLiveStream()
         let failedClient = sessionClient
         sessionClient = nil
         httpClient = nil
@@ -730,16 +806,16 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         }
     }
 
-    private static func visualFailure(_ reason: String) -> String {
+    /// Only real failures reach the user. A rate-limited or momentarily missing frame in a continuous stream is
+    /// expected, and unknown reasons are not shown as "image unavailable" while the image still works.
+    static func visualFailure(_ reason: String) -> String? {
         switch reason {
         case "daily_limit", "budget_exhausted":
             return JarvisVoiceLocalization.string(.imageLimit)
-        case "frame_rate_limited":
-            return JarvisVoiceLocalization.string(.imageRateLimit)
         case "budget_unavailable":
             return JarvisVoiceLocalization.string(.imageUnavailable)
         default:
-            return JarvisVoiceLocalization.string(.imageUnavailable)
+            return nil
         }
     }
 }

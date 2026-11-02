@@ -39,19 +39,14 @@ struct JarvisNewNoteSheet: View {
             .navigationTitle(copy.newNote)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(copy.cancel) { dismiss() }
-                        .accessibilityIdentifier("sheet.cancel")
-                        .disabled(saving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await create() }
-                    } label: {
-                        if saving { ProgressView() } else { Text(copy.create) }
-                    }
-                    .disabled(!canCreate || saving || outcomeUnknown || authorizationUnavailable)
-                }
+                JarvisSheetToolbar(
+                    confirmTitle: copy.create,
+                    closeTitle: copy.cancel,
+                    isWorking: saving,
+                    isConfirmDisabled: !canCreate || saving || outcomeUnknown || authorizationUnavailable,
+                    onConfirm: { Task { await create() } },
+                    onClose: { dismiss() }
+                )
             }
         }
         .onAppear { folder = initialFolder }
@@ -142,18 +137,14 @@ struct JarvisNewTaskSheet: View {
             .navigationTitle(copy.newTask)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(copy.cancel) { dismiss() }
-                        .disabled(saving)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await create() }
-                    } label: {
-                        if saving { ProgressView() } else { Text(copy.create) }
-                    }
-                    .disabled(!canCreate || saving || outcomeUnknown || authorizationUnavailable)
-                }
+                JarvisSheetToolbar(
+                    confirmTitle: copy.create,
+                    closeTitle: copy.cancel,
+                    isWorking: saving,
+                    isConfirmDisabled: !canCreate || saving || outcomeUnknown || authorizationUnavailable,
+                    onConfirm: { Task { await create() } },
+                    onClose: { dismiss() }
+                )
             }
         }
     }

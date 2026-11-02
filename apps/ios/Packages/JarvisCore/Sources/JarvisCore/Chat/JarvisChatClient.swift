@@ -55,14 +55,17 @@ public final class JarvisChatClient: Sendable {
         sessionId: String,
         text: String,
         attachmentIds: [String] = [],
-        screenContext: String? = nil
+        screenContext: String? = nil,
+        visualContext: ChatVisualContext? = nil
     ) async throws -> AsyncThrowingStream<ChatEvent, any Error> {
         try validateTurn(text: text, attachmentIds: attachmentIds, screenContext: screenContext)
+        guard screenContext == nil || visualContext == nil else { throw JarvisChatClientError.invalidScreenContext }
         guard Self.validID(sessionId) else { throw JarvisChatClientError.invalidResponse }
         let body = try encode(SendTurnRequest(
             text: text,
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
-            screenContext: screenContext
+            screenContext: screenContext,
+            visualContext: visualContext
         ))
         let recoveryStart = await clock.now()
         let response = try await client.performChatStream(
@@ -71,6 +74,26 @@ public final class JarvisChatClient: Sendable {
             body: body
         )
         return eventStream(from: response, sessionId: sessionId, recoveryStart: recoveryStart)
+    }
+
+    /// Uploads one live frame for the next turn and returns the reference the turn carries. The model receives the
+    /// image itself, labelled as a live screen share or live camera view, never as a file attachment.
+    public func uploadVisualFrame(
+        sessionId: String,
+        source: VoiceScreenSource,
+        jpeg: Data,
+        question: String
+    ) async throws -> ChatVisualContext {
+        guard Self.validID(sessionId) else { throw JarvisChatClientError.invalidResponse }
+        let turnId = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let trimmed = String(question.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
+        let frame = try await client.uploadVoiceFrame(
+            sessionId: sessionId, jpeg: jpeg, question: trimmed, turnId: turnId
+        )
+        return ChatVisualContext(
+            source: source, capturedAt: frame.capturedAt, question: trimmed,
+            turnId: turnId, frameId: frame.frameId
+        )
     }
 
     public func listActiveTurns() async throws -> [ActiveChatTurn] {
@@ -478,6 +501,7 @@ private struct SendTurnRequest: Encodable {
     let text: String
     let attachmentIds: [String]?
     let screenContext: String?
+    let visualContext: ChatVisualContext?
 }
 
 private struct ActiveTurnsResponse: Decodable {

@@ -15,6 +15,8 @@ final class LocalizedFormatStringTests: XCTestCase {
         "approval.expires": ["@"],
         "chat.failedChecksSummary": ["ld"],
         "chat.dismissLabel": ["@"],
+        "chat.clearGroupLabel": ["@"],
+        "chat.groupMore": ["ld"],
         "factory.issueNumber": ["ld"],
         "factory.blockedBy": ["ld"],
         "health.target": ["@"],

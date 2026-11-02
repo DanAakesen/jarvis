@@ -109,7 +109,7 @@ struct JarvisNoteEditorView: View {
                     if saving {
                         ProgressView()
                     } else {
-                        Text(copy.save)
+                        Label(copy.save, systemImage: "checkmark").labelStyle(.iconOnly)
                     }
                 }
                 .disabled(!hasChanges || saving || latestConflict != nil || needsReload || client == nil)

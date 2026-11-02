@@ -10541,3 +10541,90 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - CI on ee5e2e0: the Banking step failed because the Banking row is disabled (`JarvisDestination.banking.isNavigable == false`, shown with the "later" label per the 29 October 2026 sidebar decision). Tapping it does nothing by design. It is not a placeholder screen, and it runs no loop or heavy work. The Danish timeout was the descendants query after the failed step.
 - `SidebarNavigationTests` now has one test per navigable item and language, each waiting on the single `screen.<destination>` identifier, so one slow item cannot use the whole allowance. A separate test asserts the Banking row is disabled and does not navigate.
 - If Dan wants Banking to open a placeholder, set `isNavigable` to true and update the navigation tests that pin banking as disabled.
+
+## 2026-11-02 — P15-55: shared Apple-style control layer, first slice
+
+- Status: accepted; the issue is only partly done (see below).
+- `apps/ios/Jarvis/JarvisControls.swift` is the one place for control chrome: `JarvisIconButton` (icon-only glass, 44 pt), `JarvisSheetToolbar` (check mark to confirm, X to close, both trailing, no text), `JarvisChip` (capsule filter/legend pill) and `JarvisFilledCircleButton` (composer send). The Notes, Factory new-task, Steer and Health lift sheets, the note editor save, the camera close X (now right-aligned, icon-only) and the send button use them. Accessibility labels keep the old Danish/English strings, and `sheet.cancel` is kept for UI tests; `sheet.confirm` is new.
+- Dictation: the recogniser starts a shorter transcript after a pause, which overwrote the field. `DictationTranscript` (JarvisCore, unit tested) commits a restarted segment so earlier words stay.
+- Not done in this slice: message survival on backgrounding, screen-share frame streaming and wording, voice video, dictation waveform and field growth, chat transcript sync, 2x lens, notifications grouping, mode control (needs an iOS client for the presence route), add-item sheet fields, Health detent/toggle, sidebar blur, native orb, remaining screens. Usage and Status are placeholders on iOS in this branch, so the first-load error could not be reproduced here; the web pages are unchanged.
+- Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Sheets), SwiftUI `ToolbarContent`, `ButtonStyle.glass`, `LabelStyle.iconOnly`, `buttonBorderShape`, and Speech `SFSpeechRecognitionResult`. Not compiled: no Xcode here; JarvisCore tests pass (254).
+
+## 2026-11-02 — P15-55: live screen/camera frames reach Jarvis as live input, not attachments
+
+- Status: accepted. Traced end to end after build 42 evidence (Dan, issue #1518).
+- Root causes found:
+  1. iOS Chat attached one frame as `Screen.jpg`/`Video.jpg` at send time. The backend turned it into a text description at upload (10 s limit; failure became "File content could not be extracted"), so the model saw a described "file", then called `attachment_list`/`attachment_read`/`watch_for`. Nothing ever posted to `/vision/watch` from iOS (only the web app does), so `watch_for` had no feed and Jarvis said it could not confirm one.
+  2. The broadcast extension refreshed its active marker and frame file only when ReplayKit delivered a frame, which it does only when the screen changes. On a still screen the 5 s freshness lapsed: Chat showed "Screen sharing stopped" and `latestFrame()` returned nil. The Chat status loop also stopped as soon as the state left busy, so it never recovered.
+- Fix: Chat now uploads the frame to `/screen/frames` (mode `handle`) and sends the turn with `visualContext` (`source` screen or camera, `frameId`, `turnId`). The existing frame store resolves it to the real image for the model, and the context text now says "a live screen share" or "a live camera view", never a picture upload. Chat and Voice also stream sampled frames to `/vision/watch` every 2.6 s (`LiveFrameStreamer`, bounded rate and size, stops on 404 or repeated failure, sends DELETE on stop). The extension keeps a 1 s heartbeat that refreshes the marker and last frame. Old `Screen.jpg`/`Video.jpg` attachments are hidden from the Chat history.
+- Tests: JarvisCore (`LiveFrameStreamerTests`, visual context in `JarvisChatClientTests`), Python `test_image_context.py`, backend `visual-context.test.ts`. Not verified: SwiftUI and the broadcast extension were not compiled here; the stream needs a device check, including the vision budget and the 2.5 s per-source rate limit shared with the per-turn frame upload.
+
+## 2026-11-02 — P15-55: one corner radius, one glass surface, transparent chat header
+
+- Status: accepted (Dan's instructions on PR 1518; not compiled here, needs iOS CI and a device check).
+- Branch state: main (`d2d0e9a`, PR 1517) is already an ancestor of this branch, so there was nothing to merge.
+- The sidebar stays on the right, as it is now.
+- One global corner-radius token, `JarvisDesignTokens.surfaceRadius` (24 pt). The composer, Now bar, bubbles, video and camera tiles, plus-menu, Health panels and activity cards derive from it instead of per-view values.
+- The Now bar is 36 pt high (was 44 pt) and uses the same radius as the composer.
+- The chat header bar is transparent with no line: `jarvisAmbientBackground(transparentNavigationBar: true)` hides the navigation bar background and the top scroll-edge effect is hidden.
+- Every control that floats over content keeps Apple's glass behind the control itself. The header buttons no longer hide their system glass (`sharedBackgroundVisibility(.hidden)` removed). Non-toolbar surfaces use the shared `jarvisGlassSurface(cornerRadius:)` in `JarvisControls.swift`: `glassEffect` (iOS 26 is the deployment target, so no older-OS branch is needed) with a `regularMaterial` fallback under Reduce Transparency.
+- The "Screen sharing stopped." line no longer shows once sharing ends; only starting, live and error states show a status line.
+- Not done yet from Part 1: the remaining screens' ad hoc controls, Usage chips, the Health toggle and burger/plus removal. Which page counts as the main shell for the burger needs Dan's answer, because the sidebar is the only navigation entry.
+
+## 2026-11-02 — P15-55: clear glass, composer rim and orange composer icons (Dan, PR 1518)
+
+- Status: accepted; not compiled here, needs iOS CI and a device check against `docs/ios/design/board.html`.
+- Glass: the board's glass is clear with a light fill (`--g-fill-bar`). `JarvisGlass.surface(tint:)` is now `Glass.clear` with `JarvisDesignTokens.glassFill` (white 44% light, blue-grey 36% dark), replacing `.regular` for the composer, Now bar, bubbles, chips and activity cards. Reduce Transparency still falls back to a material.
+- Composer rim: `jarvisRim` in the shared layer follows the board's `data-cs` states (idle 0.4 opacity, 1.5 pt, 40 s lap; typing 0.9, 2 pt, 14 s; listening 0.9, 2 pt, 8 s; thinking 1.0, 3 pt, 7 s). The earlier agreement (P14-32, DESIGN.md) is a thin 2 pt rim, no hover rim, and a steady rim under reduced motion; that is kept. Colour is the orange primary accent with a warm glint, not the web's teal.
+- Pulse: random 2.5–7 s gaps, random 1.2–2.6 s duration and random depth (0.1–0.25, thinking 0.25–0.5), never periodic. Reduce Motion gives a static rim with no sweep and no pulse.
+- Cost: one stroked shape redrawn at 12 fps, no mask, blur or shadow. The board's outer glow is left out because it needs an offscreen shadow.
+- The board shows no rim on the Now bar, so it gets none.
+- Composer icons: voice (waveform), dictation (mic) and send (paper plane) are orange primary-accent icons with no background, from `JarvisComposerIconButton`. The trailing slot is voice when the field is empty and send when there is text. `JarvisFilledCircleButton` is removed.
+
+## 2026-11-02 — P15-55: the composer rim does not animate in fixture/UI-test runs
+
+- CI on d6f6300 failed `ChatComposerUITests.testPlusMenuOpensNextToThePlusButton` (then hung past its allowance). `chat.plus` and the camera menu item were not changed; the new rim's endless `TimelineView` and `withAnimation` pulse loop kept XCUITest from ever seeing the app idle. `jarvisRim(isAnimated:)` is false when `model.fixtureMode` is on, so fixture and UI-test runs show a static rim. Real runs keep the sweep and pulse; Reduce Motion still makes both static. Not compiled or run here; needs the iOS UI test job to confirm.
+
+## 2026-11-02 — P15-55: notifications grouped per category (iOS)
+
+- The notification sheet shows one row per category with the latest update and an "+ N earlier" count. Older items sit in a lazy disclosure. A group with older items has one clear-all control; the toolbar has a clear-everything control. The grouping is `NowFeedActivityGrouping` in JarvisCore (tested).
+- The backend has one dismiss route per item, so clear-all dismisses item by item, treats a missing item as dismissed, stops on any other error and reloads once. A bulk route would need a backend change and was not added.
+- The sheet close X keeps its existing toolbar chrome and `chat.notifications.done`; a repo test pins that source.
+- Not compiled here (no Xcode). Still open: mode control, orb, burger icon (which page is the main shell?), Usage chips, Health toggle and detent, add-item sheet, camera lenses and preview, navigate-away send, dictation waveform, transcript sync.
+
+## 2026-11-02 — P15-55: composer icon identifiers restored
+
+- A bulk edit had hard-coded `sheet.cancel` on `JarvisComposerIconButton`, so `chat.send`, `chat.mode`, `chat.dictate` were missing in the UI tree. The button uses its `identifier` again. `chat.send` exists whenever the draft is non-empty; the UI test needs no change.
+
+## 2026-11-02 — P15-55: build 44 slice (draft, Now bar status, title, voice image message)
+
+- A sent message is never restored to the composer. Cancelling the send task on navigate-away used to put the text back; `discardOptimisticMessage` no longer restores.
+- The Now bar no longer shows thinking or tool status and is not shown just because a turn is sending. The status line ("Thinking…", tool status) is the text of the Jarvis bubble until real text streams in.
+- The chat header has no title.
+- Voice shows an image message only for real failures (`daily_limit`, `budget_exhausted`, `budget_unavailable`). The caption path, `frame_rate_limited` and `frame_unavailable` are expected in a continuous stream and are silent.
+- Not done yet from the build 44 list: reply push notification (1), merged Notifications sheet (4), dictation waveform (6), Camera vs single photo in Voice (8), Live Activity audio line and buttons (10, 11), sidebar blur (12) and the page-by-page application of the shared layer (13). Nothing was compiled (no Xcode).
+
+## 2026-11-02 — P15-55: Voice menu has "Enable video" and "Camera" (item 8)
+
+- Two separate items. "Enable video" / "Aktivér video" is a toggle with on/off state and starts or stops live video (`startCamera`/`stopCamera`). "Camera" / "Kamera" takes one photo and sends it with the next turn. It works with video on or off.
+- With video off, `beginPhotoSession` runs the camera only for the viewfinder: nothing is streamed and the session is not told video is on. The viewfinder sheet's `onDismiss` calls `endPhotoSession`, which releases the camera. Turning video on during a photo session replaces the temporary capture.
+- Not compiled here (no Xcode).
+
+## 2026-11-02 — P15-55: sidebar rows centred as one block
+
+- The navigation rows are one block centred vertically between the header rule and the bottom safe area (`JarvisSidebar`). The bottom safe-area inset moved from inside the scroll content to below the scroll area, so the free space is measured between the two insets and the space above and below the block is equal. Row order, size and spacing are unchanged. If the rows do not fit, the content grows past the minimum height and scrolls from the top. Not compiled here; the iPhone SE and Pro Max screenshots come from iOS CI and need a device check.
+
+## 2026-11-02 P15-55: dictation waveform and plus-menu CI retry
+
+- Dictation shows `JarvisWaveform` between the plus button and the dictate button while listening: a centred line of 48 bars driven by the microphone RMS (about 20 updates per second, newest right). Reduce Motion drops the interpolation. It only exists while listening, so UI-test runs are unaffected. Not compiled here (no Xcode); needs iOS CI and a device check.
+- CI on e7165a3 failed only `testPlusMenuOpensNextToThePlusButton`. The log shows a 69 s "Setting up automation session" for that test (others 1-8 s), which points at a slow simulator rather than a changed `chat.plus` control. The rim is already static in fixture mode. The failed run was re-run on the same commit to confirm; no test was weakened.
+
+## 2026-11-02 P15-55: CI on cd256f5
+
+- PC bridge job: `BrowserExecutorTests.Browser_executor_falls_back_to_cdp_when_extension_is_disconnected` failed in `FakeCdpTarget.DisposeAsync` (`ObjectDisposedException` on the HttpListener). It is a test-teardown race in code this PR does not touch, so it is treated as flaky and re-run.
+- iOS UI job: `testSentMessageBubbleIsVisibleAboveComposer` hung past its 2 minute allowance (a different test than on e7165a3; the plus-menu test passed). Both hangs are idle-wait symptoms. `JarvisRim` no longer builds a `TimelineView` at all when static (fixture or Reduce Motion), instead of a paused one, so nothing can schedule frames in UI-test runs. Not verifiable without Xcode; the next iOS CI run is the check.
+
+## 2026-11-02 P15-55: Voice orb versus the board's chat-bubble mini core
+
+- Checked `JarvisOrbView` (dark glass sphere, cyan rim, orange/amber tangled centre) against the board's `.working-core` / `drawMini` mark. The Voice screen already renders `JarvisOrbView` through `VoiceOrbView`, the same view the gate and lock-screen preview use, so Voice matches Dan's description and nothing is drawn twice. No change made.
+- Difference noted: the board's mini core is only the amber tangle on a transparent canvas, with no sphere or rim, and the iOS chat bubble does not draw a mini mark (status text is the bubble text). If the chat bubble should show the mark, it must reuse `JarvisOrbView` at about 24 pt rather than add a second drawing. Not compiled or compared on a device here.

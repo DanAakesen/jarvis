@@ -186,7 +186,7 @@ struct JarvisChatScreen: View {
         .overlay(alignment: .topTrailing) {
             videoTile
         }
-        .navigationTitle("Chat")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -219,12 +219,10 @@ struct JarvisChatScreen: View {
                 .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
                 .accessibilityIdentifier("chat.notifications")
             }
-            .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSidebarMenuButton(language: appLanguage)
             }
-            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             await model.load()
@@ -295,10 +293,13 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
-        .jarvisAmbientBackground()
+        .jarvisAmbientBackground(transparentNavigationBar: true)
         .onAppear(perform: refreshScreenSharing)
-        .task(id: screenShare.isBusy) {
-            while screenShare.isBusy && !Task.isCancelled {
+        .onChange(of: liveSource) { _, _ in updateLiveStream() }
+        .task {
+            // Keep observing for the whole time the screen is shown: a share that restarts, or a heartbeat that
+            // briefly lapses, must not leave the status stuck on "stopped".
+            while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 refreshScreenSharing()
             }
@@ -316,6 +317,7 @@ struct JarvisChatScreen: View {
         .onDisappear {
             dictation.stop()
             model.suspendObservation()
+            model.stopLiveStream()
             stopVideo()
             if isScreenSharing { stopScreenSharing() }
         }
@@ -376,9 +378,10 @@ struct JarvisChatScreen: View {
                         ForEach(renderedRows) { row in
                             messageRow(row)
                         }
-                        if !model.streamingText.isEmpty {
+                        if model.isSending || !model.streamingText.isEmpty {
                             messageBubble(
-                                text: model.streamingText,
+                                text: model.streamingText.isEmpty
+                                    ? (model.statusLine ?? "Thinking…") : model.streamingText,
                                 role: .jarvis,
                                 interrupted: false,
                                 messageID: "streaming"
@@ -394,7 +397,7 @@ struct JarvisChatScreen: View {
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(.bottom)
-                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(true, for: .top)
                 .scrollEdgeEffectStyle(.soft, for: .bottom)
                 .onChange(of: model.messages.last?.id) { _, _ in
                     scrollToBottom(proxy, animated: !reduceMotion)
@@ -513,7 +516,7 @@ struct JarvisChatScreen: View {
                         }
                     }
                     .glassEffect(
-                        .regular.tint(JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
+                        JarvisGlass.surface(tint: JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
                         in: userBubbleShape
                     )
                     .overlay {
@@ -641,7 +644,7 @@ struct JarvisChatScreen: View {
                             }
                             .font(.caption)
                             .padding(JarvisDesignTokens.chatMessageSpacing)
-                            .glassEffect(.regular, in: .capsule)
+                            .jarvisGlassSurface()
                         }
                     }
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
@@ -665,7 +668,13 @@ struct JarvisChatScreen: View {
 
                 HStack(spacing: 0) {
                     plusMenu
-                    Spacer(minLength: 0)
+                    if dictation.isListening {
+                        JarvisWaveform(levels: dictation.levels)
+                            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
+                            .accessibilityIdentifier("chat.waveform")
+                    } else {
+                        Spacer(minLength: 0)
+                    }
                     dictateButton
                     trailingButton
                 }
@@ -673,9 +682,9 @@ struct JarvisChatScreen: View {
             .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
             .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
             .background {
-                RoundedRectangle(cornerRadius: JarvisDesignTokens.chatComposerRadius)
-                    .fill(reduceTransparency ? JarvisDesignTokens.glassSolid : Color.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: JarvisDesignTokens.chatComposerRadius))
+                Color.clear
+                    .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                    .jarvisRim(cornerRadius: JarvisDesignTokens.surfaceRadius, state: rimState, isAnimated: !model.fixtureMode)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -684,23 +693,20 @@ struct JarvisChatScreen: View {
         }
     }
 
+    private var rimState: JarvisRimState {
+        if model.isSending { return .thinking }
+        if dictation.isListening { return .listening }
+        return model.canSend ? .typing : .idle
+    }
+
     private var dictateButton: some View {
-        Button(action: toggleDictation) {
-            Image(systemName: dictation.isListening ? "stop.circle.fill" : "mic")
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
-                .foregroundStyle(
-                    dictation.isListening ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent
-                )
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(model.isSending || model.fixtureMode)
-        .accessibilityLabel(copy(dictation.isListening ? .stopDictation : .dictate))
-        .accessibilityIdentifier("chat.dictate")
+        JarvisComposerIconButton(
+            title: copy(dictation.isListening ? .stopDictation : .dictate),
+            systemImage: dictation.isListening ? "stop.circle.fill" : "mic",
+            identifier: "chat.dictate",
+            isDisabled: model.isSending || model.fixtureMode,
+            action: toggleDictation
+        )
     }
 
     private func toggleDictation() {
@@ -753,45 +759,27 @@ struct JarvisChatScreen: View {
             .accessibilityIdentifier("chat.stop")
             .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
         } else if model.canSend {
-            trailingDisc(symbol: "arrow.up", isSend: true, action: {
-                dictation.stop()
-                sendMessage()
-            })
-            .accessibilityLabel(copy(.sendMessage))
-            .accessibilityIdentifier("chat.send")
-            .accessibilityHint(sendHint)
+            JarvisComposerIconButton(
+                title: copy(.sendMessage),
+                systemImage: "paperplane.fill",
+                identifier: "chat.send",
+                hint: sendHint,
+                action: {
+                    dictation.stop()
+                    sendMessage()
+                }
+            )
         } else {
-            trailingDisc(symbol: "waveform", isSend: false, action: {
-                dictation.stop()
-                onNavigate(.voice)
-            })
-            .accessibilityLabel(copy(.voiceMode))
-            .accessibilityIdentifier("chat.mode")
+            JarvisComposerIconButton(
+                title: copy(.voiceMode),
+                systemImage: "waveform",
+                identifier: "chat.mode",
+                action: {
+                    dictation.stop()
+                    onNavigate(.voice)
+                }
+            )
         }
-    }
-
-    private func trailingDisc(symbol: String, isSend: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 4, weight: .bold))
-                .foregroundStyle(
-                    isSend ? JarvisDesignTokens.primaryAccentForeground : JarvisDesignTokens.secondaryAccent
-                )
-                .frame(
-                    width: JarvisDesignTokens.chatComposerSendDiameter,
-                    height: JarvisDesignTokens.chatComposerSendDiameter
-                )
-                .background(
-                    isSend ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent.opacity(0.16),
-                    in: Circle()
-                )
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -928,7 +916,7 @@ struct JarvisChatScreen: View {
         case .idle: nil
         case .starting: (copy(.screenShareStarting), "dot.radiowaves.left.and.right", false)
         case .live: (copy(.screenSharingActive), "dot.radiowaves.left.and.right", false)
-        case .stopped: (copy(.screenShareStopped), "stop.circle", false)
+        case .stopped: nil
         case .failed: (copy(.screenShareFailed), "exclamationmark.triangle", true)
         case .extensionMissing: (copy(.screenShareExtensionMissing), "exclamationmark.triangle", true)
         }
@@ -1101,28 +1089,35 @@ struct JarvisChatScreen: View {
 
     private func sendMessage() {
         guard !model.isSending, model.canSend else { return }
-        let hasPendingVisualCapture = model.pendingAttachments.contains {
-            $0.name == "Video.jpg" || $0.name == "Screen.jpg"
-        }
-        if (isVideoEnabled || isScreenSharing) && !hasPendingVisualCapture {
-            guard model.pendingAttachments.count < ChatAttachmentLimits.maximumCount else {
-                model.actionError = copy(.attachmentLimitReached)
-                return
-            }
-            let frame = isScreenSharing ? screenShareBridge.latestFrame() : cameraCapture?.capturePhoto()
+        if let source = liveSource {
+            let frame = source == .screen ? screenShareBridge.latestFrame() : cameraCapture?.latestFrame()
             guard let frame else {
-                model.actionError = copy(isScreenSharing ? .screenFrameUnavailable : .cameraFrameUnavailable)
+                model.actionError = copy(source == .screen ? .screenFrameUnavailable : .cameraFrameUnavailable)
                 return
             }
-            let attachmentCount = model.pendingAttachments.count
-            model.addAttachment(
-                name: isScreenSharing ? "Screen.jpg" : "Video.jpg",
-                contentType: "image/jpeg",
-                data: frame
-            )
-            guard model.pendingAttachments.count == attachmentCount + 1 else { return }
+            model.send(visualFrame: PendingVisualFrame(source: source, jpeg: frame))
+            return
         }
         model.send()
+    }
+
+    /// The live input Jarvis is receiving, if any: a screen share or the camera video.
+    private var liveSource: VoiceScreenSource? {
+        if isScreenSharing { return .screen }
+        if isVideoEnabled { return .camera }
+        return nil
+    }
+
+    private func updateLiveStream() {
+        switch liveSource {
+        case .screen?:
+            model.startLiveStream(source: .screen) { VoiceScreenShareBridge().latestFrame() }
+        case .camera?:
+            guard let camera = cameraCapture else { return }
+            model.startLiveStream(source: .camera) { camera.latestFrame() }
+        case nil:
+            model.stopLiveStream()
+        }
     }
 
     private var addAttachmentHint: String {
@@ -1148,13 +1143,8 @@ struct JarvisChatScreen: View {
             Task { await model.refreshActivity() }
         } label: {
             HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                if model.isSending {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
-                        .accessibilityHidden(true)
-                }
+                Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
+                    .accessibilityHidden(true)
                 Text(model.nowTitle)
                     .font(.subheadline.weight(.medium))
                     .lineLimit(1)
@@ -1163,11 +1153,12 @@ struct JarvisChatScreen: View {
                     .font(.caption.weight(.semibold))
                     .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.nowBarHeight)
             .padding(.horizontal, JarvisDesignTokens.chatGlassInset)
-            .contentShape(Rectangle())
+            .contentShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
         .accessibilityLabel("Background activity, \(model.nowTitle)")
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
     }
@@ -1507,10 +1498,13 @@ private struct JarvisChatCameraSheet: View {
     var body: some View {
         VStack {
             HStack {
-                Button(closeTitle, systemImage: "xmark", action: onCancel)
-                    .buttonStyle(.glass)
-                    .accessibilityIdentifier("camera.close")
                 Spacer()
+                JarvisIconButton(
+                    title: closeTitle,
+                    systemImage: "xmark",
+                    identifier: "camera.close",
+                    action: onCancel
+                )
             }
             Spacer()
             lensButtons

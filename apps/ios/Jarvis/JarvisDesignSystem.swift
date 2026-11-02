@@ -122,20 +122,23 @@ enum JarvisDesignTokens {
     static let chatVerticalInset: CGFloat = 12
     static let chatMessageSpacing: CGFloat = 8
     static let chatMessageMaximumWidth: CGFloat = 360
-    static let chatBubbleRadius: CGFloat = 22
-    static let chatUserBubbleRadius: CGFloat = 24
+    /// The one corner radius for floating surfaces: Now bar, composer, bubbles, panels, tiles and sheets of glass.
+    static let surfaceRadius: CGFloat = 24
+    static let chatBubbleRadius: CGFloat = surfaceRadius
+    static let chatUserBubbleRadius: CGFloat = surfaceRadius
     static let chatUserBubbleBorderOpacity: Double = 0.34
     static let chatUserBubbleBorderWidth: CGFloat = 1
     static let toolbarQuietActionFillOpacity: Double = 0.08
     static let toolbarQuietActionPressedOpacity: Double = 0.16
-    static let chatComposerRadius: CGFloat = 24
+    static let chatComposerRadius: CGFloat = surfaceRadius
     static let chatComposerSpacing: CGFloat = 10
     static let chatComposerIconSize: CGFloat = 20
     static let chatComposerSendDiameter: CGFloat = 34
     static let chatComposerTextInset: CGFloat = 14
     static let chatVideoTileWidth: CGFloat = 156
     static let chatVideoTileHeight: CGFloat = 208
-    static let chatVideoTileRadius: CGFloat = 24
+    static let chatVideoTileRadius: CGFloat = surfaceRadius
+    static let nowBarHeight: CGFloat = 36
     static let chatMinimumTapTarget: CGFloat = 44
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
@@ -143,7 +146,7 @@ enum JarvisDesignTokens {
     static let chatPlusMenuInset: CGFloat = 16
     static let chatPlusMenuSpacing: CGFloat = 2
     static let chatPlusMenuRowHeight: CGFloat = 44
-    static let chatPlusMenuRadius: CGFloat = 22
+    static let chatPlusMenuRadius: CGFloat = surfaceRadius
     static let chatLivePreviewHeight: CGFloat = 126
     static let chatGlassInset: CGFloat = 12
     static let chatGlassOpacity: CGFloat = 0.16
@@ -166,7 +169,7 @@ enum JarvisDesignTokens {
     static let voiceControlBottomInset: CGFloat = 24
     static let voiceCameraTileWidth: CGFloat = 122
     static let voiceCameraTileHeight: CGFloat = 164
-    static let voiceCameraTileCornerRadius: CGFloat = 22
+    static let voiceCameraTileCornerRadius: CGFloat = surfaceRadius
     static let voiceCameraTileInset: CGFloat = 18
     static let voiceCameraTileControlClearance: CGFloat = 108
     static let voiceCameraCloseButtonDiameter: CGFloat = 36
@@ -243,7 +246,7 @@ enum JarvisDesignTokens {
     static let healthChartLineWidth: CGFloat = 2
     static let healthTargetLineWidth: CGFloat = 1
     static let healthTargetLineDash: [CGFloat] = [4, 3]
-    static let healthPanelRadius: CGFloat = 22
+    static let healthPanelRadius: CGFloat = surfaceRadius
     static let healthAccent = primaryAccent
     static let healthAccentForeground = primaryAccentForeground
     static let accentSecondary = secondaryAccent
@@ -286,6 +289,16 @@ enum JarvisDesignTokens {
     static let orbGlassHighlight = Color(red: 0.26, green: 0.34, blue: 0.42)
     static let orbGlassShadow = Color(red: 0.025, green: 0.04, blue: 0.06)
     static let orbGlassShadowColor = Color.black.opacity(0.38)
+    /// The board's light glass fill (`--g-fill-bar`): white in light, deep blue-grey in dark.
+    static let glassFill = adaptiveColor(
+        light: UIColor(white: 1, alpha: 0.44),
+        dark: UIColor(red: 16.0 / 255, green: 22.0 / 255, blue: 30.0 / 255, alpha: 0.36)
+    )
+    /// The warm glint at the end of the composer rim's sweep.
+    static let rimGlint = adaptiveColor(
+        light: UIColor(red: 1, green: 150.0 / 255, blue: 40.0 / 255, alpha: 1),
+        dark: UIColor(red: 1, green: 205.0 / 255, blue: 120.0 / 255, alpha: 1)
+    )
     static let orbCyan = adaptiveColor(
         light: UIColor(red: 42.0 / 255, green: 164.0 / 255, blue: 194.0 / 255, alpha: 1),
         dark: UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 1)
@@ -430,11 +443,12 @@ struct JarvisList<Content: View>: View {
 }
 
 extension View {
-    func jarvisAmbientBackground() -> some View {
+    func jarvisAmbientBackground(transparentNavigationBar: Bool = false) -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollContentBackground(.hidden)
             .background { JarvisScreenBackground() }
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar, .bottomBar)
+            .toolbarBackground(transparentNavigationBar ? .hidden : .automatic, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .bottomBar)
             .presentationBackground { JarvisScreenBackground() }
     }
 }

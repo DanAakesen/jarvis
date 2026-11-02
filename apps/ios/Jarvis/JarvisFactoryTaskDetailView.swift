@@ -634,21 +634,14 @@ private struct JarvisFactorySteerSheet: View {
             .navigationTitle(copy.text(.steer))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(copy.text(.cancel)) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button {
-                        Task { await send() }
-                    } label: {
-                        if sending {
-                            ProgressView()
-                        } else {
-                            Text(copy.text(.sendSteering))
-                        }
-                    }
-                    .disabled(sending || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+                JarvisSheetToolbar(
+                    confirmTitle: copy.text(.sendSteering),
+                    closeTitle: copy.text(.cancel),
+                    isWorking: sending,
+                    isConfirmDisabled: message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    onConfirm: { Task { await send() } },
+                    onClose: { dismiss() }
+                )
             }
             .environment(\.locale, copy.language.locale)
         }

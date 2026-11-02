@@ -8,6 +8,7 @@ enum VoiceScreenShareContract {
     static let frameFileName = "voice-screen-frame.jpg"
     static let frameInterval: TimeInterval = 0.4
     static let markerFreshness: TimeInterval = 5
+    static let heartbeatInterval: TimeInterval = 1
     static let minimumJPEGBytes = 4
     static let jpegStartMarker: [UInt8] = [0xff, 0xd8]
     static let jpegEndMarker: [UInt8] = [0xff, 0xd9]

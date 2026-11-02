@@ -970,3 +970,18 @@ def test_private_image_payload_rejected_without_echo():
     assert response.json() == {"error": "Invalid request"}
     assert JPEG not in response.text
     assert chat_runtime.MAX_REQUEST_BYTES > len(JPEG)
+
+
+def test_visual_context_names_a_live_screen_share_or_camera_never_a_picture_upload() -> None:
+    from visual_context import visual_context_text
+
+    screen = visual_context_text(
+        {"source": "screen", "capturedAt": "2026-11-02T10:00:00Z", "frameId": "f1"}
+    )
+    camera = visual_context_text(
+        {"source": "camera", "capturedAt": "2026-11-02T10:00:00Z", "frameId": "f1"}
+    )
+    assert "a live screen share" in screen
+    assert "a live camera view" in camera
+    for text in (screen, camera):
+        assert "never a picture or file upload" in text

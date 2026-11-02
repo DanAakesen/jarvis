@@ -189,6 +189,54 @@ final class JarvisChatClientTests: XCTestCase {
         XCTAssertTrue(requests.isEmpty)
     }
 
+    func testLiveFrameTravelsAsLabelledVisualContextNotAsAttachment() async throws {
+        let transport = FakeChatTransport([
+            .response(jsonResponse(status: 200, body: [
+                "frameId": String(repeating: "a", count: 32), "capturedAt": "2026-11-02T10:00:00.000Z",
+                "question": "What is on screen?",
+            ])),
+            .stream(streamResponse(events: event("done", [
+                "id": "43", "sessionId": "12", "role": "jarvis", "text": "ok", "model": "fixture",
+                "at": "2026-11-02T10:00:01.000Z",
+            ]))),
+        ])
+        let chat = makeChatClient(transport: transport)
+        let jpeg = Data([0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9])
+
+        let context = try await chat.uploadVisualFrame(
+            sessionId: "12", source: .screen, jpeg: jpeg, question: "What is on screen?"
+        )
+        _ = try await collect(try await chat.sendTurn(
+            sessionId: "12", text: "What is on screen?", visualContext: context
+        ))
+
+        XCTAssertEqual(context.source, .screen)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.url.path), ["/api/screen/frames", "/api/conversation/sessions/12/turns"])
+        let upload = try JSONSerialization.jsonObject(with: requests[0].body!) as? [String: Any]
+        XCTAssertEqual(upload?["mode"] as? String, "handle")
+        let turn = try JSONSerialization.jsonObject(with: requests[1].body!) as? [String: Any]
+        XCTAssertNil(turn?["attachmentIds"])
+        let visual = turn?["visualContext"] as? [String: Any]
+        XCTAssertEqual(visual?["source"] as? String, "screen")
+        XCTAssertEqual(visual?["frameId"] as? String, String(repeating: "a", count: 32))
+        XCTAssertEqual(visual?["turnId"] as? String, upload?["turnId"] as? String)
+    }
+
+    func testRejectsVisualContextTogetherWithLegacyScreenContext() async throws {
+        let transport = FakeChatTransport([])
+        let chat = makeChatClient(transport: transport)
+        let context = ChatVisualContext(
+            source: .camera, capturedAt: "2026-11-02T10:00:00.000Z", question: nil, turnId: "t1", frameId: "f1"
+        )
+        do {
+            _ = try await chat.sendTurn(sessionId: "12", text: "Hi", screenContext: "x", visualContext: context)
+            XCTFail("Expected rejection")
+        } catch {
+            XCTAssertEqual(error as? JarvisChatClientError, .invalidScreenContext)
+        }
+    }
+
     func testListsActiveTurnsAndHistoryToolCalls() async throws {
         let transport = FakeChatTransport([
             .response(jsonResponse(status: 200, body: ["turns": [
