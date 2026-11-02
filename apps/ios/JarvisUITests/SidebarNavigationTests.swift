@@ -105,19 +105,33 @@ final class SidebarNavigationTests: XCTestCase {
         XCTAssertFalse(app.buttons["navigation.chat"].exists, "Tapping a sidebar item must close the drawer")
     }
 
-    private static let sidebarDestinations = [
-        "proactive", "status", "usage", "banking", "softwareFactory", "health", "notes", "chat",
-    ]
+    func testProactiveShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("proactive", language: "da") }
+    func testProactiveShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("proactive", language: "en") }
+    func testStatusShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("status", language: "da") }
+    func testStatusShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("status", language: "en") }
+    func testUsageShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("usage", language: "da") }
+    func testUsageShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("usage", language: "en") }
+    func testSoftwareFactoryShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("softwareFactory", language: "da") }
+    func testSoftwareFactoryShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("softwareFactory", language: "en") }
+    func testHealthShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("health", language: "da") }
+    func testHealthShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("health", language: "en") }
+    func testNotesShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("notes", language: "da") }
+    func testNotesShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("notes", language: "en") }
+    func testChatShowsItsScreenInDanish() { assertSidebarItemShowsItsScreen("chat", language: "da") }
+    func testChatShowsItsScreenInEnglish() { assertSidebarItemShowsItsScreen("chat", language: "en") }
 
-    func testEverySidebarItemShowsItsScreenInDanish() {
-        assertEverySidebarItemShowsItsScreen(language: "da")
+    /// Banking is a confirmed "later" row: disabled in the drawer, so tapping it must leave the screen unchanged.
+    func testBankingRowIsDisabledAndDoesNotNavigate() {
+        launchAndOpenSidebar(language: "en")
+        defer { app.terminate() }
+        let item = app.buttons["navigation.banking"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3), "banking must be in the sidebar")
+        XCTAssertFalse(item.isEnabled, "banking is marked later and must be disabled")
+        item.tap()
+        XCTAssertTrue(app.buttons["navigation.banking"].exists, "Tapping a disabled row must not close the drawer")
     }
 
-    func testEverySidebarItemShowsItsScreenInEnglish() {
-        assertEverySidebarItemShowsItsScreen(language: "en")
-    }
-
-    private func assertEverySidebarItemShowsItsScreen(language: String) {
+    private func launchAndOpenSidebar(language: String) {
         app.launchArguments = [
             "--ui-test-navigation",
             "-jarvis.appLanguage", language,
@@ -125,24 +139,24 @@ final class SidebarNavigationTests: XCTestCase {
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ]
         app.launch()
-        defer { app.terminate() }
         let menu = app.buttons["navigation.openSidebar"]
         XCTAssertTrue(menu.waitForExistence(timeout: 8))
-        for destination in Self.sidebarDestinations {
-            if !app.buttons["navigation.\(destination)"].exists {
-                menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            }
-            let item = app.buttons["navigation.\(destination)"]
-            XCTAssertTrue(item.waitForExistence(timeout: 3), "\(destination) must be in the sidebar")
-            item.tap()
-            let screen = app.descendants(matching: .any).matching(identifier: "screen.\(destination)").firstMatch
-            XCTAssertTrue(screen.waitForExistence(timeout: 4), "\(destination) must show its own screen")
-            let closed = NSPredicate { _, _ in !self.app.buttons["navigation.\(destination)"].exists }
-            XCTAssertEqual(
-                XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: closed, object: nil)], timeout: 4),
-                .completed,
-                "Tapping \(destination) must close the drawer"
-            )
-        }
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    private func assertSidebarItemShowsItsScreen(_ destination: String, language: String) {
+        launchAndOpenSidebar(language: language)
+        defer { app.terminate() }
+        let item = app.buttons["navigation.\(destination)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 3), "\(destination) must be in the sidebar")
+        item.tap()
+        let screen = app.descendants(matching: .any)["screen.\(destination)"]
+        XCTAssertTrue(screen.waitForExistence(timeout: 6), "\(destination) must show its own screen")
+        let closed = NSPredicate { _, _ in !self.app.buttons["navigation.\(destination)"].exists }
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: closed, object: nil)], timeout: 4),
+            .completed,
+            "Tapping \(destination) must close the drawer"
+        )
     }
 }

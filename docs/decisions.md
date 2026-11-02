@@ -10534,3 +10534,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Status: accepted.
 - CI on 0d162a8 failed `testEverySidebarItemShowsItsScreen*` at the step that reopens the sidebar: after Proactive (a title-only placeholder) the screen had no `navigation.openSidebar` button, so the user could not leave it. This was an app bug, not a test-query problem.
 - `JarvisPlaceholderView` now shows its title and `JarvisSidebarMenuButton` in a top row, like the other destinations. The test is unchanged. Not run: no Xcode here.
+
+## 2026-11-02 — P15-54: Banking stays a disabled "later" sidebar row
+
+- Status: accepted; open question for Dan below.
+- CI on ee5e2e0: the Banking step failed because the Banking row is disabled (`JarvisDestination.banking.isNavigable == false`, shown with the "later" label per the 29 October 2026 sidebar decision). Tapping it does nothing by design. It is not a placeholder screen, and it runs no loop or heavy work. The Danish timeout was the descendants query after the failed step.
+- `SidebarNavigationTests` now has one test per navigable item and language, each waiting on the single `screen.<destination>` identifier, so one slow item cannot use the whole allowance. A separate test asserts the Banking row is disabled and does not navigate.
+- If Dan wants Banking to open a placeholder, set `isNavigable` to true and update the navigation tests that pin banking as disabled.
