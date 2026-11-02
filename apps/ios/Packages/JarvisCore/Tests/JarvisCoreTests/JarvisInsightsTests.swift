@@ -579,6 +579,11 @@ final class JarvisProactiveSettingsTests: XCTestCase {
         }
     }
 
+    func testCheckNowAcceptsTheAcceptedStatus() async throws {
+        let transport = try FixtureTransport(scenario: Data(#"{"version": 1, "interactions": [{"method": "POST", "path": "/api/proactive/runs", "response": {"statusCode": 202, "body": {"run": {}}}}]}"#.utf8))
+        try await JarvisProactiveClient(client: try insightsClient(transport)).checkNow()
+    }
+
     func testClientPostsSnoozeFeedback() async throws {
         let transport = try FixtureTransport(scenario: Data("""
         {"version": 1, "interactions": [{

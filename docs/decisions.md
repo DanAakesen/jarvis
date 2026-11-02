@@ -10584,3 +10584,14 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 ## 2026-11-02 — P15-55: the composer rim does not animate in fixture/UI-test runs
 
 - CI on d6f6300 failed `ChatComposerUITests.testPlusMenuOpensNextToThePlusButton` (then hung past its allowance). `chat.plus` and the camera menu item were not changed; the new rim's endless `TimelineView` and `withAnimation` pulse loop kept XCUITest from ever seeing the app idle. `jarvisRim(isAnimated:)` is false when `model.fixtureMode` is on, so fixture and UI-test runs show a static rim. Real runs keep the sweep and pulse; Reduce Motion still makes both static. Not compiled or run here; needs the iOS UI test job to confirm.
+
+## 2026-11-02 — P15-58: Usage, Status and Proactive pages (#1525)
+
+- Status: accepted; SwiftUI not compiled on Linux, needs iOS CI and a device check.
+- Logic, clients and copy sit in `JarvisCore/Insights` so they are tested on Linux; the views only render them.
+- Preferences are read-only in the Proactive editor. The backend derives them and `PATCH /proactive/settings` rejects them; the issue asked for an editable list, which would have failed every save.
+- Add to tasks uses the Notes client (`createTask`, personal scope); there is no proactive route for it.
+- `POST /proactive/runs` returns 202, so Check now accepts it (200 alone would have shown a false failure).
+- UI tests use `JarvisInsightsFixtureTransport` behind `--ui-test-navigation` with a fixed clock, no polling and no stale timer, so XCUITest can go idle.
+- The Apple documentation site could not be fetched in this environment; the PR lists the pages the design follows.
+

@@ -1862,6 +1862,21 @@ decision routes. The contract comes from `apps/backend/src/core/now.ts` and
 `apps/web/src/now-feed.ts`; approvals are not a new backend capability. Fixture
 success does not establish live service, device, or owner acceptance.
 
+### iOS Usage, Status and Proactive pages (P15-58)
+
+The Usage, Status and Proactive destinations replace the placeholders in the
+`NavigationStack` shell. `JarvisUsageClient`, `JarvisStatusClient` and
+`JarvisProactiveClient` plus their logic (period/grouping/share maths, status
+ordering and stale detection, proactive sentence, settings validation and the
+save/fail/retry editor state) live in pure-Swift `JarvisCore/Insights` and reuse
+`JarvisClient` against the existing `GET /usage`, `GET /status` and
+`/proactive/*` routes. Copy is in `JarvisInsights.strings` (da, en). The SwiftUI
+areas live in `apps/ios/Jarvis` and use the shared glass, corner token and
+ambient background. Nothing polls except Proactive (10 s while the scene is
+active). `--ui-test-navigation` swaps in `JarvisInsightsFixtureTransport`
+(fixed clock, stateful settings; `--ui-test-insights=error|offline|empty` and
+`--ui-test-insights-save-fails-once` select failure states).
+
 ### iOS Health dashboard (P15-18)
 
 The Health destination mounts in the existing `NavigationStack` shell. Its

@@ -607,7 +607,8 @@ public final class JarvisProactiveClient: Sendable {
         _ = try await client.performAuthenticatedRequest(
             method: .post,
             path: ["proactive", "runs"],
-            idempotent: false
+            idempotent: false,
+            additionalSuccessStatuses: [202]
         )
     }
 
