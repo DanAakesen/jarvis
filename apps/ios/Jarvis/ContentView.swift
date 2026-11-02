@@ -156,8 +156,8 @@ struct ContentView: View {
                 // is chosen directly from the root-owned destination, so a root-level destination can never fail
                 // to appear because a path push was dropped.
                 NavigationStack {
-                    Group {
-                        if navigation.currentDestination == .chat {
+                    JarvisDestinationHost(navigation: navigation) { destination in
+                        if destination == .chat {
                             JarvisChatScreen(
                                 client: chatClient,
                                 fixtureMode: fixtureMode,
@@ -172,7 +172,7 @@ struct ContentView: View {
                             .id(sessionEpoch)
                             .onAppear { navigation.debugDestinationShown(.chat) }
                         } else {
-                            destinationView(navigation.currentDestination)
+                            destinationView(destination)
                                 .id(sessionEpoch)
                         }
                     }
@@ -459,5 +459,16 @@ private struct JarvisPlaceholderView: View {
             .jarvisAmbientBackground()
             .navigationTitle(destination.localizedTitle(language: language))
             .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Renders the root screen for the root-owned destination. It observes the model directly: reads made inside
+/// ContentView's GeometryReader closure are not a reliable subscription, so the screen could stay on Chat.
+private struct JarvisDestinationHost<Content: View>: View {
+    @ObservedObject var navigation: JarvisNavigationModel
+    @ViewBuilder let content: (JarvisDestination) -> Content
+
+    var body: some View {
+        content(navigation.currentDestination)
     }
 }
