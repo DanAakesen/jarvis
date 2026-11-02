@@ -196,6 +196,7 @@ struct JarvisHealthArea: View {
     let onRetryConfiguration: () -> Void
     private let now: Date
     private let presentNewLiftAfterLoading: Bool
+    private let workoutLogger: (any JarvisWorkoutLogging)?
 
     @State private var periodPreset: JarvisHealthPeriodPreset = .today
     @State private var searchText = ""
@@ -204,6 +205,7 @@ struct JarvisHealthArea: View {
     @State private var isLoading = false
     @State private var trackWorkout = false
     @State private var newLiftPresented = false
+    @State private var newWorkoutPresented = false
     @State private var lifts: [[String: JSONValue]] = []
     @State private var pastExercises: [[String: JSONValue]] = []
     @State private var exercisesPartial = false
@@ -220,7 +222,8 @@ struct JarvisHealthArea: View {
         onRetryConfiguration: @escaping () -> Void = {},
         now: Date = Date(),
         workoutInitiallySelected: Bool = false,
-        presentNewLiftAfterLoading: Bool = false
+        presentNewLiftAfterLoading: Bool = false,
+        workoutLogger: (any JarvisWorkoutLogging)? = nil
     ) {
         self.client = client
         self.language = language
@@ -228,6 +231,7 @@ struct JarvisHealthArea: View {
         self.onRetryConfiguration = onRetryConfiguration
         self.now = now
         self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
+        self.workoutLogger = workoutLogger
         _trackWorkout = State(initialValue: workoutInitiallySelected)
     }
 
@@ -258,6 +262,7 @@ struct JarvisHealthArea: View {
                             loadMore: { Task { await loadLifts(more: true) } }
                         )
                     } else {
+                        if let headline { JarvisPageHeadline(phrase: headline) }
                         periodMenu
                         if let dashboard {
                             if let failure = dashboard.failure {
@@ -342,6 +347,13 @@ struct JarvisHealthArea: View {
                 onSaved: { refreshVersion += 1 }
             )
         }
+        .sheet(isPresented: $newWorkoutPresented) {
+            JarvisHealthNewWorkoutSheet(
+                logger: workoutLogger ?? client,
+                language: language,
+                onSaved: { refreshVersion += 1 }
+            )
+        }
         .task {
             guard observeRefreshEvents, let client else { return }
             do {
@@ -357,26 +369,41 @@ struct JarvisHealthArea: View {
     }
 
     private var header: some View {
-        HStack {
-            JarvisSidebarMenuButton(language: language)
-            Text(copy.text(.title))
-                .font(.largeTitle.weight(.semibold))
-                .foregroundStyle(.primary)
-            Spacer()
-            Button {
+        JarvisPageHeader(title: copy.text(.title), language: language) {
+            JarvisPageActionButton(
+                systemImage: "arrow.clockwise",
+                label: copy.text(.refresh),
+                identifier: "health.refresh",
+                isDisabled: isLoading
+            ) {
                 refreshVersion += 1
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: JarvisDesignTokens.notesIconSize, weight: .medium))
-                    .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.glass)
-            .disabled(isLoading)
-            .accessibilityLabel(copy.text(.refresh))
+            JarvisPageActionMenu(
+                systemImage: "plus",
+                label: copy.text(.log),
+                identifier: "health.plus"
+            ) {
+                Button {
+                    newLiftPresented = true
+                } label: {
+                    Label(copy.text(.logLift), systemImage: "dumbbell")
+                }
+                .disabled(!liftsAvailable || liftsLoading)
+                .accessibilityIdentifier("health.logLift")
+                Button {
+                    newWorkoutPresented = true
+                } label: {
+                    Label(copy.text(.logWorkout), systemImage: "figure.run")
+                }
+                .accessibilityIdentifier("health.logWorkout")
+            }
         }
-        .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-        .padding(.top, JarvisDesignTokens.healthSectionSpacing)
+    }
+
+    private var headline: JarvisPagePhrase? {
+        guard let dashboard, dashboard.capabilities != nil else { return nil }
+        let rings = JarvisHealthRingsSection(data: dashboard, period: period, language: language)
+        return JarvisHealthPagePhrase.make(rings.phraseInput(isToday: periodPreset == .today), language: language)
     }
 
     private var segmentSwitcher: some View {
@@ -451,16 +478,6 @@ struct JarvisHealthArea: View {
                 .regularMaterial,
                 in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
             )
-            Button {
-                newLiftPresented = true
-            } label: {
-                Image(systemName: "plus")
-                    .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
-            }
-            .buttonStyle(.glass)
-            .disabled(!liftsAvailable || liftsLoading)
-            .accessibilityLabel(copy.text(liftsAvailable ? .newLift : .unavailable))
-            .accessibilityIdentifier("health.plus")
         }
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
     }

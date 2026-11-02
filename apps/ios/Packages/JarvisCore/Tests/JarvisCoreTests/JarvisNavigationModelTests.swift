@@ -54,9 +54,14 @@ final class JarvisNavigationModelTests: XCTestCase {
         XCTAssertTrue(button.contains("Button {\n            navigation.openSidebar()\n        } label:"))
         XCTAssertTrue(button.contains(".jarvisToolbarButtonStyle()"))
         XCTAssertFalse(button.contains("let action"))
-        for file in ["JarvisChatScreen", "JarvisHealthArea", "JarvisNotesArea", "JarvisFactoryArea"] {
+        for file in ["JarvisChatScreen", "JarvisPageHeader"] {
             let screen = try source("Jarvis/\(file).swift")
             XCTAssertTrue(screen.contains("JarvisSidebarMenuButton(language:"))
+            XCTAssertFalse(screen.contains("onOpenSidebar"))
+        }
+        for file in ["JarvisHealthArea", "JarvisNotesArea", "JarvisFactoryArea"] {
+            let screen = try source("Jarvis/\(file).swift")
+            XCTAssertTrue(screen.contains("JarvisPageHeader(title:"), "\(file) uses the shared page header")
             XCTAssertFalse(screen.contains("onOpenSidebar"))
         }
         let chat = try source("Jarvis/JarvisChatScreen.swift")

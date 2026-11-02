@@ -77,6 +77,20 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case vaultPending = "health.vaultPending"
     case cancel = "health.cancel"
     case loadMore = "health.loadMore"
+    case overview = "health.overview"
+    case log = "health.log"
+    case logLift = "health.logLift"
+    case logWorkout = "health.logWorkout"
+    case newWorkout = "health.newWorkout"
+    case workoutType = "health.workoutType"
+    case workoutDuration = "health.workoutDuration"
+    case workoutUnavailable = "health.workoutUnavailable"
+    case workoutChestTricepsCore = "health.workoutType.chestTricepsCore"
+    case workoutBackBicepsCore = "health.workoutType.backBicepsCore"
+    case workoutArmsShoulders = "health.workoutType.armsShoulders"
+    case workoutLegsCore = "health.workoutType.legsCore"
+    case workoutCardio = "health.workoutType.cardio"
+    case workoutOther = "health.workoutType.other"
 }
 
 public enum JarvisHealthLocalization {

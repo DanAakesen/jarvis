@@ -147,6 +147,9 @@
 "voice.hideCaptions" = "Hide captions";
 "voice.showCaptions" = "Show captions";
 "voice.screenShareUnavailable" = "Screen sharing is unavailable: this build does not include the Jarvis broadcast extension.";
+"notes.overview" = "Overview";
+"notes.openTasks" = "Open tasks";
+"notes.doneTasks" = "Done";
 "voice.sentPhoto" = "Photo sent";
 "voice.sentVideo" = "Video sent";
 "voice.sentScreen" = "Screen sharing sent";

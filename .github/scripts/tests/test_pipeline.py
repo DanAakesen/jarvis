@@ -746,8 +746,10 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("let action", button)
         for area in ("Notes", "Health", "Factory"):
             source = (ROOT / f"apps/ios/Jarvis/Jarvis{area}Area.swift").read_text()
-            self.assertIn("JarvisSidebarMenuButton(language: language)", source)
+            self.assertIn("JarvisPageHeader(title:", source)
             self.assertNotIn("onOpenSidebar", source)
+        page_header = (ROOT / "apps/ios/Jarvis/JarvisPageHeader.swift").read_text()
+        self.assertIn("JarvisSidebarMenuButton(language: language)", page_header)
         shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertNotIn("openSidebarFromButton", shell)
         self.assertNotIn("onOpenSidebar", shell)
