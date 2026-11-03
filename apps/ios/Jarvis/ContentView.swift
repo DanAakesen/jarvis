@@ -162,10 +162,10 @@ struct ContentView: View {
                                 client: chatClient,
                                 fixtureMode: fixtureMode,
                                 initialActivitySheet: activityScreenshotState != nil
-                                    ? .background
+                                    ? .activity
                                     : (fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")
                                         || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
-                                        ? .needsYou : nil),
+                                        ? .activity : nil),
                                 startupError: startupError,
                                 onNavigate: { navigate(to: $0) }
                             )

@@ -69,3 +69,15 @@
 "chat.composer.stopDictate" = "Stop diktering";
 "chat.composer.dictateUnavailable" = "Diktering er ikke tilgængelig. Tjek tilladelser til mikrofon og talegenkendelse.";
 "chat.composer.send" = "Send besked";
+"chat.followUpUnavailable" = "Opfølgningen kunne ikke sendes. Din besked er tilbage i feltet.";
+"chat.thinking.generic" = "Tænker over det…";
+"chat.thinking.weather" = "Tjekker vejret…";
+"chat.thinking.calendar" = "Kigger i kalenderen…";
+"chat.thinking.mail" = "Læser din mail…";
+"chat.thinking.search" = "Søger efter svar…";
+"chat.thinking.code" = "Arbejder på koden…";
+"chat.thinking.image" = "Kigger på billedet…";
+"chat.thinking.attachments" = "Uploader dine filer…";
+"chat.thinking.reconnecting" = "Genopretter forbindelsen…";
+"chat.thinking.followUp" = "Tager din opfølgning med…";
+"chat.activity.title" = "Aktivitet";

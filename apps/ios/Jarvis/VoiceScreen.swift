@@ -156,7 +156,7 @@ struct VoiceScreenView: View {
     }
 
     private var hasCaptions: Bool {
-        !model.userCaption.isEmpty || !model.assistantCaption.isEmpty
+        !model.userCaption.isEmpty || !model.assistantCaption.isEmpty || !model.sentMedia.isEmpty
     }
 
     private var connectionTitle: String? {
@@ -211,8 +211,43 @@ struct VoiceScreenView: View {
             JarvisDesignTokens.voiceContentSpacing * 2
     }
 
+    private func sentMediaLabel(_ kind: VoiceSentMedia.Kind) -> String {
+        switch kind {
+        case .photo: JarvisVoiceLocalization.string(.sentPhoto)
+        case .video: JarvisVoiceLocalization.string(.sentVideo)
+        case .screen: JarvisVoiceLocalization.string(.sentScreen)
+        }
+    }
+
+    private var sentMediaStrip: some View {
+        HStack(spacing: JarvisDesignTokens.voiceCaptionSpeakerSpacing) {
+            ForEach(model.sentMedia) { media in
+                if let image = UIImage(data: media.jpeg) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                        .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceStatusSpacing, style: .continuous))
+                        .overlay(alignment: .bottomTrailing) {
+                            if media.kind != .photo {
+                                Image(systemName: media.kind == .video ? "video.fill" : "rectangle.on.rectangle")
+                                    .font(.caption2)
+                                    .foregroundStyle(.white)
+                                    .padding(2)
+                            }
+                        }
+                        .accessibilityLabel(sentMediaLabel(media.kind))
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
     private var captions: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
+            if !model.sentMedia.isEmpty {
+                sentMediaStrip
+            }
             if !model.userCaption.isEmpty {
                 captionLine(
                     label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
@@ -560,7 +595,7 @@ private struct VoiceOrbView: View {
     let diameter: CGFloat
     let onMinimize: () -> Void
 
-    private var activity: JarvisOrbActivity {
+    private var activity: JarvisMiniCoreActivity {
         if isMuted { return .muted }
         switch state {
         case .listening: return .listening
@@ -573,7 +608,7 @@ private struct VoiceOrbView: View {
     }
 
     var body: some View {
-        JarvisOrbView(activity: activity, diameter: diameter)
+        JarvisMiniCoreView(activity: activity, diameter: diameter)
             .frame(
                 width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
                 height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2
@@ -656,8 +691,12 @@ private struct VoicePhotoViewfinder: View {
                 .ignoresSafeArea()
             VStack {
                 HStack {
-                    Button(JarvisVoiceLocalization.string(.close)) { dismiss() }
-                        .buttonStyle(.glass)
+                    JarvisIconButton(
+                        title: JarvisVoiceLocalization.string(.close),
+                        systemImage: "xmark",
+                        identifier: "voice.camera.close",
+                        action: { dismiss() }
+                    )
                     Spacer()
                 }
                 Spacer()

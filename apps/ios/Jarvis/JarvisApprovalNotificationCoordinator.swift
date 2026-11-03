@@ -12,6 +12,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     static let actionResultKey = "jarvis.lockScreenApprovalAction"
 
     private static let categoryID = "jarvis.approval"
+    private static let replyCategoryID = "jarvis.reply"
     private static let privateCategoryID = "jarvis.approval.private"
     private static let approveActionID = "jarvis.approval.approve"
     private static let declineActionID = "jarvis.approval.decline"
@@ -153,6 +154,11 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     ) {
         if notification.request.content.categoryIdentifier == Self.categoryID ||
             notification.request.content.categoryIdentifier == Self.privateCategoryID {
+            completionHandler([])
+            return
+        }
+        // A reply push is only for a backgrounded app: in the foreground the chat already shows it live.
+        if notification.request.content.categoryIdentifier == Self.replyCategoryID {
             completionHandler([])
             return
         }

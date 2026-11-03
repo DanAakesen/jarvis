@@ -98,6 +98,7 @@ struct JarvisSidebarReveal<Page: View>: View {
                 page
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .allowsHitTesting(progress == 0)
+                    .blur(radius: JarvisDesignTokens.sidebarPageBlurRadius * progress)
                     .overlay {
                         if progress > 0 {
                             Color.clear

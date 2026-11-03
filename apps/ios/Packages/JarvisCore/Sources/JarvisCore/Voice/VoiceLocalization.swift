@@ -10,6 +10,7 @@ public enum JarvisVoiceLocalizationKey: String, CaseIterable, Sendable {
     case signInError, tryLater, imageLimit, imageRateLimit, imageUnavailable
     case preview
     case screenShareUnavailable
+    case sentPhoto, sentVideo, sentScreen
 }
 
 public enum JarvisVoiceLocalization {
