@@ -73,7 +73,16 @@ struct JarvisTodayScreen: View {
             .sharedBackgroundVisibility(.hidden)
         }
         .jarvisAmbientBackground(transparentNavigationBar: true)
-        .task { await model.refresh() }
+        .task {
+            await model.refresh()
+#if targetEnvironment(simulator)
+            let arguments = ProcessInfo.processInfo.arguments
+            if fixtureMode, sheet == nil {
+                if arguments.contains("--screenshot-today-sheet=workout") { sheet = .workout }
+                if arguments.contains("--screenshot-today-sheet=lift") { sheet = .lift }
+            }
+#endif
+        }
         .sheet(item: $sheet) { presented in
             sheetContent(presented)
         }
@@ -494,7 +503,7 @@ struct JarvisTodayScreen: View {
             JarvisTodayGymSheet(
                 model: model, language: language, kind: presented.id == "lift" ? .lift : .workout
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
     }

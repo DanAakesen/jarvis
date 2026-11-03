@@ -72,42 +72,6 @@ struct JarvisTodayGymSheet: View {
     var body: some View {
         NavigationStack {
             JarvisForm {
-                switch kind {
-                case .workout:
-                    Section(copy(.sessionTypeGroup)) {
-                        ForEach(JarvisGymSessionType.allCases) { option in
-                            choiceRow(
-                                title: option.title(language: language),
-                                isSelected: session == option,
-                                identifier: "today.workout.session.\(option.rawValue)"
-                            ) { session = option }
-                        }
-                    }
-                case .lift:
-                    Section(copy(.liftType)) {
-                        ForEach(JarvisGymLiftType.allCases) { option in
-                            choiceRow(
-                                title: option.title(language: language),
-                                isSelected: liftType == option,
-                                identifier: "today.lift.type.\(option.rawValue)"
-                            ) { liftType = option }
-                        }
-                    }
-                    Section {
-                        HStack(spacing: 12) {
-                            TextField("kg", text: $weight)
-                                .keyboardType(.decimalPad)
-                                .accessibilityLabel("kg")
-                                .accessibilityIdentifier("today.lift.weight")
-                            TextField(copy(.reps), text: $reps)
-                                .keyboardType(.numberPad)
-                                .accessibilityIdentifier("today.lift.reps")
-                            TextField(copy(.sets), text: $sets)
-                                .keyboardType(.numberPad)
-                                .accessibilityIdentifier("today.lift.sets")
-                        }
-                    }
-                }
                 Section {
                     if date != nil {
                         DatePicker(copy(.logDate), selection: dateBinding, in: ...model.now, displayedComponents: .date)
@@ -131,6 +95,40 @@ struct JarvisTodayGymSheet: View {
                                 identifier: "today.log.date.set"
                             ) { date = model.now; resetStatus() }
                         }
+                    }
+                }
+                switch kind {
+                case .workout:
+                    Section(copy(.sessionTypeGroup)) {
+                        ForEach(JarvisGymSessionType.allCases) { option in
+                            choiceRow(
+                                title: option.title(language: language),
+                                isSelected: session == option,
+                                identifier: "today.workout.session.\(option.rawValue)"
+                            ) { session = option }
+                        }
+                    }
+                case .lift:
+                    Section(copy(.liftType)) {
+                        ForEach(JarvisGymLiftType.allCases) { option in
+                            choiceRow(
+                                title: option.title(language: language),
+                                isSelected: liftType == option,
+                                identifier: "today.lift.type.\(option.rawValue)"
+                            ) { liftType = option }
+                        }
+                    }
+                    Section {
+                        TextField("kg", text: $weight)
+                            .keyboardType(.decimalPad)
+                            .accessibilityLabel("kg")
+                            .accessibilityIdentifier("today.lift.weight")
+                        TextField(copy(.reps), text: $reps)
+                            .keyboardType(.numberPad)
+                            .accessibilityIdentifier("today.lift.reps")
+                        TextField(copy(.sets), text: $sets)
+                            .keyboardType(.numberPad)
+                            .accessibilityIdentifier("today.lift.sets")
                     }
                 }
             }

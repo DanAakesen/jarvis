@@ -283,6 +283,19 @@ jobs:
               sleep 2
               xcrun simctl io "$DEVICE_ID" screenshot "$SCREENSHOT_DIR/ambient-${screen}-${appearance}.png"
             done
+            for language in da en; do
+              for view in home workout lift; do
+                home_args=(--ui-test-navigation --ui-test-today)
+                if [[ "$view" != home ]]; then
+                  home_args+=("--screenshot-today-sheet=$view")
+                fi
+                xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+                  "${home_args[@]}" -jarvis.appLanguage "$language" -jarvis.appTheme "$appearance"
+                sleep 3
+                xcrun simctl io "$DEVICE_ID" screenshot \
+                  "$SCREENSHOT_DIR/home-${view}-${appearance}-${language}.png"
+              done
+            done
             for state in empty active; do
               xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
                 --screenshot-chat-fixture "--screenshot-activity-state=$state"

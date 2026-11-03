@@ -94,6 +94,17 @@ final class TodayUITests: XCTestCase {
         XCTAssertEqual(ring.value as? String, "6300", "Changing the range resets the selection")
     }
 
+    /// Finds a sheet element by identifier whatever its type, scrolling the sheet until it appears.
+    private func sheetElement(_ id: String) -> XCUIElement {
+        let element = app.descendants(matching: .any).matching(identifier: id).firstMatch
+        var swipes = 0
+        while !element.waitForExistence(timeout: 2) && swipes < 4 {
+            app.swipeUp()
+            swipes += 1
+        }
+        return element
+    }
+
     func testLogButtonsOpenDifferentSheets() {
         launch()
         let workout = app.buttons["today.logWorkout"]
@@ -120,7 +131,7 @@ final class TodayUITests: XCTestCase {
         let save = app.buttons["sheet.confirm"]
         XCTAssertFalse(save.isEnabled, "Saving needs a session type")
         chest.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["today.log.date"].exists, "The date defaults to today")
+        XCTAssertTrue(sheetElement("today.log.date").exists, "The date defaults to today")
         XCTAssertTrue(save.isEnabled)
         app.buttons["today.log.date.clear"].tap()
         XCTAssertFalse(save.isEnabled, "Saving is blocked without a date")
@@ -144,6 +155,7 @@ final class TodayUITests: XCTestCase {
         bench.tap()
         for (field, value) in [("weight", "60"), ("reps", "8"), ("sets", "3")] {
             let input = app.textFields["today.lift.\(field)"]
+            XCTAssertTrue(sheetElement("today.lift.\(field)").exists, "today.lift.\(field) missing")
             input.tap()
             input.typeText(value)
         }
