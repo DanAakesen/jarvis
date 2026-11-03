@@ -196,18 +196,11 @@ struct JarvisFactoryTaskDetailView: View {
                     }
                 }
                 if hasMoreEvents {
-                    Button {
-                        Task { await loadMoreEvents() }
-                    } label: {
-                        if loadingMoreEvents {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                        } else {
-                            Text(copy.text(.loadMore))
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .disabled(loadingMoreEvents)
+                    JarvisLabelledButton(
+                        title: copy.text(.loadMore),
+                        isBusy: loadingMoreEvents,
+                        isFullWidth: true
+                    ) { Task { await loadMoreEvents() } }
                 }
             }
 
@@ -251,32 +244,35 @@ struct JarvisFactoryTaskDetailView: View {
     @ViewBuilder
     private func actionButton(_ action: FactoryTaskControl, task: FactoryTaskRecord) -> some View {
         if action == .cancel {
-            Button(role: .destructive) {
-                cancelPresented = true
-            } label: {
-                Label(copy.text(.cancelTask), systemImage: "xmark.circle")
-            }
-            .disabled(busyAction != nil)
+            JarvisLabelledButton(
+                title: copy.text(.cancelTask),
+                systemImage: "xmark.circle",
+                isDisabled: busyAction != nil,
+                isFullWidth: true,
+                isLeading: true,
+                isDestructive: true
+            ) { cancelPresented = true }
         } else if action == .steer {
-            Button {
-                steeringPresented = true
-            } label: {
-                Label(copy.text(.steer), systemImage: "text.bubble")
-            }
-            .disabled(busyAction != nil)
+            JarvisLabelledButton(
+                title: copy.text(.steer),
+                systemImage: "text.bubble",
+                isDisabled: busyAction != nil,
+                isFullWidth: true,
+                isLeading: true
+            ) { steeringPresented = true }
         } else {
-            Button {
+            JarvisLabelledButton(
+                title: actionTitle(action),
+                systemImage: actionSymbol(action),
+                isBusy: busyAction == action,
+                isDisabled: busyAction != nil,
+                isFullWidth: true,
+                isLeading: true
+            ) {
                 Task {
                     await perform(FactoryTaskControlRequest(taskId: task.id, action: action))
                 }
-            } label: {
-                HStack {
-                    Label(actionTitle(action), systemImage: actionSymbol(action))
-                    Spacer()
-                    if busyAction == action { ProgressView() }
-                }
             }
-            .disabled(busyAction != nil)
         }
     }
 

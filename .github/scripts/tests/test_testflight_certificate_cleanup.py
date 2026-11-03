@@ -214,7 +214,7 @@ end
         steps = json.loads(source.stdout)["jobs"]["upload"]["steps"]
         names = [step.get("name") for step in steps]
         cleanup = steps[names.index("Revoke development certificates")]
-        self.assertEqual(cleanup["if"], "always() && github.ref == 'refs/heads/main'")
+        self.assertEqual(cleanup["if"], "always()")
         self.assertEqual(cleanup["timeout-minutes"], 5)
         self.assertEqual(set(cleanup["env"]), {
             "APP_STORE_CONNECT_KEY_P8", "APP_STORE_CONNECT_KEY_ID", "APP_STORE_CONNECT_ISSUER_ID",

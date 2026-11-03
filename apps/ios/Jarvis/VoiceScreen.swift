@@ -183,37 +183,27 @@ struct VoiceScreenView: View {
 
     private var connectionRecoveryActions: some View {
         HStack(spacing: JarvisDesignTokens.voiceControlSpacing) {
-            Button {
+            JarvisLabelledButton(
+                title: JarvisNotesLocalization.string(.voiceRetryNow, language: language),
+                systemImage: "arrow.clockwise",
+                identifier: "voice.retryNow",
+                isDisabled: model.connectionPresentationState == .retrying,
+                isFullWidth: true
+            ) {
                 Task { await model.retryNow() }
-            } label: {
-                Label(
-                    JarvisNotesLocalization.string(.voiceRetryNow, language: language),
-                    systemImage: "arrow.clockwise"
-                )
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.glass)
-            .tint(JarvisDesignTokens.settingsAccent)
-            .disabled(model.connectionPresentationState == .retrying)
 
-            Button {
+            JarvisLabelledButton(
+                title: JarvisNotesLocalization.string(.voiceConnectionEnd, language: language),
+                systemImage: "phone.down.fill",
+                identifier: "voice.connectionEnd",
+                isFullWidth: true
+            ) {
                 Task {
                     await model.end()
                     onEnd()
                 }
-            } label: {
-                Label(
-                    JarvisNotesLocalization.string(.voiceConnectionEnd, language: language),
-                    systemImage: "phone.down.fill"
-                )
-                .font(.body.weight(.semibold))
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.glass)
-            .tint(JarvisDesignTokens.accentSecondary)
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
     }
@@ -288,17 +278,12 @@ struct VoiceScreenView: View {
         .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.voiceCaptionPanelRadius)
         .padding(.horizontal, -JarvisDesignTokens.voiceCaptionHorizontalExtension)
         .overlay(alignment: .topTrailing) {
-            Button {
-                captionsHidden = true
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(JarvisNotesLocalization.string(.voiceHideCaptions, language: appLanguage))
+            JarvisIconButton(
+                title: JarvisNotesLocalization.string(.voiceHideCaptions, language: appLanguage),
+                systemImage: "xmark",
+                identifier: "voice.captions.hide",
+                chrome: .onGlass
+            ) { captionsHidden = true }
         }
     }
 
@@ -342,7 +327,6 @@ struct VoiceScreenView: View {
                     label: JarvisVoiceLocalization.string(.openSettings),
                     isSelected: false,
                     disabled: false,
-                    tint: .primary,
                     action: model.openSettings
                 )
             } else if model.signInRequired {
@@ -350,16 +334,14 @@ struct VoiceScreenView: View {
                     symbol: "person.crop.circle.badge.exclamationmark",
                     label: JarvisVoiceLocalization.string(.signInRequired),
                     isSelected: false,
-                    disabled: true,
-                    tint: .secondary
+                    disabled: true
                 ) {}
             } else if !model.isSessionActive {
                 VoiceControlButton(
                     symbol: "arrow.clockwise",
                     label: JarvisVoiceLocalization.string(.reconnect),
                     isSelected: false,
-                    disabled: false,
-                    tint: .primary
+                    disabled: false
                 ) {
                     Task { await model.start() }
                 }
@@ -369,14 +351,18 @@ struct VoiceScreenView: View {
                     label: JarvisVoiceLocalization.string(model.isMuted ? .unmute : .mute),
                     isSelected: model.isMuted,
                     disabled: !model.canUseControls,
-                    tint: .primary
+                    identifier: "voice.mic"
                 ) {
                     Task { await model.toggleMute() }
                 }
-                .accessibilityIdentifier("voice.mic")
             }
 
-            Menu {
+            JarvisMenuButton(
+                title: JarvisVoiceLocalization.string(.add),
+                systemImage: "plus",
+                identifier: "voice.add",
+                isDisabled: !model.canUseControls
+            ) {
                 if model.cameraPermissionDenied {
                     Button(JarvisVoiceLocalization.string(.cameraSettings), systemImage: "gearshape") {
                         model.openSettings()
@@ -410,15 +396,7 @@ struct VoiceScreenView: View {
                         }
                     }
                 }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.title2.weight(.medium))
-                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                    .contentShape(Circle())
             }
-            .buttonStyle(.glass)
-            .disabled(!model.canUseControls)
-            .accessibilityLabel(JarvisVoiceLocalization.string(.add))
 
             VoiceControlButton(
                 symbol: nil,
@@ -428,9 +406,6 @@ struct VoiceScreenView: View {
                 ),
                 isSelected: model.isCaptionsEnabled && !captionsHidden,
                 disabled: false,
-                tint: model.isCaptionsEnabled && !captionsHidden
-                    ? JarvisDesignTokens.primaryAccent
-                    : .primary,
                 title: "CC"
             ) {
                 if captionsHidden {
@@ -445,15 +420,14 @@ struct VoiceScreenView: View {
                 label: JarvisVoiceLocalization.string(.end),
                 isSelected: false,
                 disabled: !model.isSessionActive,
-                tint: .white,
-                prominent: true
+                identifier: "voice.end",
+                isEnd: true
             ) {
                 Task {
                     await model.end()
                     onEnd()
                 }
             }
-            .accessibilityIdentifier("voice.end")
         }
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
@@ -466,9 +440,11 @@ struct VoiceScreenView: View {
             Text(JarvisVoiceLocalization.string(.sharingScreen))
                 .font(.body.weight(.medium))
             Spacer(minLength: 0)
-            Button(JarvisVoiceLocalization.string(.stop)) { model.requestStopScreenSharing() }
-                .buttonStyle(.glass)
-                .accessibilityLabel(JarvisVoiceLocalization.string(.stopSharing))
+            JarvisLabelledButton(
+                title: JarvisVoiceLocalization.string(.stop),
+                identifier: "voice.stopSharing",
+                accessibilityTitle: JarvisVoiceLocalization.string(.stopSharing)
+            ) { model.requestStopScreenSharing() }
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .frame(maxWidth: .infinity)
@@ -489,20 +465,12 @@ struct VoiceScreenView: View {
             .frame(width: width, height: height)
             .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceCameraTileCornerRadius))
             .overlay(alignment: .topTrailing) {
-                Button {
-                    Task { await model.stopCamera() }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.bold))
-                        .frame(
-                            width: JarvisDesignTokens.voiceCameraCloseButtonDiameter,
-                            height: JarvisDesignTokens.voiceCameraCloseButtonDiameter
-                        )
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .buttonStyle(.plain)
+                JarvisIconButton(
+                    title: JarvisVoiceLocalization.string(.stopCamera),
+                    systemImage: "xmark",
+                    identifier: "voice.camera.stop"
+                ) { Task { await model.stopCamera() } }
                 .padding(JarvisDesignTokens.voiceStatusSpacing / 2)
-                .accessibilityLabel(JarvisVoiceLocalization.string(.stopCamera))
             }
             .overlay(alignment: .bottomTrailing) {
                 if model.photoIsReady {
@@ -618,44 +586,22 @@ private struct VoiceControlButton: View {
     let label: String
     let isSelected: Bool
     let disabled: Bool
-    let tint: Color
     var title: String? = nil
-    var prominent = false
+    var identifier = ""
+    var isEnd = false
     let action: () -> Void
 
     var body: some View {
-        control
-    }
-
-    @ViewBuilder
-    private var control: some View {
-        if prominent {
-            button
-                .buttonStyle(.glassProminent)
-        } else {
-            button.buttonStyle(.glass)
-        }
-    }
-
-    private var button: some View {
-        Button(action: action) {
-            Group {
-                if let title {
-                    Text(title)
-                        .font(.system(size: 14, weight: .bold))
-                } else if let symbol {
-                    Image(systemName: symbol)
-                        .font(.title3.weight(.semibold))
-                }
-            }
-                .foregroundStyle(tint)
-                .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                .contentShape(Circle())
-        }
-        .disabled(disabled)
-        .tint(prominent ? JarvisDesignTokens.voiceEndActionColor : tint)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        JarvisIconButton(
+            title: label,
+            systemImage: title == nil ? symbol : nil,
+            identifier: identifier,
+            text: title,
+            isDisabled: disabled,
+            isSelected: isSelected,
+            tint: isEnd ? JarvisDesignTokens.voiceEndActionColor : nil,
+            action: action
+        )
     }
 }
 
@@ -680,14 +626,11 @@ private struct VoicePhotoViewfinder: View {
                     Spacer()
                 }
                 Spacer()
-                Button(action: onCapture) {
-                    Circle()
-                        .stroke(.white, lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth * 2)
-                        .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                        .overlay(Circle().fill(.white).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(JarvisVoiceLocalization.string(.takePhoto))
+                JarvisShutterButton(
+                    title: JarvisVoiceLocalization.string(.takePhoto),
+                    identifier: "voice.camera.shutter",
+                    action: onCapture
+                )
                 .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
             }
             .padding(JarvisDesignTokens.voiceStatusSpacing)
@@ -701,42 +644,30 @@ struct VoiceMiniBar: View {
 
     var body: some View {
         HStack(spacing: JarvisDesignTokens.voiceStatusSpacing) {
-            Button(action: onRestore) {
-                HStack(spacing: JarvisDesignTokens.voiceStatusSpacing) {
-                    Image(systemName: "waveform")
-                    Text(model.statusText)
-                        .font(.body.weight(.medium))
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(JarvisVoiceLocalization.string(.restore)). \(model.statusText)")
-            .accessibilityIdentifier("voice.mini.restore")
+            JarvisLabelledButton(
+                title: model.statusText,
+                systemImage: "waveform",
+                identifier: "voice.mini.restore",
+                isFullWidth: true,
+                isLeading: true,
+                accessibilityTitle: "\(JarvisVoiceLocalization.string(.restore)). \(model.statusText)",
+                action: onRestore
+            )
 
-            Button {
-                Task { await model.toggleMute() }
-            } label: {
-                Image(systemName: model.isMuted ? "mic.slash.fill" : "mic.fill")
-                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-            }
-            .buttonStyle(.glass)
-            .disabled(!model.canUseControls)
-            .accessibilityLabel(JarvisVoiceLocalization.string(model.isMuted ? .unmute : .mute))
-            .accessibilityIdentifier("voice.mini.mic")
-            .accessibilityAddTraits(model.isMuted ? .isSelected : [])
+            JarvisIconButton(
+                title: JarvisVoiceLocalization.string(model.isMuted ? .unmute : .mute),
+                systemImage: model.isMuted ? "mic.slash.fill" : "mic.fill",
+                identifier: "voice.mini.mic",
+                isDisabled: !model.canUseControls,
+                isSelected: model.isMuted
+            ) { Task { await model.toggleMute() } }
 
-            Button {
-                Task { await model.end() }
-            } label: {
-                Image(systemName: "phone.down.fill")
-                    .foregroundStyle(.white)
-                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(JarvisDesignTokens.voiceEndActionColor)
-            .accessibilityLabel(JarvisVoiceLocalization.string(.end))
-            .accessibilityIdentifier("voice.mini.end")
+            JarvisIconButton(
+                title: JarvisVoiceLocalization.string(.end),
+                systemImage: "phone.down.fill",
+                identifier: "voice.mini.end",
+                tint: JarvisDesignTokens.voiceEndActionColor
+            ) { Task { await model.end() } }
         }
         .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.voiceScreenShareBarHeight / 2))

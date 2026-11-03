@@ -102,10 +102,9 @@ struct JarvisFactoryNewTaskSheet: View {
                     if policySaveFailed {
                         Text(copy.text(.policySaveFailed))
                             .foregroundStyle(.red)
-                        Button(copy.text(.retry)) {
+                        JarvisLabelledButton(title: copy.text(.retry), isDisabled: savingPolicy) {
                             Task { await savePolicy(policy) }
                         }
-                        .disabled(savingPolicy)
                     }
                 }
 

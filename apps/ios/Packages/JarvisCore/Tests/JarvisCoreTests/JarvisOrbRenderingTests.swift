@@ -23,7 +23,7 @@ final class JarvisOrbRenderingTests: XCTestCase {
         ]
         for file in files {
             let text = try source(file)
-            XCTAssertTrue(text.contains("JarvisOrb("), file)
+            XCTAssertTrue(text.contains("JarvisOrb(") || text.contains("JarvisOrbButton("), file)
             XCTAssertFalse(text.contains("JarvisMiniCoreView("), file)
             XCTAssertFalse(text.contains("JarvisOrbView"), file)
             XCTAssertFalse(text.contains("VoiceOrbView"), file)

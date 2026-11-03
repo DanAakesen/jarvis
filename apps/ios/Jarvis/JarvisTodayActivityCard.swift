@@ -63,24 +63,11 @@ struct JarvisTodayActivityCard: View {
         HStack(spacing: 0) {
             ForEach(JarvisTodayRange.allCases) { range in
                 let selected = model.activity.range == range
-                Button {
-                    animate { model.activity.setRange(range) }
-                } label: {
-                    Text(range.title(language: language))
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                        .padding(.horizontal, 8)
-                        .frame(
-                            minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                            minHeight: JarvisDesignTokens.chatMinimumTapTarget
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(range.title(language: language))
-                .accessibilityAddTraits(selected ? .isSelected : [])
-                .accessibilityIdentifier("today.range.\(range.rawValue)")
+                JarvisLabelledButton(
+                    title: range.title(language: language),
+                    identifier: "today.range.\(range.rawValue)",
+                    isSelected: selected
+                ) { animate { model.activity.setRange(range) } }
             }
         }
         .accessibilityElement(children: .contain)
@@ -373,19 +360,12 @@ struct JarvisTodayActivityCard: View {
             Text(text).font(.subheadline).foregroundStyle(.secondary)
             Spacer(minLength: 0)
             if retry {
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                        .frame(
-                            width: JarvisDesignTokens.chatMinimumTapTarget,
-                            height: JarvisDesignTokens.chatMinimumTapTarget
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.retry))
+                JarvisIconButton(
+                    title: copy(.retry),
+                    systemImage: "arrow.clockwise",
+                    identifier: "today.activity.retry",
+                    chrome: .onGlass
+                ) { Task { await model.refresh() } }
             }
         }
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)

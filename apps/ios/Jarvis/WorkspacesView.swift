@@ -46,15 +46,14 @@ struct WorkspacesView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(action: refresh) {
-                    if loadState == .loading {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                }
-                .disabled(loadState == .loading)
-                .accessibilityLabel(text(.refreshAccessibility))
+                JarvisIconButton(
+                    title: text(.refreshAccessibility),
+                    systemImage: "arrow.clockwise",
+                    identifier: "workspaces.refresh",
+                    isBusy: loadState == .loading,
+                    chrome: .onGlass,
+                    action: refresh
+                )
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -132,22 +131,15 @@ struct WorkspacesView: View {
 
     private func kindFilterButton(title: String, kind: SavedWorkspaceKind?) -> some View {
         let selected = selectedKind == kind
-        return Button {
+        return JarvisLabelledButton(
+            title: title,
+            systemImage: selected ? "checkmark" : nil,
+            isSelected: selected
+        ) {
             withAnimation(reduceMotion ? nil : .snappy(duration: JarvisDesignTokens.filterAnimationDuration)) {
                 selectedKind = selected ? nil : kind
             }
-        } label: {
-            HStack(spacing: JarvisDesignTokens.iconLabelSpacing) {
-                if selected { Image(systemName: "checkmark") }
-                Text(title)
-            }
-            .font(.subheadline.weight(selected ? .semibold : .regular))
-            .foregroundStyle(selected ? Color.accentColor : Color.primary)
-            .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var searchField: some View {
@@ -161,16 +153,12 @@ struct WorkspacesView: View {
                 .submitLabel(.search)
                 .accessibilityLabel(text(.search))
             if !query.isEmpty {
-                Button {
-                    query = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(text(.clearSearch))
+                JarvisIconButton(
+                    title: text(.clearSearch),
+                    systemImage: "xmark.circle.fill",
+                    identifier: "workspaces.search.clear",
+                    chrome: .onGlass
+                ) { query = "" }
             }
         }
         .padding(.leading, JarvisDesignTokens.contentInset)
@@ -218,17 +206,12 @@ struct WorkspacesView: View {
                 }
                 if hasMore {
                     Section {
-                        Button {
-                            Task { await loadOlder() }
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Text(text(.showOlder))
-                                Spacer()
-                            }
-                            .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
-                        }
-                        .disabled(loadState == .loading || loadingOlder)
+                        JarvisLabelledButton(
+                            title: text(.showOlder),
+                            isBusy: loadingOlder,
+                            isDisabled: loadState == .loading,
+                            isFullWidth: true
+                        ) { Task { await loadOlder() } }
                         .listRowSeparator(.hidden)
                     }
                 }
@@ -249,12 +232,10 @@ struct WorkspacesView: View {
             VStack(spacing: JarvisDesignTokens.contentSpacing) {
                 Label(text(.noMatching), systemImage: "magnifyingglass")
                     .font(.headline)
-                Button(text(.clearFilters)) {
+                JarvisLabelledButton(title: text(.clearFilters)) {
                     query = ""
                     selectedKind = nil
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
             }
             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
         case .ready:
@@ -266,9 +247,7 @@ struct WorkspacesView: View {
                 Label(errorTitle, systemImage: "exclamationmark.triangle")
                     .font(.headline)
                 if runtime.workspacesClient != nil && !signInRequired {
-                    Button(text(.retry), action: refresh)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color.accentColor)
+                    JarvisLabelledButton(title: text(.retry), action: refresh)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
@@ -325,7 +304,13 @@ struct WorkspacesView: View {
             .accessibilityLabel(formatted(.openItem, item.title, kindLabel(item.kind), formatWhen(item.createdAt)))
             .accessibilityHint(item.promptSummary.isEmpty ? "" : item.promptSummary)
 
-            Menu {
+            JarvisMenuButton(
+                title: formatted(.actionsFor, item.title),
+                systemImage: "ellipsis",
+                identifier: "workspaces.item.actions",
+                isDisabled: busyItems.contains(item.id),
+                chrome: .onGlass
+            ) {
                 Button(text(item.pinned ? .unpin : .pin), systemImage: item.pinned ? "pin.slash" : "pin") {
                     Task { await setPinned(item, pinned: !item.pinned) }
                 }
@@ -336,15 +321,7 @@ struct WorkspacesView: View {
                 Button(text(.remove), systemImage: "trash", role: .destructive) {
                     removeTarget = item
                 }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: JarvisDesignTokens.iconSize, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
-                    .contentShape(Rectangle())
             }
-            .accessibilityLabel(formatted(.actionsFor, item.title))
-            .disabled(busyItems.contains(item.id))
         }
         .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
         .listRowInsets(EdgeInsets(

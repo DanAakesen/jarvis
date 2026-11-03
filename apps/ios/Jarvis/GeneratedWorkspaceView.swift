@@ -41,9 +41,7 @@ struct GeneratedWorkspaceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(text(.close), systemImage: "xmark") { dismiss() }
-                        .labelStyle(.iconOnly)
-                        .accessibilityLabel(text(.closeAccessibility))
+                    JarvisSheetCloseButton(title: text(.closeAccessibility)) { dismiss() }
                 }
             }
         }
@@ -734,10 +732,7 @@ private struct GeneratedActionControl: View {
 
     var body: some View {
         if let title = title, runtime.canPerform(action) {
-            Button(title, systemImage: symbol) { onAction(action) }
-                .buttonStyle(.plain)
-                .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                .frame(minHeight: JarvisDesignTokens.controlMinimumHeight)
+            JarvisLabelledButton(title: title, systemImage: symbol) { onAction(action) }
         } else {
             Label(title ?? text(.actionUnavailable), systemImage: "xmark.circle")
                 .font(.subheadline)

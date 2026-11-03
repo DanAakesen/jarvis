@@ -186,16 +186,13 @@ struct JarvisActivitySheet: View {
                 }
             }
             Spacer(minLength: 0)
-            Button(model.dismissingBackgroundTaskIDs.contains(task.id) ? copy(.dismissing) : copy(.dismiss)) {
+            JarvisLabelledButton(
+                title: model.dismissingBackgroundTaskIDs.contains(task.id) ? copy(.dismissing) : copy(.dismiss),
+                isDisabled: model.fixtureMode || model.dismissingBackgroundTaskIDs.contains(task.id),
+                accessibilityTitle: String(format: copy(.dismissLabel), task.title)
+            ) {
                 Task { await model.dismissBackgroundTask(task) }
             }
-            .buttonStyle(.plain)
-            .font(.body.weight(.medium))
-            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .contentShape(Rectangle())
-            .disabled(model.fixtureMode || model.dismissingBackgroundTaskIDs.contains(task.id))
-            .accessibilityLabel(String(format: copy(.dismissLabel), task.title))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

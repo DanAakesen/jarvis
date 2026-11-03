@@ -39,17 +39,14 @@ struct JarvisDeploymentsSettingsView: View {
                                 .font(.body.weight(.medium))
                             Spacer()
                             if catalogue.source == "arm" {
-                                Button(role: .destructive) {
-                                    pendingRemoval = deployment
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .frame(
-                                            width: JarvisDesignTokens.settingsControlHeight,
-                                            height: JarvisDesignTokens.settingsControlHeight
-                                        )
-                                }
-                                .disabled(readOnly || removing != nil)
-                                .accessibilityLabel("\(copy(.removeDeployment)) \(deployment.name)")
+                                JarvisIconButton(
+                                    title: "\(copy(.removeDeployment)) \(deployment.name)",
+                                    systemImage: "trash",
+                                    identifier: "settings.deployment.remove",
+                                    isDisabled: readOnly || removing != nil,
+                                    tint: .red,
+                                    chrome: .onGlass
+                                ) { pendingRemoval = deployment }
                             }
                         }
                         Text("\(deployment.model) · \(deployment.version) · \(deployment.sku)")
@@ -67,11 +64,13 @@ struct JarvisDeploymentsSettingsView: View {
                     .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
                 }
                 if let error {
-                    Button(copy(.retry)) { Task { await load() } }
-                        .disabled(loading || removing != nil)
+                    JarvisLabelledButton(
+                        title: copy(.retry),
+                        isDisabled: loading || removing != nil
+                    ) { Task { await load() } }
                 }
             } else {
-                Button(copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             }
         }
         .listStyle(.insetGrouped)
@@ -80,13 +79,13 @@ struct JarvisDeploymentsSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(loading || removing != nil)
-                .accessibilityLabel(copy(.refresh))
+                JarvisIconButton(
+                    title: copy(.refresh),
+                    systemImage: "arrow.clockwise",
+                    identifier: "settings.refresh",
+                    isDisabled: loading || removing != nil,
+                    chrome: .onGlass
+                ) { Task { await load() } }
             }
         }
         .task {
@@ -208,10 +207,11 @@ struct JarvisNewDeploymentView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(saving ? copy(.saving) : copy(.requestDeployment)) {
-                    Task { await requestDeployment() }
-                }
-                .disabled(readOnly || saving || submitted || !validDraft)
+                JarvisSheetConfirmButton(
+                    title: copy(.requestDeployment),
+                    isWorking: saving,
+                    isDisabled: readOnly || submitted || !validDraft
+                ) { Task { await requestDeployment() } }
             }
         }
         .onChange(of: model) { _, _ in error = nil; notice = nil }

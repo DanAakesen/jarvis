@@ -1182,7 +1182,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn('Text(badge > 99 ? "99+" : "\\(badge)")', glyph)
         self.assertIn(".frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)", glyph)
         self.assertIn(".offset(x: -2, y: 2)", glyph)
-        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent", glyph)
+        self.assertIn("JarvisDesignTokens.secondaryAccent", glyph)
 
     def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -1245,13 +1245,8 @@ class SafeFailureTests(unittest.TestCase):
             source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
             self.assertIn("JarvisApprovalLocalization.string", source)
             self.assertIn("model.isResolving(confirmation, decision:", source)
-            # The sheet uses the shared labelled button (44 pt target); Chat's inline buttons keep their own sizing.
-            if filename == "JarvisActivitySheet.swift":
-                self.assertIn("isDisabled: model.fixtureMode || model.isResolving(confirmation)", source)
-            else:
-                self.assertIn(".disabled(model.fixtureMode || model.isResolving(confirmation))", source)
-                self.assertIn("minWidth: JarvisDesignTokens.chatMinimumTapTarget", source)
-                self.assertIn("minHeight: JarvisDesignTokens.chatMinimumTapTarget", source)
+            # Both use the shared labelled button, which owns the 44 pt target.
+            self.assertIn("isDisabled: model.fixtureMode || model.isResolving(confirmation)", source)
         sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
         self.assertIn("JarvisApprovalLocalization.string(.approve, language: appLanguage)", sheet)
         self.assertIn("JarvisApprovalLocalization.string(.decline, language: appLanguage)", sheet)
@@ -1303,7 +1298,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("!$0.running.isEmpty", activity_predicate)
         self.assertIn("!$0.items.isEmpty", activity_predicate)
         self.assertNotIn("$0.awayMode", activity_predicate)
-        self.assertIn(".tint(JarvisDesignTokens.secondaryAccent)", screen)
+        self.assertIn("JarvisComposerMenuButton(", screen)
         self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
         self.assertIn('ContentUnavailableView("No activity", systemImage: "checkmark.circle")', sheet)
         self.assertIn("if !items.isEmpty", sheet)

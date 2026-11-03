@@ -420,7 +420,7 @@ struct JarvisHealthArea: View {
     private var periodMenu: some View {
         HStack {
             Spacer(minLength: 0)
-            Menu {
+            JarvisLabelledMenu(title: copy.period(periodPreset), identifier: "health.period") {
                 ForEach(JarvisHealthPeriodPreset.allCases) { preset in
                     Button {
                         periodPreset = preset
@@ -432,19 +432,7 @@ struct JarvisHealthArea: View {
                         }
                     }
                 }
-            } label: {
-                HStack(spacing: JarvisDesignTokens.healthMenuSpacing) {
-                    Text(copy.period(periodPreset))
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, JarvisDesignTokens.healthSectionSpacing)
-                .frame(minHeight: JarvisDesignTokens.healthControlHeight)
             }
-            .buttonStyle(.glass)
-            .accessibilityLabel(copy.period(periodPreset))
         }
     }
 
@@ -460,15 +448,12 @@ struct JarvisHealthArea: View {
                     .accessibilityLabel(copy.text(.search))
                     .accessibilityIdentifier("health.search")
                 if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(copy.text(.clearSearch))
+                    JarvisIconButton(
+                        title: copy.text(.clearSearch),
+                        systemImage: "xmark.circle.fill",
+                        identifier: "health.search.clear",
+                        chrome: .onGlass
+                    ) { searchText = "" }
                 }
             }
             .padding(.leading, JarvisDesignTokens.healthSectionSpacing)

@@ -8,6 +8,10 @@ import XCTest
 /// - `JarvisControls.swift` and `JarvisDesignSystem.swift` own every glass surface, button style and orb component.
 /// - `JarvisMiniCoreView.swift` is the orb drawing itself, which `JarvisOrb` wraps.
 /// - `JarvisComponentGallery.swift` only shows the shared components and defines none of its own.
+/// - `.buttonStyle(.plain)` and `JarvisPressableRowButtonStyle` stay allowed in screens: they only make a whole content
+///   row (a note, a list item, a chart slice, a disclosure header) tappable and draw no chrome. Anything that looks like a
+///   button (icon, label, menu, chip, tab) uses the shared components.
+/// - The Live Activity's `Button(intent:)` is the WidgetKit API and cannot use SwiftUI button styles.
 /// Any other file that needs a new look must add it to the shared layer instead of adding an exception here.
 final class JarvisDesignSystemGuardTests: XCTestCase {
     private static let sharedLayer: Set<String> = ["JarvisControls.swift", "JarvisDesignSystem.swift"]
@@ -48,6 +52,11 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
         XCTAssertEqual(try offenders(#"\.glassEffect\("#, allowing: Self.sharedLayer), [])
     }
 
+    func testNoScreenAppliesButtonChrome() throws {
+        let chrome = #"\.buttonStyle\(\s*\.(?:glass|glassProminent|bordered|borderedProminent|borderless)\b"#
+        XCTAssertEqual(try offenders(chrome, allowing: Self.sharedLayer), [])
+    }
+
     func testNoScreenDefinesAButtonStyle() throws {
         XCTAssertEqual(try offenders(#":\s*(?:[A-Za-z]+,\s*)*ButtonStyle\b"#, allowing: Self.sharedLayer), [])
     }
@@ -61,6 +70,15 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
     func testScreensCreateOrbsOnlyThroughJarvisOrb() throws {
         let allowing = Self.sharedLayer.union(Self.orbDrawing)
         XCTAssertEqual(try offenders(#"JarvisMiniCoreView\("#, allowing: allowing), [])
+    }
+
+    func testTheGuardDetectsButtonChrome() throws {
+        let expression = try NSRegularExpression(pattern: #"\.buttonStyle\(\s*\.(?:glass|glassProminent|bordered|borderedProminent|borderless)\b"#)
+        for sample in ["Button(\"x\") {}.buttonStyle(.glass)", "x.buttonStyle(.glassProminent)", "x.buttonStyle(.borderless)"] {
+            XCTAssertNotNil(expression.firstMatch(in: sample, range: NSRange(sample.startIndex..., in: sample)))
+        }
+        let plain = "x.buttonStyle(.plain)"
+        XCTAssertNil(expression.firstMatch(in: plain, range: NSRange(plain.startIndex..., in: plain)))
     }
 
     func testTheGuardDetectsAViolation() throws {

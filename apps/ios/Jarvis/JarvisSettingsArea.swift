@@ -237,14 +237,12 @@ struct JarvisSettingsArea: View {
                     .autocorrectionDisabled()
                     .accessibilityLabel(copy(.search))
                 if !search.isEmpty {
-                    Button {
-                        search = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(copy(.cancel))
+                    JarvisIconButton(
+                        title: copy(.cancel),
+                        systemImage: "xmark.circle.fill",
+                        identifier: "settings.search.clear",
+                        chrome: .onGlass
+                    ) { search = "" }
                 }
             }
             .padding(.horizontal, JarvisDesignTokens.settingsSectionSpacing)

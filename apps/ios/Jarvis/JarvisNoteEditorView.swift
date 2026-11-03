@@ -93,25 +93,21 @@ struct JarvisNoteEditorView: View {
         .toolbar(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button {
+                JarvisIconButton(
+                    title: copy.back,
+                    systemImage: "chevron.left",
+                    identifier: "note.back",
+                    chrome: .onGlass
+                ) {
                     if hasChanges { activeAlert = .discard } else { onClose() }
-                } label: {
-                    Image(systemName: "chevron.left")
                 }
-                .accessibilityLabel(copy.back)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await saveDraft(sha: note.sha) }
-                } label: {
-                    if saving {
-                        ProgressView()
-                    } else {
-                        Label(copy.save, systemImage: "checkmark").labelStyle(.iconOnly)
-                    }
-                }
-                .disabled(!hasChanges || saving || latestConflict != nil || needsReload || client == nil)
-                .accessibilityLabel(copy.save)
+                JarvisSheetConfirmButton(
+                    title: copy.save,
+                    isWorking: saving,
+                    isDisabled: !hasChanges || latestConflict != nil || needsReload || client == nil
+                ) { Task { await saveDraft(sha: note.sha) } }
             }
         }
         .alert(alertTitle, isPresented: Binding(

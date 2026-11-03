@@ -37,17 +37,14 @@ struct JarvisProactiveSettingsView: View {
                 Text(copy(draftPaused ? .paused : .running))
                     .foregroundStyle(.secondary)
             } else {
-                Button(copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             }
         }
         .navigationTitle(copy(.proactiveRow))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(saving ? copy(.saving) : copy(.save)) {
-                    Task { await save() }
-                }
-                .disabled(readOnly || loading || saving || !isDirty)
+                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || saving || !isDirty) { Task { await save() } }
             }
         }
         .task {
@@ -130,23 +127,19 @@ struct JarvisRoutinesSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button(role: .destructive) {
-                        pendingDeletion = routine
-                    } label: {
-                        Image(systemName: "trash")
-                            .frame(
-                                width: JarvisDesignTokens.settingsControlHeight,
-                                height: JarvisDesignTokens.settingsControlHeight
-                            )
-                    }
-                    .disabled(readOnly || deleting)
-                    .accessibilityLabel(copy(.delete))
+                    JarvisIconButton(
+                        title: copy(.delete),
+                        systemImage: "trash",
+                        identifier: "settings.routine.delete",
+                        isDisabled: readOnly || deleting,
+                        tint: .red,
+                        chrome: .onGlass
+                    ) { pendingDeletion = routine }
                 }
                 .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
             if let error, !routines.isEmpty {
-                Button(copy(.retry)) { Task { await load() } }
-                    .disabled(loading)
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) { Task { await load() } }
             }
         }
         .listStyle(.insetGrouped)
@@ -155,13 +148,13 @@ struct JarvisRoutinesSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(loading || deleting)
-                .accessibilityLabel(copy(.refresh))
+                JarvisIconButton(
+                    title: copy(.refresh),
+                    systemImage: "arrow.clockwise",
+                    identifier: "settings.refresh",
+                    isDisabled: loading || deleting,
+                    chrome: .onGlass
+                ) { Task { await load() } }
             }
         }
         .task {
@@ -267,10 +260,10 @@ struct JarvisMemorySettingsView: View {
                 .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
             if hasMore {
-                Button(loadingMore ? copy(.loading) : copy(.loadMore)) {
-                    Task { await loadMore() }
-                }
-                .disabled(loadingMore)
+                JarvisLabelledButton(
+                    title: loadingMore ? copy(.loading) : copy(.loadMore),
+                    isDisabled: loadingMore
+                ) { Task { await loadMore() } }
             }
         }
         .listStyle(.insetGrouped)
@@ -281,13 +274,13 @@ struct JarvisMemorySettingsView: View {
         .onSubmit(of: .search) { Task { await load(reset: true) } }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await load(reset: true) }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(loading || loadingMore)
-                .accessibilityLabel(copy(.refresh))
+                JarvisIconButton(
+                    title: copy(.refresh),
+                    systemImage: "arrow.clockwise",
+                    identifier: "settings.refresh",
+                    isDisabled: loading || loadingMore,
+                    chrome: .onGlass
+                ) { Task { await load(reset: true) } }
             }
         }
         .task(id: query) {
@@ -427,24 +420,24 @@ private struct JarvisMemoryEditorView: View {
             if loading {
                 ProgressView(copy(.loading))
             } else if !loaded {
-                Button(copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             } else {
                 TextEditor(text: $draft)
                     .frame(minHeight: 180)
                     .accessibilityLabel(copy(.memoryText))
                     .disabled(readOnly || saving || deleting)
             }
-            Button(copy(.delete), role: .destructive) {
-                confirmDelete = true
-            }
-            .disabled(readOnly || loading || !loaded || saving || deleting)
+            JarvisLabelledButton(
+                title: copy(.delete),
+                isDisabled: readOnly || loading || !loaded || saving || deleting,
+                isDestructive: true
+            ) { confirmDelete = true }
         }
         .navigationTitle(memory.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(saving ? copy(.saving) : copy(.save)) { Task { await save() } }
-                    .disabled(readOnly || loading || !loaded || saving || deleting || !hasChanges || !validText)
+                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || !loaded || saving || deleting || !hasChanges || !validText) { Task { await save() } }
             }
         }
         .task { await load() }
@@ -611,15 +604,14 @@ struct JarvisTargetsSettingsView: View {
                     }
                 }
             } else {
-                Button(copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             }
         }
         .navigationTitle(copy(kind.screenTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(saving ? copy(.saving) : copy(.save)) { Task { await save() } }
-                    .disabled(readOnly || loading || saving || !dirty || !valid)
+                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || saving || !dirty || !valid) { Task { await save() } }
             }
         }
         .task {
@@ -721,20 +713,20 @@ struct JarvisHealthCredentialView: View {
                     LabeledContent(copy(.credentialExpiry), value: formattedDate(expiresAt))
                 }
             } else {
-                Button(copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             }
         }
         .navigationTitle(copy(.uploadCredentialRow))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await load() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .disabled(loading)
-                .accessibilityLabel(copy(.refresh))
+                JarvisIconButton(
+                    title: copy(.refresh),
+                    systemImage: "arrow.clockwise",
+                    identifier: "settings.refresh",
+                    isDisabled: loading,
+                    chrome: .onGlass
+                ) { Task { await load() } }
             }
         }
         .task {
@@ -801,7 +793,7 @@ struct JarvisOwnerSettingsView: View {
             } else if let name {
                 LabeledContent(copy(.ownerRow), value: name)
             } else {
-                Button(copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             }
         }
         .navigationTitle(copy(.ownerRow))
