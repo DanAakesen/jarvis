@@ -10739,3 +10739,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Settings uses `JarvisPageHeader` (title, refresh, sidebar button). The notifications sheet draws its own header in content (bold title, Clear all, close) and hides the navigation bar, so there is one background and the close button is a centred circle. Group rows swipe left to dismiss, with a VoiceOver action as the alternative. Health shows an empty state (`health.notAuthorised`, da and en) and no headline when the backend reports no readable sources, for example while the HealthKit entitlement is off.
 - Evidence: Health and Notes already used the shared header and headline. UI tests cover titles and shared button identifiers for Health, Notes, Settings and the notifications sheet.
 - Not verified: no Simulator run or before and after screenshots in this change. Status, Proaktiv and Proaktiv settings stay with #1548.
+
+## 2026-11-03 P15-72: icon button test root cause and HealthKit
+
+- Decision: `JarvisPageHeroCard` no longer sets `accessibilityIdentifier("page.hero")`. On the Simulator that identifier replaced the identifiers of every control inside the card, so `ComponentGalleryUITests.testIconButtonsAreSquareAndTheBellKeepsItsSizeWithABadge` could not find `gallery.icon`. The test keeps its explicit identifier allowlist of simple icon buttons (never toggles, pills or tabs).
+- Decision: the iPhone app enables the HealthKit capability and `com.apple.developer.healthkit` entitlement (CI checks both) so Home can read steps when the owner allows it. Nothing is written to Health or uploaded.
+- Evidence: the failing run's accessibility tree showed `identifier: 'page.hero'` on all gallery buttons. The iOS Simulator workflow already fails the run when any UI test fails.
+- Not verified: no Simulator run in this environment (Linux); the App ID and profile need HealthKit enabled in the Apple developer portal before the next TestFlight build.

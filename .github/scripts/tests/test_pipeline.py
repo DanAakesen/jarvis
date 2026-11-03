@@ -1214,6 +1214,21 @@ class SafeFailureTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Missing simulator capture:", result.stderr)
 
+    def test_ios_hero_card_never_overrides_the_identifiers_of_its_controls(self):
+        header = (ROOT / "apps/ios/Jarvis/JarvisPageHeader.swift").read_text()
+        card = header.split("struct JarvisPageHeroCard", 1)[1].split("\n}\n", 1)[0]
+        self.assertNotIn(".accessibilityIdentifier(", card)
+
+    def test_ios_app_enables_healthkit_with_danish_and_english_usage_text(self):
+        entitlements = plistlib.loads((ROOT / "apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
+        self.assertIs(entitlements["com.apple.developer.healthkit"], True)
+        project = (ROOT / "apps/ios/project.yml").read_text()
+        self.assertIn("com.apple.HealthKit:", project)
+        for language in ("da", "en"):
+            strings = (ROOT / f"apps/ios/Jarvis/{language}.lproj/InfoPlist.strings").read_text()
+            self.assertIn("NSHealthShareUsageDescription", strings)
+            self.assertIn("NSHealthUpdateUsageDescription", strings)
+
     def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
         controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
         chrome = controls.split("private extension View {", 1)[1].split("\n}\n", 1)[0]

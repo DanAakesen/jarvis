@@ -1409,9 +1409,11 @@ Home layout (P15-65): no title; the data-phrase headline is first, then the acti
 Next up, tasks and the two log buttons, with the Chat composer pinned below (voice while empty, send while typing).
 Log workout (session types) and Log lift (`JarvisGymLiftType`) open two sheets with a date field that defaults to today;
 the check is disabled until a date is set, and the chosen day is saved with the current time of day through the vault
-path. Steps and workouts show "unavailable" empty states when HealthKit is off. To enable steps: add the HealthKit
-capability and `com.apple.developer.healthkit` entitlement to the App ID and provisioning profile, keep
-`NSHealthShareUsageDescription`, and register `JarvisHealthKitStepsSource` as the steps source in the app composition.
+path. Steps and workouts show "unavailable" empty states when the owner has not allowed HealthKit. The iPhone app has the
+HealthKit capability (`SystemCapabilities` in `project.yml`) and the `com.apple.developer.healthkit` entitlement, with
+`NSHealthShareUsageDescription` in Danish and English; `JarvisHealthKitStepsSource` is the steps source. Steps are read
+only and never leave the phone beyond what the Home card shows. The App ID and provisioning profile must also have the
+HealthKit capability enabled in the Apple developer portal.
 
 Transitions: Today, Chat and Voice swap with a continuity transition. `JarvisCarryOver` shares one namespace through
 the environment; the composer and the orb use `matchedGeometryEffect`, driven by an animation that
