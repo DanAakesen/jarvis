@@ -74,7 +74,7 @@ struct JarvisInsightsHeader<Actions: View>: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
             actions
-            JarvisSidebarMenuButton(language: language)
+            JarvisSidebarMenuButton(language: language, chrome: .glass)
         }
         .padding(.horizontal)
     }
@@ -146,18 +146,12 @@ struct JarvisInsightsStateView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if canRetry, let retry {
-                Button(action: retry) {
-                    Label(jarvisInsightsText(.retry, language), systemImage: "arrow.clockwise")
-                        .labelStyle(.iconOnly)
-                        .frame(
-                            minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                            minHeight: JarvisDesignTokens.chatMinimumTapTarget
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.glass)
-                .accessibilityLabel(jarvisInsightsText(.retry, language))
-                .accessibilityIdentifier("\(identifier).retry")
+                JarvisIconButton(
+                    title: jarvisInsightsText(.retry, language),
+                    systemImage: "arrow.clockwise",
+                    identifier: "\(identifier).retry",
+                    action: retry
+                )
             }
         }
         .frame(maxWidth: .infinity)
@@ -186,36 +180,5 @@ struct JarvisInsightsBadge: View {
         .padding(.vertical, 4)
         .background(tint.opacity(0.14), in: Capsule())
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// A glass icon button for a page action (refresh, settings, edit). 44 pt, labelled.
-struct JarvisInsightsIconButton: View {
-    let title: String
-    let systemImage: String
-    var identifier: String
-    var isDisabled = false
-    var isWorking = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Group {
-                if isWorking {
-                    ProgressView()
-                } else {
-                    Image(systemName: systemImage)
-                }
-            }
-            .frame(
-                minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                minHeight: JarvisDesignTokens.chatMinimumTapTarget
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.glass)
-        .disabled(isDisabled)
-        .accessibilityLabel(title)
-        .accessibilityIdentifier(identifier)
     }
 }

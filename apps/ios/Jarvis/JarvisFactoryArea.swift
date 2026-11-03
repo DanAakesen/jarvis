@@ -263,18 +263,18 @@ struct JarvisFactoryArea: View {
 
     private var header: some View {
         JarvisPageHeader(title: copy.text(.title), language: language) {
-            JarvisPageActionButton(
+            JarvisIconButton(
+                title: copy.text(.refresh),
                 systemImage: "arrow.clockwise",
-                label: copy.text(.refresh),
                 identifier: "factory.refresh",
                 isBusy: refreshing,
                 isDisabled: client == nil
             ) {
                 Task { await refresh() }
             }
-            JarvisPageActionButton(
+            JarvisIconButton(
+                title: copy.text(.newTask),
                 systemImage: "plus",
-                label: copy.text(.newTask),
                 identifier: "factory.plus",
                 isDisabled: client == nil || projects.isEmpty
             ) {
@@ -350,7 +350,11 @@ struct JarvisFactoryArea: View {
             .accessibilityLabel(copy.text(.project))
 
             if segment != .releases {
-                Menu {
+                JarvisMenuButton(
+                    title: copy.text(.filters),
+                    systemImage: "line.3.horizontal.decrease",
+                    identifier: "factory.filters"
+                ) {
                     Picker(copy.text(.agent), selection: $selectedAgent) {
                         Text(copy.text(.all)).tag("")
                         ForEach(FactoryAgent.allCases, id: \.rawValue) { agent in
@@ -363,14 +367,7 @@ struct JarvisFactoryArea: View {
                             Text(copy.state(state)).tag(state.rawValue)
                         }
                     }
-                } label: {
-                    Label(copy.text(.filters), systemImage: "line.3.horizontal.decrease")
-                        .labelStyle(.iconOnly)
-                        .frame(width: JarvisDesignTokens.factoryControlHeight, height: JarvisDesignTokens.factoryControlHeight)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.glass)
-                .accessibilityLabel(copy.text(.filters))
             }
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
@@ -722,8 +719,7 @@ struct FactoryStateMessage: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .buttonStyle(.glass)
+                JarvisLabelledButton(title: actionTitle, action: action)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

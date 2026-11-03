@@ -475,7 +475,7 @@ struct JarvisTodayScreen: View {
             .accessibilityLabel(JarvisChatLocalization.string(.messagePlaceholder, language: language))
             .accessibilityIdentifier("today.input")
             Button(action: onVoice) {
-                JarvisMiniCoreView(activity: .calm, diameter: 28, isStatic: true)
+                JarvisOrb(activity: .calm, size: 28, isStatic: true)
                     .jarvisCarryOver(.orb)
                     .frame(
                         width: JarvisDesignTokens.chatMinimumTapTarget,

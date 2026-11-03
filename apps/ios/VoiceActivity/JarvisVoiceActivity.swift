@@ -19,7 +19,7 @@ struct JarvisVoiceActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    VoiceActivityOrbView(
+                    VoiceActivityMark(
                         diameter: 30,
                         language: context.attributes.appLanguage,
                         status: voiceActivityStatusText(
@@ -98,7 +98,7 @@ struct JarvisVoiceActivity: Widget {
                     }
                 }
             } compactLeading: {
-                VoiceActivityOrbView(
+                VoiceActivityMark(
                     diameter: 18,
                     language: context.attributes.appLanguage,
                     status: voiceActivityStatusText(
@@ -114,7 +114,7 @@ struct JarvisVoiceActivity: Widget {
                 )
                 .frame(width: 22, height: 14)
             } minimal: {
-                VoiceActivityOrbView(
+                VoiceActivityMark(
                     diameter: 18,
                     language: context.attributes.appLanguage,
                     status: voiceActivityStatusText(
@@ -133,14 +133,13 @@ private func voiceActivityStatusText(
     (VoiceLiveActivityCopy(rawValue: phase.rawValue) ?? .listening).text(language: language)
 }
 
-private struct VoiceActivityOrbView: View {
+private struct VoiceActivityMark: View {
     let diameter: CGFloat
     let language: JarvisAppLanguage
     let status: String
 
     var body: some View {
-        JarvisMiniCoreView(activity: .calm, diameter: diameter, isStatic: true)
-            .frame(width: diameter, height: diameter)
+        JarvisOrb(activity: .calm, size: diameter, isStatic: true)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(VoiceLiveActivityCopy.title.text(language: language))
             .accessibilityValue(status)
@@ -185,8 +184,8 @@ struct VoiceLockScreenView: View {
     var body: some View {
         VStack(spacing: JarvisDesignTokens.liveActivitySpacing) {
             HStack(spacing: JarvisDesignTokens.rowSpacing) {
-                JarvisMiniCoreView(
-                    activity: .calm, diameter: JarvisDesignTokens.liveActivityOrbSize,
+                JarvisOrb(
+                    activity: .calm, size: JarvisDesignTokens.liveActivityOrbSize,
                     isStatic: true
                 )
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {

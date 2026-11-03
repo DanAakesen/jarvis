@@ -22,17 +22,12 @@ struct JarvisNotesGraphView: View {
         VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
             HStack {
                 Spacer()
-                Button {
+                JarvisLabelledButton(
+                    title: showingList ? copy.showGraph : copy.showGraphList,
+                    systemImage: showingList ? "point.3.connected.trianglepath.dotted" : "list.bullet"
+                ) {
                     showingList.toggle()
-                } label: {
-                    Label(
-                        showingList ? copy.showGraph : copy.showGraphList,
-                        systemImage: showingList ? "point.3.connected.trianglepath.dotted" : "list.bullet"
-                    )
-                    .font(.subheadline)
                 }
-                .buttonStyle(.glass)
-                .accessibilityLabel(showingList ? copy.showGraph : copy.showGraphList)
             }
             if showingList {
                 graphList

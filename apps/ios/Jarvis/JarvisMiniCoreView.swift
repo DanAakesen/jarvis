@@ -14,7 +14,8 @@ enum JarvisMiniCoreActivity: Equatable {
 
 /// The one Jarvis mark: the amber filament tangle of the chat bubble's mini core on a transparent canvas, scaled to
 /// any size. The gate, Voice, the chat bubble, the lock-screen preview and the Voice Live Activity all draw it.
-/// It breathes uniformly (no rotation, no bending) and is steady under Reduce Motion or when `isStatic` is set.
+/// The canvas is always proposed a square of `diameter`, so it can never be stretched by a flexible parent; use
+/// `JarvisOrb` in screens. It breathes uniformly (no rotation, no bending) and is steady under Reduce Motion or when `isStatic` is set.
 /// API: Canvas, TimelineView, Environment(\.accessibilityReduceMotion).
 struct JarvisMiniCoreView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -64,6 +65,7 @@ struct JarvisMiniCoreView: View {
                 ? sin(timeline.date.timeIntervalSinceReferenceDate * 2 * .pi / duration)
                 : 0
             core
+                .frame(width: diameter, height: diameter)
                 .scaleEffect(1 + CGFloat(wave) * amplitude)
                 .opacity(animates ? 0.88 + (wave + 1) * 0.06 : 1)
         }

@@ -244,9 +244,9 @@ struct JarvisNotesArea: View {
 
     private var header: some View {
         JarvisPageHeader(title: copy.title, language: language) {
-            JarvisPageActionButton(
+            JarvisIconButton(
+                title: selectedTab == .graph ? copy.resetGraph : copy.refresh,
                 systemImage: "arrow.clockwise",
-                label: selectedTab == .graph ? copy.resetGraph : copy.refresh,
                 identifier: "notes.refresh"
             ) {
                 if selectedTab == .graph {
@@ -254,9 +254,9 @@ struct JarvisNotesArea: View {
                 }
                 refreshVersion += 1
             }
-            JarvisPageActionMenu(
+            JarvisMenuButton(
+                title: copy.create,
                 systemImage: "plus",
-                label: copy.create,
                 identifier: "notes.plus",
                 isDisabled: client == nil || signInUnavailable
             ) {
@@ -833,8 +833,7 @@ struct JarvisNotesArea: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let retry {
-                Button(copy.retry, action: retry)
-                    .buttonStyle(.glass)
+                JarvisLabelledButton(title: copy.retry, action: retry)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

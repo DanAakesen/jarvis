@@ -202,50 +202,25 @@ struct JarvisChatScreen: View {
         .toolbar {
             if let onBackToToday {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onBackToToday) {
-                        Image(systemName: "house")
-                            .font(.system(size: 18, weight: .regular))
-                            .frame(
-                                width: JarvisDesignTokens.chatMinimumTapTarget,
-                                height: JarvisDesignTokens.chatMinimumTapTarget
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .jarvisToolbarButtonStyle()
-                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                    .accessibilityLabel(JarvisTodayLocalization.string(.backToToday, language: appLanguage))
-                    .accessibilityIdentifier("chat.backToToday")
+                    JarvisIconButton(
+                        title: JarvisTodayLocalization.string(.backToToday, language: appLanguage),
+                        systemImage: "house",
+                        identifier: "chat.backToToday",
+                        chrome: .onGlass,
+                        action: onBackToToday
+                    )
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                JarvisIconButton(
+                    title: displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you",
+                    systemImage: "bell",
+                    identifier: "chat.notifications",
+                    badge: displayedNeedsYouCount,
+                    chrome: .onGlass
+                ) {
                     presentedSheet = .activity(.activity)
-                } label: {
-                    ZStack {
-                        Image(systemName: "bell")
-                            .symbolVariant(displayedNeedsYouCount > 0 ? .fill : .none)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                    .overlay(alignment: .topTrailing) {
-                        if displayedNeedsYouCount > 0 {
-                            Text(displayedNeedsYouCount > 99 ? "99+" : "\(displayedNeedsYouCount)")
-                                .font(.system(size: 10, weight: .bold))
-                                .monospacedDigit()
-                                .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
-                                .padding(.horizontal, 4)
-                                .frame(minWidth: 18, minHeight: 16)
-                                .background(JarvisDesignTokens.primaryAccent, in: Capsule())
-                                .offset(x: -2, y: 2)
-                        }
-                    }
-                    .contentShape(Rectangle())
                 }
-                .jarvisToolbarButtonStyle()
-                .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
-                .accessibilityIdentifier("chat.notifications")
             }
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
@@ -388,24 +363,20 @@ struct JarvisChatScreen: View {
                                     .font(.footnote)
                                     .foregroundStyle(.red)
                                 Spacer()
-                                Button("Retry") { Task { await model.retryHistory() } }
-                                    .buttonStyle(.glass)
-                                    .disabled(model.fixtureMode)
-                                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                                JarvisLabelledButton(
+                                    title: "Retry",
+                                    isDisabled: model.fixtureMode,
+                                    hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                                ) { Task { await model.retryHistory() } }
                             }
                         }
                         if model.hasOlderMessages {
-                            Button {
+                            JarvisLabelledButton(
+                                title: "Load earlier messages",
+                                isBusy: model.isLoadingOlder
+                            ) {
                                 Task { await model.loadOlder() }
-                            } label: {
-                                if model.isLoadingOlder {
-                                    ProgressView()
-                                } else {
-                                    Text("Load earlier messages")
-                                }
                             }
-                            .buttonStyle(.glass)
-                            .disabled(model.isLoadingOlder)
                             .frame(maxWidth: .infinity)
                             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
                         }
@@ -529,12 +500,11 @@ struct JarvisChatScreen: View {
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatMessageSpacing) {
                 if messageID == "streaming" && model.streamingText.isEmpty {
-                    JarvisMiniCoreView(
+                    JarvisOrb(
                         activity: .thinking,
-                        diameter: JarvisDesignTokens.chatMiniCoreSize,
+                        size: JarvisDesignTokens.chatMiniCoreSize,
                         isStatic: model.fixtureMode || reduceMotion
                     )
-                    .accessibilityHidden(true)
                 }
                 messageText(text, role: role, messageID: messageID)
                     .font(.body)
@@ -560,9 +530,9 @@ struct JarvisChatScreen: View {
                                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
                         }
                     }
-                    .glassEffect(
-                        JarvisGlass.surface(tint: JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
-                        in: userBubbleShape
+                    .jarvisGlassSurface(
+                        cornerRadius: JarvisDesignTokens.chatUserBubbleRadius,
+                        tint: JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)
                     )
                     .overlay {
                         userBubbleShape.strokeBorder(

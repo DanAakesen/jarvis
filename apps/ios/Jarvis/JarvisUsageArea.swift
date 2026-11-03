@@ -38,7 +38,7 @@ struct JarvisUsageArea: View {
                 title: JarvisDestination.usage.localizedTitle(language: language),
                 language: language
             ) {
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "usage.refresh",
@@ -146,7 +146,7 @@ struct JarvisUsageArea: View {
                     }
                     Spacer(minLength: 0)
                     if bucket != nil {
-                        JarvisInsightsIconButton(
+                        JarvisIconButton(
                             title: text(.closeSheet),
                             systemImage: "xmark",
                             identifier: "usage.clearSelection"
@@ -183,7 +183,7 @@ struct JarvisUsageArea: View {
                         systemImage: "scissors",
                         tint: JarvisDesignTokens.primaryAccent
                     )
-                    JarvisInsightsIconButton(
+                    JarvisIconButton(
                         title: text(.usageRefreshReport),
                         systemImage: "arrow.clockwise",
                         identifier: "usage.refreshReport"

@@ -66,11 +66,9 @@ struct JarvisNoteEditorView: View {
             }
             if latestConflict == nil,
                status == copy.conflict || status == copy.unknownWrite || status == copy.savedNeedsRefresh {
-                Button(copy.reload) {
+                JarvisLabelledButton(title: copy.reload, isDisabled: saving) {
                     Task { await reloadLatest() }
                 }
-                .buttonStyle(.glass)
-                .disabled(saving)
             }
             if let latestConflict {
                 conflictActions(latestConflict)
@@ -149,19 +147,16 @@ struct JarvisNoteEditorView: View {
             }
             .frame(maxHeight: JarvisDesignTokens.notesConflictPreviewMaximumHeight)
             HStack {
-                Button(copy.reload) {
+                JarvisLabelledButton(title: copy.reload) {
                     applyLatest(latest)
                 }
-                .buttonStyle(.glass)
-                Button(copy.keepDraft) {
+                JarvisLabelledButton(title: copy.keepDraft, isDisabled: saving) {
                     if draft == latest.content {
                         applyLatest(latest)
                     } else {
                         Task { await saveDraft(sha: latest.sha) }
                     }
                 }
-                .buttonStyle(.glass)
-                .disabled(saving)
             }
         }
         .padding(JarvisDesignTokens.notesSectionSpacing)

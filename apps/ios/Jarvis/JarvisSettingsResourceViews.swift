@@ -868,11 +868,12 @@ struct JarvisCredentialsSettingsView: View {
                         LabeledContent(copy(.lastRenewed), value: formattedDate(renewed))
                     }
                     if credential.name == "codex-login" {
-                        Button(renewing == credential.name ? copy(.saving) : copy(.renew)) {
+                        JarvisLabelledButton(
+                            title: renewing == credential.name ? copy(.saving) : copy(.renew),
+                            isDisabled: readOnly || renewing != nil
+                        ) {
                             Task { await renew(credential.name) }
                         }
-                        .buttonStyle(.glass)
-                        .disabled(readOnly || renewing != nil)
                     }
                 }
 

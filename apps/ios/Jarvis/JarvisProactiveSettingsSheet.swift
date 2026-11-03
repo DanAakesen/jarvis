@@ -260,18 +260,12 @@ struct JarvisProactiveSettingsSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                         if editor?.canRetry == true {
-                            Button(action: save) {
-                                Label(text(.editorRetrySave), systemImage: "arrow.clockwise")
-                                    .labelStyle(.iconOnly)
-                                    .frame(
-                                        minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                                        minHeight: JarvisDesignTokens.chatMinimumTapTarget
-                                    )
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.glass)
-                            .accessibilityLabel(text(.editorRetrySave))
-                            .accessibilityIdentifier("proactive.edit.retry")
+                            JarvisIconButton(
+                                title: text(.editorRetrySave),
+                                systemImage: "arrow.clockwise",
+                                identifier: "proactive.edit.retry",
+                                action: save
+                            )
                         }
                     case .idle:
                         EmptyView()

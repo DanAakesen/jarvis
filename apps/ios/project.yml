@@ -93,6 +93,7 @@ targets:
       - path: Shared
       - path: Jarvis/JarvisMiniCoreView.swift
       - path: Jarvis/JarvisDesignSystem.swift
+      - path: Jarvis/JarvisControls.swift
     dependencies:
       - package: JarvisCore
         product: JarvisCore

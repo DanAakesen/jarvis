@@ -67,7 +67,7 @@ struct JarvisLockScreenTasksPreview: View {
     private var approvalNotification: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                JarvisMiniCoreView(activity: .calm, diameter: 38)
+                JarvisOrb(activity: .calm, size: 38)
                     .frame(width: 38, height: 38)
                     .accessibilityHidden(true)
                 Text("Jarvis")

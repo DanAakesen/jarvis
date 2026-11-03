@@ -491,8 +491,7 @@ private struct JarvisGateSurface: View {
 
             if isSignIn {
                 GeometryReader { geometry in
-                    JarvisMiniCoreView(activity: orbActivity)
-                        .accessibilityHidden(true)
+                    JarvisOrb(activity: orbActivity)
                         .position(
                             x: geometry.size.width / 2,
                             y: JarvisDesignTokens.gateOrbCenterTop
@@ -521,8 +520,7 @@ private struct JarvisGateSurface: View {
             } else {
                 VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
                     Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
-                    JarvisMiniCoreView(activity: orbActivity)
-                        .accessibilityHidden(true)
+                    JarvisOrb(activity: orbActivity)
 
                     if isLocked {
                         Image(systemName: "faceid")
@@ -555,24 +553,14 @@ private struct JarvisGateSurface: View {
     @ViewBuilder
     private var primaryActionButton: some View {
         if let buttonTitle {
-            Button(action: onPrimaryAction) {
-                HStack(spacing: JarvisDesignTokens.gateControlSpacing / 2) {
-                    if isSigningIn {
-                        ProgressView()
-                            .tint(JarvisDesignTokens.gateActionForeground)
-                            .accessibilityHidden(true)
-                    } else if presentation == .signIn(.idle) {
-                        JarvisMicrosoftMark()
-                    } else if presentation == .lock(.signedOut) {
-                        Image(systemName: "person.crop.circle")
-                            .accessibilityHidden(true)
-                    }
-                    Text(buttonTitle)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(JarvisGateButtonStyle())
-            .disabled(isSigningIn)
+            JarvisLabelledButton(
+                title: buttonTitle,
+                systemImage: presentation == .lock(.signedOut) ? "person.crop.circle" : nil,
+                leading: presentation == .signIn(.idle) ? AnyView(JarvisMicrosoftMark()) : nil,
+                isBusy: isSigningIn,
+                isFullWidth: true,
+                action: onPrimaryAction
+            )
         }
     }
 }
@@ -603,18 +591,5 @@ private struct JarvisMicrosoftMark: View {
         Rectangle()
             .fill(color)
             .frame(width: 9, height: 9)
-    }
-}
-
-private struct JarvisGateButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(JarvisDesignTokens.gateActionAccent)
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background(.regularMaterial, in: Capsule())
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.86 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

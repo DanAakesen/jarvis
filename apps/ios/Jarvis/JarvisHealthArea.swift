@@ -370,17 +370,17 @@ struct JarvisHealthArea: View {
 
     private var header: some View {
         JarvisPageHeader(title: copy.text(.title), language: language) {
-            JarvisPageActionButton(
+            JarvisIconButton(
+                title: copy.text(.refresh),
                 systemImage: "arrow.clockwise",
-                label: copy.text(.refresh),
                 identifier: "health.refresh",
                 isDisabled: isLoading
             ) {
                 refreshVersion += 1
             }
-            JarvisPageActionMenu(
+            JarvisMenuButton(
+                title: copy.text(.log),
                 systemImage: "plus",
-                label: copy.text(.log),
                 identifier: "health.plus"
             ) {
                 Button {
@@ -530,16 +530,13 @@ struct JarvisHealthArea: View {
                 .font(.subheadline)
                 .lineLimit(2)
             Spacer(minLength: 0)
-            Button(copy.text(.retry)) {
+            JarvisLabelledButton(title: copy.text(.retry), isDisabled: isLoading) {
                 if client == nil {
                     onRetryConfiguration()
                 } else {
                     refreshVersion += 1
                 }
             }
-            .buttonStyle(.glass)
-            .tint(JarvisDesignTokens.healthAccent)
-            .disabled(isLoading)
         }
         .foregroundStyle(failure == .offline ? .secondary : .primary)
         .accessibilityElement(children: .contain)

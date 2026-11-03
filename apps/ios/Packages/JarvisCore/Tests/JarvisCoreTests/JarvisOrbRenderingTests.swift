@@ -11,7 +11,7 @@ final class JarvisOrbRenderingTests: XCTestCase {
 
     func testLockScreenNotificationFixtureUsesAnAppIconSizedMiniCore() throws {
         let source = try source("apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift")
-        XCTAssertTrue(source.contains("JarvisMiniCoreView(activity: .calm, diameter: 38)"))
+        XCTAssertTrue(source.contains("JarvisOrb(activity: .calm, size: 38)"))
         XCTAssertTrue(source.contains(".frame(width: 38, height: 38)"))
     }
 
@@ -19,12 +19,14 @@ final class JarvisOrbRenderingTests: XCTestCase {
         let files = [
             "apps/ios/Jarvis/JarvisGateRootView.swift", "apps/ios/Jarvis/VoiceScreen.swift",
             "apps/ios/Jarvis/JarvisChatScreen.swift", "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift",
-            "apps/ios/VoiceActivity/JarvisVoiceActivity.swift",
+            "apps/ios/Jarvis/JarvisTodayScreen.swift", "apps/ios/VoiceActivity/JarvisVoiceActivity.swift",
         ]
         for file in files {
             let text = try source(file)
-            XCTAssertTrue(text.contains("JarvisMiniCoreView("), file)
+            XCTAssertTrue(text.contains("JarvisOrb("), file)
+            XCTAssertFalse(text.contains("JarvisMiniCoreView("), file)
             XCTAssertFalse(text.contains("JarvisOrbView"), file)
+            XCTAssertFalse(text.contains("VoiceOrbView"), file)
         }
         let repository = URL(fileURLWithPath: #filePath)
         XCTAssertFalse(FileManager.default.fileExists(
@@ -42,5 +44,16 @@ final class JarvisOrbRenderingTests: XCTestCase {
         XCTAssertFalse(core.contains("scaleEffect(x:"))
         XCTAssertFalse(core.contains(".brightness("), "Core animation must preserve transparent pixels")
         XCTAssertFalse(core.contains("orbGlass"), "The old glass sphere is gone")
+        XCTAssertTrue(core.contains(".frame(width: diameter, height: diameter)\n                .scaleEffect"), "The canvas is always square")
+    }
+
+    func testOrbIsAlwaysSquareAndCircularAndScaledBySizeOnly() throws {
+        let controls = try source("apps/ios/Jarvis/JarvisControls.swift")
+        let orb = try XCTUnwrap(controls.components(separatedBy: "struct JarvisOrb: View").last)
+            .components(separatedBy: "\nextension ").first ?? ""
+        XCTAssertTrue(orb.contains("JarvisMiniCoreView(activity: activity, diameter: size, isStatic: isStatic)"))
+        XCTAssertTrue(orb.contains(".aspectRatio(1, contentMode: .fit)"))
+        XCTAssertTrue(orb.contains(".frame(width: size, height: size)"))
+        XCTAssertTrue(orb.contains(".clipShape(Circle())"))
     }
 }

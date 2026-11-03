@@ -29,12 +29,12 @@ struct JarvisStatusArea: View {
                 title: JarvisDestination.status.localizedTitle(language: language),
                 language: language
             ) {
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "status.refresh",
-                    isDisabled: state.isLoading,
-                    isWorking: state.isLoading && state.snapshot != nil
+                    isBusy: state.isLoading && state.snapshot != nil,
+                    isDisabled: state.isLoading
                 ) { reloadToken += 1 }
             }
             Picker(text(.statusFilterLabel), selection: $filter) {

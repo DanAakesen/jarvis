@@ -10684,3 +10684,12 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - The writer keeps one note per Copenhagen day at `Health/Gym log/YYYY-MM-DD.md`, one `##` section per session, lifts as lines under their session and unassigned lifts in a separate section. Every owned line ends in a `<!-- jarvis:kind:id -->` marker, so edits replace the line, deletes remove it, repeats change nothing and text the owner added is kept. Writes use the todo writer's stale-write pattern (read, apply, write with the SHA, re-read on conflict, 3 attempts, 256 KiB cap). User text has comment delimiters and control characters removed and secret-like text withheld.
 - Lifts store `gym_day` when created (the session's day if linked) so a later session delete cannot move a lift to another note. Deleting a session moves its lifts to the unassigned section. Lifts saved before migration 0074 are marked as already handled and are not back-filled into the vault.
 - `GET /daily/workouts?days=7|14|30&limit=` lists recent workouts; `POST`, `PATCH` and `DELETE /daily/workouts` follow the lift routes (owner only, no agent or connector tokens). The note text is Danish by default with English labels available in the writer.
+
+## P15-63: one design system layer for buttons, orb and page scaffold (3 November 2026)
+
+- Decision: the four competing icon-button variants collapse into `JarvisIconButton` (with `JarvisLabelledButton`, `JarvisMenuButton` and the sheet buttons), every orb is a `JarvisOrb`, and `JarvisPageScaffold` is the page frame. `VoiceOrbView`, the gate and sidebar button styles and `jarvisToolbarButtonStyle()` are gone. Screens no longer call `glassEffect`; they use `jarvisGlassSurface(cornerRadius:tint:)`.
+- Enforced by `JarvisDesignSystemGuardTests` (source scan in the normal JarvisCore CI job). Exceptions: `JarvisControls.swift`, `JarvisDesignSystem.swift`, and `JarvisMiniCoreView.swift` (the orb drawing that `JarvisOrb` wraps).
+- Orb distortion: `JarvisMiniCoreView` now gives its canvas an explicit square frame and `JarvisOrb` adds a fixed aspect ratio and circular clip. Not verified on a device from this environment (no Xcode).
+- The Live Activity extension compiles `JarvisControls.swift` for `JarvisOrb`.
+- Still raw: Voice dock controls, camera shutter and side controls, Today row cards, the Health period menu and Chat approval buttons keep their own chrome and need a later migration.
+

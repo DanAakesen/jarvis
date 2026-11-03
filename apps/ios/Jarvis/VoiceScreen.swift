@@ -27,11 +27,7 @@ struct VoiceScreenView: View {
 
                 VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
                     Spacer(minLength: 0)
-                    VoiceOrbView(
-                        status: connectionTitle ?? model.statusText,
-                        state: model.voiceState,
-                        canMinimize: model.isSessionActive && !model.showsConnectionRecovery,
-                        isMuted: model.showsConnectionRecovery || model.isMuted,
+                    voiceOrb(
                         diameter: min(
                             JarvisDesignTokens.gateOrbSize,
                             max(100, geometry.size.height - voiceBottomReservation -
@@ -40,9 +36,7 @@ struct VoiceScreenView: View {
                                 JarvisDesignTokens.voiceContentSpacing * 2 -
                                 JarvisDesignTokens.voiceControlBottomInset)
                         )
-                    ) {
-                        minimizeVoice()
-                    }
+                    )
                     if let connectionTitle {
                         Text(connectionTitle)
                             .font(.system(size: JarvisDesignTokens.voiceStatusFontSize, weight: .semibold))
@@ -159,6 +153,27 @@ struct VoiceScreenView: View {
         !model.userCaption.isEmpty || !model.assistantCaption.isEmpty || !model.sentMedia.isEmpty
     }
 
+    private func voiceOrb(diameter: CGFloat) -> some View {
+        JarvisOrb(
+            activity: JarvisMiniCoreActivity(
+                voiceState: model.voiceState,
+                isMuted: model.showsConnectionRecovery || model.isMuted
+            ),
+            size: diameter
+        )
+        .jarvisCarryOver(.orb)
+        .frame(
+            width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
+            height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2
+        )
+        .accessibilityElement()
+        .accessibilityLabel("\(JarvisVoiceLocalization.string(.orb)). \(connectionTitle ?? model.statusText)")
+        .modifier(VoiceMinimizeAction(
+            isEnabled: model.isSessionActive && !model.showsConnectionRecovery,
+            action: minimizeVoice
+        ))
+    }
+
     private var connectionTitle: String? {
         guard model.showsConnectionRecovery else { return nil }
         let key: JarvisNotesLocalizationKey =
@@ -270,10 +285,7 @@ struct VoiceScreenView: View {
         .frame(maxHeight: JarvisDesignTokens.voiceCaptionMaximumHeight)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(captionAccessibilityLabel)
-        .glassEffect(
-            .regular,
-            in: .rect(cornerRadius: JarvisDesignTokens.voiceCaptionPanelRadius)
-        )
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.voiceCaptionPanelRadius)
         .padding(.horizontal, -JarvisDesignTokens.voiceCaptionHorizontalExtension)
         .overlay(alignment: .topTrailing) {
             Button {
@@ -587,40 +599,7 @@ struct VoiceScreenView: View {
     }
 }
 
-private struct VoiceOrbView: View {
-    let status: String
-    let state: VoiceSessionState
-    let canMinimize: Bool
-    let isMuted: Bool
-    let diameter: CGFloat
-    let onMinimize: () -> Void
-
-    private var activity: JarvisMiniCoreActivity {
-        if isMuted { return .muted }
-        switch state {
-        case .listening: return .listening
-        case .ready: return .thinking
-        case .speaking: return .speaking
-        case .reconnecting: return .reconnecting
-        case .failed, .ended: return .offline
-        case .idle, .connecting: return .calm
-        }
-    }
-
-    var body: some View {
-        JarvisMiniCoreView(activity: activity, diameter: diameter)
-            .jarvisCarryOver(.orb)
-            .frame(
-                width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
-                height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2
-            )
-            .accessibilityElement()
-            .accessibilityLabel("\(JarvisVoiceLocalization.string(.orb)). \(status)")
-            .modifier(VoiceOrbMinimizeAction(isEnabled: canMinimize, action: onMinimize))
-    }
-}
-
-private struct VoiceOrbMinimizeAction: ViewModifier {
+private struct VoiceMinimizeAction: ViewModifier {
     let isEnabled: Bool
     let action: () -> Void
 

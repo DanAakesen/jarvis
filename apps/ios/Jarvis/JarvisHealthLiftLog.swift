@@ -49,9 +49,7 @@ struct JarvisHealthLiftLog: View {
                 ContentUnavailableView(copy.text(.noResults), systemImage: "magnifyingglass")
             }
             if hasMore {
-                Button(copy.text(.loadMore), action: loadMore)
-                    .buttonStyle(.bordered)
-                    .disabled(loading)
+                JarvisLabelledButton(title: copy.text(.loadMore), isDisabled: loading, action: loadMore)
             }
         }
     }
@@ -133,13 +131,12 @@ struct JarvisHealthNewLiftSheet: View {
                             HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
                                 ForEach(suggestedExercises.indices, id: \.self) { index in
                                     let exercise = suggestedExercises[index]
-                                    Button(exercise["exerciseName"]?.stringValue ?? "") {
+                                    JarvisLabelledButton(title: exercise["exerciseName"]?.stringValue ?? "") {
                                         name = exercise["exerciseName"]?.stringValue ?? ""
                                         weight = String(format: "%g", exercise["weightKg"]?.numberValue ?? 0)
                                         reps = String(format: "%.0f", exercise["reps"]?.numberValue ?? 1)
                                         sets = String(format: "%.0f", exercise["sets"]?.numberValue ?? 1)
                                     }
-                                    .buttonStyle(.glass)
                                 }
                             }
                         }

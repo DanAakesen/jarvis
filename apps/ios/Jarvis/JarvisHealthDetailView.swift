@@ -50,9 +50,7 @@ struct JarvisHealthDetailView: View {
                 ContentUnavailableView {
                     Label(failure.title(language: language), systemImage: failure == .offline ? "wifi.slash" : "exclamationmark.triangle")
                 } actions: {
-                    Button(copy.text(.retry)) { retryVersion += 1 }
-                        .buttonStyle(.glass)
-                        .disabled(loading)
+                    JarvisLabelledButton(title: copy.text(.retry), isDisabled: loading) { retryVersion += 1 }
                 }
             } else if unavailable && !isWorkout {
                 ContentUnavailableView(copy.text(.unavailable), systemImage: "heart.text.square")
@@ -149,10 +147,7 @@ struct JarvisHealthDetailView: View {
                         heartRateFailure.title(language: language),
                         systemImage: heartRateFailure == .offline ? "wifi.slash" : "exclamationmark.triangle"
                     )
-                    Button(copy.text(.retry)) { retryVersion += 1 }
-                        .buttonStyle(.glass)
-                        .tint(JarvisDesignTokens.healthAccent)
-                        .disabled(loading)
+                    JarvisLabelledButton(title: copy.text(.retry), isDisabled: loading) { retryVersion += 1 }
                 }
             } else if heartRateUnavailable || heartRate.isEmpty {
                 Section(copy.text(.heartRate)) {

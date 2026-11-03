@@ -51,8 +51,8 @@ final class JarvisNavigationModelTests: XCTestCase {
         let end = try XCTUnwrap(design.range(of: "enum JarvisDesignTokens"))
         let button = String(design[start.lowerBound..<end.lowerBound])
         XCTAssertTrue(button.contains("@EnvironmentObject private var navigation: JarvisNavigationModel"))
-        XCTAssertTrue(button.contains("Button {\n            navigation.openSidebar()\n        } label:"))
-        XCTAssertTrue(button.contains(".jarvisToolbarButtonStyle()"))
+        XCTAssertTrue(button.contains("JarvisIconButton("))
+        XCTAssertTrue(button.contains(") {\n            navigation.openSidebar()\n        }"))
         XCTAssertFalse(button.contains("let action"))
         for file in ["JarvisChatScreen", "JarvisPageHeader"] {
             let screen = try source("Jarvis/\(file).swift")

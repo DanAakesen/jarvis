@@ -2,29 +2,21 @@ import JarvisCore
 import SwiftUI
 import UIKit
 
-extension View {
-    func jarvisToolbarButtonStyle() -> some View {
-        // The system toolbar owns the glass surface; the button adds no second fill.
-        buttonStyle(.plain)
-    }
-}
-
+/// The sidebar button every page carries: the shared icon button. `.onGlass` inside a system toolbar, `.glass` in a title bar.
 struct JarvisSidebarMenuButton: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     let language: JarvisAppLanguage
+    var chrome: JarvisControlChrome = .onGlass
 
     var body: some View {
-        Button {
+        JarvisIconButton(
+            title: JarvisNotesLocalization.string(.openSidebar, language: language),
+            systemImage: "sidebar.trailing",
+            identifier: "navigation.openSidebar",
+            chrome: chrome
+        ) {
             navigation.openSidebar()
-        } label: {
-            Image(systemName: "sidebar.trailing")
-                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                .contentShape(Rectangle())
         }
-        .jarvisToolbarButtonStyle()
-        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-        .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
-        .accessibilityIdentifier("navigation.openSidebar")
     }
 }
 
@@ -313,17 +305,12 @@ enum JarvisDesignTokens {
     }
 }
 
-struct JarvisQuietToolbarIconButtonStyle: ButtonStyle {
+/// Row button without chrome: the row dims while pressed. The only custom button style besides the glass ones.
+struct JarvisPressableRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(
-                Color.primary.opacity(
-                    configuration.isPressed
-                        ? JarvisDesignTokens.toolbarQuietActionPressedOpacity
-                        : JarvisDesignTokens.toolbarQuietActionFillOpacity
-                ),
-                in: Circle()
-            )
+            .opacity(configuration.isPressed ? JarvisDesignTokens.sidebarPressedOpacity : 1)
+            .contentShape(Rectangle())
     }
 }
 
