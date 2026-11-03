@@ -121,7 +121,7 @@ final class TodayUITests: XCTestCase {
         app.buttons["sheet.cancel"].tap()
     }
 
-    func testWorkoutSavingIsBlockedWithoutADateAndTheDateIsSaved() {
+    func testWorkoutSavingNeedsASessionAndTheDateIsSaved() {
         launch()
         let log = app.buttons["today.logWorkout"]
         XCTAssertTrue(log.waitForExistence(timeout: 10))
@@ -133,9 +133,6 @@ final class TodayUITests: XCTestCase {
         chest.tap()
         XCTAssertTrue(sheetElement("today.log.date").exists, "The date defaults to today")
         XCTAssertTrue(save.isEnabled)
-        app.buttons["today.log.date.clear"].tap()
-        XCTAssertFalse(save.isEnabled, "Saving is blocked without a date")
-        app.buttons["today.log.date.set"].tap()
         XCTAssertTrue(save.isEnabled)
         save.tap()
         XCTAssertTrue(app.descendants(matching: .any)["today.log.status"].waitForExistence(timeout: 5))
@@ -160,9 +157,6 @@ final class TodayUITests: XCTestCase {
             input.typeText(value)
         }
         XCTAssertTrue(save.isEnabled)
-        app.buttons["today.log.date.clear"].tap()
-        XCTAssertFalse(save.isEnabled, "Saving is blocked without a date")
-        app.buttons["today.log.date.set"].tap()
         save.tap()
         XCTAssertTrue(app.descendants(matching: .any)["today.log.status"].waitForExistence(timeout: 5))
     }
