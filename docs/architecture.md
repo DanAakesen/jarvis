@@ -1387,6 +1387,30 @@ WebSocket adapter against the #1391 core seam.
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
+### iOS Home (Today) page
+
+P15-57 adds `JarvisDestination.today` ("Home" / "Hjem", `house`) as the last sidebar row and the
+launch page: `ContentView.initialNavigation` starts on Home unless a fixture or screenshot run asks for
+another page, and `JarvisNavigationModel.reset()` (sign-out) returns to Home. The pure logic lives in
+`JarvisCore/Today` (time-of-day greeting, range aggregation, step and workout aggregation, selection/reset,
+gym-log note format and the `JarvisTodayCalendarSource`, `JarvisTodayStepsSource` and `JarvisGymLogStore`
+protocols) so Linux CI tests it; Danish/English copy is the `JarvisToday` strings table. The app target adds
+`JarvisTodayScreen`, `JarvisTodayActivityCard`, `JarvisTodayGymSheet`, `JarvisTodayModel`, and
+`JarvisHealthKitStepsSource` (read-only `HKStatisticsCollectionQuery`; entitlement
+`com.apple.developer.healthkit` and a localized `NSHealthShareUsageDescription`).
+
+Data: tasks come from `GET /vault/tasks` and note correlation from `GET /notes` through the existing
+`JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Gym log/<date>-<time>-<session>.md`
+and read back with `GET /notes?directory=Personal/Gym log`; steps come from HealthKit. No backend route exists
+that lists calendar entries for the phone, so Next up shows "Calendar unavailable" through
+`JarvisUnavailableCalendarSource` instead of inventing entries.
+
+Transitions: Today, Chat and Voice swap with a continuity transition. `JarvisCarryOver` shares one namespace through
+the environment; the composer and the orb use `matchedGeometryEffect`, driven by an animation that
+`JarvisDestinationHost` supplies only for swaps among those three pages (every other swap stays unanimated).
+With Reduce Motion the geometry match is off and the swap is a short cross-fade. Typing on Home hands the text to
+Chat; Chat then shows a Home button, and minimizing or ending Voice returns to the page it was opened from.
+
 ### iOS navigation shell
 
 `JarvisCore` owns the pure-Swift destination/path normalization and sidebar state.
@@ -1861,6 +1885,21 @@ for the existing `GET /now` confirmations and `POST /now/confirmations/:id`
 decision routes. The contract comes from `apps/backend/src/core/now.ts` and
 `apps/web/src/now-feed.ts`; approvals are not a new backend capability. Fixture
 success does not establish live service, device, or owner acceptance.
+
+### iOS Usage, Status and Proactive pages (P15-58)
+
+The Usage, Status and Proactive destinations replace the placeholders in the
+`NavigationStack` shell. `JarvisUsageClient`, `JarvisStatusClient` and
+`JarvisProactiveClient` plus their logic (period/grouping/share maths, status
+ordering and stale detection, proactive sentence, settings validation and the
+save/fail/retry editor state) live in pure-Swift `JarvisCore/Insights` and reuse
+`JarvisClient` against the existing `GET /usage`, `GET /status` and
+`/proactive/*` routes. Copy is in `JarvisInsights.strings` (da, en). The SwiftUI
+areas live in `apps/ios/Jarvis` and use the shared glass, corner token and
+ambient background. Nothing polls except Proactive (10 s while the scene is
+active). `--ui-test-navigation` swaps in `JarvisInsightsFixtureTransport`
+(fixed clock, stateful settings; `--ui-test-insights=error|offline|empty` and
+`--ui-test-insights-save-fails-once` select failure states).
 
 ### iOS Health dashboard (P15-18)
 
@@ -8505,3 +8544,7 @@ the existing SQL cancellation helper and rechecks state after awaits. A database
 write already committed before cancellation remains transcript history; stop
 does not delete historical messages. Old feed-generation DELETEs cannot stop a
 replacement feed. No database schema change.
+
+### Gym log vault copy (P15-60)
+
+`apps/backend/src/daily/gym/` holds the workout model and store, the marker-based Gym log note writer (`gym-log.ts`) and the sync/retry service (`gym-sync.ts`). `composeDaily` receives the vault client; without it entries stay `pending`. Routes: `/daily/workouts` (GET, POST, PATCH, DELETE) and the existing `/daily/lifts` routes, which now accept an optional `workoutId` and return `entry.vault`. Migration `0074_daily_gym_log.sql` adds the workout table and the lift link, day and sync columns. See `docs/decisions.md` (2026-11-02 P15-60).

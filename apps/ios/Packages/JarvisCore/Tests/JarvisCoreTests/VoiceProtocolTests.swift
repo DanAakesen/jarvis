@@ -501,9 +501,9 @@ final class VoiceSessionClientTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async {
-        for _ in 0..<1_000 {
+        for _ in 0..<5_000 {
             if await client.state() == expected { return }
-            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Session did not reach \(expected)", file: file, line: line)
     }

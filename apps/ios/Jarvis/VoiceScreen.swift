@@ -609,6 +609,7 @@ private struct VoiceOrbView: View {
 
     var body: some View {
         JarvisMiniCoreView(activity: activity, diameter: diameter)
+            .jarvisCarryOver(.orb)
             .frame(
                 width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
                 height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2

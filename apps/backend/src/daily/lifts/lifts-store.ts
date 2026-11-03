@@ -1,11 +1,18 @@
 import sql from 'mssql';
 import type { FastifyRequest } from 'fastify';
 import { dailyQuerySources } from '@jarvis/contracts';
-import { ToolFailure } from '../../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { databaseReadRequest } from '../../database/wake-retry.js';
+import { dayKey } from '../../proactive/time.js';
 import { resolveDailyBrowserOwner } from '../owner.js';
 import type { DailyChanges } from '../revisions.js';
-import { parseLiftPatch, presentLiftEntry, type LiftCreate, type LiftEntry, type LiftPatch } from './lifts.js';
+import type { VaultState } from '../gym/workouts.js';
+import { parseLiftPatch, presentLiftEntry, presentLiftWrite, type LiftCreate, type LiftEntry, type LiftPatch } from './lifts.js';
+
+/** Vault copy hook; the store never depends on how the note is written. */
+export interface LiftVaultSync {
+  syncLift(entry: LiftEntry, signal: AbortSignal): Promise<VaultState>;
+}
 
 export interface LiftCursor {
   readonly performedAt: string;
@@ -29,16 +36,27 @@ interface StoredRow {
   deleted_at: Date | string | null;
   updated_at: Date | string;
   revision: number | string;
+  workout_id?: string | null;
+  gym_day?: string | null;
+  vault_synced_revision?: number | string | null;
 }
 
-const rowFields = 'id, exercise_name, exercise_key, weight_kg, reps, sets, performed_at, deleted_at, updated_at, revision';
+const rowFields = 'id, exercise_name, exercise_key, weight_kg, reps, sets, performed_at, deleted_at, updated_at, revision, workout_id, gym_day, vault_synced_revision';
 const insertedFields = rowFields.split(', ').map(field => `INSERTED.${field}`).join(', ');
 const selectIdempotent = `SELECT ${rowFields} FROM daily.lift_entries WITH (UPDLOCK, HOLDLOCK)
   WHERE owner_object_id = @owner AND idempotency_key = @idempotencyKey;`;
 const insertEntry = `INSERT INTO daily.lift_entries
-  (owner_object_id, exercise_name, exercise_key, weight_kg, reps, sets, performed_at, idempotency_key)
+  (owner_object_id, exercise_name, exercise_key, weight_kg, reps, sets, performed_at, idempotency_key, workout_id, gym_day)
   OUTPUT ${insertedFields}
-  VALUES (@owner, @name, @key, @weight, @reps, @sets, @performedAt, @idempotencyKey);`;
+  VALUES (@owner, @name, @key, @weight, @reps, @sets, @performedAt, @idempotencyKey, @workoutId, @gymDay);`;
+const selectWorkoutDay = `SELECT gym_day FROM daily.workout_entries
+  WHERE owner_object_id = @owner AND id = @workoutId AND deleted_at IS NULL;`;
+const markSyncedCommand = `UPDATE daily.lift_entries SET vault_synced_revision = @revision
+  WHERE owner_object_id = @owner AND id = @id AND revision >= @revision
+    AND (vault_synced_revision IS NULL OR vault_synced_revision < @revision);`;
+const selectPending = `SELECT TOP (@take) ${rowFields} FROM daily.lift_entries
+  WHERE owner_object_id = @owner AND (vault_synced_revision IS NULL OR vault_synced_revision < revision)
+  ORDER BY updated_at ASC, id ASC;`;
 const updateBase = `UPDATE daily.lift_entries SET`;
 const deleteEntry = `UPDATE daily.lift_entries
   SET deleted_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(), revision = revision + 1
@@ -57,7 +75,13 @@ function decode(row: StoredRow): LiftEntry {
   const updatedAt = stamp(row.updated_at);
   const weightKg = Number(row.weight_kg);
   const revision = Number(row.revision);
-  if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(row.id) ||
+  const synced = row.vault_synced_revision === null || row.vault_synced_revision === undefined ? null : Number(row.vault_synced_revision);
+  const workoutId = row.workout_id ?? null;
+  const gymDay = row.gym_day ?? null;
+  if (workoutId !== null && !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(workoutId) ||
+      gymDay !== null && !/^\d{4}-\d{2}-\d{2}$/u.test(gymDay) ||
+      synced !== null && !Number.isSafeInteger(synced) ||
+      !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(row.id) ||
       typeof row.exercise_name !== 'string' || row.exercise_name.length < 1 || row.exercise_name.length > 80 ||
       typeof row.exercise_key !== 'string' || row.exercise_key !== row.exercise_name.trim().toLowerCase() ||
       !Number.isFinite(weightKg) || weightKg < 0 || weightKg > 1000 ||
@@ -69,6 +93,7 @@ function decode(row: StoredRow): LiftEntry {
   return {
     id: row.id.toLowerCase(), exerciseName: row.exercise_name, exerciseKey: row.exercise_key,
     weightKg, reps: row.reps, sets: row.sets, performedAt, deletedAt, updatedAt, revision,
+    workoutId: workoutId?.toLowerCase() ?? null, gymDay, vaultSyncedRevision: synced,
   };
 }
 
@@ -76,7 +101,7 @@ function bindOwner(request: sql.Request, owner: string): sql.Request {
   return request.input('owner', sql.UniqueIdentifier, owner);
 }
 
-function bindCreate(request: sql.Request, owner: string, value: LiftCreate): sql.Request {
+function bindCreate(request: sql.Request, owner: string, value: LiftCreate, gymDay: string): sql.Request {
   return bindOwner(request, owner)
     .input('idempotencyKey', sql.UniqueIdentifier, value.idempotencyKey)
     .input('name', sql.NVarChar(80), value.exerciseName)
@@ -84,7 +109,9 @@ function bindCreate(request: sql.Request, owner: string, value: LiftCreate): sql
     .input('weight', sql.Decimal(6, 2), value.weightKg)
     .input('reps', sql.Int, value.reps)
     .input('sets', sql.Int, value.sets)
-    .input('performedAt', sql.DateTime2(3), new Date(value.performedAt));
+    .input('performedAt', sql.DateTime2(3), new Date(value.performedAt))
+    .input('workoutId', sql.UniqueIdentifier, value.workoutId)
+    .input('gymDay', sql.Char(10), gymDay);
 }
 
 async function run(request: sql.Request, command: string, signal: AbortSignal) {
@@ -101,12 +128,25 @@ export class LiftEntriesStore {
     private readonly pool: sql.ConnectionPool,
     private readonly owner: string,
     private readonly changes: DailyChanges,
+    private readonly vault: LiftVaultSync | undefined,
   ) {}
 
-  static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, changes: DailyChanges): LiftEntriesStore {
+  static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, changes: DailyChanges, vault?: LiftVaultSync): LiftEntriesStore {
     const owner = resolveDailyBrowserOwner(request);
     if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
-    return new LiftEntriesStore(pool, owner.toLowerCase(), changes);
+    return new LiftEntriesStore(pool, owner.toLowerCase(), changes, vault);
+  }
+
+  /** Server-side jobs act for the configured owner only. */
+  static forOwner(pool: sql.ConnectionPool, owner: string, changes: DailyChanges): LiftEntriesStore {
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
+    return new LiftEntriesStore(pool, owner.toLowerCase(), changes, undefined);
+  }
+
+  private async finish(entry: LiftEntry, signal: AbortSignal) {
+    const pending = entry.vaultSyncedRevision === null || entry.vaultSyncedRevision < entry.revision;
+    const vault = this.vault && pending ? await this.vault.syncLift(entry, signal) : pending ? 'pending' : 'synced';
+    return presentLiftWrite(vault === 'synced' ? { ...entry, vaultSyncedRevision: entry.revision } : entry);
   }
 
   async history(options: LiftHistoryOptions, signal: AbortSignal) {
@@ -148,7 +188,7 @@ export class LiftEntriesStore {
     }
   }
 
-  async create(value: LiftCreate, signal: AbortSignal): Promise<{ entry: ReturnType<typeof presentLiftEntry>; replayed: boolean }> {
+  async create(value: LiftCreate, signal: AbortSignal): Promise<{ entry: ReturnType<typeof presentLiftWrite>; replayed: boolean }> {
     signal.throwIfAborted();
     const transaction = new sql.Transaction(this.pool);
     let created = false;
@@ -160,23 +200,32 @@ export class LiftEntriesStore {
       if (existing) {
         entry = decode(existing);
       } else {
-        const inserted = (await run(bindCreate(transaction.request(), this.owner, value), insertEntry, signal)).recordset[0];
+        let gymDay = dayKey(new Date(value.performedAt));
+        if (value.workoutId) {
+          const workout = (await bindOwner(transaction.request(), this.owner)
+            .input('workoutId', sql.UniqueIdentifier, value.workoutId)
+            .query<{ gym_day: string }>(selectWorkoutDay)).recordset[0];
+          if (!workout) throw new ToolRefusal('Workout entry not found.');
+          gymDay = workout.gym_day;
+        }
+        const inserted = (await run(bindCreate(transaction.request(), this.owner, value, gymDay), insertEntry, signal)).recordset[0];
         if (!inserted) throw new Error('Lift insert returned no row');
         entry = decode(inserted);
         created = true;
       }
       signal.throwIfAborted();
       await transaction.commit();
-    } catch {
+    } catch (error) {
       try { await transaction.rollback(); } catch { /* Preserve the sanitized failure. */ }
       if (signal.aborted) throw signal.reason;
+      if (error instanceof ToolRefusal) throw error;
       throw new ToolFailure('Lift could not be saved. Check history before retrying.');
     }
     if (created) this.changes.publish({ owner: this.owner, sources: [dailyQuerySources.lifts] });
-    return { entry: presentLiftEntry(entry), replayed: !created };
+    return { entry: await this.finish(entry, signal), replayed: !created };
   }
 
-  async update(id: string, patch: LiftPatch, signal: AbortSignal): Promise<ReturnType<typeof presentLiftEntry> | null> {
+  async update(id: string, patch: LiftPatch, signal: AbortSignal): Promise<ReturnType<typeof presentLiftWrite> | null> {
     signal.throwIfAborted();
     const checked = parseLiftPatch(patch);
     if (!checked.ok || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(id)) {
@@ -215,10 +264,10 @@ export class LiftEntriesStore {
     }
     if (!entry) return null;
     this.changes.publish({ owner: this.owner, sources: [dailyQuerySources.lifts] });
-    return presentLiftEntry(entry);
+    return this.finish(entry, signal);
   }
 
-  async delete(id: string, signal: AbortSignal): Promise<ReturnType<typeof presentLiftEntry> | null> {
+  async delete(id: string, signal: AbortSignal): Promise<ReturnType<typeof presentLiftWrite> | null> {
     signal.throwIfAborted();
     if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(id)) throw new TypeError('Invalid lift id');
     let entry: LiftEntry | null;
@@ -232,7 +281,18 @@ export class LiftEntriesStore {
     }
     if (!entry) return null;
     this.changes.publish({ owner: this.owner, sources: [dailyQuerySources.lifts] });
-    return presentLiftEntry(entry);
+    return this.finish(entry, signal);
+  }
+
+  async pendingVaultCopies(limit: number, signal: AbortSignal): Promise<LiftEntry[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new TypeError('Invalid pending limit');
+    const request = bindOwner(databaseReadRequest(this.pool), this.owner).input('take', sql.Int, limit);
+    return (await run(request, selectPending, signal)).recordset.map(decode);
+  }
+
+  async markVaultSynced(id: string, revision: number, signal: AbortSignal): Promise<void> {
+    await run(bindOwner(databaseReadRequest(this.pool), this.owner)
+      .input('id', sql.UniqueIdentifier, id).input('revision', sql.BigInt, revision), markSyncedCommand, signal);
   }
 }
 

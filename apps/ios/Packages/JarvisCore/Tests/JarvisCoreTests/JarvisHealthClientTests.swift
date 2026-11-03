@@ -322,6 +322,84 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertTrue(authorized)
     }
 
+    func testWorkoutDraftValidatesTypesTitleNoteAndDuration() {
+        let id = UUID(uuidString: "00000000-0000-4000-8000-000000000041")!
+        let start = Date(timeIntervalSince1970: 1_793_000_000)
+        XCTAssertTrue(JarvisWorkoutDraft(idempotencyKey: id, sessionType: .cardio, startedAt: start).isValid)
+        XCTAssertTrue(JarvisWorkoutDraft(
+            idempotencyKey: id, sessionType: .other, title: " Climbing ", startedAt: start, durationMinutes: 45
+        ).isValid)
+        XCTAssertFalse(JarvisWorkoutDraft(idempotencyKey: id, sessionType: .cardio, title: "x", startedAt: start).isValid)
+        XCTAssertFalse(JarvisWorkoutDraft(idempotencyKey: id, sessionType: .cardio, startedAt: start, durationMinutes: 0).isValid)
+        XCTAssertFalse(JarvisWorkoutDraft(idempotencyKey: id, sessionType: .cardio, startedAt: start, note: "a\nb").isValid)
+        XCTAssertEqual(JarvisWorkoutSessionType.allCases.count, 6)
+    }
+
+    func testWorkoutCreateKeepsTheEntryAndReportsAPendingVaultCopyOnRetry() async throws {
+        let id = UUID(uuidString: "00000000-0000-4000-8000-000000000042")!
+        let start = Date(timeIntervalSince1970: 1_793_000_000)
+        let body: [String: Any] = [
+            "idempotencyKey": id.uuidString, "sessionType": "legs_core",
+            "startedAt": JarvisWorkoutDraft.timestamp(start), "durationMinutes": 50,
+        ]
+        func entry(_ vault: String) -> [String: Any] {
+            ["id": id.uuidString, "sessionType": "legs_core", "title": NSNull(),
+             "startedAt": JarvisWorkoutDraft.timestamp(start), "durationMinutes": 50, "note": NSNull(), "vault": vault]
+        }
+        let interactions: [[String: Any]] = [("pending", 201), ("synced", 200)].map { vault, status in
+            [
+                "method": "POST", "path": "/api/daily/workouts", "requestBody": body,
+                "response": ["statusCode": status, "body": ["entry": entry(vault), "replayed": status == 200]],
+            ]
+        }
+        let fixture = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: [
+            "version": 1, "interactions": interactions,
+        ]))
+        let health = JarvisHealthClient(client: try makeClient(fixture))
+        let draft = JarvisWorkoutDraft(
+            idempotencyKey: id, sessionType: .legsCore, startedAt: start, durationMinutes: 50
+        )
+        let first = try await health.createWorkout(draft)
+        XCTAssertEqual(first.vault, .pending)
+        XCTAssertEqual(first.sessionType, .legsCore)
+        let second = try await health.createWorkout(draft)
+        XCTAssertEqual(second.vault, .synced)
+        let remaining = await fixture.remainingInteractions()
+        XCTAssertEqual(remaining, 0)
+        do {
+            _ = try await health.createWorkout(JarvisWorkoutDraft(
+                idempotencyKey: id, sessionType: .cardio, startedAt: start, durationMinutes: 0
+            ))
+            XCTFail("Invalid drafts must not reach the transport")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .invalidRequest)
+        }
+    }
+
+    func testRecentWorkoutsUseTheBoundedWindowAndRejectInvalidResponses() async throws {
+        let id = UUID(uuidString: "00000000-0000-4000-8000-000000000043")!
+        let item: [String: Any] = [
+            "id": id.uuidString, "sessionType": "cardio", "title": NSNull(),
+            "startedAt": "2026-11-02T10:00:00.000Z", "durationMinutes": NSNull(), "note": NSNull(), "vault": "synced",
+        ]
+        let fixture = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: [
+            "version": 1, "interactions": [[
+                "method": "GET", "path": "/api/daily/workouts", "query": ["limit": "20", "days": "14"],
+                "response": ["statusCode": 200, "body": ["items": [item]]],
+            ]],
+        ]))
+        let health = JarvisHealthClient(client: try makeClient(fixture))
+        let items = try await health.recentWorkouts(days: 14, limit: 20)
+        XCTAssertEqual(items.map(\.id), [id.uuidString])
+        XCTAssertNotNil(items.first?.startedAtDate)
+        do {
+            _ = try await health.recentWorkouts(days: 5)
+            XCTFail("Only 7, 14 and 30 days are supported")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .invalidRequest)
+        }
+    }
+
     private func makeClient(_ transport: any HTTPTransport, maximumRetries: Int = 0) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(

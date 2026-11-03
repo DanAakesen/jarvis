@@ -27,6 +27,9 @@ struct JarvisNotesCopy {
     }
 
     var title: String { text(.title) }
+    var overview: String { text(.overview) }
+    var openTasks: String { text(.openTasks) }
+    var doneTasks: String { text(.doneTasks) }
     var refresh: String { text(.refresh) }
     var search: String { text(.search) }
     var all: String { text(.all) }
@@ -240,28 +243,61 @@ struct JarvisNotesArea: View {
     }
 
     private var header: some View {
-        HStack {
-            JarvisSidebarMenuButton(language: language)
-            Text(copy.title)
-                .font(.largeTitle.weight(.semibold))
-                .foregroundStyle(.primary)
-            Spacer()
-            Button {
+        JarvisPageHeader(title: copy.title, language: language) {
+            JarvisPageActionButton(
+                systemImage: "arrow.clockwise",
+                label: selectedTab == .graph ? copy.resetGraph : copy.refresh,
+                identifier: "notes.refresh"
+            ) {
                 if selectedTab == .graph {
                     graphSearch = nil
                 }
                 refreshVersion += 1
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: JarvisDesignTokens.notesIconSize, weight: .medium))
-                    .frame(width: JarvisDesignTokens.notesControlHeight, height: JarvisDesignTokens.notesControlHeight)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.glass)
-            .accessibilityLabel(selectedTab == .graph ? copy.resetGraph : copy.refresh)
+            JarvisPageActionMenu(
+                systemImage: "plus",
+                label: copy.create,
+                identifier: "notes.plus",
+                isDisabled: client == nil || signInUnavailable
+            ) {
+                Button {
+                    newNoteFolder = selectedFolder
+                    newNotePresented = true
+                } label: {
+                    Label(copy.newNote, systemImage: "note.text")
+                }
+                .accessibilityIdentifier("notes.newNote")
+                Button {
+                    newTaskPresented = true
+                } label: {
+                    Label(copy.newTask, systemImage: "checklist")
+                }
+            }
         }
-        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-        .padding(.top, JarvisDesignTokens.notesSectionSpacing)
+    }
+
+    /// The data headline and hero under the title, as the first scrolling row of the notes, list and tasks tabs.
+    /// Nothing shows until the tasks are loaded, so loading and error states carry only the title.
+    @ViewBuilder
+    private var pageHead: some View {
+        if let taskList {
+            let counts = JarvisNotesPagePhrase.TaskCounts(taskList)
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+                JarvisPageHeadline(phrase: JarvisNotesPagePhrase.tasks(taskList, language: language))
+                JarvisPageHeroCard(title: copy.overview) {
+                    JarvisPageStatGrid(
+                        stats: [
+                            JarvisPageStat(id: "open", value: counts.open, label: copy.openTasks, systemImage: "checklist", tint: JarvisDesignTokens.primaryAccent),
+                            JarvisPageStat(id: "overdue", value: counts.overdue, label: copy.overdue, systemImage: "flag", tint: .red),
+                            JarvisPageStat(id: "today", value: counts.dueToday, label: copy.today, systemImage: "clock", tint: JarvisDesignTokens.primaryAccent),
+                            JarvisPageStat(id: "done", value: counts.done, label: copy.doneTasks, systemImage: "checkmark.circle", tint: .green),
+                        ],
+                        language: language
+                    )
+                }
+            }
+            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+        }
     }
 
     private var tabSwitcher: some View {
@@ -307,10 +343,14 @@ struct JarvisNotesArea: View {
                 stateView(icon: "note.text", title: copy.loading, retry: nil)
             } else if let loadError {
                 stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-            } else if let tree, folderGroups.isEmpty {
-                stateView(icon: "note.text", title: copy.emptyNotes, retry: nil)
+            } else if tree != nil, folderGroups.isEmpty {
+                VStack(spacing: 0) {
+                    JarvisPageHeadline(phrase: JarvisNotesPagePhrase.empty(language: language))
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                    stateView(icon: "note.text", title: copy.emptyNotes, retry: nil)
+                }
             } else {
-                JarvisList {
+                JarvisList(head: { pageHead }) {
                     ForEach(visibleFolderGroups, id: \.self) { folder in
                         Section {
                             if expandedFolders.contains(folder) {
@@ -366,7 +406,7 @@ struct JarvisNotesArea: View {
             } else if folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0 {
                 stateView(icon: "folder", title: copy.emptyList, retry: nil)
             } else {
-                JarvisList {
+                JarvisList(head: { pageHead }) {
                     if (tree?.rootNoteCount ?? 0) > 0 {
                         Section {
                             if expandedFolders.contains("") {
@@ -395,12 +435,15 @@ struct JarvisNotesArea: View {
                 if graph.nodes.isEmpty {
                     stateView(icon: "point.3.connected.trianglepath.dotted", title: copy.emptyGraph, retry: nil)
                 } else {
-                    JarvisNotesGraphView(
-                        graph: graph,
-                        copy: copy,
-                        onOpen: { node in await openNote(path: node.path) }
-                    )
-                    .id(refreshVersion)
+                    VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                        JarvisPageHeadline(phrase: JarvisNotesPagePhrase.graph(graph, language: language))
+                        JarvisNotesGraphView(
+                            graph: graph,
+                            copy: copy,
+                            onOpen: { node in await openNote(path: node.path) }
+                        )
+                        .id(refreshVersion)
+                    }
                     .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                     .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
                 }
@@ -517,33 +560,6 @@ struct JarvisNotesArea: View {
             .frame(maxWidth: .infinity)
             .background(.regularMaterial, in: Capsule())
             .accessibilityElement(children: .contain)
-            Menu {
-                Button {
-                    newNoteFolder = selectedFolder
-                    newNotePresented = true
-                } label: {
-                    Label(copy.newNote, systemImage: "note.text")
-                }
-                .accessibilityIdentifier("notes.newNote")
-                Button {
-                    newTaskPresented = true
-                } label: {
-                    Label(copy.newTask, systemImage: "checklist")
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: JarvisDesignTokens.notesIconSize, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: JarvisDesignTokens.notesControlHeight, height: JarvisDesignTokens.notesControlHeight)
-                    .background(.regularMaterial, in: Circle())
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel(copy.create)
-            .accessibilityIdentifier("notes.plus")
-            .accessibilityHint(
-                client == nil ? copy.unavailable : signInUnavailable ? copy.signIn : copy.createHint
-            )
-            .disabled(client == nil || signInUnavailable)
         }
     }
 
@@ -661,7 +677,7 @@ struct JarvisNotesArea: View {
             if groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty {
                 stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
             } else {
-                JarvisList {
+                JarvisList(head: { pageHead }) {
                     if !groups.overdue.isEmpty {
                         Section {
                             ForEach(groups.overdue) { task in taskRow(task, today: list.today) }
@@ -841,6 +857,10 @@ struct JarvisNotesArea: View {
         do {
             switch selectedTab {
             case .notes, .list:
+                if force || taskList == nil, let result = try? await client.tasks() {
+                    guard !Task.isCancelled else { return }
+                    taskList = result
+                }
                 if force || tree == nil {
                     let nextTree = try await client.folderTree()
                     guard !Task.isCancelled else { return }

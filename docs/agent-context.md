@@ -6330,7 +6330,7 @@ before its GeometryReader closure; rendering uses that snapshot, while actions
 mutate the same persisted state. Full native navigation remains unverified.
 Its 45-minute limit accommodates
 both the existing captures and the new repeated UI sequence. The
-`--ui-test-navigation` fixture is simulator-only and needs no live credentials,
+`--ui-test-navigation` fixture is simulator-only (it also serves the Usage, Status and Proactive fixtures; see `InsightsPagesTests`) and needs no live credentials,
 audio device, or backend; device authorization is unchanged.
 Linux can parse Swift and run Core/pipeline tests, but cannot execute XCUITest.
 Run 41286956749 compiled successfully; all three UI tests failed before the first
@@ -6997,3 +6997,12 @@ branches before merging. The XCUITest suite continues to run on PRs and retain
 its screenshots, but a UI-test failure is a warning rather than a merge gate;
 the same suite runs nightly on `main` and opens or updates one tracking issue
 when it fails.
+
+## iOS Home (Today) fixture run (P15-57)
+
+`TodayUITests` launches with `--ui-test-navigation --ui-test-today` (simulator only). That run starts on Home with
+fixed data (2 November 2026, 14:30, 6,300 steps, four calendar entries, three tasks, two gym logs) and a stub gym
+store, so no HealthKit prompt, network or live credentials are needed. Rim and greeting shimmer stay static so
+XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs keep their own start page.
+`ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
+
