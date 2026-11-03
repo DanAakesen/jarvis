@@ -11,10 +11,6 @@ struct JarvisActivitySheet: View {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
 
-    private var hasCalendarConfirmation: Bool {
-        model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true
-    }
-
     private func copy(_ key: JarvisChatLocalizationKey) -> String {
         JarvisChatLocalization.string(key, language: appLanguage)
     }
@@ -27,14 +23,14 @@ struct JarvisActivitySheet: View {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatSheetRowSpacing) {
                     if let error = model.activityError, model.nowFeed == nil {
                         ContentUnavailableView {
-                            Label("Activity unavailable", systemImage: "wifi.slash")
+                            Label(copy(.activityUnavailable), systemImage: "wifi.slash")
                         } description: {
                             Text(error)
                         } actions: {
                             JarvisLabelledButton(
-                                title: "Retry",
+                                title: copy(.activityRetry),
                                 isDisabled: model.fixtureMode,
-                                hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                                hint: model.fixtureMode ? copy(.activityRetryUnavailable) : ""
                             ) { Task { await model.refreshActivity() } }
                         }
                     } else if let feed = model.nowFeed {
@@ -49,9 +45,9 @@ struct JarvisActivitySheet: View {
                                     .foregroundStyle(.red)
                                 Spacer()
                                 JarvisLabelledButton(
-                                    title: "Retry",
+                                    title: copy(.activityRetry),
                                     isDisabled: model.fixtureMode,
-                                    hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                                    hint: model.fixtureMode ? copy(.activityRetryUnavailable) : ""
                                 ) { Task { await model.refreshActivity() } }
                             }
                         }
@@ -85,10 +81,10 @@ struct JarvisActivitySheet: View {
                             quietFailureGroup(presentation.quiet)
                         }
                         if !hasActivity {
-                            ContentUnavailableView("No activity", systemImage: "checkmark.circle")
+                            ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")
                         }
                     } else {
-                        ProgressView("Loading")
+                        ProgressView(copy(.activityLoading))
                             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                     }
                 }
@@ -238,13 +234,13 @@ struct JarvisActivitySheet: View {
 
     private func confirmationSection(_ confirmations: [PendingConfirmation]) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(hasCalendarConfirmation && appLanguage == .da ? "Afventer godkendelse" : "Pending confirmations")
+            Text(copy(.activityPending))
                 .font(.headline)
                 .accessibilityIdentifier("confirmation-section-heading")
             ForEach(confirmations, id: \.id) { confirmation in
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                     Text(confirmation.actionKind == .calendarChange
-                         ? (appLanguage == .da ? "Kalenderændring" : "Calendar change")
+                         ? copy(.activityCalendarChange)
                          : confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
                         .font(.subheadline.weight(.semibold))
                         .accessibilityIdentifier("confirmation-kind-\(confirmation.id)")
@@ -264,7 +260,7 @@ struct JarvisActivitySheet: View {
                             identifier: "confirmation-decline-\(confirmation.id)",
                             isDisabled: model.fixtureMode || model.isResolving(confirmation),
                             hint: model.fixtureMode
-                                ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                                ? copy(.activityFixtureApproval)
                                 : ""
                         ) {
                             Task { await model.resolve(confirmation, decision: .reject) }
@@ -277,16 +273,14 @@ struct JarvisActivitySheet: View {
                             identifier: "confirmation-approve-\(confirmation.id)",
                             isDisabled: model.fixtureMode || model.isResolving(confirmation),
                             hint: model.fixtureMode
-                                ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                                ? copy(.activityFixtureApproval)
                                 : ""
                         ) {
                             Task { await model.resolve(confirmation, decision: .approve) }
                         }
                     }
                     if model.fixtureMode && confirmation.actionKind == .calendarChange {
-                        Text(appLanguage == .da
-                             ? "Godkendelse er deaktiveret med eksempeldata."
-                             : "Approval actions are disabled with fixture data.")
+                        Text(copy(.activityFixtureApproval))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .accessibilityIdentifier("confirmation-fixture-reason")
@@ -301,7 +295,7 @@ struct JarvisActivitySheet: View {
 
     private func runningSection(_ tasks: [NowFeedRunningTask]) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text("Running")
+            Text(copy(.activityRunning))
                 .font(.headline)
             ForEach(tasks, id: \.id) { task in
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -323,9 +317,9 @@ struct JarvisActivitySheet: View {
 
     private func awayModeSection(_ isAway: Bool) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text("Away mode")
+            Text(copy(.activityAwayMode))
                 .font(.headline)
-            Label(isAway ? "On" : "Off", systemImage: isAway ? "moon.fill" : "sun.max")
+            Label(isAway ? copy(.activityOn) : copy(.activityOff), systemImage: isAway ? "moon.fill" : "sun.max")
                 .font(.body)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(JarvisDesignTokens.chatGlassInset)
@@ -341,7 +335,7 @@ struct JarvisActivitySheet: View {
     ) -> some View {
         let group = NowFeedActivityGrouping.groups(items).first
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(category.title)
+            Text(title(for: category))
                 .font(.headline)
             if let group {
                 groupRow(group)
@@ -369,7 +363,7 @@ struct JarvisActivitySheet: View {
                     ProgressView()
                 } else if group.olderCount > 0 {
                     JarvisIconButton(
-                        title: String(format: copy(.clearGroupLabel), group.category.title),
+                        title: String(format: copy(.clearGroupLabel), title(for: group.category)),
                         systemImage: "trash",
                         identifier: "activity.clear.\(group.id)",
                         isDisabled: model.fixtureMode
@@ -413,7 +407,7 @@ struct JarvisActivitySheet: View {
         .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .jarvisSwipeToDismiss(
             label: String(format: copy(group.olderCount > 0 ? .clearGroupLabel : .dismissLabel),
-                          group.olderCount > 0 ? group.category.title : group.latest.title),
+                          group.olderCount > 0 ? title(for: group.category) : group.latest.title),
             isEnabled: !model.fixtureMode && !busy
         ) {
             if group.olderCount > 0 {
@@ -421,6 +415,15 @@ struct JarvisActivitySheet: View {
             } else {
                 Task { await model.dismissActivity(group.latest) }
             }
+        }
+    }
+
+    private func title(for category: NowFeedActivityCategory) -> String {
+        switch category {
+        case .attention: copy(.activityAttention)
+        case .release: copy(.activityRelease)
+        case .credential: copy(.activityCredential)
+        case .alert: copy(.activityAlert)
         }
     }
 
@@ -432,17 +435,6 @@ struct JarvisActivitySheet: View {
         }()
         guard let date else { return value }
         return DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .short)
-    }
-}
-
-private extension NowFeedActivityCategory {
-    var title: String {
-        switch self {
-        case .attention: "Needs attention"
-        case .release: "Releases and deployments"
-        case .credential: "Credential warnings"
-        case .alert: "Alerts"
-        }
     }
 }
 

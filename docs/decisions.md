@@ -10746,3 +10746,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: the iPhone app enables the HealthKit capability and `com.apple.developer.healthkit` entitlement (CI checks both) so Home can read steps when the owner allows it. Nothing is written to Health or uploaded.
 - Evidence: the failing run's accessibility tree showed `identifier: 'page.hero'` on all gallery buttons. The iOS Simulator workflow already fails the run when any UI test fails.
 - Not verified: no Simulator run in this environment (Linux); the App ID and profile need HealthKit enabled in the Apple developer portal before the next TestFlight build.
+
+## 2026-11-03 P15-74: Pages B fixes
+
+- Decision: Health keeps one hero, the Aktivitet card (`JarvisHealthRingsSection`), with the period menu in its accessory slot. The duplicate Home activity and steps card, and its "not available" messages, are removed from Health.
+- Decision: the Notifications page is titled Notifications / Notifikationer, and every label on it (away mode, pending confirmations, retry, loading, categories) comes from `JarvisChat.strings` in da and en.
+- Decision: the Notes preview fixture now answers `GET /api/vault/tasks` first, so the headline and hero show in screenshots. Before, the tasks request failed and the page showed only the title, tabs and one row.
+- Not verified: no Simulator run in this environment (Linux). Simulator screenshots (da/en, dark/light), the dark Notes render and the bottom bar overlap still need checking on a Mac.

@@ -3,15 +3,28 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-struct JarvisHealthRingsSection: View {
+struct JarvisHealthRingsSection<Accessory: View>: View {
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let language: JarvisAppLanguage
+    let accessory: Accessory
+
+    init(
+        data: JarvisHealthDashboardData,
+        period: JarvisHealthPeriod,
+        language: JarvisAppLanguage,
+        @ViewBuilder accessory: () -> Accessory
+    ) {
+        self.data = data
+        self.period = period
+        self.language = language
+        self.accessory = accessory()
+    }
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
     var body: some View {
-        JarvisPageHeroCard(title: copy.text(.activity)) {
+        JarvisPageHeroCard(title: copy.text(.activity), accessory: { accessory }) {
             HStack(alignment: .top, spacing: JarvisDesignTokens.healthRowSpacing) {
                 ring(
                     label: copy.text(.gym),
@@ -104,6 +117,12 @@ struct JarvisHealthRingsSection: View {
             guard let date, date >= period.startDate, date <= period.endDate else { return false }
             return JarvisHealthLogic.workoutKind(row["workout_type"]?.stringValue) == kind
         }.count)
+    }
+}
+
+extension JarvisHealthRingsSection where Accessory == EmptyView {
+    init(data: JarvisHealthDashboardData, period: JarvisHealthPeriod, language: JarvisAppLanguage) {
+        self.init(data: data, period: period, language: language) { EmptyView() }
     }
 }
 

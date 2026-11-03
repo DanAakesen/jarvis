@@ -19,4 +19,13 @@ final class JarvisChatLocalizationTests: XCTestCase {
         XCTAssertEqual(JarvisChatLocalization.string(.screenShareStarting, language: .da), "Starter skærmdeling…")
         XCTAssertEqual(JarvisChatLocalization.string(.screenShareLive, language: .en), "Sharing your screen with Jarvis.")
     }
+
+    func testNotificationsPageCopyIsFullyLocalised() {
+        XCTAssertEqual(JarvisChatLocalization.string(.activityTitle, language: .da), "Notifikationer")
+        XCTAssertEqual(JarvisChatLocalization.string(.activityTitle, language: .en), "Notifications")
+        XCTAssertEqual(JarvisChatLocalization.string(.activityPending, language: .da), "Afventer godkendelse")
+        XCTAssertEqual(JarvisChatLocalization.string(.activityAwayMode, language: .da), "Fraværstilstand")
+        XCTAssertEqual(JarvisChatLocalization.string(.activityRetry, language: .da), "Prøv igen")
+        XCTAssertEqual(JarvisChatLocalization.string(.activityAwayMode, language: .en), "Away mode")
+    }
 }

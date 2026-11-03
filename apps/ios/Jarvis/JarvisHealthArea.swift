@@ -197,8 +197,6 @@ struct JarvisHealthArea: View {
     private let now: Date
     private let presentNewLiftAfterLoading: Bool
     private let workoutLogger: (any JarvisWorkoutLogging)?
-    /// Home's model, so the hero reuses the activity and steps card from Home.
-    private let todayModel: JarvisTodayModel?
 
     @State private var periodPreset: JarvisHealthPeriodPreset = .today
     @State private var searchText = ""
@@ -225,10 +223,8 @@ struct JarvisHealthArea: View {
         now: Date = Date(),
         workoutInitiallySelected: Bool = false,
         presentNewLiftAfterLoading: Bool = false,
-        workoutLogger: (any JarvisWorkoutLogging)? = nil,
-        todayModel: JarvisTodayModel? = nil
+        workoutLogger: (any JarvisWorkoutLogging)? = nil
     ) {
-        self.todayModel = todayModel
         self.client = client
         self.language = language
         self.observeRefreshEvents = observeRefreshEvents
@@ -267,10 +263,6 @@ struct JarvisHealthArea: View {
                         )
                     } else {
                         if let headline { JarvisPageHeadline(phrase: headline) }
-                        if let todayModel {
-                            JarvisTodayActivityCard(model: todayModel, language: language, fixtureMode: todayModel.isFixture)
-                        }
-                        periodMenu
                         if let dashboard {
                             if let failure = dashboard.failure {
                                 failureRow(failure)
@@ -289,7 +281,7 @@ struct JarvisHealthArea: View {
                                     data: dashboard,
                                     period: period,
                                     language: language
-                                )
+                                ) { periodMenu }
                                 JarvisHealthSummarySection(
                                     data: dashboard,
                                     period: period,
@@ -347,9 +339,6 @@ struct JarvisHealthArea: View {
         }
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {
             await loadDashboard()
-        }
-        .task(id: refreshVersion) {
-            await todayModel?.refresh()
         }
         .task(id: "\(liftsAvailable)-\(refreshVersion)") {
             await loadLifts()
@@ -436,18 +425,15 @@ struct JarvisHealthArea: View {
     }
 
     private var periodMenu: some View {
-        HStack {
-            Spacer(minLength: 0)
-            JarvisLabelledMenu(title: copy.period(periodPreset), identifier: "health.period") {
-                ForEach(JarvisHealthPeriodPreset.allCases) { preset in
-                    Button {
-                        periodPreset = preset
-                    } label: {
-                        if periodPreset == preset {
-                            Label(copy.period(preset), systemImage: "checkmark")
-                        } else {
-                            Text(copy.period(preset))
-                        }
+        JarvisLabelledMenu(title: copy.period(periodPreset), identifier: "health.period") {
+            ForEach(JarvisHealthPeriodPreset.allCases) { preset in
+                Button {
+                    periodPreset = preset
+                } label: {
+                    if periodPreset == preset {
+                        Label(copy.period(preset), systemImage: "checkmark")
+                    } else {
+                        Text(copy.period(preset))
                     }
                 }
             }
