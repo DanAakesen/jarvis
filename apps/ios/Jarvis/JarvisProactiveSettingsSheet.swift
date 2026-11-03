@@ -22,6 +22,7 @@ struct JarvisProactiveSettingsSheet: View {
     @State private var loadToken = 0
     @State private var saveToken = 0
     @State private var pendingPatch: JarvisProactiveSettingsPatch?
+    @State private var newFeed = ""
 
     private func text(_ key: JarvisInsightsLocalizationKey) -> String {
         jarvisInsightsText(key, language)
@@ -155,9 +156,17 @@ struct JarvisProactiveSettingsSheet: View {
                     Text(text(.editorScope))
                 }
                 Section {
-                    TextField(text(.editorBudget), text: draft(\.budgetText, fallback: ""))
-                        .keyboardType(.numberPad)
+                    HStack {
+                        Text(text(.editorBudget))
+                        Spacer(minLength: 0)
+                        Text("\(budgetValue)")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(value: budgetSlider, in: Double(JarvisProactiveLimits.budgetRange.lowerBound)...Double(JarvisProactiveLimits.budgetRange.upperBound), step: 10)
                         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                        .accessibilityLabel(text(.editorBudget))
+                        .accessibilityValue("\(budgetValue)")
                         .accessibilityIdentifier("proactive.edit.budget")
                     if editor?.draft.budget == nil {
                         issue(.budgetOutOfRange)
@@ -167,14 +176,45 @@ struct JarvisProactiveSettingsSheet: View {
                 }
                 .id(Focus.budget.rawValue)
                 Section {
-                    TextEditor(text: draft(\.feedsText, fallback: ""))
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .frame(minHeight: 88)
-                        .accessibilityLabel(text(.editorFeeds))
-                        .accessibilityHint(text(.editorFeedsPlaceholder))
-                        .accessibilityIdentifier("proactive.edit.feeds")
+                    ForEach(Array(feedRows.enumerated()), id: \.offset) { index, feed in
+                        HStack(spacing: 8) {
+                            Image(systemName: "dot.radiowaves.up.forward")
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            Text(feed)
+                                .font(.subheadline)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                        .swipeActions {
+                            Button(role: .destructive) {
+                                removeFeed(at: index)
+                            } label: {
+                                Label(text(.editorRemoveFeed), systemImage: "trash")
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityAction(named: text(.editorRemoveFeed)) { removeFeed(at: index) }
+                        .accessibilityIdentifier("proactive.edit.feed.\(index)")
+                    }
+                    HStack(spacing: 8) {
+                        TextField(text(.editorFeedsPlaceholder), text: $newFeed)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .onSubmit(addFeed)
+                            .accessibilityLabel(text(.editorAddFeed))
+                            .accessibilityIdentifier("proactive.edit.feeds")
+                        JarvisIconButton(
+                            title: text(.editorAddFeed),
+                            systemImage: "plus",
+                            identifier: "proactive.edit.feeds.add",
+                            isDisabled: newFeed.trimmingCharacters(in: .whitespaces).isEmpty,
+                            action: addFeed
+                        )
+                    }
                     ForEach(feedIssues, id: \.self) { issue($0) }
                 } header: {
                     Text(text(.editorFeeds))
@@ -211,6 +251,34 @@ struct JarvisProactiveSettingsSheet: View {
                 if focus != .top { proxy.scrollTo(focus.rawValue, anchor: .top) }
             }
         }
+    }
+
+    private var budgetValue: Int { editor?.draft.budget ?? 0 }
+
+    private var budgetSlider: Binding<Double> {
+        Binding(
+            get: { Double(budgetValue) },
+            set: { editor?.draft.budgetText = String(Int($0.rounded())) }
+        )
+    }
+
+    private var feedRows: [String] { editor?.draft.feeds ?? [] }
+
+    private func addFeed() {
+        let value = newFeed.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty, var current = editor else { return }
+        current.draft.feedsText = (current.draft.feeds + [value]).joined(separator: "\n")
+        editor = current
+        newFeed = ""
+    }
+
+    private func removeFeed(at index: Int) {
+        guard var current = editor else { return }
+        var feeds = current.draft.feeds
+        guard feeds.indices.contains(index) else { return }
+        feeds.remove(at: index)
+        current.draft.feedsText = feeds.joined(separator: "\n")
+        editor = current
     }
 
     private var feedIssues: [JarvisProactiveIssue] {

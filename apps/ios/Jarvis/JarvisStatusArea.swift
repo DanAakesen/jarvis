@@ -25,7 +25,7 @@ struct JarvisStatusArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisInsightsHeader(
+            JarvisPageHeader(
                 title: JarvisDestination.status.localizedTitle(language: language),
                 language: language
             ) {
@@ -37,15 +37,19 @@ struct JarvisStatusArea: View {
                     isDisabled: state.isLoading
                 ) { reloadToken += 1 }
             }
-            JarvisTabStrip(
-                title: text(.statusFilterLabel),
-                identifierPrefix: "status.filter",
-                items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                selection: $filter
-            )
-            .padding(.horizontal)
             ScrollView {
-                content
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                    if let snapshot = state.snapshot {
+                        JarvisPageHeadline(phrase: JarvisStatusPagePhrase.make(snapshot, language: language))
+                    }
+                    JarvisTabStrip(
+                        title: text(.statusFilterLabel),
+                        identifierPrefix: "status.filter",
+                        items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                        selection: $filter
+                    )
+                    content
+                }
                     .padding(.horizontal)
                     .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }

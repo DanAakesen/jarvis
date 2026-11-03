@@ -61,7 +61,7 @@ struct JarvisProactiveArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisInsightsHeader(
+            JarvisPageHeader(
                 title: JarvisDestination.proactive.localizedTitle(language: language),
                 language: language
             ) {
@@ -73,7 +73,14 @@ struct JarvisProactiveArea: View {
                 ) { editorRequest = EditorRequest(focus: .top) }
             }
             ScrollView {
-                content
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                    if case .loaded(let loaded) = status {
+                        JarvisPageHeadline(
+                            phrase: JarvisProactivePagePhrase.make(status: loaded, openItems: openItems.count, language: language)
+                        )
+                    }
+                    content
+                }
                     .padding(.horizontal)
                     .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
