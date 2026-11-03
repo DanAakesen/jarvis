@@ -32,7 +32,7 @@ struct JarvisTodayScreen: View {
     @State private var draft = ""
     @StateObject private var dictation = ChatDictation()
     @State private var dictationFailed = false
-    @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 32
+    @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
     @FocusState private var composerFocused: Bool
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
@@ -41,7 +41,7 @@ struct JarvisTodayScreen: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+            VStack(alignment: .leading, spacing: 10) {
                 greeting
                 JarvisTodayActivityCard(model: model, language: language, fixtureMode: fixtureMode)
                 if model.isShowingOfflineCopy {
@@ -89,7 +89,8 @@ struct JarvisTodayScreen: View {
         let value = model.greeting(language: language)
         return JarvisTodayShimmer(isAnimated: !fixtureMode && !reduceMotion) {
             Text(attributedGreeting(value))
-                .font(.system(size: greetingSize, weight: .bold))
+                .font(.system(size: greetingSize, weight: .semibold))
+                .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -474,7 +475,7 @@ struct JarvisTodayScreen: View {
                 isFocused: $composerFocused,
                 inputIdentifier: "today.input",
                 rimState: dictation.isListening ? .listening : (canSend ? .typing : .idle),
-                isRimAnimated: !fixtureMode && !reduceMotion,
+                isRimAnimated: !fixtureMode,
                 waveformLevels: dictation.isListening ? dictation.levels : nil,
                 onSubmit: sendDraft,
                 header: { EmptyView() },
