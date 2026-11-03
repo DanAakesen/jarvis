@@ -133,11 +133,7 @@ struct JarvisSettingsArea: View {
     }
 
     private var header: some View {
-        HStack {
-            Text(copy(.title))
-                .font(.largeTitle.weight(.semibold))
-                .foregroundStyle(.primary)
-            Spacer()
+        JarvisPageHeader(title: copy(.title), language: language) {
             JarvisIconButton(
                 title: copy(.refresh),
                 systemImage: "arrow.clockwise",
@@ -147,8 +143,6 @@ struct JarvisSettingsArea: View {
                 Task { await reload() }
             }
         }
-        .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
-        .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
     }
 
     private var settingsList: some View {

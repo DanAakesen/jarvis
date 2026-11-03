@@ -1219,16 +1219,19 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn(".jarvisGlassCircle()", chrome)
         self.assertIn("JarvisDesignTokens.iconButtonDiameter", chrome)
         self.assertIn("static let iconButtonDiameter: CGFloat = 48", (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text())
-        for filename in ("JarvisChatScreen.swift", "JarvisActivitySheet.swift"):
-            source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
-            toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
-            with self.subTest(filename=filename):
-                self.assertIn("JarvisIconButton(", toolbar)
-                # Every toolbar item hides the system container so only our one circle glass shows.
-                self.assertIn(".sharedBackgroundVisibility(.hidden)", toolbar)
-                self.assertNotIn(".buttonStyle(", toolbar)
-                self.assertNotIn(".glassEffect(", toolbar)
+        source = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
+        self.assertIn("JarvisIconButton(", toolbar)
+        # Every toolbar item hides the system container so only our one circle glass shows.
+        self.assertIn(".sharedBackgroundVisibility(.hidden)", toolbar)
+        self.assertNotIn(".buttonStyle(", toolbar)
+        self.assertNotIn(".glassEffect(", toolbar)
         sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
+        # The notifications sheet draws its buttons in its own header, so there is no second toolbar background.
+        self.assertNotIn(".toolbar {", sheet)
+        self.assertIn(".toolbar(.hidden, for: .navigationBar)", sheet)
+        self.assertIn("JarvisIconButton(", sheet.split("private var header: some View {", 1)[1])
+        self.assertIn("jarvisSwipeToDismiss", sheet)
         self.assertIn('systemImage: "xmark"', sheet)
         self.assertIn("title: copy(.done)", sheet)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()

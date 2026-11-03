@@ -10726,3 +10726,8 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Home has no title. Order is headline, activity hero, Home sections, Chat composer. Typing on Home no longer jumps to Chat; voice becomes send while typing and send hands the text to Chat. Log workout and Log lift are two sheets with a date (default today); nothing saves without a date.
 - Evidence: Build 56 testing showed both log buttons opened the same sheet and a lookalike composer.
 - Consequence: lifts are a fixed list mapped to a gym session; HealthKit stays off until the entitlement is provisioned.
+## 2026-11-03 P15-68: Settings and Notifications on the shared header, Health empty state
+
+- Decision: Settings uses `JarvisPageHeader` (title, refresh, sidebar button). The notifications sheet draws its own header in content (bold title, Clear all, close) and hides the navigation bar, so there is one background and the close button is a centred circle. Group rows swipe left to dismiss, with a VoiceOver action as the alternative. Health shows an empty state (`health.notAuthorised`, da and en) and no headline when the backend reports no readable sources, for example while the HealthKit entitlement is off.
+- Evidence: Health and Notes already used the shared header and headline. UI tests cover titles and shared button identifiers for Health, Notes, Settings and the notifications sheet.
+- Not verified: no Simulator run or before and after screenshots in this change. Status, Proaktiv and Proaktiv settings stay with #1548.
