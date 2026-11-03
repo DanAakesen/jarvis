@@ -197,6 +197,8 @@ struct JarvisHealthArea: View {
     private let now: Date
     private let presentNewLiftAfterLoading: Bool
     private let workoutLogger: (any JarvisWorkoutLogging)?
+    /// Home's model, so the hero reuses the activity and steps card from Home.
+    private let todayModel: JarvisTodayModel?
 
     @State private var periodPreset: JarvisHealthPeriodPreset = .today
     @State private var searchText = ""
@@ -223,8 +225,10 @@ struct JarvisHealthArea: View {
         now: Date = Date(),
         workoutInitiallySelected: Bool = false,
         presentNewLiftAfterLoading: Bool = false,
-        workoutLogger: (any JarvisWorkoutLogging)? = nil
+        workoutLogger: (any JarvisWorkoutLogging)? = nil,
+        todayModel: JarvisTodayModel? = nil
     ) {
+        self.todayModel = todayModel
         self.client = client
         self.language = language
         self.observeRefreshEvents = observeRefreshEvents
@@ -263,6 +267,9 @@ struct JarvisHealthArea: View {
                         )
                     } else {
                         if let headline { JarvisPageHeadline(phrase: headline) }
+                        if let todayModel {
+                            JarvisTodayActivityCard(model: todayModel, language: language, fixtureMode: todayModel.isFixture)
+                        }
                         periodMenu
                         if let dashboard {
                             if let failure = dashboard.failure {
@@ -337,10 +344,12 @@ struct JarvisHealthArea: View {
                 searchBar
             }
             .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
-            .background(.bar)
         }
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {
             await loadDashboard()
+        }
+        .task(id: refreshVersion) {
+            await todayModel?.refresh()
         }
         .task(id: "\(liftsAvailable)-\(refreshVersion)") {
             await loadLifts()
@@ -467,10 +476,7 @@ struct JarvisHealthArea: View {
             .padding(.leading, JarvisDesignTokens.healthSectionSpacing)
             .padding(.trailing, JarvisDesignTokens.notesCompactInset)
             .frame(minHeight: JarvisDesignTokens.healthControlHeight)
-            .background(
-                .regularMaterial,
-                in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
-            )
+            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.healthPanelRadius)
         }
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
     }

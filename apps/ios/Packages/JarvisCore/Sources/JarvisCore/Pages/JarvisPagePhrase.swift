@@ -349,3 +349,26 @@ public enum JarvisProactivePagePhrase {
             : "Dan, Jarvis has {no new suggestions} for you.")
     }
 }
+
+/// Notifications header phrase, written from what needs Dan, what is running and the updates in the feed.
+public enum JarvisNotificationsPagePhrase {
+    public static func make(needsYou: Int, running: Int, updates: Int, language: JarvisAppLanguage) -> JarvisPagePhrase {
+        let da = language == .da
+        if needsYou > 0 {
+            return JarvisPagePhrase(markup: da
+                ? "Dan, {\(count(needsYou, one: "godkendelse", many: "godkendelser"))} venter på dig."
+                : "Dan, {\(count(needsYou, one: "approval", many: "approvals"))} \(needsYou == 1 ? "is" : "are") waiting for you.")
+        }
+        if updates > 0 {
+            return JarvisPagePhrase(markup: da
+                ? "Dan, du har {\(count(updates, one: "ny opdatering", many: "nye opdateringer"))}."
+                : "Dan, you have {\(count(updates, one: "new update", many: "new updates"))}.")
+        }
+        if running > 0 {
+            return JarvisPagePhrase(markup: da
+                ? "Dan, {\(count(running, one: "opgave", many: "opgaver"))} kører nu."
+                : "Dan, {\(count(running, one: "task", many: "tasks"))} \(running == 1 ? "is" : "are") running.")
+        }
+        return JarvisPagePhrase(markup: da ? "Dan, der er {ingen nye notifikationer}." : "Dan, there are {no new notifications}.")
+    }
+}

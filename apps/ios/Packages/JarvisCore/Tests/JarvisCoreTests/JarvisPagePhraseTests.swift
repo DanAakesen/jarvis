@@ -87,4 +87,15 @@ final class JarvisPagePhraseTests: XCTestCase {
             "Dan, Jarvis has 2 suggestions for you."
         )
     }
+
+    func testNotificationsPhraseLeadsWithApprovals() {
+        XCTAssertEqual(
+            JarvisNotificationsPagePhrase.make(needsYou: 2, running: 1, updates: 3, language: .en).plainText,
+            "Dan, 2 approvals are waiting for you."
+        )
+        XCTAssertEqual(
+            JarvisNotificationsPagePhrase.make(needsYou: 0, running: 0, updates: 0, language: .da).plainText,
+            "Dan, der er ingen nye notifikationer."
+        )
+    }
 }
