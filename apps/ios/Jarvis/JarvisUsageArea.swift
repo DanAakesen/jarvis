@@ -1,0 +1,510 @@
+import Charts
+import JarvisCore
+import SwiftUI
+
+/// The Usage page: what Jarvis work cost in the chosen period, from `GET /usage`. No polling: it reloads on
+/// retry, refresh or a new period.
+/// HIG: Charting data, Segmented controls, Layout, Accessibility. API: Charts (BarMark, chartXSelection), Picker.
+struct JarvisUsageArea: View {
+    let client: JarvisUsageClient?
+    let language: JarvisAppLanguage
+    let onRetryConfiguration: () -> Void
+
+    @State private var period = JarvisUsagePeriod.default
+    @State private var groupBy = JarvisUsageGroupBy.project
+    @State private var load: JarvisInsightsLoad<JarvisUsageSummary> = .loading
+    @State private var selectedBucketID: String?
+    @State private var chartSelection: String?
+    @State private var selectedSliceID: String?
+    @State private var reloadToken = 0
+
+    private struct LoadKey: Hashable {
+        let period: JarvisUsagePeriod
+        let token: Int
+    }
+
+    private func text(_ key: JarvisInsightsLocalizationKey) -> String {
+        jarvisInsightsText(key, language)
+    }
+
+    private var isLoading: Bool {
+        if case .loading = load { return true }
+        return false
+    }
+
+    var body: some View {
+        VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
+            JarvisInsightsHeader(
+                title: JarvisDestination.usage.localizedTitle(language: language),
+                language: language
+            ) {
+                JarvisInsightsIconButton(
+                    title: text(.refresh),
+                    systemImage: "arrow.clockwise",
+                    identifier: "usage.refresh",
+                    isDisabled: isLoading
+                ) { reloadToken += 1 }
+            }
+            Picker(text(.usageRangeLabel), selection: $period) {
+                ForEach(JarvisUsagePeriod.allCases) { option in
+                    Text(text(option.localizationKey)).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.large)
+            .padding(.horizontal)
+            .accessibilityIdentifier("usage.range")
+            ScrollView {
+                content
+                    .padding(.horizontal)
+                    .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
+            }
+            .accessibilityIdentifier("usage.scroll")
+        }
+        .jarvisAmbientBackground()
+        .toolbar(.hidden, for: .navigationBar)
+        .task(id: LoadKey(period: period, token: reloadToken)) { await reload() }
+        .onChange(of: chartSelection) { _, newValue in
+            if let newValue { selectedBucketID = newValue }
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        switch load {
+        case .loading:
+            JarvisInsightsStateView(kind: .loading, language: language, identifier: "usage.loading")
+        case .failed(let failure):
+            JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
+                if client == nil { onRetryConfiguration() }
+                reloadToken += 1
+            }
+        case .loaded(let summary):
+            loaded(summary)
+        }
+    }
+
+    private func reload() async {
+        guard let client else {
+            load = .failed(.notConfigured)
+            return
+        }
+        load = .loading
+        selectedBucketID = nil
+        selectedSliceID = nil
+        do {
+            let report = try await client.report(period: period)
+            if Task.isCancelled { return }
+            load = .loaded(JarvisUsageSummary(report: report, period: period))
+        } catch {
+            if Task.isCancelled { return }
+            load = .failed(JarvisInsightsFailure(error))
+        }
+    }
+
+    // MARK: Loaded
+
+    @ViewBuilder private func loaded(_ summary: JarvisUsageSummary) -> some View {
+        VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+            if summary.isEmpty {
+                JarvisInsightsCard {
+                    JarvisInsightsStateView(
+                        kind: .empty,
+                        emptyTitle: text(.usageNoUsage),
+                        language: language,
+                        identifier: "usage.empty"
+                    )
+                }
+            } else {
+                overview(summary)
+                breakdown(summary)
+                topTasks(summary)
+            }
+            toolCalls(summary)
+        }
+    }
+
+    private func selectedBucket(_ summary: JarvisUsageSummary) -> JarvisUsageBucket? {
+        summary.buckets.first { $0.id == selectedBucketID }
+    }
+
+    private func overview(_ summary: JarvisUsageSummary) -> some View {
+        let bucket = selectedBucket(summary)
+        let totals = summary.totals(in: bucket)
+        return JarvisInsightsCard {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(summary.usesCost ? text(.usageTotalCost) : text(.usageNoCosts))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        if let bucket {
+                            Text(label(for: bucket))
+                                .font(.caption)
+                                .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                                .accessibilityIdentifier("usage.selection")
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if bucket != nil {
+                        JarvisInsightsIconButton(
+                            title: text(.closeSheet),
+                            systemImage: "xmark",
+                            identifier: "usage.clearSelection"
+                        ) {
+                            selectedBucketID = nil
+                            chartSelection = nil
+                        }
+                    }
+                }
+                Text(valueText(summary.value(in: bucket), summary: summary))
+                    .font(.largeTitle.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .accessibilityIdentifier("usage.total")
+                indicators(summary)
+                chart(summary)
+                totalsGrid(totals)
+            }
+        }
+    }
+
+    private func indicators(_ summary: JarvisUsageSummary) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if summary.hasEstimates {
+                JarvisInsightsBadge(title: text(.usageIncludesEstimates), systemImage: "plusminus")
+                    .accessibilityIdentifier("usage.estimates")
+            }
+            if summary.truncated {
+                HStack(spacing: 8) {
+                    JarvisInsightsBadge(
+                        title: JarvisInsightsLocalization.format(
+                            .usageTruncated, language: language, summary.entries.count, summary.totalEntries
+                        ),
+                        systemImage: "scissors",
+                        tint: JarvisDesignTokens.primaryAccent
+                    )
+                    JarvisInsightsIconButton(
+                        title: text(.usageRefreshReport),
+                        systemImage: "arrow.clockwise",
+                        identifier: "usage.refreshReport"
+                    ) { reloadToken += 1 }
+                }
+                .accessibilityIdentifier("usage.truncated")
+            }
+        }
+    }
+
+    // MARK: Chart
+
+    private func barTitle(_ summary: JarvisUsageSummary) -> String {
+        switch (summary.period.bucketKind, summary.usesCost) {
+        case (.day, true): text(.usagePerDay)
+        case (.week, true): text(.usagePerWeek)
+        case (.month, true): text(.usagePerMonth)
+        case (.day, false): text(.usageRecordsPerDay)
+        case (.week, false): text(.usageRecordsPerWeek)
+        case (.month, false): text(.usageRecordsPerMonth)
+        }
+    }
+
+    private func chart(_ summary: JarvisUsageSummary) -> some View {
+        let title = barTitle(summary)
+        return VStack(spacing: 4) {
+            Chart(summary.buckets) { bucket in
+                BarMark(
+                    x: .value(title, bucket.startKey),
+                    y: .value(title, bucket.value)
+                )
+                .foregroundStyle(
+                    selectedBucketID == nil || selectedBucketID == bucket.id
+                        ? JarvisDesignTokens.primaryAccent
+                        : JarvisDesignTokens.primaryAccent.opacity(0.35)
+                )
+                .cornerRadius(3)
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartXSelection(value: $chartSelection)
+            .frame(height: 120)
+            .accessibilityLabel(title)
+            .accessibilityHint(text(.usageBarHint))
+            .accessibilityIdentifier("usage.chart")
+            if let first = summary.buckets.first, let last = summary.buckets.last {
+                HStack {
+                    Text(label(for: first))
+                    Spacer(minLength: 8)
+                    Text(label(for: last))
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private func label(for bucket: JarvisUsageBucket) -> String {
+        guard let start = JarvisInsightsDates.date(fromDayKey: bucket.startKey) else { return bucket.startKey }
+        switch bucket.kind {
+        case .day:
+            return JarvisInsightsDates.template(start, "dMMM", language: language)
+        case .month:
+            return JarvisInsightsDates.template(start, "MMMyyyy", language: language)
+        case .week:
+            let end = JarvisInsightsDates.date(fromDayKey: bucket.endKey) ?? start
+            return JarvisInsightsDates.template(start, "dMMM", language: language) + " – "
+                + JarvisInsightsDates.template(end, "dMMM", language: language)
+        }
+    }
+
+    // MARK: Totals
+
+    private func totalsGrid(_ totals: JarvisUsageTotals) -> some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 72), spacing: 8, alignment: .topLeading)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            tile(text(.usageSandbox), number(totals.sandboxMinutes) + " " + text(.usageMinutesUnit), "usage.tile.sandbox")
+            tile(text(.usageTokens), compact(totals.tokens), "usage.tile.tokens")
+            tile(text(.usageTurns), number(totals.turns), "usage.tile.turns")
+            tile(text(.usagePremium), number(totals.premiumRequests), "usage.tile.premium")
+        }
+    }
+
+    private func tile(_ title: String, _ value: String, _ identifier: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(identifier)
+    }
+
+    // MARK: Breakdown
+
+    private var palette: [Color] {
+        let accent = JarvisDesignTokens.primaryAccent
+        let stone = JarvisDesignTokens.secondaryAccent
+        return [accent, stone, accent.opacity(0.55), stone.opacity(0.55), accent.opacity(0.3), stone.opacity(0.3)]
+    }
+
+    private func breakdown(_ summary: JarvisUsageSummary) -> some View {
+        let slices = summary.slices(by: groupBy)
+        return JarvisInsightsCard(title: text(.usageBreakdown)) {
+            Picker(text(.usageBreakdown), selection: $groupBy) {
+                ForEach(JarvisUsageGroupBy.allCases) { option in
+                    Text(text(option.localizationKey)).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.large)
+            .accessibilityIdentifier("usage.groupBy")
+            .onChange(of: groupBy) { _, _ in selectedSliceID = nil }
+            splitBar(slices, summary: summary)
+            VStack(spacing: 0) {
+                ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
+                    sliceRow(slice, index: index, summary: summary)
+                }
+            }
+        }
+    }
+
+    private func splitBar(_ slices: [JarvisUsageSlice], summary: JarvisUsageSummary) -> some View {
+        GeometryReader { proxy in
+            let gap: CGFloat = 2
+            let available = max(0, proxy.size.width - gap * CGFloat(max(0, slices.count - 1)))
+            let total = slices.reduce(0) { $0 + $1.value }
+            HStack(spacing: gap) {
+                ForEach(Array(slices.enumerated()), id: \.element.id) { index, slice in
+                    Button {
+                        selectedSliceID = selectedSliceID == slice.id ? nil : slice.id
+                    } label: {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(palette[index % palette.count])
+                            .opacity(selectedSliceID == nil || selectedSliceID == slice.id ? 1 : 0.3)
+                            .frame(height: 20)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: total > 0 ? available * CGFloat(slice.value / total) : 0)
+                    .accessibilityLabel(sliceTitle(slice))
+                    .accessibilityValue("\(slice.share) %")
+                    .accessibilityIdentifier("usage.segment.\(slice.id)")
+                }
+            }
+        }
+        .frame(height: JarvisDesignTokens.chatMinimumTapTarget)
+    }
+
+    private func sliceRow(_ slice: JarvisUsageSlice, index: Int, summary: JarvisUsageSummary) -> some View {
+        Button {
+            selectedSliceID = selectedSliceID == slice.id ? nil : slice.id
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(palette[index % palette.count])
+                    .frame(width: 10, height: 10)
+                    .accessibilityHidden(true)
+                Text(sliceTitle(slice))
+                    .font(.subheadline)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
+                Text(valueText(slice.value, summary: summary))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text("\(slice.share) %")
+                    .font(.subheadline.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .frame(minWidth: 44, alignment: .trailing)
+            }
+            .foregroundStyle(.primary)
+            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            selectedSliceID == slice.id ? JarvisDesignTokens.primaryAccent.opacity(0.1) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .accessibilityAddTraits(selectedSliceID == slice.id ? .isSelected : [])
+        .accessibilityIdentifier("usage.slice.\(slice.id)")
+    }
+
+    private func sliceTitle(_ slice: JarvisUsageSlice) -> String {
+        switch groupBy {
+        case .project:
+            return slice.name ?? text(.usageNoProject)
+        case .agent:
+            switch slice.id {
+            case "codex": return text(.usageSourceCodex)
+            case "copilot": return text(.usageSourceCopilot)
+            default: return text(.usageAgentJarvis)
+            }
+        case .source:
+            switch slice.id {
+            case "sandbox": return text(.usageSourceSandbox)
+            case "jarvis_model": return text(.usageSourceModel)
+            case "voice": return text(.usageSourceVoice)
+            case "codex": return text(.usageSourceCodex)
+            case "copilot": return text(.usageSourceCopilot)
+            default: return slice.id
+            }
+        }
+    }
+
+    // MARK: Top tasks and tools
+
+    private func topTasks(_ summary: JarvisUsageSummary) -> some View {
+        let ranks = summary.topTasks()
+        let maximum = ranks.map(\.value).max() ?? 0
+        return JarvisInsightsCard(title: text(.usageTopTasks)) {
+            VStack(spacing: 10) {
+                ForEach(ranks) { rank in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(taskTitle(rank))
+                                .font(.subheadline)
+                                .lineLimit(2)
+                                .layoutPriority(1)
+                            Spacer(minLength: 8)
+                            Text(valueText(rank.value, summary: summary))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        GeometryReader { proxy in
+                            Capsule()
+                                .fill(JarvisDesignTokens.secondaryAccent.opacity(0.6))
+                                .frame(width: maximum > 0 ? proxy.size.width * CGFloat(rank.value / maximum) : 0)
+                        }
+                        .frame(height: 4)
+                        .accessibilityHidden(true)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .accessibilityIdentifier("usage.topTasks")
+        }
+    }
+
+    private func taskTitle(_ rank: JarvisUsageTaskRank) -> String {
+        if let title = rank.title, !title.isEmpty { return title }
+        if let taskId = rank.taskId {
+            return JarvisInsightsLocalization.format(.usageTaskNumber, language: language, String(taskId.prefix(8)))
+        }
+        switch rank.source {
+        case "voice": return text(.usageConversation)
+        case "jarvis_model": return text(.usageModelUse)
+        default: return text(.usageUnlinked)
+        }
+    }
+
+    private func toolCalls(_ summary: JarvisUsageSummary) -> some View {
+        JarvisInsightsCard(title: text(.usageToolCalls)) {
+            VStack(alignment: .leading, spacing: 8) {
+                if summary.toolCalls.isEmpty {
+                    Text(text(.usageNoToolCalls))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(summary.toolCalls.prefix(8), id: \.tool) { call in
+                        HStack(spacing: 8) {
+                            Text(call.tool)
+                                .font(.subheadline)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .layoutPriority(1)
+                            Spacer(minLength: 8)
+                            Text(call.count)
+                                .font(.subheadline.weight(.semibold))
+                                .monospacedDigit()
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                Text(
+                    summary.codexResearchCalls.map {
+                        JarvisInsightsLocalization.format(.usageCodexResearch, language: language, $0)
+                    } ?? text(.usageCodexResearchUnavailable)
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+            .accessibilityIdentifier("usage.toolCalls")
+        }
+    }
+
+    // MARK: Formatting
+
+    private func number(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0)).locale(language.locale))
+    }
+
+    private func compact(_ value: Double) -> String {
+        value.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(language.locale))
+    }
+
+    /// Cost in DKK when the report carries cost; otherwise the number of records, as the page says it counts.
+    private func valueText(_ value: Double, summary: JarvisUsageSummary) -> String {
+        if summary.usesCost {
+            let amount = value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale))
+            return amount + " " + text(.currencyUnit)
+        }
+        return number(value) + " " + text(.usageRecords)
+    }
+}

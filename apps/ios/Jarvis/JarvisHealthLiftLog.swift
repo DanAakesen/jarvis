@@ -95,6 +95,7 @@ struct JarvisHealthNewLiftSheet: View {
     @State private var submittedDraft: JarvisLiftDraft?
     @State private var saving = false
     @State private var failed = false
+    @State private var vaultPending = false
     @State private var saveVersion = 0
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
@@ -152,6 +153,10 @@ struct JarvisHealthNewLiftSheet: View {
                     Text(copy.text(.saveFailed))
                         .foregroundStyle(.red)
                         .accessibilityAddTraits(.updatesFrequently)
+                } else if vaultPending {
+                    Text(copy.text(.vaultPending))
+                        .foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
             }
             .navigationTitle(copy.text(.newLift))
@@ -166,6 +171,7 @@ struct JarvisHealthNewLiftSheet: View {
                         submittedDraft = submittedDraft ?? draft
                         saving = true
                         failed = false
+                        vaultPending = false
                         saveVersion += 1
                     },
                     onClose: { dismiss() }
@@ -178,10 +184,15 @@ struct JarvisHealthNewLiftSheet: View {
         .task(id: saveVersion) {
             guard saveVersion > 0, let client, let submittedDraft else { return }
             do {
-                try await client.createLift(submittedDraft)
+                let vault = try await client.createLift(submittedDraft)
                 try Task.checkCancellation()
                 onSaved()
-                dismiss()
+                if vault == .synced {
+                    dismiss()
+                } else {
+                    // The lift is saved; saving again with the same key retries the vault copy.
+                    vaultPending = true
+                }
             } catch {
                 failed = true
             }

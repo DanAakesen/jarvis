@@ -10585,6 +10585,27 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 - CI on d6f6300 failed `ChatComposerUITests.testPlusMenuOpensNextToThePlusButton` (then hung past its allowance). `chat.plus` and the camera menu item were not changed; the new rim's endless `TimelineView` and `withAnimation` pulse loop kept XCUITest from ever seeing the app idle. `jarvisRim(isAnimated:)` is false when `model.fixtureMode` is on, so fixture and UI-test runs show a static rim. Real runs keep the sweep and pulse; Reduce Motion still makes both static. Not compiled or run here; needs the iOS UI test job to confirm.
 
+## 2026-11-02 — P15-58: Usage, Status and Proactive pages (#1525)
+
+- Status: accepted; SwiftUI not compiled on Linux, needs iOS CI and a device check.
+- Logic, clients and copy sit in `JarvisCore/Insights` so they are tested on Linux; the views only render them.
+- Preferences are read-only in the Proactive editor. The backend derives them and `PATCH /proactive/settings` rejects them; the issue asked for an editable list, which would have failed every save.
+- Add to tasks uses the Notes client (`createTask`, personal scope); there is no proactive route for it.
+- `POST /proactive/runs` returns 202, so Check now accepts it (200 alone would have shown a false failure).
+- UI tests use `JarvisInsightsFixtureTransport` behind `--ui-test-navigation` with a fixed clock, no polling and no stale timer, so XCUITest can go idle.
+- The Apple documentation site could not be fetched in this environment; the PR lists the pages the design follows.
+
+## 2026-11-02 — P15-57: Today (Home) page and chat/voice transition (#1523)
+
+- Status: accepted from the issue; not compiled or run here (no Xcode on this runner). Needs the iOS CI job and a device check against `docs/ios/design/today.html`.
+- Home is a normal pushed destination (`.today`); `JarvisNavigationState()` still defaults to Chat so existing fixtures and tests keep starting on Chat. Normal launches, and sign-out, go to Home. The `--ui-test-today` argument (simulator only, with `--ui-test-navigation`) starts on Home with fixed fixture data.
+- No calendar-list route exists for the phone, so Next up reads a `JarvisTodayCalendarSource`; production binds the unavailable source and shows "Calendar unavailable". Nothing is invented.
+- Gym logs save through the existing vault notes path (`POST /notes`, `Personal/Gym log/…`), behind the `JarvisGymLogStore` protocol. The unavailable store never reports success; an unconfirmed write locks Save so it cannot be duplicated.
+- Steps come from HealthKit (read-only); workouts come from saved Gym logs. Hourly bars are a running total for 06:00–22:00; future hours are disabled. The target line is 8,000.
+- Bars below 44 pt wide (14d and 30d) keep a full-height 44 pt+ hit area and are individually reachable by VoiceOver with a caption and value, which is the accessible alternative.
+- The chat/voice carry-over is a `matchedGeometryEffect` namespace (composer and orb). Reduce Motion turns the geometry match off and leaves a cross-fade. The rim and greeting shimmer are static in fixture runs so XCUITest can go idle.
+- `.github/scripts/tests/test_pipeline.py` now allows exactly one leading toolbar item on Chat: the Home button that appears only when Chat was opened from Home.
+
 ## 2026-11-02 — P15-55: notifications grouped per category (iOS)
 
 - The notification sheet shows one row per category with the latest update and an "+ N earlier" count. Older items sit in a lazy disclosure. A group with older items has one clear-all control; the toolbar has a clear-everything control. The grouping is `NowFeedActivityGrouping` in JarvisCore (tested).
@@ -10629,6 +10650,23 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Checked `JarvisOrbView` (dark glass sphere, cyan rim, orange/amber tangled centre) against the board's `.working-core` / `drawMini` mark. The Voice screen already renders `JarvisOrbView` through `VoiceOrbView`, the same view the gate and lock-screen preview use, so Voice matches Dan's description and nothing is drawn twice. No change made.
 - Difference noted: the board's mini core is only the amber tangle on a transparent canvas, with no sphere or rim, and the iOS chat bubble does not draw a mini mark (status text is the bubble text). If the chat bubble should show the mark, it must reuse `JarvisOrbView` at about 24 pt rather than add a second drawing. Not compiled or compared on a device here.
 
+## 2026-11-02 P15-61: shared page header for Health, Factory and Notes (#1531)
+
+- Decision (owner-approved board `docs/ios/design/pages.html`): every page except Chat, Settings, Voice and Home uses one `JarvisPageHeader` (`apps/ios/Jarvis/JarvisPageHeader.swift`): a bold ~32 pt title (scales with Dynamic Type and wraps, never truncates) level with 44 pt glass action buttons and the sidebar button, then `JarvisPageHeadline` (one data sentence, orange key words), then one `JarvisPageHeroCard`. Loading and error states pass no phrase, so only the title shows. Usage, Status and Proactive (PR 1526) and Home (PR 1524) can adopt it with `JarvisPageHeader(title:language:) { actions }`; it was not on main when this was written, so it is created here.
+- Phrases are pure functions in `JarvisCore/Pages/JarvisPagePhrase.swift` (`{braces}` mark key words), written from real data and tested on Linux in Danish and English: Factory from the board counts or the releases, Notes from the task list (overdue, due today) or the graph, Health from the period's workouts and steps against the targets.
+- Health: the plus opens a chooser, Log lift or Log workout. The Workout sheet uses P15-60's `JarvisWorkoutSessionType`, `JarvisWorkoutDraft` and `JarvisVaultState` as the single source of truth. The save sits behind `JarvisWorkoutLogging`, which `JarvisHealthClient` implements by calling `createWorkout`; `JarvisHealthArea(workoutLogger:)` can override it.
+- Factory: the plus moved from the bottom dock to the header; the segmented control moved into the bottom dock above the search with more space between them. Task rows have a GitHub mark button (`GitHubMark` asset, Primer Octicons `mark-github`, MIT) that opens the issue; tapping the row opens the task in Jarvis. Group headers are a pressable bordered surface with the chevron at the far right. The "1 kører · 1 på pause" sub-line exists only in the web board mock; the iOS code never rendered it, so nothing was removed.
+- Notes: the plus moved to the header with reset or refresh. No pinned or unsorted concept was added. The task list now also loads on the notes and list tabs so the headline and hero can show there.
+- Shared files touched: `JarvisDesignSystem.swift` (`JarvisList` gains an optional head row; existing call sites are unchanged). Glass and button styles are untouched (PR 1528).
+- Not compiled here (no Xcode): needs iOS CI and a device check.
+
+## 2026-11-02 P15-60: Gym log in the vault
+
+- Workouts (`daily.workout_entries`) and lifts (`daily.lift_entries`) stay the record. Each row has a `revision` and a `vault_synced_revision`; the vault copy is finished only when the two match, so "pending" is derived, never stored as a flag that could lie. Responses carry `entry.vault` (`synced` or `pending`). A failed or missing vault write keeps the row, answers with `pending`, and the owner-bound retry job (every 5 minutes, 25 entries, stops at the first vault failure) finishes it. Repeating the same create (same idempotency key) also retries the copy.
+- The writer keeps one note per Copenhagen day at `Health/Gym log/YYYY-MM-DD.md`, one `##` section per session, lifts as lines under their session and unassigned lifts in a separate section. Every owned line ends in a `<!-- jarvis:kind:id -->` marker, so edits replace the line, deletes remove it, repeats change nothing and text the owner added is kept. Writes use the todo writer's stale-write pattern (read, apply, write with the SHA, re-read on conflict, 3 attempts, 256 KiB cap). User text has comment delimiters and control characters removed and secret-like text withheld.
+- Lifts store `gym_day` when created (the session's day if linked) so a later session delete cannot move a lift to another note. Deleting a session moves its lifts to the unassigned section. Lifts saved before migration 0074 are marked as already handled and are not back-filled into the vault.
+- `GET /daily/workouts?days=7|14|30&limit=` lists recent workouts; `POST`, `PATCH` and `DELETE /daily/workouts` follow the lift routes (owner only, no agent or connector tokens). The note text is Danish by default with English labels available in the writer.
+
 ## 2026-11-02 P15-59: Build 45 fixes (live chat, voice media, orb, controls, location)
 
 - Chat stays event driven: the composer is never disabled while Jarvis answers. A message sent mid-turn goes to the existing `POST /conversation/sessions/:id/steer` route (`JarvisChatClient.steerTurn`) and joins the running turn; a 409 means no turn is active and the text returns to the composer. `.activityChanged` refreshes history when no turn of this client is streaming, so replies finished during voice or screen sharing appear unprompted.
@@ -10649,3 +10687,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Caps (`core/notification-policy.ts`, enforced in `recordNotification`): the same kind and text is stored once per rolling 24 hours (dismissed rows count, so a dismissed message does not return); at most 10 stored notifications per kind (`info`, `success`, `warning`, `error`) per rolling 24 hours; stored notifications leave the feed after 7 days. Other alert, release and attention rows keep their own rules.
 - Routes (owner only): `POST /now/activity/:id/dismiss`, `POST /now/activity/groups/:category/dismiss` and `POST /now/activity/clear`. Group and clear use the same visibility rules as the feed read, so they never dismiss hidden rows.
 - Unverified: live APNs delivery and the iOS Notifications page wiring.
+
+## 2026-11-02 P15-60: Gym log in the vault
+
+- Workouts (`daily.workout_entries`) and lifts (`daily.lift_entries`) stay the record. Each row has a `revision` and a `vault_synced_revision`; the vault copy is finished only when the two match, so "pending" is derived, never stored as a flag that could lie. Responses carry `entry.vault` (`synced` or `pending`). A failed or missing vault write keeps the row, answers with `pending`, and the owner-bound retry job (every 5 minutes, 25 entries, stops at the first vault failure) finishes it. Repeating the same create (same idempotency key) also retries the copy.
+- The writer keeps one note per Copenhagen day at `Health/Gym log/YYYY-MM-DD.md`, one `##` section per session, lifts as lines under their session and unassigned lifts in a separate section. Every owned line ends in a `<!-- jarvis:kind:id -->` marker, so edits replace the line, deletes remove it, repeats change nothing and text the owner added is kept. Writes use the todo writer's stale-write pattern (read, apply, write with the SHA, re-read on conflict, 3 attempts, 256 KiB cap). User text has comment delimiters and control characters removed and secret-like text withheld.
+- Lifts store `gym_day` when created (the session's day if linked) so a later session delete cannot move a lift to another note. Deleting a session moves its lifts to the unassigned section. Lifts saved before migration 0074 are marked as already handled and are not back-filled into the vault.
+- `GET /daily/workouts?days=7|14|30&limit=` lists recent workouts; `POST`, `PATCH` and `DELETE /daily/workouts` follow the lift routes (owner only, no agent or connector tokens). The note text is Danish by default with English labels available in the writer.

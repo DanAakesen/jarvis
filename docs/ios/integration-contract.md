@@ -257,3 +257,7 @@ shared contract code cited below.
   `packages/contracts/src/index.d.ts`, `apps/backend/src/daily/query.ts`,
   `apps/backend/src/daily/routes/lifts.ts`, and
   `apps/backend/src/daily/lifts/lifts.ts`.
+
+## 16. Usage, Status and Proactive (P15-58)
+
+No new backend route. The pages call `GET /usage?period=`, `GET /status`, `GET /proactive/status`, `GET /proactive/items?state=open|all`, `GET /proactive/runs`, `POST /proactive/runs` (answers 202), `GET`/`PATCH /proactive/settings` (with `expectedRevision`; 409 `settings_changed` re-fetches and rebases the draft), and `POST /proactive/items/:id/feedback` (`seen`, `dismiss`, `snooze` until tomorrow 07:00). 401 and 403 mean sign-in needed, 404 on proactive status means unavailable. "Add to tasks" creates a personal task through the existing Notes task route because proactive has no such route. The settings PATCH does not accept preferences, so the editor shows them read-only.

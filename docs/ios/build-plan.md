@@ -146,7 +146,7 @@ Enabling capabilities needs the Account Holder or Admin role, and changing an Ap
 | Extension App ID | `com.danaakesen.jarvis.broadcast`, with the existing App Group enabled | Registers the P15-11 ReplayKit broadcast target for signed installation. | Owner portal/provisioning check required before device testing |
 | Extension App ID | `com.danaakesen.jarvis.widgets` | Registers the P15-36 WidgetKit Live Activity extension for signed installation. | Owner portal/provisioning check required before device/TestFlight testing |
 | App Services | MusicKit | Lets Jarvis start Apple Music. | Done, it costs nothing |
-| Capabilities | HealthKit (Clinical Health Records left off) | The owner's pick, ahead of need. Version 1 has no Health data. | Done |
+| Capabilities | HealthKit (Clinical Health Records left off) | The owner's pick, ahead of need. P15-57 reads step counts (read-only) for Home. | Done |
 | Capabilities | Side Button Access | The owner's pick. Lets a voice assistant start from the side button through an App Intent. Apple limits it to Japan, on iOS 26.2 or later. | Done |
 | Capabilities | Maps | The owner's pick. Nothing in the current design uses it. | Done |
 | Capabilities | Push to Talk | The owner's pick. The contract describes an open microphone with no push to talk, so nothing in the current design uses it. | Done |

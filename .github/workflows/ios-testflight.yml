@@ -88,6 +88,13 @@ jobs:
           umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+      - name: Revoke stale development certificates before archive
+        timeout-minutes: 5
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: ruby .github/scripts/testflight_certificate_cleanup.rb
       - name: Archive with automatic signing
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -116,11 +123,12 @@ jobs:
             JARVIS_ENTRA_API_SCOPE="$JARVIS_ENTRA_API_SCOPE" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1; then
             echo "::error::Archive failed. A sanitised excerpt of the log follows; identifiers are masked."
+            ERRS=$(grep -E ' error: ' "$RUNNER_TEMP/archive.log" | sed -E -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" -e 's|/Users/runner/work/jarvis/jarvis/||g' -e 's/%/%25/g' | awk '!seen[$0]++' | head -n 15 | paste -sd '#' -); echo "::error::COMPILE ERRORS: ${ERRS}"
             grep -E -i -e 'error:' -e 'Provisioning profile' -e 'No profile' \
               -e 'requires a development team' -e 'Communication with Apple' \
               -e 'No Accounts' -e 'not registered' -e 'No signing certificate' \
               -e 'Automatic signing' -e 'entitlement' -e 'capabilit' \
-              -e 'App Store Connect' -e 'authentication' -e 'not authorized' \
+              -e 'App Store Connect' -e 'authentication' -e 'not authorized' -e 'failed' -e 'fatal' -e 'cannot' -e 'Undefined' -e 'Invalid' -e 'duplicate' -e 'Segmentation' -e 'crash' -e 'unable' -e 'missing' \
               -e 'bundle identifier' -e 'App ID' -e 'cloud signing' \
               "$RUNNER_TEMP/archive.log" \
               | sed -E \
@@ -130,7 +138,7 @@ jobs:
                 -e 's/%/%25/g' \
                 -e 's/^[[:space:]]+//' \
               | awk '!seen[$0]++' \
-              | head -n 40 \
+              | head -n 80 \
               | while IFS= read -r line; do
                   echo "::error::${line}"
                 done || true
@@ -183,7 +191,7 @@ jobs:
                 -e 's/%/%25/g' \
                 -e 's/^[[:space:]]+//' \
               | awk '!seen[$0]++' \
-              | head -n 40 \
+              | head -n 80 \
               | while IFS= read -r line; do
                   echo "::error::${line}"
                 done || true

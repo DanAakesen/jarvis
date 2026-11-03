@@ -2,6 +2,7 @@
 "language.danish" = "Dansk";
 "language.english" = "Engelsk";
 "settings.title" = "Indstillinger";
+"navigation.today" = "Hjem";
 "navigation.chat" = "Chat";
 "navigation.voice" = "Stemme";
 "voice.connectionLost" = "Forbindelsen blev afbrudt";
@@ -146,6 +147,9 @@
 "voice.hideCaptions" = "Skjul undertekster";
 "voice.showCaptions" = "Vis undertekster";
 "voice.screenShareUnavailable" = "Skærmdeling er ikke tilgængelig: denne version indeholder ikke Jarvis' udsendelsesudvidelse.";
+"notes.overview" = "Overblik";
+"notes.openTasks" = "Åbne opgaver";
+"notes.doneTasks" = "Klaret";
 "voice.sentPhoto" = "Foto sendt";
 "voice.sentVideo" = "Video sendt";
 "voice.sentScreen" = "Skærmdeling sendt";

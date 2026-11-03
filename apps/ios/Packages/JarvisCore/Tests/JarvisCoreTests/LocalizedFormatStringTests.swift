@@ -7,7 +7,7 @@ import XCTest
 final class LocalizedFormatStringTests: XCTestCase {
     private static let tables = [
         "JarvisApprovals", "JarvisChat", "JarvisFactory", "JarvisHealth", "JarvisNotes",
-        "JarvisSettings", "JarvisWorkspaces", "VoiceLiveActivity",
+        "JarvisSettings", "JarvisToday", "JarvisWorkspaces", "VoiceLiveActivity",
     ]
 
     /// "@" is an object argument (String); "ld" is an Int argument.
@@ -20,6 +20,10 @@ final class LocalizedFormatStringTests: XCTestCase {
         "factory.issueNumber": ["ld"],
         "factory.blockedBy": ["ld"],
         "health.target": ["@"],
+        "today.greeting.nextEvent": ["@", "@"],
+        "today.greeting.tasks": ["ld"],
+        "today.showMore": ["ld"],
+        "today.ago.days": ["ld"],
         "workspace.removeQuestion": ["@"],
         "workspace.connectionLabel": ["@"],
         "workspace.openItem": ["@", "@", "@"],

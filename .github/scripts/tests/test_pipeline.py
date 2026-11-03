@@ -746,8 +746,10 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("let action", button)
         for area in ("Notes", "Health", "Factory"):
             source = (ROOT / f"apps/ios/Jarvis/Jarvis{area}Area.swift").read_text()
-            self.assertIn("JarvisSidebarMenuButton(language: language)", source)
+            self.assertIn("JarvisPageHeader(title:", source)
             self.assertNotIn("onOpenSidebar", source)
+        page_header = (ROOT / "apps/ios/Jarvis/JarvisPageHeader.swift").read_text()
+        self.assertIn("JarvisSidebarMenuButton(language: language)", page_header)
         shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
         self.assertNotIn("openSidebarFromButton", shell)
         self.assertNotIn("onOpenSidebar", shell)
@@ -761,7 +763,9 @@ class SafeFailureTests(unittest.TestCase):
                         chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
         ui_tests = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
         self.assertIn("XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX", ui_tests)
-        self.assertNotIn("ToolbarItem(placement: .topBarLeading)", chat)
+        # Only the Home button shown when Chat was opened from Today may sit on the leading side.
+        self.assertEqual(chat.count("ToolbarItem(placement: .topBarLeading)"), 1)
+        self.assertIn("if let onBackToToday {\n                ToolbarItem(placement: .topBarLeading)", chat)
         self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
         self.assertNotIn("onOpenSidebar", chat)
         self.assertNotIn("showsSidebarToolbarButton", chat)

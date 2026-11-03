@@ -26,6 +26,7 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 const failureEvents = new Set([
   'proactive.failed',
   'proactive.todo_writer',
+  'daily.gym_log',
   'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
   'daily.mcp_operation_failed', 'daily.mcp_audit_failed',
   'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
@@ -411,6 +412,13 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.count === 'number' && Number.isInteger(input.count) && input.count >= 0 && input.count <= 100) {
       fields.count = input.count;
     }
+    if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
+        input.durationMs >= 0 && input.durationMs <= 180_000) fields.durationMs = input.durationMs;
+    return fields;
+  }
+  if (input.msg === 'daily.gym_log') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.reason === 'string' && ['vault_write_failed', 'aborted'].includes(input.reason)) fields.reason = input.reason;
     if (typeof input.durationMs === 'number' && Number.isFinite(input.durationMs) &&
         input.durationMs >= 0 && input.durationMs <= 180_000) fields.durationMs = input.durationMs;
     return fields;

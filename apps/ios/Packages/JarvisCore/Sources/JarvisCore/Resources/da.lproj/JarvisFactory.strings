@@ -146,3 +146,10 @@
 "factory.historyTruncated" = "Commit-historikken er ufuldstændig";
 "factory.sandbox" = "Sandbox";
 "factory.jarvisModel" = "Jarvis-model";
+"factory.openInGitHub" = "Åbn i GitHub";
+"factory.pipeline" = "Pipeline";
+"factory.tasks" = "opgaver";
+"factory.task" = "opgave";
+"factory.stageTasks" = "Opgaver efter fase";
+"factory.expanded" = "Udvidet";
+"factory.collapsed" = "Foldet";

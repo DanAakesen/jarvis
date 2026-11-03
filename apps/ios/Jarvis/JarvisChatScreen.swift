@@ -122,6 +122,12 @@ struct JarvisChatScreen: View {
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
+    private let handoff: JarvisChatHandoff?
+    private let onHandoffConsumed: () -> Void
+    @EnvironmentObject private var navigation: JarvisNavigationModel
+    private var onBackToToday: (() -> Void)? {
+        navigation.cameFromToday ? { navigation.navigate(to: .today) } : nil
+    }
     private let screenShareBridge = VoiceScreenShareBridge()
 
     init(
@@ -129,15 +135,21 @@ struct JarvisChatScreen: View {
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
+        handoff: JarvisChatHandoff? = nil,
+        onHandoffConsumed: @escaping () -> Void = {},
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
-        _model = StateObject(wrappedValue: JarvisChatModel(
+        let chatModel = JarvisChatModel(
             client: client,
             fixtureMode: fixtureMode,
             startupError: startupError
-        ))
+        )
+        if let handoff { chatModel.draft = handoff.text }
+        _model = StateObject(wrappedValue: chatModel)
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
+        self.handoff = handoff
+        self.onHandoffConsumed = onHandoffConsumed
     }
 
     private var renderedRows: [RenderedChatRow] {
@@ -188,6 +200,23 @@ struct JarvisChatScreen: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let onBackToToday {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onBackToToday) {
+                        Image(systemName: "house")
+                            .font(.system(size: 18, weight: .regular))
+                            .frame(
+                                width: JarvisDesignTokens.chatMinimumTapTarget,
+                                height: JarvisDesignTokens.chatMinimumTapTarget
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .jarvisToolbarButtonStyle()
+                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                    .accessibilityLabel(JarvisTodayLocalization.string(.backToToday, language: appLanguage))
+                    .accessibilityIdentifier("chat.backToToday")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     presentedSheet = .activity(.activity)
@@ -222,6 +251,12 @@ struct JarvisChatScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSidebarMenuButton(language: appLanguage)
             }
+        }
+        .task(id: handoff?.id) {
+            guard let handoff else { return }
+            model.draft = handoff.text
+            composerFocused = true
+            onHandoffConsumed()
         }
         .task {
             await model.load()
@@ -699,6 +734,7 @@ struct JarvisChatScreen: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+            .jarvisCarryOver(.composer)
             .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
         }
