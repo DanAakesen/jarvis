@@ -153,9 +153,10 @@ struct JarvisRoutinesSettingsView: View {
                     systemImage: "arrow.clockwise",
                     identifier: "settings.refresh",
                     isDisabled: loading || deleting,
-                    chrome: .onGlass
+                    chrome: .glass
                 ) { Task { await load() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if routines.isEmpty { await load() }

@@ -56,6 +56,13 @@ struct JarvisComponentGallery: View {
                     }
                 }
             }
+            JarvisPageHeroCard(title: "Bell") {
+                HStack(spacing: 12) {
+                    JarvisIconButton(title: "Bell", systemImage: "bell", identifier: "gallery.bell") {}
+                    JarvisIconButton(title: "Bell with badge", systemImage: "bell", identifier: "gallery.bell.badge", badge: 3) {}
+                    JarvisIconButton(title: "Bell with large badge", systemImage: "bell", identifier: "gallery.bell.badge.large", badge: 120) {}
+                }
+            }
             JarvisPageHeroCard(title: "Labelled buttons") {
                 VStack(alignment: .leading, spacing: 12) {
                     JarvisLabelledButton(title: "Label", identifier: "gallery.label") {}

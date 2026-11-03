@@ -24,16 +24,18 @@ struct JarvisGlassBackground: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var cornerRadius: CGFloat?
     var tint: Color?
+    var isCircle = false
+    var isInteractive = false
 
     private var shape: AnyShape {
-        if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
+        if isCircle { AnyShape(Circle()) } else if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
     }
 
     func body(content: Content) -> some View {
         if reduceTransparency {
             content.background(.regularMaterial, in: shape)
         } else {
-            content.glassEffect(JarvisGlass.surface(tint: tint), in: shape)
+            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: tint).interactive() : JarvisGlass.surface(tint: tint), in: shape)
         }
     }
 }
@@ -43,6 +45,11 @@ extension View {
     /// accent surfaces such as the user bubble.
     func jarvisGlassSurface(cornerRadius: CGFloat? = nil, tint: Color? = nil) -> some View {
         modifier(JarvisGlassBackground(cornerRadius: cornerRadius, tint: tint))
+    }
+
+    /// Glass in a true circle for the shared icon and menu buttons.
+    func jarvisGlassCircle() -> some View {
+        modifier(JarvisGlassBackground(isCircle: true, isInteractive: true))
     }
 }
 
@@ -517,7 +524,7 @@ private struct JarvisControlGlyph: View {
                     .accessibilityHidden(true)
             }
         }
-        .contentShape(Rectangle())
+        .contentShape(Circle())
     }
 }
 
@@ -526,9 +533,12 @@ private extension View {
     func jarvisControlChrome(_ chrome: JarvisControlChrome) -> some View {
         switch chrome {
         case .glass:
-            buttonStyle(.glass).buttonBorderShape(.circle)
+            buttonStyle(.plain)
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                .jarvisGlassCircle()
         case .onGlass:
             buttonStyle(.plain)
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
         }
     }
 }

@@ -84,9 +84,10 @@ struct JarvisDeploymentsSettingsView: View {
                     systemImage: "arrow.clockwise",
                     identifier: "settings.refresh",
                     isDisabled: loading || removing != nil,
-                    chrome: .onGlass
+                    chrome: .glass
                 ) { Task { await load() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if catalogue == nil { await load() }

@@ -681,7 +681,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("JarvisIconButton(", button)
         controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
         glyph = controls.split("private struct JarvisControlGlyph: View {", 1)[1].split("private extension View", 1)[0]
-        self.assertLess(glyph.index(".frame(width:"), glyph.index(".contentShape(Rectangle())"))
+        self.assertLess(glyph.index(".frame(width:"), glyph.index(".contentShape(Circle())"))
         self.assertIn("width: JarvisDesignTokens.chatMinimumTapTarget", glyph)
         self.assertIn("height: JarvisDesignTokens.chatMinimumTapTarget", glyph)
         self.assertIn("static let chatMinimumTapTarget: CGFloat = 44", source)
@@ -759,13 +759,14 @@ class SafeFailureTests(unittest.TestCase):
         self.assertLess(chat.index('identifier: "chat.notifications"'),
                         chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"))
         self.assertLess(chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"),
-                        chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
+                        chat.index("JarvisSidebarMenuButton(language: appLanguage, chrome: .glass)"))
         ui_tests = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
         self.assertIn("XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX", ui_tests)
         # Only the Home button shown when Chat was opened from Today may sit on the leading side.
         self.assertEqual(chat.count("ToolbarItem(placement: .topBarLeading)"), 1)
         self.assertIn("if let onBackToToday {\n                ToolbarItem(placement: .topBarLeading)", chat)
-        self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
+        self.assertIn("JarvisSidebarMenuButton(language: appLanguage, chrome: .glass)", chat)
+        self.assertEqual(chat.count(".sharedBackgroundVisibility(.hidden)"), 3)
         self.assertNotIn("onOpenSidebar", chat)
         self.assertNotIn("showsSidebarToolbarButton", chat)
         tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
@@ -1165,12 +1166,14 @@ class SafeFailureTests(unittest.TestCase):
         controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
         chrome = controls.split("private extension View {", 1)[1].split("\n}\n", 1)[0]
         self.assertIn("buttonStyle(.plain)", chrome.split("case .onGlass:", 1)[1])
+        self.assertIn(".jarvisGlassCircle()", chrome.split("case .onGlass:", 1)[0])
         for filename in ("JarvisChatScreen.swift", "JarvisActivitySheet.swift"):
             source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
             toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
             with self.subTest(filename=filename):
                 self.assertIn("JarvisIconButton(", toolbar)
-                self.assertIn("chrome: .onGlass", toolbar)
+                # Chat draws its own 44 pt glass circles and hides the system toolbar glass; the sheet keeps the system's.
+                self.assertIn("chrome: .glass" if filename == "JarvisChatScreen.swift" else "chrome: .onGlass", toolbar)
                 self.assertNotIn(".buttonStyle(", toolbar)
                 self.assertNotIn(".glassEffect(", toolbar)
         sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()

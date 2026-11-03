@@ -61,4 +61,24 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(second, named: "Orb frame 2 (0.8 s later)")
         XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation, "The orb must animate")
     }
+
+    /// Every icon and menu button is one 44 pt circle: the frame is square, with or without a badge.
+    func testIconButtonsAreSquareAndTheBellKeepsItsSizeWithABadge() {
+        launchGallery()
+        defer { app.terminate() }
+        let marker = app.descendants(matching: .any).matching(identifier: "screen.componentGallery").firstMatch
+        XCTAssertTrue(marker.waitForExistence(timeout: 30), "The component gallery did not open.")
+        let ids = [
+            "gallery.icon", "gallery.icon.badge", "gallery.menu", "gallery.bell", "gallery.bell.badge",
+            "gallery.bell.badge.large", "navigation.openSidebar",
+        ]
+        for id in ids {
+            let button = app.buttons[id].firstMatch
+            if !button.exists { app.swipeUp() }
+            XCTAssertTrue(button.waitForExistence(timeout: 10), id)
+            XCTAssertEqual(button.frame.width, button.frame.height, accuracy: 0.5, "\(id) must be square")
+            XCTAssertEqual(button.frame.width, 44, accuracy: 0.5, "\(id) must be 44 pt")
+        }
+        attach(app.screenshot(), named: "Bell with and without a badge")
+    }
 }

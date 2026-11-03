@@ -68,8 +68,9 @@ struct JarvisTodayScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSidebarMenuButton(language: language)
+                JarvisSidebarMenuButton(language: language, chrome: .glass)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .jarvisAmbientBackground(transparentNavigationBar: true)
         .task { await model.refresh() }

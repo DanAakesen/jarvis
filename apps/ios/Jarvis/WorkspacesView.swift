@@ -51,10 +51,11 @@ struct WorkspacesView: View {
                     systemImage: "arrow.clockwise",
                     identifier: "workspaces.refresh",
                     isBusy: loadState == .loading,
-                    chrome: .onGlass,
+                    chrome: .glass,
                     action: refresh
                 )
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             searchField

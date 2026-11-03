@@ -206,10 +206,11 @@ struct JarvisChatScreen: View {
                         title: JarvisTodayLocalization.string(.backToToday, language: appLanguage),
                         systemImage: "house",
                         identifier: "chat.backToToday",
-                        chrome: .onGlass,
+                        chrome: .glass,
                         action: onBackToToday
                     )
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisIconButton(
@@ -217,15 +218,17 @@ struct JarvisChatScreen: View {
                     systemImage: "bell",
                     identifier: "chat.notifications",
                     badge: displayedNeedsYouCount,
-                    chrome: .onGlass
+                    chrome: .glass
                 ) {
                     presentedSheet = .activity(.activity)
                 }
             }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSidebarMenuButton(language: appLanguage)
+                JarvisSidebarMenuButton(language: appLanguage, chrome: .glass)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task(id: handoff?.id) {
             guard let handoff else { return }
