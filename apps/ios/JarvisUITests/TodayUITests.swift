@@ -8,7 +8,7 @@ final class TodayUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launch(language: String = "en") {
+    private func launch(language: String = "en", appearance: String? = nil) {
         app.launchArguments = [
             "--ui-test-navigation",
             "--ui-test-today",
@@ -16,6 +16,7 @@ final class TodayUITests: XCTestCase {
             "-AppleLanguages", "(\(language))",
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ]
+        if let appearance { app.launchArguments += ["-jarvis.appTheme", appearance] }
         app.launch()
     }
 
@@ -30,6 +31,40 @@ final class TodayUITests: XCTestCase {
             XCTAssertTrue(app.descendants(matching: .any)["today.greeting"].waitForExistence(timeout: 5))
             XCTAssertFalse(screen("chat").exists)
             app.terminate()
+        }
+    }
+
+    /// Home against the concept board (docs/ios/design/today.html): big phrase, the workouts and steps card with
+    /// every row, two equal quick-action tiles, the Today / Tasks control and the real Chat composer.
+    func testHomeMatchesTheBoardInDarkAndLightDanishAndEnglish() {
+        for language in ["da", "en"] {
+            for appearance in ["dark", "light"] {
+                launch(language: language, appearance: appearance)
+                XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "\(language) \(appearance)")
+                let greeting = app.descendants(matching: .any)["today.greeting"]
+                XCTAssertTrue(greeting.waitForExistence(timeout: 5))
+                XCTAssertTrue(app.descendants(matching: .any)["today.donut"].exists)
+                for session in ["chest", "back", "arms", "legs", "cardio"] {
+                    XCTAssertTrue(app.buttons["today.legend.\(session)"].exists, "Muscle row \(session)")
+                }
+                XCTAssertTrue(app.descendants(matching: .any)["today.steps.ring"].exists)
+                XCTAssertTrue(app.descendants(matching: .any)["today.steps.chart"].exists)
+                let workout = app.buttons["today.logWorkout"]
+                let lift = app.buttons["today.logLift"]
+                XCTAssertTrue(workout.exists && lift.exists)
+                XCTAssertEqual(workout.frame.width, lift.frame.width, accuracy: 1, "Quick actions are equal tiles")
+                XCTAssertTrue(app.buttons["today.tab.today"].exists && app.buttons["today.tab.due"].exists)
+                XCTAssertTrue(app.buttons["today.plus"].exists)
+                XCTAssertTrue(app.textFields["today.input"].exists)
+                XCTAssertTrue(app.buttons["today.composer.plus"].exists, "Composer plus on the left")
+                XCTAssertTrue(app.buttons["today.dictate"].exists, "Composer dictation on the right")
+                XCTAssertTrue(app.buttons["today.voice"].exists, "Composer voice on the right")
+                let screenshot = XCTAttachment(screenshot: app.screenshot())
+                screenshot.name = "home-\(language)-\(appearance).png"
+                screenshot.lifetime = .keepAlways
+                add(screenshot)
+                app.terminate()
+            }
         }
     }
 

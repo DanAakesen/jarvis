@@ -642,72 +642,51 @@ struct JarvisChatScreen: View {
             if model.shouldShowNowBar {
                 nowBar
             }
-            VStack(spacing: 0) {
-                if !model.pendingAttachments.isEmpty {
-                    ScrollView(.horizontal) {
-                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                            ForEach(model.pendingAttachments) { attachment in
-                                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                                    Image(systemName: attachment.contentType.hasPrefix("image/") ? "photo" : "doc")
-                                        .accessibilityHidden(true)
-                                    Text(attachment.name)
-                                        .lineLimit(1)
-                                    JarvisIconButton(
-                                        title: "Remove \(attachment.name)",
-                                        systemImage: "xmark.circle.fill",
-                                        identifier: "chat.attachment.remove",
-                                        isDisabled: model.isSending
-                                    ) { model.removeAttachment(attachment) }
+            JarvisComposerBar(
+                placeholder: copy(.messagePlaceholder),
+                text: $model.draft,
+                isFocused: $composerFocused,
+                inputIdentifier: "chat.input",
+                inputHint: model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "",
+                isInputDisabled: model.fixtureTurnUnavailable,
+                rimState: rimState,
+                isRimAnimated: !model.fixtureMode,
+                waveformLevels: dictation.isListening ? dictation.levels : nil,
+                onSubmit: sendMessage,
+                header: {
+                    if !model.pendingAttachments.isEmpty {
+                        ScrollView(.horizontal) {
+                            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                ForEach(model.pendingAttachments) { attachment in
+                                    HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                        Image(systemName: attachment.contentType.hasPrefix("image/") ? "photo" : "doc")
+                                            .accessibilityHidden(true)
+                                        Text(attachment.name)
+                                            .lineLimit(1)
+                                        JarvisIconButton(
+                                            title: "Remove \(attachment.name)",
+                                            systemImage: "xmark.circle.fill",
+                                            identifier: "chat.attachment.remove",
+                                            isDisabled: model.isSending
+                                        ) { model.removeAttachment(attachment) }
+                                    }
+                                    .font(.caption)
+                                    .padding(JarvisDesignTokens.chatMessageSpacing)
+                                    .jarvisGlassSurface()
                                 }
-                                .font(.caption)
-                                .padding(JarvisDesignTokens.chatMessageSpacing)
-                                .jarvisGlassSurface()
                             }
+                            .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
+                            .padding(.top, JarvisDesignTokens.chatComposerSpacing / 2)
                         }
-                        .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
-                        .padding(.top, JarvisDesignTokens.chatComposerSpacing / 2)
+                        .scrollIndicators(.hidden)
                     }
-                    .scrollIndicators(.hidden)
-                }
-                TextField(copy(.messagePlaceholder), text: $model.draft, axis: .vertical)
-                    .font(.body)
-                    .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
-                    .focused($composerFocused)
-                    .submitLabel(.send)
-                    .onSubmit(sendMessage)
-                    .disabled(model.fixtureTurnUnavailable)
-                    .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
-                    .padding(.top, JarvisDesignTokens.chatComposerTextInset)
-                    .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
-                    .accessibilityLabel(copy(.messagePlaceholder))
-                    .accessibilityIdentifier("chat.input")
-                    .accessibilityHint(model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "")
-
-                HStack(spacing: 0) {
-                    plusMenu
-                    if dictation.isListening {
-                        JarvisWaveform(levels: dictation.levels)
-                            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing)
-                            .accessibilityIdentifier("chat.waveform")
-                    } else {
-                        Spacer(minLength: 0)
-                    }
+                },
+                leading: { plusMenu },
+                actions: {
                     dictateButton
                     trailingButton
                 }
-            }
-            .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
-            .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
-            .background {
-                Color.clear
-                    .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-                    .jarvisRim(cornerRadius: JarvisDesignTokens.surfaceRadius, state: rimState, isAnimated: !model.fixtureMode)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-            .jarvisCarryOver(.composer)
-            .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-            .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
+            )
         }
     }
 

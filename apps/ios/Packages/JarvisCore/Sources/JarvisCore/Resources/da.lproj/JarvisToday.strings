@@ -56,6 +56,8 @@
 "today.ago.yesterday" = "i går";
 "today.ago.days" = "%ld d siden";
 "today.noWorkoutYet" = "Ingen træninger endnu";
+"today.noLiftYet" = "Ingen løft endnu";
+"today.ofGoal" = "af %ld";
 "today.sessionType" = "Sessionstype";
 "today.quickLift" = "Hurtigt løft";
 "today.exercise" = "Øvelse";

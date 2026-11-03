@@ -56,6 +56,8 @@
 "today.ago.yesterday" = "yesterday";
 "today.ago.days" = "%ld d ago";
 "today.noWorkoutYet" = "No workouts yet";
+"today.noLiftYet" = "No lifts yet";
+"today.ofGoal" = "of %ld";
 "today.sessionType" = "Session type";
 "today.quickLift" = "Quick lift";
 "today.exercise" = "Exercise";

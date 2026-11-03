@@ -97,6 +97,17 @@ final class JarvisTodayModel: ObservableObject {
         return last.session.shortTitle(language: language) + " · " + ago
     }
 
+    /// "Bench press · 80 kg", or nil while there is nothing true to say yet.
+    func lastLiftText(language: JarvisAppLanguage) -> String? {
+        guard let entries = workouts.value else { return nil }
+        let lifts = entries.compactMap { entry in entry.lift.map { (entry.performedAt, $0) } }
+        guard let last = lifts.max(by: { $0.0 < $1.0 })?.1 else {
+            return JarvisTodayLocalization.string(.noLiftYet, language: language)
+        }
+        let weight = last.weightKg.rounded() == last.weightKg ? String(Int(last.weightKg)) : String(last.weightKg)
+        return last.exercise + " · " + weight + " kg"
+    }
+
     /// True when a block failed because the phone is offline but still shows what it loaded earlier.
     var isShowingOfflineCopy: Bool {
         (calendar.failure == .offline && calendar.value != nil)

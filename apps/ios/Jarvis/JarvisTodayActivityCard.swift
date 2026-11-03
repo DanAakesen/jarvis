@@ -130,6 +130,11 @@ struct JarvisTodayActivityCard: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                } else if total == 0 {
+                    Text(JarvisTodayLocalization.string(.ofGoal, count: 1, language: language))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
             .padding(14)
@@ -185,45 +190,37 @@ struct JarvisTodayActivityCard: View {
         }
     }
 
-    @ViewBuilder
     private func legend(_ display: JarvisTodayActivityDisplay) -> some View {
-        let present = display.segments.filter { $0.count > 0 }
-        if present.isEmpty {
-            Text(copy(.workoutsEmpty))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            VStack(spacing: 0) {
-                ForEach(present) { segment in
-                    let selected = display.centerSession == segment.session
-                    Button {
-                        animate { model.activity.toggleSegment(segment.session) }
-                    } label: {
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(color(segment.session))
-                                .frame(width: 10, height: 10)
-                                .accessibilityHidden(true)
-                            Text(segment.session.shortTitle(language: language))
-                                .font(.subheadline)
-                                .lineLimit(1)
-                            Spacer(minLength: 4)
-                            Text("\(segment.count)")
-                                .font(.subheadline.weight(.semibold))
-                                .monospacedDigit()
-                        }
-                        .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        .contentShape(Rectangle())
+        VStack(spacing: 0) {
+            ForEach(display.segments) { segment in
+                let selected = display.centerSession == segment.session
+                Button {
+                    animate { model.activity.toggleSegment(segment.session) }
+                } label: {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(color(segment.session))
+                            .frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
+                        Text(segment.session.shortTitle(language: language))
+                            .font(.subheadline)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text("\(segment.count)")
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        "\(segment.session.title(language: language)), \(segment.count)"
-                    )
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                    .accessibilityIdentifier("today.legend.\(segment.session.rawValue)")
+                    .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : Color.primary)
+                    .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .disabled(segment.count == 0)
+                .accessibilityLabel(
+                    "\(segment.session.title(language: language)), \(segment.count)"
+                )
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityIdentifier("today.legend.\(segment.session.rawValue)")
             }
         }
     }
@@ -316,6 +313,13 @@ struct JarvisTodayActivityCard: View {
                 )
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
+                Text("\(copy(.goal)) \(JarvisTodayActivity.stepGoal.formatted(.number.locale(language.locale)))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .offset(y: -height * goal / top)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
         }
         .accessibilityElement(children: .contain)

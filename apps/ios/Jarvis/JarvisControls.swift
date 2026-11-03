@@ -406,6 +406,51 @@ struct JarvisLabelledButton: View {
     }
 }
 
+/// A quick-action tile: a round accent icon chip, a title and a subtitle on one glass surface. Tiles side by side
+/// share the row equally.
+struct JarvisTileButton: View {
+    let title: String
+    var subtitle: String?
+    let systemImage: String
+    var identifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                    .frame(width: 36, height: 36)
+                    .background(JarvisDesignTokens.primaryAccent.opacity(0.18), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, 12)
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+        .accessibilityLabel(subtitle.map { "\(title). \($0)" } ?? title)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
 /// One entry of a `JarvisTabStrip`.
 struct JarvisTabItem<Tag: Hashable> {
     let tag: Tag

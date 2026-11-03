@@ -47,7 +47,11 @@ struct JarvisTodayFixture {
         }
         daily[today] = hourly.reduce(0, +)
         let gym = [
-            JarvisGymLogEntry(performedAt: date(2, 7), session: .chest),
+            JarvisGymLogEntry(
+                performedAt: date(2, 7),
+                session: .chest,
+                lift: JarvisGymLift(exercise: "Bench press", weightKg: 80, reps: 5, sets: 3)
+            ),
             JarvisGymLogEntry(performedAt: date(1, 18), session: .back),
             JarvisGymLogEntry(
                 performedAt: calendar.date(byAdding: .day, value: -3, to: date(2, 18)) ?? now,

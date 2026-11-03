@@ -59,6 +59,8 @@ public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
     case agoYesterday = "today.ago.yesterday"
     case agoDays = "today.ago.days"
     case noWorkoutYet = "today.noWorkoutYet"
+    case noLiftYet = "today.noLiftYet"
+    case ofGoal = "today.ofGoal"
     case sessionTypeGroup = "today.sessionType"
     case quickLift = "today.quickLift"
     case exercise = "today.exercise"
