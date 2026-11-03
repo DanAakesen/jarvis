@@ -21,7 +21,9 @@ struct JarvisActivitySheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            VStack(spacing: 0) {
+                header
+                ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatSheetRowSpacing) {
                     if let error = model.activityError, model.nowFeed == nil {
                         ContentUnavailableView {
@@ -93,30 +95,9 @@ struct JarvisActivitySheet: View {
             }
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
-            .jarvisAmbientBackground()
-            .navigationTitle(copy(.activityTitle))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    JarvisIconButton(
-                        title: copy(.done),
-                        systemImage: "xmark",
-                        identifier: "chat.notifications.done"
-                    ) { dismiss() }
-                }
-                .sharedBackgroundVisibility(.hidden)
-                if let items = model.nowFeed?.items, items.count > 1 {
-                    ToolbarItem(placement: .topBarLeading) {
-                        JarvisIconButton(
-                            title: copy(.clearAll),
-                            systemImage: "trash",
-                            identifier: "activity.clearAll",
-                            isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
-                        ) { Task { await model.dismissActivities(items) } }
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                }
             }
+            .jarvisAmbientBackground()
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             await model.refreshActivity()
@@ -124,6 +105,37 @@ struct JarvisActivitySheet: View {
         .onReceive(NotificationCenter.default.publisher(for: .jarvisApprovalActionCompleted)) { _ in
             Task { await model.refreshActivity() }
         }
+    }
+
+    /// Title level with the shared glass buttons, inside the content so the sheet has one background and the
+    /// close button sits centred in its own circle rather than in a second toolbar capsule.
+    private var header: some View {
+        HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
+            Text(copy(.activityTitle))
+                .font(.system(size: JarvisPageHeaderMetrics.titleSize, weight: .bold))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: JarvisPageHeaderMetrics.actionSize, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("page.title")
+            HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                if let items = model.nowFeed?.items, items.count > 1 {
+                    JarvisIconButton(
+                        title: copy(.clearAll),
+                        systemImage: "trash",
+                        identifier: "activity.clearAll",
+                        isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
+                    ) { Task { await model.dismissActivities(items) } }
+                }
+                JarvisIconButton(
+                    title: copy(.done),
+                    systemImage: "xmark",
+                    identifier: "chat.notifications.done"
+                ) { dismiss() }
+            }
+        }
+        .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        .padding(.vertical, JarvisPageHeaderMetrics.actionSpacing)
     }
 
     private var backgroundTaskSection: some View {

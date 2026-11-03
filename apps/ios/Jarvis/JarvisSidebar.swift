@@ -177,6 +177,7 @@ struct JarvisSidebar: View {
                 }
                 .buttonStyle(JarvisPressableRowButtonStyle())
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
+                .accessibilityIdentifier("navigation.settings")
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
             }
