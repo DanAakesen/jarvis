@@ -4,7 +4,8 @@
 # skipped to save Actions minutes (L83): a PR merges only when it is up to date
 # with main and green, so the merged tree was already tested. Copilot PR ready
 # dispatches this workflow after marking a PR ready.
-# "CI result" is the single check to require on main before merging a PR.
+# "CI result" is the single check to require on main before merging a PR. It covers
+# only quick jobs: the iOS Simulator job runs separately in ios-simulator.yml.
 # Component workflows are reusable (workflow_call) so each check runs once.
 name: CI
 
@@ -102,11 +103,15 @@ jobs:
     name: iOS
     needs: plan
     if: needs.plan.outputs.ios == 'true'
-    # The called workflow's simulator job comments on the pull request.
+    # Only the quick Linux job gates merge. The slow Simulator job runs in
+    # ios-simulator.yml and reports separately. The called workflow still declares
+    # write permissions for that job, so the caller must grant them.
     permissions:
       contents: read
       issues: write
       pull-requests: write
+    with:
+      simulator: skip
     uses: ./.github/workflows/ios-ci.yml
 
   infra:
@@ -161,6 +166,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     steps:
@@ -168,6 +174,12 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version-file: .python-version
+      - name: Summarize job timings
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/ci_timing.py
       - name: Require selected checks and record exact tested tree
         env:
           RESULTS: ${{ toJSON(needs) }}

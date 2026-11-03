@@ -1,0 +1,38 @@
+# Slow iOS Simulator build, UI tests and screenshots. Runs on every iOS change
+# and reports its own result, but is not part of the "CI result" merge gate.
+# Docs-only and plan-only changes never match the path filter. A failed run on
+# main opens or updates one tracking issue (see ios-ci.yml).
+name: iOS Simulator
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-ci.yml'
+      - '.github/workflows/ios-simulator.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-ci.yml'
+      - '.github/workflows/ios-simulator.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-simulator-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  simulator:
+    name: iOS Simulator
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    with:
+      linux: skip
+    uses: ./.github/workflows/ios-ci.yml
