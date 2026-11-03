@@ -1,3 +1,4 @@
 "NSFaceIDUsageDescription" = "Unlock Jarvis with Face ID.";
 "NSLocationWhenInUseUsageDescription" = "Jarvis uses your approximate location for local weather.";
 "NSHealthShareUsageDescription" = "Jarvis reads your step count to show it on Home. Nothing is written to Health or uploaded.";
+"NSHealthUpdateUsageDescription" = "Jarvis does not write to Health. It only reads your step count to show it on Home.";
