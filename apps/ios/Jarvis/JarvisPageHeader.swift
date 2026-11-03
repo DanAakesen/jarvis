@@ -111,7 +111,6 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
             in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
         )
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("page.hero")
     }
 }
 

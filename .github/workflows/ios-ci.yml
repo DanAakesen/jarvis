@@ -88,6 +88,7 @@ jobs:
           app_group = ["group.com.danaakesen.jarvis"]
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
           assert entitlements["aps-environment"] == "$(APS_ENVIRONMENT)"
+          assert entitlements["com.apple.developer.healthkit"] is True
           assert entitlements["com.apple.security.application-groups"] == app_group
           assert entitlements["keychain-access-groups"] == ["$(AppIdentifierPrefix)com.microsoft.adalcache"]
           assert info["LSApplicationQueriesSchemes"] == ["msauthv2", "msauthv3"]
