@@ -207,6 +207,10 @@ struct JarvisActivitySheet: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .jarvisSwipeToDismiss(
+            label: String(format: copy(.dismissLabel), task.title),
+            isEnabled: !model.fixtureMode && !model.dismissingBackgroundTaskIDs.contains(task.id)
+        ) { Task { await model.dismissBackgroundTask(task) } }
     }
 
     private func confirmationSection(_ confirmations: [PendingConfirmation]) -> some View {
@@ -384,8 +388,16 @@ struct JarvisActivitySheet: View {
         .padding(JarvisDesignTokens.chatGlassInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-        .jarvisSwipeToDismiss(isEnabled: !model.fixtureMode && !busy, label: copy(.dismiss)) {
-            Task { await model.dismissActivities(group.items) }
+        .jarvisSwipeToDismiss(
+            label: String(format: copy(group.olderCount > 0 ? .clearGroupLabel : .dismissLabel),
+                          group.olderCount > 0 ? group.category.title : group.latest.title),
+            isEnabled: !model.fixtureMode && !busy
+        ) {
+            if group.olderCount > 0 {
+                Task { await model.dismissActivities(group.items) }
+            } else {
+                Task { await model.dismissActivity(group.latest) }
+            }
         }
     }
 
@@ -411,39 +423,38 @@ private extension NowFeedActivityCategory {
     }
 }
 
-private extension View {
-    /// Swipe a row left to dismiss it. Vertical drags still scroll, and VoiceOver gets a named action.
-    func jarvisSwipeToDismiss(isEnabled: Bool, label: String, onDismiss: @escaping () -> Void) -> some View {
-        modifier(JarvisSwipeToDismiss(isEnabled: isEnabled, label: label, onDismiss: onDismiss))
-    }
-}
-
+/// Swipe a row to the left to dismiss it. VoiceOver gets the same action by name, and the row snaps back when the
+/// drag is short or mostly vertical, so it never fights the page scroll. HIG: Gestures, Lists (swipe actions).
 private struct JarvisSwipeToDismiss: ViewModifier {
-    private static let threshold: CGFloat = 96
-    let isEnabled: Bool
     let label: String
-    let onDismiss: () -> Void
+    let isEnabled: Bool
+    let action: () -> Void
     @State private var offset: CGFloat = 0
+    private let threshold: CGFloat = 96
 
     func body(content: Content) -> some View {
         content
             .offset(x: offset)
-            .opacity(1 - min(abs(offset) / (Self.threshold * 3), 0.5))
+            .opacity(1 - min(abs(offset) / (threshold * 3), 0.4))
             .simultaneousGesture(
-                DragGesture(minimumDistance: 16)
+                DragGesture(minimumDistance: 24)
                     .onChanged { value in
                         guard isEnabled, abs(value.translation.width) > abs(value.translation.height) else { return }
                         offset = min(0, value.translation.width)
                     }
                     .onEnded { value in
-                        let commit = isEnabled && value.translation.width < -Self.threshold &&
-                            abs(value.translation.width) > abs(value.translation.height)
+                        let commit = isEnabled && value.translation.width < -threshold
+                            && abs(value.translation.width) > abs(value.translation.height)
                         withAnimation(.snappy) { offset = 0 }
-                        if commit { onDismiss() }
+                        if commit { action() }
                     }
             )
-            .accessibilityAction(named: label) {
-                if isEnabled { onDismiss() }
-            }
+            .accessibilityAction(named: label) { if isEnabled { action() } }
+    }
+}
+
+private extension View {
+    func jarvisSwipeToDismiss(label: String, isEnabled: Bool, perform action: @escaping () -> Void) -> some View {
+        modifier(JarvisSwipeToDismiss(label: label, isEnabled: isEnabled, action: action))
     }
 }
