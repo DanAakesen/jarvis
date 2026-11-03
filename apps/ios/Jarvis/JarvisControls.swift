@@ -47,6 +47,11 @@ extension View {
         modifier(JarvisGlassBackground(cornerRadius: cornerRadius, tint: tint))
     }
 
+    /// Interactive glass in a capsule for the shared labelled buttons and tabs.
+    func jarvisGlassCapsule() -> some View {
+        modifier(JarvisGlassBackground(isInteractive: true))
+    }
+
     /// Glass in a true circle for the shared icon and menu buttons.
     func jarvisGlassCircle() -> some View {
         modifier(JarvisGlassBackground(isCircle: true, isInteractive: true))
@@ -350,7 +355,7 @@ private struct JarvisLabelledContent: View {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             } else {
-                Text(title).font(.body.weight(.semibold))
+                Text(title).font(.body.weight(.semibold)).lineLimit(1)
             }
             if isLeading { Spacer(minLength: 0) }
             if let trailingSystemImage {
@@ -360,7 +365,8 @@ private struct JarvisLabelledContent: View {
             }
         }
         .foregroundStyle(tint.opacity(isDisabled ? 0.4 : 1))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+        .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
         .frame(
             maxWidth: isFullWidth ? .infinity : nil,
             minHeight: JarvisDesignTokens.chatMinimumTapTarget,
@@ -401,13 +407,48 @@ struct JarvisLabelledButton: View {
                 isDestructive: isDestructive
             )
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
+        .jarvisGlassCapsule()
         .disabled(isDisabled || isBusy)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityLabel(accessibilityTitle ?? subtitle.map { "\(title). \($0)" } ?? title)
         .accessibilityValue(accessibilityValue)
         .accessibilityHint(hint)
         .accessibilityIdentifier(identifier ?? "")
+    }
+}
+
+/// One entry of a `JarvisTabStrip`.
+struct JarvisTabItem<Tag: Hashable> {
+    let tag: Tag
+    let title: String
+    var identifier: String?
+}
+
+/// The one tab strip and segmented control: a row of the shared labelled capsules, each on a single line with
+/// comfortable padding and a 44 pt minimum height. It scrolls horizontally when the tabs do not fit, and never wraps.
+struct JarvisTabStrip<Tag: Hashable>: View {
+    let title: String
+    let identifierPrefix: String
+    let items: [JarvisTabItem<Tag>]
+    @Binding var selection: Tag
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    JarvisLabelledButton(
+                        title: item.title,
+                        identifier: item.identifier ?? "\(identifierPrefix).\(index)",
+                        isSelected: selection == item.tag
+                    ) { selection = item.tag }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .accessibilityLabel(title)
     }
 }
 
@@ -445,7 +486,8 @@ struct JarvisLabelledMenu<Content: View>: View {
                 isFullWidth: isFullWidth, isLeading: isFullWidth
             )
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
+        .jarvisGlassCapsule()
         .disabled(isDisabled)
         .accessibilityLabel(accessibilityTitle ?? title)
         .accessibilityIdentifier(identifier ?? "")

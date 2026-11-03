@@ -200,7 +200,9 @@ enum JarvisDesignTokens {
     static let notesControlHeight: CGFloat = 44
     static let notesRowMinimumHeight: CGFloat = 52
     static let notesIconSize: CGFloat = 18
-    static let notesChipSpacing: CGFloat = 18
+    static let notesChipSpacing: CGFloat = 8
+    static let labelledHorizontalPadding: CGFloat = 16
+    static let labelledVerticalPadding: CGFloat = 10
     static let notesGraphNodeRadius: CGFloat = 5
     static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4

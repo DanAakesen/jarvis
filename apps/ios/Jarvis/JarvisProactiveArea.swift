@@ -303,13 +303,15 @@ struct JarvisProactiveArea: View {
     private var itemsCard: some View {
         JarvisInsightsCard {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-                Picker(text(.proactiveTabs), selection: $tab) {
-                    Text(text(.proactiveTabOpen)).tag(Tab.open)
-                    Text(text(.proactiveTabEarlier)).tag(Tab.earlier)
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.large)
-                .accessibilityIdentifier("proactive.tabs")
+                JarvisTabStrip(
+                    title: text(.proactiveTabs),
+                    identifierPrefix: "proactive.tabs",
+                    items: [
+                        JarvisTabItem(tag: Tab.open, title: text(.proactiveTabOpen)),
+                        JarvisTabItem(tag: Tab.earlier, title: text(.proactiveTabEarlier)),
+                    ],
+                    selection: $tab
+                )
                 if actionFailed {
                     JarvisInsightsBadge(
                         title: text(.proactiveActionFailed),

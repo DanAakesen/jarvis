@@ -110,11 +110,15 @@ struct JarvisNewTaskSheet: View {
             JarvisForm {
                 TextField(copy.titleField, text: $title, axis: .vertical)
                     .lineLimit(1...3)
-                Picker(copy.scope, selection: $scope) {
-                    Text(copy.personal).tag(VaultTaskScope.personal)
-                    Text(copy.work).tag(VaultTaskScope.work)
-                }
-                .pickerStyle(.segmented)
+                JarvisTabStrip(
+                    title: copy.scope,
+                    identifierPrefix: "notes.create.scope",
+                    items: [
+                        JarvisTabItem(tag: VaultTaskScope.personal, title: copy.personal),
+                        JarvisTabItem(tag: VaultTaskScope.work, title: copy.work),
+                    ],
+                    selection: $scope
+                )
                 Toggle(copy.dueDateEnabled, isOn: $dueDateEnabled)
                 if dueDateEnabled {
                     DatePicker(copy.dueDate, selection: $dueDate, displayedComponents: .date)

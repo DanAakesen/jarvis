@@ -57,6 +57,10 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
         XCTAssertEqual(try offenders(chrome, allowing: Self.sharedLayer), [])
     }
 
+    func testNoScreenUsesASegmentedPicker() throws {
+        XCTAssertEqual(try offenders(#"\.pickerStyle\(\s*\.segmented\b"#, allowing: Self.sharedLayer), [])
+    }
+
     func testNoScreenDefinesAButtonStyle() throws {
         XCTAssertEqual(try offenders(#":\s*(?:[A-Za-z]+,\s*)*ButtonStyle\b"#, allowing: Self.sharedLayer), [])
     }

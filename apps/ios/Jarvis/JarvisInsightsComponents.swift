@@ -176,8 +176,8 @@ struct JarvisInsightsBadge: View {
         }
         .font(.caption.weight(.medium))
         .foregroundStyle(tint)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(tint.opacity(0.14), in: Capsule())
         .accessibilityElement(children: .combine)
     }

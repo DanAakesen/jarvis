@@ -6,6 +6,8 @@ import SwiftUI
 /// It has no user-facing entry: it opens only in debug and UI-test builds, with `--component-gallery`, so reviewers
 /// can compare the screenshot against the design board. Release builds do not compile it.
 struct JarvisComponentGallery: View {
+    @State private var galleryTab = "Notes"
+
     var body: some View {
         NavigationStack {
             JarvisPageScaffold(
@@ -62,6 +64,14 @@ struct JarvisComponentGallery: View {
                     JarvisIconButton(title: "Bell with badge", systemImage: "bell", identifier: "gallery.bell.badge", badge: 3) {}
                     JarvisIconButton(title: "Bell with large badge", systemImage: "bell", identifier: "gallery.bell.badge.large", badge: 120) {}
                 }
+            }
+            JarvisPageHeroCard(title: "Tab strip") {
+                JarvisTabStrip(
+                    title: "Tabs",
+                    identifierPrefix: "gallery.tabs",
+                    items: ["Notes", "Tasks", "List", "Graph"].map { JarvisTabItem(tag: $0, title: $0) },
+                    selection: $galleryTab
+                )
             }
             JarvisPageHeroCard(title: "Labelled buttons") {
                 VStack(alignment: .leading, spacing: 12) {

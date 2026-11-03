@@ -1076,7 +1076,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("segmentSwitcher", header_body)
         bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
         self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
-        self.assertIn(".pickerStyle(.segmented)", area)
+        self.assertIn("JarvisTabStrip(", area)
+        self.assertNotIn(".pickerStyle(.segmented)", area)
         self.assertIn("guard !more || !liftsLoading", area)
         self.assertIn("guard liftLoadID == loadID else { return }", area)
         log = (ROOT / "apps/ios/Jarvis/JarvisHealthLiftLog.swift").read_text()

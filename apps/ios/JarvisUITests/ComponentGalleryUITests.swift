@@ -81,4 +81,20 @@ final class ComponentGalleryUITests: XCTestCase {
         }
         attach(app.screenshot(), named: "Bell with and without a badge")
     }
+
+    /// The tab strip never wraps a title and every tab is at least 44 pt tall.
+    func testTabStripTabsAreSingleLineAndAtLeast44Points() {
+        launchGallery()
+        defer { app.terminate() }
+        let marker = app.descendants(matching: .any).matching(identifier: "screen.componentGallery").firstMatch
+        XCTAssertTrue(marker.waitForExistence(timeout: 30), "The component gallery did not open.")
+        for id in ["gallery.tabs.0", "gallery.tabs.1", "gallery.tabs.2", "gallery.tabs.3"] {
+            let tab = app.buttons[id].firstMatch
+            if !tab.exists { app.swipeUp() }
+            XCTAssertTrue(tab.waitForExistence(timeout: 10), id)
+            XCTAssertGreaterThanOrEqual(tab.frame.height, 44, "\(id) must be at least 44 pt tall")
+            XCTAssertLessThan(tab.frame.height, 60, "\(id) must be one line")
+        }
+        attach(app.screenshot(), named: "Tab strip")
+    }
 }

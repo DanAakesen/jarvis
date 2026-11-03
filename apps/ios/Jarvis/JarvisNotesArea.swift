@@ -301,19 +301,15 @@ struct JarvisNotesArea: View {
     }
 
     private var tabSwitcher: some View {
-        HStack(spacing: 0) {
-            ForEach(JarvisNotesTab.allCases) { tab in
-                JarvisLabelledButton(
-                    title: copy.title(for: tab),
-                    identifier: "notes.tab.\(tab.rawValue)",
-                    isFullWidth: true,
-                    isSelected: selectedTab == tab
-                ) { selectedTab = tab }
-            }
-        }
+        JarvisTabStrip(
+            title: copy.title,
+            identifierPrefix: "notes.tab",
+            items: JarvisNotesTab.allCases.map {
+                JarvisTabItem(tag: $0, title: copy.title(for: $0), identifier: "notes.tab.\($0.rawValue)")
+            },
+            selection: $selectedTab
+        )
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy.title)
     }
 
     @ViewBuilder
@@ -516,11 +512,6 @@ struct JarvisNotesArea: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                JarvisLabelledMenu(title: copy.title(for: selectedScope), identifier: "notes.scope") {
-                    ForEach(JarvisNotesSearchScope.allCases) { scope in
-                        Button(copy.title(for: scope)) { selectedScope = scope }
-                    }
-                }
                 TextField(copy.search, text: $searchText)
                     .textFieldStyle(.plain)
                     .submitLabel(.search)
@@ -537,11 +528,16 @@ struct JarvisNotesArea: View {
                     ) { searchText = "" }
                 }
             }
-            .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing)
-            .frame(height: JarvisDesignTokens.notesControlHeight)
+            .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
             .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: Capsule())
+            .jarvisGlassSurface()
             .accessibilityElement(children: .contain)
+            JarvisLabelledMenu(title: copy.title(for: selectedScope), identifier: "notes.scope") {
+                ForEach(JarvisNotesSearchScope.allCases) { scope in
+                    Button(copy.title(for: scope)) { selectedScope = scope }
+                }
+            }
         }
     }
 

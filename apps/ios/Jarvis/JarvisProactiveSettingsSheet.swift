@@ -145,14 +145,12 @@ struct JarvisProactiveSettingsSheet: View {
                     Text(text(.editorCategories))
                 }
                 Section {
-                    Picker(text(.editorScope), selection: draft(\.scope, fallback: .all)) {
-                        ForEach(JarvisProactiveScope.allCases) { scope in
-                            Text(text(scope.localizationKey)).tag(scope)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.large)
-                    .accessibilityIdentifier("proactive.edit.scope")
+                    JarvisTabStrip(
+                        title: text(.editorScope),
+                        identifierPrefix: "proactive.edit.scope",
+                        items: JarvisProactiveScope.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                        selection: draft(\.scope, fallback: .all)
+                    )
                 } header: {
                     Text(text(.editorScope))
                 }

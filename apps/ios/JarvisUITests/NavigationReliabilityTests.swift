@@ -162,9 +162,9 @@ final class NavigationReliabilityTests: XCTestCase {
                 navigate(to: "health")
                 assertDestinationMenuWorks()
                 exerciseSearch("health.search")
-                let healthMode = app.segmentedControls["health.mode"]
-                tap(healthMode.buttons.element(boundBy: 1))
-                waitFor(healthMode.buttons.element(boundBy: 1), key: "isSelected", value: true)
+                let healthMode = app.buttons["health.mode.1"]
+                tap(healthMode)
+                waitFor(healthMode, key: "isSelected", value: true)
                 tap(app.buttons["health.plus"])
                 tap(app.buttons["health.logLift"])
                 cancelSheet()

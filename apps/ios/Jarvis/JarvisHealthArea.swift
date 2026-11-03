@@ -407,12 +407,15 @@ struct JarvisHealthArea: View {
     }
 
     private var segmentSwitcher: some View {
-        Picker(copy.text(.title), selection: $trackWorkout) {
-            Text(copy.text(.dashboard)).tag(false)
-            Text(copy.text(.trackWorkout)).tag(true)
-        }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("health.mode")
+        JarvisTabStrip(
+            title: copy.text(.title),
+            identifierPrefix: "health.mode",
+            items: [
+                JarvisTabItem(tag: false, title: copy.text(.dashboard)),
+                JarvisTabItem(tag: true, title: copy.text(.trackWorkout)),
+            ],
+            selection: $trackWorkout
+        )
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
         .onChange(of: trackWorkout) { _, _ in searchText = "" }
     }
