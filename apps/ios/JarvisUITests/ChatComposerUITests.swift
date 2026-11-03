@@ -35,6 +35,7 @@ final class ChatComposerUITests: XCTestCase {
         let menu = app.buttons["navigation.openSidebar"].firstMatch
         XCTAssertTrue(bell.waitForExistence(timeout: 10))
         XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        // Covers only the simple icon button component (JarvisIconButton/JarvisMenuButton); add new icon buttons to this list by hand, never sweep all buttons.
         for button in [bell, menu] {
             XCTAssertEqual(button.frame.width, button.frame.height, accuracy: 0.5, "\(button.identifier) must be square")
             XCTAssertEqual(button.frame.width, 48, accuracy: 0.5, "\(button.identifier) must be 48 pt")

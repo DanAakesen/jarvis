@@ -68,6 +68,7 @@ final class ComponentGalleryUITests: XCTestCase {
         defer { app.terminate() }
         let marker = app.descendants(matching: .any).matching(identifier: "screen.componentGallery").firstMatch
         XCTAssertTrue(marker.waitForExistence(timeout: 30), "The component gallery did not open.")
+        // Covers only the simple icon button component (JarvisIconButton/JarvisMenuButton); add new icon buttons to this list by hand, never sweep all buttons.
         let ids = [
             "gallery.icon", "gallery.icon.badge", "gallery.menu", "gallery.bell", "gallery.bell.badge",
             "gallery.bell.badge.large", "gallery.bell.menu", "navigation.openSidebar",
