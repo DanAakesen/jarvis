@@ -171,8 +171,8 @@ final class NavigationReliabilityTests: XCTestCase {
                 tap(app.buttons["health.plus"])
                 tap(app.buttons["health.logWorkout"])
                 cancelSheet()
-                tap(healthMode.buttons.element(boundBy: 0))
-                waitFor(healthMode.buttons.element(boundBy: 0), key: "isSelected", value: true)
+                tap(app.buttons["health.mode.0"])
+                waitFor(app.buttons["health.mode.0"], key: "isSelected", value: true)
                 exerciseSearch("health.search")
 
                 navigate(to: "notes")

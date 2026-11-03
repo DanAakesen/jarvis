@@ -9,6 +9,11 @@ final class InsightsPagesTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// A tab of the shared tab strip: its identifier starts with the strip's prefix and its label is the tab title.
+    private func tab(_ prefix: String, _ label: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", prefix + ".", label)).firstMatch
+    }
+
     private func element(_ id: String) -> XCUIElement {
         app.descendants(matching: .any)[id]
     }
@@ -95,7 +100,7 @@ final class InsightsPagesTests: XCTestCase {
             .completed,
             "The Earlier tab must hide open suggestions"
         )
-        tabs.buttons["Open"].tap()
+        tab("proactive.tabs", "Open").tap()
         XCTAssertTrue(element("proactive.item.\(firstItem)").waitForExistence(timeout: 6))
     }
 
@@ -172,10 +177,5 @@ private extension XCUIElement {
     func clearText() {
         guard let current = value as? String, !current.isEmpty else { return }
         typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
-    }
-
-    /// A tab of the shared tab strip: its identifier starts with the strip's prefix and its label is the tab title.
-    private func tab(_ prefix: String, _ label: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", prefix + ".", label)).firstMatch
     }
 }
