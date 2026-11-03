@@ -30,8 +30,14 @@ final class JarvisComposerControlsTests: XCTestCase {
         XCTAssertTrue(controls.contains(".clear.tint("))
         XCTAssertFalse(controls.contains(".mask"))
 
-        let chat = try source("apps/ios/Jarvis/JarvisChatScreen.swift")
-        XCTAssertTrue(chat.contains(".jarvisRim("))
-        XCTAssertFalse(chat.contains(".glassEffect(.regular"))
+        let bar = try source("apps/ios/Jarvis/JarvisComposerBar.swift")
+        XCTAssertTrue(bar.contains(".jarvisRim("))
+        XCTAssertFalse(bar.contains(".glassEffect(.regular"))
+
+        for screen in ["JarvisChatScreen.swift", "JarvisTodayScreen.swift"] {
+            let text = try source("apps/ios/Jarvis/\(screen)")
+            XCTAssertTrue(text.contains("JarvisComposerBar("), "\(screen) uses the shared composer")
+            XCTAssertFalse(text.contains(".glassEffect(.regular"))
+        }
     }
 }

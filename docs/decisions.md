@@ -10726,6 +10726,14 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Home has no title. Order is headline, activity hero, Home sections, Chat composer. Typing on Home no longer jumps to Chat; voice becomes send while typing and send hands the text to Chat. Log workout and Log lift are two sheets with a date (default today); nothing saves without a date.
 - Evidence: Build 56 testing showed both log buttons opened the same sheet and a lookalike composer.
 - Consequence: lifts are a fixed list mapped to a gym session; HealthKit stays off until the entitlement is provisioned.
+
+## 2026-11-03 Home matches the board, with the shared composer (P15-70)
+
+- Decision: Home follows `docs/ios/design/today.html`: a 32 pt bold phrase with orange key words (Danish by default), the workouts and steps card with all five muscle rows even when empty (donut "0 af 1", step ring, hourly bars, 8.000 goal line), two equal quick-action tiles (round chip, title, last workout or last lift), a Today / Tasks control with counts and a round plus, then one day list card. The phrase sits at the very top under the status bar, with no title and no sidebar button (Dan, #1553); the sidebar opens by edge swipe.
+- Decision: Chat and Home use one composer, `JarvisComposerBar`: plus on the left, dictation and voice on the right, voice becomes send while typing, orange rim, no orb. Only the surrounding screen differs.
+- Evidence: TestFlight build 60 showed a small English sentence, a tiny ring with "No workouts" and unequal pills, side by side with the board.
+- Consequence: `TodayUITests.testHomeMatchesTheBoardInDarkAndLightDanishAndEnglish` attaches Home screenshots for da/en and dark/light; compare them to the board before merging.
+
 ## 2026-11-03 P15-68: Settings and Notifications on the shared header, Health empty state
 
 - Decision: Settings uses `JarvisPageHeader` (title, refresh, sidebar button). The notifications sheet draws its own header in content (bold title, Clear all, close) and hides the navigation bar, so there is one background and the close button is a centred circle. Group rows swipe left to dismiss, with a VoiceOver action as the alternative. Health shows an empty state (`health.notAuthorised`, da and en) and no headline when the backend reports no readable sources, for example while the HealthKit entitlement is off.

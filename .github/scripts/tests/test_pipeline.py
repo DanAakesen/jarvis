@@ -911,7 +911,9 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn(".accessibilityHidden(!isOpen)", sidebar)
         self.assertIn("navigation.closeSidebar()", sidebar)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        composer_background = chat.split("Color.clear\n                    .jarvisGlassSurface", 1)[1].split("            }", 1)[0]
+        self.assertIn("JarvisComposerBar(", chat)
+        composer_bar = (ROOT / "apps/ios/Jarvis/JarvisComposerBar.swift").read_text()
+        composer_background = composer_bar.split("Color.clear\n                .jarvisGlassSurface", 1)[1].split("        }", 1)[0]
         self.assertIn(".allowsHitTesting(false)", composer_background)
         self.assertIn(".accessibilityHidden(true)", composer_background)
         self.assertIn("#selector(UIResponder.resignFirstResponder)", gate)

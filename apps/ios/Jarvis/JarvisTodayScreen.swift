@@ -27,10 +27,12 @@ struct JarvisTodayScreen: View {
     let onVoice: () -> Void
 
     @State private var tab: Tab = .today
-    @State private var nextExpanded = false
     @State private var listExpanded = false
     @State private var sheet: Sheet?
     @State private var draft = ""
+    @StateObject private var dictation = ChatDictation()
+    @State private var dictationFailed = false
+    @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 32
     @FocusState private var composerFocused: Bool
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
@@ -48,12 +50,10 @@ struct JarvisTodayScreen: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("today.offline")
                 }
-                nextUp
-                agenda
                 quickActions
+                agenda
             }
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            .padding(.top, 4)
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
@@ -65,14 +65,9 @@ struct JarvisTodayScreen: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisSidebarMenuButton(language: language)
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
-        .jarvisAmbientBackground(transparentNavigationBar: true)
+        .toolbar(.hidden, for: .navigationBar)
+        .jarvisAmbientBackground()
+        .onDisappear { dictation.stop() }
         .task {
             await model.refresh()
 #if targetEnvironment(simulator)
@@ -94,8 +89,8 @@ struct JarvisTodayScreen: View {
         let value = model.greeting(language: language)
         return JarvisTodayShimmer(isAnimated: !fixtureMode && !reduceMotion) {
             Text(attributedGreeting(value))
-            .font(.title2.weight(.semibold))
-            .fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: greetingSize, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
@@ -114,37 +109,94 @@ struct JarvisTodayScreen: View {
         return result
     }
 
-    // MARK: Next up
+    // MARK: Day list and tasks
 
-    private var nextUp: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(copy(.nextUp))
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            if calendarSection.value == nil, calendarSection.isLoading {
-                loadingRow
-            } else if let entries = calendarSection.value {
-                if entries.isEmpty {
-                    statusRow(copy(.nothingPlanned), systemImage: "calendar")
-                } else {
-                    let expansion = JarvisTodayExpansion(total: entries.count, isExpanded: nextExpanded)
-                    VStack(spacing: 0) {
-                        ForEach(Array(entries.prefix(expansion.visible))) { entry in
-                            calendarRow(entry)
-                        }
-                    }
-                    expandButton(
-                        expansion: expansion,
-                        isExpanded: nextExpanded,
-                        identifier: "today.next.expand"
-                    ) { nextExpanded.toggle() }
+    private enum DayRow: Identifiable {
+        case entry(JarvisTodayCalendarEntry)
+        case task(VaultTask)
+
+        var id: String {
+            switch self {
+            case .entry(let entry): "entry.\(entry.id)"
+            case .task(let task): "task.\(task.id)"
+            }
+        }
+    }
+
+    private var calendarSection: JarvisTodaySection<[JarvisTodayCalendarEntry]> { model.calendar }
+
+    private var taskLists: JarvisTodayTaskLists? { model.taskData.value?.lists }
+
+    private var agenda: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                tabControl
+                plusMenu
+            }
+            dayCard
+        }
+        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: tab)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(copy(.agendaAndTasks))
+        .accessibilityIdentifier("today.agenda")
+    }
+
+    private var tabControl: some View {
+        let today = rows(for: .today).count
+        let due = taskLists?.due.count
+        return JarvisTabStrip(
+            title: copy(.agendaAndTasks),
+            identifierPrefix: "today.tab",
+            items: [
+                JarvisTabItem(tag: Tab.today, title: "\(copy(.tabToday)) \(today)", identifier: "today.tab.today"),
+                JarvisTabItem(
+                    tag: Tab.due,
+                    title: due.map { "\(copy(.tabDue)) \($0)" } ?? copy(.tabDue),
+                    identifier: "today.tab.due"
+                ),
+            ],
+            selection: $tab
+        )
+        .onChange(of: tab) { listExpanded = false }
+    }
+
+    private func rows(for value: Tab) -> [DayRow] {
+        switch value {
+        case .today:
+            let entries = JarvisTodayAgenda.upcoming(calendarSection.value ?? [], now: model.now).map(DayRow.entry)
+            return entries + (taskLists?.today ?? []).map(DayRow.task)
+        case .due:
+            return (taskLists?.due ?? []).map(DayRow.task)
+        }
+    }
+
+    private var dayCard: some View {
+        let visibleRows = rows(for: tab)
+        let expansion = JarvisTodayExpansion(total: visibleRows.count, isExpanded: listExpanded)
+        return VStack(alignment: .leading, spacing: 6) {
+            if tab == .today { calendarIssue }
+            taskIssue
+            if visibleRows.isEmpty {
+                if !isLoadingRows, !hasRowIssue {
+                    statusRow(
+                        copy(tab == .today ? .nothingToday : .nothingDue),
+                        systemImage: tab == .today ? "calendar" : "checklist"
+                    )
                 }
             } else {
-                statusRow(
-                    copy(calendarSection.failure == .unavailable ? .calendarUnavailable : .loadFailed),
-                    systemImage: "calendar.badge.exclamationmark",
-                    retry: calendarSection.failure != .unavailable
-                )
+                VStack(spacing: 0) {
+                    ForEach(Array(visibleRows.prefix(expansion.visible))) { row in
+                        switch row {
+                        case .entry(let entry): calendarRow(entry)
+                        case .task(let task): taskRow(task)
+                        }
+                    }
+                }
+                expandButton(
+                    expansion: expansion,
+                    isExpanded: listExpanded,
+                    identifier: "today.list.expand"
+                ) { listExpanded.toggle() }
             }
         }
         .padding(.horizontal, 14)
@@ -155,7 +207,45 @@ struct JarvisTodayScreen: View {
         .accessibilityIdentifier("today.nextUp")
     }
 
-    private var calendarSection: JarvisTodaySection<[JarvisTodayCalendarEntry]> { model.calendar }
+    private var isLoadingRows: Bool {
+        (tab == .today && calendarSection.value == nil && calendarSection.isLoading)
+            || (model.taskData.value == nil && model.taskData.isLoading)
+    }
+
+    private var hasRowIssue: Bool {
+        (tab == .today && calendarSection.value == nil && !calendarSection.isLoading)
+            || (model.taskData.value == nil && !model.taskData.isLoading)
+    }
+
+    @ViewBuilder
+    private var calendarIssue: some View {
+        if calendarSection.value == nil {
+            if calendarSection.isLoading {
+                loadingRow
+            } else {
+                statusRow(
+                    copy(calendarSection.failure == .unavailable ? .calendarUnavailable : .loadFailed),
+                    systemImage: "calendar.badge.exclamationmark",
+                    retry: calendarSection.failure != .unavailable
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var taskIssue: some View {
+        if model.taskData.value == nil, !(tab == .today && calendarSection.value == nil && calendarSection.isLoading) {
+            if model.taskData.isLoading {
+                loadingRow
+            } else {
+                statusRow(
+                    copy(model.taskData.failure == .unavailable ? .tasksUnavailable : .loadFailed),
+                    systemImage: "exclamationmark.triangle",
+                    retry: model.taskData.failure != .unavailable
+                )
+            }
+        }
+    }
 
     private func calendarRow(_ entry: JarvisTodayCalendarEntry) -> some View {
         let notes = model.correlatedNotes(for: entry)
@@ -172,7 +262,11 @@ struct JarvisTodayScreen: View {
                         Text(location).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
+                Text(relativeStart(entry))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             ForEach(notes) { note in
                 Label(note.title, systemImage: "note.text")
@@ -188,74 +282,15 @@ struct JarvisTodayScreen: View {
         .accessibilityIdentifier("today.entry.\(entry.id)")
     }
 
-    // MARK: Agenda
-
-    private var taskLists: JarvisTodayTaskLists? { model.taskData.value?.lists }
-
-    private var visibleTasks: [VaultTask] {
-        guard let lists = taskLists else { return [] }
-        return tab == .today ? lists.today : lists.due
-    }
-
-    private var agenda: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                tabButton(.today, title: copy(.tabToday), count: taskLists?.today.count)
-                tabButton(.due, title: copy(.tabDue), count: taskLists?.due.count)
-                Spacer(minLength: 0)
-                plusMenu
-            }
-            if model.taskData.value == nil, model.taskData.isLoading {
-                loadingRow
-            } else if taskLists != nil {
-                let tasks = visibleTasks
-                if tasks.isEmpty {
-                    statusRow(copy(tab == .today ? .nothingToday : .nothingDue), systemImage: "checklist")
-                } else {
-                    let expansion = JarvisTodayExpansion(total: tasks.count, isExpanded: listExpanded)
-                    VStack(spacing: 0) {
-                        ForEach(Array(tasks.prefix(expansion.visible))) { task in
-                            taskRow(task)
-                        }
-                    }
-                    expandButton(
-                        expansion: expansion,
-                        isExpanded: listExpanded,
-                        identifier: "today.list.expand"
-                    ) { listExpanded.toggle() }
-                }
-            } else {
-                statusRow(
-                    copy(model.taskData.failure == .unavailable ? .tasksUnavailable : .loadFailed),
-                    systemImage: "exclamationmark.triangle",
-                    retry: model.taskData.failure != .unavailable
-                )
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: tab)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy(.agendaAndTasks))
-        .accessibilityIdentifier("today.agenda")
-    }
-
-    private func tabButton(_ value: Tab, title: String, count: Int?) -> some View {
-        let label = count.map { "\(title) \($0)" } ?? title
-        return JarvisLabelledButton(
-            title: label,
-            identifier: value == .today ? "today.tab.today" : "today.tab.due",
-            isSelected: tab == value
-        ) {
-            tab = value
-            listExpanded = false
-        }
+    private func relativeStart(_ entry: JarvisTodayCalendarEntry) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = language.locale
+        formatter.unitsStyle = .short
+        return formatter.localizedString(for: entry.start, relativeTo: model.now)
     }
 
     private var plusMenu: some View {
-        JarvisComposerMenuButton(title: copy(.add), systemImage: "plus", identifier: "today.plus") {
+        JarvisMenuButton(title: copy(.add), systemImage: "plus", identifier: "today.plus") {
             Button(copy(.newTask), systemImage: "checklist") { present(.task) }
                 .accessibilityIdentifier("today.plus.task")
             Button(copy(.newNote), systemImage: "note.text") { present(.note) }
@@ -364,39 +399,21 @@ struct JarvisTodayScreen: View {
 
     private var quickActions: some View {
         HStack(spacing: 10) {
-            quickAction(
+            JarvisTileButton(
                 title: copy(.logWorkout),
                 subtitle: model.lastWorkoutText(language: language),
                 systemImage: "figure.strengthtraining.traditional",
                 identifier: "today.logWorkout"
             ) { sheet = .workout }
-            quickAction(
+            JarvisTileButton(
                 title: copy(.logLift),
-                subtitle: nil,
+                subtitle: model.lastLiftText(language: language),
                 systemImage: "dumbbell",
                 identifier: "today.logLift"
             ) { sheet = .lift }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(copy(.quickActions))
-    }
-
-    private func quickAction(
-        title: String,
-        subtitle: String?,
-        systemImage: String,
-        identifier: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        JarvisLabelledButton(
-            title: title,
-            subtitle: subtitle,
-            systemImage: systemImage,
-            identifier: identifier,
-            isFullWidth: true,
-            isLeading: true,
-            action: action
-        )
     }
 
     // MARK: Composer
@@ -413,61 +430,98 @@ struct JarvisTodayScreen: View {
         onChat(JarvisChatHandoff(text: text))
     }
 
-    /// The Chat composer: text field above one trailing control, voice while empty and send while
-    /// typing, inside the same glass surface with the animated rim.
-    private var composer: some View {
-        VStack(spacing: 0) {
-            TextField(
-                JarvisChatLocalization.string(.messagePlaceholder, language: language),
-                text: $draft,
-                axis: .vertical
-            )
-            .font(.body)
-            .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
-            .focused($composerFocused)
-            .submitLabel(.send)
-            .onSubmit(sendDraft)
-            .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
-            .padding(.top, JarvisDesignTokens.chatComposerTextInset)
-            .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
-            .accessibilityLabel(JarvisChatLocalization.string(.messagePlaceholder, language: language))
-            .accessibilityIdentifier("today.input")
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                if canSend {
-                    JarvisComposerIconButton(
-                        title: JarvisChatLocalization.string(.sendMessage, language: language),
-                        systemImage: "paperplane.fill",
-                        identifier: "today.send",
-                        action: sendDraft
-                    )
-                } else {
-                    JarvisOrbButton(
-                        title: JarvisChatLocalization.string(.voiceMode, language: language),
-                        identifier: "today.voice",
-                        isStatic: true,
-                        action: onVoice
-                    )
-                    .jarvisCarryOver(.orb)
-                }
+    private func chatCopy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: language)
+    }
+
+    private func toggleDictation() {
+        if dictation.isListening {
+            dictation.stop()
+            return
+        }
+        Task {
+            guard await ChatDictation.requestAccess() else {
+                dictationFailed = true
+                return
+            }
+            do {
+                try dictation.start(
+                    locale: Locale(identifier: language == .da ? "da-DK" : "en-GB"),
+                    base: draft
+                ) { draft = $0 }
+                dictationFailed = false
+            } catch {
+                dictationFailed = true
             }
         }
-        .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
-        .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
-        .background {
-            Color.clear
-                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
-                .jarvisRim(
-                    cornerRadius: JarvisDesignTokens.surfaceRadius,
-                    state: canSend ? .typing : .idle,
-                    isAnimated: !fixtureMode && !reduceMotion
-                )
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+    }
+
+    /// The Chat composer itself (`JarvisComposerBar`): plus on the left, dictation and voice on the right, voice
+    /// becoming send while typing.
+    private var composer: some View {
+        VStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
+            if dictationFailed {
+                Label(chatCopy(.dictationUnavailable), systemImage: "mic.slash")
+                    .font(.footnote)
+                    .foregroundStyle(Color.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+                    .accessibilityIdentifier("today.dictation.error")
+            }
+            JarvisComposerBar(
+                placeholder: chatCopy(.messagePlaceholder),
+                text: $draft,
+                isFocused: $composerFocused,
+                inputIdentifier: "today.input",
+                rimState: dictation.isListening ? .listening : (canSend ? .typing : .idle),
+                isRimAnimated: !fixtureMode && !reduceMotion,
+                waveformLevels: dictation.isListening ? dictation.levels : nil,
+                onSubmit: sendDraft,
+                header: { EmptyView() },
+                leading: {
+                    JarvisComposerMenuButton(
+                        title: copy(.add),
+                        systemImage: "plus",
+                        identifier: "today.composer.plus"
+                    ) {
+                        Button(copy(.newTask), systemImage: "checklist") { present(.task) }
+                            .accessibilityIdentifier("today.composer.task")
+                        Button(copy(.newNote), systemImage: "note.text") { present(.note) }
+                            .accessibilityIdentifier("today.composer.note")
+                    }
+                },
+                actions: {
+                    JarvisComposerIconButton(
+                        title: chatCopy(dictation.isListening ? .stopDictation : .dictate),
+                        systemImage: dictation.isListening ? "stop.circle.fill" : "mic",
+                        identifier: "today.dictate",
+                        isDisabled: fixtureMode,
+                        action: toggleDictation
+                    )
+                    if canSend {
+                        JarvisComposerIconButton(
+                            title: chatCopy(.sendMessage),
+                            systemImage: "paperplane.fill",
+                            identifier: "today.send",
+                            action: {
+                                dictation.stop()
+                                sendDraft()
+                            }
+                        )
+                    } else {
+                        JarvisComposerIconButton(
+                            title: chatCopy(.voiceMode),
+                            systemImage: "waveform",
+                            identifier: "today.voice",
+                            action: {
+                                dictation.stop()
+                                onVoice()
+                            }
+                        )
+                    }
+                }
+            )
         }
-        .jarvisCarryOver(.composer)
-        .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-        .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
     }
 
     // MARK: Sheets

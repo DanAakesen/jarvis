@@ -24,6 +24,7 @@ final class LocalizedFormatStringTests: XCTestCase {
         "today.greeting.tasks": ["ld"],
         "today.showMore": ["ld"],
         "today.ago.days": ["ld"],
+        "today.ofGoal": ["ld"],
         "workspace.removeQuestion": ["@"],
         "workspace.connectionLabel": ["@"],
         "workspace.openItem": ["@", "@", "@"],
