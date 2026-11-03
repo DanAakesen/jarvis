@@ -1,3 +1,4 @@
+import { createPushLedger } from './push-ledger.js';
 import { EventEmitter } from 'node:events';
 import { connect, type OutgoingHttpHeaders } from 'node:http2';
 import { exportPKCS8, generateKeyPair, jwtVerify } from 'jose';
@@ -238,5 +239,35 @@ describe('chat reply notifications', () => {
     notify({ sessionId: 's1', messageId: 'm1', text: 'Svar', language: 'da' });
     await vi.waitFor(() => expect(removed).toEqual(['cd'.repeat(32)]));
     expect(send).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('one push per event', () => {
+  it('sends a single push when a turn stages an approval and then replies', async () => {
+    const registrations: ApprovalNotificationRegistration[] = [
+      { deviceToken, language: 'en', showActions: true, timeZone },
+    ];
+    const store = { list: async () => registrations, remove: async () => {} } as unknown as ApprovalNotificationStore;
+    const send = vi.fn(async () => ({ accepted: true, invalidToken: false }));
+    const services = { store, sender: { send } };
+    const ledger = createPushLedger();
+    const notifyApproval = createApprovalNotificationDispatcher(
+      'owner', services, { warn: vi.fn() }, Date.now, ledger);
+    const notifyReply = createReplyNotificationDispatcher('owner', services, { warn: vi.fn() }, Date.now, ledger);
+    const turnStartedAt = Date.now() - 1;
+
+    notifyApproval({
+      id: 'B'.repeat(43), actionKind: 'calendar_change', summary: 'Create the meeting.',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    notifyReply({ sessionId: 's1', messageId: 'm1', text: 'Approve the meeting?', language: 'en', turnStartedAt });
+    notifyReply({ sessionId: 's1', messageId: 'm1', text: 'Approve the meeting?', language: 'en', turnStartedAt });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(JSON.parse(send.mock.calls[0]![1].toString()).confirmationID).toBe('B'.repeat(43));
+
+    notifyReply({ sessionId: 's1', messageId: 'm2', text: 'Later reply', language: 'en', turnStartedAt: Date.now() + 1 });
+    notifyReply({ sessionId: 's1', messageId: 'm2', text: 'Later reply', language: 'en', turnStartedAt: Date.now() + 1 });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+    expect(ledger.entries().map(({ key }) => key)).toEqual(['approval:' + 'B'.repeat(43), 'reply:m2']);
   });
 });

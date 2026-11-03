@@ -341,6 +341,95 @@ describe('Now feed API', () => {
     expect(execute).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ['approve', 'completed', /^Done: Move the synthetic meeting to 15:00\. .*\?$/u],
+    ['reject', 'cancelled', /^Okay, I did not make the change: Move the synthetic meeting to 15:00\. .*\?$/u],
+  ] as const)('answers a tapped calendar %s in the chat that proposed it', async (decision, status, text) => {
+    const actions = new PendingGoogleActions();
+    const execute = vi.fn(async () => ({ status }));
+    actions.stage({ scope: 'calendar', sourceSessionId: '7', sourceMessageId: '42',
+      summary: 'Move the synthetic meeting to 15:00.', execute });
+    const card = actions.pendingBrowserConfirmations()[0]!;
+    const addMessage = vi.fn(async (input: { text: string }) => ({ id: '99', ...input }));
+    const conversationStore = {
+      getSession: vi.fn(async () => ({ id: '7', language: 'en' })), addMessage,
+    } as unknown as NonNullable<Parameters<typeof buildApp>[2]>['conversationStore'];
+    const notifyReply = vi.fn();
+    const app = buildApp(config, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+      modules: [coreModule, createGoogleModule({ request: vi.fn() }, {
+        timeZone: 'Europe/Copenhagen', pendingActions: actions,
+      })],
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) },
+      conversationStore, notifyReply,
+    });
+    apps.push(app);
+    const response = await app.inject({ method: 'POST', url: `/now/confirmations/${card.id}`, headers,
+      payload: { decision } });
+    expect(response.statusCode).toBe(204);
+    expect(addMessage).toHaveBeenCalledOnce();
+    expect(addMessage.mock.calls[0]![0]).toMatchObject({ sessionId: '7', role: 'jarvis', language: 'en' });
+    expect(addMessage.mock.calls[0]![0].text).toMatch(text);
+    expect(notifyReply).not.toHaveBeenCalled();
+  });
+
+  it('states an unverified calendar outcome in the chat and asks to check', async () => {
+    const actions = new PendingGoogleActions();
+    actions.stage({ scope: 'calendar', sourceSessionId: '7', sourceMessageId: '42',
+      summary: 'Create the meeting.', execute: vi.fn(async () => { throw new Error('provider'); }) });
+    const card = actions.pendingBrowserConfirmations()[0]!;
+    const addMessage = vi.fn(async (input: { text: string }) => ({ id: '99', ...input }));
+    const conversationStore = {
+      getSession: vi.fn(async () => ({ id: '7', language: 'da' })), addMessage,
+    } as unknown as NonNullable<Parameters<typeof buildApp>[2]>['conversationStore'];
+    const app = buildApp(config, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' }),
+      modules: [coreModule, createGoogleModule({ request: vi.fn() }, {
+        timeZone: 'Europe/Copenhagen', pendingActions: actions,
+      })],
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) },
+      conversationStore,
+    });
+    apps.push(app);
+    const response = await app.inject({ method: 'POST', url: `/now/confirmations/${card.id}`, headers,
+      payload: { decision: 'approve' } });
+    expect(response.statusCode).toBe(502);
+    expect(addMessage.mock.calls[0]![0].text).toContain('Jeg kan ikke bekræfte');
+    expect(addMessage.mock.calls[0]![0].text.endsWith('?')).toBe(true);
+  });
+
+  it.each(['owner', 'agent', 'other', 'anonymous'])('gates dismiss, dismiss group and clear all for %s', async (identity) => {
+    const dismiss = vi.fn(async () => true);
+    const dismissGroup = vi.fn(async () => 4);
+    const dismissAll = vi.fn(async () => 9);
+    const app = buildApp(config, undefined, {
+      auth: async () => identity === 'agent'
+        ? { kind: 'jarvis-agent', objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }
+        : { objectId: identity === 'other' ? 'other-owner' : config.auth.ownerObjectId,
+          tenantId: config.auth.tenantId, displayName: 'Dan' },
+      nowFeedStore: { read: vi.fn(async () => feed), dismiss, dismissGroup, dismissAll },
+    });
+    apps.push(app);
+    const call = (url: string) => app.inject({ method: 'POST', url, ...(identity === 'anonymous' ? {} : { headers }) });
+    const owner = identity === 'owner';
+    const denied = identity === 'anonymous' ? 401 : 403;
+    const one = await call('/now/activity/7/dismiss');
+    const group = await call('/now/activity/groups/alert/dismiss');
+    const all = await call('/now/activity/clear');
+    expect(one.statusCode).toBe(owner ? 204 : denied);
+    expect(group.statusCode).toBe(owner ? 200 : denied);
+    expect(all.statusCode).toBe(owner ? 200 : denied);
+    expect(dismiss).toHaveBeenCalledTimes(owner ? 1 : 0);
+    expect(dismissGroup).toHaveBeenCalledTimes(owner ? 1 : 0);
+    expect(dismissAll).toHaveBeenCalledTimes(owner ? 1 : 0);
+    if (owner) {
+      expect(group.json()).toEqual({ dismissed: 4 });
+      expect(all.json()).toEqual({ dismissed: 9 });
+      expect(dismissGroup).toHaveBeenCalledWith('alert');
+      expect((await call('/now/activity/groups/unknown/dismiss')).statusCode).toBe(400);
+    }
+  });
+
   it('refuses browser approvals and presence updates from a different authenticated identity', async () => {
     const markPresent = vi.fn();
     const resolveBrowserConfirmation = vi.fn();
