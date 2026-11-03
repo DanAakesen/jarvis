@@ -224,6 +224,8 @@
 "insights.editorBudget" = "Monthly budget (DKK)";
 "insights.editorFeeds" = "News feeds";
 "insights.editorFeedsPlaceholder" = "One https link per line";
+"insights.editorAddFeed" = "Add feed";
+"insights.editorRemoveFeed" = "Remove feed";
 "insights.editorGuidance" = "Guidance";
 "insights.editorGuidanceCount" = "%1$d / %2$d";
 "insights.editorPreferences" = "Preferences";
