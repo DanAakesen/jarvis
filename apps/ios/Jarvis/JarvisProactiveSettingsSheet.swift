@@ -145,14 +145,12 @@ struct JarvisProactiveSettingsSheet: View {
                     Text(text(.editorCategories))
                 }
                 Section {
-                    Picker(text(.editorScope), selection: draft(\.scope, fallback: .all)) {
-                        ForEach(JarvisProactiveScope.allCases) { scope in
-                            Text(text(scope.localizationKey)).tag(scope)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.large)
-                    .accessibilityIdentifier("proactive.edit.scope")
+                    JarvisTabStrip(
+                        title: text(.editorScope),
+                        identifierPrefix: "proactive.edit.scope",
+                        items: JarvisProactiveScope.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                        selection: draft(\.scope, fallback: .all)
+                    )
                 } header: {
                     Text(text(.editorScope))
                 }
@@ -260,18 +258,12 @@ struct JarvisProactiveSettingsSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
                         if editor?.canRetry == true {
-                            Button(action: save) {
-                                Label(text(.editorRetrySave), systemImage: "arrow.clockwise")
-                                    .labelStyle(.iconOnly)
-                                    .frame(
-                                        minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                                        minHeight: JarvisDesignTokens.chatMinimumTapTarget
-                                    )
-                                    .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.glass)
-                            .accessibilityLabel(text(.editorRetrySave))
-                            .accessibilityIdentifier("proactive.edit.retry")
+                            JarvisIconButton(
+                                title: text(.editorRetrySave),
+                                systemImage: "arrow.clockwise",
+                                identifier: "proactive.edit.retry",
+                                action: save
+                            )
                         }
                     case .idle:
                         EmptyView()

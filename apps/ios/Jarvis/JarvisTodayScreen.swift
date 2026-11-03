@@ -70,6 +70,7 @@ struct JarvisTodayScreen: View {
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSidebarMenuButton(language: language)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .jarvisAmbientBackground(transparentNavigationBar: true)
         .task { await model.refresh() }
@@ -241,46 +242,23 @@ struct JarvisTodayScreen: View {
 
     private func tabButton(_ value: Tab, title: String, count: Int?) -> some View {
         let label = count.map { "\(title) \($0)" } ?? title
-        return Button {
+        return JarvisLabelledButton(
+            title: label,
+            identifier: value == .today ? "today.tab.today" : "today.tab.due",
+            isSelected: tab == value
+        ) {
             tab = value
             listExpanded = false
-        } label: {
-            Text(label)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .padding(.horizontal, 12)
-                .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                .foregroundStyle(tab == value ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(tab == value ? .isSelected : [])
-        .accessibilityIdentifier(value == .today ? "today.tab.today" : "today.tab.due")
     }
 
     private var plusMenu: some View {
-        Menu {
+        JarvisComposerMenuButton(title: copy(.add), systemImage: "plus", identifier: "today.plus") {
             Button(copy(.newTask), systemImage: "checklist") { present(.task) }
                 .accessibilityIdentifier("today.plus.task")
             Button(copy(.newNote), systemImage: "note.text") { present(.note) }
                 .accessibilityIdentifier("today.plus.note")
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
-                .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .tint(JarvisDesignTokens.secondaryAccent)
-        .menuOrder(.fixed)
-        .accessibilityLabel(copy(.add))
-        .accessibilityIdentifier("today.plus")
     }
 
     private func present(_ value: Sheet) {
@@ -292,21 +270,11 @@ struct JarvisTodayScreen: View {
 
     private func taskRow(_ task: VaultTask) -> some View {
         HStack(spacing: 4) {
-            Button {
-                Task { await model.complete(task) }
-            } label: {
-                Image(systemName: "circle")
-                    .font(.system(size: JarvisDesignTokens.chatComposerIconSize))
-                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                    .frame(
-                        width: JarvisDesignTokens.chatMinimumTapTarget,
-                        height: JarvisDesignTokens.chatMinimumTapTarget
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(copy(.markDone)): \(task.text)")
-            .accessibilityIdentifier("today.task.done.\(task.id)")
+            JarvisIconButton(
+                title: "\(copy(.markDone)): \(task.text)",
+                systemImage: "circle",
+                identifier: "today.task.done.\(task.id)"
+            ) { Task { await model.complete(task) } }
             VStack(alignment: .leading, spacing: 0) {
                 Text(task.text).font(.body).lineLimit(2)
                 if let due = dueText(task) {
@@ -342,28 +310,20 @@ struct JarvisTodayScreen: View {
     ) -> some View {
         Group {
             if expansion.hidden > 0 {
-                Button {
+                JarvisLabelledButton(
+                    title: isExpanded
+                        ? copy(.showLess)
+                        : JarvisTodayLocalization.string(.showMore, count: expansion.hidden, language: language),
+                    trailingSystemImage: isExpanded ? "chevron.up" : "chevron.down",
+                    identifier: identifier,
+                    isFullWidth: true
+                ) {
                     if reduceMotion {
                         action()
                     } else {
                         withAnimation(.snappy(duration: 0.3), action)
                     }
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(isExpanded
-                             ? copy(.showLess)
-                             : JarvisTodayLocalization.string(.showMore, count: expansion.hidden, language: language))
-                        Image(systemName: "chevron.down")
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                            .accessibilityHidden(true)
-                    }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                    .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(identifier)
             }
         }
     }
@@ -387,20 +347,11 @@ struct JarvisTodayScreen: View {
             Text(text).font(.subheadline).foregroundStyle(.secondary)
             Spacer(minLength: 0)
             if retry {
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                        .frame(
-                            width: JarvisDesignTokens.chatMinimumTapTarget,
-                            height: JarvisDesignTokens.chatMinimumTapTarget
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.retry))
-                .accessibilityIdentifier("today.retry")
+                JarvisIconButton(
+                    title: copy(.retry),
+                    systemImage: "arrow.clockwise",
+                    identifier: "today.retry"
+                ) { Task { await model.refresh() } }
             }
         }
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
@@ -435,26 +386,15 @@ struct JarvisTodayScreen: View {
         identifier: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    if let subtitle {
-                        Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.glass)
-        .accessibilityLabel(subtitle.map { "\(title). \($0)" } ?? title)
-        .accessibilityIdentifier(identifier)
+        JarvisLabelledButton(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage,
+            identifier: identifier,
+            isFullWidth: true,
+            isLeading: true,
+            action: action
+        )
     }
 
     // MARK: Composer
@@ -474,18 +414,13 @@ struct JarvisTodayScreen: View {
             .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
             .accessibilityLabel(JarvisChatLocalization.string(.messagePlaceholder, language: language))
             .accessibilityIdentifier("today.input")
-            Button(action: onVoice) {
-                JarvisMiniCoreView(activity: .calm, diameter: 28, isStatic: true)
-                    .jarvisCarryOver(.orb)
-                    .frame(
-                        width: JarvisDesignTokens.chatMinimumTapTarget,
-                        height: JarvisDesignTokens.chatMinimumTapTarget
-                    )
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(JarvisChatLocalization.string(.voiceMode, language: language))
-            .accessibilityIdentifier("today.voice")
+            JarvisOrbButton(
+                title: JarvisChatLocalization.string(.voiceMode, language: language),
+                identifier: "today.voice",
+                isStatic: true,
+                action: onVoice
+            )
+            .jarvisCarryOver(.orb)
         }
         .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
         .background {

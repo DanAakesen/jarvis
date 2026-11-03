@@ -727,14 +727,14 @@ class SafeFailureTests(unittest.TestCase):
         button = source.split("struct JarvisSidebarMenuButton: View {", 1)[1].split(
             "enum JarvisDesignTokens", 1
         )[0]
-        label = button.split("} label: {", 1)[1].split(
-            ".jarvisToolbarButtonStyle()", 1
-        )[0]
-        self.assertLess(label.index(".frame("), label.index(".contentShape(Rectangle())"))
-        self.assertIn("width: JarvisDesignTokens.chatMinimumTapTarget", label)
-        self.assertIn("height: JarvisDesignTokens.chatMinimumTapTarget", label)
+        self.assertIn("JarvisIconButton(", button)
+        controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
+        glyph = controls.split("private struct JarvisControlGlyph: View {", 1)[1].split("private extension View", 1)[0]
+        self.assertLess(glyph.index(".frame(width:"), glyph.index(".contentShape(Circle())"))
+        self.assertIn("width: JarvisDesignTokens.iconButtonDiameter", glyph)
+        self.assertIn("height: JarvisDesignTokens.iconButtonDiameter", glyph)
         self.assertIn("static let chatMinimumTapTarget: CGFloat = 44", source)
-        self.assertIn("buttonStyle(.plain)", source)
+        self.assertIn("buttonStyle(.plain)", controls)
 
     def test_ios_physical_menu_tap_opens_real_drawer_within_two_seconds(self):
         project = load_workflow(ROOT / "apps/ios/project.yml")
@@ -787,11 +787,10 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("import JarvisCore", design)
         button = design.split("struct JarvisSidebarMenuButton: View {", 1)[1].split("enum JarvisDesignTokens", 1)[0]
         for required in ('@EnvironmentObject private var navigation: JarvisNavigationModel',
-                         'navigation.openSidebar()', '"sidebar.trailing"', "chatMinimumTapTarget",
-                         "contentShape(Rectangle())", "jarvisToolbarButtonStyle()",
-                         "string(.openSidebar, language: language)", '"navigation.openSidebar"'):
+                         'navigation.openSidebar()', '"sidebar.trailing"',
+                         "JarvisIconButton(", "string(.openSidebar, language: language)", '"navigation.openSidebar"'):
             self.assertIn(required, button)
-        self.assertRegex(button, r"Button \{\s+navigation\.openSidebar\(\)\s+\} label:")
+        self.assertRegex(button, r"\) \{\s+navigation\.openSidebar\(\)\s+\}")
         self.assertNotIn("let action", button)
         for area in ("Notes", "Health", "Factory"):
             source = (ROOT / f"apps/ios/Jarvis/Jarvis{area}Area.swift").read_text()
@@ -806,7 +805,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("ToolbarItemGroup(placement: .topBarTrailing)", chat)
         self.assertEqual(chat.count("ToolbarItem(placement: .topBarTrailing)"), 2)
         self.assertIn("ToolbarSpacer(.fixed, placement: .topBarTrailing)", chat)
-        self.assertLess(chat.index('.accessibilityIdentifier("chat.notifications")'),
+        self.assertLess(chat.index('identifier: "chat.notifications"'),
                         chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"))
         self.assertLess(chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"),
                         chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
@@ -816,6 +815,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(chat.count("ToolbarItem(placement: .topBarLeading)"), 1)
         self.assertIn("if let onBackToToday {\n                ToolbarItem(placement: .topBarLeading)", chat)
         self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
+        self.assertEqual(chat.count(".sharedBackgroundVisibility(.hidden)"), 3)
         self.assertNotIn("onOpenSidebar", chat)
         self.assertNotIn("showsSidebarToolbarButton", chat)
         tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
@@ -1125,7 +1125,8 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("segmentSwitcher", header_body)
         bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
         self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
-        self.assertIn(".pickerStyle(.segmented)", area)
+        self.assertIn("JarvisTabStrip(", area)
+        self.assertNotIn(".pickerStyle(.segmented)", area)
         self.assertIn("guard !more || !liftsLoading", area)
         self.assertIn("guard liftLoadID == loadID else { return }", area)
         log = (ROOT / "apps/ios/Jarvis/JarvisHealthLiftLog.swift").read_text()
@@ -1212,31 +1213,31 @@ class SafeFailureTests(unittest.TestCase):
             self.assertIn("Missing simulator capture:", result.stderr)
 
     def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
-        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
-        style = design.split("func jarvisToolbarButtonStyle()", 1)[1].split("\n    }", 1)[0]
-        self.assertIn("buttonStyle(.plain)", style)
-        for surface in (".background(", ".overlay(", ".glassEffect(", ".stroke("):
-            self.assertNotIn(surface, style)
+        controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
+        chrome = controls.split("private extension View {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("buttonStyle(.plain)", chrome)
+        self.assertIn(".jarvisGlassCircle()", chrome)
+        self.assertIn("JarvisDesignTokens.iconButtonDiameter", chrome)
+        self.assertIn("static let iconButtonDiameter: CGFloat = 48", (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text())
         for filename in ("JarvisChatScreen.swift", "JarvisActivitySheet.swift"):
             source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
             toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
             with self.subTest(filename=filename):
-                self.assertIn(".jarvisToolbarButtonStyle()", toolbar)
-                self.assertNotIn(".buttonStyle(.glass)", toolbar)
+                self.assertIn("JarvisIconButton(", toolbar)
+                # Every toolbar item hides the system container so only our one circle glass shows.
+                self.assertIn(".sharedBackgroundVisibility(.hidden)", toolbar)
+                self.assertNotIn(".buttonStyle(", toolbar)
                 self.assertNotIn(".glassEffect(", toolbar)
-        self.assertIn('Image(systemName: "xmark")', source)
-        self.assertIn("Button { dismiss() } label:", source)
-        self.assertIn(".accessibilityLabel(copy(.done))", source)
-        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", source)
-        self.assertNotIn('Button("Done")', source)
+        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
+        self.assertIn('systemImage: "xmark"', sheet)
+        self.assertIn("title: copy(.done)", sheet)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertIn('Text(displayedNeedsYouCount > 99 ? "99+" : "\\(displayedNeedsYouCount)")', chat)
-        self.assertIn(
-            ".frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)",
-            chat,
-        )
-        self.assertIn(".offset(x: -2, y: 2)", chat)
-        self.assertIn(".foregroundStyle(JarvisDesignTokens.secondaryAccent)", chat)
+        self.assertIn("badge: displayedNeedsYouCount", chat)
+        glyph = controls.split("private struct JarvisControlGlyph: View {", 1)[1]
+        self.assertIn('Text(badge > 99 ? "99+" : "\\(badge)")', glyph)
+        self.assertIn(".frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)", glyph)
+        self.assertIn(".offset(x: -2, y: 2)", glyph)
+        self.assertIn("JarvisDesignTokens.secondaryAccent", glyph)
 
     def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -1299,9 +1300,8 @@ class SafeFailureTests(unittest.TestCase):
             source = (ROOT / "apps/ios/Jarvis" / filename).read_text()
             self.assertIn("JarvisApprovalLocalization.string", source)
             self.assertIn("model.isResolving(confirmation, decision:", source)
-            self.assertIn(".disabled(model.fixtureMode || model.isResolving(confirmation))", source)
-            self.assertIn("minWidth: JarvisDesignTokens.chatMinimumTapTarget", source)
-            self.assertIn("minHeight: JarvisDesignTokens.chatMinimumTapTarget", source)
+            # Both use the shared labelled button, which owns the 44 pt target.
+            self.assertIn("isDisabled: model.fixtureMode || model.isResolving(confirmation)", source)
         sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
         self.assertIn("JarvisApprovalLocalization.string(.approve, language: appLanguage)", sheet)
         self.assertIn("JarvisApprovalLocalization.string(.decline, language: appLanguage)", sheet)
@@ -1353,7 +1353,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("!$0.running.isEmpty", activity_predicate)
         self.assertIn("!$0.items.isEmpty", activity_predicate)
         self.assertNotIn("$0.awayMode", activity_predicate)
-        self.assertIn(".tint(JarvisDesignTokens.secondaryAccent)", screen)
+        self.assertIn("JarvisComposerMenuButton(", screen)
         self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
         self.assertIn('ContentUnavailableView("No activity", systemImage: "checkmark.circle")', sheet)
         self.assertIn("if !items.isEmpty", sheet)

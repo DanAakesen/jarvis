@@ -158,12 +158,13 @@ struct JarvisSettingsEditorView: View {
         .environment(\.locale, language.locale)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(saving ? copy(.saving) : copy(.save)) {
-                    Task { await save() }
-                }
-                .disabled(readOnly || saving || !hasChanges || !validDraft)
-                .accessibilityLabel(saving ? copy(.saving) : copy(.save))
+                JarvisSheetConfirmButton(
+                    title: copy(.save),
+                    isWorking: saving,
+                    isDisabled: readOnly || !hasChanges || !validDraft
+                ) { Task { await save() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if draft.isEmpty {
@@ -417,12 +418,15 @@ struct JarvisSettingsLanguageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button(copy(.save)) {
+                JarvisSheetConfirmButton(
+                    title: copy(.save),
+                    isDisabled: draft == selectedLanguage.rawValue
+                ) {
                     language = draft
                     dismiss()
                 }
-                .disabled(draft == selectedLanguage.rawValue)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 }

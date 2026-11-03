@@ -8,8 +8,8 @@ import SwiftUI
 /// API: ScaledMetric, ButtonStyle.glass, Menu, Text concatenation, accessibilityAddTraits(.isHeader).
 enum JarvisPageHeaderMetrics {
     static let titleSize: CGFloat = 32
-    static let actionSize = JarvisDesignTokens.chatMinimumTapTarget
-    static let actionIconSize: CGFloat = 18
+    static let actionSize = JarvisDesignTokens.iconButtonDiameter
+    static let actionIconSize = JarvisDesignTokens.iconButtonGlyphSize
     static let inset: CGFloat = 16
     static let spacing: CGFloat = 12
     static let actionSpacing: CGFloat = 8
@@ -44,7 +44,6 @@ struct JarvisPageHeader<Actions: View>: View {
             HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
                 actions
                 JarvisSidebarMenuButton(language: language)
-                    .jarvisGlassSurface()
             }
         }
         .padding(.horizontal, JarvisPageHeaderMetrics.inset)
@@ -56,77 +55,6 @@ struct JarvisPageHeader<Actions: View>: View {
 extension JarvisPageHeader where Actions == EmptyView {
     init(title: String, language: JarvisAppLanguage) {
         self.init(title: title, language: language) { EmptyView() }
-    }
-}
-
-private struct JarvisPageActionIcon: View {
-    let systemImage: String
-
-    var body: some View {
-        Image(systemName: systemImage)
-            .font(.system(size: JarvisPageHeaderMetrics.actionIconSize, weight: .medium))
-            .frame(width: JarvisPageHeaderMetrics.actionSize, height: JarvisPageHeaderMetrics.actionSize)
-            .contentShape(Rectangle())
-    }
-}
-
-/// A glass icon button for the title bar, the same 44 pt size as the Chat header buttons.
-struct JarvisPageActionButton: View {
-    let systemImage: String
-    let label: String
-    let identifier: String
-    var isBusy = false
-    var isDisabled = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            if isBusy {
-                ProgressView()
-                    .frame(width: JarvisPageHeaderMetrics.actionSize, height: JarvisPageHeaderMetrics.actionSize)
-            } else {
-                JarvisPageActionIcon(systemImage: systemImage)
-            }
-        }
-        .buttonStyle(.glass)
-        .disabled(isDisabled || isBusy)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(identifier)
-    }
-}
-
-/// A glass icon button that opens a menu (for example the plus chooser).
-struct JarvisPageActionMenu<Content: View>: View {
-    let systemImage: String
-    let label: String
-    let identifier: String
-    var isDisabled = false
-    let content: Content
-
-    init(
-        systemImage: String,
-        label: String,
-        identifier: String,
-        isDisabled: Bool = false,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.systemImage = systemImage
-        self.label = label
-        self.identifier = identifier
-        self.isDisabled = isDisabled
-        self.content = content()
-    }
-
-    var body: some View {
-        Menu {
-            content
-        } label: {
-            JarvisPageActionIcon(systemImage: systemImage)
-        }
-        .buttonStyle(.glass)
-        .disabled(isDisabled)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(identifier)
     }
 }
 
@@ -232,5 +160,54 @@ struct JarvisPageStatGrid: View {
                 .accessibilityLabel("\(stat.label), \(stat.value.formatted(.number.locale(language.locale)))")
             }
         }
+    }
+}
+
+/// The one page scaffold: a transparent top bar with the bold left-aligned title level with trailing glass actions
+/// (`JarvisPageHeader`), then a data-phrase headline slot, a hero slot and a sections slot, on the shared ambient
+/// background. Without a title (Home) there is no top bar and the headline sits at the very top. Chat, Settings and
+/// Voice keep their own patterns. HIG: Navigation bars, Toolbars, Layout. API: ScrollView, ViewBuilder.
+struct JarvisPageScaffold<Actions: View, Headline: View, Hero: View, Sections: View>: View {
+    let title: String?
+    let language: JarvisAppLanguage
+    let actions: Actions
+    let headline: Headline
+    let hero: Hero
+    let sections: Sections
+
+    init(
+        title: String?,
+        language: JarvisAppLanguage,
+        @ViewBuilder actions: () -> Actions,
+        @ViewBuilder headline: () -> Headline,
+        @ViewBuilder hero: () -> Hero,
+        @ViewBuilder sections: () -> Sections
+    ) {
+        self.title = title
+        self.language = language
+        self.actions = actions()
+        self.headline = headline()
+        self.hero = hero()
+        self.sections = sections()
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let title {
+                JarvisPageHeader(title: title, language: language) { actions }
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                    headline
+                    hero
+                    sections
+                }
+                .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+                .padding(.top, title == nil ? JarvisPageHeaderMetrics.spacing : 0)
+                .padding(.bottom, JarvisPageHeaderMetrics.spacing)
+            }
+        }
+        .jarvisAmbientBackground()
+        .toolbar(.hidden, for: .navigationBar)
     }
 }

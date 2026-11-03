@@ -9,6 +9,11 @@ final class InsightsPagesTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// A tab of the shared tab strip: its identifier starts with the strip's prefix and its label is the tab title.
+    private func tab(_ prefix: String, _ label: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", prefix + ".", label)).firstMatch
+    }
+
     private func element(_ id: String) -> XCUIElement {
         app.descendants(matching: .any)[id]
     }
@@ -35,9 +40,9 @@ final class InsightsPagesTests: XCTestCase {
         let total = element("usage.total")
         XCTAssertTrue(total.waitForExistence(timeout: 8))
         let thirtyDays = total.label
-        let range = app.segmentedControls["usage.range"]
+        let range = tab("usage.range", "7 d")
         XCTAssertTrue(range.waitForExistence(timeout: 3))
-        range.buttons["7 d"].tap()
+        range.tap()
         let changed = NSPredicate { _, _ in self.element("usage.total").label != thirtyDays }
         XCTAssertEqual(
             XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: changed, object: nil)], timeout: 6),
@@ -59,9 +64,9 @@ final class InsightsPagesTests: XCTestCase {
         defer { app.terminate() }
         let database = element("status.row.database")
         XCTAssertTrue(database.waitForExistence(timeout: 8))
-        let filter = app.segmentedControls["status.filter"]
+        let filter = tab("status.filter", "Issues")
         XCTAssertTrue(filter.exists)
-        filter.buttons["Issues"].tap()
+        filter.tap()
         let hidden = NSPredicate { _, _ in !self.element("status.row.database").exists }
         XCTAssertEqual(
             XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: hidden, object: nil)], timeout: 6),
@@ -79,23 +84,23 @@ final class InsightsPagesTests: XCTestCase {
         open("status", language: "da")
         defer { app.terminate() }
         XCTAssertTrue(element("status.row.database").waitForExistence(timeout: 8))
-        XCTAssertTrue(app.segmentedControls["status.filter"].buttons["Problemer"].exists)
+        XCTAssertTrue(tab("status.filter", "Problemer").exists)
     }
 
     func testProactiveTabsSwitchBetweenOpenAndEarlier() {
         open("proactive")
         defer { app.terminate() }
         XCTAssertTrue(element("proactive.item.\(firstItem)").waitForExistence(timeout: 8))
-        let tabs = app.segmentedControls["proactive.tabs"]
-        XCTAssertTrue(tabs.exists)
-        tabs.buttons["Earlier"].tap()
+        let earlier = tab("proactive.tabs", "Earlier")
+        XCTAssertTrue(earlier.exists)
+        earlier.tap()
         let gone = NSPredicate { _, _ in !self.element("proactive.item.\(self.firstItem)").exists }
         XCTAssertEqual(
             XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: gone, object: nil)], timeout: 6),
             .completed,
             "The Earlier tab must hide open suggestions"
         )
-        tabs.buttons["Open"].tap()
+        tab("proactive.tabs", "Open").tap()
         XCTAssertTrue(element("proactive.item.\(firstItem)").waitForExistence(timeout: 6))
     }
 

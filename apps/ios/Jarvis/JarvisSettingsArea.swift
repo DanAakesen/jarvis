@@ -138,20 +138,14 @@ struct JarvisSettingsArea: View {
                 .font(.largeTitle.weight(.semibold))
                 .foregroundStyle(.primary)
             Spacer()
-            Button {
+            JarvisIconButton(
+                title: copy(.refresh),
+                systemImage: "arrow.clockwise",
+                identifier: "settings.refresh",
+                isDisabled: loading
+            ) {
                 Task { await reload() }
-            } label: {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: JarvisDesignTokens.settingsIconSize, weight: .medium))
-                    .frame(
-                        width: JarvisDesignTokens.settingsControlHeight,
-                        height: JarvisDesignTokens.settingsControlHeight
-                    )
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.glass)
-            .disabled(loading)
-            .accessibilityLabel(copy(.refresh))
         }
         .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
         .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
@@ -243,33 +237,24 @@ struct JarvisSettingsArea: View {
                     .autocorrectionDisabled()
                     .accessibilityLabel(copy(.search))
                 if !search.isEmpty {
-                    Button {
-                        search = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(copy(.cancel))
+                    JarvisIconButton(
+                        title: copy(.cancel),
+                        systemImage: "xmark.circle.fill",
+                        identifier: "settings.search.clear"
+                    ) { search = "" }
                 }
             }
             .padding(.horizontal, JarvisDesignTokens.settingsSectionSpacing)
             .frame(height: JarvisDesignTokens.settingsControlHeight)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.settingsSearchRadius))
 
-            Button {
+            JarvisIconButton(
+                title: copy(.addDeployment),
+                systemImage: "plus",
+                identifier: "settings.addDeployment"
+            ) {
                 path.append(.newDeployment)
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: JarvisDesignTokens.settingsIconSize, weight: .semibold))
-                    .frame(
-                        width: JarvisDesignTokens.settingsControlHeight,
-                        height: JarvisDesignTokens.settingsControlHeight
-                    )
-                    .contentShape(Circle())
             }
-            .buttonStyle(.glass)
-            .accessibilityLabel(copy(.addDeployment))
         }
         .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
         .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
@@ -281,8 +266,7 @@ struct JarvisSettingsArea: View {
         VStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
             Text(message(for: loadError ?? .offline))
                 .foregroundStyle(.secondary)
-            Button(copy(.retry)) { Task { await reload() } }
-                .buttonStyle(.glass)
+            JarvisLabelledButton(title: copy(.retry)) { Task { await reload() } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

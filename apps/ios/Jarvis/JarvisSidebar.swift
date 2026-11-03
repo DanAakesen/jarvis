@@ -2,14 +2,6 @@ import JarvisCore
 import SwiftUI
 import UIKit
 
-private struct JarvisSidebarButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .opacity(configuration.isPressed ? JarvisDesignTokens.sidebarPressedOpacity : 1)
-            .contentShape(Rectangle())
-    }
-}
-
 /// Reveal container at the app root: the drawer sits behind the page and the page slides sideways to
 /// uncover it. It renders from the root-owned navigation model only (committed state plus the transient
 /// swipe progress), so no screen, sheet, or voice state can leave the page offset or a tap-catcher behind.
@@ -183,7 +175,7 @@ struct JarvisSidebar: View {
                         )
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(JarvisSidebarButtonStyle())
+                .buttonStyle(JarvisPressableRowButtonStyle())
                 .accessibilityLabel(JarvisDestination.settings.localizedTitle(language: language))
                 .focused($settingsFocused)
                 .onHover { settingsHovered = $0 }
@@ -251,7 +243,7 @@ struct JarvisSidebar: View {
             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.sidebarRowHeight)
             .foregroundStyle(rowColor(for: destination, selected: isHighlighted))
         }
-        .buttonStyle(JarvisSidebarButtonStyle())
+        .buttonStyle(JarvisPressableRowButtonStyle())
         .disabled(!destination.isNavigable)
         .accessibilityIdentifier("navigation.\(destination.rawValue)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])

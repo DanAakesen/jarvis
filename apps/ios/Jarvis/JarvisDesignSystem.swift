@@ -2,29 +2,19 @@ import JarvisCore
 import SwiftUI
 import UIKit
 
-extension View {
-    func jarvisToolbarButtonStyle() -> some View {
-        // The system toolbar owns the glass surface; the button adds no second fill.
-        buttonStyle(.plain)
-    }
-}
-
+/// The sidebar button every page carries: the shared icon button.
 struct JarvisSidebarMenuButton: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     let language: JarvisAppLanguage
 
     var body: some View {
-        Button {
+        JarvisIconButton(
+            title: JarvisNotesLocalization.string(.openSidebar, language: language),
+            systemImage: "sidebar.trailing",
+            identifier: "navigation.openSidebar"
+        ) {
             navigation.openSidebar()
-        } label: {
-            Image(systemName: "sidebar.trailing")
-                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                .contentShape(Rectangle())
         }
-        .jarvisToolbarButtonStyle()
-        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-        .accessibilityLabel(JarvisNotesLocalization.string(.openSidebar, language: language))
-        .accessibilityIdentifier("navigation.openSidebar")
     }
 }
 
@@ -146,6 +136,9 @@ enum JarvisDesignTokens {
     /// How far the composer rim's pulse travels outwards before it fades.
     static let rimRippleReach: CGFloat = 7
     static let chatMinimumTapTarget: CGFloat = 44
+    /// The one diameter of every circular icon or menu button, in the Chat header and everywhere else.
+    static let iconButtonDiameter: CGFloat = 48
+    static let iconButtonGlyphSize: CGFloat = 20
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
     static let chatPlusMenuWidth: CGFloat = 272
@@ -208,7 +201,9 @@ enum JarvisDesignTokens {
     static let notesControlHeight: CGFloat = 44
     static let notesRowMinimumHeight: CGFloat = 52
     static let notesIconSize: CGFloat = 18
-    static let notesChipSpacing: CGFloat = 18
+    static let notesChipSpacing: CGFloat = 8
+    static let labelledHorizontalPadding: CGFloat = 16
+    static let labelledVerticalPadding: CGFloat = 10
     static let notesGraphNodeRadius: CGFloat = 5
     static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4
@@ -313,17 +308,12 @@ enum JarvisDesignTokens {
     }
 }
 
-struct JarvisQuietToolbarIconButtonStyle: ButtonStyle {
+/// Row button without chrome: the row dims while pressed. The only custom button style besides the glass ones.
+struct JarvisPressableRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(
-                Color.primary.opacity(
-                    configuration.isPressed
-                        ? JarvisDesignTokens.toolbarQuietActionPressedOpacity
-                        : JarvisDesignTokens.toolbarQuietActionFillOpacity
-                ),
-                in: Circle()
-            )
+            .opacity(configuration.isPressed ? JarvisDesignTokens.sidebarPressedOpacity : 1)
+            .contentShape(Rectangle())
     }
 }
 

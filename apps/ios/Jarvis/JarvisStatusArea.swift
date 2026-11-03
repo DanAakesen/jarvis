@@ -29,23 +29,21 @@ struct JarvisStatusArea: View {
                 title: JarvisDestination.status.localizedTitle(language: language),
                 language: language
             ) {
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "status.refresh",
-                    isDisabled: state.isLoading,
-                    isWorking: state.isLoading && state.snapshot != nil
+                    isBusy: state.isLoading && state.snapshot != nil,
+                    isDisabled: state.isLoading
                 ) { reloadToken += 1 }
             }
-            Picker(text(.statusFilterLabel), selection: $filter) {
-                ForEach(JarvisStatusFilter.allCases) { option in
-                    Text(text(option.localizationKey)).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .controlSize(.large)
+            JarvisTabStrip(
+                title: text(.statusFilterLabel),
+                identifierPrefix: "status.filter",
+                items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $filter
+            )
             .padding(.horizontal)
-            .accessibilityIdentifier("status.filter")
             ScrollView {
                 content
                     .padding(.horizontal)

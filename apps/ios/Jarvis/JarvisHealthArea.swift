@@ -370,17 +370,17 @@ struct JarvisHealthArea: View {
 
     private var header: some View {
         JarvisPageHeader(title: copy.text(.title), language: language) {
-            JarvisPageActionButton(
+            JarvisIconButton(
+                title: copy.text(.refresh),
                 systemImage: "arrow.clockwise",
-                label: copy.text(.refresh),
                 identifier: "health.refresh",
                 isDisabled: isLoading
             ) {
                 refreshVersion += 1
             }
-            JarvisPageActionMenu(
+            JarvisMenuButton(
+                title: copy.text(.log),
                 systemImage: "plus",
-                label: copy.text(.log),
                 identifier: "health.plus"
             ) {
                 Button {
@@ -407,12 +407,15 @@ struct JarvisHealthArea: View {
     }
 
     private var segmentSwitcher: some View {
-        Picker(copy.text(.title), selection: $trackWorkout) {
-            Text(copy.text(.dashboard)).tag(false)
-            Text(copy.text(.trackWorkout)).tag(true)
-        }
-        .pickerStyle(.segmented)
-        .accessibilityIdentifier("health.mode")
+        JarvisTabStrip(
+            title: copy.text(.title),
+            identifierPrefix: "health.mode",
+            items: [
+                JarvisTabItem(tag: false, title: copy.text(.dashboard)),
+                JarvisTabItem(tag: true, title: copy.text(.trackWorkout)),
+            ],
+            selection: $trackWorkout
+        )
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
         .onChange(of: trackWorkout) { _, _ in searchText = "" }
     }
@@ -420,7 +423,7 @@ struct JarvisHealthArea: View {
     private var periodMenu: some View {
         HStack {
             Spacer(minLength: 0)
-            Menu {
+            JarvisLabelledMenu(title: copy.period(periodPreset), identifier: "health.period") {
                 ForEach(JarvisHealthPeriodPreset.allCases) { preset in
                     Button {
                         periodPreset = preset
@@ -432,19 +435,7 @@ struct JarvisHealthArea: View {
                         }
                     }
                 }
-            } label: {
-                HStack(spacing: JarvisDesignTokens.healthMenuSpacing) {
-                    Text(copy.period(periodPreset))
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, JarvisDesignTokens.healthSectionSpacing)
-                .frame(minHeight: JarvisDesignTokens.healthControlHeight)
             }
-            .buttonStyle(.glass)
-            .accessibilityLabel(copy.period(periodPreset))
         }
     }
 
@@ -460,15 +451,11 @@ struct JarvisHealthArea: View {
                     .accessibilityLabel(copy.text(.search))
                     .accessibilityIdentifier("health.search")
                 if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                            .frame(width: JarvisDesignTokens.healthControlHeight, height: JarvisDesignTokens.healthControlHeight)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(copy.text(.clearSearch))
+                    JarvisIconButton(
+                        title: copy.text(.clearSearch),
+                        systemImage: "xmark.circle.fill",
+                        identifier: "health.search.clear"
+                    ) { searchText = "" }
                 }
             }
             .padding(.leading, JarvisDesignTokens.healthSectionSpacing)
@@ -530,16 +517,13 @@ struct JarvisHealthArea: View {
                 .font(.subheadline)
                 .lineLimit(2)
             Spacer(minLength: 0)
-            Button(copy.text(.retry)) {
+            JarvisLabelledButton(title: copy.text(.retry), isDisabled: isLoading) {
                 if client == nil {
                     onRetryConfiguration()
                 } else {
                     refreshVersion += 1
                 }
             }
-            .buttonStyle(.glass)
-            .tint(JarvisDesignTokens.healthAccent)
-            .disabled(isLoading)
         }
         .foregroundStyle(failure == .offline ? .secondary : .primary)
         .accessibilityElement(children: .contain)

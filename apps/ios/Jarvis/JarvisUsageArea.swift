@@ -38,22 +38,20 @@ struct JarvisUsageArea: View {
                 title: JarvisDestination.usage.localizedTitle(language: language),
                 language: language
             ) {
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "usage.refresh",
                     isDisabled: isLoading
                 ) { reloadToken += 1 }
             }
-            Picker(text(.usageRangeLabel), selection: $period) {
-                ForEach(JarvisUsagePeriod.allCases) { option in
-                    Text(text(option.localizationKey)).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .controlSize(.large)
+            JarvisTabStrip(
+                title: text(.usageRangeLabel),
+                identifierPrefix: "usage.range",
+                items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $period
+            )
             .padding(.horizontal)
-            .accessibilityIdentifier("usage.range")
             ScrollView {
                 content
                     .padding(.horizontal)
@@ -146,7 +144,7 @@ struct JarvisUsageArea: View {
                     }
                     Spacer(minLength: 0)
                     if bucket != nil {
-                        JarvisInsightsIconButton(
+                        JarvisIconButton(
                             title: text(.closeSheet),
                             systemImage: "xmark",
                             identifier: "usage.clearSelection"
@@ -183,7 +181,7 @@ struct JarvisUsageArea: View {
                         systemImage: "scissors",
                         tint: JarvisDesignTokens.primaryAccent
                     )
-                    JarvisInsightsIconButton(
+                    JarvisIconButton(
                         title: text(.usageRefreshReport),
                         systemImage: "arrow.clockwise",
                         identifier: "usage.refreshReport"
@@ -299,14 +297,12 @@ struct JarvisUsageArea: View {
     private func breakdown(_ summary: JarvisUsageSummary) -> some View {
         let slices = summary.slices(by: groupBy)
         return JarvisInsightsCard(title: text(.usageBreakdown)) {
-            Picker(text(.usageBreakdown), selection: $groupBy) {
-                ForEach(JarvisUsageGroupBy.allCases) { option in
-                    Text(text(option.localizationKey)).tag(option)
-                }
-            }
-            .pickerStyle(.segmented)
-            .controlSize(.large)
-            .accessibilityIdentifier("usage.groupBy")
+            JarvisTabStrip(
+                title: text(.usageBreakdown),
+                identifierPrefix: "usage.groupBy",
+                items: JarvisUsageGroupBy.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $groupBy
+            )
             .onChange(of: groupBy) { _, _ in selectedSliceID = nil }
             splitBar(slices, summary: summary)
             VStack(spacing: 0) {

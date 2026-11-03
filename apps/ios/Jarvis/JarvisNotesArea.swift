@@ -244,9 +244,9 @@ struct JarvisNotesArea: View {
 
     private var header: some View {
         JarvisPageHeader(title: copy.title, language: language) {
-            JarvisPageActionButton(
+            JarvisIconButton(
+                title: selectedTab == .graph ? copy.resetGraph : copy.refresh,
                 systemImage: "arrow.clockwise",
-                label: selectedTab == .graph ? copy.resetGraph : copy.refresh,
                 identifier: "notes.refresh"
             ) {
                 if selectedTab == .graph {
@@ -254,9 +254,9 @@ struct JarvisNotesArea: View {
                 }
                 refreshVersion += 1
             }
-            JarvisPageActionMenu(
+            JarvisMenuButton(
+                title: copy.create,
                 systemImage: "plus",
-                label: copy.create,
                 identifier: "notes.plus",
                 isDisabled: client == nil || signInUnavailable
             ) {
@@ -301,26 +301,15 @@ struct JarvisNotesArea: View {
     }
 
     private var tabSwitcher: some View {
-        HStack(spacing: 0) {
-            ForEach(JarvisNotesTab.allCases) { tab in
-                Button {
-                    selectedTab = tab
-                } label: {
-                    Text(copy.title(for: tab))
-                        .font(.subheadline.weight(selectedTab == tab ? .semibold : .regular))
-                        .foregroundStyle(selectedTab == tab ? Color.accentColor : Color.primary)
-                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesControlHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selectedTab == tab ? .isSelected : [])
-                .accessibilityLabel(copy.title(for: tab))
-                .accessibilityIdentifier("notes.tab.\(tab.rawValue)")
-            }
-        }
+        JarvisTabStrip(
+            title: copy.title,
+            identifierPrefix: "notes.tab",
+            items: JarvisNotesTab.allCases.map {
+                JarvisTabItem(tag: $0, title: copy.title(for: $0), identifier: "notes.tab.\($0.rawValue)")
+            },
+            selection: $selectedTab
+        )
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy.title)
     }
 
     @ViewBuilder
@@ -360,10 +349,9 @@ struct JarvisNotesArea: View {
                                 if groupLoading.contains(folder) {
                                     ProgressView().frame(maxWidth: .infinity)
                                 } else if groupHasMore[folder] == true {
-                                    Button(copy.loadMore) {
+                                    JarvisLabelledButton(title: copy.loadMore) {
                                         Task { await loadMoreNotes(in: folder) }
                                     }
-                                    .foregroundStyle(Color.accentColor)
                                 } else if groupNotes[folder] != nil && (groupNotes[folder]?.isEmpty ?? true) {
                                     Text(copy.emptyNotes)
                                         .foregroundStyle(.secondary)
@@ -524,19 +512,6 @@ struct JarvisNotesArea: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
-                Menu {
-                    ForEach(JarvisNotesSearchScope.allCases) { scope in
-                        Button(copy.title(for: scope)) { selectedScope = scope }
-                    }
-                } label: {
-                    HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                        Text(copy.title(for: selectedScope))
-                        Image(systemName: "chevron.down").font(.caption2)
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(Color.accentColor)
-                }
-                .accessibilityLabel(copy.title(for: selectedScope))
                 TextField(copy.search, text: $searchText)
                     .textFieldStyle(.plain)
                     .submitLabel(.search)
@@ -545,21 +520,23 @@ struct JarvisNotesArea: View {
                     .accessibilityLabel(copy.search)
                     .accessibilityIdentifier("notes.search")
                 if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(copy.clearSearch)
+                    JarvisIconButton(
+                        title: copy.clearSearch,
+                        systemImage: "xmark.circle.fill",
+                        identifier: "notes.search.clear"
+                    ) { searchText = "" }
                 }
             }
-            .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing)
-            .frame(height: JarvisDesignTokens.notesControlHeight)
+            .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
             .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: Capsule())
+            .jarvisGlassSurface()
             .accessibilityElement(children: .contain)
+            JarvisLabelledMenu(title: copy.title(for: selectedScope), identifier: "notes.scope") {
+                ForEach(JarvisNotesSearchScope.allCases) { scope in
+                    Button(copy.title(for: scope)) { selectedScope = scope }
+                }
+            }
         }
     }
 
@@ -597,16 +574,7 @@ struct JarvisNotesArea: View {
     }
 
     private func folderFilter(_ folder: String, title: String) -> some View {
-        Button {
-            selectedFolder = folder
-        } label: {
-            Text(title)
-                .font(.subheadline.weight(selectedFolder == folder ? .semibold : .regular))
-                .foregroundStyle(selectedFolder == folder ? Color.accentColor : Color.primary)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selectedFolder == folder ? .isSelected : [])
+        JarvisLabelledButton(title: title, isSelected: selectedFolder == folder) { selectedFolder = folder }
     }
 
     private func folderHeader(_ folder: String, inList: Bool) -> some View {
@@ -715,24 +683,14 @@ struct JarvisNotesArea: View {
 
     private func taskRow(_ task: VaultTask, today: String) -> some View {
         HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-            Button {
-                if !task.done { Task { await completeTask(task) } }
-            } label: {
-                Group {
-                    if pendingTaskIDs.contains(task.id) {
-                        ProgressView()
-                    } else {
-                        Image(systemName: task.done ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: JarvisDesignTokens.notesTaskActionSize))
-                            .foregroundStyle(task.done ? Color.accentColor : Color.secondary)
-                    }
-                }
-                .frame(width: JarvisDesignTokens.notesControlHeight, height: JarvisDesignTokens.notesControlHeight)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(task.done || pendingTaskIDs.contains(task.id))
-            .accessibilityLabel(task.done ? copy.completed : copy.complete)
+            JarvisIconButton(
+                title: task.done ? copy.completed : copy.complete,
+                systemImage: task.done ? "checkmark.circle.fill" : "circle",
+                identifier: "notes.task.complete",
+                isBusy: pendingTaskIDs.contains(task.id),
+                isDisabled: task.done,
+                isSelected: task.done
+            ) { Task { await completeTask(task) } }
             .accessibilityValue(task.text)
             VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
                 Text(task.text).foregroundStyle(.primary)
@@ -801,10 +759,9 @@ struct JarvisNotesArea: View {
         if directoryLoading.contains(directory) {
             ProgressView().frame(maxWidth: .infinity)
         } else if directoryHasMore[directory] == true {
-            Button(copy.loadMore) {
+            JarvisLabelledButton(title: copy.loadMore) {
                 Task { await loadMoreDirectory(directory) }
             }
-            .foregroundStyle(Color.accentColor)
         }
     }
 
@@ -833,8 +790,7 @@ struct JarvisNotesArea: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let retry {
-                Button(copy.retry, action: retry)
-                    .buttonStyle(.glass)
+                JarvisLabelledButton(title: copy.retry, action: retry)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

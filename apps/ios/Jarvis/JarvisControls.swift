@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 
 /// The shared control layer. Screens use these instead of building their own button chrome:
@@ -22,24 +23,38 @@ enum JarvisGlass {
 struct JarvisGlassBackground: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var cornerRadius: CGFloat?
+    var tint: Color?
+    var isCircle = false
+    var isInteractive = false
 
     private var shape: AnyShape {
-        if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
+        if isCircle { AnyShape(Circle()) } else if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
     }
 
     func body(content: Content) -> some View {
         if reduceTransparency {
             content.background(.regularMaterial, in: shape)
         } else {
-            content.glassEffect(JarvisGlass.surface(), in: shape)
+            content.glassEffect(isInteractive ? JarvisGlass.surface(tint: tint).interactive() : JarvisGlass.surface(tint: tint), in: shape)
         }
     }
 }
 
 extension View {
-    /// Glass behind a floating control. Pass a radius for a rounded rectangle, or none for a capsule.
-    func jarvisGlassSurface(cornerRadius: CGFloat? = nil) -> some View {
-        modifier(JarvisGlassBackground(cornerRadius: cornerRadius))
+    /// Glass behind a floating control. Pass a radius for a rounded rectangle, or none for a capsule. A tint colours
+    /// accent surfaces such as the user bubble.
+    func jarvisGlassSurface(cornerRadius: CGFloat? = nil, tint: Color? = nil) -> some View {
+        modifier(JarvisGlassBackground(cornerRadius: cornerRadius, tint: tint))
+    }
+
+    /// Interactive glass in a capsule for the shared labelled buttons and tabs.
+    func jarvisGlassCapsule() -> some View {
+        modifier(JarvisGlassBackground(isInteractive: true))
+    }
+
+    /// Glass in a true circle for the shared icon and menu buttons.
+    func jarvisGlassCircle() -> some View {
+        modifier(JarvisGlassBackground(isCircle: true, isInteractive: true))
     }
 }
 
@@ -210,83 +225,347 @@ extension View {
     }
 }
 
-/// Orange icon for the composer row (voice, dictation, send): primary accent, no background, 44 pt target.
-struct JarvisComposerIconButton: View {
+/// The one icon button, identical to the Chat header buttons: Apple glass, 44 pt target, secondary accent icon.
+/// Optional busy state (a progress view in place of the icon), count badge, selected state, tint and short text glyph.
+/// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle, ProgressView.
+struct JarvisIconButton: View {
     let title: String
-    let systemImage: String
+    var systemImage: String?
     var identifier: String
-    var hint = ""
+    var text: String?
+    var badge = 0
+    var isBusy = false
     var isDisabled = false
+    var isSelected = false
+    var tint: Color?
+    var hint = ""
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
-                .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
+            JarvisControlGlyph(
+                systemImage: systemImage, text: text, badge: badge, isBusy: isBusy,
+                isDisabled: isDisabled, isSelected: isSelected, tint: tint
+            )
         }
-        .buttonStyle(.plain)
+        .jarvisControlChrome()
+        .disabled(isDisabled || isBusy)
+        .accessibilityLabel(title)
+        .accessibilityHint(hint)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// The one menu button: a glass icon, the same as `JarvisIconButton`, that opens a menu.
+struct JarvisMenuButton<Content: View>: View {
+    let title: String
+    let systemImage: String
+    var identifier: String
+    var text: String?
+    var isDisabled = false
+    var tint: Color?
+    var hint = ""
+    var value = ""
+    let content: Content
+
+    init(
+        title: String,
+        systemImage: String,
+        identifier: String,
+        text: String? = nil,
+        isDisabled: Bool = false,
+        tint: Color? = nil,
+        hint: String = "",
+        value: String = "",
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.identifier = identifier
+        self.text = text
+        self.isDisabled = isDisabled
+        self.tint = tint
+        self.hint = hint
+        self.value = value
+        self.content = content()
+    }
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            JarvisControlGlyph(
+                systemImage: text == nil ? systemImage : nil, text: text, badge: 0, isBusy: false,
+                isDisabled: isDisabled, isSelected: false, tint: tint
+            )
+        }
+        .jarvisControlChrome()
         .disabled(isDisabled)
         .accessibilityLabel(title)
+        .accessibilityValue(value)
         .accessibilityHint(hint)
         .accessibilityIdentifier(identifier)
     }
 }
 
-/// Icon-only glass button for toolbars and floating controls.
-struct JarvisIconButton: View {
+/// The text of a labelled control: optional leading icon or progress view, title, optional subtitle and chevron.
+private struct JarvisLabelledContent: View {
     let title: String
-    let systemImage: String
-    var identifier: String?
+    var subtitle: String?
+    var systemImage: String?
+    var leading: AnyView?
+    var trailingSystemImage: String?
+    var isBusy = false
     var isDisabled = false
+    var isFullWidth = false
+    var isLeading = false
+    var isEmphasised = false
+    var isDestructive = false
+
+    private var tint: Color {
+        if isDestructive { return .red }
+        return isEmphasised ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if isBusy {
+                ProgressView().accessibilityHidden(true)
+            } else if let leading {
+                leading
+            } else if let systemImage {
+                Image(systemName: systemImage).accessibilityHidden(true)
+            }
+            if let subtitle {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                    Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+            } else {
+                Text(title).font(.body.weight(.semibold)).lineLimit(1)
+            }
+            if isLeading { Spacer(minLength: 0) }
+            if let trailingSystemImage {
+                Image(systemName: trailingSystemImage)
+                    .font(.caption.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+        }
+        .foregroundStyle(tint.opacity(isDisabled ? 0.4 : 1))
+        .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+        .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
+        .frame(
+            maxWidth: isFullWidth ? .infinity : nil,
+            minHeight: JarvisDesignTokens.chatMinimumTapTarget,
+            alignment: isLeading ? .leading : .center
+        )
+        .contentShape(Capsule())
+    }
+}
+
+/// The one labelled button: text with an optional icon on Apple glass, secondary accent, no orange fill.
+/// `isEmphasised` colours the text with the primary accent (never a fill); `subtitle` adds a second line and
+/// `isLeading` left-aligns a full-width button, for quick-action rows.
+struct JarvisLabelledButton: View {
+    let title: String
+    var subtitle: String?
+    var systemImage: String?
+    var leading: AnyView?
+    var trailingSystemImage: String?
+    var identifier: String?
+    var isBusy = false
+    var isDisabled = false
+    var isFullWidth = false
+    var isLeading = false
+    var isEmphasised = false
+    var isSelected = false
+    var isDestructive = false
+    var hint = ""
+    var accessibilityTitle: String?
+    var accessibilityValue = ""
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .labelStyle(.iconOnly)
-                .frame(
-                    minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                    minHeight: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
+            JarvisLabelledContent(
+                title: title, subtitle: subtitle, systemImage: systemImage, leading: leading,
+                trailingSystemImage: trailingSystemImage, isBusy: isBusy, isDisabled: isDisabled,
+                isFullWidth: isFullWidth, isLeading: isLeading, isEmphasised: isEmphasised || isSelected,
+                isDestructive: isDestructive
+            )
         }
-        .buttonStyle(.glass)
-        .disabled(isDisabled)
-        .accessibilityLabel(title)
+        .buttonStyle(.plain)
+        .jarvisGlassCapsule()
+        .disabled(isDisabled || isBusy)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityLabel(accessibilityTitle ?? subtitle.map { "\(title). \($0)" } ?? title)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(hint)
         .accessibilityIdentifier(identifier ?? "")
     }
 }
 
-/// Icon button for rows that already sit on a glass surface and for toolbars (which own their glass): one
-/// 44 pt target with the secondary accent and no background of its own, so it never doubles the glass behind it.
-struct JarvisInlineIconButton: View {
+/// One entry of a `JarvisTabStrip`.
+struct JarvisTabItem<Tag: Hashable> {
+    let tag: Tag
     let title: String
-    let systemImage: String
     var identifier: String?
+}
+
+/// The one tab strip and segmented control: a row of the shared labelled capsules, each on a single line with
+/// comfortable padding and a 44 pt minimum height. It scrolls horizontally when the tabs do not fit, and never wraps.
+struct JarvisTabStrip<Tag: Hashable>: View {
+    let title: String
+    let identifierPrefix: String
+    let items: [JarvisTabItem<Tag>]
+    @Binding var selection: Tag
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    JarvisLabelledButton(
+                        title: item.title,
+                        identifier: item.identifier ?? "\(identifierPrefix).\(index)",
+                        isSelected: selection == item.tag
+                    ) { selection = item.tag }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .accessibilityLabel(title)
+    }
+}
+
+/// A labelled button that opens a menu (the period picker): the same glass, text and chevron.
+struct JarvisLabelledMenu<Content: View>: View {
+    let title: String
+    var identifier: String?
+    var isDisabled = false
+    var isFullWidth = false
+    var accessibilityTitle: String?
+    let content: Content
+
+    init(
+        title: String,
+        identifier: String? = nil,
+        isDisabled: Bool = false,
+        isFullWidth: Bool = false,
+        accessibilityTitle: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.identifier = identifier
+        self.isDisabled = isDisabled
+        self.isFullWidth = isFullWidth
+        self.accessibilityTitle = accessibilityTitle
+        self.content = content()
+    }
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            JarvisLabelledContent(
+                title: title, trailingSystemImage: "chevron.down", isDisabled: isDisabled,
+                isFullWidth: isFullWidth, isLeading: isFullWidth
+            )
+        }
+        .buttonStyle(.plain)
+        .jarvisGlassCapsule()
+        .disabled(isDisabled)
+        .accessibilityLabel(accessibilityTitle ?? title)
+        .accessibilityIdentifier(identifier ?? "")
+    }
+}
+
+/// The camera shutter: a white ring with a white disc, or a progress view while a photo is taken.
+struct JarvisShutterButton: View {
+    let title: String
+    var identifier = "camera.shutter"
+    var isBusy = false
     var isDisabled = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(JarvisDesignTokens.secondaryAccent.opacity(isDisabled ? 0.4 : 1))
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
+            if isBusy {
+                ProgressView()
+                    .tint(.white)
+                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
+            } else {
+                Circle()
+                    .stroke(.white, lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth * 2)
+                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
+                    .overlay(Circle().fill(.white).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
+            }
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
+        .disabled(isBusy || isDisabled)
         .accessibilityLabel(title)
-        .accessibilityIdentifier(identifier ?? "")
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// Icon, short text or progress view with the 44 pt target, the secondary accent and an optional count badge.
+private struct JarvisControlGlyph: View {
+    var systemImage: String?
+    var text: String?
+    let badge: Int
+    let isBusy: Bool
+    let isDisabled: Bool
+    let isSelected: Bool
+    var tint: Color?
+
+    private var color: Color {
+        (tint ?? (isSelected ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent))
+            .opacity(isDisabled ? 0.4 : 1)
+    }
+
+    var body: some View {
+        Group {
+            if isBusy {
+                ProgressView()
+            } else if let text {
+                Text(text)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(color)
+            } else if let systemImage {
+                Image(systemName: systemImage)
+                    .symbolVariant(badge > 0 ? .fill : .none)
+                    .font(.system(size: JarvisDesignTokens.iconButtonGlyphSize, weight: .regular))
+                    .foregroundStyle(color)
+            }
+        }
+        .frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)
+        .overlay(alignment: .topTrailing) {
+            if badge > 0 {
+                Text(badge > 99 ? "99+" : "\(badge)")
+                    .font(.system(size: 10, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
+                    .padding(.horizontal, 4)
+                    .frame(minWidth: 18, minHeight: 16)
+                    .background(JarvisDesignTokens.primaryAccent, in: Capsule())
+                    .offset(x: -2, y: 2)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Circle())
+    }
+}
+
+private extension View {
+    /// One circle for every icon and menu button: a fixed square frame from one token and a Circle glass surface.
+    /// In a toolbar the item must also hide the system container (`sharedBackgroundVisibility(.hidden)`), or the
+    /// system draws a second glass around this one.
+    func jarvisControlChrome() -> some View {
+        buttonStyle(.plain)
+            .frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)
+            .jarvisGlassCircle()
     }
 }
 
@@ -298,17 +577,14 @@ struct JarvisSheetConfirmButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            if isWorking {
-                ProgressView()
-            } else {
-                Label(title, systemImage: "checkmark").labelStyle(.iconOnly)
-            }
-        }
-        .buttonStyle(.borderedProminent)
-        .disabled(isDisabled || isWorking)
-        .accessibilityLabel(title)
-        .accessibilityIdentifier("sheet.confirm")
+        JarvisIconButton(
+            title: title,
+            systemImage: "checkmark",
+            identifier: "sheet.confirm",
+            isBusy: isWorking,
+            isDisabled: isDisabled,
+            action: action
+        )
     }
 }
 
@@ -319,12 +595,13 @@ struct JarvisSheetCloseButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Label(title, systemImage: "xmark").labelStyle(.iconOnly)
-        }
-        .disabled(isDisabled)
-        .accessibilityLabel(title)
-        .accessibilityIdentifier("sheet.cancel")
+        JarvisIconButton(
+            title: title,
+            systemImage: "xmark",
+            identifier: "sheet.cancel",
+            isDisabled: isDisabled,
+            action: action
+        )
     }
 }
 
@@ -346,33 +623,161 @@ struct JarvisSheetToolbar: ToolbarContent {
                 action: onConfirm
             )
         }
+        .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .topBarTrailing) {
             JarvisSheetCloseButton(title: closeTitle, isDisabled: isWorking, action: onClose)
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 }
 
-/// Floating capsule pill for legends and filters.
-struct JarvisChip: View {
+/// The one orb: the Chat mini core, always square (fixed aspect ratio and a circular clip) and scaled by size
+/// only, so it looks the same on Home, the Gate, Voice and in chat at every size. Never draw an orb elsewhere.
+/// API: View.aspectRatio(_:contentMode:), View.clipShape(_:), Circle.
+struct JarvisOrb: View {
+    let activity: JarvisOrbActivity
+    var size: CGFloat = JarvisDesignTokens.gateOrbSize
+    var isStatic = false
+
+    var body: some View {
+        JarvisOrbCanvas(activity: activity, isStatic: isStatic)
+            .aspectRatio(1, contentMode: .fit)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
+    }
+}
+
+/// The orb as a button (Home composer voice entry): the shared orb in a 44 pt target, no extra chrome.
+struct JarvisOrbButton: View {
     let title: String
-    var systemImage: String?
-    var isSelected = false
+    var identifier: String
+    var activity: JarvisOrbActivity = .calm
+    var size: CGFloat = 28
+    var isStatic = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if let systemImage { Image(systemName: systemImage) }
-                Text(title).lineLimit(1)
-            }
-            .font(.subheadline.weight(.medium))
-            .padding(.horizontal, 14)
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .contentShape(Capsule())
+            JarvisOrb(activity: activity, size: size, isStatic: isStatic)
+                .frame(
+                    width: JarvisDesignTokens.chatMinimumTapTarget,
+                    height: JarvisDesignTokens.chatMinimumTapTarget
+                )
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.glass)
-        .tint(isSelected ? JarvisDesignTokens.primaryAccent : nil)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+extension JarvisOrbActivity {
+    /// The orb's activity for a live Voice session.
+    init(voiceState: VoiceSessionState, isMuted: Bool) {
+        if isMuted {
+            self = .muted
+            return
+        }
+        switch voiceState {
+        case .listening: self = .listening
+        case .ready: self = .thinking
+        case .speaking: self = .speaking
+        case .reconnecting: self = .reconnecting
+        case .failed, .ended: self = .offline
+        case .idle, .connecting: self = .calm
+        }
+    }
+}
+
+/// Orange icon for the composer row (voice, dictation, send, stop): primary accent, no background, 44 pt target.
+/// While `isBusy` it shows a progress view instead of the icon.
+struct JarvisComposerIconButton: View {
+    let title: String
+    let systemImage: String
+    var identifier: String
+    var hint = ""
+    var isDisabled = false
+    var isBusy = false
+    var iconSize = JarvisDesignTokens.chatComposerIconSize
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            JarvisComposerGlyph(systemImage: systemImage, isBusy: isBusy, iconSize: iconSize)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .accessibilityLabel(title)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// The composer's plus: the same orange, backgroundless icon, opening a menu.
+struct JarvisComposerMenuButton<Content: View>: View {
+    let title: String
+    let systemImage: String
+    var identifier: String
+    var hint = ""
+    var isDisabled = false
+    let content: Content
+
+    init(
+        title: String,
+        systemImage: String,
+        identifier: String,
+        hint: String = "",
+        isDisabled: Bool = false,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.identifier = identifier
+        self.hint = hint
+        self.isDisabled = isDisabled
+        self.content = content()
+    }
+
+    var body: some View {
+        Menu {
+            content
+        } label: {
+            JarvisComposerGlyph(
+                systemImage: systemImage, isBusy: false, iconSize: JarvisDesignTokens.chatComposerIconSize
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .tint(JarvisDesignTokens.secondaryAccent)
+        .menuOrder(.fixed)
+        .disabled(isDisabled)
+        .accessibilityLabel(title)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+private struct JarvisComposerGlyph: View {
+    let systemImage: String
+    let isBusy: Bool
+    let iconSize: CGFloat
+
+    var body: some View {
+        Group {
+            if isBusy {
+                ProgressView()
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: iconSize, weight: .regular))
+                    .foregroundStyle(JarvisDesignTokens.primaryAccent)
+            }
+        }
+        .frame(
+            width: JarvisDesignTokens.chatMinimumTapTarget,
+            height: JarvisDesignTokens.chatMinimumTapTarget
+        )
+        .contentShape(Rectangle())
     }
 }
 

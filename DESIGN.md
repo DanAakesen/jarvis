@@ -3192,3 +3192,15 @@ and Factory, with Danish/English text and an Open Settings link when disabled.
 No task Approve/Reject controls are fabricated; the existing real-confirmation
 notification owns those actions. APNs task updates require protected configuration
 and device provisioning; physical rendering and delivery remain device checks.
+
+## UI components (P15-63; 3 November 2026)
+
+One look, taken from the Chat header: Apple glass, 44 pt target, secondary accent icon. It exists once, as shared components, and every screen uses them.
+
+- **Buttons** (`JarvisControls.swift`): `JarvisIconButton` (glass, optional busy state and count badge), `JarvisLabelledButton` (text with optional icon, no large orange fill), `JarvisMenuButton` (glass icon that opens a menu), `JarvisSheetConfirmButton` (check) and `JarvisSheetCloseButton` (X), icon only. `JarvisComposerIconButton` stays orange with no background. `chrome: .onGlass` is for hosts that already draw glass (system toolbar, glass rows); the default `.glass` draws its own.
+- **Orb**: `JarvisOrb` wraps `JarvisOrbCanvas`, the native port of the web orb (dark glass sphere, cyan rim, orange and amber tangled core, live flowing motion). It is always square (fixed aspect ratio, circular clip) and scaled by size only. Home, the Gate, Voice, Chat and the Live Activity use it; no other orb drawing may exist.
+- **Page scaffold**: `JarvisPageScaffold` is a transparent top bar with a bold left-aligned title of about 32 pt, trailing glass actions level with it, then a data-phrase headline, a hero and sections, on the shared ambient background. Home passes no title. Chat, Settings and Voice keep their own patterns.
+- **Rule**: never call `glassEffect`, define a `ButtonStyle`, or draw an orb in a screen file; to change the look, change the shared component. `JarvisDesignSystemGuardTests` enforces it.
+- **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
+- Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
+

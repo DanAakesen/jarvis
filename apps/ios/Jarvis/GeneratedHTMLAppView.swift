@@ -21,8 +21,7 @@ struct HTMLAppRenderer: View {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
                     Text(text(.htmlAppLoadFailed))
                         .foregroundStyle(.secondary)
-                    Button(text(.retry)) { attempt += 1 }
-                        .buttonStyle(.glass)
+                    JarvisLabelledButton(title: text(.retry)) { attempt += 1 }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {

@@ -29,10 +29,11 @@ struct JarvisActivitySheet: View {
                         } description: {
                             Text(error)
                         } actions: {
-                            Button("Retry") { Task { await model.refreshActivity() } }
-                                .buttonStyle(.glass)
-                                .disabled(model.fixtureMode)
-                                .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                            JarvisLabelledButton(
+                                title: "Retry",
+                                isDisabled: model.fixtureMode,
+                                hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                            ) { Task { await model.refreshActivity() } }
                         }
                     } else if let feed = model.nowFeed {
                         let presentation = model.backgroundPresentation
@@ -45,10 +46,11 @@ struct JarvisActivitySheet: View {
                                     .font(.footnote)
                                     .foregroundStyle(.red)
                                 Spacer()
-                                Button("Retry") { Task { await model.refreshActivity() } }
-                                    .buttonStyle(.glass)
-                                    .disabled(model.fixtureMode)
-                                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                                JarvisLabelledButton(
+                                    title: "Retry",
+                                    isDisabled: model.fixtureMode,
+                                    hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                                ) { Task { await model.refreshActivity() } }
                             }
                         }
                         if let message = model.activityMessage {
@@ -96,25 +98,23 @@ struct JarvisActivitySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                            .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                    }
-                        .accessibilityIdentifier("chat.notifications.done")
-                        .jarvisToolbarButtonStyle()
-                        .accessibilityLabel(copy(.done))
+                    JarvisIconButton(
+                        title: copy(.done),
+                        systemImage: "xmark",
+                        identifier: "chat.notifications.done"
+                    ) { dismiss() }
                 }
+                .sharedBackgroundVisibility(.hidden)
                 if let items = model.nowFeed?.items, items.count > 1 {
                     ToolbarItem(placement: .topBarLeading) {
-                        JarvisInlineIconButton(
+                        JarvisIconButton(
                             title: copy(.clearAll),
                             systemImage: "trash",
                             identifier: "activity.clearAll",
                             isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
                         ) { Task { await model.dismissActivities(items) } }
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
             }
         }
@@ -174,7 +174,7 @@ struct JarvisActivitySheet: View {
             }
         }
         .padding(JarvisDesignTokens.chatGlassInset)
-        .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
     }
 
     private func failedTaskRow(_ task: BackgroundTaskRecord) -> some View {
@@ -186,16 +186,13 @@ struct JarvisActivitySheet: View {
                 }
             }
             Spacer(minLength: 0)
-            Button(model.dismissingBackgroundTaskIDs.contains(task.id) ? copy(.dismissing) : copy(.dismiss)) {
+            JarvisLabelledButton(
+                title: model.dismissingBackgroundTaskIDs.contains(task.id) ? copy(.dismissing) : copy(.dismiss),
+                isDisabled: model.fixtureMode || model.dismissingBackgroundTaskIDs.contains(task.id),
+                accessibilityTitle: String(format: copy(.dismissLabel), task.title)
+            ) {
                 Task { await model.dismissBackgroundTask(task) }
             }
-            .buttonStyle(.plain)
-            .font(.body.weight(.medium))
-            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .contentShape(Rectangle())
-            .disabled(model.fixtureMode || model.dismissingBackgroundTaskIDs.contains(task.id))
-            .accessibilityLabel(String(format: copy(.dismissLabel), task.title))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -221,37 +218,31 @@ struct JarvisActivitySheet: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("confirmation-expiry-\(confirmation.id)")
                     HStack {
-                        Button {
+                        JarvisLabelledButton(
+                            title: model.isResolving(confirmation, decision: .reject)
+                                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
+                                : JarvisApprovalLocalization.string(.decline, language: appLanguage),
+                            identifier: "confirmation-decline-\(confirmation.id)",
+                            isDisabled: model.fixtureMode || model.isResolving(confirmation),
+                            hint: model.fixtureMode
+                                ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                                : ""
+                        ) {
                             Task { await model.resolve(confirmation, decision: .reject) }
-                        } label: {
-                            Text(model.isResolving(confirmation, decision: .reject)
-                                 ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                                 : JarvisApprovalLocalization.string(.decline, language: appLanguage))
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
-                        .buttonStyle(.glass)
-                        .disabled(model.fixtureMode || model.isResolving(confirmation))
-                        .accessibilityIdentifier("confirmation-decline-\(confirmation.id)")
-                        .accessibilityHint(model.fixtureMode
-                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
-                            : "")
                         Spacer()
-                        Button {
+                        JarvisLabelledButton(
+                            title: model.isResolving(confirmation, decision: .approve)
+                                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
+                                : JarvisApprovalLocalization.string(.approve, language: appLanguage),
+                            identifier: "confirmation-approve-\(confirmation.id)",
+                            isDisabled: model.fixtureMode || model.isResolving(confirmation),
+                            hint: model.fixtureMode
+                                ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                                : ""
+                        ) {
                             Task { await model.resolve(confirmation, decision: .approve) }
-                        } label: {
-                            Text(model.isResolving(confirmation, decision: .approve)
-                                 ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                                 : JarvisApprovalLocalization.string(.approve, language: appLanguage))
-                                .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget,
-                                       minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                         }
-                        .buttonStyle(.glassProminent)
-                        .disabled(model.fixtureMode || model.isResolving(confirmation))
-                        .accessibilityIdentifier("confirmation-approve-\(confirmation.id)")
-                        .accessibilityHint(model.fixtureMode
-                            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
-                            : "")
                     }
                     if model.fixtureMode && confirmation.actionKind == .calendarChange {
                         Text(appLanguage == .da
@@ -264,7 +255,7 @@ struct JarvisActivitySheet: View {
                 }
                 .padding(JarvisDesignTokens.chatGlassInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
             }
         }
     }
@@ -286,7 +277,7 @@ struct JarvisActivitySheet: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(JarvisDesignTokens.chatGlassInset)
-                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
             }
         }
     }
@@ -299,7 +290,7 @@ struct JarvisActivitySheet: View {
                 .font(.body)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(JarvisDesignTokens.chatGlassInset)
-                .glassEffect(JarvisGlass.surface(), in: .rect(cornerRadius: JarvisDesignTokens.chatBubbleRadius))
+                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
         }
     }
 
@@ -338,14 +329,14 @@ struct JarvisActivitySheet: View {
                 if busy {
                     ProgressView()
                 } else if group.olderCount > 0 {
-                    JarvisInlineIconButton(
+                    JarvisIconButton(
                         title: String(format: copy(.clearGroupLabel), group.category.title),
                         systemImage: "trash",
                         identifier: "activity.clear.\(group.id)",
                         isDisabled: model.fixtureMode
                     ) { Task { await model.dismissActivities(group.items) } }
                 } else {
-                    JarvisInlineIconButton(
+                    JarvisIconButton(
                         title: String(format: copy(.dismissLabel), group.latest.title),
                         systemImage: "xmark",
                         identifier: "activity.dismiss.\(group.latest.id)",
@@ -363,7 +354,7 @@ struct JarvisActivitySheet: View {
                                     Text(timeString(item.at)).font(.caption).foregroundStyle(.secondary)
                                 }
                                 Spacer(minLength: 0)
-                                JarvisInlineIconButton(
+                                JarvisIconButton(
                                     title: String(format: copy(.dismissLabel), item.title),
                                     systemImage: "xmark",
                                     identifier: "activity.dismiss.\(item.id)",

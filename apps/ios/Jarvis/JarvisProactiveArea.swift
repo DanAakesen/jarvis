@@ -65,7 +65,7 @@ struct JarvisProactiveArea: View {
                 title: JarvisDestination.proactive.localizedTitle(language: language),
                 language: language
             ) {
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.proactiveSettings),
                     systemImage: "gearshape",
                     identifier: "proactive.settings",
@@ -270,26 +270,15 @@ struct JarvisProactiveArea: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("proactive.lastCheck")
                 HStack(spacing: 8) {
-                    Button {
+                    JarvisLabelledButton(
+                        title: checkingNow ? text(.proactiveChecking) : text(.proactiveCheckNow),
+                        systemImage: "sparkle.magnifyingglass",
+                        identifier: "proactive.checkNow",
+                        isBusy: checkingNow,
+                        isDisabled: !JarvisProactiveLogic.canCheckNow(loaded)
+                    ) {
                         Task { await checkNow() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            if checkingNow {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Image(systemName: "sparkle.magnifyingglass")
-                            }
-                            Text(checkingNow ? text(.proactiveChecking) : text(.proactiveCheckNow))
-                                .lineLimit(1)
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        .contentShape(Capsule())
                     }
-                    .buttonStyle(.glass)
-                    .disabled(!JarvisProactiveLogic.canCheckNow(loaded) || checkingNow)
-                    .accessibilityIdentifier("proactive.checkNow")
                     if loaded.paused {
                         JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
                             .accessibilityIdentifier("proactive.paused")
@@ -314,13 +303,15 @@ struct JarvisProactiveArea: View {
     private var itemsCard: some View {
         JarvisInsightsCard {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-                Picker(text(.proactiveTabs), selection: $tab) {
-                    Text(text(.proactiveTabOpen)).tag(Tab.open)
-                    Text(text(.proactiveTabEarlier)).tag(Tab.earlier)
-                }
-                .pickerStyle(.segmented)
-                .controlSize(.large)
-                .accessibilityIdentifier("proactive.tabs")
+                JarvisTabStrip(
+                    title: text(.proactiveTabs),
+                    identifierPrefix: "proactive.tabs",
+                    items: [
+                        JarvisTabItem(tag: Tab.open, title: text(.proactiveTabOpen)),
+                        JarvisTabItem(tag: Tab.earlier, title: text(.proactiveTabEarlier)),
+                    ],
+                    selection: $tab
+                )
                 if actionFailed {
                     JarvisInsightsBadge(
                         title: text(.proactiveActionFailed),
@@ -474,13 +465,13 @@ struct JarvisProactiveArea: View {
                 let added = item.todoAdded || addedTaskIDs.contains(item.id)
                 let busy = busyIDs.contains(item.id)
                 HStack(spacing: 8) {
-                    JarvisInsightsIconButton(
+                    JarvisIconButton(
                         title: added ? text(.proactiveTodoAdded) : text(.proactiveAddToTasks),
                         systemImage: added ? "checkmark.circle" : "checklist",
                         identifier: "proactive.addTask.\(item.id)",
                         isDisabled: added || busy
                     ) { Task { await addToTasks(item) } }
-                    JarvisInsightsIconButton(
+                    JarvisIconButton(
                         title: text(.proactiveSnooze),
                         systemImage: "moon.zzz",
                         identifier: "proactive.snooze.\(item.id)",
@@ -490,7 +481,7 @@ struct JarvisProactiveArea: View {
                             await perform(.snooze(until: JarvisProactiveLogic.snoozeTimestamp(now: now)), on: item)
                         }
                     }
-                    JarvisInsightsIconButton(
+                    JarvisIconButton(
                         title: text(.proactiveDismiss),
                         systemImage: "xmark",
                         identifier: "proactive.dismiss.\(item.id)",
@@ -552,7 +543,7 @@ struct JarvisProactiveArea: View {
         JarvisInsightsCard(
             title: text(.proactiveSources),
             accessory: AnyView(
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.editorEditSources),
                     systemImage: "pencil",
                     identifier: "proactive.editSources"
@@ -614,7 +605,7 @@ struct JarvisProactiveArea: View {
         return JarvisInsightsCard(
             title: text(.proactiveBudget),
             accessory: AnyView(
-                JarvisInsightsIconButton(
+                JarvisIconButton(
                     title: text(.editorEditBudget),
                     systemImage: "pencil",
                     identifier: "proactive.editBudget"

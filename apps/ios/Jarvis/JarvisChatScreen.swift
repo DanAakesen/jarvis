@@ -202,55 +202,31 @@ struct JarvisChatScreen: View {
         .toolbar {
             if let onBackToToday {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(action: onBackToToday) {
-                        Image(systemName: "house")
-                            .font(.system(size: 18, weight: .regular))
-                            .frame(
-                                width: JarvisDesignTokens.chatMinimumTapTarget,
-                                height: JarvisDesignTokens.chatMinimumTapTarget
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .jarvisToolbarButtonStyle()
-                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                    .accessibilityLabel(JarvisTodayLocalization.string(.backToToday, language: appLanguage))
-                    .accessibilityIdentifier("chat.backToToday")
+                    JarvisIconButton(
+                        title: JarvisTodayLocalization.string(.backToToday, language: appLanguage),
+                        systemImage: "house",
+                        identifier: "chat.backToToday",
+                        action: onBackToToday
+                    )
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
+                JarvisIconButton(
+                    title: displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you",
+                    systemImage: "bell",
+                    identifier: "chat.notifications",
+                    badge: displayedNeedsYouCount
+                ) {
                     presentedSheet = .activity(.activity)
-                } label: {
-                    ZStack {
-                        Image(systemName: "bell")
-                            .symbolVariant(displayedNeedsYouCount > 0 ? .fill : .none)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                    .overlay(alignment: .topTrailing) {
-                        if displayedNeedsYouCount > 0 {
-                            Text(displayedNeedsYouCount > 99 ? "99+" : "\(displayedNeedsYouCount)")
-                                .font(.system(size: 10, weight: .bold))
-                                .monospacedDigit()
-                                .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
-                                .padding(.horizontal, 4)
-                                .frame(minWidth: 18, minHeight: 16)
-                                .background(JarvisDesignTokens.primaryAccent, in: Capsule())
-                                .offset(x: -2, y: 2)
-                        }
-                    }
-                    .contentShape(Rectangle())
                 }
-                .jarvisToolbarButtonStyle()
-                .accessibilityLabel(displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you")
-                .accessibilityIdentifier("chat.notifications")
             }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSidebarMenuButton(language: appLanguage)
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task(id: handoff?.id) {
             guard let handoff else { return }
@@ -372,10 +348,11 @@ struct JarvisChatScreen: View {
             } description: {
                 Text(error)
             } actions: {
-                Button("Retry") { Task { await model.retryHistory() } }
-                    .buttonStyle(.glass)
-                    .disabled(model.fixtureMode)
-                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                JarvisLabelledButton(
+                    title: "Retry",
+                    isDisabled: model.fixtureMode,
+                    hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                ) { Task { await model.retryHistory() } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -388,24 +365,20 @@ struct JarvisChatScreen: View {
                                     .font(.footnote)
                                     .foregroundStyle(.red)
                                 Spacer()
-                                Button("Retry") { Task { await model.retryHistory() } }
-                                    .buttonStyle(.glass)
-                                    .disabled(model.fixtureMode)
-                                    .accessibilityHint(model.fixtureMode ? "Retry is unavailable with fixture data." : "")
+                                JarvisLabelledButton(
+                                    title: "Retry",
+                                    isDisabled: model.fixtureMode,
+                                    hint: model.fixtureMode ? "Retry is unavailable with fixture data." : ""
+                                ) { Task { await model.retryHistory() } }
                             }
                         }
                         if model.hasOlderMessages {
-                            Button {
+                            JarvisLabelledButton(
+                                title: "Load earlier messages",
+                                isBusy: model.isLoadingOlder
+                            ) {
                                 Task { await model.loadOlder() }
-                            } label: {
-                                if model.isLoadingOlder {
-                                    ProgressView()
-                                } else {
-                                    Text("Load earlier messages")
-                                }
                             }
-                            .buttonStyle(.glass)
-                            .disabled(model.isLoadingOlder)
                             .frame(maxWidth: .infinity)
                             .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
                         }
@@ -529,12 +502,11 @@ struct JarvisChatScreen: View {
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatMessageSpacing) {
                 if messageID == "streaming" && model.streamingText.isEmpty {
-                    JarvisMiniCoreView(
+                    JarvisOrb(
                         activity: .thinking,
-                        diameter: JarvisDesignTokens.chatMiniCoreSize,
+                        size: JarvisDesignTokens.chatMiniCoreSize,
                         isStatic: model.fixtureMode || reduceMotion
                     )
-                    .accessibilityHidden(true)
                 }
                 messageText(text, role: role, messageID: messageID)
                     .font(.body)
@@ -560,9 +532,9 @@ struct JarvisChatScreen: View {
                                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
                         }
                     }
-                    .glassEffect(
-                        JarvisGlass.surface(tint: JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)),
-                        in: userBubbleShape
+                    .jarvisGlassSurface(
+                        cornerRadius: JarvisDesignTokens.chatUserBubbleRadius,
+                        tint: JarvisDesignTokens.primaryAccent.opacity(JarvisDesignTokens.chatGlassOpacity)
                     )
                     .overlay {
                         userBubbleShape.strokeBorder(
@@ -658,10 +630,11 @@ struct JarvisChatScreen: View {
                         .foregroundStyle(.red)
                         .accessibilityAddTraits(.isStaticText)
                     Spacer(minLength: 0)
-                    Button("Dismiss") { model.actionError = nil }
-                        .buttonStyle(.borderless)
-                        .disabled(model.isSending)
-                        .accessibilityLabel("Dismiss error")
+                    JarvisLabelledButton(
+                        title: "Dismiss",
+                        isDisabled: model.isSending,
+                        accessibilityTitle: "Dismiss error"
+                    ) { model.actionError = nil }
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
@@ -679,14 +652,12 @@ struct JarvisChatScreen: View {
                                         .accessibilityHidden(true)
                                     Text(attachment.name)
                                         .lineLimit(1)
-                                    Button {
-                                        model.removeAttachment(attachment)
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .disabled(model.isSending)
-                                    .accessibilityLabel("Remove \(attachment.name)")
+                                    JarvisIconButton(
+                                        title: "Remove \(attachment.name)",
+                                        systemImage: "xmark.circle.fill",
+                                        identifier: "chat.attachment.remove",
+                                        isDisabled: model.isSending
+                                    ) { model.removeAttachment(attachment) }
                                 }
                                 .font(.caption)
                                 .padding(JarvisDesignTokens.chatMessageSpacing)
@@ -782,29 +753,16 @@ struct JarvisChatScreen: View {
     @ViewBuilder
     private var trailingButton: some View {
         if model.isSending && !model.canSend {
-            Button {
-                Task { await model.cancel() }
-            } label: {
-                Group {
-                    if model.isCancelling {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: JarvisDesignTokens.chatComposerIconSize - 4, weight: .semibold))
-                            .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                    }
-                }
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(model.fixtureMode || model.isCancelling || !model.canCancel)
-            .accessibilityLabel(model.isCancelling ? "Cancelling turn" : "Stop response")
-            .accessibilityIdentifier("chat.stop")
-            .accessibilityHint(model.fixtureMode ? "Cancellation is disabled with fixture data." : "")
+            JarvisComposerIconButton(
+                title: model.isCancelling ? "Cancelling turn" : "Stop response",
+                systemImage: "stop.fill",
+                identifier: "chat.stop",
+                hint: model.fixtureMode ? "Cancellation is disabled with fixture data." : "",
+                isDisabled: model.fixtureMode || model.isCancelling || !model.canCancel,
+                isBusy: model.isCancelling,
+                iconSize: JarvisDesignTokens.chatComposerIconSize - 4,
+                action: { Task { await model.cancel() } }
+            )
         } else if model.canSend {
             JarvisComposerIconButton(
                 title: copy(.sendMessage),
@@ -835,21 +793,12 @@ struct JarvisChatScreen: View {
             ZStack(alignment: .topTrailing) {
                 VoiceCameraPreview(session: cameraCapture.session)
                     .accessibilityLabel(copy(.videoOn))
-                Button(action: stopVideo) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 28, height: 28)
-                        .background(.black.opacity(0.5), in: Circle())
-                        .frame(
-                            width: JarvisDesignTokens.chatMinimumTapTarget,
-                            height: JarvisDesignTokens.chatMinimumTapTarget
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.disableVideo))
-                .accessibilityIdentifier("video.stop")
+                JarvisIconButton(
+                    title: copy(.disableVideo),
+                    systemImage: "xmark",
+                    identifier: "video.stop",
+                    action: stopVideo
+                )
                 VStack {
                     Spacer()
                     JarvisCameraControls(camera: cameraCapture, language: appLanguage, usesTorch: true)
@@ -870,7 +819,13 @@ struct JarvisChatScreen: View {
     }
 
     private var plusMenu: some View {
-        Menu {
+        JarvisComposerMenuButton(
+            title: copy(.plusMenuLabel),
+            systemImage: "plus",
+            identifier: "chat.plus",
+            hint: copy(isPreparingCamera ? .cameraStarting : .plusMenuHint),
+            isDisabled: model.isSending || isPreparingCamera
+        ) {
             Menu {
                 voiceLanguageOption(.da, title: copy(.danish))
                 voiceLanguageOption(.en, title: copy(.english))
@@ -916,24 +871,7 @@ struct JarvisChatScreen: View {
                 (model.fixtureMode && !usesCameraStub)
                     || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount
             )
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: JarvisDesignTokens.chatComposerIconSize, weight: .regular))
-                .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                .frame(
-                    width: JarvisDesignTokens.chatMinimumTapTarget,
-                    height: JarvisDesignTokens.chatMinimumTapTarget
-                )
-                .contentShape(Rectangle())
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .tint(JarvisDesignTokens.secondaryAccent)
-        .menuOrder(.fixed)
-        .disabled(model.isSending || isPreparingCamera)
-        .accessibilityLabel(copy(.plusMenuLabel))
-        .accessibilityIdentifier("chat.plus")
-        .accessibilityHint(copy(isPreparingCamera ? .cameraStarting : .plusMenuHint))
     }
 
     private func deferred(_ action: @escaping () -> Void) {
@@ -1185,41 +1123,24 @@ struct JarvisChatScreen: View {
     }
 
     private var nowBar: some View {
-        Button {
+        JarvisLabelledButton(
+            title: model.nowTitle,
+            systemImage: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles",
+            trailingSystemImage: "chevron.up",
+            isFullWidth: true,
+            isLeading: true,
+            accessibilityTitle: "Background activity, \(model.nowTitle)"
+        ) {
             presentedSheet = .activity(.activity)
             Task { await model.refreshActivity() }
-        } label: {
-            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                Image(systemName: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles")
-                    .accessibilityHidden(true)
-                Text(model.nowTitle)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.up")
-                    .font(.caption.weight(.semibold))
-                    .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.nowBarHeight)
-            .padding(.horizontal, JarvisDesignTokens.chatGlassInset)
-            .contentShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
-            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Background activity, \(model.nowTitle)")
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
     }
 
     private func approvalBar(_ confirmation: PendingConfirmation) -> some View {
         HStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
             approvalButton(confirmation, decision: .reject)
-                .buttonStyle(.glass)
-                .tint(JarvisDesignTokens.secondaryAccent)
-                .accessibilityIdentifier("now-confirmation-decline-\(confirmation.id)")
             approvalButton(confirmation, decision: .approve)
-                .buttonStyle(.glassProminent)
-                .tint(JarvisDesignTokens.primaryAccent)
-                .accessibilityIdentifier("now-confirmation-approve-\(confirmation.id)")
         }
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
     }
@@ -1233,30 +1154,25 @@ struct JarvisChatScreen: View {
             decision == .approve ? .approve : .decline,
             language: appLanguage
         )
-        return Button {
+        return JarvisLabelledButton(
+            title: isPending
+                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
+                : actionLabel,
+            identifier: "now-confirmation-\(decision == .approve ? "approve" : "decline")-\(confirmation.id)",
+            isBusy: isPending,
+            isDisabled: model.fixtureMode || model.isResolving(confirmation),
+            isFullWidth: true,
+            isEmphasised: decision == .approve,
+            hint: model.fixtureMode
+                ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
+                : "",
+            accessibilityTitle: actionLabel,
+            accessibilityValue: isPending
+                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
+                : ""
+        ) {
             Task { await model.resolve(confirmation, decision: decision) }
-        } label: {
-            HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                if isPending {
-                    ProgressView()
-                        .controlSize(.small)
-                        .accessibilityHidden(true)
-                }
-                Text(isPending
-                     ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                     : actionLabel)
-            }
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .contentShape(Rectangle())
         }
-        .disabled(model.fixtureMode || model.isResolving(confirmation))
-        .accessibilityLabel(actionLabel)
-        .accessibilityValue(isPending
-            ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-            : "")
-        .accessibilityHint(model.fixtureMode
-            ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
-            : "")
     }
 
     private func timeString(_ value: String) -> String {
@@ -1444,46 +1360,37 @@ private struct JarvisCameraControls: View {
     var body: some View {
         HStack(spacing: 6) {
             if usesTorch ? model.camera.hasTorch : model.camera.hasFlash {
-                Button(action: usesTorch ? model.toggleTorch : model.toggleFlash) {
-                    control { Image(systemName: lightSymbol) }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(lightLabel)
-                .accessibilityIdentifier("camera.flash")
+                JarvisIconButton(
+                    title: lightLabel,
+                    systemImage: lightSymbol,
+                    identifier: "camera.flash",
+                    action: usesTorch ? model.toggleTorch : model.toggleFlash
+                )
             }
             if VoiceCameraCapture.hasCamera(position: model.flipTarget) {
-                Button(action: model.flip) {
-                    control { Image(systemName: "camera.rotate") }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.flipCamera))
-                .accessibilityIdentifier("camera.flip")
+                JarvisIconButton(
+                    title: copy(.flipCamera),
+                    systemImage: "camera.rotate",
+                    identifier: "camera.flip",
+                    action: model.flip
+                )
             }
             if model.lenses.count > 1 {
-                Menu {
+                JarvisMenuButton(
+                    title: copy(.cameraLens),
+                    systemImage: "camera.metering.matrix",
+                    identifier: "camera.lens",
+                    text: model.magnificationTitle(model.lens),
+                    value: copy(model.lens.localizationKey)
+                ) {
                     Picker(copy(.cameraLens), selection: Binding(get: { model.lens }, set: { model.select(lens: $0) })) {
                         ForEach(model.lenses) { option in
                             Text(copy(option.localizationKey)).tag(option)
                         }
                     }
-                } label: {
-                    control { Text(model.magnificationTitle(model.lens)).font(.caption.weight(.semibold)) }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(copy(.cameraLens))
-                .accessibilityValue(copy(model.lens.localizationKey))
-                .accessibilityIdentifier("camera.lens")
             }
         }
-    }
-
-    private func control<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .foregroundStyle(.white)
-            .frame(minWidth: 34, minHeight: 34)
-            .background(.black.opacity(0.5), in: Capsule())
-            .frame(minWidth: JarvisDesignTokens.chatMinimumTapTarget, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .contentShape(Rectangle())
     }
 }
 
@@ -1557,19 +1464,27 @@ private struct JarvisChatCameraSheet: View {
             lensButtons
             HStack {
                 sideControl(visible: camera.hasFlash) {
-                    Button(action: model.toggleFlash) {
-                        sideControlLabel(systemImage: flashSymbol)
-                    }
-                    .accessibilityLabel(flashLabel)
-                    .accessibilityIdentifier("camera.flash")
+                    JarvisIconButton(
+                        title: flashLabel,
+                        systemImage: flashSymbol,
+                        identifier: "camera.flash",
+                        action: model.toggleFlash
+                    )
                 }
-                shutter
+                JarvisShutterButton(
+                    title: isCapturingPhoto ? takingPhotoTitle : takePhotoTitle,
+                    isBusy: isCapturingPhoto,
+                    isDisabled: !hasDevice,
+                    action: onCapture
+                )
+                .frame(maxWidth: .infinity)
                 sideControl(visible: VoiceCameraCapture.hasCamera(position: model.flipTarget)) {
-                    Button(action: model.flip) {
-                        sideControlLabel(systemImage: "camera.rotate")
-                    }
-                    .accessibilityLabel(copyText(.flipCamera))
-                    .accessibilityIdentifier("camera.flip")
+                    JarvisIconButton(
+                        title: copyText(.flipCamera),
+                        systemImage: "camera.rotate",
+                        identifier: "camera.flip",
+                        action: model.flip
+                    )
                 }
             }
             .padding(.bottom, JarvisDesignTokens.voiceControlBottomInset)
@@ -1589,60 +1504,25 @@ private struct JarvisChatCameraSheet: View {
     private var lensButtons: some View {
         HStack(spacing: 10) {
             ForEach(model.lenses.isEmpty ? [VoiceCameraLens.wide] : model.lenses) { option in
-                let selected = option == model.lens
-                Button { model.select(lens: option) } label: {
-                    Text(model.magnificationTitle(option))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : .white)
-                        .frame(width: 52, height: 52)
-                        .background(.black.opacity(selected ? 0.7 : 0.45), in: Circle())
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(!hasDevice)
-                .accessibilityLabel(copyText(option.localizationKey))
+                JarvisIconButton(
+                    title: copyText(option.localizationKey),
+                    systemImage: nil,
+                    identifier: "camera.lens.\(option.rawValue)",
+                    text: model.magnificationTitle(option),
+                    isDisabled: !hasDevice,
+                    isSelected: option == model.lens
+                ) { model.select(lens: option) }
                 .accessibilityValue(model.magnificationTitle(option))
-                .accessibilityAddTraits(selected ? .isSelected : [])
-                .accessibilityIdentifier("camera.lens.\(option.rawValue)")
             }
         }
         .padding(.bottom, 16)
     }
 
-    private var shutter: some View {
-        Button(action: onCapture) {
-            if isCapturingPhoto {
-                ProgressView()
-                    .tint(.white)
-                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-            } else {
-                Circle()
-                    .stroke(.white, lineWidth: JarvisDesignTokens.voiceOrbStrokeWidth * 2)
-                    .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
-                    .overlay(Circle().fill(.white).padding(JarvisDesignTokens.voiceStatusSpacing / 2))
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(isCapturingPhoto || !hasDevice)
-        .accessibilityLabel(isCapturingPhoto ? takingPhotoTitle : takePhotoTitle)
-        .accessibilityIdentifier("camera.shutter")
-        .frame(maxWidth: .infinity)
-    }
-
     @ViewBuilder
     private func sideControl<Content: View>(visible: Bool, @ViewBuilder _ content: () -> Content) -> some View {
         Group {
-            if visible { content().buttonStyle(.plain) } else { Color.clear }
+            if visible { content() } else { Color.clear }
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private func sideControlLabel(systemImage: String) -> some View {
-        Image(systemName: systemImage)
-            .font(.title3.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(width: 52, height: 52)
-            .background(.black.opacity(0.45), in: Circle())
-            .contentShape(Circle())
     }
 }
