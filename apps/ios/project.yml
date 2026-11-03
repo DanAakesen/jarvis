@@ -19,6 +19,10 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "26.0"
+    attributes:
+      SystemCapabilities:
+        com.apple.HealthKit:
+          enabled: 1
     sources:
       - path: Jarvis
         excludes:
