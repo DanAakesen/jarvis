@@ -209,7 +209,7 @@ jobs:
             echo "This TestFlight build is a preview; it does not create a release tag."
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Revoke development certificates
-        if: always()
+        if: always() && github.ref == 'refs/heads/main'
         timeout-minutes: 5
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}

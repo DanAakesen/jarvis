@@ -57,6 +57,7 @@ jobs:
           languages: ${{ matrix.language }}
           queries: security-extended
           build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Setup .NET for C# CodeQL build
         if: matrix.language == 'csharp'

@@ -121,7 +121,7 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(screen("chat").waitForExistence(timeout: 10), "Typing on Home continues in Chat")
         XCTAssertTrue(app.textViews["chat.input"].waitForExistence(timeout: 5)
                       || app.textFields["chat.input"].waitForExistence(timeout: 5))
-        let home = app.descendants(matching: .any)["chat.backToToday"]
+        let home = app.buttons["chat.backToToday"].firstMatch
         if !home.waitForExistence(timeout: 10) {
             XCTFail("chat.backToToday missing. \(String(app.debugDescription.prefix(6000)))")
             return
