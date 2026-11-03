@@ -43,6 +43,7 @@ final class TodayUITests: XCTestCase {
                 XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "\(language) \(appearance)")
                 let greeting = app.descendants(matching: .any)["today.greeting"]
                 XCTAssertTrue(greeting.waitForExistence(timeout: 5))
+                XCTAssertFalse(app.buttons["navigation.openSidebar"].exists, "Home has no sidebar button")
                 XCTAssertTrue(app.descendants(matching: .any)["today.donut"].exists)
                 for session in ["chest", "back", "arms", "legs", "cardio"] {
                     XCTAssertTrue(app.buttons["today.legend.\(session)"].exists, "Muscle row \(session)")
@@ -70,9 +71,10 @@ final class TodayUITests: XCTestCase {
 
     func testHomeIsTheActiveSidebarRowOnToday() {
         launch()
-        let menu = app.buttons["navigation.openSidebar"]
-        XCTAssertTrue(menu.waitForExistence(timeout: 10))
-        menu.tap()
+        XCTAssertTrue(screen("today").waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["navigation.openSidebar"].exists, "Home has no sidebar button")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.4))
+            .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.4)))
         let home = app.buttons["navigation.today"]
         XCTAssertTrue(home.waitForExistence(timeout: 3))
         XCTAssertTrue(home.isSelected, "Home is the active row on Today")

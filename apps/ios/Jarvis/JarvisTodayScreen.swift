@@ -54,7 +54,6 @@ struct JarvisTodayScreen: View {
                 agenda
             }
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            .padding(.top, 4)
             .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
@@ -88,19 +87,16 @@ struct JarvisTodayScreen: View {
 
     private var greeting: some View {
         let value = model.greeting(language: language)
-        return HStack(alignment: .top, spacing: 8) {
-            JarvisTodayShimmer(isAnimated: !fixtureMode && !reduceMotion) {
-                Text(attributedGreeting(value))
-                    .font(.system(size: greetingSize, weight: .bold))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(value.plainText)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityIdentifier("today.greeting")
-            JarvisSidebarMenuButton(language: language)
+        return JarvisTodayShimmer(isAnimated: !fixtureMode && !reduceMotion) {
+            Text(attributedGreeting(value))
+                .font(.system(size: greetingSize, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(value.plainText)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityIdentifier("today.greeting")
     }
 
     private func attributedGreeting(_ greeting: JarvisTodayGreeting) -> AttributedString {

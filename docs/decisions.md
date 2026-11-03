@@ -10729,7 +10729,7 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 ## 2026-11-03 Home matches the board, with the shared composer (P15-70)
 
-- Decision: Home follows `docs/ios/design/today.html`: a 32 pt bold phrase with orange key words (Danish by default), the workouts and steps card with all five muscle rows even when empty (donut "0 af 1", step ring, hourly bars, 8.000 goal line), two equal quick-action tiles (round chip, title, last workout or last lift), a Today / Tasks control with counts and a round plus, then one day list card. The sidebar button sits on the phrase row, not above it.
+- Decision: Home follows `docs/ios/design/today.html`: a 32 pt bold phrase with orange key words (Danish by default), the workouts and steps card with all five muscle rows even when empty (donut "0 af 1", step ring, hourly bars, 8.000 goal line), two equal quick-action tiles (round chip, title, last workout or last lift), a Today / Tasks control with counts and a round plus, then one day list card. The phrase sits at the very top under the status bar, with no title and no sidebar button (Dan, #1553); the sidebar opens by edge swipe.
 - Decision: Chat and Home use one composer, `JarvisComposerBar`: plus on the left, dictation and voice on the right, voice becomes send while typing, orange rim, no orb. Only the surrounding screen differs.
 - Evidence: TestFlight build 60 showed a small English sentence, a tiny ring with "No workouts" and unequal pills, side by side with the board.
 - Consequence: `TodayUITests.testHomeMatchesTheBoardInDarkAndLightDanishAndEnglish` attaches Home screenshots for da/en and dark/light; compare them to the board before merging.
