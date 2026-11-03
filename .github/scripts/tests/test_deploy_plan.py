@@ -4,6 +4,7 @@ import tempfile
 import unittest
 
 from deploy_plan import changed_files, plan
+from hermetic import setUpModule  # noqa: F401
 
 
 def selected(result):
@@ -71,7 +72,7 @@ class ChangedFilesTests(unittest.TestCase):
         self.previous = os.getcwd()
         os.chdir(self.directory.name)
         for command in (
-            ["git", "init", "-q"],
+            ["git", "init", "-q", "-b", "main"],
             ["git", "config", "user.email", "test@example.com"],
             ["git", "config", "user.name", "Test"],
         ):

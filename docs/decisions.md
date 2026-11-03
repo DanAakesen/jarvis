@@ -10684,3 +10684,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - The writer keeps one note per Copenhagen day at `Health/Gym log/YYYY-MM-DD.md`, one `##` section per session, lifts as lines under their session and unassigned lifts in a separate section. Every owned line ends in a `<!-- jarvis:kind:id -->` marker, so edits replace the line, deletes remove it, repeats change nothing and text the owner added is kept. Writes use the todo writer's stale-write pattern (read, apply, write with the SHA, re-read on conflict, 3 attempts, 256 KiB cap). User text has comment delimiters and control characters removed and secret-like text withheld.
 - Lifts store `gym_day` when created (the session's day if linked) so a later session delete cannot move a lift to another note. Deleting a session moves its lifts to the unassigned section. Lifts saved before migration 0074 are marked as already handled and are not back-filled into the vault.
 - `GET /daily/workouts?days=7|14|30&limit=` lists recent workouts; `POST`, `PATCH` and `DELETE /daily/workouts` follow the lift routes (owner only, no agent or connector tokens). The note text is Danish by default with English labels available in the writer.
+
+## 2026-11-03 P15-67: Fast merge gate, separate Simulator check
+
+- Decision: `CI result` gates merge on quick jobs only. The iOS Simulator job moved to `ios-simulator.yml` and reports separately. Reason: it took 43 of the median 44 minutes and failed 9 of 13 failed runs, so every PR waited on it.
+- Trade-off: a PR can merge before the Simulator result arrives. A failure on `main` opens or updates one tracking issue, and the PR comment still warns when UI tests fail. Copilot ready qualification no longer waits for the Simulator.
+- Not changed: UI tests were not skipped, deleted, retried or weakened. Sharding and a smoke subset stay open until the Simulator timing is measured.
