@@ -21,6 +21,18 @@ final class JarvisTodayGymTests: XCTestCase {
         XCTAssertEqual(JarvisGymSessionType.cardio.shortTitle(language: .en), "Cardio")
     }
 
+    func testLiftsHaveBothLanguagesAndAValidSession() {
+        for lift in JarvisGymLiftType.allCases {
+            for language in [JarvisAppLanguage.da, .en] {
+                let title = lift.title(language: language)
+                XCTAssertFalse(title.isEmpty)
+                XCTAssertFalse(title.hasPrefix("today."), "Missing \(language) string for \(lift)")
+            }
+            XCTAssertTrue(JarvisGymSessionType.allCases.contains(lift.session))
+        }
+        XCTAssertEqual(JarvisGymLiftType.benchPress.title(language: .da), "Bænkpres")
+    }
+
     func testVaultPathIsAValidNotePathAndRoundTrips() throws {
         for session in JarvisGymSessionType.allCases {
             let value = entry(session)

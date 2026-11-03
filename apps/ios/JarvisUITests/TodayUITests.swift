@@ -94,38 +94,92 @@ final class TodayUITests: XCTestCase {
         XCTAssertEqual(ring.value as? String, "6300", "Changing the range resets the selection")
     }
 
-    func testGymSheetOpensSavesAndCloses() {
+    /// Finds a sheet element by identifier whatever its type, scrolling the sheet until it appears.
+    private func sheetElement(_ id: String) -> XCUIElement {
+        let element = app.descendants(matching: .any).matching(identifier: id).firstMatch
+        var swipes = 0
+        while !element.waitForExistence(timeout: 2) && swipes < 4 {
+            app.swipeUp()
+            swipes += 1
+        }
+        return element
+    }
+
+    func testLogButtonsOpenDifferentSheets() {
+        launch()
+        let workout = app.buttons["today.logWorkout"]
+        XCTAssertTrue(workout.waitForExistence(timeout: 10))
+        workout.tap()
+        XCTAssertTrue(app.buttons["today.workout.session.chest"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["today.lift.type.benchPress"].exists, "Log workout shows workout types, not lifts")
+        app.buttons["sheet.cancel"].tap()
+        let lift = app.buttons["today.logLift"]
+        XCTAssertTrue(lift.waitForExistence(timeout: 5))
+        lift.tap()
+        XCTAssertTrue(app.buttons["today.lift.type.benchPress"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["today.workout.session.chest"].exists, "Log lift shows lifts, not workout types")
+        app.buttons["sheet.cancel"].tap()
+    }
+
+    func testWorkoutSavingIsBlockedWithoutADateAndTheDateIsSaved() {
         launch()
         let log = app.buttons["today.logWorkout"]
         XCTAssertTrue(log.waitForExistence(timeout: 10))
         log.tap()
-        let chest = app.buttons["today.gym.session.chest"]
+        let chest = app.buttons["today.workout.session.chest"]
         XCTAssertTrue(chest.waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["sheet.confirm"].isEnabled, "Saving needs a session type")
-        chest.tap()
         let save = app.buttons["sheet.confirm"]
+        XCTAssertFalse(save.isEnabled, "Saving needs a session type")
+        chest.tap()
+        XCTAssertTrue(sheetElement("today.log.date").exists, "The date defaults to today")
+        XCTAssertTrue(save.isEnabled)
+        app.buttons["today.log.date.clear"].tap()
+        XCTAssertFalse(save.isEnabled, "Saving is blocked without a date")
+        app.buttons["today.log.date.set"].tap()
         XCTAssertTrue(save.isEnabled)
         save.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["today.gym.status"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["today.log.status"].waitForExistence(timeout: 5))
         app.buttons["sheet.cancel"].tap()
         XCTAssertTrue(log.waitForExistence(timeout: 5))
-        XCTAssertTrue(log.isHittable)
     }
 
-    func testTypingOpensChatAndHomeReturns() {
+    func testLiftSavingNeedsALiftAndADate() {
+        launch()
+        let log = app.buttons["today.logLift"]
+        XCTAssertTrue(log.waitForExistence(timeout: 10))
+        log.tap()
+        let bench = app.buttons["today.lift.type.benchPress"]
+        XCTAssertTrue(bench.waitForExistence(timeout: 5))
+        let save = app.buttons["sheet.confirm"]
+        XCTAssertFalse(save.isEnabled)
+        bench.tap()
+        for (field, value) in [("weight", "60"), ("reps", "8"), ("sets", "3")] {
+            let input = app.textFields["today.lift.\(field)"]
+            XCTAssertTrue(sheetElement("today.lift.\(field)").exists, "today.lift.\(field) missing")
+            input.tap()
+            input.typeText(value)
+        }
+        XCTAssertTrue(save.isEnabled)
+        app.buttons["today.log.date.clear"].tap()
+        XCTAssertFalse(save.isEnabled, "Saving is blocked without a date")
+        app.buttons["today.log.date.set"].tap()
+        save.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["today.log.status"].waitForExistence(timeout: 5))
+    }
+
+    func testTypingShowsSendAndSendOpensChatThenHomeReturns() {
         launch()
         let input = app.textFields["today.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["today.voice"].exists, "Voice is the default trailing control")
         input.tap()
         input.typeText("H")
-        XCTAssertTrue(screen("chat").waitForExistence(timeout: 10), "Typing on Home continues in Chat")
-        XCTAssertTrue(app.textViews["chat.input"].waitForExistence(timeout: 5)
-                      || app.textFields["chat.input"].waitForExistence(timeout: 5))
+        let send = app.buttons["today.send"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5), "Voice becomes send while typing")
+        send.tap()
+        XCTAssertTrue(screen("chat").waitForExistence(timeout: 10), "Send continues in Chat")
         let home = app.buttons["chat.backToToday"].firstMatch
-        if !home.waitForExistence(timeout: 10) {
-            XCTFail("chat.backToToday missing. \(String(app.debugDescription.prefix(6000)))")
-            return
-        }
+        XCTAssertTrue(home.waitForExistence(timeout: 10))
         home.tap()
         XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "Reversing returns to Home")
     }

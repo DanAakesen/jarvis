@@ -1,8 +1,11 @@
 import JarvisCore
 import SwiftUI
 
-/// Quick gym log: pick one of the five session types, optionally add a lift, and save it to the vault as a Gym log.
+/// Home log sheets. Log workout shows the session types; Log lift shows the lifts. Both carry a date field
+/// (default today) and nothing is saved until a date is set. Saving goes through the existing vault path.
 struct JarvisTodayGymSheet: View {
+    enum Kind { case workout, lift }
+
     private enum Status: Equatable {
         case idle
         case saving
@@ -13,82 +16,119 @@ struct JarvisTodayGymSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
-    let startsWithLift: Bool
+    let kind: Kind
 
     @State private var session: JarvisGymSessionType?
-    @State private var exercise = ""
+    @State private var liftType: JarvisGymLiftType?
     @State private var weight = ""
     @State private var reps = ""
     @State private var sets = ""
+    @State private var date: Date?
     @State private var status: Status = .idle
-    @FocusState private var exerciseFocused: Bool
+
+    init(model: JarvisTodayModel, language: JarvisAppLanguage, kind: Kind) {
+        self.model = model
+        self.language = language
+        self.kind = kind
+        _date = State(initialValue: model.now)
+    }
+
+    private var prefix: String { kind == .workout ? "today.workout" : "today.lift" }
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
         JarvisTodayLocalization.string(key, language: language)
     }
 
-    private var hasLiftInput: Bool {
-        ![exercise, weight, reps, sets].allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
     private var parsedLift: JarvisGymLift? {
-        guard let kilos = Double(weight.replacingOccurrences(of: ",", with: ".")),
+        guard let liftType,
+              let kilos = Double(weight.replacingOccurrences(of: ",", with: ".")),
               let repCount = Int(reps), let setCount = Int(sets) else { return nil }
-        let lift = JarvisGymLift(exercise: exercise, weightKg: kilos, reps: repCount, sets: setCount)
+        let lift = JarvisGymLift(
+            exercise: liftType.title(language: language), weightKg: kilos, reps: repCount, sets: setCount
+        )
         return lift.isValid ? lift : nil
     }
 
     private var canSave: Bool {
-        guard session != nil else { return false }
+        guard date != nil else { return false }
         switch status {
         case .saving, .saved, .failed(.saveOutcomeUnknown): return false
         default: break
         }
-        return !hasLiftInput || parsedLift != nil
+        switch kind {
+        case .workout: return session != nil
+        case .lift: return parsedLift != nil
+        }
+    }
+
+    private var dateBinding: Binding<Date> {
+        Binding(get: { date ?? model.now }, set: { date = $0 })
+    }
+
+    private func resetStatus() {
+        if status != .saving, status != .saved { status = .idle }
     }
 
     var body: some View {
         NavigationStack {
             JarvisForm {
-                Section(copy(.sessionTypeGroup)) {
-                    ForEach(JarvisGymSessionType.allCases) { option in
-                        Button {
-                            session = option
-                            if status != .saving, status != .saved { status = .idle }
-                        } label: {
-                            HStack {
-                                Text(option.title(language: language))
-                                    .foregroundStyle(.primary)
-                                Spacer(minLength: 8)
-                                if session == option {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .contentShape(Rectangle())
+                Section {
+                    if date != nil {
+                        DatePicker(copy(.logDate), selection: dateBinding, in: ...model.now, displayedComponents: .date)
+                            .environment(\.locale, language.locale)
+                            .accessibilityIdentifier("today.log.date")
+                        HStack {
+                            Spacer(minLength: 0)
+                            JarvisIconButton(
+                                title: copy(.clearDate),
+                                systemImage: "xmark.circle",
+                                identifier: "today.log.date.clear"
+                            ) { date = nil; resetStatus() }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(session == option ? .isSelected : [])
-                        .accessibilityIdentifier("today.gym.session.\(option.rawValue)")
+                    } else {
+                        HStack {
+                            Text(copy(.dateRequired)).foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                            JarvisIconButton(
+                                title: copy(.setDate),
+                                systemImage: "calendar.badge.plus",
+                                identifier: "today.log.date.set"
+                            ) { date = model.now; resetStatus() }
+                        }
                     }
                 }
-                Section(copy(.quickLift)) {
-                    TextField(copy(.exercise), text: $exercise)
-                        .focused($exerciseFocused)
-                        .accessibilityIdentifier("today.gym.exercise")
-                    HStack(spacing: 12) {
+                switch kind {
+                case .workout:
+                    Section(copy(.sessionTypeGroup)) {
+                        ForEach(JarvisGymSessionType.allCases) { option in
+                            choiceRow(
+                                title: option.title(language: language),
+                                isSelected: session == option,
+                                identifier: "today.workout.session.\(option.rawValue)"
+                            ) { session = option }
+                        }
+                    }
+                case .lift:
+                    Section(copy(.liftType)) {
+                        ForEach(JarvisGymLiftType.allCases) { option in
+                            choiceRow(
+                                title: option.title(language: language),
+                                isSelected: liftType == option,
+                                identifier: "today.lift.type.\(option.rawValue)"
+                            ) { liftType = option }
+                        }
+                    }
+                    Section {
                         TextField("kg", text: $weight)
                             .keyboardType(.decimalPad)
                             .accessibilityLabel("kg")
-                            .accessibilityIdentifier("today.gym.weight")
+                            .accessibilityIdentifier("today.lift.weight")
                         TextField(copy(.reps), text: $reps)
                             .keyboardType(.numberPad)
-                            .accessibilityIdentifier("today.gym.reps")
+                            .accessibilityIdentifier("today.lift.reps")
                         TextField(copy(.sets), text: $sets)
                             .keyboardType(.numberPad)
-                            .accessibilityIdentifier("today.gym.sets")
+                            .accessibilityIdentifier("today.lift.sets")
                     }
                 }
             }
@@ -100,10 +140,10 @@ struct JarvisTodayGymSheet: View {
                         .padding(.horizontal)
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.updatesFrequently)
-                        .accessibilityIdentifier("today.gym.status")
+                        .accessibilityIdentifier("today.log.status")
                 }
             }
-            .navigationTitle(copy(.gymLog))
+            .navigationTitle(copy(kind == .workout ? .logWorkout : .logLift))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 JarvisSheetToolbar(
@@ -116,13 +156,32 @@ struct JarvisTodayGymSheet: View {
                 )
             }
         }
-        .onAppear {
-            if startsWithLift, !fixtureFocusSuppressed { exerciseFocused = true }
-        }
-        .accessibilityIdentifier("today.gym.sheet")
+        .accessibilityIdentifier("\(prefix).sheet")
     }
 
-    private var fixtureFocusSuppressed: Bool { model.isFixture }
+    private func choiceRow(
+        title: String, isSelected: Bool, identifier: String, action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            action()
+            resetStatus()
+        } label: {
+            HStack {
+                Text(title).foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
+    }
 
     private struct StatusMessage {
         let text: String
@@ -144,10 +203,14 @@ struct JarvisTodayGymSheet: View {
     }
 
     private func save() async {
-        guard let session, canSave else { return }
+        guard let date, canSave else { return }
+        let target = kind == .workout ? session : liftType?.session
+        guard let target else { return }
         status = .saving
         do {
-            try await model.saveGymLog(session: session, lift: hasLiftInput ? parsedLift : nil)
+            try await model.saveGymLog(
+                session: target, lift: kind == .lift ? parsedLift : nil, on: date
+            )
             status = .saved
         } catch let error as JarvisGymLogError {
             switch error {
