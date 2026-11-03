@@ -433,10 +433,10 @@ struct JarvisTodayScreen: View {
                         action: sendDraft
                     )
                 } else {
-                    JarvisComposerIconButton(
+                    JarvisOrbButton(
                         title: JarvisChatLocalization.string(.voiceMode, language: language),
-                        systemImage: "waveform",
                         identifier: "today.voice",
+                        isStatic: true,
                         action: onVoice
                     )
                     .jarvisCarryOver(.orb)
