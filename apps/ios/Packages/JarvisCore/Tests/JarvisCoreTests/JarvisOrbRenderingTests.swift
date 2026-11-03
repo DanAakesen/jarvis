@@ -23,7 +23,7 @@ final class JarvisOrbRenderingTests: XCTestCase {
         let files = [
             "apps/ios/Jarvis/JarvisGateRootView.swift", "apps/ios/Jarvis/VoiceScreen.swift",
             "apps/ios/Jarvis/JarvisChatScreen.swift", "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift",
-            "apps/ios/Jarvis/JarvisTodayScreen.swift", "apps/ios/VoiceActivity/JarvisVoiceActivity.swift",
+            "apps/ios/VoiceActivity/JarvisVoiceActivity.swift",
         ]
         for file in files {
             let text = try source(file)
@@ -33,6 +33,9 @@ final class JarvisOrbRenderingTests: XCTestCase {
             XCTAssertFalse(text.contains("JarvisOrbView"), file)
             XCTAssertFalse(text.contains("VoiceOrbView"), file)
         }
+        let home = try source("apps/ios/Jarvis/JarvisTodayScreen.swift")
+        XCTAssertFalse(home.contains("JarvisOrb"), "The Home composer is the shared chat composer: no orb")
+        XCTAssertTrue(home.contains("JarvisComposerBar("))
         let repository = URL(fileURLWithPath: #filePath)
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repository.deletingLastPathComponent().deletingLastPathComponent()
