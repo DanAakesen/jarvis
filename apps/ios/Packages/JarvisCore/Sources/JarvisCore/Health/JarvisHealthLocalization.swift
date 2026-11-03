@@ -22,6 +22,7 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case accessDenied = "health.accessDenied"
     case loading = "health.loading"
     case empty = "health.empty"
+    case notAuthorised = "health.notAuthorised"
     case notRecorded = "health.notRecorded"
     case retry = "health.retry"
     case offline = "health.offline"

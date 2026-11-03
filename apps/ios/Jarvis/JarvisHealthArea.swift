@@ -271,7 +271,13 @@ struct JarvisHealthArea: View {
                             if dashboard.failure == nil && dashboard.hasFailure {
                                 failureRow(firstFailure(in: dashboard))
                             }
-                            if dashboard.capabilities != nil {
+                            if let capabilities = dashboard.capabilities, capabilities.availableSources.isEmpty {
+                                ContentUnavailableView(
+                                    copy.text(.notAuthorised),
+                                    systemImage: "heart.text.square"
+                                )
+                                .accessibilityIdentifier("health.empty")
+                            } else if dashboard.capabilities != nil {
                                 JarvisHealthRingsSection(
                                     data: dashboard,
                                     period: period,
@@ -401,7 +407,7 @@ struct JarvisHealthArea: View {
     }
 
     private var headline: JarvisPagePhrase? {
-        guard let dashboard, dashboard.capabilities != nil else { return nil }
+        guard let dashboard, let capabilities = dashboard.capabilities, !capabilities.availableSources.isEmpty else { return nil }
         let rings = JarvisHealthRingsSection(data: dashboard, period: period, language: language)
         return JarvisHealthPagePhrase.make(rings.phraseInput(isToday: periodPreset == .today), language: language)
     }

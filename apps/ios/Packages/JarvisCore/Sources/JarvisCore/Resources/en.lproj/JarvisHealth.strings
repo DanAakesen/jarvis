@@ -19,6 +19,7 @@
 "health.accessDenied" = "Health data is available to the owner only";
 "health.loading" = "Loading";
 "health.empty" = "No data";
+"health.notAuthorised" = "Allow Jarvis to read Health";
 "health.notRecorded" = "Not recorded";
 "health.retry" = "Try again";
 "health.offline" = "Offline";

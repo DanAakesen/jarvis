@@ -51,6 +51,7 @@ final class NavigationReliabilityTests: XCTestCase {
             let pages: [(destination: String, actions: [String])] = [
                 ("health", ["health.refresh", "health.plus"]),
                 ("notes", ["notes.refresh", "notes.plus"]),
+                ("settings", ["settings.refresh"]),
                 ("softwareFactory", ["factory.refresh", "factory.plus"]),
             ]
             for page in pages {
@@ -75,6 +76,27 @@ final class NavigationReliabilityTests: XCTestCase {
                 tap(app.buttons["navigation.chat"])
                 waitFor(app.buttons["navigation.chat"], key: "exists", value: false)
             }
+        }
+    }
+
+    func testNotificationsSheetHasOneHeaderWithCentredClose() {
+        for language in ["da", "en"] {
+            launch(language: language)
+            defer { app.terminate() }
+            let bell = app.buttons["chat.notifications"]
+            waitFor(bell, key: "isHittable", value: true)
+            bell.tap()
+            let title = app.staticTexts["page.title"]
+            waitFor(title, key: "exists", value: true)
+            XCTAssertFalse(title.label.isEmpty, "Notifications [\(language)] needs a title")
+            let close = app.buttons["chat.notifications.done"]
+            waitFor(close, key: "isHittable", value: true)
+            XCTAssertGreaterThanOrEqual(close.frame.width, 44)
+            XCTAssertLessThan(abs(close.frame.width - close.frame.height), 1, "The close button is a circle")
+            XCTAssertLessThan(abs(title.frame.midY - close.frame.midY), 24, "Title is level with the buttons")
+            attachScreenshot("Notifications (\(language))")
+            close.tap()
+            waitFor(title, key: "exists", value: false)
         }
     }
 

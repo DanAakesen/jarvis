@@ -10733,3 +10733,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Chat and Home use one composer, `JarvisComposerBar`: plus on the left, dictation and voice on the right, voice becomes send while typing, orange rim, no orb. Only the surrounding screen differs.
 - Evidence: TestFlight build 60 showed a small English sentence, a tiny ring with "No workouts" and unequal pills, side by side with the board.
 - Consequence: `TodayUITests.testHomeMatchesTheBoardInDarkAndLightDanishAndEnglish` attaches Home screenshots for da/en and dark/light; compare them to the board before merging.
+
+## 2026-11-03 P15-68: Settings and Notifications on the shared header, Health empty state
+
+- Decision: Settings uses `JarvisPageHeader` (title, refresh, sidebar button). The notifications sheet draws its own header in content (bold title, Clear all, close) and hides the navigation bar, so there is one background and the close button is a centred circle. Group rows swipe left to dismiss, with a VoiceOver action as the alternative. Health shows an empty state (`health.notAuthorised`, da and en) and no headline when the backend reports no readable sources, for example while the HealthKit entitlement is off.
+- Evidence: Health and Notes already used the shared header and headline. UI tests cover titles and shared button identifiers for Health, Notes, Settings and the notifications sheet.
+- Not verified: no Simulator run or before and after screenshots in this change. Status, Proaktiv and Proaktiv settings stay with #1548.

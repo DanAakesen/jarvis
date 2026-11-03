@@ -19,6 +19,7 @@
 "health.accessDenied" = "Sundhedsdata er kun tilgængelige for ejeren";
 "health.loading" = "Indlæser";
 "health.empty" = "Ingen data";
+"health.notAuthorised" = "Giv Jarvis adgang til Sundhed";
 "health.notRecorded" = "Ikke registreret";
 "health.retry" = "Prøv igen";
 "health.offline" = "Offline";

@@ -73,29 +73,9 @@ struct JarvisTodayGymSheet: View {
         NavigationStack {
             JarvisForm {
                 Section {
-                    if date != nil {
-                        DatePicker(copy(.logDate), selection: dateBinding, in: ...model.now, displayedComponents: .date)
-                            .environment(\.locale, language.locale)
-                            .accessibilityIdentifier("today.log.date")
-                        HStack {
-                            Spacer(minLength: 0)
-                            JarvisIconButton(
-                                title: copy(.clearDate),
-                                systemImage: "xmark.circle",
-                                identifier: "today.log.date.clear"
-                            ) { date = nil; resetStatus() }
-                        }
-                    } else {
-                        HStack {
-                            Text(copy(.dateRequired)).foregroundStyle(.secondary)
-                            Spacer(minLength: 0)
-                            JarvisIconButton(
-                                title: copy(.setDate),
-                                systemImage: "calendar.badge.plus",
-                                identifier: "today.log.date.set"
-                            ) { date = model.now; resetStatus() }
-                        }
-                    }
+                    DatePicker(copy(.logDate), selection: dateBinding, in: ...model.now, displayedComponents: .date)
+                        .environment(\.locale, language.locale)
+                        .accessibilityIdentifier("today.log.date")
                 }
                 switch kind {
                 case .workout:
