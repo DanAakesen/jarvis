@@ -110,11 +110,9 @@ final class InsightsPagesTests: XCTestCase {
         XCTAssertTrue(element("proactive.budget").waitForExistence(timeout: 8))
         let before = element("proactive.budget").label
         app.buttons["proactive.settings"].tap()
-        let budget = app.textFields["proactive.edit.budget"]
+        let budget = app.sliders["proactive.edit.budget"]
         XCTAssertTrue(budget.waitForExistence(timeout: 4))
-        budget.tap()
-        budget.clearText()
-        budget.typeText("80")
+        budget.adjust(toNormalizedSliderPosition: 0.08)
         app.buttons["sheet.confirm"].tap()
         let closed = NSPredicate { _, _ in !self.element("proactive.edit.sheet").exists }
         XCTAssertEqual(
@@ -136,11 +134,9 @@ final class InsightsPagesTests: XCTestCase {
         XCTAssertTrue(element("proactive.budget").waitForExistence(timeout: 8))
         let before = element("proactive.budget").label
         app.buttons["proactive.settings"].tap()
-        let budget = app.textFields["proactive.edit.budget"]
+        let budget = app.sliders["proactive.edit.budget"]
         XCTAssertTrue(budget.waitForExistence(timeout: 4))
-        budget.tap()
-        budget.clearText()
-        budget.typeText("90")
+        budget.adjust(toNormalizedSliderPosition: 0.09)
         app.buttons["sheet.cancel"].tap()
         let closed = NSPredicate { _, _ in !self.element("proactive.edit.sheet").exists }
         XCTAssertEqual(
@@ -155,15 +151,13 @@ final class InsightsPagesTests: XCTestCase {
         defer { app.terminate() }
         XCTAssertTrue(element("proactive.budget").waitForExistence(timeout: 8))
         app.buttons["proactive.settings"].tap()
-        let budget = app.textFields["proactive.edit.budget"]
+        let budget = app.sliders["proactive.edit.budget"]
         XCTAssertTrue(budget.waitForExistence(timeout: 4))
-        budget.tap()
-        budget.clearText()
-        budget.typeText("70")
+        budget.adjust(toNormalizedSliderPosition: 0.07)
         app.buttons["sheet.confirm"].tap()
         let retry = app.buttons["proactive.edit.retry"]
         XCTAssertTrue(retry.waitForExistence(timeout: 6), "A failed save must offer retry")
-        XCTAssertEqual(app.textFields["proactive.edit.budget"].value as? String, "70")
+        XCTAssertEqual(app.sliders["proactive.edit.budget"].value as? String, "70")
         retry.tap()
         let closed = NSPredicate { _, _ in !self.element("proactive.edit.sheet").exists }
         XCTAssertEqual(

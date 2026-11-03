@@ -301,3 +301,51 @@ public enum JarvisHealthPagePhrase {
             : "Dan, {\(gym)} workouts are done, and \(stepsPart).")
     }
 }
+
+/// Status header phrase, written from the check results.
+public enum JarvisStatusPagePhrase {
+    public static func make(_ snapshot: JarvisStatusSnapshot, language: JarvisAppLanguage) -> JarvisPagePhrase {
+        let da = language == .da
+        let down = snapshot.entries.filter { $0.status == .down }.count
+        let degraded = snapshot.entries.filter { $0.status == .degraded }.count
+        let total = snapshot.entries.count
+        if down > 0 {
+            let list = da ? count(down, one: "tjek", many: "tjek") : count(down, one: "check", many: "checks")
+            return JarvisPagePhrase(markup: da ? "Dan, {\(list)} er nede." : "Dan, {\(list)} \(down == 1 ? "is" : "are") down.")
+        }
+        if degraded > 0 {
+            let list = da ? count(degraded, one: "tjek", many: "tjek") : count(degraded, one: "check", many: "checks")
+            return JarvisPagePhrase(markup: da
+                ? "Dan, {\(list)} kører forringet."
+                : "Dan, {\(list)} \(degraded == 1 ? "is" : "are") degraded.")
+        }
+        let healthy = snapshot.entries.filter { $0.status == .ok }.count
+        if healthy == total, total > 0 {
+            return JarvisPagePhrase(markup: da ? "Dan, {alle \(total) tjek} er i orden." : "Dan, {all \(total) checks} are healthy.")
+        }
+        return JarvisPagePhrase(markup: da
+            ? "Dan, {\(healthy) af \(total) tjek} er i orden."
+            : "Dan, {\(healthy) of \(total) checks} are healthy.")
+    }
+}
+
+/// Proactive header phrase, written from the open suggestions and the next check.
+public enum JarvisProactivePagePhrase {
+    public static func make(status: JarvisProactiveStatus, openItems: Int, language: JarvisAppLanguage) -> JarvisPagePhrase {
+        let da = language == .da
+        if status.paused {
+            return JarvisPagePhrase(markup: da ? "Dan, proaktiv er {sat på pause}." : "Dan, proactive is {paused}.")
+        }
+        if openItems > 0 {
+            let items = da
+                ? count(openItems, one: "forslag", many: "forslag")
+                : count(openItems, one: "suggestion", many: "suggestions")
+            return JarvisPagePhrase(markup: da
+                ? "Dan, Jarvis har {\(items)} til dig."
+                : "Dan, Jarvis has {\(items)} for you.")
+        }
+        return JarvisPagePhrase(markup: da
+            ? "Dan, Jarvis har {ingen nye forslag} til dig."
+            : "Dan, Jarvis has {no new suggestions} for you.")
+    }
+}
