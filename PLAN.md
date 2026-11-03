@@ -3767,4 +3767,4 @@ sustained performance acceptance or permission to resume #717/#741.
 - Apple-target compilation and real-device End voice/sidebar interaction remain
   unverified; no deployment or device acceptance is claimed.
 
-| P15-60 | [#1529](https://github.com/DanAakesen/jarvis/issues/1529) | Gym log: save workouts and lifts to the vault, with workout types | Workout entries, the Gym log vault writer with retry job, workout routes and the JarvisCore client are implemented with tests; page redesigns stay in other issues. | None | Complete |
+| P15-60 | [#1529](https://github.com/DanAakesen/jarvis/issues/1529) | Gym log: save workouts and lifts to the vault, with workout types | Workout entries, the Gym log vault writer with retry job, workout routes and the JarvisCore client are implemented with tests; page redesigns stay in other issues. | None | In progress |
