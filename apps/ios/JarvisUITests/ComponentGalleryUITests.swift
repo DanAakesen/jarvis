@@ -74,9 +74,8 @@ final class ComponentGalleryUITests: XCTestCase {
             "gallery.bell.badge.large", "gallery.bell.menu", "navigation.openSidebar",
         ]
         for id in ids {
-            let button = app.buttons[id].firstMatch
-            if !button.exists { app.swipeUp() }
-            XCTAssertTrue(button.waitForExistence(timeout: 10), id)
+            let button = galleryElement(id)
+            XCTAssertTrue(button.exists, "\(id) not found. Accessibility tree:\n\(app.debugDescription)")
             XCTAssertEqual(button.frame.width, button.frame.height, accuracy: 0.5, "\(id) must be square")
             XCTAssertEqual(button.frame.width, 48, accuracy: 0.5, "\(id) must be 48 pt")
         }
@@ -90,12 +89,22 @@ final class ComponentGalleryUITests: XCTestCase {
         let marker = app.descendants(matching: .any).matching(identifier: "screen.componentGallery").firstMatch
         XCTAssertTrue(marker.waitForExistence(timeout: 30), "The component gallery did not open.")
         for id in ["gallery.tabs.0", "gallery.tabs.1", "gallery.tabs.2", "gallery.tabs.3"] {
-            let tab = app.buttons[id].firstMatch
-            if !tab.exists { app.swipeUp() }
-            XCTAssertTrue(tab.waitForExistence(timeout: 10), id)
+            let tab = galleryElement(id)
+            XCTAssertTrue(tab.exists, "\(id) not found. Accessibility tree:\n\(app.debugDescription)")
             XCTAssertGreaterThanOrEqual(tab.frame.height, 44, "\(id) must be at least 44 pt tall")
             XCTAssertLessThan(tab.frame.height, 60, "\(id) must be one line")
         }
         attach(app.screenshot(), named: "Tab strip")
+    }
+
+    /// Finds a gallery element by identifier whatever its accessibility type, scrolling the page until it appears.
+    private func galleryElement(_ id: String) -> XCUIElement {
+        let element = app.descendants(matching: .any).matching(identifier: id).firstMatch
+        var swipes = 0
+        while !element.waitForExistence(timeout: 2) && swipes < 6 {
+            app.swipeUp()
+            swipes += 1
+        }
+        return element
     }
 }
