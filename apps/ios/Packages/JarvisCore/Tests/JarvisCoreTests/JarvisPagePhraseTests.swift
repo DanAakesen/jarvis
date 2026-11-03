@@ -66,4 +66,25 @@ final class JarvisPagePhraseTests: XCTestCase {
         }
         XCTAssertFalse(JarvisWorkoutDraft(idempotencyKey: UUID(), sessionType: .cardio, startedAt: Date(), durationMinutes: 0).isValid)
     }
+
+    func testStatusPhraseLeadsWithFailures() {
+        func entry(_ id: String, _ status: JarvisStatusValue) -> JarvisStatusEntry {
+            JarvisStatusEntry(id: id, status: status, checkedAt: "2026-11-02T08:00:00Z")
+        }
+        let healthy = JarvisStatusSnapshot(checkedAt: "2026-11-02T08:00:00Z", entries: [entry("a", .ok), entry("b", .ok)])
+        XCTAssertEqual(JarvisStatusPagePhrase.make(healthy, language: .en).plainText, "Dan, all 2 checks are healthy.")
+        let down = JarvisStatusSnapshot(checkedAt: "2026-11-02T08:00:00Z", entries: [entry("a", .down), entry("b", .ok)])
+        XCTAssertEqual(JarvisStatusPagePhrase.make(down, language: .en).plainText, "Dan, 1 check is down.")
+    }
+
+    func testProactivePhraseCountsOpenItems() {
+        let status = JarvisProactiveStatus(
+            paused: false, quietNow: false, nextSlotAt: nil, lastRun: nil,
+            budget: JarvisProactiveBudget(month: "2026-11", monthlyLimitDkk: 50, estimatedSpendDkk: 1, state: .ok), sources: []
+        )
+        XCTAssertEqual(
+            JarvisProactivePagePhrase.make(status: status, openItems: 2, language: .en).plainText,
+            "Dan, Jarvis has 2 suggestions for you."
+        )
+    }
 }
