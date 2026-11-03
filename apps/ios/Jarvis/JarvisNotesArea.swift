@@ -184,7 +184,6 @@ struct JarvisNotesArea: View {
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
             .padding(.top, JarvisDesignTokens.notesSectionSpacing)
             .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
-            .background(.bar)
         }
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab()

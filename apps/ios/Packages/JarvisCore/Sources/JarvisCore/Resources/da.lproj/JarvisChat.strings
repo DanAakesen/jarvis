@@ -81,3 +81,7 @@
 "chat.thinking.reconnecting" = "Genopretter forbindelsen…";
 "chat.thinking.followUp" = "Tager din opfølgning med…";
 "chat.activity.title" = "Aktivitet";
+"chat.activity.overview" = "Overblik";
+"chat.activity.needsYou" = "Kræver dig";
+"chat.activity.running" = "Kører";
+"chat.activity.updates" = "Opdateringer";

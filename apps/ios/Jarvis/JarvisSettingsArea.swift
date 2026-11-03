@@ -240,7 +240,7 @@ struct JarvisSettingsArea: View {
             }
             .padding(.horizontal, JarvisDesignTokens.settingsSectionSpacing)
             .frame(height: JarvisDesignTokens.settingsControlHeight)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.settingsSearchRadius))
+            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.settingsSearchRadius)
 
             JarvisIconButton(
                 title: copy(.addDeployment),
@@ -253,7 +253,6 @@ struct JarvisSettingsArea: View {
         .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
         .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
         .padding(.bottom, JarvisDesignTokens.settingsSectionSpacing)
-        .background(.bar)
     }
 
     private var errorState: some View {

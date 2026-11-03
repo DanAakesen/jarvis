@@ -61,6 +61,7 @@ struct JarvisActivitySheet: View {
                                 .foregroundStyle(.secondary)
                                 .accessibilityAddTraits(.updatesFrequently)
                         }
+                        pageHead(feed)
                         if hasActivity || feed.awayMode {
                             awayModeSection(feed.awayMode)
                         }
@@ -136,6 +137,28 @@ struct JarvisActivitySheet: View {
         }
         .padding(.horizontal, JarvisPageHeaderMetrics.inset)
         .padding(.vertical, JarvisPageHeaderMetrics.actionSpacing)
+    }
+
+    /// The data headline and hero under the title; nothing shows until the feed has loaded.
+    private func pageHead(_ feed: JarvisNowFeed) -> some View {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            JarvisPageHeadline(phrase: JarvisNotificationsPagePhrase.make(
+                needsYou: feed.confirmations.count,
+                running: feed.running.count,
+                updates: feed.items.count,
+                language: appLanguage
+            ))
+            JarvisPageHeroCard(title: copy(.activityOverview)) {
+                JarvisPageStatGrid(
+                    stats: [
+                        JarvisPageStat(id: "needs", value: feed.confirmations.count, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent),
+                        JarvisPageStat(id: "running", value: feed.running.count, label: copy(.activityRunning), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
+                        JarvisPageStat(id: "updates", value: feed.items.count, label: copy(.activityUpdates), systemImage: "tray"),
+                    ],
+                    language: appLanguage
+                )
+            }
+        }
     }
 
     private var backgroundTaskSection: some View {

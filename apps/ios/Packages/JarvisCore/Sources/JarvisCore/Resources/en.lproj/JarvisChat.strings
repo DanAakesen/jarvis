@@ -81,3 +81,7 @@
 "chat.thinking.reconnecting" = "Reconnecting…";
 "chat.thinking.followUp" = "Taking your follow-up into account…";
 "chat.activity.title" = "Activity";
+"chat.activity.overview" = "Overview";
+"chat.activity.needsYou" = "Needs you";
+"chat.activity.running" = "Running";
+"chat.activity.updates" = "Updates";
