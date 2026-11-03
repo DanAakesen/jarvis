@@ -76,3 +76,14 @@
 "today.retry" = "Try again";
 "today.backToToday" = "Home";
 "today.page" = "Home";
+"today.lift.benchPress" = "Bench press";
+"today.lift.squat" = "Squat";
+"today.lift.deadlift" = "Deadlift";
+"today.lift.overheadPress" = "Overhead press";
+"today.lift.barbellRow" = "Barbell row";
+"today.lift.pullUp" = "Pull-up";
+"today.liftType" = "Lift";
+"today.logDate" = "Date";
+"today.setDate" = "Set date";
+"today.clearDate" = "Clear date";
+"today.dateRequired" = "Set a date to save";

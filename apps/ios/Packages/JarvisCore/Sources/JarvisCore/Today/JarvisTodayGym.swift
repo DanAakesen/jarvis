@@ -40,6 +40,38 @@ public enum JarvisGymSessionType: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The lifts offered on the Home "Log lift" sheet. Each maps to the session it belongs to, so a lift is saved as a
+/// normal gym log with that lift attached.
+public enum JarvisGymLiftType: String, CaseIterable, Identifiable, Sendable {
+    case benchPress, squat, deadlift, overheadPress, barbellRow, pullUp
+
+    public var id: String { rawValue }
+
+    public var session: JarvisGymSessionType {
+        switch self {
+        case .benchPress: .chest
+        case .squat: .legs
+        case .deadlift, .barbellRow, .pullUp: .back
+        case .overheadPress: .arms
+        }
+    }
+
+    var titleKey: JarvisTodayLocalizationKey {
+        switch self {
+        case .benchPress: .liftBenchPress
+        case .squat: .liftSquat
+        case .deadlift: .liftDeadlift
+        case .overheadPress: .liftOverheadPress
+        case .barbellRow: .liftBarbellRow
+        case .pullUp: .liftPullUp
+        }
+    }
+
+    public func title(language: JarvisAppLanguage) -> String {
+        JarvisTodayLocalization.string(titleKey, language: language)
+    }
+}
+
 /// One optional lift on a gym log.
 public struct JarvisGymLift: Equatable, Sendable {
     public let exercise: String

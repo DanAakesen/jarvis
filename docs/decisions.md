@@ -10720,3 +10720,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: merge a PR only when its tested head already contains current `main`. Deploy requires a CI receipt whose tree equals the tree of `main` after the merge, so a PR merged behind a newer `main` ships nothing (`exact_qualification_missing`).
 - Evidence: the backend changes of P15-64 merged right after P15-67 and the Deploy plan job failed with that code. A small up-to-date PR re-qualifies `main`.
 - Consequence: when two PRs are ready, merge one, then update the other from `main` and wait for its quick gate before merging it.
+
+## 2026-11-03 Home layout and log sheets (P15-65)
+
+- Decision: Home has no title. Order is headline, activity hero, Home sections, Chat composer. Typing on Home no longer jumps to Chat; voice becomes send while typing and send hands the text to Chat. Log workout and Log lift are two sheets with a date (default today); nothing saves without a date.
+- Evidence: Build 56 testing showed both log buttons opened the same sheet and a lookalike composer.
+- Consequence: lifts are a fixed list mapped to a gym session; HealthKit stays off until the entitlement is provisioned.

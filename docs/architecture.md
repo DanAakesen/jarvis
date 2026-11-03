@@ -1405,6 +1405,14 @@ and read back with `GET /notes?directory=Personal/Gym log`; steps come from Heal
 that lists calendar entries for the phone, so Next up shows "Calendar unavailable" through
 `JarvisUnavailableCalendarSource` instead of inventing entries.
 
+Home layout (P15-65): no title; the data-phrase headline is first, then the activity hero (workouts and steps), then
+Next up, tasks and the two log buttons, with the Chat composer pinned below (voice while empty, send while typing).
+Log workout (session types) and Log lift (`JarvisGymLiftType`) open two sheets with a date field that defaults to today;
+the check is disabled until a date is set, and the chosen day is saved with the current time of day through the vault
+path. Steps and workouts show "unavailable" empty states when HealthKit is off. To enable steps: add the HealthKit
+capability and `com.apple.developer.healthkit` entitlement to the App ID and provisioning profile, keep
+`NSHealthShareUsageDescription`, and register `JarvisHealthKitStepsSource` as the steps source in the app composition.
+
 Transitions: Today, Chat and Voice swap with a continuity transition. `JarvisCarryOver` shares one namespace through
 the environment; the composer and the orb use `matchedGeometryEffect`, driven by an animation that
 `JarvisDestinationHost` supplies only for swaps among those three pages (every other swap stays unanimated).

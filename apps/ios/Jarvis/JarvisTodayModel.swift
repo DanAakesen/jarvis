@@ -141,8 +141,16 @@ final class JarvisTodayModel: ObservableObject {
         await loadTasks()
     }
 
-    func saveGymLog(session: JarvisGymSessionType, lift: JarvisGymLift?) async throws {
-        let entry = JarvisGymLogEntry(performedAt: dependencies.now(), session: session, lift: lift)
+    /// Saves a gym log on `day`, at the current time of day, through the vault path.
+    func saveGymLog(session: JarvisGymSessionType, lift: JarvisGymLift?, on day: Date) async throws {
+        let calendar = Calendar.current
+        let time = calendar.dateComponents([.hour, .minute], from: dependencies.now())
+        var parts = calendar.dateComponents([.year, .month, .day], from: day)
+        parts.hour = time.hour
+        parts.minute = time.minute
+        let entry = JarvisGymLogEntry(
+            performedAt: calendar.date(from: parts) ?? day, session: session, lift: lift
+        )
         try await dependencies.gym.save(entry)
         if isFixture {
             workouts.value = (workouts.value ?? []) + [entry]

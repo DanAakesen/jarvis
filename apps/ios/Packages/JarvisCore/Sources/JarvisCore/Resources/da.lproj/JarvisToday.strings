@@ -76,3 +76,14 @@
 "today.retry" = "Prøv igen";
 "today.backToToday" = "Hjem";
 "today.page" = "Hjem";
+"today.lift.benchPress" = "Bænkpres";
+"today.lift.squat" = "Squat";
+"today.lift.deadlift" = "Dødløft";
+"today.lift.overheadPress" = "Skulderpres";
+"today.lift.barbellRow" = "Stangroning";
+"today.lift.pullUp" = "Pull-up";
+"today.liftType" = "Løft";
+"today.logDate" = "Dato";
+"today.setDate" = "Vælg dato";
+"today.clearDate" = "Ryd dato";
+"today.dateRequired" = "Vælg en dato for at gemme";
