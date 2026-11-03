@@ -8,8 +8,8 @@ struct JarvisTodayActivityCard: View {
     let language: JarvisAppLanguage
     let fixtureMode: Bool
 
-    @ScaledMetric(relativeTo: .body) private var ringSize: CGFloat = 112
-    @ScaledMetric(relativeTo: .body) private var donutSize: CGFloat = 96
+    @ScaledMetric(relativeTo: .body) private var ringSize: CGFloat = 56
+    @ScaledMetric(relativeTo: .body) private var donutSize: CGFloat = 100
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
         JarvisTodayLocalization.string(key, language: language)
@@ -27,16 +27,16 @@ struct JarvisTodayActivityCard: View {
 
     var body: some View {
         let display = model.display(language: language)
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             header
             workoutsBlock(display)
             Divider().accessibilityHidden(true)
             Text(copy(.steps))
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
                 .accessibilityAddTraits(.isHeader)
             stepsBlock(display)
         }
-        .padding(14)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .accessibilityElement(children: .contain)
@@ -46,27 +46,22 @@ struct JarvisTodayActivityCard: View {
     // MARK: Header
 
     private var header: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                Text(copy(.workouts)).font(.headline).accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 8)
-                rangeToggle
-            }
-            VStack(alignment: .leading, spacing: 0) {
-                Text(copy(.workouts)).font(.headline).accessibilityAddTraits(.isHeader)
-                rangeToggle
-            }
+        HStack(spacing: 8) {
+            Text(copy(.workouts)).font(.subheadline.weight(.semibold)).accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 8)
+            rangeToggle
         }
     }
 
     private var rangeToggle: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 4) {
             ForEach(JarvisTodayRange.allCases) { range in
                 let selected = model.activity.range == range
                 JarvisLabelledButton(
                     title: range.title(language: language),
                     identifier: "today.range.\(range.rawValue)",
-                    isSelected: selected
+                    isSelected: selected,
+                    isCompact: true
                 ) { animate { model.activity.setRange(range) } }
             }
         }
@@ -108,14 +103,14 @@ struct JarvisTodayActivityCard: View {
         let total = display.totalWorkouts
         return ZStack {
             Circle()
-                .stroke(Color.primary.opacity(0.08), lineWidth: 12)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 10)
             if total > 0 {
                 ForEach(arcs(display), id: \.session) { arc in
                     Circle()
                         .trim(from: arc.start, to: arc.end)
                         .stroke(
                             color(arc.session),
-                            style: StrokeStyle(lineWidth: arc.session == display.centerSession ? 16 : 12)
+                            style: StrokeStyle(lineWidth: arc.session == display.centerSession ? 13 : 10)
                         )
                         .rotationEffect(.degrees(-90))
                         .opacity(display.centerSession == nil || arc.session == display.centerSession ? 1 : 0.35)
@@ -123,7 +118,7 @@ struct JarvisTodayActivityCard: View {
             }
             VStack(spacing: 0) {
                 Text("\(display.centerCount)")
-                    .font(.system(.title, design: .rounded, weight: .bold))
+                    .font(.system(.title3, design: .rounded, weight: .bold))
                     .monospacedDigit()
                 if let selected = display.centerSession {
                     Text(selected.shortTitle(language: language))
@@ -137,9 +132,9 @@ struct JarvisTodayActivityCard: View {
                         .lineLimit(1)
                 }
             }
-            .padding(14)
+            .padding(12)
         }
-        .padding(8)
+        .padding(4)
         .frame(width: donutSize, height: donutSize)
         .contentShape(Circle())
         .gesture(
@@ -203,15 +198,15 @@ struct JarvisTodayActivityCard: View {
                             .frame(width: 10, height: 10)
                             .accessibilityHidden(true)
                         Text(segment.session.shortTitle(language: language))
-                            .font(.subheadline)
+                            .font(.footnote)
                             .lineLimit(1)
                         Spacer(minLength: 4)
                         Text("\(segment.count)")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.footnote.weight(.semibold))
                             .monospacedDigit()
                     }
                     .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : Color.primary)
-                    .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                    .frame(maxWidth: .infinity, minHeight: 22, maxHeight: 22)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -240,11 +235,11 @@ struct JarvisTodayActivityCard: View {
                 )
             }
         } else {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .center, spacing: 12) {
                     ring(display)
                     bars(display)
-                        .frame(height: ringSize)
+                        .frame(height: 48)
                 }
                 Text(display.caption)
                     .font(.caption)
@@ -257,29 +252,24 @@ struct JarvisTodayActivityCard: View {
 
     private func ring(_ display: JarvisTodayActivityDisplay) -> some View {
         ZStack {
-            Circle().stroke(Color.primary.opacity(0.08), lineWidth: 10)
+            Circle().stroke(Color.primary.opacity(0.08), lineWidth: 6)
             Circle()
                 .trim(from: 0, to: CGFloat(display.ringFraction))
                 .stroke(
                     JarvisDesignTokens.primaryAccent,
-                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 0) {
                 Text(display.ringSteps.formatted(.number.locale(language.locale)))
-                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .font(.system(.caption, design: .rounded, weight: .bold))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.6)
+                    .minimumScaleFactor(0.5)
                     .lineLimit(1)
-                Text(display.ringLabel ?? copy(.stepsSoFar))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
-            .padding(16)
+            .padding(8)
         }
-        .padding(5)
+        .padding(3)
         .frame(width: ringSize, height: ringSize)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(copy(.steps))
@@ -316,6 +306,9 @@ struct JarvisTodayActivityCard: View {
                 Text("\(copy(.goal)) \(JarvisTodayActivity.stepGoal.formatted(.number.locale(language.locale)))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(.ultraThinMaterial, in: Capsule())
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .offset(y: -height * goal / top)
                     .allowsHitTesting(false)
@@ -339,7 +332,7 @@ struct JarvisTodayActivityCard: View {
                     .opacity(bar.isEnabled ? (selected || model.activity.selectedBar == nil ? 1 : 0.45) : 0.15)
                     .frame(height: max(2, fill))
             }
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .frame(maxWidth: .infinity, minHeight: 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
