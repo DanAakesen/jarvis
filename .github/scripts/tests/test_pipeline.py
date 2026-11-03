@@ -1326,8 +1326,17 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("JarvisApprovalLocalization.string(.approve, language: appLanguage)", sheet)
         self.assertIn("JarvisApprovalLocalization.string(.decline, language: appLanguage)", sheet)
         self.assertIn("JarvisApprovalLocalization.string(.sending, language: appLanguage)", sheet)
-        self.assertIn('appLanguage == .da ? "Kalenderændring" : "Calendar change"', sheet)
-        self.assertIn('hasCalendarConfirmation && appLanguage == .da ? "Afventer godkendelse"', sheet)
+        self.assertIn("? copy(.activityCalendarChange)", sheet)
+        self.assertIn("Text(copy(.activityPending))", sheet)
+        self.assertIn("? copy(.activityFixtureApproval)", sheet)
+        strings = ROOT / "apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources"
+        for language, expected in (
+            ("da", ('"chat.activity.calendarChange" = "Kalenderændring";', '"chat.activity.pending" = "Afventer godkendelse";')),
+            ("en", ('"chat.activity.calendarChange" = "Calendar change";', '"chat.activity.pending" = "Pending confirmations";')),
+        ):
+            resource = (strings / f"{language}.lproj/JarvisChat.strings").read_text()
+            for line in expected:
+                self.assertIn(line, resource)
         self.assertIn("JarvisApprovalLocalization.string(.expires, language: appLanguage)", sheet)
         self.assertIn('.accessibilityIdentifier("confirmation-fixture-reason")', sheet)
         chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
@@ -1375,7 +1384,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("$0.awayMode", activity_predicate)
         self.assertIn("JarvisComposerMenuButton(", screen)
         self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
-        self.assertIn('ContentUnavailableView("No activity", systemImage: "checkmark.circle")', sheet)
+        self.assertIn('ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")', sheet)
         self.assertIn("if !items.isEmpty", sheet)
         self.assertNotIn("emptyMessage", sheet)
         self.assertIn('for state in empty active', capture)
