@@ -10720,3 +10720,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: merge a PR only when its tested head already contains current `main`. Deploy requires a CI receipt whose tree equals the tree of `main` after the merge, so a PR merged behind a newer `main` ships nothing (`exact_qualification_missing`).
 - Evidence: the backend changes of P15-64 merged right after P15-67 and the Deploy plan job failed with that code. A small up-to-date PR re-qualifies `main`.
 - Consequence: when two PRs are ready, merge one, then update the other from `main` and wait for its quick gate before merging it.
+
+## 2026-11-03 P15-68: Settings and Notifications on the shared header, Health empty state
+
+- Decision: Settings uses `JarvisPageHeader` (title, refresh, sidebar button). The notifications sheet draws its own header in content (bold title, Clear all, close) and hides the navigation bar, so there is one background and the close button is a centred circle. Group rows swipe left to dismiss, with a VoiceOver action as the alternative. Health shows an empty state (`health.notAuthorised`, da and en) and no headline when the backend reports no readable sources, for example while the HealthKit entitlement is off.
+- Evidence: Health and Notes already used the shared header and headline. UI tests cover titles and shared button identifiers for Health, Notes, Settings and the notifications sheet.
+- Not verified: no Simulator run or before and after screenshots in this change. Status, Proaktiv and Proaktiv settings stay with #1548.

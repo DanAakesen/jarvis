@@ -21,7 +21,9 @@ struct JarvisActivitySheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            VStack(spacing: 0) {
+                header
+                ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatSheetRowSpacing) {
                     if let error = model.activityError, model.nowFeed == nil {
                         ContentUnavailableView {
@@ -93,30 +95,9 @@ struct JarvisActivitySheet: View {
             }
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
-            .jarvisAmbientBackground()
-            .navigationTitle(copy(.activityTitle))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    JarvisIconButton(
-                        title: copy(.done),
-                        systemImage: "xmark",
-                        identifier: "chat.notifications.done"
-                    ) { dismiss() }
-                }
-                .sharedBackgroundVisibility(.hidden)
-                if let items = model.nowFeed?.items, items.count > 1 {
-                    ToolbarItem(placement: .topBarLeading) {
-                        JarvisIconButton(
-                            title: copy(.clearAll),
-                            systemImage: "trash",
-                            identifier: "activity.clearAll",
-                            isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
-                        ) { Task { await model.dismissActivities(items) } }
-                    }
-                    .sharedBackgroundVisibility(.hidden)
-                }
             }
+            .jarvisAmbientBackground()
+            .toolbar(.hidden, for: .navigationBar)
         }
         .task {
             await model.refreshActivity()
@@ -124,6 +105,37 @@ struct JarvisActivitySheet: View {
         .onReceive(NotificationCenter.default.publisher(for: .jarvisApprovalActionCompleted)) { _ in
             Task { await model.refreshActivity() }
         }
+    }
+
+    /// Title level with the shared glass buttons, inside the content so the sheet has one background and the
+    /// close button sits centred in its own circle rather than in a second toolbar capsule.
+    private var header: some View {
+        HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
+            Text(copy(.activityTitle))
+                .font(.system(size: JarvisPageHeaderMetrics.titleSize, weight: .bold))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: JarvisPageHeaderMetrics.actionSize, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("page.title")
+            HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                if let items = model.nowFeed?.items, items.count > 1 {
+                    JarvisIconButton(
+                        title: copy(.clearAll),
+                        systemImage: "trash",
+                        identifier: "activity.clearAll",
+                        isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
+                    ) { Task { await model.dismissActivities(items) } }
+                }
+                JarvisIconButton(
+                    title: copy(.done),
+                    systemImage: "xmark",
+                    identifier: "chat.notifications.done"
+                ) { dismiss() }
+            }
+        }
+        .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        .padding(.vertical, JarvisPageHeaderMetrics.actionSpacing)
     }
 
     private var backgroundTaskSection: some View {
@@ -372,6 +384,9 @@ struct JarvisActivitySheet: View {
         .padding(JarvisDesignTokens.chatGlassInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+        .jarvisSwipeToDismiss(isEnabled: !model.fixtureMode && !busy, label: copy(.dismiss)) {
+            Task { await model.dismissActivities(group.items) }
+        }
     }
 
     private func timeString(_ value: String) -> String {
@@ -393,5 +408,42 @@ private extension NowFeedActivityCategory {
         case .credential: "Credential warnings"
         case .alert: "Alerts"
         }
+    }
+}
+
+private extension View {
+    /// Swipe a row left to dismiss it. Vertical drags still scroll, and VoiceOver gets a named action.
+    func jarvisSwipeToDismiss(isEnabled: Bool, label: String, onDismiss: @escaping () -> Void) -> some View {
+        modifier(JarvisSwipeToDismiss(isEnabled: isEnabled, label: label, onDismiss: onDismiss))
+    }
+}
+
+private struct JarvisSwipeToDismiss: ViewModifier {
+    private static let threshold: CGFloat = 96
+    let isEnabled: Bool
+    let label: String
+    let onDismiss: () -> Void
+    @State private var offset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset)
+            .opacity(1 - min(abs(offset) / (Self.threshold * 3), 0.5))
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 16)
+                    .onChanged { value in
+                        guard isEnabled, abs(value.translation.width) > abs(value.translation.height) else { return }
+                        offset = min(0, value.translation.width)
+                    }
+                    .onEnded { value in
+                        let commit = isEnabled && value.translation.width < -Self.threshold &&
+                            abs(value.translation.width) > abs(value.translation.height)
+                        withAnimation(.snappy) { offset = 0 }
+                        if commit { onDismiss() }
+                    }
+            )
+            .accessibilityAction(named: label) {
+                if isEnabled { onDismiss() }
+            }
     }
 }
