@@ -615,6 +615,7 @@ return {
       },
     }, async (request, reply) => {
       const turnStartedAt = performance.now();
+      const turnStartedAtMs = Date.now();
       const store = app.conversationStore;
       const agent = app.conversationAgent;
       if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
@@ -942,7 +943,8 @@ return {
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
-            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text, language: turnLanguage });
+            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text, language: turnLanguage,
+              turnStartedAt: turnStartedAtMs });
             logChatLatency(request, 'turn_complete', turnStartedAt);
             if (visualContext) {
               request.log.info({

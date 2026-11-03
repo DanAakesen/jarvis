@@ -144,6 +144,7 @@ import {
   createApprovalNotificationSender,
   loadApprovalNotificationConfig,
 } from './push/approval-notifications.js';
+import { createPushLedger } from './push/push-ledger.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeDaily } from './daily/composition.js';
@@ -190,11 +191,14 @@ try {
       sender: await createApprovalNotificationSender(approvalNotificationConfig),
     }
     : undefined;
+  const pushLedger = createPushLedger();
   const notifyApproval = approvalNotifications
-    ? createApprovalNotificationDispatcher(config.auth.ownerObjectId, approvalNotifications, logger)
+    ? createApprovalNotificationDispatcher(
+      config.auth.ownerObjectId, approvalNotifications, logger, Date.now, pushLedger)
     : undefined;
   const notifyReply = approvalNotifications
-    ? createReplyNotificationDispatcher(config.auth.ownerObjectId, approvalNotifications, logger)
+    ? createReplyNotificationDispatcher(
+      config.auth.ownerObjectId, approvalNotifications, logger, Date.now, pushLedger)
     : undefined;
   if (config.healthUploadEnabled && !database) {
     throw new ConfigurationError('JARVIS_HEALTH_UPLOAD_ENABLED requires the existing SQL pool');

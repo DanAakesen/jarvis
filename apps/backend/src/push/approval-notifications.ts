@@ -6,6 +6,7 @@ import { ConfigurationError } from '../config.js';
 import type { ApprovalNotificationRegistration, ApprovalNotificationStore } from '../database/approval-notification-store.js';
 import type { BrowserConfirmation } from '../core/owner-interactions.js';
 import { loadApnsConfig, type ApnsConfig } from './activitykit.js';
+import { createPushLedger, type PushLedger } from './push-ledger.js';
 
 const deviceTokenPattern = /^(?:[0-9a-f]{2}){32,256}$/iu;
 const confirmationIdPattern = /^[A-Za-z0-9_-]{43}$/u;
@@ -83,6 +84,8 @@ export interface ReplyNotificationInput {
   messageId: string;
   text: string;
   language: 'da' | 'en';
+  /** Epoch milliseconds when the turn that produced this reply began. */
+  turnStartedAt?: number;
 }
 
 const replyCategory = 'jarvis.reply';
@@ -222,14 +225,10 @@ export function createApprovalNotificationDispatcher(
   services: ApprovalNotificationServices,
   logger: Pick<FastifyBaseLogger, 'warn'>,
   now: () => number = Date.now,
+  ledger: PushLedger = createPushLedger(now),
 ): (confirmation: BrowserConfirmation) => void {
-  const recentlySent = new Map<string, number>();
   return (confirmation) => {
-    const time = now();
-    for (const [id, at] of recentlySent) if (time - at > 10 * 60_000) recentlySent.delete(id);
-    if (recentlySent.has(confirmation.id)) return;
-    recentlySent.set(confirmation.id, time);
-    while (recentlySent.size > 2000) recentlySent.delete(recentlySent.keys().next().value!);
+    if (!ledger.claim('approval', confirmation.id)) return;
     void (async () => {
       const expiresAt = Date.parse(confirmation.expiresAt);
       if (!Number.isFinite(expiresAt) || expiresAt <= now()) return;
@@ -266,8 +265,10 @@ export function createReplyNotificationDispatcher(
   services: ApprovalNotificationServices,
   logger: Pick<FastifyBaseLogger, 'warn'>,
   now: () => number = Date.now,
+  ledger: PushLedger = createPushLedger(now),
 ): (reply: ReplyNotificationInput) => void {
   return (reply) => {
+    if (!ledger.claimReply(reply.messageId, reply.turnStartedAt ?? now())) return;
     void (async () => {
       const registrations = await services.store.list(owner);
       const expiresAt = now() + 60 * 60_000;
