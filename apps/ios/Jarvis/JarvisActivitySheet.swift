@@ -101,20 +101,20 @@ struct JarvisActivitySheet: View {
                     JarvisIconButton(
                         title: copy(.done),
                         systemImage: "xmark",
-                        identifier: "chat.notifications.done",
-                        chrome: .onGlass
+                        identifier: "chat.notifications.done"
                     ) { dismiss() }
                 }
+                .sharedBackgroundVisibility(.hidden)
                 if let items = model.nowFeed?.items, items.count > 1 {
                     ToolbarItem(placement: .topBarLeading) {
                         JarvisIconButton(
                             title: copy(.clearAll),
                             systemImage: "trash",
                             identifier: "activity.clearAll",
-                            isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty,
-                            chrome: .onGlass
+                            isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
                         ) { Task { await model.dismissActivities(items) } }
                     }
+                    .sharedBackgroundVisibility(.hidden)
                 }
             }
         }
@@ -333,16 +333,14 @@ struct JarvisActivitySheet: View {
                         title: String(format: copy(.clearGroupLabel), group.category.title),
                         systemImage: "trash",
                         identifier: "activity.clear.\(group.id)",
-                        isDisabled: model.fixtureMode,
-                        chrome: .onGlass
+                        isDisabled: model.fixtureMode
                     ) { Task { await model.dismissActivities(group.items) } }
                 } else {
                     JarvisIconButton(
                         title: String(format: copy(.dismissLabel), group.latest.title),
                         systemImage: "xmark",
                         identifier: "activity.dismiss.\(group.latest.id)",
-                        isDisabled: model.fixtureMode,
-                        chrome: .onGlass
+                        isDisabled: model.fixtureMode
                     ) { Task { await model.dismissActivity(group.latest) } }
                 }
             }
@@ -360,8 +358,7 @@ struct JarvisActivitySheet: View {
                                     title: String(format: copy(.dismissLabel), item.title),
                                     systemImage: "xmark",
                                     identifier: "activity.dismiss.\(item.id)",
-                                    isDisabled: model.fixtureMode || model.dismissingActivityIDs.contains(item.id),
-                                    chrome: .onGlass
+                                    isDisabled: model.fixtureMode || model.dismissingActivityIDs.contains(item.id)
                                 ) { Task { await model.dismissActivity(item) } }
                             }
                         }

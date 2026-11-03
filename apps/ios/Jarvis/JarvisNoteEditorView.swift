@@ -96,12 +96,12 @@ struct JarvisNoteEditorView: View {
                 JarvisIconButton(
                     title: copy.back,
                     systemImage: "chevron.left",
-                    identifier: "note.back",
-                    chrome: .onGlass
+                    identifier: "note.back"
                 ) {
                     if hasChanges { activeAlert = .discard } else { onClose() }
                 }
             }
+            .sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSheetConfirmButton(
                     title: copy.save,
@@ -109,6 +109,7 @@ struct JarvisNoteEditorView: View {
                     isDisabled: !hasChanges || latestConflict != nil || needsReload || client == nil
                 ) { Task { await saveDraft(sha: note.sha) } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .alert(alertTitle, isPresented: Binding(
             get: { activeAlert != nil },

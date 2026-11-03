@@ -51,7 +51,6 @@ struct WorkspacesView: View {
                     systemImage: "arrow.clockwise",
                     identifier: "workspaces.refresh",
                     isBusy: loadState == .loading,
-                    chrome: .glass,
                     action: refresh
                 )
             }
@@ -157,8 +156,7 @@ struct WorkspacesView: View {
                 JarvisIconButton(
                     title: text(.clearSearch),
                     systemImage: "xmark.circle.fill",
-                    identifier: "workspaces.search.clear",
-                    chrome: .onGlass
+                    identifier: "workspaces.search.clear"
                 ) { query = "" }
             }
         }
@@ -309,8 +307,7 @@ struct WorkspacesView: View {
                 title: formatted(.actionsFor, item.title),
                 systemImage: "ellipsis",
                 identifier: "workspaces.item.actions",
-                isDisabled: busyItems.contains(item.id),
-                chrome: .onGlass
+                isDisabled: busyItems.contains(item.id)
             ) {
                 Button(text(item.pinned ? .unpin : .pin), systemImage: item.pinned ? "pin.slash" : "pin") {
                     Task { await setPinned(item, pinned: !item.pinned) }

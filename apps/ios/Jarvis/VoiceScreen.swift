@@ -281,8 +281,7 @@ struct VoiceScreenView: View {
             JarvisIconButton(
                 title: JarvisNotesLocalization.string(.voiceHideCaptions, language: appLanguage),
                 systemImage: "xmark",
-                identifier: "voice.captions.hide",
-                chrome: .onGlass
+                identifier: "voice.captions.hide"
             ) { captionsHidden = true }
         }
     }

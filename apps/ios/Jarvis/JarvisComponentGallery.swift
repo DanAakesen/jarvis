@@ -58,10 +58,11 @@ struct JarvisComponentGallery: View {
                     }
                 }
             }
-            JarvisPageHeroCard(title: "Bell") {
+            JarvisPageHeroCard(title: "Chat header: bell and menu") {
                 HStack(spacing: 12) {
                     JarvisIconButton(title: "Bell", systemImage: "bell", identifier: "gallery.bell") {}
                     JarvisIconButton(title: "Bell with badge", systemImage: "bell", identifier: "gallery.bell.badge", badge: 3) {}
+                    JarvisIconButton(title: "Sidebar", systemImage: "sidebar.trailing", identifier: "gallery.bell.menu") {}
                     JarvisIconButton(title: "Bell with large badge", systemImage: "bell", identifier: "gallery.bell.badge.large", badge: 120) {}
                 }
             }

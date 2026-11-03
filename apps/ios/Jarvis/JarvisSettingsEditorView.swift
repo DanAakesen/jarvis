@@ -164,6 +164,7 @@ struct JarvisSettingsEditorView: View {
                     isDisabled: readOnly || !hasChanges || !validDraft
                 ) { Task { await save() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if draft.isEmpty {
@@ -425,6 +426,7 @@ struct JarvisSettingsLanguageView: View {
                     dismiss()
                 }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
     }
 }

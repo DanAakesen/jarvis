@@ -541,8 +541,7 @@ struct JarvisFactoryArea: View {
                 JarvisIconButton(
                     title: copy.text(.clearSearch),
                     systemImage: "xmark.circle.fill",
-                    identifier: "factory.search.clear",
-                    chrome: .onGlass
+                    identifier: "factory.search.clear"
                 ) { searchText = "" }
             }
         }

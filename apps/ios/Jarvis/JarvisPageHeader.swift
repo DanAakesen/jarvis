@@ -8,8 +8,8 @@ import SwiftUI
 /// API: ScaledMetric, ButtonStyle.glass, Menu, Text concatenation, accessibilityAddTraits(.isHeader).
 enum JarvisPageHeaderMetrics {
     static let titleSize: CGFloat = 32
-    static let actionSize = JarvisDesignTokens.chatMinimumTapTarget
-    static let actionIconSize: CGFloat = 18
+    static let actionSize = JarvisDesignTokens.iconButtonDiameter
+    static let actionIconSize = JarvisDesignTokens.iconButtonGlyphSize
     static let inset: CGFloat = 16
     static let spacing: CGFloat = 12
     static let actionSpacing: CGFloat = 8
@@ -43,7 +43,7 @@ struct JarvisPageHeader<Actions: View>: View {
                 .accessibilityIdentifier("page.title")
             HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
                 actions
-                JarvisSidebarMenuButton(language: language, chrome: .glass)
+                JarvisSidebarMenuButton(language: language)
             }
         }
         .padding(.horizontal, JarvisPageHeaderMetrics.inset)

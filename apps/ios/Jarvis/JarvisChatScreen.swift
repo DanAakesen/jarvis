@@ -206,7 +206,6 @@ struct JarvisChatScreen: View {
                         title: JarvisTodayLocalization.string(.backToToday, language: appLanguage),
                         systemImage: "house",
                         identifier: "chat.backToToday",
-                        chrome: .glass,
                         action: onBackToToday
                     )
                 }
@@ -217,8 +216,7 @@ struct JarvisChatScreen: View {
                     title: displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you",
                     systemImage: "bell",
                     identifier: "chat.notifications",
-                    badge: displayedNeedsYouCount,
-                    chrome: .glass
+                    badge: displayedNeedsYouCount
                 ) {
                     presentedSheet = .activity(.activity)
                 }
@@ -226,7 +224,7 @@ struct JarvisChatScreen: View {
             .sharedBackgroundVisibility(.hidden)
             ToolbarSpacer(.fixed, placement: .topBarTrailing)
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSidebarMenuButton(language: appLanguage, chrome: .glass)
+                JarvisSidebarMenuButton(language: appLanguage)
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -658,8 +656,7 @@ struct JarvisChatScreen: View {
                                         title: "Remove \(attachment.name)",
                                         systemImage: "xmark.circle.fill",
                                         identifier: "chat.attachment.remove",
-                                        isDisabled: model.isSending,
-                                        chrome: .onGlass
+                                        isDisabled: model.isSending
                                     ) { model.removeAttachment(attachment) }
                                 }
                                 .font(.caption)

@@ -43,6 +43,7 @@ struct GeneratedWorkspaceSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     JarvisSheetCloseButton(title: text(.closeAccessibility)) { dismiss() }
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
         .presentationDetents([.large])

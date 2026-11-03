@@ -454,8 +454,7 @@ struct JarvisHealthArea: View {
                     JarvisIconButton(
                         title: copy.text(.clearSearch),
                         systemImage: "xmark.circle.fill",
-                        identifier: "health.search.clear",
-                        chrome: .onGlass
+                        identifier: "health.search.clear"
                     ) { searchText = "" }
                 }
             }

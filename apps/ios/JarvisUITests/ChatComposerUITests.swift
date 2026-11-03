@@ -27,7 +27,7 @@ final class ChatComposerUITests: XCTestCase {
         }
     }
 
-    /// The bell and the side menu are the reference buttons: two identical 44 pt glass circles.
+    /// The bell and the side menu are the reference buttons: two identical 48 pt glass circles.
     func testChatHeaderButtonsAreSquareCircles() {
         let app = launch(language: "en")
         defer { app.terminate() }
@@ -37,7 +37,7 @@ final class ChatComposerUITests: XCTestCase {
         XCTAssertTrue(menu.waitForExistence(timeout: 10))
         for button in [bell, menu] {
             XCTAssertEqual(button.frame.width, button.frame.height, accuracy: 0.5, "\(button.identifier) must be square")
-            XCTAssertEqual(button.frame.width, 44, accuracy: 0.5, "\(button.identifier) must be 44 pt")
+            XCTAssertEqual(button.frame.width, 48, accuracy: 0.5, "\(button.identifier) must be 48 pt")
         }
     }
 

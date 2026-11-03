@@ -68,7 +68,7 @@ struct JarvisTodayScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSidebarMenuButton(language: language, chrome: .glass)
+                JarvisSidebarMenuButton(language: language)
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -273,8 +273,7 @@ struct JarvisTodayScreen: View {
             JarvisIconButton(
                 title: "\(copy(.markDone)): \(task.text)",
                 systemImage: "circle",
-                identifier: "today.task.done.\(task.id)",
-                chrome: .onGlass
+                identifier: "today.task.done.\(task.id)"
             ) { Task { await model.complete(task) } }
             VStack(alignment: .leading, spacing: 0) {
                 Text(task.text).font(.body).lineLimit(2)
@@ -351,8 +350,7 @@ struct JarvisTodayScreen: View {
                 JarvisIconButton(
                     title: copy(.retry),
                     systemImage: "arrow.clockwise",
-                    identifier: "today.retry",
-                    chrome: .onGlass
+                    identifier: "today.retry"
                 ) { Task { await model.refresh() } }
             }
         }

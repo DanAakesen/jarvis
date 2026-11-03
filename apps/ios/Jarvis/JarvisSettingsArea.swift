@@ -240,8 +240,7 @@ struct JarvisSettingsArea: View {
                     JarvisIconButton(
                         title: copy(.cancel),
                         systemImage: "xmark.circle.fill",
-                        identifier: "settings.search.clear",
-                        chrome: .onGlass
+                        identifier: "settings.search.clear"
                     ) { search = "" }
                 }
             }

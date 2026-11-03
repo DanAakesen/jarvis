@@ -225,14 +225,6 @@ extension View {
     }
 }
 
-/// Where a button sits. `.glass` draws the Apple glass itself (floating over content, page title bars);
-/// `.onGlass` is for a host that already provides the glass (the system toolbar, a glass row), so the button adds no
-/// second fill.
-enum JarvisControlChrome {
-    case glass
-    case onGlass
-}
-
 /// The one icon button, identical to the Chat header buttons: Apple glass, 44 pt target, secondary accent icon.
 /// Optional busy state (a progress view in place of the icon), count badge, selected state, tint and short text glyph.
 /// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle, ProgressView.
@@ -247,7 +239,6 @@ struct JarvisIconButton: View {
     var isSelected = false
     var tint: Color?
     var hint = ""
-    var chrome: JarvisControlChrome = .glass
     let action: () -> Void
 
     var body: some View {
@@ -257,7 +248,7 @@ struct JarvisIconButton: View {
                 isDisabled: isDisabled, isSelected: isSelected, tint: tint
             )
         }
-        .jarvisControlChrome(chrome)
+        .jarvisControlChrome()
         .disabled(isDisabled || isBusy)
         .accessibilityLabel(title)
         .accessibilityHint(hint)
@@ -276,7 +267,6 @@ struct JarvisMenuButton<Content: View>: View {
     var tint: Color?
     var hint = ""
     var value = ""
-    var chrome: JarvisControlChrome = .glass
     let content: Content
 
     init(
@@ -288,7 +278,6 @@ struct JarvisMenuButton<Content: View>: View {
         tint: Color? = nil,
         hint: String = "",
         value: String = "",
-        chrome: JarvisControlChrome = .glass,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
@@ -299,7 +288,6 @@ struct JarvisMenuButton<Content: View>: View {
         self.tint = tint
         self.hint = hint
         self.value = value
-        self.chrome = chrome
         self.content = content()
     }
 
@@ -312,7 +300,7 @@ struct JarvisMenuButton<Content: View>: View {
                 isDisabled: isDisabled, isSelected: false, tint: tint
             )
         }
-        .jarvisControlChrome(chrome)
+        .jarvisControlChrome()
         .disabled(isDisabled)
         .accessibilityLabel(title)
         .accessibilityValue(value)
@@ -548,11 +536,11 @@ private struct JarvisControlGlyph: View {
             } else if let systemImage {
                 Image(systemName: systemImage)
                     .symbolVariant(badge > 0 ? .fill : .none)
-                    .font(.system(size: 18, weight: .regular))
+                    .font(.system(size: JarvisDesignTokens.iconButtonGlyphSize, weight: .regular))
                     .foregroundStyle(color)
             }
         }
-        .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+        .frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)
         .overlay(alignment: .topTrailing) {
             if badge > 0 {
                 Text(badge > 99 ? "99+" : "\(badge)")
@@ -571,17 +559,13 @@ private struct JarvisControlGlyph: View {
 }
 
 private extension View {
-    @ViewBuilder
-    func jarvisControlChrome(_ chrome: JarvisControlChrome) -> some View {
-        switch chrome {
-        case .glass:
-            buttonStyle(.plain)
-                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                .jarvisGlassCircle()
-        case .onGlass:
-            buttonStyle(.plain)
-                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-        }
+    /// One circle for every icon and menu button: a fixed square frame from one token and a Circle glass surface.
+    /// In a toolbar the item must also hide the system container (`sharedBackgroundVisibility(.hidden)`), or the
+    /// system draws a second glass around this one.
+    func jarvisControlChrome() -> some View {
+        buttonStyle(.plain)
+            .frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)
+            .jarvisGlassCircle()
     }
 }
 
@@ -599,7 +583,6 @@ struct JarvisSheetConfirmButton: View {
             identifier: "sheet.confirm",
             isBusy: isWorking,
             isDisabled: isDisabled,
-            chrome: .onGlass,
             action: action
         )
     }
@@ -617,7 +600,6 @@ struct JarvisSheetCloseButton: View {
             systemImage: "xmark",
             identifier: "sheet.cancel",
             isDisabled: isDisabled,
-            chrome: .onGlass,
             action: action
         )
     }
@@ -641,9 +623,11 @@ struct JarvisSheetToolbar: ToolbarContent {
                 action: onConfirm
             )
         }
+        .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .topBarTrailing) {
             JarvisSheetCloseButton(title: closeTitle, isDisabled: isWorking, action: onClose)
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 }
 

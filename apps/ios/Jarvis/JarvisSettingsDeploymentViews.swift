@@ -44,8 +44,7 @@ struct JarvisDeploymentsSettingsView: View {
                                     systemImage: "trash",
                                     identifier: "settings.deployment.remove",
                                     isDisabled: readOnly || removing != nil,
-                                    tint: .red,
-                                    chrome: .onGlass
+                                    tint: .red
                                 ) { pendingRemoval = deployment }
                             }
                         }
@@ -83,8 +82,7 @@ struct JarvisDeploymentsSettingsView: View {
                     title: copy(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "settings.refresh",
-                    isDisabled: loading || removing != nil,
-                    chrome: .glass
+                    isDisabled: loading || removing != nil
                 ) { Task { await load() } }
             }
             .sharedBackgroundVisibility(.hidden)
@@ -214,6 +212,7 @@ struct JarvisNewDeploymentView: View {
                     isDisabled: readOnly || submitted || !validDraft
                 ) { Task { await requestDeployment() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .onChange(of: model) { _, _ in error = nil; notice = nil }
         .onChange(of: version) { _, _ in error = nil; notice = nil }

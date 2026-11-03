@@ -523,8 +523,7 @@ struct JarvisNotesArea: View {
                     JarvisIconButton(
                         title: copy.clearSearch,
                         systemImage: "xmark.circle.fill",
-                        identifier: "notes.search.clear",
-                        chrome: .onGlass
+                        identifier: "notes.search.clear"
                     ) { searchText = "" }
                 }
             }
@@ -690,8 +689,7 @@ struct JarvisNotesArea: View {
                 identifier: "notes.task.complete",
                 isBusy: pendingTaskIDs.contains(task.id),
                 isDisabled: task.done,
-                isSelected: task.done,
-                chrome: .onGlass
+                isSelected: task.done
             ) { Task { await completeTask(task) } }
             .accessibilityValue(task.text)
             VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {

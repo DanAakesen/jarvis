@@ -46,6 +46,7 @@ struct JarvisProactiveSettingsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || saving || !isDirty) { Task { await save() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if settings == nil { await load() }
@@ -132,8 +133,7 @@ struct JarvisRoutinesSettingsView: View {
                         systemImage: "trash",
                         identifier: "settings.routine.delete",
                         isDisabled: readOnly || deleting,
-                        tint: .red,
-                        chrome: .onGlass
+                        tint: .red
                     ) { pendingDeletion = routine }
                 }
                 .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
@@ -152,8 +152,7 @@ struct JarvisRoutinesSettingsView: View {
                     title: copy(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "settings.refresh",
-                    isDisabled: loading || deleting,
-                    chrome: .glass
+                    isDisabled: loading || deleting
                 ) { Task { await load() } }
             }
             .sharedBackgroundVisibility(.hidden)
@@ -279,10 +278,10 @@ struct JarvisMemorySettingsView: View {
                     title: copy(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "settings.refresh",
-                    isDisabled: loading || loadingMore,
-                    chrome: .onGlass
+                    isDisabled: loading || loadingMore
                 ) { Task { await load(reset: true) } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task(id: query) {
             if hasLoaded {
@@ -440,6 +439,7 @@ private struct JarvisMemoryEditorView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || !loaded || saving || deleting || !hasChanges || !validText) { Task { await save() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task { await load() }
         .confirmationDialog(copy(.memoryDeleteConfirm), isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -614,6 +614,7 @@ struct JarvisTargetsSettingsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || saving || !dirty || !valid) { Task { await save() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if targets == nil { await load() }
@@ -725,10 +726,10 @@ struct JarvisHealthCredentialView: View {
                     title: copy(.refresh),
                     systemImage: "arrow.clockwise",
                     identifier: "settings.refresh",
-                    isDisabled: loading,
-                    chrome: .onGlass
+                    isDisabled: loading
                 ) { Task { await load() } }
             }
+            .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if credential == nil { await load() }

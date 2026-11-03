@@ -74,7 +74,7 @@ struct JarvisInsightsHeader<Actions: View>: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
             actions
-            JarvisSidebarMenuButton(language: language, chrome: .glass)
+            JarvisSidebarMenuButton(language: language)
         }
         .padding(.horizontal)
     }

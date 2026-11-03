@@ -2,18 +2,16 @@ import JarvisCore
 import SwiftUI
 import UIKit
 
-/// The sidebar button every page carries: the shared icon button. `.onGlass` inside a system toolbar, `.glass` in a title bar.
+/// The sidebar button every page carries: the shared icon button.
 struct JarvisSidebarMenuButton: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
     let language: JarvisAppLanguage
-    var chrome: JarvisControlChrome = .onGlass
 
     var body: some View {
         JarvisIconButton(
             title: JarvisNotesLocalization.string(.openSidebar, language: language),
             systemImage: "sidebar.trailing",
-            identifier: "navigation.openSidebar",
-            chrome: chrome
+            identifier: "navigation.openSidebar"
         ) {
             navigation.openSidebar()
         }
@@ -138,6 +136,9 @@ enum JarvisDesignTokens {
     /// How far the composer rim's pulse travels outwards before it fades.
     static let rimRippleReach: CGFloat = 7
     static let chatMinimumTapTarget: CGFloat = 44
+    /// The one diameter of every circular icon or menu button, in the Chat header and everywhere else.
+    static let iconButtonDiameter: CGFloat = 48
+    static let iconButtonGlyphSize: CGFloat = 20
     static let chatSheetCornerRadius: CGFloat = 28
     static let chatSheetRowSpacing: CGFloat = 16
     static let chatPlusMenuWidth: CGFloat = 272

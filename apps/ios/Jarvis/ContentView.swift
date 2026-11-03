@@ -556,7 +556,7 @@ private struct JarvisPlaceholderView: View {
                     .font(.title2.weight(.semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                JarvisSidebarMenuButton(language: language, chrome: .glass)
+                JarvisSidebarMenuButton(language: language)
             }
             .padding(.horizontal)
             Spacer(minLength: 0)

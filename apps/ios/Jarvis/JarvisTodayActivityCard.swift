@@ -363,8 +363,7 @@ struct JarvisTodayActivityCard: View {
                 JarvisIconButton(
                     title: copy(.retry),
                     systemImage: "arrow.clockwise",
-                    identifier: "today.activity.retry",
-                    chrome: .onGlass
+                    identifier: "today.activity.retry"
                 ) { Task { await model.refresh() } }
             }
         }
