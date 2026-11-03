@@ -316,8 +316,7 @@ struct ContentView: View {
                 onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
                 now: fixtureMode ? JarvisHealthPreview.now : Date(),
                 workoutInitiallySelected: healthScreenshotState != nil,
-                presentNewLiftAfterLoading: healthScreenshotState == "newlift",
-                todayModel: todayModel
+                presentNewLiftAfterLoading: healthScreenshotState == "newlift"
             )
         } else if destination == .usage {
             JarvisUsageArea(

@@ -35,6 +35,33 @@ enum JarvisNotesPreview {
               "interactions": [
                 {
                   "method": "GET",
+                  "path": "/api/vault/tasks",
+                  "query": {"state": "open"},
+                  "response": {
+                    "statusCode": 200,
+                    "body": {
+                      "items": [{
+                        "id": "1111111111111111111111111111111111111111111111111111111111111111",
+                        "text": "Synthetic task",
+                        "done": false,
+                        "dueDate": "2026-10-30",
+                        "dueTime": null,
+                        "dueAt": null,
+                        "priority": "medium",
+                        "path": "Inbox/Synthetic_Note.md",
+                        "line": 3,
+                        "heading": null,
+                        "version": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                      }],
+                      "readAt": "2026-10-30T12:00:00.000Z",
+                      "today": "2026-10-30",
+                      "total": 1,
+                      "truncated": false
+                    }
+                  }
+                },
+                {
+                  "method": "GET",
                   "path": "/api/notes/tree",
                   "response": {
                     "statusCode": 200,
