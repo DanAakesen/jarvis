@@ -3438,6 +3438,14 @@ fail closed after five minutes if the owner does not approve. The existing
 `teams_conversations` and `teams_confirmations` tables and rows are retained
 unchanged; only the confirmation table remains in use.
 
+
+### Approval replies, push rule and notification caps (P15-64)
+
+- `POST /now/confirmations/:id` posts a chat reply after every calendar approval or rejection (`core/approval-reply.ts`): outcome plus one follow-up question, written into the session that staged the change. The reply is not pushed.
+- `push/push-ledger.ts` enforces one push and one log entry per event: an approval push per confirmation id, a reply push per message id. A reply that completes the turn which staged an approval is not pushed.
+- `core/notification-policy.ts` bounds the Now-feed notification rows written by `recordNotification`: identical kind and text once per rolling 24 hours, at most 10 per kind per rolling 24 hours, expiry from the feed after 7 days.
+- Owner-only feed routes: `POST /now/activity/:id/dismiss`, `POST /now/activity/groups/:category/dismiss` (`attention`, `release`, `credential`, `alert`) and `POST /now/activity/clear`; the last two return `{ dismissed }`.
+
 ## Proactive Web Push backend (P13-01, 17 October 2026)
 
 The backend registers the owner-authenticated push routes only when

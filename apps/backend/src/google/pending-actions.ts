@@ -157,6 +157,14 @@ export class PendingGoogleActions {
     }));
   }
 
+  /** The chat session and summary behind a pending calendar card, so a tap can be answered in that chat. */
+  browserActionContext(id: string): { readonly sessionId: string; readonly summary: string } | undefined {
+    this.removeExpired();
+    const action = [...this.actions.values()].find((candidate) =>
+      candidate.scope === 'calendar' && candidate.browserId === id);
+    return action ? { sessionId: action.sourceSessionId, summary: action.summary } : undefined;
+  }
+
   async resolveBrowserConfirmation(
     id: string, decision: ConfirmationDecision, signal: AbortSignal,
   ): Promise<false | { readonly result: unknown }> {

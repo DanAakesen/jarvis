@@ -1,4 +1,4 @@
-import type { FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import {
   isNowSseEvent,
@@ -12,6 +12,7 @@ import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
 import { type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from './owner-interactions.js';
+import { postApprovalReply, type ApprovalOutcome } from './approval-reply.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { formatSseEvent, registerSseShutdown, writeSseEvent } from './sse.js';
 
@@ -50,6 +51,10 @@ export type NowFeedSnapshot = Omit<NowFeed, 'awayMode' | 'confirmations'>;
 export interface NowFeedStore {
   read(): Promise<NowFeedSnapshot>;
   dismiss(id: string): Promise<boolean>;
+  /** Dismisses every visible item of one category; resolves to the number dismissed. */
+  dismissGroup?(category: NowActivityCategory): Promise<number>;
+  /** Dismisses every visible item; resolves to the number dismissed. */
+  dismissAll?(): Promise<number>;
   recordNotification?(kind: string, text: string): Promise<void>;
 }
 
@@ -93,6 +98,8 @@ export function sseHeaders(reply: FastifyReply): Record<string, string> {
 }
 
 export function registerNowRoutes(app: FastifyInstance) {
+  const isOwner = (request: FastifyRequest) =>
+    request.principal?.objectId.toLowerCase() === app.ownerObjectId.toLowerCase();
   app.get('/presence', async (request, reply) => {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
@@ -165,6 +172,8 @@ export function registerNowRoutes(app: FastifyInstance) {
     if (!service && !app.pendingGoogleActions) {
       return reply.code(503).send({ error: 'Confirmation service unavailable' });
     }
+    const calendarAction = app.pendingGoogleActions?.browserActionContext(request.params.id);
+    const postReply = (outcome: ApprovalOutcome) => postApprovalReply(app.conversationStore, calendarAction, outcome);
     let resolved: boolean | { readonly result: unknown } | undefined =
       await service?.resolveBrowserConfirmation(request.params.id, request.body.decision);
     if (!resolved) {
@@ -175,6 +184,7 @@ export function registerNowRoutes(app: FastifyInstance) {
       } catch {
         const error = 'Calendar result is unverified. Check the calendar before retrying; do not repeat the write.';
         await app.nowFeedStore?.recordNotification?.('error', error).catch(() => {});
+        await postReply('unverified');
         app.nowEventHub.publish({ type: 'refresh' });
         return reply.code(502).send({ error });
       }
@@ -197,12 +207,15 @@ export function registerNowRoutes(app: FastifyInstance) {
         for (const notice of notices) {
           await app.nowFeedStore?.recordNotification?.('error', notice).catch(() => {});
         }
+        await postReply('unverified');
         app.nowEventHub.publish({ type: 'refresh' });
         return reply.code(502).send({ error: [
           result?.detail ?? 'Calendar result is unverified.',
           details, caution,
         ].filter(Boolean).join('\n') });
       }
+      await postReply(result?.status === 'completed' ? 'completed' : 'cancelled');
+      app.nowEventHub.publish({ type: 'refresh' });
     }
     return reply.code(204).send();
   });
@@ -213,12 +226,38 @@ export function registerNowRoutes(app: FastifyInstance) {
       response: { 400: { type: 'object', properties: { error: { type: 'string' } }, required: ['error'] } },
     },
   }, async (request, reply) => {
+    if (!isOwner(request)) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.nowFeedStore) return reply.code(503).send({ error: 'Now feed unavailable' });
     const { id } = request.params;
     if (BigInt(id) > maxSqlBigInt) return reply.code(400).send({ error: 'Invalid activity ID' });
     if (!await app.nowFeedStore.dismiss(id)) return reply.code(404).send({ error: 'Activity item not found' });
     app.nowEventHub.publish({ type: 'refresh' });
     return reply.code(204).send();
+  });
+
+  app.post<{ Params: { category: NowActivityCategory } }>('/now/activity/groups/:category/dismiss', {
+    schema: {
+      params: {
+        type: 'object',
+        properties: { category: { type: 'string', enum: ['attention', 'release', 'credential', 'alert'] } },
+        required: ['category'],
+        additionalProperties: false,
+      },
+    },
+  }, async (request, reply) => {
+    if (!isOwner(request)) return reply.code(403).send({ error: 'Forbidden' });
+    if (!app.nowFeedStore?.dismissGroup) return reply.code(503).send({ error: 'Now feed unavailable' });
+    const dismissed = await app.nowFeedStore.dismissGroup(request.params.category);
+    app.nowEventHub.publish({ type: 'refresh' });
+    return { dismissed };
+  });
+
+  app.post('/now/activity/clear', async (request, reply) => {
+    if (!isOwner(request)) return reply.code(403).send({ error: 'Forbidden' });
+    if (!app.nowFeedStore?.dismissAll) return reply.code(503).send({ error: 'Now feed unavailable' });
+    const dismissed = await app.nowFeedStore.dismissAll();
+    app.nowEventHub.publish({ type: 'refresh' });
+    return { dismissed };
   });
 
   app.get('/now/events', async (request, reply) => {

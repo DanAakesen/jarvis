@@ -14,6 +14,7 @@ from unittest.mock import patch
 import zipfile
 
 from pipeline_evidence import ci_evidence, dispatched_pull, ownership
+from hermetic import setUpModule  # noqa: F401
 from pipeline_impact import (
     CHECKS, PARTS, checks_for, deploy_parts, fingerprints, require_results, selection, workflow_recipe,
 )
@@ -142,7 +143,8 @@ class ImpactTests(unittest.TestCase):
 
     def test_workflow_only_changes_do_not_rebuild_applications(self):
         for path in (".github/workflows/ci.yml", ".github/workflows/codeql.yml",
-                     ".github/workflows/ios-ci.yml", ".github/workflows/ios-testflight.yml",
+                     ".github/workflows/ios-ci.yml", ".github/workflows/ios-simulator.yml",
+                     ".github/workflows/ios-testflight.yml", ".github/scripts/ci_timing.py",
                      ".github/scripts/smoke_reasons.py"):
             self.assertEqual(deploy_parts(path), set())
 
@@ -625,7 +627,7 @@ class SafeFailureTests(unittest.TestCase):
     def test_ios_macos_build_is_cost_guarded(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         source = (ROOT / ".github/workflows/ios-ci.yml").read_text()
-        self.assertIn("on:\n  workflow_call:\n  workflow_dispatch:\n  schedule:", source)
+        self.assertIn("\n  workflow_dispatch:\n  schedule:", source)
         self.assertEqual(workflow["on"]["schedule"], [{"cron": "17 3 * * *"}])
         self.assertIn("    needs: linux", source)
         self.assertIn(
@@ -647,6 +649,53 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("--screenshot-sidebar-open", source)
         self.assertIn("sidebar-open-light.png", source)
         self.assertIn("sidebar-open-dark.png", source)
+
+    def test_ios_simulator_runs_beside_the_merge_gate_and_tracks_main_failures(self):
+        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
+        self.assertEqual(ci["jobs"]["ios"]["with"], {"simulator": "skip"})
+        self.assertEqual(ci["jobs"]["ios"]["uses"], "./.github/workflows/ios-ci.yml")
+        self.assertIn("ios", ci["jobs"]["result"]["needs"])
+        self.assertTrue(ci["concurrency"]["cancel-in-progress"])
+        simulator = load_workflow(ROOT / ".github/workflows/ios-simulator.yml")
+        job = simulator["jobs"]["simulator"]
+        self.assertEqual(job["with"], {"linux": "skip"})
+        self.assertEqual(job["uses"], "./.github/workflows/ios-ci.yml")
+        self.assertEqual(simulator["on"]["pull_request"]["paths"], simulator["on"]["push"]["paths"])
+        self.assertIn("apps/ios/**", simulator["on"]["pull_request"]["paths"])
+        self.assertNotIn("docs/**", simulator["on"]["pull_request"]["paths"])
+        self.assertEqual(simulator["on"]["push"]["branches"], ["main"])
+        self.assertTrue(simulator["concurrency"]["cancel-in-progress"])
+        self.assertIn("draft", job["if"])
+        ios = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        self.assertEqual(ios["jobs"]["linux"]["if"], "inputs.linux != 'skip'")
+        self.assertIn("inputs.simulator != 'skip'", ios["jobs"]["macos"]["if"])
+        tracker = next(step for step in ios["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Open or update the nightly UI test issue")
+        self.assertIn("github.event_name == 'push'", tracker["if"])
+        self.assertIn("github.ref == 'refs/heads/main'", tracker["if"])
+
+    def test_ci_timing_summary_lists_finished_jobs_by_duration(self):
+        from ci_timing import table
+        jobs = [
+            {"name": "Web", "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:04:05Z",
+             "conclusion": "success"},
+            {"name": "Backend", "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:09:00Z",
+             "conclusion": "failure"},
+            {"name": "Skipped", "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:00:00Z",
+             "conclusion": "skipped"},
+            {"name": "Running", "started_at": "2026-01-01T00:00:00Z", "completed_at": None, "conclusion": None},
+        ]
+        text = table(jobs)
+        self.assertLess(text.index("Backend"), text.index("Web"))
+        self.assertIn("| Backend | 9m 00s | failure |", text)
+        self.assertIn("| Web | 4m 05s | success |", text)
+        self.assertNotIn("Skipped", text)
+        self.assertNotIn("Running", text)
+        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
+        steps = ci["jobs"]["result"]["steps"]
+        timing = next(step for step in steps if step.get("name") == "Summarize job timings")
+        self.assertEqual(timing["run"], "python .github/scripts/ci_timing.py")
+        self.assertEqual(ci["jobs"]["result"]["permissions"]["actions"], "read")
 
     def test_ios_navigation_regression_gates_the_build_and_retains_results(self):
         project = load_workflow(ROOT / "apps/ios/project.yml")
