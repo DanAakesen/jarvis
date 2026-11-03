@@ -6,7 +6,7 @@ import XCTest
 ///
 /// Allowed exceptions, by file name:
 /// - `JarvisControls.swift` and `JarvisDesignSystem.swift` own every glass surface, button style and orb component.
-/// - `JarvisMiniCoreView.swift` is the orb drawing itself, which `JarvisOrb` wraps.
+/// - `JarvisOrbCanvas.swift` is the one orb drawing (a port of the web orb), which `JarvisOrb` wraps.
 /// - `JarvisComponentGallery.swift` only shows the shared components and defines none of its own.
 /// - `.buttonStyle(.plain)` and `JarvisPressableRowButtonStyle` stay allowed in screens: they only make a whole content
 ///   row (a note, a list item, a chart slice, a disclosure header) tappable and draw no chrome. Anything that looks like a
@@ -15,7 +15,7 @@ import XCTest
 /// Any other file that needs a new look must add it to the shared layer instead of adding an exception here.
 final class JarvisDesignSystemGuardTests: XCTestCase {
     private static let sharedLayer: Set<String> = ["JarvisControls.swift", "JarvisDesignSystem.swift"]
-    private static let orbDrawing: Set<String> = ["JarvisMiniCoreView.swift"]
+    private static let orbDrawing: Set<String> = ["JarvisOrbCanvas.swift"]
 
     private func swiftSources() throws -> [(name: String, text: String)] {
         var root = URL(fileURLWithPath: #filePath)
@@ -69,7 +69,7 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
 
     func testScreensCreateOrbsOnlyThroughJarvisOrb() throws {
         let allowing = Self.sharedLayer.union(Self.orbDrawing)
-        XCTAssertEqual(try offenders(#"JarvisMiniCoreView\("#, allowing: allowing), [])
+        XCTAssertEqual(try offenders(#"JarvisOrbCanvas\(|JarvisMiniCore"#, allowing: allowing), [])
     }
 
     func testTheGuardDetectsButtonChrome() throws {

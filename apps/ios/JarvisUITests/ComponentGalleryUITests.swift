@@ -23,4 +23,23 @@ final class ComponentGalleryUITests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    /// Two screenshots of the live orb taken apart in time must differ: the orb flows, it is not a still image.
+    func testOrbAnimatesBetweenTwoFrames() {
+        app.launchArguments = ["--component-gallery", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        defer { app.terminate() }
+        let orbs = app.descendants(matching: .any)["gallery.orbs"]
+        XCTAssertTrue(orbs.waitForExistence(timeout: 10))
+        let first = orbs.screenshot()
+        Thread.sleep(forTimeInterval: 0.8)
+        let second = orbs.screenshot()
+        for (name, shot) in [("Orb frame 1", first), ("Orb frame 2 (0.8 s later)", second)] {
+            let attachment = XCTAttachment(screenshot: shot)
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation, "The orb must animate")
+    }
 }

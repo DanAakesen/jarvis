@@ -442,7 +442,7 @@ private struct JarvisGateSurface: View {
         return false
     }
 
-    private var orbActivity: JarvisMiniCoreActivity {
+    private var orbActivity: JarvisOrbActivity {
         if presentation == .signIn(.signingIn) { return .signingIn }
         if presentation == .loading { return .calm }
         return .idle

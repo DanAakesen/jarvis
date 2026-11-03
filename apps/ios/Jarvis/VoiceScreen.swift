@@ -155,7 +155,7 @@ struct VoiceScreenView: View {
 
     private func voiceOrb(diameter: CGFloat) -> some View {
         JarvisOrb(
-            activity: JarvisMiniCoreActivity(
+            activity: JarvisOrbActivity(
                 voiceState: model.voiceState,
                 isMuted: model.showsConnectionRecovery || model.isMuted
             ),

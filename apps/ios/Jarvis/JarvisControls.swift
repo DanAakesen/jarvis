@@ -599,12 +599,12 @@ struct JarvisSheetToolbar: ToolbarContent {
 /// only, so it looks the same on Home, the Gate, Voice and in chat at every size. Never draw an orb elsewhere.
 /// API: View.aspectRatio(_:contentMode:), View.clipShape(_:), Circle.
 struct JarvisOrb: View {
-    let activity: JarvisMiniCoreActivity
+    let activity: JarvisOrbActivity
     var size: CGFloat = JarvisDesignTokens.gateOrbSize
     var isStatic = false
 
     var body: some View {
-        JarvisMiniCoreView(activity: activity, diameter: size, isStatic: isStatic)
+        JarvisOrbCanvas(activity: activity, isStatic: isStatic)
             .aspectRatio(1, contentMode: .fit)
             .frame(width: size, height: size)
             .clipShape(Circle())
@@ -616,7 +616,7 @@ struct JarvisOrb: View {
 struct JarvisOrbButton: View {
     let title: String
     var identifier: String
-    var activity: JarvisMiniCoreActivity = .calm
+    var activity: JarvisOrbActivity = .calm
     var size: CGFloat = 28
     var isStatic = false
     let action: () -> Void
@@ -636,7 +636,7 @@ struct JarvisOrbButton: View {
     }
 }
 
-extension JarvisMiniCoreActivity {
+extension JarvisOrbActivity {
     /// The orb's activity for a live Voice session.
     init(voiceState: VoiceSessionState, isMuted: Bool) {
         if isMuted {

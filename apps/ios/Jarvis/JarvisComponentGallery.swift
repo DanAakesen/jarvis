@@ -20,11 +20,13 @@ struct JarvisComponentGallery: View {
                 hero: {
                     JarvisPageHeroCard(title: "Orb") {
                         HStack(alignment: .center, spacing: 24) {
-                            JarvisOrb(activity: .calm, size: 44, isStatic: true)
-                            JarvisOrb(activity: .calm, size: 96, isStatic: true)
-                            JarvisOrb(activity: .calm, size: 160, isStatic: true)
+                            JarvisOrb(activity: .calm, size: 44)
+                            JarvisOrb(activity: .listening, size: 96)
+                            JarvisOrb(activity: .thinking, size: 160)
                         }
                         .frame(maxWidth: .infinity)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Orb at three sizes")
                         .accessibilityIdentifier("gallery.orbs")
                     }
                 },
