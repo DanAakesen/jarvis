@@ -10700,3 +10700,9 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: `CI result` gates merge on quick jobs only. The iOS Simulator job moved to `ios-simulator.yml` and reports separately. Reason: it took 43 of the median 44 minutes and failed 9 of 13 failed runs, so every PR waited on it.
 - Trade-off: a PR can merge before the Simulator result arrives. A failure on `main` opens or updates one tracking issue, and the PR comment still warns when UI tests fail. Copilot ready qualification no longer waits for the Simulator.
 - Not changed: UI tests were not skipped, deleted, retried or weakened. Sharding and a smoke subset stay open until the Simulator timing is measured.
+
+## 2026-11-03 Merge order and deploy qualification
+
+- Decision: merge a PR only when its tested head already contains current `main`. Deploy requires a CI receipt whose tree equals the tree of `main` after the merge, so a PR merged behind a newer `main` ships nothing (`exact_qualification_missing`).
+- Evidence: the backend changes of P15-64 merged right after P15-67 and the Deploy plan job failed with that code. A small up-to-date PR re-qualifies `main`.
+- Consequence: when two PRs are ready, merge one, then update the other from `main` and wait for its quick gate before merging it.
