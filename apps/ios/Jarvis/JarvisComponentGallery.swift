@@ -34,7 +34,12 @@ struct JarvisComponentGallery: View {
             )
         }
         .environmentObject(JarvisNavigationModel())
-        .accessibilityIdentifier("screen.componentGallery")
+        .overlay(alignment: .topLeading) {
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityElement()
+                .accessibilityIdentifier("screen.componentGallery")
+        }
     }
 
     private var sections: some View {

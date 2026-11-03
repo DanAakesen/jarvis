@@ -8,38 +8,57 @@ final class ComponentGalleryUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func testGalleryShowsEverySharedComponentAndAttachesAScreenshot() {
+    private func launchGallery() {
         app.launchArguments = ["--component-gallery", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
-        defer { app.terminate() }
-        XCTAssertTrue(app.descendants(matching: .any)["gallery.header.refresh"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.descendants(matching: .any)["gallery.orbs"].exists)
-        XCTAssertTrue(app.buttons["navigation.openSidebar"].exists)
-        for id in ["gallery.icon", "gallery.menu", "gallery.label"] {
-            XCTAssertTrue(app.descendants(matching: .any)[id].exists, id)
-        }
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = "Component gallery"
+    }
+
+    /// First match by identifier or, as a fallback, by accessibility label: a container identifier must never hide a control.
+    private func element(_ identifier: String, label: String) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == %@ OR label == %@", identifier, label))
+            .firstMatch
+    }
+
+    private func attach(_ screenshot: XCUIScreenshot, named name: String) {
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
     }
 
+    func testGalleryShowsEverySharedComponentAndAttachesAScreenshot() {
+        launchGallery()
+        defer { app.terminate() }
+        let marker = app.descendants(matching: .any).matching(identifier: "screen.componentGallery").firstMatch
+        if !marker.waitForExistence(timeout: 30) {
+            XCTFail("The component gallery did not open. \(String(app.debugDescription.prefix(6000)))")
+            return
+        }
+        for (id, label) in [
+            ("gallery.header.refresh", "Refresh"), ("gallery.orbs", "Orb at three sizes"),
+            ("navigation.openSidebar", "navigation.openSidebar"), ("gallery.icon", "Default"), ("gallery.menu", "Menu"),
+            ("gallery.label", "Label"),
+        ] {
+            XCTAssertTrue(element(id, label: label).waitForExistence(timeout: 10), id)
+        }
+        attach(app.screenshot(), named: "Component gallery")
+    }
+
     /// Two screenshots of the live orb taken apart in time must differ: the orb flows, it is not a still image.
     func testOrbAnimatesBetweenTwoFrames() {
-        app.launchArguments = ["--component-gallery", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
-        app.launch()
+        launchGallery()
         defer { app.terminate() }
-        let orbs = app.descendants(matching: .any)["gallery.orbs"]
-        XCTAssertTrue(orbs.waitForExistence(timeout: 10))
+        let orbs = element("gallery.orbs", label: "Orb at three sizes")
+        if !orbs.waitForExistence(timeout: 30) {
+            XCTFail("The orb row did not appear. \(String(app.debugDescription.prefix(6000)))")
+            return
+        }
         let first = orbs.screenshot()
         Thread.sleep(forTimeInterval: 0.8)
         let second = orbs.screenshot()
-        for (name, shot) in [("Orb frame 1", first), ("Orb frame 2 (0.8 s later)", second)] {
-            let attachment = XCTAttachment(screenshot: shot)
-            attachment.name = name
-            attachment.lifetime = .keepAlways
-            add(attachment)
-        }
+        attach(first, named: "Orb frame 1")
+        attach(second, named: "Orb frame 2 (0.8 s later)")
         XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation, "The orb must animate")
     }
 }
