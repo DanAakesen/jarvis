@@ -1,19 +1,20 @@
 import JarvisCore
 import SwiftUI
 
-/// Home: the first screen on launch. Greeting, what is next, tasks, workouts and steps, quick log, and a composer
-/// that carries over into Chat and Voice.
+/// Home: the first screen on launch. No title: the data-phrase headline sits at the top, then the activity hero
+/// (workouts and steps), what is next, tasks, quick log, and the Chat composer that carries over into Chat and Voice.
 struct JarvisTodayScreen: View {
     private enum Tab: Hashable { case today, due }
 
     private enum Sheet: Identifiable {
-        case task, note, gym(withLift: Bool)
+        case task, note, workout, lift
 
         var id: String {
             switch self {
             case .task: "task"
             case .note: "note"
-            case .gym(let withLift): withLift ? "lift" : "workout"
+            case .workout: "workout"
+            case .lift: "lift"
             }
         }
     }
@@ -40,6 +41,7 @@ struct JarvisTodayScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
                 greeting
+                JarvisTodayActivityCard(model: model, language: language, fixtureMode: fixtureMode)
                 if model.isShowingOfflineCopy {
                     Label(copy(.offline), systemImage: "wifi.slash")
                         .font(.footnote)
@@ -48,7 +50,6 @@ struct JarvisTodayScreen: View {
                 }
                 nextUp
                 agenda
-                JarvisTodayActivityCard(model: model, language: language, fixtureMode: fixtureMode)
                 quickActions
             }
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
@@ -64,7 +65,6 @@ struct JarvisTodayScreen: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
-        .navigationTitle(JarvisDestination.today.localizedTitle(language: language))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -76,13 +76,6 @@ struct JarvisTodayScreen: View {
         .task { await model.refresh() }
         .sheet(item: $sheet) { presented in
             sheetContent(presented)
-        }
-        .onChange(of: draft) { old, new in
-            guard old.isEmpty, !new.isEmpty else { return }
-            let text = new
-            draft = ""
-            composerFocused = false
-            onChat(JarvisChatHandoff(text: text))
         }
     }
 
@@ -367,13 +360,13 @@ struct JarvisTodayScreen: View {
                 subtitle: model.lastWorkoutText(language: language),
                 systemImage: "figure.strengthtraining.traditional",
                 identifier: "today.logWorkout"
-            ) { sheet = .gym(withLift: false) }
+            ) { sheet = .workout }
             quickAction(
                 title: copy(.logLift),
                 subtitle: nil,
                 systemImage: "dumbbell",
                 identifier: "today.logLift"
-            ) { sheet = .gym(withLift: true) }
+            ) { sheet = .lift }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(copy(.quickActions))
@@ -399,36 +392,65 @@ struct JarvisTodayScreen: View {
 
     // MARK: Composer
 
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func sendDraft() {
+        guard canSend else { return }
+        let text = draft
+        draft = ""
+        composerFocused = false
+        onChat(JarvisChatHandoff(text: text))
+    }
+
+    /// The Chat composer: text field above one trailing control, voice while empty and send while
+    /// typing, inside the same glass surface with the animated rim.
     private var composer: some View {
-        HStack(spacing: 0) {
+        VStack(spacing: 0) {
             TextField(
                 JarvisChatLocalization.string(.messagePlaceholder, language: language),
                 text: $draft,
                 axis: .vertical
             )
             .font(.body)
-            .lineLimit(1...3)
+            .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
             .focused($composerFocused)
             .submitLabel(.send)
-            .padding(.leading, JarvisDesignTokens.chatComposerTextInset)
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .onSubmit(sendDraft)
+            .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
+            .padding(.top, JarvisDesignTokens.chatComposerTextInset)
+            .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
             .accessibilityLabel(JarvisChatLocalization.string(.messagePlaceholder, language: language))
             .accessibilityIdentifier("today.input")
-            JarvisOrbButton(
-                title: JarvisChatLocalization.string(.voiceMode, language: language),
-                identifier: "today.voice",
-                isStatic: true,
-                action: onVoice
-            )
-            .jarvisCarryOver(.orb)
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if canSend {
+                    JarvisComposerIconButton(
+                        title: JarvisChatLocalization.string(.sendMessage, language: language),
+                        systemImage: "paperplane.fill",
+                        identifier: "today.send",
+                        action: sendDraft
+                    )
+                } else {
+                    JarvisComposerIconButton(
+                        title: JarvisChatLocalization.string(.voiceMode, language: language),
+                        systemImage: "waveform",
+                        identifier: "today.voice",
+                        action: onVoice
+                    )
+                    .jarvisCarryOver(.orb)
+                }
+            }
         }
         .padding(.horizontal, JarvisDesignTokens.chatComposerSpacing / 2)
+        .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
         .background {
             Color.clear
                 .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
                 .jarvisRim(
                     cornerRadius: JarvisDesignTokens.surfaceRadius,
-                    state: .idle,
+                    state: canSend ? .typing : .idle,
                     isAnimated: !fixtureMode && !reduceMotion
                 )
                 .allowsHitTesting(false)
@@ -468,10 +490,12 @@ struct JarvisTodayScreen: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-        case .gym(let withLift):
-            JarvisTodayGymSheet(model: model, language: language, startsWithLift: withLift)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+        case .workout, .lift:
+            JarvisTodayGymSheet(
+                model: model, language: language, kind: presented.id == "lift" ? .lift : .workout
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 }
