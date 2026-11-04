@@ -9,6 +9,7 @@ import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } fr
 import { ConfigurationError, localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
+import { installConditionalGet } from './conditional-get.js';
 import { registerOwnerSessionRoutes } from './auth/session/routes.js';
 import type { OwnerSessionService } from './auth/session/service.js';
 import { OwnerSessionConnectionRegistry } from './auth/session/connections.js';
@@ -283,6 +284,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.register(multipart, {
     limits: { files: 1, fields: 0, parts: 1, fileSize: 20 * 1024 * 1024 },
   });
+  installConditionalGet(app);
   app.addHook('onResponse', async (request, reply) => {
     request.log.info({
       method: request.method,

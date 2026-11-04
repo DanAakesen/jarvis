@@ -182,3 +182,43 @@ enum JarvisSignpost {
     static func end(_ name: StaticString, _ state: State) {}
     #endif
 }
+
+/// What one card or list section shows while its repository loads. A failed refresh keeps the last value, so cached
+/// data stays on screen and the failure is shown beside it instead of replacing it.
+public enum JarvisCardState<Value: Sendable>: Sendable {
+    case loading
+    case loaded(Value, refreshFailed: Bool)
+    case failed(any Error)
+
+    public var value: Value? {
+        if case .loaded(let value, _) = self { return value }
+        return nil
+    }
+
+    public var refreshFailed: Bool {
+        if case .loaded(_, let failed) = self { return failed }
+        return false
+    }
+
+    public var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    public mutating func apply(_ update: JarvisRepositoryUpdate<Value>) {
+        switch update {
+        case .cached(let value, _), .fresh(let value):
+            self = .loaded(value, refreshFailed: false)
+        case .refreshing:
+            if case .loaded = self {} else { self = .loading }
+        case .failed(let error, let cached):
+            if let cached {
+                self = .loaded(cached, refreshFailed: true)
+            } else if let value {
+                self = .loaded(value, refreshFailed: true)
+            } else {
+                self = .failed(error)
+            }
+        }
+    }
+}

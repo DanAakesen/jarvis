@@ -17,4 +17,15 @@ enum JarvisAppCache {
     static func clear() async {
         await shared.clear()
     }
+
+    /// A repository over the app cache for one kind of data. Pages read through it and never call the network
+    /// client directly for cached lists.
+    static func repository<Value: Codable & Sendable & Equatable>(
+        _ kind: JarvisRepositoryKind,
+        scope: String = "",
+        fetch: @escaping JarvisRepository<Value>.Fetch
+    ) async -> JarvisRepository<Value> {
+        await bindIfNeeded()
+        return JarvisRepository(cache: shared, kind: kind, scope: scope, fetch: fetch)
+    }
 }

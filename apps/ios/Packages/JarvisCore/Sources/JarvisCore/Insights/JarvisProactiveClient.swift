@@ -581,6 +581,41 @@ public final class JarvisProactiveClient: Sendable {
         return value
     }
 
+    /// Conditional reads for the repository layer. Validation matches the plain reads below.
+    public func fetchStatus(validator: String?) async throws -> JarvisFetchResult<JarvisProactiveStatus> {
+        try await client.conditionalGet(path: ["proactive", "status"], validator: validator) {
+            let value: JarvisProactiveStatus = try self.decode($0)
+            guard value.isValid else { throw JarvisInsightsError.invalidResponse }
+            return value
+        }
+    }
+
+    public func fetchItems(validator: String?) async throws -> JarvisFetchResult<[JarvisProactiveItem]> {
+        try await client.conditionalGet(
+            path: ["proactive", "items"],
+            queryItems: [URLQueryItem(name: "state", value: "open")],
+            validator: validator
+        ) {
+            let envelope: ItemsEnvelope = try self.decode($0)
+            guard envelope.items.count <= 100, envelope.items.allSatisfy(\.isValid) else {
+                throw JarvisInsightsError.invalidResponse
+            }
+            return envelope.items
+        }
+    }
+
+    public func fetchRuns(validator: String?) async throws -> JarvisFetchResult<[JarvisProactiveRun]> {
+        try await client.conditionalGet(
+            path: ["proactive", "runs"],
+            queryItems: [URLQueryItem(name: "limit", value: "10")],
+            validator: validator
+        ) {
+            let envelope: RunsEnvelope = try self.decode($0)
+            guard envelope.runs.allSatisfy(\.isValid) else { throw JarvisInsightsError.invalidResponse }
+            return envelope.runs
+        }
+    }
+
     public func items(all: Bool) async throws -> [JarvisProactiveItem] {
         let envelope: ItemsEnvelope = try await get(
             ["proactive", "items"],
