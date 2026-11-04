@@ -97,7 +97,9 @@ describe('Now feed dismissal', () => {
 
     await createNowFeedStore(pool).read();
 
-    expect(query.mock.calls[1]?.[0]).toContain("alert_key NOT LIKE N'notification:%' OR at > DATEADD(day, -7");
+    expect(query.mock.calls[1]?.[0]).toContain("alert_key NOT LIKE N'notification:%' OR");
+    expect(query.mock.calls[1]?.[0]).toContain('at > DATEADD(day, -7');
+    expect(query.mock.calls[1]?.[0]).toContain("kind <> N'success'");
   });
 });
 
