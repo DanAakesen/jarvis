@@ -188,7 +188,7 @@ describe('Health composition', () => {
     const on = fixture(module);
     const baselineRoutes = await routeTable(baseline);
     const onRoutes = await routeTable(on);
-    const healthRoutes = ['capabilities', 'lifts', 'lifts/:id', 'nutrition-targets', 'training-targets', 'query', 'workouts', 'workouts/:id'];
+    const healthRoutes = ['capabilities', 'lifts', 'lifts/:id', 'nutrition-targets', 'training-targets', 'query', 'sync', 'workouts', 'workouts/:id'];
     expect([...onRoutes].filter((url) => !baselineRoutes.has(url)).sort()).toEqual([
       ...healthRoutes.flatMap((route) => [`/health/${route}`, `/daily/${route}`]),
       ...healthToolNames.flatMap((name) => [`/tools/${name}`, `/tools/${name === 'health_summary' ? 'daily_health_summary' : name === 'health_history' ? 'daily_health_history' : name.replace(/^health_/u, 'daily_')}`]),

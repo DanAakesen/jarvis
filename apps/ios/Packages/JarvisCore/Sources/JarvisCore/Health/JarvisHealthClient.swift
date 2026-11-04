@@ -128,7 +128,7 @@ public enum JarvisHealthClientError: Error, Equatable, Sendable {
     case invalidStream
 }
 
-public final class JarvisHealthClient: Sendable {
+public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
     private let client: JarvisClient
     private static let responseLimit = 1024 * 1024
 
@@ -136,31 +136,19 @@ public final class JarvisHealthClient: Sendable {
         self.client = client
     }
 
-    /// Creates the Health upload credential the existing ingest path accepts, rotating it when one already exists.
-    /// The secret is held in memory by the caller and sent only to `/api/health/ingest`.
-    public func uploadCredential() async throws -> String {
-        struct Issued: Decodable { let token: String }
-        for action in ["create", "rotate"] {
-            let response = try await client.performAuthenticatedRequest(
-                method: .post,
-                path: ["api", "health", "upload-credential"],
-                body: try JSONEncoder().encode(["action": action]),
-                idempotent: false,
-                additionalSuccessStatuses: [409]
-            )
-            if response.statusCode == 409 { continue }
-            guard response.statusCode == 200,
-                  let issued = try? JSONDecoder().decode(Issued.self, from: response.body),
-                  !issued.token.isEmpty else {
-                throw JarvisHealthClientError.invalidResponse
-            }
-            return issued.token
+    /// Sends one batch to the owner-only sync route. The route is idempotent (the same samples are acknowledged,
+    /// never stored twice), so the transport may retry it.
+    public func send(_ request: JarvisHealthSyncRequest) async throws {
+        let response = try await client.performAuthenticatedRequest(
+            method: .post,
+            path: ["health", "sync"],
+            body: try request.encoded(),
+            idempotent: true,
+            timeout: .seconds(60)
+        )
+        guard response.statusCode == 200 else {
+            throw response.statusCode == 400 ? JarvisHealthSyncError.rejected : JarvisHealthSyncError.unavailable
         }
-        throw JarvisHealthClientError.invalidResponse
-    }
-
-    public func syncSender(token: @escaping @Sendable () async throws -> String) -> JarvisHealthURLSessionSender {
-        JarvisHealthURLSessionSender(baseURL: client.baseURL, token: token)
     }
 
     public func capabilities() async throws -> JarvisHealthCapabilities {

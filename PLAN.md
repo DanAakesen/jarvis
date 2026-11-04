@@ -1,6 +1,7 @@
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 
 - Done: feeds removed, rename with temporary `/daily` alias, iOS `/health/*`, Sync button and ingest payload with Swift tests.
+- P15-86 (#1587): owner-only `POST /health/sync`, anchor, Sync button states and last-sync time done; app target compiled only by CI.
 - Open: background sync (HKObserverQuery/BGTask), alias removal once builds ≤67 are gone, macOS CI build of the app target.
 
 ## P15-51 — approval flow polish (#1504)
