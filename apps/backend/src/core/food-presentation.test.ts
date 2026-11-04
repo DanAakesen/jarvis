@@ -11,7 +11,7 @@ it('recognizes reordered formatted list items, preserving missing and changed va
 });
 
 it('keeps one rounded list with every nutrient and preserves source precision', async () => {
-  const { nutritionSummary } = await import('../daily/nutrition/review.js');
+  const { nutritionSummary } = await import('../health/nutrition/review.js');
   const values = { proteinGrams: 36.7645, energyKcal: 632.0129381733168, fatGrams: 18.510714285714286,
     carbohydratesGrams: 74.08109593194055, fiberGrams: 11.017062937062937 };
   const before = structuredClone(values);

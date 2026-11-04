@@ -8,10 +8,10 @@ import { JarvisActivityProvider } from './activity-provider';
 import { appAreas } from './areas';
 import { AreaSectionsContext, areaSectionLinks, type AreaSections } from './area-sections';
 import { Loader } from './Loader';
-import { NutritionTargetsSettings } from './daily/NutritionTargetsSettings';
-import { TrainingTargetsSettings } from './daily/TrainingTargetsSettings';
+import { NutritionTargetsSettings } from './health/NutritionTargetsSettings';
+import { TrainingTargetsSettings } from './health/TrainingTargetsSettings';
 import { HealthUploadSettings } from './HealthUploadSettings';
-import { DailyRefreshContext } from './daily/refresh';
+import { HealthRefreshContext } from './health/refresh';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
 import type { CameraController, ScreenShareController } from './screen-sharing';
@@ -92,37 +92,37 @@ function activityLabel(event: JarvisActivityEvent | null): string {
   }
 }
 
-function Shell({ signedIn, config, session, camera, screenShare, dailyEnabled, proactiveEnabled }: {
+function Shell({ signedIn, config, session, camera, screenShare, healthEnabled, proactiveEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
-  dailyEnabled: boolean;
+  healthEnabled: boolean;
   proactiveEnabled: boolean;
 }) {
   return (
     <ConversationIntentProvider>
       <ContextPanelProvider>
         <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare}
-          dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />
+          healthEnabled={healthEnabled} proactiveEnabled={proactiveEnabled} />
       </ContextPanelProvider>
     </ConversationIntentProvider>
   );
 }
 
-function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnabled, proactiveEnabled }: {
+function ShellLayout({ signedIn, config, session, camera, screenShare, healthEnabled, proactiveEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
-  dailyEnabled: boolean;
+  healthEnabled: boolean;
   proactiveEnabled: boolean;
 }) {
-  const areas = appAreas(dailyEnabled, proactiveEnabled);
-  const [dailyRefresh, setDailyRefresh] = useState(0);
-  const onDailyRefresh = useCallback(() => { if (dailyEnabled) setDailyRefresh(value => value + 1); }, [dailyEnabled]);
+  const areas = appAreas(healthEnabled, proactiveEnabled);
+  const [healthRefresh, setHealthRefresh] = useState(0);
+  const onHealthRefresh = useCallback(() => { if (healthEnabled) setHealthRefresh(value => value + 1); }, [healthEnabled]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const home = pathname === '/';
@@ -208,7 +208,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const factoryIssueNavigator = useRef<FactoryIssueNavigator | null>(null);
   const issueNavigationAbort = useRef<AbortController | null>(null);
   const navigateTo = useCallback((request: NavigateRequest) => {
-    const target = resolveNavigation(request, dailyEnabled);
+    const target = resolveNavigation(request, healthEnabled);
     if (!target.ok) return false;
     if (target.issueNumber !== undefined) return false;
     if (target.pane === 'workspaces') { setWorkspacesOpen(true); return true; }
@@ -222,7 +222,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     cancelReveal.current();
     cancelReveal.current = revealId ? revealWhenReady(() => document.getElementById(revealId), reduced) : () => {};
     return true;
-  }, [closePagePanels, dailyEnabled, navigate, setWorkspacesOpen]);
+  }, [closePagePanels, healthEnabled, navigate, setWorkspacesOpen]);
   useEffect(() => () => cancelReveal.current(), []);
   useEffect(() => {
     if (pathname !== '/factory/kanban') issueNavigationAbort.current?.abort();
@@ -230,7 +230,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   useEffect(() => () => issueNavigationAbort.current?.abort(), []);
   // What Dan is looking at (P9-43), sent with the snapshot so Jarvis can say "this page" or "that task" correctly.
   const [frontViewId, setFrontViewId] = useState<string | null>(null);
-  const viewPage = pageForPath(pathname, dailyEnabled);
+  const viewPage = pageForPath(pathname, healthEnabled);
   const viewSection = useVisibleSettingsSection(signedIn && viewPage === 'settings');
   const viewIssueNumber = useFocusedFactoryIssue(signedIn && viewPage === 'factory');
   const viewTaskId = frontViewId?.startsWith('task-') ? frontViewId.slice(5) : undefined;
@@ -297,7 +297,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, cancelSignal?: AbortSignal): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'navigate' && command.page === 'factory' && command.issueNumber !== undefined) {
       const { issueNumber, taskId } = command;
-      const target = resolveNavigation(command, dailyEnabled);
+      const target = resolveNavigation(command, healthEnabled);
       if (!target.ok) return Promise.resolve({ applied: false, reason: target.reason });
       if (cancelSignal?.aborted || (expiresAt !== undefined && expiresAt <= Date.now() + 250)) {
         return Promise.resolve({ applied: false, reason: 'The issue navigation command expired or was cancelled.' });
@@ -327,7 +327,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     }
     const navigation = readNavigateCommand(command);
     if (navigation) {
-      const target = resolveNavigation(navigation, dailyEnabled);
+      const target = resolveNavigation(navigation, healthEnabled);
       if (!target.ok) return false;
       const deadline = Math.min(expiresAt ?? Date.now() + 6000, Date.now() + 6000) - 250;
       if (cancelSignal?.aborted || deadline <= Date.now()) {
@@ -370,7 +370,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
-  }, [dailyEnabled, navigateTo, workspaceCommands]);
+  }, [healthEnabled, navigateTo, workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
@@ -718,7 +718,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               }
               setNavigationOpen(area.navigation.length > 1 || area.sections === true);
             }}>
-              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'health' ? 'health_area' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-workspaces${workspacesOpen ? ' active' : ''}`} data-tone="workspaces" data-rail-tip="Workspaces" type="button" aria-label="Workspaces" aria-pressed={workspacesOpen}
@@ -822,9 +822,9 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
               <NavigationGuardContext.Provider value={navigationGuard}>
                 <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
                   <div ref={setFeedbackHost} className="workspace-feedback-host" />
-                  <DailyRefreshContext.Provider value={dailyRefresh}>
+                  <HealthRefreshContext.Provider value={healthRefresh}>
                     <AreaSectionsContext.Provider value={setAreaSections}><Outlet /></AreaSectionsContext.Provider>
-                  </DailyRefreshContext.Provider>
+                  </HealthRefreshContext.Provider>
                 </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
               {/* The chat stays mounted on every page, so a conversation or voice session survives navigation. */}
@@ -860,7 +860,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
                   getAccessToken={getAccessToken}
                   applyWorkspaceCommand={applyWorkspaceCommand}
                   onAttentionChange={onAttentionChange}
-                  {...(dailyEnabled ? { onDataRefresh: onDailyRefresh } : {})}
+                  {...(healthEnabled ? { onDataRefresh: onHealthRefresh } : {})}
                 />
               </div>
             )}
@@ -873,11 +873,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileBottomNav menuOpen={menuOpen} dailyEnabled={dailyEnabled} workspacesOpen={workspacesOpen}
+          <MobileBottomNav menuOpen={menuOpen} healthEnabled={healthEnabled} workspacesOpen={workspacesOpen}
             onToggleWorkspaces={() => { setNavigationOpen(false); setWorkspacesOpen((open) => !open); }}
             onOpenMenu={() => setMenuOpen((open) => !open)} onNavigate={closePagePanels} />
           <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels}
-            onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled}
+            onContext={contextPanel.toggle} healthEnabled={healthEnabled} proactiveEnabled={proactiveEnabled}
             {...(sectionLinks && activeArea ? { sections: { label: activeArea.label, links: sectionLinks } } : {})} />
         </>
       )}
@@ -896,7 +896,7 @@ function TasksRedirect() {
   return <Navigate to={`/notes?${new URLSearchParams(query ? { tasks: '1', q: query } : { tasks: '1' })}`} replace />;
 }
 
-function DailyRedirect() {
+function HealthRedirect() {
   const { pathname, search, hash } = useLocation();
   return <Navigate to={{ pathname: pathname.replace(/^\/daily(?=\/|$)/u, '/health'), search, hash }} replace />;
 }
@@ -912,7 +912,7 @@ function SettingsRoute({ config, session, nutritionKey, pushEnabled, proactiveEn
   session: SignInSession;
   pushEnabled: boolean;
   proactiveEnabled: boolean;
-  /** Account key for the Daily nutrition targets; null while Daily is off, which renders nothing and asks for nothing. */
+  /** Account key for the Health nutrition targets; null while Health is off, which renders nothing and asks for nothing. */
   nutritionKey: string | null;
 }) {
   const navigate = useNavigate();
@@ -948,20 +948,20 @@ const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
 // The deployed camera protocol accepts upload-only image handles in chat and voice.
 const cameraConversationDeployed = true;
 
-export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled = __JARVIS_PUSH_ENABLED__,
+export function App({ config = defaultConfig, healthEnabled = false, pushEnabled = __JARVIS_PUSH_ENABLED__,
   proactiveEnabled = __JARVIS_PROACTIVE_ENABLED__ }: {
   config?: PublicConfig;
-  dailyEnabled?: boolean;
+  healthEnabled?: boolean;
   pushEnabled?: boolean;
   proactiveEnabled?: boolean;
 }) {
-  const areas = appAreas(dailyEnabled, proactiveEnabled);
+  const areas = appAreas(healthEnabled, proactiveEnabled);
   useGlassLight();
   const session = useSignIn(config);
   const location = useLocation();
   const navigate = useNavigate();
   const signedIn = session.state === 'signed-in' && session.profile !== null;
-  const dailyAccountKey = dailyEnabled && signedIn
+  const healthAccountKey = healthEnabled && signedIn
     ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? 'owner'
     : 'disabled';
   const camera = useCamera(config, session.getAccessToken, cameraConversationDeployed);
@@ -1006,18 +1006,18 @@ export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled 
         enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
         <Routes>
           <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare}
-            dailyEnabled={dailyEnabled} proactiveEnabled={proactiveEnabled} />}>
+            healthEnabled={healthEnabled} proactiveEnabled={proactiveEnabled} />}>
             <Route element={<RequireSignIn session={session} />}>
               <Route index element={<h1 className="visually-hidden">Welcome, {session.profile?.name ?? ''}</h1>} />
-              <Route path="daily/*" element={<DailyRedirect />} />
+              <Route path="daily/*" element={<HealthRedirect />} />
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
-                  <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl}
+                  <Component key={id === 'health' ? healthAccountKey : id} backendUrl={config.backendUrl}
                     getAccessToken={session.getAccessToken} signIn={session.signIn} />
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session}
-                nutritionKey={dailyEnabled ? dailyAccountKey : null} pushEnabled={pushEnabled} proactiveEnabled={proactiveEnabled} />} />
+                nutritionKey={healthEnabled ? healthAccountKey : null} pushEnabled={pushEnabled} proactiveEnabled={proactiveEnabled} />} />
               {(pushEnabled || proactiveEnabled) && <Route path="proactive/:id" element={
                 <ProactiveItemPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}
                   signIn={session.signIn} proactiveEnabled={proactiveEnabled} />

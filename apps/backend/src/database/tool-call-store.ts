@@ -11,11 +11,11 @@ function serialize(value: unknown): string {
 
 export function createToolCallStore(pool: sql.ConnectionPool): ToolCallStore {
   return {
-    async recordDailyMcp(call) {
+    async recordHealthMcp(call) {
       if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(call.requestId) ||
           !['read_nutrition', 'lookup_food', 'log_food', 'correct_food', 'delete_food', 'read_food_preferences', 'manage_saved_food'].includes(call.tool) ||
           !['awaiting_confirmation', 'ok', 'refused', 'error'].includes(call.phase) ||
-          !['ok', 'refused', 'error'].includes(call.outcome)) throw new TypeError('Invalid Daily connector audit metadata');
+          !['ok', 'refused', 'error'].includes(call.outcome)) throw new TypeError('Invalid Health connector audit metadata');
       const request = pool.request()
         .input('requestId', sql.UniqueIdentifier, call.requestId)
         .input('tool', sql.NVarChar(64), `daily_mcp_${call.tool}`)

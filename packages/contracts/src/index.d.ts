@@ -33,39 +33,35 @@ export interface VaultMirrorStatusView {
 }
 export const vaultMirrorStatusViewSchema: ZodType<VaultMirrorStatusView>;
 
-/** Reserved IDs only; native Daily renderers are implemented in P12-16. */
-export const dailyViewIds: Readonly<{
-  status: 'daily-status'; recomp: 'daily-recomp'; review: 'daily-review'; ready: 'daily-ready';
+/** Reserved IDs only; native Health renderers are implemented in P12-16. */
+export const healthViewIds: Readonly<{
+  status: 'health-status'; recomp: 'health-recomp'; review: 'health-review'; ready: 'health-ready';
 }>;
-export type DailyViewKind = keyof typeof dailyViewIds;
-export type DailyViewId = typeof dailyViewIds[DailyViewKind];
-export const dailyModuleId: 'daily';
-export const dailyContractVersion: 1;
-export const dailyQuerySources: Readonly<{
+export type HealthViewKind = keyof typeof healthViewIds;
+export type HealthViewId = typeof healthViewIds[HealthViewKind];
+export const healthModuleId: 'health';
+export const healthContractVersion: 1;
+export const healthQuerySources: Readonly<{
   metrics: 'daily.health.metrics'; sleep: 'daily.health.sleep'; workouts: 'daily.health.workouts';
   workout: 'daily.health.workout'; heartRate: 'daily.health.heart-rate';
   meals: 'daily.nutrition.meals'; favorites: 'daily.nutrition.favorites';
   plans: 'daily.nutrition.plans'; sync: 'daily.sync';
   briefs: 'daily.briefs.history'; brief: 'daily.briefs.detail';
   metricCatalog: 'daily.health.metric-catalog'; days: 'daily.nutrition.days';
-  attention: 'daily.attention'; calendar: 'daily.calendar'; trainingTargets: 'daily.health.training-targets';
+  trainingTargets: 'daily.health.training-targets';
   lifts: 'daily.health.lifts';
 }>;
-export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
-export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV2: readonly Exclude<DailySourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV3: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV4: readonly Exclude<DailySourceId, 'daily.health.training-targets' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV5: readonly Exclude<DailySourceId, 'daily.health.lifts'>[];
-export const dailyQuerySourcesV5WithoutFeeds: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV6: readonly DailySourceId[];
-export const dailyQuerySourcesV6WithoutFeeds: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar'>[];
-export const dailyQuerySourcesV6WithoutTrainingTargets: readonly Exclude<DailySourceId, 'daily.health.training-targets'>[];
-export const dailyQuerySourcesV6WithoutFeedsOrTrainingTargets: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets'>[];
-export const dailyCapabilitiesVersion: 6;
-export const dailyCapabilitiesAccept: 'application/json;version=6, application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json';
-export type DailyCursor = { date: string; key: string } | { key: string } | { date: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string } | { performedAt: string; id: string };
-export type DailyQuery =
+export type HealthSourceId = typeof healthQuerySources[keyof typeof healthQuerySources];
+export const healthQuerySourcesV1: readonly Exclude<HealthSourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
+export const healthQuerySourcesV2: readonly Exclude<HealthSourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
+export const healthQuerySourcesV3: readonly Exclude<HealthSourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
+export const healthQuerySourcesV5: readonly Exclude<HealthSourceId, 'daily.health.lifts'>[];
+export const healthQuerySourcesV6: readonly HealthSourceId[];
+export const healthQuerySourcesV6WithoutTrainingTargets: readonly Exclude<HealthSourceId, 'daily.health.training-targets'>[];
+export const healthCapabilitiesVersion: 6;
+export const healthCapabilitiesAccept: 'application/json;version=6, application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json';
+export type HealthCursor = { date: string; key: string } | { key: string } | { date: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string } | { performedAt: string; id: string };
+export type HealthQuery =
   | { source: 'daily.health.metrics'; startDate: string; endDate: string; metric?: string; limit?: number; cursor?: { date: string; key: string } }
   | { source: 'daily.health.metric-catalog'; startDate: string; endDate: string; limit?: number; cursor?: { key: string } }
   | { source: 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }
@@ -80,21 +76,12 @@ export type DailyQuery =
   | { source: 'daily.briefs.detail'; briefId: string }
   | { source: 'daily.health.training-targets' }
   | { source: 'daily.health.lifts'; limit?: number; cursor?: { performedAt: string; id: string }; lastPerExercise?: boolean }
-  | { source: 'daily.sync' }
-  | { source: 'daily.attention' }
-  | { source: 'daily.calendar'; from: string; to: string };
-export type DailyJson = null | boolean | number | string | DailyJson[] | { [key: string]: DailyJson };
-export interface DailyQueryResult {
-  source: DailySourceId;
+  | { source: 'daily.sync' };
+export type HealthJson = null | boolean | number | string | HealthJson[] | { [key: string]: HealthJson };
+export interface HealthQueryResult {
+  source: HealthSourceId;
   period: { startDate: string; endDate: string; timeZone: 'Europe/Copenhagen' } | null;
-  calendarRange?: { from: string; to: string };
-  feedSources?: {
-    source: 'Gmail' | 'GoogleCalendar'; status: 'Missing' | 'Stale' | 'Current';
-    capturedAt: string | null; attemptedAt: string | null; error: string | null;
-    range?: { from: string; to: string } | null;
-  }[];
-  rangeCovered?: boolean;
-  items: Record<string, DailyJson>[];
+  items: Record<string, HealthJson>[];
   status: 'available' | 'empty' | 'partial';
   units: Readonly<Record<string, string>>;
   provenance: {
@@ -105,12 +92,12 @@ export interface DailyQueryResult {
     observedAt: string; sourceProcessedCommittedAt: string | null;
     latestReturnedRecordUpdatedAt: string | null; staleness: 'unknown';
   };
-  coverage: { returned: number; hasMore: boolean; next: DailyCursor | null; sourceCompleteness: 'unknown'; detailMetricsTruncated?: boolean };
+  coverage: { returned: number; hasMore: boolean; next: HealthCursor | null; sourceCompleteness: 'unknown'; detailMetricsTruncated?: boolean };
   /** Content fingerprint of this exact committed-read result, not a global ordering/replay token. */
   revision: string;
 }
-export const dailyQuerySchema: Readonly<Record<string, unknown>>;
-export function isDailyQuery(value: unknown): value is DailyQuery;
+export const healthQuerySchema: Readonly<Record<string, unknown>>;
+export function isHealthQuery(value: unknown): value is HealthQuery;
 
 export const generatedViewVersion: 1;
 export const presenceModes: readonly ['present', 'away', 'on_the_move'];
@@ -621,8 +608,8 @@ export interface UsageReport {
   to: string;
   entries: UsageEntry[];
   totalEntries: string;
-  dailyToolUsage: { date: string; tools: { tool: string; count: string }[] };
-  dailyCostTotals: UsageCostTotal[];
+  healthToolUsage: { date: string; tools: { tool: string; count: string }[] };
+  healthCostTotals: UsageCostTotal[];
   monthlyCostTotals: UsageCostTotal[];
   toolCalls: UsageToolCallCount[];
   roleCoverage: UsageRoleCoverage[];

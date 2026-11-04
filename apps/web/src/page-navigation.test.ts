@@ -101,9 +101,9 @@ describe('page navigation', () => {
   it('names the page Dan is looking at and builds a valid snapshot view', () => {
     expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/status', '/notes', '/knowledge', '/nowhere'].map(path => pageForPath(path)))
       .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'status', 'notes', 'knowledge', 'home']);
-    expect(pageForPath('/daily')).toBe('home');
     expect(pageForPath('/health')).toBe('home');
-    expect(pageForPath('/daily', true)).toBe('health');
+    expect(pageForPath('/health')).toBe('home');
+    expect(pageForPath('/health', true)).toBe('health');
     expect(pageForPath('/health', true)).toBe('health');
     for (const page of ['daily', 'health'] as const) {
       const refused = resolveNavigation({ page });

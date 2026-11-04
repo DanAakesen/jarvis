@@ -3,7 +3,7 @@ import { FactoryArea } from './factory/FactoryArea';
 import { UsagePage } from './usage/UsagePage';
 import { NotesArea } from './notes/NotesArea';
 import { StatusPage } from './status/StatusPage';
-import { DailyHome } from './daily/DailyHome';
+import { HealthHome } from './health/HealthHome';
 import { ProactiveArea } from './ProactiveArea';
 
 export interface AreaProps {
@@ -39,8 +39,8 @@ export const areas: readonly Area[] = [
   { id: 'status', label: 'Status', path: 'status', navigation: [{ label: 'Status', path: '/status' }], Component: StatusPage },
 ];
 
-const withDaily: readonly Area[] = [
-  { id: 'daily', label: 'Health', path: 'health', navigation: [{ label: 'Health', path: '/health' }], sections: true, Component: DailyHome },
+const withHealth: readonly Area[] = [
+  { id: 'health', label: 'Health', path: 'health', navigation: [{ label: 'Health', path: '/health' }], sections: true, Component: HealthHome },
   ...areas,
 ];
 
@@ -53,7 +53,7 @@ const proactiveArea: Area = {
 };
 
 /** Trusted inactive-source composition; never enabled by a URL or a second login. */
-export function appAreas(dailyEnabled = false, proactiveEnabled = false): readonly Area[] {
-  const base = dailyEnabled ? withDaily : areas;
+export function appAreas(healthEnabled = false, proactiveEnabled = false): readonly Area[] {
+  const base = healthEnabled ? withHealth : areas;
   return proactiveEnabled ? [base[0]!, proactiveArea, ...base.slice(1)] : base;
 }

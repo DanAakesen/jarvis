@@ -525,7 +525,6 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
         ("health_nutrition_targets", 210.0),
         ("health_nutrition_history", 210.0),
         ("health_coach_status", 210.0),
-        ("health_feed", 225.0),
     ],
 )
 async def test_tool_calls_use_the_configured_default_or_long_timeout(
@@ -698,7 +697,6 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
         ("health_nutrition_targets", 210.0),
         ("health_nutrition_history", 210.0),
         ("health_coach_status", 210.0),
-        ("health_feed", 225.0),
     ],
 )
 async def test_long_running_tools_get_a_longer_read_timeout(name: str, read_timeout: float) -> None:

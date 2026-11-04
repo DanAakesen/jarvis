@@ -1,3 +1,8 @@
+## Health rename commands (P15-78 / #1571; 4 November 2026)
+
+- Backend: `cd apps/backend && npx vitest run src/health`; web: `cd apps/web && npx vitest run src/health`; contracts: `cd packages/contracts && npm test`; iOS sync logic: `cd apps/ios/Packages/JarvisCore && swift test --filter JarvisHealthSyncTests`. The iOS app target compiles only on macOS CI.
+- Env: use `JARVIS_HEALTH_ENABLED` and `VITE_HEALTH_ENABLED`; the `DAILY` names are fallbacks until the alias is removed.
+
 ## CI merge gate and timings (P15-67 / #1543; 3 November 2026)
 
 - `CI result` (the check named in the branch rules) covers only quick jobs. `ci.yml` calls `ios-ci.yml` with `simulator: skip`, so the `iOS` check there is the Linux JarvisCore job (about 10 minutes at most; no Simulator).

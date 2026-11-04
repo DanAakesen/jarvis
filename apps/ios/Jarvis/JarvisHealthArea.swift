@@ -319,6 +319,9 @@ struct JarvisHealthArea: View {
                                     language: language
                                 )
                                 freshnessLine(dashboard)
+                                if let client {
+                                    JarvisHealthSyncSection(client: client, language: language)
+                                }
                             }
                         } else {
                             JarvisLoadingView(title: copy.text(.loading))

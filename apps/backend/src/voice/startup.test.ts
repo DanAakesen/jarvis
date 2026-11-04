@@ -435,7 +435,7 @@ describe('Voice Live capability-preserving fallback', () => {
     expect(names(active)).toEqual([VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL].sort());
   });
 
-  it('dispatches Daily and proactive tools from the full real relay catalogue', async () => {
+  it('dispatches Health and proactive tools from the full real relay catalogue', async () => {
     const foodExecute = vi.fn(async () => ({ status: 'committed' }));
     const proactiveExecute = vi.fn(async () => ({ status: 'available' }));
     const f = await fixture({}, 'en', [
@@ -586,7 +586,7 @@ describe('Voice Live capability-preserving fallback', () => {
     expect(f.summaries()).toHaveLength(1);
   });
 
-  it('steps down when the Daily-capable R1 fails', async () => {
+  it('steps down when the Health-capable R1 fails', async () => {
     const f = await fixture({}, 'en', catalogue());
     f.upstream.open();
     f.upstream.event('session.created');

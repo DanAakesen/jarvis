@@ -1,0 +1,81 @@
+import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
+import { Loader } from '../../../Loader';
+import { HealthUnavailable } from '../../ui/HealthUnavailable';
+import { IconChip, type HealthIconName } from '../../ui/icons';
+import type { BlockState } from './block-state';
+
+export type { BlockState };
+
+function Chevron() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></svg>;
+}
+
+/** A figure with its unit set smaller beside it. The space between them is real text, so the value still reads as one. */
+export function Figure({ value, unit }: { value: string; unit?: string | undefined }) {
+  return <><span className="health-top-figure">{value}</span>{unit ? <>{' '}<span className="health-top-unit">{unit}</span></> : null}</>;
+}
+
+/**
+ * One card. The heading opens what is behind it: a link to a section, or a button that expands a panel on this page.
+ * The body is laid out by the caller and keeps its size.
+ */
+export function TopCard({ title, icon, to, panel, state, onRetry, stale = false, children }: {
+  title: string;
+  icon: HealthIconName;
+  to?: string;
+  panel?: { expanded: boolean; controls: string; onToggle: () => void };
+  state: BlockState;
+  onRetry?: () => void;
+  /** A read failed but the values it had already returned are still shown. */
+  stale?: boolean;
+  children: ReactNode;
+}) {
+  const failed = state === 'error' || stale;
+  return <article className="health-top-card" data-card={title.toLowerCase()} aria-busy={state === 'loading' || undefined}>
+    <header>
+      <h3>{panel
+        ? <button className="health-top-card-toggle" type="button" aria-expanded={panel.expanded} aria-controls={panel.controls}
+          onClick={panel.onToggle}><IconChip name={icon} />{title}<Chevron /></button>
+        : <Link to={to ?? '.'}><IconChip name={icon} />{title}<Chevron /></Link>}</h3>
+      {failed && onRetry && <div className="health-top-card-recovery">
+        {stale && state !== 'error' && <span role="status">Could not refresh</span>}
+        <button className="ghost-button" type="button" onClick={onRetry}>Retry</button>
+      </div>}
+    </header>
+    {state === 'loading' && <span className="visually-hidden" role="status">Loading {title.toLowerCase()}</span>}
+    {children}
+  </article>;
+}
+
+/**
+ * A label, one value and one line under it. The slots are always mounted and reserve their height.
+ * A null value in a ready tile is a figure that was not recorded: a quiet dash, spoken as "Not recorded".
+ */
+export function Tile({ label, state, value, note, chart, meter, icon, unavailable }: {
+  label: string;
+  state: BlockState;
+  value: ReactNode;
+  note?: ReactNode;
+  /** A trend beside the value. Passing it, even as null, reserves its space. */
+  chart?: ReactNode;
+  /** A progress bar under the note. Passing it, even as null, reserves its height. */
+  meter?: ReactNode;
+  icon?: HealthIconName;
+  unavailable: string;
+}) {
+  return <div className="health-top-tile" data-state={state} role="group" aria-label={label}>
+    <p className="health-top-tile-label">{icon && <IconChip name={icon} />}{label}</p>
+    <p className="health-top-tile-value">
+      {state === 'ready' ? value === null
+        ? <><span className="health-top-tile-none" aria-hidden="true" title="Not recorded">—</span><span className="visually-hidden">Not recorded</span></>
+        : value : state === 'loading' ? <Loader label={`Loading ${label.toLowerCase()}`} variant="inline" announce={false} /> : '—'}
+    </p>
+    {chart !== undefined && <div className="health-top-tile-chart">{state === 'ready' ? chart : null}</div>}
+    <div className="health-top-tile-note">
+      {state === 'ready' ? note : state === 'error' ? 'Could not load'
+        : state === 'unavailable' ? <HealthUnavailable>{unavailable}</HealthUnavailable> : null}
+    </div>
+    {meter !== undefined && <div className="health-top-tile-meter" aria-hidden="true">{state === 'ready' ? meter : null}</div>}
+  </div>;
+}
