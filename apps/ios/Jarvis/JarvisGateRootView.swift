@@ -125,6 +125,7 @@ private final class JarvisGateModel: ObservableObject {
                 requestTimeout: JarvisApprovalNotificationCoordinator.requestTimeout
             )
             JarvisApprovalNotificationCoordinator.shared.configure(client: notificationClient ?? client)
+            JarvisWidgetSnapshotPublisher.shared.configure(client: client)
             provider.onSignInRequired = { [weak self] in
                 self?.clientRequestedSignIn()
             }
@@ -198,6 +199,7 @@ private final class JarvisGateModel: ObservableObject {
                     Task {
                         await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
                     }
+                    Task { await JarvisWidgetSnapshotPublisher.shared.refresh() }
                 }
             }
         @unknown default:

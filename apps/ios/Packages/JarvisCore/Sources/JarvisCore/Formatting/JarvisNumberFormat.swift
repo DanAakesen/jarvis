@@ -17,12 +17,24 @@ public enum JarvisNumberFormat {
         return plain(value / 1_000_000, fractionDigits: magnitude < 9_950_000 ? 1 : 0, language: language) + "M"
     }
 
-    private static func plain(_ value: Double, fractionDigits: Int, language: JarvisAppLanguage) -> String {
+    /// Like `compact`, but thousands always keep one decimal ("8,0k"), so a goal reads the same width as a count.
+    public static func compactOneDecimal(_ value: Int, language: JarvisAppLanguage = .default) -> String {
+        let magnitude = abs(Double(value))
+        guard magnitude >= 999.5, magnitude < 999_500 else { return compact(value, language: language) }
+        return plain(Double(value) / 1_000, fractionDigits: 1, minimumFractionDigits: 1, language: language) + "k"
+    }
+
+    private static func plain(
+        _ value: Double,
+        fractionDigits: Int,
+        minimumFractionDigits: Int = 0,
+        language: JarvisAppLanguage
+    ) -> String {
         let formatter = NumberFormatter()
         formatter.locale = language.locale
         formatter.numberStyle = .decimal
         formatter.usesGroupingSeparator = false
-        formatter.minimumFractionDigits = 0
+        formatter.minimumFractionDigits = minimumFractionDigits
         formatter.maximumFractionDigits = fractionDigits
         formatter.roundingMode = .halfUp
         return formatter.string(from: NSNumber(value: value)) ?? String(Int(value.rounded()))
