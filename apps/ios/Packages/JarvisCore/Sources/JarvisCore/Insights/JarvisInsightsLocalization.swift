@@ -50,6 +50,7 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case usageToolCalls = "insights.usageToolCalls"
     case usageNoToolCalls = "insights.usageNoToolCalls"
     case usageNoUsage = "insights.usageNoUsage"
+    case refreshFailedShowingSaved = "insights.refreshFailedShowingSaved"
     case usageRecords = "insights.usageRecords"
     case usagePerDay = "insights.usagePerDay"
     case usagePerWeek = "insights.usagePerWeek"

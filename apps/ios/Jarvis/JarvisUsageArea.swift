@@ -17,6 +17,8 @@ struct JarvisUsageArea: View {
     @State private var chartSelection: String?
     @State private var selectedSliceID: String?
     @State private var reloadToken = 0
+    @State private var refreshFailedWithCache = false
+    @State private var forceReload = false
 
     private struct LoadKey: Hashable {
         let period: JarvisUsagePeriod
@@ -34,7 +36,7 @@ struct JarvisUsageArea: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            LazyVStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                 if case .loaded(let summary) = load {
                     JarvisPageHeadline(phrase: JarvisUsagePagePhrase.make(summary, language: language))
                 }
@@ -44,12 +46,18 @@ struct JarvisUsageArea: View {
                     items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
                     selection: $period
                 )
+                if refreshFailedWithCache {
+                    Text(text(.refreshFailedShowingSaved))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("usage.refreshFailed")
+                }
                 content
             }
             .padding(.horizontal)
             .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
         }
-        .refreshable { reloadToken += 1 }
+        .refreshable { forceReload = true; reloadToken += 1 }
         .accessibilityIdentifier("usage.scroll")
         .jarvisPageHeader {
             JarvisPageHeader(
@@ -79,21 +87,40 @@ struct JarvisUsageArea: View {
         }
     }
 
+    /// Reads through the repository: cached data first, then a quiet refresh only when it is stale (or forced).
     private func reload() async {
         guard let client else {
             load = .failed(.notConfigured)
             return
         }
-        if case .loaded = load {} else { load = .loading }
+        let force = forceReload
+        forceReload = false
         selectedBucketID = nil
         selectedSliceID = nil
-        do {
-            let report = try await client.report(period: period)
+        refreshFailedWithCache = false
+        await JarvisAppCache.bindIfNeeded()
+        let selected = period
+        let repository = JarvisRepository<JarvisUsageReport>(
+            cache: JarvisAppCache.shared,
+            kind: .usage,
+            scope: selected.rawValue
+        ) { try await client.fetchReport(period: selected, validator: $0) }
+        if case .loaded = load {} else { load = .loading }
+        for await update in repository.updates(force: force) {
             if Task.isCancelled { return }
-            load = .loaded(JarvisUsageSummary(report: report, period: period))
-        } catch {
-            if Task.isCancelled { return }
-            load = .failed(JarvisInsightsFailure(error))
+            switch update {
+            case .cached(let report, _), .fresh(let report):
+                load = .loaded(JarvisUsageSummary(report: report, period: selected))
+            case .refreshing:
+                break
+            case .failed(let error, let cached):
+                if let cached {
+                    load = .loaded(JarvisUsageSummary(report: cached, period: selected))
+                    refreshFailedWithCache = true
+                } else {
+                    load = .failed(JarvisInsightsFailure(error))
+                }
+            }
         }
     }
 

@@ -47,6 +47,7 @@
 "insights.usageToolCalls" = "Tool calls today";
 "insights.usageNoToolCalls" = "No tool calls today";
 "insights.usageNoUsage" = "No usage yet";
+"insights.refreshFailedShowingSaved" = "Couldn't refresh – showing saved data";
 "insights.usageRecords" = "records";
 "insights.usagePerDay" = "Cost per day";
 "insights.usagePerWeek" = "Cost per week";
