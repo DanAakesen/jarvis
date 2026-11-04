@@ -10794,3 +10794,6 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Home's workouts card shows Active time and Active kcal (34 pt, hairline between) instead of a workout types list. Workout entries carry duration and active energy from HealthKit.
 - Decision: the task checkbox is `JarvisCheckButton` (no border, animates to a check mark, then completes). The Notes search scope menu was removed; search covers notes and tasks.
 - Not done: the rest of #1573 (page pattern tests, Health carousel, Notes hero and list, Factory layout). Nothing was compiled or run on a device.
+
+## 2026-11-04 P15-79: One loading animation (item 17)
+- Decision: `JarvisLoadingView` is the only loading animation, with `Size.area` and `Size.inline` variants. Busy buttons in `JarvisControls.swift` (4 sites) and the Settings loading skeleton now use it. The guard test also fails on `.redacted(reason: .placeholder)` skeletons and on any indeterminate `ProgressView` outside the view (determinate `ProgressView(value:)` bars and the WidgetKit Live Activity surface stay).

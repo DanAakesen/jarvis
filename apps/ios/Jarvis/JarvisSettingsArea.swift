@@ -70,10 +70,6 @@ struct JarvisSettingsArea: View {
     @State private var signingOut = false
     @State private var confirmCurrentSignOut = false
     @State private var confirmAllSignOut = false
-    private let loadingSkeletonKeys: [JarvisSettingsLocalizationKey] = [
-        .appearanceRow, .personalityRow, .identityRow, .voiceRow,
-    ]
-
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
     }
@@ -243,22 +239,8 @@ struct JarvisSettingsArea: View {
     }
 
     private var loadingSkeleton: some View {
-        JarvisList {
-            ForEach(loadingSkeletonKeys, id: \.self) { key in
-                HStack {
-                    Text(copy(key))
-                        .redacted(reason: .placeholder)
-                    Spacer()
-                    Capsule()
-                        .fill(.tertiary)
-                        .frame(width: JarvisDesignTokens.settingsSkeletonValueWidth, height: JarvisDesignTokens.settingsSkeletonValueHeight)
-                }
-                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
-            }
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .accessibilityHidden(true)
+        JarvisLoadingView(title: copy(.loading))
+            .frame(maxHeight: .infinity)
     }
 
     private var hasVisibleContent: Bool {

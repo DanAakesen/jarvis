@@ -227,7 +227,7 @@ extension View {
 
 /// The one icon button, identical to the Chat header buttons: Apple glass, 44 pt target, secondary accent icon.
 /// Optional busy state (a progress view in place of the icon), count badge, selected state, tint and short text glyph.
-/// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle, ProgressView.
+/// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle.
 struct JarvisIconButton: View {
     let title: String
     var systemImage: String?
@@ -364,7 +364,7 @@ private struct JarvisLabelledContent: View {
     var body: some View {
         HStack(spacing: 8) {
             if isBusy {
-                ProgressView().accessibilityHidden(true)
+                JarvisLoadingView(size: .inline).accessibilityHidden(true)
             } else if let leading {
                 leading
             } else if let systemImage {
@@ -654,8 +654,7 @@ struct JarvisShutterButton: View {
     var body: some View {
         Button(action: action) {
             if isBusy {
-                ProgressView()
-                    .tint(.white)
+                JarvisLoadingView(size: .inline)
                     .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
             } else {
                 Circle()
@@ -689,7 +688,7 @@ private struct JarvisControlGlyph: View {
     var body: some View {
         Group {
             if isBusy {
-                ProgressView()
+                JarvisLoadingView(size: .inline)
             } else if let text {
                 Text(text)
                     .font(.system(size: 15, weight: .semibold))
@@ -927,7 +926,7 @@ private struct JarvisComposerGlyph: View {
     var body: some View {
         Group {
             if isBusy {
-                ProgressView()
+                JarvisLoadingView(size: .inline)
             } else {
                 Image(systemName: systemImage)
                     .font(.system(size: iconSize, weight: .regular))
