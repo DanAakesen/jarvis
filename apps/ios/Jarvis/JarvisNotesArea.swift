@@ -28,6 +28,8 @@ struct JarvisNotesCopy {
 
     var title: String { text(.title) }
     var overview: String { text(.overview) }
+    var links: String { text(.links) }
+    var recent: String { text(.recent) }
     var openTasks: String { text(.openTasks) }
     var folderCount: String { text(.folderCount) }
     var rootNotes: String { text(.rootNotes) }
@@ -81,7 +83,6 @@ struct JarvisNotesCopy {
     var resetGraph: String { text(.resetGraph) }
     var vaultRoot: String { text(.vaultRoot) }
     var loadMore: String { text(.loadMore) }
-    var recent: String { text(.recent) }
     var createHint: String { text(.createHint) }
     var discardTitle: String { text(.discardTitle) }
     var discard: String { text(.discard) }
@@ -132,7 +133,7 @@ struct JarvisNotesArea: View {
     let onRetryConfiguration: () -> Void
 
     @State private var selectedTab: JarvisNotesTab = .notes
-    private let selectedScope: JarvisNotesSearchScope = .all
+    @State private var selectedScope: JarvisNotesSearchScope = .all
     @State private var selectedFolder = ""
     @State private var searchText = ""
     @State private var refreshVersion = 0
@@ -147,8 +148,6 @@ struct JarvisNotesArea: View {
     @State private var directoryLoading = Set<String>()
     @State private var taskList: VaultTaskList?
     @State private var graph: KnowledgeGraph?
-    @State private var recentNotes: [KnowledgeGraphNode] = []
-    @State private var recentLoading = false
     @State private var graphSearch: KnowledgeGraphSearch?
     @State private var taskSearch: VaultTaskList?
     @State private var loading = false
@@ -173,7 +172,6 @@ struct JarvisNotesArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !tabsInHead { tabSwitcher }
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedContent
             } else {
@@ -280,64 +278,52 @@ struct JarvisNotesArea: View {
         }
     }
 
-    /// The data headline and hero under the title, as the first scrolling row of the notes, list and tasks tabs.
-    /// Nothing shows until the tasks are loaded, so loading and error states carry only the title.
+    /// The page head, as the first scrolling row: data phrase, Overview hero, then the Notes / Tasks / List / Graph
+    /// segmented bar and, on Notes, the Recent strip. Nothing but the bar shows until the data is loaded.
     @ViewBuilder
     private var pageHead: some View {
-        if let taskList {
-            let counts = JarvisNotesPagePhrase.TaskCounts(taskList)
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+            if selectedTab == .graph, let graph {
+                JarvisPageHeadline(phrase: JarvisNotesPagePhrase.graph(graph, language: language))
+            } else if let taskList {
                 JarvisPageHeadline(phrase: JarvisNotesPagePhrase.tasks(taskList, language: language))
-                JarvisPageHeroCard(title: copy.overview) {
-                    JarvisPageStatGrid(
-                        stats: [
-                            JarvisPageStat(id: "open", value: counts.open, label: copy.openTasks, systemImage: "checklist", tint: JarvisDesignTokens.primaryAccent),
-                            JarvisPageStat(id: "overdue", value: counts.overdue, label: copy.overdue, systemImage: "flag", tint: .red),
-                            JarvisPageStat(id: "today", value: counts.dueToday, label: copy.today, systemImage: "clock", tint: JarvisDesignTokens.primaryAccent),
-                            JarvisPageStat(id: "done", value: counts.done, label: copy.doneTasks, systemImage: "checkmark.circle", tint: .green),
-                        ],
-                        language: language
-                    )
-                }
             }
-            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-        } else if let tree {
-            JarvisPageHeroCard(title: copy.overview) {
-                JarvisPageStatGrid(
-                    stats: [
-                        JarvisPageStat(id: "folders", value: tree.directories.count, label: copy.folderCount, systemImage: "folder", tint: JarvisDesignTokens.primaryAccent),
-                        JarvisPageStat(id: "rootNotes", value: tree.rootNoteCount, label: copy.rootNotes, systemImage: "note.text", tint: JarvisDesignTokens.primaryAccent),
-                    ],
-                    language: language
+            if selectedTab != .graph, taskList != nil || tree != nil {
+                overviewHero
+            }
+            tabSwitcher
+            if selectedTab == .notes, let graph {
+                JarvisNotesRecentStrip(
+                    title: copy.recent,
+                    notes: JarvisNotesPresentation.recentNotes(graph),
+                    onOpen: { node in Task { await openNote(path: node.path) } }
                 )
             }
-            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         }
+        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+        .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
     }
 
-    /// The tab bar sits under the hero, inside the scrolling head, once the hero has data. Until then, on the Graph
-    /// tab and while searching, it stays at the top so the tabs are always reachable.
-    private var tabsInHead: Bool {
-        let hasContent: Bool
-        switch selectedTab {
-        case .notes: hasContent = tree != nil && !folderGroups.isEmpty
-        case .list: hasContent = tree != nil && !(folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0)
-        case .tasks:
-            hasContent = taskList.map {
-                let groups = JarvisNotesLogic.taskGroups($0.items, today: $0.today)
-                return !(groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty)
-            } ?? false
-        case .graph: hasContent = false
-        }
-        return taskList != nil && hasContent && loadError == nil
-            && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    private var overviewHero: some View {
+        let counts = taskList.map { JarvisNotesPagePhrase.TaskCounts($0) }
+        return JarvisNotesOverviewHero(
+            title: copy.overview,
+            linkCount: graph?.edges.count,
+            linksLabel: copy.links,
+            stats: [
+                JarvisPageStat(id: "notes", value: graph?.nodes.count ?? tree?.rootNoteCount ?? 0, label: copy.notes, systemImage: "note.text", tint: JarvisDesignTokens.primaryAccent),
+                JarvisPageStat(id: "open", value: counts?.open ?? 0, label: copy.openTasks, systemImage: "checklist", tint: JarvisDesignTokens.primaryAccent),
+                JarvisPageStat(id: "overdue", value: counts?.overdue ?? 0, label: copy.overdue, systemImage: "flag", tint: JarvisDesignTokens.primaryAccent),
+                JarvisPageStat(id: "today", value: counts?.dueToday ?? 0, label: copy.today, systemImage: "clock", tint: JarvisDesignTokens.primaryAccent),
+            ],
+            shares: graph.map { JarvisNotesPresentation.folderShares($0) } ?? [],
+            rootTitle: copy.vaultRoot,
+            language: language
+        )
     }
 
-    private var pageHeadWithTabs: some View {
-        VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-            pageHead
-            tabSwitcher
-        }
+    private var graphFolderCounts: [String: Int] {
+        Dictionary(uniqueKeysWithValues: (graph.map { JarvisNotesPresentation.folderShares($0) } ?? []).map { ($0.folder, $0.count) })
     }
 
     private var tabSwitcher: some View {
@@ -361,8 +347,16 @@ struct JarvisNotesArea: View {
                 }
             }
         }
-        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-        .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+    }
+
+    /// A loading, error or empty state still shows the segmented bar so the tabs stay reachable.
+    private func tabState(icon: String, title: String, retry: (() -> Void)?) -> some View {
+        VStack(spacing: 0) {
+            tabSwitcher
+                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+            stateView(icon: icon, title: title, retry: retry)
+        }
     }
 
     @ViewBuilder
@@ -382,56 +376,31 @@ struct JarvisNotesArea: View {
     private var notesContent: some View {
         Group {
             if loading && tree == nil {
-                stateView(icon: "note.text", title: copy.loading, retry: nil)
+                tabState(icon: "note.text", title: copy.loading, retry: nil)
             } else if let loadError {
-                stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
             } else if tree != nil, folderGroups.isEmpty {
                 VStack(spacing: 0) {
                     JarvisPageHeadline(phrase: JarvisNotesPagePhrase.empty(language: language))
                         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                    stateView(icon: "note.text", title: copy.emptyNotes, retry: nil)
+                    tabState(icon: "note.text", title: copy.emptyNotes, retry: nil)
                 }
             } else {
-                notesFolderList
-            }
-        }
-    }
-
-    private var notesFolderList: some View {
-        Group {
-            Group {
-                JarvisList(head: {
-                    VStack(spacing: 0) {
-                        pageHeadWithTabs
-                        if showsRecent { recentStrip }
-                    }
-                }) {
-                    ForEach(visibleFolderGroups, id: \.self) { folder in
-                        Section {
-                            if expandedFolders.contains(folder) {
-                                ForEach(groupNotes[folder] ?? []) { note in
-                                    noteRow(note)
-                                }
-                                if groupLoading.contains(folder) {
-                                    JarvisLoadingView().frame(maxWidth: .infinity)
-                                } else if groupHasMore[folder] == true {
-                                    JarvisLabelledButton(title: copy.loadMore) {
-                                        Task { await loadMoreNotes(in: folder) }
-                                    }
-                                } else if groupNotes[folder] != nil && (groupNotes[folder]?.isEmpty ?? true) {
-                                    Text(copy.emptyNotes)
-                                        .foregroundStyle(.secondary)
-                                }
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+                        pageHead
+                        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+                            ForEach(visibleFolderGroups, id: \.self) { folder in
+                                folderSection(folder)
                             }
-                        } header: {
-                            folderHeader(folder, inList: false)
                         }
-                        .textCase(nil)
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                     }
                 }
-                .listStyle(.plain)
+                .contentMargins(.bottom, JarvisNotesOverviewMetrics.bottomClearance, for: .scrollContent)
                 .scrollContentBackground(.hidden)
                 .refreshable { await loadSelectedTab(force: true) }
+                .accessibilityIdentifier("notes.scroll")
             }
         }
     }
@@ -439,14 +408,14 @@ struct JarvisNotesArea: View {
     private var tasksContent: some View {
         Group {
             if loading && taskList == nil {
-                stateView(icon: "checklist", title: copy.loading, retry: nil)
+                tabState(icon: "checklist", title: copy.loading, retry: nil)
             } else if let loadError {
-                stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
             } else if let taskList {
                 taskListView(taskList)
                     .refreshable { await loadSelectedTab(force: true) }
             } else {
-                stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
+                tabState(icon: "checklist", title: copy.emptyTasks, retry: nil)
             }
         }
     }
@@ -454,13 +423,13 @@ struct JarvisNotesArea: View {
     private var listContent: some View {
         Group {
             if loading && tree == nil {
-                stateView(icon: "folder", title: copy.loading, retry: nil)
+                tabState(icon: "folder", title: copy.loading, retry: nil)
             } else if let loadError {
-                stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
             } else if folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0 {
-                stateView(icon: "folder", title: copy.emptyList, retry: nil)
+                tabState(icon: "folder", title: copy.emptyList, retry: nil)
             } else {
-                JarvisList(head: { pageHeadWithTabs }) {
+                JarvisList(head: { pageHead }) {
                     if (tree?.rootNoteCount ?? 0) > 0 {
                         Section {
                             if expandedFolders.contains("") {
@@ -473,6 +442,7 @@ struct JarvisNotesArea: View {
                     ForEach(folders) { folder in folderRow(folder) }
                 }
                 .listStyle(.plain)
+                .contentMargins(.bottom, JarvisNotesOverviewMetrics.bottomClearance, for: .scrollContent)
                 .scrollContentBackground(.hidden)
                 .refreshable { await loadSelectedTab(force: true) }
             }
@@ -482,23 +452,23 @@ struct JarvisNotesArea: View {
     private var graphContent: some View {
         Group {
             if loading && graph == nil {
-                stateView(icon: "point.3.connected.trianglepath.dotted", title: copy.loading, retry: nil)
+                tabState(icon: "point.3.connected.trianglepath.dotted", title: copy.loading, retry: nil)
             } else if let loadError {
-                stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
             } else if let graph {
                 if graph.nodes.isEmpty {
-                    stateView(icon: "point.3.connected.trianglepath.dotted", title: copy.emptyGraph, retry: nil)
+                    tabState(icon: "point.3.connected.trianglepath.dotted", title: copy.emptyGraph, retry: nil)
                 } else {
-                    VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                        JarvisPageHeadline(phrase: JarvisNotesPagePhrase.graph(graph, language: language))
+                    VStack(spacing: 0) {
+                        pageHead
                         JarvisNotesGraphView(
                             graph: graph,
                             copy: copy,
                             onOpen: { node in await openNote(path: node.path) }
                         )
                         .id(refreshVersion)
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                     }
-                    .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                     .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
                 }
             }
@@ -621,39 +591,81 @@ struct JarvisNotesArea: View {
         JarvisLabelledButton(title: title, isSelected: selectedFolder == folder) { selectedFolder = folder }
     }
 
+    /// One folder of the Notes tab in the Software Factory list style: a rounded outlined header row, then its notes
+    /// in a transparent rounded container indented 16 pt more, rows separated by hairlines.
+    private func folderSection(_ folder: String) -> some View {
+        let notes = groupNotes[folder] ?? []
+        return VStack(alignment: .leading, spacing: JarvisDesignTokens.notesChipSpacing) {
+            folderHeader(folder, inList: false)
+            if expandedFolders.contains(folder) {
+                VStack(spacing: 0) {
+                    ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
+                        if index > 0 { JarvisNotesHairline() }
+                        noteRow(note)
+                            .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing)
+                    }
+                    if groupLoading.contains(folder) {
+                        JarvisLoadingView()
+                            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight)
+                    } else if groupHasMore[folder] == true {
+                        JarvisLabelledButton(title: copy.loadMore) {
+                            Task { await loadMoreNotes(in: folder) }
+                        }
+                        .padding(JarvisDesignTokens.notesChipSpacing)
+                    } else if groupNotes[folder] != nil && notes.isEmpty {
+                        Text(copy.emptyNotes)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight)
+                    }
+                }
+                .jarvisHairlineOutline(radius: JarvisNotesOverviewMetrics.listRadius)
+                .padding(.leading, JarvisNotesOverviewMetrics.listIndent)
+                .accessibilityIdentifier("notes.folder.rows")
+            }
+        }
+    }
+
     private func folderHeader(_ folder: String, inList: Bool) -> some View {
         let isExpanded = expandedFolders.contains(folder)
         let title = folder.isEmpty ? copy.vaultRoot : folder
-        let count = inList
+        let count = graphFolderCounts[folder] ?? (inList
             ? directoryNotes[folder]?.count
-            : groupHasMore[folder] == true ? nil : groupNotes[folder]?.count
+            : groupHasMore[folder] == true ? nil : groupNotes[folder]?.count)
         return Button {
             toggleFolder(folder)
         } label: {
             HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: JarvisDesignTokens.notesChevronSize, weight: .semibold))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .foregroundStyle(.secondary)
-                Image(systemName: inList ? "folder" : "folder.fill")
-                    .font(.system(size: JarvisDesignTokens.notesIconSize))
+                Circle()
+                    .fill(JarvisDesignTokens.primaryAccent)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
                 Text(title)
                     .font(.headline)
                 Spacer()
                 if let count {
                     Text(String(count))
-                        .font(.subheadline)
+                        .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .padding(.horizontal, JarvisDesignTokens.notesChipSpacing)
+                        .padding(.vertical, JarvisDesignTokens.notesInlineSpacing / 2)
+                        .background(Color.primary.opacity(0.08), in: Capsule())
                 }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: JarvisDesignTokens.notesChevronSize, weight: .semibold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
+            .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing + JarvisDesignTokens.notesInlineSpacing)
             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight, alignment: .leading)
             .contentShape(Rectangle())
             .foregroundStyle(.primary)
         }
         .buttonStyle(.plain)
+        .jarvisHairlineOutline(radius: JarvisNotesOverviewMetrics.listRadius)
         .accessibilityLabel(title)
         .accessibilityValue(isExpanded ? copy.expanded : copy.collapsed)
-        .accessibilityIdentifier("notes.folder.\(inList ? "list." : "")\(folder)")
+        .accessibilityIdentifier("notes.folder.header")
     }
 
     private func noteRow(_ note: VaultNoteSummary) -> some View {
@@ -688,9 +700,9 @@ struct JarvisNotesArea: View {
         let groups = JarvisNotesLogic.taskGroups(list.items, today: list.today)
         return Group {
             if groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty {
-                stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
+                tabState(icon: "checklist", title: copy.emptyTasks, retry: nil)
             } else {
-                JarvisList(head: { pageHeadWithTabs }) {
+                JarvisList(head: { pageHead }) {
                     if !groups.overdue.isEmpty {
                         Section {
                             ForEach(groups.overdue) { task in taskRow(task, today: list.today) }
@@ -721,6 +733,7 @@ struct JarvisNotesArea: View {
                     }
                 }
                 .listStyle(.plain)
+                .contentMargins(.bottom, JarvisNotesOverviewMetrics.bottomClearance, for: .scrollContent)
                 .scrollContentBackground(.hidden)
             }
         }
@@ -899,6 +912,10 @@ struct JarvisNotesArea: View {
         do {
             switch selectedTab {
             case .notes, .list:
+                if force || graph == nil, let result = try? await client.graph() {
+                    guard !Task.isCancelled else { return }
+                    graph = result
+                }
                 if force || taskList == nil, let result = try? await openTasks(client, force: force) {
                     guard !Task.isCancelled else { return }
                     taskList = result
@@ -918,6 +935,10 @@ struct JarvisNotesArea: View {
                     }
                 }
             case .tasks:
+                if force || graph == nil, let result = try? await client.graph() {
+                    guard !Task.isCancelled else { return }
+                    graph = result
+                }
                 if force || taskList == nil {
                     let result = try await openTasks(client, force: force)
                     guard !Task.isCancelled else { return }
@@ -930,94 +951,12 @@ struct JarvisNotesArea: View {
                     graph = result
                 }
             }
-            if selectedTab == .notes, force || recentNotes.isEmpty {
-                await loadRecent(client)
-            }
         } catch {
             guard !Task.isCancelled else { return }
             loadError = message(for: error)
             loadRetryUnavailable = authorizationUnavailable(error)
             signInUnavailable = loadRetryUnavailable
         }
-    }
-
-    /// The five most recently modified notes. A failure leaves the strip hidden; the list still loads.
-    private func loadRecent(_ client: JarvisNotesClient) async {
-        recentLoading = true
-        defer { recentLoading = false }
-        guard let result = try? await client.graph(), !Task.isCancelled else { return }
-        recentNotes = JarvisNotesPresentation.recentNotes(result.nodes)
-    }
-
-    private var showsRecent: Bool {
-        selectedFolder.isEmpty && (recentLoading || !recentNotes.isEmpty)
-    }
-
-    private var recentStrip: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
-            Text(copy.recent)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(nil)
-                .accessibilityAddTraits(.isHeader)
-                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            if recentLoading && recentNotes.isEmpty {
-                JarvisLoadingView(size: .inline)
-                    .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                        ForEach(recentNotes) { node in recentCard(node) }
-                    }
-                    .scrollTargetLayout()
-                }
-                .contentMargins(.horizontal, JarvisDesignTokens.notesHorizontalInset, for: .scrollContent)
-                .scrollTargetBehavior(.viewAligned)
-                .scrollIndicators(.hidden)
-            }
-        }
-        .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
-        .accessibilityIdentifier("notes.recent")
-    }
-
-    private func recentCard(_ node: KnowledgeGraphNode) -> some View {
-        let dot = [Color.orange, JarvisDesignTokens.ambientGreen, JarvisDesignTokens.ambientBlue, .pink, .purple, .teal]
-        let index = node.folder.unicodeScalars.reduce(0) { ($0 + Int($1.value)) % dot.count }
-        let opening = openingNotePaths.contains(node.path)
-        return Button {
-            Task { await openNote(path: node.path) }
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(node.title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
-                HStack(spacing: 6) {
-                    Circle().fill(dot[index]).frame(width: 8, height: 8).accessibilityHidden(true)
-                    if opening {
-                        JarvisLoadingView(size: .inline)
-                    } else {
-                        Text(JarvisNotesLocalization.formattedUpdatedDate(node.updatedAt, language: copy.language))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-            .padding(12)
-            .frame(width: 140, height: 84, alignment: .topLeading)
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .disabled(opening)
-        .accessibilityLabel(node.title)
-        .accessibilityIdentifier("notes.recent.card")
     }
 
     private func treeRepository(_ client: JarvisNotesClient) async -> JarvisRepository<VaultNoteTree> {

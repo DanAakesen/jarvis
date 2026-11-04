@@ -10845,6 +10845,15 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Requests per page (derived from code, not measured on a device). Before: every visit refetched. After: 0 inside the freshness window, 1 conditional request (304) when stale. Status 1→0/1, Proactive 3→0/3, Settings 1→0/1, Notes 3–4→0/3–4, Factory 2→0/2, Home 3→0/3.
 - Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore (`swift test`) and backend (`vitest`, `tsc`, `eslint`) checks pass.
 
+## 2026-11-04 P15-85: Notes hero and rows, Factory layout, Home chips
+
+- Notes page order is header, data phrase, Overview hero, the Notes / Tasks / List / Graph segmented bar, then the list; the bottom holds only folder chips, search and plus (the scope menu is removed). The hero (`JarvisNotesOverviewHero`) shows a link count, four hairline-separated columns (Notes, Open tasks, Overdue, Today) and a per-folder colour bar with legend from the graph (`JarvisNotesPresentation.folderShares`). A Recent strip (`recentNotes`) sits under the bar.
+- Notes folders are collapsed by default: a rounded outlined header row (dot, name, count pill, chevron) and a transparent, 20 pt rounded, 0.5 pt outlined container indented 16 pt with hairline row separators. Content has a 190 pt bottom inset.
+- Factory: the filter moved from the header to the second row, right of the segmented bar; the dock holds only search and plus. Columns already start collapsed.
+- Home: Today / Tasks due use the full-width `JarvisSegmentedBar` with the plus on its right.
+- Home composer (checked by reading code): `sendDraft` plays the lift-off animation then hands the text to Chat, which sends it once history has loaded. Every plus-menu choice is handed to Chat, which performs it (video and screen share turn on there). Same `JarvisComposerBar` and `JarvisComposerPlusMenu` as Chat.
+- Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore `swift test` passes. HIG pages used: Layout, Lists and tables, Segmented controls, Menus, Typography.
+
 ## 2026-11-04 P15-82: Gym and Factory home screen widgets
 
 - Eight widgets (four Gym, four Factory) live in the existing `JarvisWidgets` extension next to the Live Activity. No controls, no Live Activity change.

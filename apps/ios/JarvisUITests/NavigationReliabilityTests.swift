@@ -21,7 +21,7 @@ final class NavigationReliabilityTests: XCTestCase {
             defer { app.terminate() }
             navigate(to: "notes")
             waitFor(app.staticTexts["page.title"], key: "exists", value: true)
-            let folders = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'notes.folder.'"))
+            let folders = app.buttons.matching(identifier: "notes.folder.header")
             if folders.count > 0 {
                 for index in 0..<folders.count {
                     let header = folders.element(boundBy: index)
@@ -31,7 +31,7 @@ final class NavigationReliabilityTests: XCTestCase {
             let recent = app.descendants(matching: .any)["notes.recent"]
             if recent.waitForExistence(timeout: 3) {
                 XCTAssertTrue(recent.staticTexts[label].exists, "\(language): Recent label")
-                let cards = app.buttons.matching(identifier: "notes.recent.card")
+                let cards = app.buttons.matching(identifier: "notes.recent.item")
                 XCTAssertLessThanOrEqual(cards.count, 5)
                 XCTAssertGreaterThan(cards.count, 0)
             }
@@ -175,6 +175,35 @@ final class NavigationReliabilityTests: XCTestCase {
         let segment = app.buttons["factory.segment.board"]
         let search = app.textFields["factory.search"]
         XCTAssertGreaterThanOrEqual(search.frame.minY - segment.frame.maxY, 12, "Space between the segments and the search")
+        let filter = app.buttons["factory.filters"]
+        XCTAssertTrue(filter.exists)
+        XCTAssertEqual(filter.frame.midY, segment.frame.midY, accuracy: 8, "Filter shares the second row with the segmented bar")
+        XCTAssertGreaterThanOrEqual(filter.frame.minX, segment.frame.maxX, "Filter sits right of the segmented bar")
+        let plus = app.buttons["factory.plus"]
+        XCTAssertEqual(plus.frame.midY, search.frame.midY, accuracy: 8, "Plus sits next to the search")
+        XCTAssertGreaterThanOrEqual(plus.frame.minX, search.frame.maxX - 1)
+    }
+
+    func testNotesPageOrderAndNoScopeButton() {
+        launch(language: "en")
+        defer { app.terminate() }
+        navigate(to: "notes")
+        let title = app.descendants(matching: .any)["page.title"]
+        let headline = app.descendants(matching: .any)["page.headline"]
+        let hero = app.descendants(matching: .any)["notes.hero"]
+        let tabs = app.buttons["notes.tab.notes"]
+        waitFor(hero, key: "exists", value: true)
+        waitFor(tabs, key: "exists", value: true)
+        XCTAssertLessThan(title.frame.maxY, headline.frame.minY, "Header, then the data phrase")
+        XCTAssertLessThan(headline.frame.maxY, hero.frame.minY, "Data phrase, then the hero")
+        XCTAssertLessThan(hero.frame.maxY, tabs.frame.minY, "Hero, then the segmented bar")
+        let folder = app.buttons["notes.folder.header"].firstMatch
+        if folder.exists {
+            XCTAssertLessThan(tabs.frame.maxY, folder.frame.minY, "Segmented bar, then the list")
+        }
+        XCTAssertFalse(app.buttons["notes.scope"].exists, "The extra button between search and plus stays removed")
+        XCTAssertTrue(app.buttons["notes.plus"].exists)
+        attachScreenshot("Notes page order")
     }
 
     func testShortDragAndBackgroundInterruptionRecover() {
