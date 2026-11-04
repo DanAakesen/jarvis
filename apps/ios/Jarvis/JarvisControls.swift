@@ -487,6 +487,30 @@ struct JarvisTabStrip<Tag: Hashable>: View {
     }
 }
 
+/// The long full-width segmented bar for a page's second row of tabs (Board / Needs Dan / Releases): every tab shares
+/// the row equally. Carousels of pills, such as the Notes folders, keep `JarvisTabStrip`.
+struct JarvisSegmentedBar<Tag: Hashable>: View {
+    let title: String
+    let identifierPrefix: String
+    let items: [JarvisTabItem<Tag>]
+    @Binding var selection: Tag
+
+    var body: some View {
+        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                JarvisLabelledButton(
+                    title: item.title,
+                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
+                    isFullWidth: true,
+                    isSelected: selection == item.tag
+                ) { selection = item.tag }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+}
+
 /// The one search field for every page: a 48 pt glass capsule with a magnifier and a clear button. The text field
 /// carries `identifier` and the clear button `identifier.clear`.
 struct JarvisSearchField: View {

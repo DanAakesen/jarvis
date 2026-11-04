@@ -40,9 +40,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jarvis uses your approximate location for local weather.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Jarvis reads your step count to show it on Home. Nothing is written to Health or uploaded.</string>
+	<string>Jarvis reads your Health data (steps, workouts, sleep, nutrition, heart, body measurements and activity) to show it in the app. Nothing is written to Health.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Jarvis does not write to Health. It only reads your step count to show it on Home.</string>
+	<string>Jarvis does not write to Health. It only reads your Health data to show it in the app.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Jarvis uses the microphone for voice conversations.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

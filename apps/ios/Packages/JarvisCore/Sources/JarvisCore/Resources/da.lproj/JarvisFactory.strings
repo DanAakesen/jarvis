@@ -104,6 +104,7 @@
 "factory.requestField" = "Anmodning";
 "factory.modelOptional" = "Model (valgfri)";
 "factory.reasoningOptional" = "Ræsonnering (valgfri)";
+"factory.defaultOption" = "Standard";
 "factory.completionPolicy" = "Fuldførelsespolitik";
 "factory.deliverPullRequest" = "Lever pull request";
 "factory.completeWithoutDeployment" = "Fuldfør uden udrulning";

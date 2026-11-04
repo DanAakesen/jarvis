@@ -107,6 +107,7 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case requestField = "factory.requestField"
     case modelOptional = "factory.modelOptional"
     case reasoningOptional = "factory.reasoningOptional"
+    case defaultOption = "factory.defaultOption"
     case completionPolicy = "factory.completionPolicy"
     case deliverPullRequest = "factory.deliverPullRequest"
     case completeWithoutDeployment = "factory.completeWithoutDeployment"
@@ -356,4 +357,45 @@ private func isValidSubmissionID(_ value: String) -> Bool {
         of: #"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"#,
         options: .regularExpression
     ) != nil
+}
+
+/// What the Factory page may call "offline". Only a real network failure counts: a server error, a rejected token
+/// or an event stream the server closed while the phone was online must not show the offline notice.
+public enum JarvisFactoryConnectionPolicy {
+    public static func isNetworkFailure(_ error: Error) -> Bool {
+        if let error = error as? JarvisClientError {
+            return error == .networkFailure || error == .timedOut
+        }
+        if let error = error as? URLError {
+            return [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .timedOut, .cannotConnectToHost,
+                    .cannotFindHost, .dnsLookupFailed].contains(error.code)
+        }
+        return false
+    }
+
+    /// Consecutive failed connection attempts before the live-update stream is called offline.
+    public static let offlineAfterFailures = 3
+}
+
+/// The optional Model and Reasoning choices on the new-task sheet, taken from the deployed models.
+public enum JarvisFactoryModelOptions {
+    private static let effortOrder = ["minimal", "low", "medium", "high", "xhigh", "max"]
+
+    /// Deployed model names, in the order the backend lists them, without repeats.
+    public static func modelNames(_ deployments: [JarvisModelDeployment]) -> [String] {
+        var seen = Set<String>()
+        return deployments.map(\.name).filter { seen.insert($0).inserted }
+    }
+
+    /// The reasoning efforts the chosen model supports, or every deployed model's efforts while none is chosen,
+    /// from lightest to heaviest.
+    public static func reasoningEfforts(_ deployments: [JarvisModelDeployment], selectedModel: String) -> [String] {
+        let source = selectedModel.isEmpty ? deployments : deployments.filter { $0.name == selectedModel }
+        let efforts = Set(source.flatMap(\.reasoningEfforts))
+        return efforts.sorted { left, right in
+            let l = effortOrder.firstIndex(of: left) ?? effortOrder.count
+            let r = effortOrder.firstIndex(of: right) ?? effortOrder.count
+            return l == r ? left < right : l < r
+        }
+    }
 }

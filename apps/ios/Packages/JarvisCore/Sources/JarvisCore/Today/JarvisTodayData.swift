@@ -25,8 +25,8 @@ public enum JarvisTodayDataError: Error, Equatable, Sendable {
     case failed
 }
 
-/// Where Next up reads calendar entries from. The backend exposes no calendar-list route to the phone yet, so the
-/// production source is `JarvisUnavailableCalendarSource` and Today shows a calendar-unavailable row.
+/// Where Next up reads calendar entries from. Production uses `JarvisBackendCalendarSource`; the unavailable source
+/// is for builds without a backend client, where Today shows a calendar-unavailable row.
 public protocol JarvisTodayCalendarSource: Sendable {
     func entries(from: Date, to: Date) async throws -> [JarvisTodayCalendarEntry]
 }

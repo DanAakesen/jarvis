@@ -68,7 +68,7 @@ const failureEvents = new Set([
   'voice.session_persistence_failed', 'voice.transcript_persistence_failed',
   'health_host_shutdown_failed', 'health_host_configuration_or_startup_failed',
   'workspace_artifact.html_open_url_failed', 'workspace_artifact.html_pin_failed',
-  'workspace_artifact.html_read_failed', 'workspace_artifact.image_read_failed',
+  'calendar.events_failed', 'workspace_artifact.html_read_failed', 'workspace_artifact.image_read_failed',
   'workspace_artifact.image_upload_failed', 'workspace_pins.list_failed', 'workspace_pins.pin_failed',
   'workspace_pins.unpin_failed',
 ]);

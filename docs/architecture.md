@@ -1403,7 +1403,12 @@ Data: tasks come from `GET /vault/tasks` and note correlation from `GET /notes` 
 `JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Gym log/<date>-<time>-<session>.md`
 and read back with `GET /notes?directory=Personal/Gym log`; steps come from HealthKit. No backend route exists
 that lists calendar entries for the phone, so Next up shows "Calendar unavailable" through
-`JarvisUnavailableCalendarSource` instead of inventing entries.
+`JarvisUnavailableCalendarSource` instead of inventing entries. (P15-77 added it: `GET /calendar/events?from&to`, Dan-only,
+registered by the Google module, reads the primary calendar with the `calendar.events` scope and returns the
+`eventSummary` shape; the phone reads it through `JarvisBackendCalendarSource`, wired through `JarvisNotesClient.calendarSource`.)
+HealthKit (P15-77): `JarvisHealthKitAccess` requests read access to every readable type once (steps, workouts, sleep,
+nutrition, heart, body and activity types); workouts on Home combine the vault gym log with Health cardio workouts
+(`JarvisCombinedGymLogStore`). Only steps and cardio workouts are shown today; the other types are authorized but not yet displayed.
 
 Home layout (P15-65): no title; the data-phrase headline is first, then the activity hero (workouts and steps), then
 Next up, tasks and the two log buttons, with the Chat composer pinned below (voice while empty, send while typing).

@@ -14,6 +14,7 @@ struct JarvisFactoryNewTaskSheet: View {
     @State private var request = ""
     @State private var model = ""
     @State private var reasoning = ""
+    @State private var deployments: [JarvisModelDeployment] = []
     @State private var policy: FactoryProjectPolicy
     @State private var savedPolicies: [String: FactoryProjectPolicy]
     @State private var creating = false
@@ -82,12 +83,41 @@ struct JarvisFactoryNewTaskSheet: View {
                 }
 
                 Section {
-                    TextField(copy.text(.modelOptional), text: $model)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField(copy.text(.reasoningOptional), text: $reasoning)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    if deployments.isEmpty {
+                        TextField(copy.text(.modelOptional), text: $model)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        TextField(copy.text(.reasoningOptional), text: $reasoning)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        Picker(copy.text(.modelOptional), selection: $model) {
+                            Text(copy.text(.defaultOption)).tag("")
+                            ForEach(JarvisFactoryModelOptions.modelNames(deployments), id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                        .accessibilityIdentifier("factory.newTask.model")
+                        Picker(copy.text(.reasoningOptional), selection: $reasoning) {
+                            Text(copy.text(.defaultOption)).tag("")
+                            ForEach(
+                                JarvisFactoryModelOptions.reasoningEfforts(deployments, selectedModel: model),
+                                id: \.self
+                            ) { effort in
+                                Text(effort).tag(effort)
+                            }
+                        }
+                        .accessibilityIdentifier("factory.newTask.reasoning")
+                    }
+                }
+                .task {
+                    deployments = (try? await client.deployedModels()) ?? []
+                }
+                .onChange(of: model) { _, _ in
+                    if !deployments.isEmpty,
+                       !JarvisFactoryModelOptions.reasoningEfforts(deployments, selectedModel: model).contains(reasoning) {
+                        reasoning = ""
+                    }
                 }
 
                 Section {
@@ -97,7 +127,7 @@ struct JarvisFactoryNewTaskSheet: View {
                     }
                     .disabled(savingPolicy)
                     if savingPolicy {
-                        ProgressView(copy.text(.policySaving))
+                        JarvisLoadingView(title: copy.text(.policySaving))
                     }
                     if policySaveFailed {
                         Text(copy.text(.policySaveFailed))

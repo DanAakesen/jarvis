@@ -134,7 +134,7 @@ struct JarvisInsightsStateView: View {
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
             if case .loading = kind {
-                ProgressView().accessibilityHidden(true)
+                JarvisLoadingView().accessibilityHidden(true)
             } else {
                 Image(systemName: systemImage)
                     .font(.title2)

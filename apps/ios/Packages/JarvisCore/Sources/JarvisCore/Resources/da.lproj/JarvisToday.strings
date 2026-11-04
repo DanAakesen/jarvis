@@ -5,7 +5,7 @@
 "today.greeting.taskOne" = "Du har {1 opgave} i dag.";
 "today.greeting.tasks" = "Du har {%ld opgaver} i dag.";
 "today.greeting.clear" = "Din {dag er fri}.";
-"today.greeting.steps" = "Du har gået {%ld skridt} i dag.";
+"today.greeting.steps" = "Du har gået {%@ skridt} i dag.";
 "today.greeting.workoutOne" = "Du har logget {1 træning} i denne uge.";
 "today.greeting.workouts" = "Du har logget {%ld træninger} i denne uge.";
 "today.nextUp" = "Næste";

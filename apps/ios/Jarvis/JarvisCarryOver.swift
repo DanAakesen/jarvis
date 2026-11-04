@@ -51,8 +51,10 @@ extension View {
     }
 }
 
-/// Text typed on Today that Chat opens with.
+/// What Today hands to Chat: a message typed on Home, which Chat sends on arrival, or a choice made in the
+/// composer plus menu, which Chat performs (the typed text, if any, stays in the composer).
 struct JarvisChatHandoff: Equatable {
     let id = UUID()
     let text: String
+    var action: JarvisComposerPlusAction?
 }

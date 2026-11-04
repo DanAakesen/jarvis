@@ -706,7 +706,7 @@ struct JarvisHealthStateLine: View {
     var body: some View {
         HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
             if state == .loading {
-                ProgressView()
+                JarvisLoadingView()
                     .controlSize(.small)
                     .accessibilityHidden(true)
             } else if state == .offline {
@@ -785,7 +785,7 @@ func metricTrend(_ read: JarvisHealthRead, period: JarvisHealthPeriod) -> Jarvis
 }
 
 func formatNumber(_ value: Double, language: JarvisAppLanguage = .default) -> String {
-    value.formatted(.number.locale(language.locale).precision(.fractionLength(0)))
+    JarvisNumberFormat.compact(value, language: language)
 }
 
 func formatDuration(_ seconds: Double, language: JarvisAppLanguage) -> String {

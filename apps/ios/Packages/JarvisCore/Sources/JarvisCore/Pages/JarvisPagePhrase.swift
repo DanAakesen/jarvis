@@ -43,7 +43,7 @@ public struct JarvisPagePhrase: Equatable, Sendable {
 }
 
 private func number(_ value: Double, _ language: JarvisAppLanguage) -> String {
-    value.formatted(.number.precision(.fractionLength(0)).locale(language.locale))
+    JarvisNumberFormat.compact(value, language: language)
 }
 
 private func count(_ value: Int, one: String, many: String) -> String {
@@ -60,10 +60,11 @@ public enum JarvisFactoryPagePhrase {
         public let failed: Int
 
         public init(board: FactoryBoard) {
+            // Every count comes from the same board columns the list below renders, so hero, phrase and list agree.
             let cards = board.columns.flatMap(\.cards)
-            total = cards.filter { $0.task != nil }.count
+            total = cards.count
             needs = board.columns.first { $0.id == .needsDan }?.cards.count ?? 0
-            running = cards.filter { $0.task?.state == .running || $0.task?.state == .pauseRequested }.count
+            running = board.columns.first { $0.id == .inProgress }?.cards.count ?? 0
             review = board.columns.first { $0.id == .inReview }?.cards.count ?? 0
             failed = cards.filter {
                 $0.task?.state == .needsAttention && $0.task?.latestSessionEndReason == FactorySessionEndReason.crashed.rawValue
@@ -326,6 +327,20 @@ public enum JarvisStatusPagePhrase {
         return JarvisPagePhrase(markup: da
             ? "Dan, {\(healthy) af \(total) tjek} er i orden."
             : "Dan, {\(healthy) of \(total) checks} are healthy.")
+    }
+}
+
+/// Usage header phrase, written from the period total (cost in DKK when the report has costs).
+public enum JarvisUsagePagePhrase {
+    public static func make(_ summary: JarvisUsageSummary, language: JarvisAppLanguage) -> JarvisPagePhrase {
+        let da = language == .da
+        guard summary.usesCost, summary.totalValue > 0 else {
+            return JarvisPagePhrase(markup: da ? "Dan, her er dit {forbrug}." : "Dan, here is your {usage}.")
+        }
+        let amount = JarvisNumberFormat.compact(summary.totalValue, language: language)
+        return JarvisPagePhrase(markup: da
+            ? "Dan, dit forbrug er {\(amount) kr}."
+            : "Dan, your usage is {\(amount) DKK}.")
     }
 }
 

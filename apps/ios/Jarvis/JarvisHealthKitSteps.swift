@@ -2,18 +2,14 @@ import HealthKit
 import JarvisCore
 
 /// Today's steps from HealthKit, where the owner has allowed it. Read-only: nothing is written or uploaded.
+/// The first request asks for every readable Health type (`JarvisHealthKitAccess`).
 struct JarvisHealthKitStepsSource: JarvisTodayStepsSource {
     func steps(now: Date, days: Int) async throws -> JarvisStepsSnapshot {
-        guard HKHealthStore.isHealthDataAvailable(),
-              let type = HKObjectType.quantityType(forIdentifier: .stepCount) else {
+        guard let type = HKObjectType.quantityType(forIdentifier: .stepCount) else {
             throw JarvisTodayDataError.unavailable
         }
         let store = HKHealthStore()
-        do {
-            try await store.requestAuthorization(toShare: [], read: [type])
-        } catch {
-            throw JarvisTodayDataError.notAuthorized
-        }
+        try await JarvisHealthKitAccess.requestReadAccess(store)
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .day, value: -(max(days, 1) - 1), to: today) ?? today

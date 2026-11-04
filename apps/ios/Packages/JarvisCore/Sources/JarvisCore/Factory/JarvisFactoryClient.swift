@@ -205,6 +205,22 @@ public final class JarvisFactoryClient: Sendable {
         return task
     }
 
+    /// The deployed models, for the optional Model and Reasoning choices on a new task.
+    public func deployedModels() async throws -> [JarvisModelDeployment] {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get,
+            path: ["models"],
+            idempotent: true
+        )
+        guard response.statusCode == 200,
+              response.body.count <= Self.maximumResponseBytes,
+              let catalogue = try? JSONDecoder().decode(JarvisModelCatalogue.self, from: response.body),
+              catalogue.deployments.count <= 200 else {
+            throw JarvisFactoryClientError.invalidResponse
+        }
+        return catalogue.deployments
+    }
+
     public func releases(projectId: String) async throws -> FactoryReleaseView {
         guard isValidFactoryID(projectId) else { throw JarvisFactoryClientError.invalidRequest }
         let response = try await client.performAuthenticatedRequest(
@@ -225,7 +241,10 @@ public final class JarvisFactoryClient: Sendable {
         return view
     }
 
+    /// `onConnected` runs once the stream is open, so the caller can tell an established connection from a failed
+    /// one even when no board event arrives for a while.
     public func listenForBoardUpdates(
+        onConnected: () async -> Void = {},
         _ receive: (FactoryBoardUpdate) async -> Void
     ) async throws {
         let response = try await client.performChatStream(
@@ -234,6 +253,7 @@ public final class JarvisFactoryClient: Sendable {
             accept: "text/event-stream",
             headers: [:]
         )
+        await onConnected()
         var parser = SSEParser()
         for try await chunk in response.body {
             for event in parser.append(chunk) {

@@ -96,3 +96,45 @@ final class JarvisTodayGymTests: XCTestCase {
         }
     }
 }
+
+final class JarvisCombinedGymLogStoreTests: XCTestCase {
+    private struct Stub: JarvisGymLogStore {
+        let result: Result<[JarvisGymLogEntry], JarvisGymLogError>
+        func save(_ entry: JarvisGymLogEntry) async throws { throw JarvisGymLogError.unavailable }
+        func entries(since: Date) async throws -> [JarvisGymLogEntry] { try result.get() }
+    }
+
+    private let day = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testMergesSourcesAndDropsNearDuplicates() async throws {
+        let vault = JarvisGymLogEntry(performedAt: day, session: .cardio)
+        let duplicate = JarvisGymLogEntry(performedAt: day.addingTimeInterval(1800), session: .cardio)
+        let run = JarvisGymLogEntry(performedAt: day.addingTimeInterval(86_400), session: .cardio)
+        let store = JarvisCombinedGymLogStore(
+            primary: Stub(result: .success([vault])), others: [Stub(result: .success([duplicate, run]))]
+        )
+        let entries = try await store.entries(since: day)
+        XCTAssertEqual(entries, [run, vault])
+    }
+
+    func testOneFailingSourceDoesNotHideTheOther() async throws {
+        let run = JarvisGymLogEntry(performedAt: day, session: .cardio)
+        let store = JarvisCombinedGymLogStore(
+            primary: Stub(result: .failure(.failed)), others: [Stub(result: .success([run]))]
+        )
+        let entries = try await store.entries(since: day)
+        XCTAssertEqual(entries, [run])
+    }
+
+    func testThrowsWhenEverySourceFailsAndSavesOnlyToThePrimary() async {
+        let store = JarvisCombinedGymLogStore(
+            primary: Stub(result: .failure(.failed)), others: [Stub(result: .failure(.unavailable))]
+        )
+        do {
+            _ = try await store.entries(since: day)
+            XCTFail("Expected failure")
+        } catch {
+            XCTAssertEqual(error as? JarvisGymLogError, .failed)
+        }
+    }
+}

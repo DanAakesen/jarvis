@@ -195,7 +195,7 @@ final class JarvisTodayModel: ObservableObject {
         let end = timeCalendar.date(byAdding: .day, value: 2, to: start) ?? start
         let result = await fetch { try await self.dependencies.calendar.entries(from: start, to: end) }
         calendar = Self.merged(calendar, result.map { JarvisTodayAgenda.upcoming($0, now: self.now) })
-        guard case .success = result, let client = dependencies.notes else { return }
+        guard let client = dependencies.notes else { return }
         let found = await fetch { try await client.notes().notes }
         notes = Self.merged(notes, found)
     }

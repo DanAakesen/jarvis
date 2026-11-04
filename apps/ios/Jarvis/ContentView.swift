@@ -498,7 +498,13 @@ struct ContentView: View {
             dependencies.gym = JarvisFixtureGymLogStore()
         } else if !fixtureMode {
             dependencies.steps = JarvisHealthKitStepsSource()
-            if let notes { dependencies.gym = JarvisVaultGymLogStore(client: notes) }
+            if let notes {
+                dependencies.gym = JarvisCombinedGymLogStore(
+                    primary: JarvisVaultGymLogStore(client: notes),
+                    others: [JarvisHealthKitWorkoutSource()]
+                )
+                dependencies.calendar = notes.calendarSource
+            }
         }
         return dependencies
     }

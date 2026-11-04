@@ -170,7 +170,6 @@ struct JarvisNotesArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             tabSwitcher
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedContent
@@ -178,6 +177,7 @@ struct JarvisNotesArea: View {
                 searchContent
             }
         }
+        .jarvisPageHeader { header }
         .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -254,7 +254,7 @@ struct JarvisNotesArea: View {
         JarvisPageHeader(title: copy.title, language: language)
     }
 
-    /// The create menu sits beside the tabs so the thumb reaches it.
+    /// The create menu sits beside the search field so the thumb reaches it.
     private var plusMenu: some View {
         JarvisMenuButton(
             title: copy.create,
@@ -314,7 +314,7 @@ struct JarvisNotesArea: View {
 
     private var tabSwitcher: some View {
         HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-            JarvisTabStrip(
+            JarvisSegmentedBar(
                 title: copy.title,
                 identifierPrefix: "notes.tab",
                 items: JarvisNotesTab.allCases.map {
@@ -332,7 +332,6 @@ struct JarvisNotesArea: View {
                     refreshVersion += 1
                 }
             }
-            plusMenu
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
@@ -373,7 +372,7 @@ struct JarvisNotesArea: View {
                                     noteRow(note)
                                 }
                                 if groupLoading.contains(folder) {
-                                    ProgressView().frame(maxWidth: .infinity)
+                                    JarvisLoadingView().frame(maxWidth: .infinity)
                                 } else if groupHasMore[folder] == true {
                                     JarvisLabelledButton(title: copy.loadMore) {
                                         Task { await loadMoreNotes(in: folder) }
@@ -545,6 +544,7 @@ struct JarvisNotesArea: View {
                     Button(copy.title(for: scope)) { selectedScope = scope }
                 }
             }
+            plusMenu
         }
     }
 
@@ -625,7 +625,7 @@ struct JarvisNotesArea: View {
         } label: {
             HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                 if openingNotePaths.contains(note.path) {
-                    ProgressView()
+                    JarvisLoadingView()
                         .frame(width: JarvisDesignTokens.notesIconSize, height: JarvisDesignTokens.notesIconSize)
                 } else {
                     Image(systemName: "note.text")
@@ -806,7 +806,7 @@ struct JarvisNotesArea: View {
             noteRow(note)
         }
         if directoryLoading.contains(directory) {
-            ProgressView().frame(maxWidth: .infinity)
+            JarvisLoadingView().frame(maxWidth: .infinity)
         } else if directoryHasMore[directory] == true {
             JarvisLabelledButton(title: copy.loadMore) {
                 Task { await loadMoreDirectory(directory) }

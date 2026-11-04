@@ -61,6 +61,16 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
         XCTAssertEqual(try offenders(#"\.pickerStyle\(\s*\.segmented\b"#, allowing: Self.sharedLayer), [])
     }
 
+    /// One shared loading animation: screens use `JarvisLoadingView`. A determinate `ProgressView(value:)` bar is fine,
+    /// and the Live Activity surface in `Shared` is rendered by WidgetKit, which cannot use the app's view.
+    func testNoScreenUsesAnAdHocSpinner() throws {
+        let spinner = #"ProgressView\((?!value:)"#
+        XCTAssertEqual(
+            try offenders(spinner, allowing: Self.sharedLayer.union(["JarvisLoadingView.swift", "FactoryTaskActivitySurface.swift"])),
+            []
+        )
+    }
+
     func testNoScreenDefinesAButtonStyle() throws {
         XCTAssertEqual(try offenders(#":\s*(?:[A-Za-z]+,\s*)*ButtonStyle\b"#, allowing: Self.sharedLayer), [])
     }

@@ -259,7 +259,7 @@ struct JarvisTodayActivityCard: View {
                 )
                 .rotationEffect(.degrees(-90))
             VStack(spacing: 0) {
-                Text(display.ringSteps.formatted(.number.locale(language.locale)))
+                Text(JarvisNumberFormat.compact(display.ringSteps, language: language))
                     .font(.system(.caption, design: .rounded, weight: .bold))
                     .monospacedDigit()
                     .minimumScaleFactor(0.5)
@@ -350,7 +350,7 @@ struct JarvisTodayActivityCard: View {
                     .foregroundStyle(JarvisDesignTokens.secondaryAccent)
                     .accessibilityHidden(true)
             } else {
-                ProgressView()
+                JarvisLoadingView()
             }
             Text(text).font(.subheadline).foregroundStyle(.secondary)
             Spacer(minLength: 0)

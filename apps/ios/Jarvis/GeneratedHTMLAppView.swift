@@ -25,7 +25,7 @@ struct HTMLAppRenderer: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ProgressView(text(.htmlAppLoading))
+                JarvisLoadingView(title: text(.htmlAppLoading))
                     .frame(maxWidth: .infinity, minHeight: 160)
             }
         }

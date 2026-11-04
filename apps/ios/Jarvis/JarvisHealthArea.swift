@@ -245,7 +245,6 @@ struct JarvisHealthArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
                     if trackWorkout {
@@ -316,7 +315,7 @@ struct JarvisHealthArea: View {
                                 freshnessLine(dashboard)
                             }
                         } else {
-                            ProgressView(copy.text(.loading))
+                            JarvisLoadingView(title: copy.text(.loading))
                                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthChartHeight)
                         }
                     }
@@ -332,16 +331,18 @@ struct JarvisHealthArea: View {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+                    segmentSwitcher
+                        .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
                     HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                        segmentSwitcher
+                        searchBar
                         plusMenu
                     }
                     .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-                    searchBar
                 }
                 .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
             }
         }
+        .jarvisPageHeader { header }
         .animation(.easeInOut(duration: 0.25), value: dashboard?.preset)
         .jarvisAmbientBackground()
         .tint(JarvisDesignTokens.healthAccent)
@@ -389,7 +390,7 @@ struct JarvisHealthArea: View {
         JarvisPageHeader(title: copy.text(.title), language: language)
     }
 
-    /// The log menu sits beside the tabs so the thumb reaches it.
+    /// The log menu sits beside the search field so the thumb reaches it.
     private var plusMenu: some View {
         JarvisMenuButton(
             title: copy.text(.log),
@@ -419,7 +420,7 @@ struct JarvisHealthArea: View {
     }
 
     private var segmentSwitcher: some View {
-        JarvisTabStrip(
+        JarvisSegmentedBar(
             title: copy.text(.title),
             identifierPrefix: "health.mode",
             items: [
@@ -449,7 +450,6 @@ struct JarvisHealthArea: View {
             identifier: "health.search",
             clearTitle: copy.text(.clearSearch)
         )
-        .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
     }
 
     @MainActor

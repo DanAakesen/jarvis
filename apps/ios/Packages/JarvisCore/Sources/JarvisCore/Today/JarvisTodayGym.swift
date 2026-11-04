@@ -192,7 +192,8 @@ public enum JarvisGymLogNote {
 public struct JarvisVaultGymLogStore: JarvisGymLogStore {
     private let client: JarvisNotesClient
     private let timeZone: TimeZone
-    private let maximumPages = 4
+    // Notes list in path order (oldest first), so reaching this month's logs can take many pages.
+    private let maximumPages = 20
 
     public init(client: JarvisNotesClient, timeZone: TimeZone = .current) {
         self.client = client
@@ -234,5 +235,51 @@ public struct JarvisVaultGymLogStore: JarvisGymLogStore {
             offset += page.limit
         }
         return result.sorted { $0.performedAt > $1.performedAt }
+    }
+}
+
+/// Reads gym logs from the vault and from other sources (Health workouts) and writes only to the vault. One source
+/// failing does not hide the others; an error is thrown only when every source fails. A Health workout is dropped
+/// when the vault already has a log of the same session within two hours.
+public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
+    private let primary: any JarvisGymLogStore
+    private let others: [any JarvisGymLogStore]
+
+    public init(primary: any JarvisGymLogStore, others: [any JarvisGymLogStore]) {
+        self.primary = primary
+        self.others = others
+    }
+
+    public func save(_ entry: JarvisGymLogEntry) async throws {
+        try await primary.save(entry)
+    }
+
+    public func entries(since: Date) async throws -> [JarvisGymLogEntry] {
+        var firstError: Error?
+        var primaryEntries: [JarvisGymLogEntry] = []
+        var succeeded = false
+        do {
+            primaryEntries = try await primary.entries(since: since)
+            succeeded = true
+        } catch {
+            firstError = error
+        }
+        var merged = primaryEntries
+        for store in others {
+            do {
+                let extra = try await store.entries(since: since)
+                succeeded = true
+                merged += extra.filter { candidate in
+                    !primaryEntries.contains {
+                        $0.session == candidate.session
+                            && abs($0.performedAt.timeIntervalSince(candidate.performedAt)) < 7200
+                    }
+                }
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+        if !succeeded, let firstError { throw firstError }
+        return merged.sorted { $0.performedAt > $1.performedAt }
     }
 }

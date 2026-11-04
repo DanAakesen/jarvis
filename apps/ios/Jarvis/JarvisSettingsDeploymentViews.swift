@@ -27,7 +27,7 @@ struct JarvisDeploymentsSettingsView: View {
                 Text(notice).foregroundStyle(.secondary)
             }
             if loading && catalogue == nil {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if let catalogue {
                 if catalogue.deployments.isEmpty {
                     Text(copy(.noItems)).foregroundStyle(.secondary)

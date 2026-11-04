@@ -311,7 +311,7 @@ struct JarvisProactiveSettingsSheet: View {
                 HStack(spacing: 10) {
                     switch state {
                     case .saving:
-                        ProgressView().accessibilityHidden(true)
+                        JarvisLoadingView().accessibilityHidden(true)
                         Text(text(.editorSaving))
                     case .saved:
                         Image(systemName: "checkmark.circle.fill")

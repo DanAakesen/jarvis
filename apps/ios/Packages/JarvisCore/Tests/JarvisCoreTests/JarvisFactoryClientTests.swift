@@ -120,6 +120,17 @@ final class JarvisFactoryClientTests: XCTestCase {
         await assertConsumed(transport)
     }
 
+    func testBoardStreamReportsConnectionBeforeAnyEvent() async throws {
+        let transport = try FixtureTransport(scenario: Data(streamScenario.utf8))
+        let client = JarvisFactoryClient(client: try makeClient(transport))
+        var order: [String] = []
+
+        try await client.listenForBoardUpdates(onConnected: { order.append("connected") }) { _ in order.append("update") }
+
+        XCTAssertEqual(order.first, "connected")
+        XCTAssertTrue(order.contains("update"))
+    }
+
     func testIssueNumberFormatsTakeIntegersNotObjects() {
         // `%@` with an Int argument crashed the Factory board when a card had a blocker.
         for key in [JarvisFactoryLocalizationKey.blockedBy, .issueNumber] {

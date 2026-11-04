@@ -104,6 +104,7 @@
 "factory.requestField" = "Request";
 "factory.modelOptional" = "Model (optional)";
 "factory.reasoningOptional" = "Reasoning (optional)";
+"factory.defaultOption" = "Default";
 "factory.completionPolicy" = "Completion policy";
 "factory.deliverPullRequest" = "Deliver pull request";
 "factory.completeWithoutDeployment" = "Complete without deployment";

@@ -62,7 +62,7 @@ final class JarvisTodayTests: XCTestCase {
         )
         XCTAssertEqual(
             known.plainText,
-            "Morning Dan. Your day is clear. You have taken 4,200 steps today. You logged 3 workouts this week."
+            "Morning Dan. Your day is clear. You have taken 4.2k steps today. You logged 3 workouts this week."
         )
         let unknown = JarvisTodayGreeting.make(
             timeOfDay: .morning, nextEvent: nil, tasksDueToday: 0, stepsToday: 0, workoutsThisWeek: 0,
