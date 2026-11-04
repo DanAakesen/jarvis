@@ -1,0 +1,230 @@
+import { healthCapabilitiesAccept, healthCapabilitiesVersion, healthQuerySources, healthQuerySourcesV1, healthQuerySourcesV2, healthQuerySourcesV3, healthQuerySourcesV5, healthQuerySourcesV6, healthQuerySourcesV6WithoutTrainingTargets, isHealthQuery, type HealthJson, type HealthQuery, type HealthQueryResult, type HealthSourceId } from '@jarvis/contracts';
+import { awaitWithSignal, backendFetch } from '../backend-request';
+
+const responseLimit = 1024 * 1024;
+const concurrentReads = 2;
+let activeReads = 0;
+type ReadWaiter = {
+  signal: AbortSignal;
+  resolve: (release: () => void) => void;
+  reject: (reason: unknown) => void;
+  abort: () => void;
+};
+const readQueue: ReadWaiter[] = [];
+
+function releaseRead(): () => void {
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    while (readQueue.length) {
+      const waiter = readQueue.shift()!;
+      waiter.signal.removeEventListener('abort', waiter.abort);
+      if (waiter.signal.aborted) {
+        waiter.reject(waiter.signal.reason ?? new DOMException('Aborted', 'AbortError'));
+        continue;
+      }
+      waiter.resolve(releaseRead());
+      return;
+    }
+    activeReads -= 1;
+  };
+}
+
+function acquireRead(signal: AbortSignal): Promise<() => void> {
+  if (signal.aborted) return Promise.reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+  if (activeReads < concurrentReads) {
+    activeReads += 1;
+    return Promise.resolve(releaseRead());
+  }
+  return new Promise((resolve, reject) => {
+    const waiter: ReadWaiter = {
+      signal, resolve, reject,
+      abort: () => {
+        const index = readQueue.indexOf(waiter);
+        if (index !== -1) readQueue.splice(index, 1);
+        signal.removeEventListener('abort', waiter.abort);
+        reject(signal.reason ?? new DOMException('Aborted', 'AbortError'));
+      },
+    };
+    readQueue.push(waiter);
+    signal.addEventListener('abort', waiter.abort, { once: true });
+    if (signal.aborted) waiter.abort();
+  });
+}
+
+export async function runHealthRead<T>(signal: AbortSignal, read: () => Promise<T>): Promise<T> {
+  const release = await acquireRead(signal);
+  try { return await read(); }
+  finally { release(); }
+}
+
+export class HealthReadError extends Error {
+  constructor(message: string, readonly kind: 'disabled' | 'auth' | 'unavailable' | 'invalid' = 'unavailable') {
+    super(message);
+    this.name = 'HealthReadError';
+  }
+}
+function object(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+function time(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/u.test(value) && Number.isFinite(Date.parse(value));
+}
+function nullableTime(value: unknown): boolean { return value === null || time(value); }
+function date(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(value) && !value.startsWith('0000-') &&
+    Number.isFinite(Date.parse(value)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+}
+function json(value: unknown, depth = 0): value is HealthJson {
+  if (depth > 32) return false;
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(item => json(item, depth + 1));
+  return object(value) && Object.values(value).every(item => json(item, depth + 1));
+}
+export function isHealthResult(value: unknown, query: HealthQuery): value is HealthQueryResult {
+  const limit = query.source === healthQuerySources.sync || query.source === healthQuerySources.workout || query.source === healthQuerySources.brief ? 1
+    : query.source === healthQuerySources.metricCatalog ? query.limit ?? 100 : 'limit' in query ? query.limit ?? 50 : 50;
+  if (!object(value) || value.source !== query.source || !Array.isArray(value.items) ||
+      value.items.length > limit ||
+      !value.items.every(item => object(item) && json(item)) ||
+      !object(value.units) || !Object.values(value.units).every(unit => typeof unit === 'string') ||
+      !object(value.provenance) || value.provenance.store !== 'daily-sql' ||
+      value.provenance.detail !== 'retained-record' ||
+      value.provenance.calculations !== (query.source === healthQuerySources.days ? 'derived-from-retained-meals' : 'existing-read-model') ||
+      value.provenance.consistency !== 'independent-committed-reads' ||
+      !object(value.freshness) || !time(value.freshness.observedAt) ||
+      !nullableTime(value.freshness.sourceProcessedCommittedAt) ||
+      !nullableTime(value.freshness.latestReturnedRecordUpdatedAt) || value.freshness.staleness !== 'unknown' ||
+      !object(value.coverage) || value.coverage.returned !== value.items.length ||
+      typeof value.coverage.hasMore !== 'boolean' || value.coverage.sourceCompleteness !== 'unknown' ||
+      value.coverage.detailMetricsTruncated !== undefined && typeof value.coverage.detailMetricsTruncated !== 'boolean' ||
+      value.coverage.detailMetricsTruncated === true && query.source !== healthQuerySources.workout ||
+      typeof value.revision !== 'string' || !/^[a-f0-9]{64}$/u.test(value.revision)) return false;
+  const items = value.items as Record<string, unknown>[];
+  if ('startDate' in query) {
+    if (!object(value.period) || value.period.startDate !== query.startDate ||
+        value.period.endDate !== query.endDate || value.period.timeZone !== 'Europe/Copenhagen') return false;
+  } else if (value.period !== null) return false;
+  if (query.source.startsWith('daily.nutrition.') && value.units.energy_kcal !== 'kcal') return false;
+  if (query.source === healthQuerySources.brief && value.items.length) {
+    const first: unknown = value.items[0];
+    if (!object(first) || first.id !== query.briefId) return false;
+  }
+  if (query.source === healthQuerySources.lifts) {
+    if (value.units.weightKg !== 'kg' || value.units.reps !== 'reps' || value.units.sets !== 'sets' ||
+        !items.every(item => typeof item.id === 'string' &&
+          /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(item.id) &&
+          typeof item.exerciseName === 'string' && item.exerciseName.length > 0 && item.exerciseName.length <= 80 &&
+          typeof item.weightKg === 'number' && Number.isFinite(item.weightKg) && item.weightKg >= 0 && item.weightKg <= 1000 &&
+          Math.abs(item.weightKg * 100 - Math.round(item.weightKg * 100)) < 1e-7 &&
+          Number.isSafeInteger(item.reps) && Number(item.reps) >= 1 && Number(item.reps) <= 1000 &&
+          Number.isSafeInteger(item.sets) && Number(item.sets) >= 1 && Number(item.sets) <= 100 &&
+          time(item.performedAt) && item.deletedAt === null && time(item.updatedAt) &&
+          Number.isSafeInteger(item.revision) && Number(item.revision) > 0)) return false;
+  }
+  if (query.source === healthQuerySources.metrics && query.metric !== undefined &&
+      items.some(item => item.metric_name !== query.metric)) return false;
+  if (query.source === healthQuerySources.metricCatalog && !items.every((item, index) =>
+    typeof item.metric_name === 'string' && item.metric_name.length > 0 && item.metric_name.length <= 256 &&
+    (!query.cursor || item.metric_name > query.cursor.key) &&
+    (index === 0 || (items[index - 1]!.metric_name as string) < item.metric_name) &&
+    Array.isArray(item.units) && item.units.length <= 5 && item.units.every(unit => typeof unit === 'string') &&
+    item.units.every((unit, unitIndex, units) => unitIndex === 0 || units[unitIndex - 1]! < unit) &&
+    date(item.first_date) && date(item.last_date) && item.first_date <= item.last_date &&
+    item.first_date >= query.startDate && item.last_date <= query.endDate &&
+    Number.isInteger(item.day_count) && Number(item.day_count) > 0 && time(item.latest_updated_at))) return false;
+  if (query.source === healthQuerySources.days && !items.every((item, index) => {
+    const nutrients = ['energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams'];
+    const unknown = item.unknown_nutrients;
+    const partial = item.partial_nutrients;
+    return date(item.meal_date) && item.meal_date >= query.startDate && item.meal_date <= query.endDate &&
+      (!query.cursor || item.meal_date > query.cursor.date) &&
+      (index === 0 || (items[index - 1]!.meal_date as string) < item.meal_date) &&
+      Number.isInteger(item.meal_count) && Number(item.meal_count) > 0 &&
+      nutrients.every(nutrient => item[nutrient] === null || typeof item[nutrient] === 'number' && Number.isFinite(item[nutrient])) &&
+      Array.isArray(unknown) && unknown.every(nutrient => typeof nutrient === 'string' && nutrients.includes(nutrient)) &&
+      new Set(unknown).size === unknown.length &&
+      Array.isArray(partial) && partial.every(nutrient => typeof nutrient === 'string' && nutrients.includes(nutrient)) &&
+      new Set(partial).size === partial.length && !partial.some(nutrient => unknown.includes(nutrient)) &&
+      nutrients.every(nutrient => unknown.includes(nutrient) === (item[nutrient] === null)) &&
+      time(item.latest_updated_at);
+  })) return false;
+  if (query.source === healthQuerySources.sleep && value.units['*_hours'] !== 'h') return false;
+  if (value.coverage.hasMore) {
+    if (!object(value.coverage.next) || !isHealthQuery({ ...query, cursor: value.coverage.next }) || value.status !== 'partial') return false;
+  } else if (value.coverage.next !== null || value.status !== (
+    value.coverage.detailMetricsTruncated === true ? 'partial' : value.items.length ? 'available' : 'empty'
+  )) return false;
+  return true;
+}
+
+async function readJson(response: Response): Promise<unknown> {
+  const declared = response.headers.get('content-length');
+  if (!response.body || !response.headers.get('content-type')?.toLowerCase().includes('application/json') ||
+      declared !== null && (!/^\d+$/u.test(declared) || Number(declared) > responseLimit)) {
+    await response.body?.cancel();
+    throw new HealthReadError('Health returned an invalid or oversized response.');
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8', { fatal: true });
+  const parts: string[] = []; let bytes = 0;
+  try {
+    while (true) {
+      const part = await reader.read(); if (part.done) break;
+      bytes += part.value.byteLength;
+      if (bytes > responseLimit) throw new HealthReadError('Health returned too much data. Narrow the period.');
+      parts.push(decoder.decode(part.value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+    const value: unknown = JSON.parse(parts.join(''));
+    return value;
+  } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
+}
+async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: HealthQuery, accept = 'application/json'): Promise<unknown> {
+  if (!backendUrl) throw new HealthReadError('The Health backend is not configured.', 'disabled');
+  signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
+  let token: string;
+  try { token = await awaitWithSignal(getAccessToken, signal); }
+  catch { signal.throwIfAborted(); throw new HealthReadError('Sign in again to read your Health records.', 'auth'); }
+  const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
+    method: body ? 'POST' : 'GET', signal, cache: 'no-store',
+    headers: { Authorization: ['Bearer', token].join(' '), Accept: accept, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    if (response.status === 404) throw new HealthReadError('Health is not enabled on this backend.', 'disabled');
+    if (response.status === 401 || response.status === 403) throw new HealthReadError('Health access could not be verified. Sign in as the configured owner.', 'auth');
+    throw new HealthReadError(`Health is unavailable (HTTP ${response.status}).`);
+  }
+  return readJson(response);
+}
+export async function loadHealthSources(backendUrl: string | null, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<HealthSourceId[]> {
+  return runHealthRead(signal, async () => {
+    const value = await requestJson(backendUrl, '/health/capabilities', getAccessToken, signal, undefined, healthCapabilitiesAccept);
+    const source = (input: unknown): input is HealthSourceId => typeof input === 'string' &&
+      Object.values(healthQuerySources).some(known => known === input);
+    if (!object(value) || value.module !== 'health' ||
+        (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== 5 && value.version !== healthCapabilitiesVersion) ||
+        !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
+        new Set(value.sources).size !== value.sources.length) throw new HealthReadError('Health data services are not available yet.', 'disabled');
+    const allowed = value.version === 1 ? healthQuerySourcesV1 : value.version === 2 ? healthQuerySourcesV2
+      : value.version === 3 || value.version === 4 ? healthQuerySourcesV3
+        : value.version === 5 ? healthQuerySourcesV5
+          : [...healthQuerySourcesV6, ...healthQuerySourcesV6WithoutTrainingTargets, ...healthQuerySourcesV5, ...healthQuerySourcesV3];
+    if (value.sources.some(id => !allowed.some(known => known === id))) {
+      throw new HealthReadError(`Health returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
+    }
+    return value.sources;
+  });
+}
+export async function queryHealth(backendUrl: string | null, query: HealthQuery, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<HealthQueryResult> {
+  if (!isHealthQuery(query)) throw new HealthReadError('Choose a valid period and source before loading Health.', 'invalid');
+  return runHealthRead(signal, async () => {
+    const value = await requestJson(backendUrl, '/health/query', getAccessToken, signal, query);
+    if (!isHealthResult(value, query)) throw new HealthReadError('Health returned mismatched or incomplete evidence. No complete result is claimed.');
+    return value;
+  });
+}

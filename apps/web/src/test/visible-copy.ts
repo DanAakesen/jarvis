@@ -3,7 +3,7 @@ import { expect } from 'vitest';
 const forbiddenWord = /\bdaily\b/iu;
 const visibleAttributes = ['aria-label', 'title', 'alt', 'placeholder'] as const;
 
-export function expectNoDailyInRenderedContent(root: HTMLElement) {
+export function expectNoHealthInRenderedContent(root: HTMLElement) {
   const violations: string[] = [];
   const text = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   while (text.nextNode()) {

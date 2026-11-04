@@ -62,8 +62,8 @@ describe('usage report API', () => {
       codexToolCallsToday: null,
       entries: [entry],
       totalEntries: '1',
-      dailyToolUsage: { date: to.toISOString().slice(0, 10), tools: [] },
-      dailyCostTotals: [],
+      healthToolUsage: { date: to.toISOString().slice(0, 10), tools: [] },
+      healthCostTotals: [],
       monthlyCostTotals: [],
       toolCalls: [],
       roleCoverage: expect.arrayContaining([

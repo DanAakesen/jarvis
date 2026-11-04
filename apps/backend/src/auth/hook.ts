@@ -1,13 +1,13 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { localWebOrigin, type BackendConfig } from '../config.js';
-import { exportDevicePaths, validateExportDevice, verifyExportCredential, type NutritionExportCredentialVerifier } from '../daily/nutrition-export/auth.js';
-import { healthUploadRoutes } from '../daily/health-upload/server.js';
-import { dailyMcpMetadataPath, dailyMcpPath } from '../daily/mcp/paths.js';
+import { exportDevicePaths, validateExportDevice, verifyExportCredential, type NutritionExportCredentialVerifier } from '../health/nutrition-export/auth.js';
+import { healthUploadRoutes } from '../health/health-upload/server.js';
+import { healthMcpMetadataPaths, healthMcpPaths } from '../health/mcp/paths.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
   isPcBridgePrincipal, isPhoneEventGridPrincipal, isDeployPrincipal,
-  isDailyConnectorPrincipal, type DailyConnectorPrincipal,
+  isHealthConnectorPrincipal, type HealthConnectorPrincipal,
   type AgentPrincipal, type DeployPrincipal, type PcBridgePrincipal, type PhoneEventGridPrincipal, type RunnerPrincipal,
   type TokenVerifier, type UserPrincipal,
 } from './verify.js';
@@ -24,7 +24,7 @@ declare module 'fastify' {
     pcBridgePrincipal: PcBridgePrincipal | null;
     phoneEventGridPrincipal: PhoneEventGridPrincipal | null;
     deployPrincipal: DeployPrincipal | null;
-    dailyConnectorPrincipal: DailyConnectorPrincipal | null;
+    healthConnectorPrincipal: HealthConnectorPrincipal | null;
     // Set only when the request authenticated with an owner session token instead of an Entra token.
     ownerSession: OwnerSessionContext | null;
   }
@@ -38,9 +38,9 @@ declare module 'fastify' {
     jarvisPhoneMedia?: boolean;
     jarvisPhoneCallback?: boolean;
     jarvisDeploySmoke?: boolean;
-    jarvisDailyMcp?: boolean;
-    jarvisDailyMcpMetadata?: boolean;
-    jarvisDailyMcpMetadataUrl?: string;
+    jarvisHealthMcp?: boolean;
+    jarvisHealthMcpMetadata?: boolean;
+    jarvisHealthMcpMetadataUrl?: string;
   }
 }
 
@@ -70,7 +70,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.decorateRequest('pcBridgePrincipal', null);
   app.decorateRequest('phoneEventGridPrincipal', null);
   app.decorateRequest('deployPrincipal', null);
-  app.decorateRequest('dailyConnectorPrincipal', null);
+  app.decorateRequest('healthConnectorPrincipal', null);
   app.decorateRequest('nutritionExportPrincipal', null);
   app.decorateRequest('ownerSession', null);
   // Owner session tokens carry the `js.` prefix, which no Entra or service token has. With the feature switch
@@ -91,8 +91,8 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   };
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
-    if (request.routeOptions.config?.jarvisDailyMcpMetadata === true &&
-        request.routeOptions.url === dailyMcpMetadataPath && ['GET', 'HEAD'].includes(request.method)) return;
+    if (request.routeOptions.config?.jarvisHealthMcpMetadata === true &&
+        healthMcpMetadataPaths.has(request.routeOptions.url ?? '') && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
     if (request.method === 'GET' && request.routeOptions.url === '/phone/media' &&
         request.routeOptions.config?.jarvisPhoneMedia === true) return;
@@ -128,10 +128,10 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       if (duplicate || !token) throw new AuthenticationDenied(401);
       const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
       reason = 'principal_not_allowed_on_route';
-      if (isDailyConnectorPrincipal(principal)) {
-        if (request.routeOptions.config?.jarvisDailyMcp !== true || request.routeOptions.url !== dailyMcpPath ||
+      if (isHealthConnectorPrincipal(principal)) {
+        if (request.routeOptions.config?.jarvisHealthMcp !== true || !healthMcpPaths.has(request.routeOptions.url ?? '') ||
             !['POST', 'GET', 'DELETE'].includes(request.method)) throw new AuthenticationDenied(403);
-        request.dailyConnectorPrincipal = principal;
+        request.healthConnectorPrincipal = principal;
       } else if (isAgentPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisAgent !== true) throw new AuthenticationDenied(403);
         request.agentPrincipal = principal;
@@ -174,8 +174,8 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         reply.header('Access-Control-Allow-Origin', origin).header('Vary', 'Origin');
       }
       if (statusCode === 401) {
-        const metadata = request.routeOptions.config?.jarvisDailyMcp === true && request.routeOptions.url === dailyMcpPath
-          ? request.routeOptions.config.jarvisDailyMcpMetadataUrl : undefined;
+        const metadata = request.routeOptions.config?.jarvisHealthMcp === true && healthMcpPaths.has(request.routeOptions.url ?? '')
+          ? request.routeOptions.config.jarvisHealthMcpMetadataUrl : undefined;
         reply.header('WWW-Authenticate', metadata ? `Bearer resource_metadata="${metadata}"` : 'Bearer');
       }
       if (error instanceof OwnerSessionThrottled) {

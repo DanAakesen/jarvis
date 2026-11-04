@@ -4,12 +4,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
-import { NutritionStore } from '../daily/nutrition/store.js';
-import { type FoodDefinition, type MealInput, type PlanRequest } from '../daily/nutrition/model.js';
-import { favoriteFingerprint } from '../daily/records.js';
-import { dailyFoodTool } from '../daily/tools/food.js';
-import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
-import { dailySavedFoodTool } from '../daily/tools/saved-food.js';
+import { NutritionStore } from '../health/nutrition/store.js';
+import { type FoodDefinition, type MealInput, type PlanRequest } from '../health/nutrition/model.js';
+import { favoriteFingerprint } from '../health/records.js';
+import { healthFoodTool } from '../health/tools/food.js';
+import { healthFoodReviewTool } from '../health/tools/food-review.js';
+import { healthSavedFoodTool } from '../health/tools/saved-food.js';
 import { createOwnerInteractionService } from '../core/owner-interactions.js';
 import { createConfirmationStore } from './confirmation-store.js';
 import { createConversationStore } from './conversation-store.js';
@@ -322,7 +322,7 @@ describe('inactive nutrition services on real SQL Server', () => {
       server: { ownerObjectId: owner, conversationStore: { getSession: async () => ({
         id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null,
       }) } } } as unknown as FastifyRequest;
-    const tool = dailyFoodTool(request => NutritionStore.forRequest(pool, request, now, {
+    const tool = healthFoodTool(request => NutritionStore.forRequest(pool, request, now, {
       publish: change => { notifications.push(...change.sources); },
     }), () => at.getTime());
     const results = await Promise.all(Array.from({ length: 6 }, () => tool.execute({ operation: 'log_favorite' }, req, signal())));
@@ -351,12 +351,12 @@ describe('inactive nutrition services on real SQL Server', () => {
     let read!: () => void; let secondMayContinue!: () => void;
     const secondRead = new Promise<void>(resolve => { read = resolve; });
     const readGate = new Promise<void>(resolve => { secondMayContinue = resolve; });
-    const first = dailyFoodTool(request => {
+    const first = healthFoodTool(request => {
       const persistence = NutritionStore.forRequest(pool, request, now);
       return { intake: persistence.intake.bind(persistence), lookupSaved: persistence.lookupSaved.bind(persistence),
         log: async (input, authority, signal) => { prepared(); await commitGate; return persistence.log(input, authority, signal); } };
     }, () => at.getTime());
-    const second = dailyFoodTool(request => {
+    const second = healthFoodTool(request => {
       const persistence = NutritionStore.forRequest(pool, request, now);
       let initial = true;
       return { lookupSaved: persistence.lookupSaved.bind(persistence), log: persistence.log.bind(persistence),
@@ -402,7 +402,7 @@ describe('inactive nutrition services on real SQL Server', () => {
     const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
       server: { ownerObjectId: owner, ownerInteractions: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
         conversationStore: conversations } } as unknown as FastifyRequest;
-    const tool = dailyFoodReviewTool(request => NutritionStore.forRequest(pool, request, () => at.toISOString(), {
+    const tool = healthFoodReviewTool(request => NutritionStore.forRequest(pool, request, () => at.toISOString(), {
       publish: change => { notifications.push(...change.sources); },
     }), () => at.getTime());
     let active: Promise<unknown> | undefined;
@@ -470,7 +470,7 @@ describe('inactive nutrition services on real SQL Server', () => {
     const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
       server: { ownerObjectId: owner, ownerInteractions: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
         conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
-    const tool = dailySavedFoodTool(request => NutritionStore.forRequest(pool, request, now, {
+    const tool = healthSavedFoodTool(request => NutritionStore.forRequest(pool, request, now, {
       publish: change => { notifications.push(...change.sources); },
     }), () => at.getTime());
     let active: Promise<unknown> | undefined;

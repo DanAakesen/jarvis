@@ -4,10 +4,10 @@ import { afterAll,beforeAll,beforeEach,describe,expect,it } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations,readDownMigration,readMigrations,revertMigration } from './migrations.js';
-import { NutritionStore } from '../daily/nutrition/store.js';
-import type { MealInput } from '../daily/nutrition/model.js';
-import { NutritionExportStore } from '../daily/nutrition-export/store.js';
-import type { NutritionExportDevice } from '../daily/nutrition-export/auth.js';
+import { NutritionStore } from '../health/nutrition/store.js';
+import type { MealInput } from '../health/nutrition/model.js';
+import { NutritionExportStore } from '../health/nutrition-export/store.js';
+import type { NutritionExportDevice } from '../health/nutrition-export/auth.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Export tests require isolated loopback SQL Server');

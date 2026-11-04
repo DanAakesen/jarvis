@@ -314,6 +314,9 @@ struct JarvisHealthArea: View {
                                     hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                 )
                                 freshnessLine(dashboard)
+                                if let client {
+                                    JarvisHealthSyncSection(client: client, language: language)
+                                }
                             }
                         } else {
                             JarvisLoadingView(title: copy.text(.loading))

@@ -1,0 +1,61 @@
+/* Overview cards: training, health and body share one period. Every tile reserves its size, so loading never moves the layout. */
+.health-top { display: grid; gap: var(--space-3); min-width: 0; margin-block: var(--space-3); }
+/* A swipeable row on phones; the grid takes over at 700px. */
+.health-top-track { display: grid; grid-auto-flow: column; grid-auto-columns: 100%; gap: var(--space-3); overflow-x: auto; overscroll-behavior-x: contain; scroll-behavior: smooth; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.health-top-track::-webkit-scrollbar { display: none; }
+.health-top-card { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); scroll-snap-align: start; scroll-snap-stop: always; }
+.health-top-card > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: 44px; }
+.health-top-card-recovery { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.health-top-card-recovery span { color: var(--text-muted); font-size: var(--type-small); }
+.health-top-card h3 { margin: 0; color: var(--text); font-size: var(--type-subsection); font-weight: 650; }
+.health-page .health-top-card h3 a { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; color: var(--text); text-decoration: none; }
+.health-page .health-top-card h3 a:hover { text-decoration: underline; text-underline-offset: .2em; }
+.health-page .health-top-card h3 .health-top-card-toggle { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.health-page .health-top-card h3 .health-top-card-toggle:hover { text-decoration: underline; text-underline-offset: .2em; }
+.health-top-card h3 svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--motion-press) var(--ease-standard); }
+.health-page .health-top-card h3 a:hover svg, .health-page .health-top-card h3 .health-top-card-toggle[aria-expanded="false"]:hover svg { transform: translateX(2px); }
+.health-page .health-top-card h3 .health-top-card-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.health-top-rings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); justify-items: center; }
+.health-top-card .health-ring-graphic { width: min(5rem, 100%); }
+.health-top-card .health-ring-centre { max-width: 80%; font-size: var(--type-body); }
+.health-top-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.health-top-tiles--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.health-top-tile { display: grid; align-content: start; gap: var(--space-1); min-width: 0; padding: var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); }
+.health-top-tiles--three .health-top-tile { padding: var(--space-2); }
+.health-top-tile p { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.health-top-tile-label { color: var(--text-muted); font-size: var(--type-small); }
+.health-top-tile-value { display: grid; align-content: center; min-height: calc(var(--type-subheading) * var(--line-tight)); color: var(--text); font-size: var(--type-subheading); font-variant-numeric: tabular-nums; font-weight: 650; line-height: var(--line-tight); }
+.health-top-tile-none { color: var(--text-muted); font-weight: 400; cursor: help; }
+.health-top-tiles--three .health-top-tile-value { min-height: calc(var(--type-body) * var(--line-tight) * 2); font-size: var(--type-body); }
+.health-top-tile-note { display: grid; align-content: center; min-height: calc(var(--type-small) * var(--line-body)); color: var(--text-muted); font-size: var(--type-small); }
+.health-top-tile-chart { min-height: 2rem; }
+.health-top-strip { display: grid; align-items: center; min-height: 5.25rem; color: var(--text-muted); font-size: var(--type-small); }
+.health-top-strip [role='region'] { min-width: 0; overflow-x: auto; }
+.health-top-strip [role='region']:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.health-top-strip ul { display: flex; gap: var(--space-2); width: max-content; margin: 0; padding: 0; list-style: none; }
+.health-top-strip li { display: grid; gap: var(--space-1); min-width: 7rem; max-width: 12rem; padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); background: var(--surface-muted); font-size: var(--type-small); }
+.health-top-strip-time, .health-top-strip-kcal { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.health-top-strip-name { overflow: hidden; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.health-top-dots { display: flex; justify-content: center; gap: var(--space-1); }
+.health-page .health-top-dot { display: grid; place-items: center; min-width: 44px; padding: 0; border: 0; background: transparent; }
+.health-top-dot span { width: var(--space-2); height: var(--space-2); border-radius: var(--radius-pill); background: var(--text-muted); }
+.health-top-dot:hover span { background: var(--text); }
+.health-top-dot[aria-current='true'] span { width: var(--space-4); background: var(--focus); }
+/* Ring captions wrap onto a second line on the narrowest phones, so that reservation grows with them. */
+@media (max-width: 360px) {
+  .health-top-rings .health-ring-caption { min-height: calc(var(--type-small) * var(--line-body) * 2); }
+}
+@media (min-width: 700px) {
+  .health-top-track { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; scroll-snap-type: none; }
+  .health-top-card[data-card='training'] { grid-column: 1 / -1; }
+  .health-top-dots { display: none; }
+}
+@media (min-width: 1200px) {
+  .health-top-track { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .health-top-card[data-card='training'] { grid-column: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .health-top-track { scroll-behavior: auto; }
+  .health-top-card h3 svg { transition: none; }
+  .health-page .health-top-card h3 a:hover svg, .health-page .health-top-card h3 .health-top-card-toggle[aria-expanded="false"]:hover svg { transform: none; }
+}

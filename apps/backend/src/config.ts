@@ -43,10 +43,8 @@ export interface BackendConfig {
     teamsResourceAccountObjectId: string;
     publicOrigin: string;
   };
-  /** Present only when JARVIS_DAILY_ENABLED is exactly "true". Absent means Daily is off and Jarvis is unchanged. */
-  dailyEnabled?: true;
-  /** Present only when JARVIS_DAILY_FEEDS_ENABLED is exactly "true"; it does not activate deployment by itself. */
-  dailyFeedsEnabled?: true;
+  /** Present only when JARVIS_HEALTH_ENABLED (or the retired JARVIS_DAILY_ENABLED while the new name is absent) is exactly "true". Absent means Health is off and Jarvis is unchanged. */
+  healthEnabled?: true;
   auth: AuthConfig;
 }
 
@@ -241,13 +239,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     !/^\/subscriptions\/[\da-f-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.Consumption\/budgets\/[a-z\d._()-]+$/iu.test(monthlyBudgetResourceId)) {
     throw new ConfigurationError('JARVIS_MONTHLY_BUDGET_RESOURCE_ID must be an Azure budget resource ID');
   }
-  const dailySetting = env.JARVIS_DAILY_ENABLED;
-  if (dailySetting !== undefined && dailySetting !== 'true' && dailySetting !== 'false') {
-    throw new ConfigurationError('JARVIS_DAILY_ENABLED must be true or false');
-  }
-  const dailyFeedsSetting = env.JARVIS_DAILY_FEEDS_ENABLED;
-  if (dailyFeedsSetting !== undefined && dailyFeedsSetting !== 'true' && dailyFeedsSetting !== 'false') {
-    throw new ConfigurationError('JARVIS_DAILY_FEEDS_ENABLED must be true or false');
+  const healthSetting = env.JARVIS_HEALTH_ENABLED ?? env.JARVIS_DAILY_ENABLED;
+  if (healthSetting !== undefined && healthSetting !== 'true' && healthSetting !== 'false') {
+    throw new ConfigurationError('JARVIS_HEALTH_ENABLED must be true or false');
   }
   const healthUploadSetting = env.JARVIS_HEALTH_UPLOAD_ENABLED;
   if (healthUploadSetting !== undefined && healthUploadSetting !== 'true' && healthUploadSetting !== 'false') {
@@ -292,8 +286,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     healthUploadEnabled: healthUploadSetting === 'true',
     ownerSessionEnabled: ownerSessionSetting === 'true',
     ...(phone ? { phone } : {}),
-    ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
-    ...(dailyFeedsSetting === 'true' ? { dailyFeedsEnabled: true as const } : {}),
+    ...(healthSetting === 'true' ? { healthEnabled: true as const } : {}),
   };
 }
 

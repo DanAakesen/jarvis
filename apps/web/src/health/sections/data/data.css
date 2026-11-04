@@ -1,0 +1,33 @@
+.health-data-embedded { height: auto; min-height: 0; overflow: visible; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
+.health-data-page .health-records { padding: 0; border: 0; border-radius: 0; }
+.health-data-page .health-toolbar { margin-block: var(--space-4); }
+.health-data-page .health-toolbar > label { flex: 0 1 260px; }
+.health-data-page .health-freshness { margin: 0; align-self: center; }
+.health-data-records { min-width: 0; margin-top: var(--space-3); }
+.health-data-records .health-scroll-table { max-width: 100%; }
+.health-data-records .health-record-number { text-align: right; font-variant-numeric: tabular-nums; }
+.health-data-records .health-record-row-header { font-weight: 400; }
+.health-record-cell { display: block; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.health-record-cards { list-style: none; padding: 0; margin: 0; }
+.health-record-cards > li { padding-block: var(--space-4); min-width: 0; }
+.health-record-cards > li + li { border-block-start: 1px solid var(--rule); }
+.health-record-cards h3 { margin: 0; font-size: var(--type-body); overflow-wrap: anywhere; }
+.health-record-cards .health-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: var(--space-3); }
+.health-record-summary { display: grid; gap: var(--space-1); margin-block: var(--space-2); font-size: var(--type-small); color: var(--text-muted); }
+.health-record-summary > span { min-width: 0; overflow-wrap: anywhere; }
+.health-record-panel { margin-top: var(--space-5); padding-block: var(--space-4); border-block: 1px solid var(--rule); }
+.health-record-panel:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.health-record-panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.health-record-panel-heading h3 { margin: 0; font-size: var(--type-subheading); overflow-wrap: anywhere; }
+.health-record-fields dd { white-space: pre-wrap; font-variant-numeric: tabular-nums; }
+.health-record-fields .health-record-fields { margin: 0; }
+.health-data-page .health-pagination { align-items: center; gap: var(--space-2); }
+.health-data-page pre { font-size: var(--type-caption); line-height: var(--line-body); }
+@media (width < 700px) {
+  .health-data-page { min-width: 0; }
+  .health-data-page.health-data-embedded { padding: 0; }
+  .health-data-page .health-toolbar > label { flex: 1 1 130px; }
+  .health-data-page .health-freshness { flex: 1 1 100%; }
+  .health-data-page .health-period { min-width: 0; }
+  .health-record-cards .ghost-button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+}

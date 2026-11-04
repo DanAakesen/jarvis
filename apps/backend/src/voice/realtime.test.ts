@@ -7,7 +7,7 @@ import { capabilityInstructions } from '../core/capability-instructions.js';
 import { defaultSettings } from '../core/settings.js';
 import { builtInModeInstructions } from '../core/presence-instructions.js';
 import { startWorkPresentation } from '../core/work-presentation.js';
-import { dailySourceTools } from '../daily/tools/source-tools.js';
+import { healthSourceTools } from '../health/tools/source-tools.js';
 import {
   createEnglishSessionUpdate,
   createRealtimeSessionUpdate,
@@ -59,7 +59,7 @@ describe('calendar follow-up routing', () => {
 });
 
 describe('Voice Live model tool schemas', () => {
-  const groupedTools = dailySourceTools({} as never, () => ({} as never), () => ({} as never));
+  const groupedTools = healthSourceTools({} as never, () => ({} as never), () => ({} as never));
 
   it.each([
     ['health_summary', ['get_health_summary', 'get_health_history']],

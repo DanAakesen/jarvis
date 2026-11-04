@@ -19,7 +19,7 @@ const tickIntervalMs = 30_000;
 const retryDelayMs = 5 * 60_000;
 const verifyTimeoutMs = 20_000;
 const maxDueRows = 20;
-const maxDailyReminders = 8;
+const maxHealthReminders = 8;
 const ownerClaimLeaseMs = 2 * 60_000;
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 
@@ -260,7 +260,7 @@ export function createReminderTicker(options: {
 
     const today = dayKey(now);
     const alreadySent = await options.reminders.countSent(today);
-    const allowance = Math.max(0, maxDailyReminders - alreadySent);
+    const allowance = Math.max(0, maxHealthReminders - alreadySent);
     const capped = eligible.slice(allowance);
     await Promise.all(capped.map((row) => update(row, { state: 'suppressed', reason: 'daily_cap' })));
     const allowed = eligible.slice(0, allowance);

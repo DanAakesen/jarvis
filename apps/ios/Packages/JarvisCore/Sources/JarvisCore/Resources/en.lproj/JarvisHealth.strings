@@ -100,3 +100,9 @@
 "health.kcalEaten" = "Eaten";
 "health.sleepChart" = "Sleep per day";
 "health.heroPages" = "Health cards";
+"health.sync" = "Sync Apple Health";
+"health.syncing" = "Syncing…";
+"health.syncNever" = "Not synced yet";
+"health.syncComplete" = "Synced %@. Every data type was read.";
+"health.syncPartial" = "Partly synced %@. Missing: %@.";
+"health.syncFailed" = "Sync failed. Try again.";

@@ -9,7 +9,7 @@ describe('SQL tool-call store', () => {
     const request = { input, query, cancel: vi.fn() };
     input.mockReturnValue(request);
     const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
-    const record = createToolCallStore(pool).recordDailyMcp;
+    const record = createToolCallStore(pool).recordHealthMcp;
     if (!record) throw new Error('Connector audit method missing');
     await record({
       requestId: '11111111-1111-4111-8111-111111111111', tool, phase: 'awaiting_confirmation', outcome: 'ok',
