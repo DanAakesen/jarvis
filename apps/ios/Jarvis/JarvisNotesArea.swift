@@ -862,28 +862,27 @@ struct JarvisNotesArea: View {
         do {
             switch selectedTab {
             case .notes, .list:
-                if force || taskList == nil, let result = try? await client.tasks() {
+                if force || taskList == nil, let result = try? await openTasks(client, force: force) {
                     guard !Task.isCancelled else { return }
                     taskList = result
                 }
                 if force || tree == nil {
-                    let nextTree = try await client.folderTree()
+                    let repository = await treeRepository(client)
+                    if !force, tree == nil, let cachedTree = await repository.resolve(cacheOnly: true).value {
+                        await applyTree(cachedTree, force: false)
+                        loading = false
+                    }
+                    let resolved = await repository.resolve(force: force)
                     guard !Task.isCancelled else { return }
-                    tree = nextTree
-                    folders = JarvisNotesPresentation.folderTree(nextTree.directories)
-                    if !topLevelFolders.contains(selectedFolder) { selectedFolder = "" }
-                    groupNotes = [:]
-                    directoryNotes = [:]
-                    groupHasMore = [:]
-                    directoryHasMore = [:]
-                    if nextTree.rootNoteCount > 0 {
-                        expandedFolders.insert("")
-                        await loadDirectory("", offset: 0)
+                    if let nextTree = resolved.value {
+                        if nextTree != tree { await applyTree(nextTree, force: force) }
+                    } else if let error = resolved.error {
+                        throw error
                     }
                 }
             case .tasks:
                 if force || taskList == nil {
-                    let result = try await client.tasks()
+                    let result = try await openTasks(client, force: force)
                     guard !Task.isCancelled else { return }
                     taskList = result
                 }
@@ -897,7 +896,7 @@ struct JarvisNotesArea: View {
             if tree != nil && selectedTab == .notes && groupNotes.isEmpty {
                 if let first = topLevelFolders.first {
                     expandedFolders.insert(first)
-                    await loadNoteGroup(first, offset: 0)
+                    await loadNoteGroup(first, offset: 0, force: force)
                 }
             }
         } catch {
@@ -908,12 +907,58 @@ struct JarvisNotesArea: View {
         }
     }
 
-    private func loadNoteGroup(_ folder: String, offset: Int) async {
+    private func treeRepository(_ client: JarvisNotesClient) async -> JarvisRepository<VaultNoteTree> {
+        await JarvisAppCache.repository(.notes, scope: "tree") { try await client.fetchFolderTree(validator: $0) }
+    }
+
+    /// The open tasks, read through the repository: fresh cache costs no request.
+    private func openTasks(_ client: JarvisNotesClient, force: Bool) async throws -> VaultTaskList {
+        let repository: JarvisRepository<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
+            try await client.fetchOpenTasks(validator: $0)
+        }
+        let resolved = await repository.resolve(force: force)
+        if let value = resolved.value { return value }
+        throw resolved.error ?? JarvisClientError.networkFailure
+    }
+
+    /// The first page of a folder or directory, read through the repository; later pages go straight to the client.
+    private func firstPage(
+        _ client: JarvisNotesClient,
+        folder: String? = nil,
+        directory: String? = nil,
+        force: Bool
+    ) async throws -> VaultNotePage {
+        let scope = folder.map { "folder:\($0)" } ?? "dir:\(directory ?? "")"
+        let repository: JarvisRepository<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: scope) {
+            try await client.fetchNotes(directory: directory, folder: folder, validator: $0)
+        }
+        let resolved = await repository.resolve(force: force)
+        if let value = resolved.value { return value }
+        throw resolved.error ?? JarvisClientError.networkFailure
+    }
+
+    private func applyTree(_ nextTree: VaultNoteTree, force: Bool) async {
+        tree = nextTree
+        folders = JarvisNotesPresentation.folderTree(nextTree.directories)
+        if !topLevelFolders.contains(selectedFolder) { selectedFolder = "" }
+        groupNotes = [:]
+        directoryNotes = [:]
+        groupHasMore = [:]
+        directoryHasMore = [:]
+        if nextTree.rootNoteCount > 0 {
+            expandedFolders.insert("")
+            await loadDirectory("", offset: 0, force: force)
+        }
+    }
+
+    private func loadNoteGroup(_ folder: String, offset: Int, force: Bool = false) async {
         guard let client, !groupLoading.contains(folder) else { return }
         groupLoading.insert(folder)
         defer { _ = groupLoading.remove(folder) }
         do {
-            let page = try await client.notes(folder: folder, offset: offset)
+            let page = try await (offset == 0
+                ? firstPage(client, folder: folder, force: force)
+                : client.notes(folder: folder, offset: offset))
             let previous = offset == 0 ? [] : groupNotes[folder] ?? []
             groupNotes[folder] = previous + page.notes
             groupHasMore[folder] = page.hasMore
@@ -929,12 +974,14 @@ struct JarvisNotesArea: View {
         await loadNoteGroup(folder, offset: groupNotes[folder]?.count ?? 0)
     }
 
-    private func loadDirectory(_ directory: String, offset: Int) async {
+    private func loadDirectory(_ directory: String, offset: Int, force: Bool = false) async {
         guard let client, !directoryLoading.contains(directory) else { return }
         directoryLoading.insert(directory)
         defer { _ = directoryLoading.remove(directory) }
         do {
-            let page = try await client.notes(directory: directory, offset: offset)
+            let page = try await (offset == 0
+                ? firstPage(client, directory: directory, force: force)
+                : client.notes(directory: directory, offset: offset))
             let previous = offset == 0 ? [] : directoryNotes[directory] ?? []
             directoryNotes[directory] = previous + page.notes
             directoryHasMore[directory] = page.hasMore
@@ -1031,6 +1078,7 @@ struct JarvisNotesArea: View {
         defer { _ = pendingTaskIDs.remove(task.id) }
         do {
             _ = try await client.setTaskDone(task, done: true)
+            await JarvisAppCache.invalidateAll(.tasks)
             refreshVersion += 1
         } catch {
             guard !Task.isCancelled else { return }

@@ -6,7 +6,7 @@ import os
 /// The kinds of cached data and how long each stays fresh. Within the window no request is made; after it the cached
 /// value is shown and refreshed in the background.
 public enum JarvisRepositoryKind: String, CaseIterable, Sendable {
-    case notes, tasks, calendar, factory, usage, status, proactive, health, settings
+    case notes, tasks, calendar, factory, usage, status, proactive, health, settings, notifications
 
     public var freshness: Duration {
         switch self {
@@ -18,7 +18,13 @@ public enum JarvisRepositoryKind: String, CaseIterable, Sendable {
         case .proactive: .seconds(120)
         case .health: .seconds(300)
         case .settings: .seconds(600)
+        case .notifications: .seconds(30)
         }
+    }
+
+    /// The storage key for one kind and an optional scope (a project, a period, a folder).
+    public func key(scope: String = "") -> String {
+        scope.isEmpty ? rawValue : "\(rawValue):\(scope)"
     }
 }
 
@@ -35,6 +41,17 @@ public enum JarvisRepositoryUpdate<Value: Sendable>: Sendable {
     case refreshing
     case fresh(Value)
     case failed(any Error, cached: Value?)
+}
+
+/// The outcome of `JarvisRepository.resolve`: the best value available and, when the refresh failed, why.
+public struct JarvisResolved<Value: Sendable>: Sendable {
+    public let value: Value?
+    public let error: (any Error)?
+
+    public init(value: Value?, error: (any Error)?) {
+        self.value = value
+        self.error = error
+    }
 }
 
 /// Owns the per-account cache. Switching account or signing out removes everything stored for the previous account.
@@ -77,6 +94,17 @@ public actor JarvisCache {
         await storage.write(JarvisCacheEntry(data: entry.data, fetchedAt: now(), validator: entry.validator), account: account, key: key)
     }
 
+    /// Drops one entry after a write that changed it, so the next open fetches instead of showing the old list.
+    public func invalidate(kind: JarvisRepositoryKind, scope: String = "") async {
+        await invalidate(kind.key(scope: scope))
+    }
+
+    /// Drops every scope of one kind (for example all note folders after a note was saved).
+    public func invalidateAll(kind: JarvisRepositoryKind) async {
+        guard let account else { return }
+        await storage.remove(account: account, keyPrefix: kind.rawValue)
+    }
+
     func invalidate(_ key: String) async {
         guard let account else { return }
         await storage.remove(account: account, key: key)
@@ -96,7 +124,7 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
 
     public init(cache: JarvisCache, kind: JarvisRepositoryKind, scope: String = "", fetch: @escaping Fetch) {
         self.cache = cache
-        self.key = scope.isEmpty ? kind.rawValue : "\(kind.rawValue):\(scope)"
+        self.key = kind.key(scope: scope)
         let parts = kind.freshness.components
         self.freshness = Double(parts.seconds) + Double(parts.attoseconds) / 1e18
         self.fetch = fetch
@@ -118,6 +146,30 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
     public func cachedValue() async -> Value? {
         guard let entry = await cache.read(key) else { return nil }
         return try? JSONDecoder().decode(Value.self, from: entry.data)
+    }
+
+    /// One-shot access for loaders that assemble several reads into a single screen. `cacheOnly` returns the cached
+    /// value without any request (instant first paint). Otherwise the call waits for the refresh and keeps the cached
+    /// value when it fails, reporting the failure beside it.
+    public func resolve(cacheOnly: Bool = false, force: Bool = false) async -> JarvisResolved<Value> {
+        if cacheOnly { return JarvisResolved(value: await cachedValue(), error: nil) }
+        var value: Value?
+        var error: (any Error)?
+        for await update in updates(force: force) {
+            switch update {
+            case .cached(let cached, _):
+                value = cached
+            case .fresh(let fresh):
+                value = fresh
+                error = nil
+            case .refreshing:
+                break
+            case .failed(let failure, let cached):
+                value = cached ?? value
+                error = failure
+            }
+        }
+        return JarvisResolved(value: value, error: error)
     }
 
     /// Marks the entry out of date (foreground, push notification) while keeping it for display.

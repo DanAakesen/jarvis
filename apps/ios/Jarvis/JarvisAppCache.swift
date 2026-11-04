@@ -28,4 +28,16 @@ enum JarvisAppCache {
         await bindIfNeeded()
         return JarvisRepository(cache: shared, kind: kind, scope: scope, fetch: fetch)
     }
+
+    /// After a write that changed a cached list, drop that entry so the next open fetches it.
+    static func invalidate(_ kind: JarvisRepositoryKind, scope: String = "") async {
+        await bindIfNeeded()
+        await shared.invalidate(kind: kind, scope: scope)
+    }
+
+    /// After a write that can change every scope of one kind (a saved note, a completed task).
+    static func invalidateAll(_ kind: JarvisRepositoryKind) async {
+        await bindIfNeeded()
+        await shared.invalidateAll(kind: kind)
+    }
 }

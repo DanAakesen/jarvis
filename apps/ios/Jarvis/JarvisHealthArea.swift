@@ -45,6 +45,12 @@ enum JarvisHealthReadState: Equatable {
     case failed
 }
 
+/// How one dashboard pass reads: `cacheOnly` paints cached data without any request, `force` refreshes everything.
+struct JarvisHealthLoadMode {
+    var cacheOnly = false
+    var force = false
+}
+
 struct JarvisHealthRead {
     var state: JarvisHealthReadState
     var items: [[String: JSONValue]] = []
@@ -56,10 +62,10 @@ struct JarvisHealthRead {
     static var loading: Self { Self(state: .loading) }
     static var notServed: Self { Self(state: .notServed) }
 
-    init(_ result: JarvisHealthQueryResult) {
-        items = result.items
-        hasMore = result.coverage.hasMore
-        updatedAt = Self.latestTimestamp(result.freshness)
+    init(_ stored: JarvisHealthStoredRead) {
+        items = stored.items
+        hasMore = stored.hasMore
+        updatedAt = Self.latestTimestamp(stored.freshness)
         state = items.isEmpty ? .empty : .available
     }
 
@@ -326,7 +332,7 @@ struct JarvisHealthArea: View {
             }
             .scrollIndicators(.hidden)
             .refreshable {
-                await loadDashboard()
+                await loadDashboard(force: true)
                 await loadLifts()
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -348,7 +354,7 @@ struct JarvisHealthArea: View {
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {
-            await loadDashboard()
+            await loadDashboard(force: refreshVersion > 0)
         }
         .task(id: "\(liftsAvailable)-\(refreshVersion)") {
             await loadLifts()
@@ -551,13 +557,21 @@ struct JarvisHealthArea: View {
             .compactMap(\.failure).first ?? data.bodyMetrics.compactMap(\.read.failure).first ?? .failed
     }
 
-    private func loadDashboard() async {
-        let previous = dashboard?.preset == periodPreset ? dashboard : nil
+    /// Reads through the repositories. A cache-only pass paints the cached dashboard at once (no request), then the
+    /// normal pass refreshes only what is stale. `force` (pull to refresh, a saved workout, a sync event) refreshes
+    /// everything.
+    private func loadDashboard(force: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
         if dashboard == nil {
             dashboard = JarvisHealthDashboardData(preset: periodPreset)
+            if !force { await buildDashboard(mode: JarvisHealthLoadMode(cacheOnly: true)) }
         }
+        await buildDashboard(mode: JarvisHealthLoadMode(force: force))
+    }
+
+    private func buildDashboard(mode: JarvisHealthLoadMode) async {
+        let previous = dashboard?.preset == periodPreset ? dashboard : nil
         guard let client else {
             var failure = JarvisHealthDashboardData(preset: periodPreset)
             failure.failure = .unavailable
@@ -568,74 +582,71 @@ struct JarvisHealthArea: View {
 
         var next = JarvisHealthDashboardData(preset: periodPreset)
         let selectedPeriod = period
-        do {
-            next.capabilities = try await client.capabilities()
-        } catch is CancellationError {
-            return
-        } catch {
+        let capabilitiesRead: (value: JarvisHealthCapabilities?, failure: JarvisHealthFailure?) = await resolved(
+            .health, scope: "capabilities", mode: mode
+        ) { try await client.fetchCapabilities(validator: $0) }
+        if Task.isCancelled { return }
+        next.failure = capabilitiesRead.failure
+        guard let capabilities = capabilitiesRead.value else {
+            if mode.cacheOnly { return }
             if var stale = previous {
-                stale.failure = JarvisHealthFailure(error)
+                stale.failure = next.failure ?? .failed
                 stale.loading = false
                 dashboard = stale
             } else {
-                next.failure = JarvisHealthFailure(error)
+                next.failure = next.failure ?? .failed
                 next.loading = false
-                guard !Task.isCancelled else { return }
                 dashboard = next
             }
             return
         }
+        next.capabilities = capabilities
 
-        do {
-            next.trainingTargets = try await client.trainingTargets()
-        } catch is CancellationError {
-            return
-        } catch {
-            next.trainingTargetFailure = JarvisHealthFailure(error)
-            next.trainingTargets = previous?.trainingTargets
-        }
-        do {
-            next.nutritionTargets = try await client.nutritionTargets()
-        } catch is CancellationError {
-            return
-        } catch {
-            next.nutritionTargetFailure = JarvisHealthFailure(error)
-            next.nutritionTargets = previous?.nutritionTargets
-        }
+        let training: (value: JarvisHealthTargets?, failure: JarvisHealthFailure?) = await resolved(
+            .health, scope: "training-targets", mode: mode
+        ) { try await client.fetchTrainingTargets(validator: $0) }
+        next.trainingTargets = training.value ?? previous?.trainingTargets
+        next.trainingTargetFailure = training.failure
+        let nutrition: (value: JarvisNutritionTargets?, failure: JarvisHealthFailure?) = await resolved(
+            .health, scope: "nutrition-targets", mode: mode
+        ) { try await client.fetchNutritionTargets(validator: $0) }
+        next.nutritionTargets = nutrition.value ?? previous?.nutritionTargets
+        next.nutritionTargetFailure = nutrition.failure
+        if Task.isCancelled { return }
 
         next.workouts = await read(
             .workouts, period: selectedPeriod, limit: 200,
-            capabilities: next.capabilities, previous: previous?.workouts, client: client
+            capabilities: next.capabilities, previous: previous?.workouts, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.steps = await read(
             .metrics, period: selectedPeriod, metric: "step_count", limit: 500,
-            capabilities: next.capabilities, previous: previous?.steps, client: client
+            capabilities: next.capabilities, previous: previous?.steps, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.nutritionDays = await read(
             .nutritionDays, period: selectedPeriod, limit: 400,
-            capabilities: next.capabilities, previous: previous?.nutritionDays, client: client
+            capabilities: next.capabilities, previous: previous?.nutritionDays, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.meals = await read(
             .meals, period: selectedPeriod, limit: 100,
-            capabilities: next.capabilities, previous: previous?.meals, client: client
+            capabilities: next.capabilities, previous: previous?.meals, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.sleep = await read(
             .sleep, period: sleepPeriod(selectedPeriod), limit: 500,
-            capabilities: next.capabilities, previous: previous?.sleep, client: client
+            capabilities: next.capabilities, previous: previous?.sleep, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.metricCatalog = await read(
             .metricCatalog, period: selectedPeriod, limit: 500,
-            capabilities: next.capabilities, previous: previous?.metricCatalog, client: client
+            capabilities: next.capabilities, previous: previous?.metricCatalog, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.sync = await read(
             .sync, period: nil, limit: nil,
-            capabilities: next.capabilities, previous: previous?.sync, client: client
+            capabilities: next.capabilities, previous: previous?.sync, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
         next.bodyMetrics = await loadBodyMetrics(
@@ -643,11 +654,28 @@ struct JarvisHealthArea: View {
             period: selectedPeriod,
             capabilities: next.capabilities,
             previous: previous?.bodyMetrics ?? [],
-            client: client
+            client: client,
+            mode: mode
         )
         next.loading = false
         guard !Task.isCancelled else { return }
         dashboard = next
+    }
+
+    /// One cached read: the value (cached or fresh) and, when the refresh failed, the failure beside it. A
+    /// cache-only pass never reports a failure.
+    private func resolved<Value: Codable & Sendable & Equatable>(
+        _ kind: JarvisRepositoryKind,
+        scope: String,
+        mode: JarvisHealthLoadMode,
+        fetch: @escaping JarvisRepository<Value>.Fetch
+    ) async -> (value: Value?, failure: JarvisHealthFailure?) {
+        let repository = await JarvisAppCache.repository(kind, scope: scope, fetch: fetch)
+        let result = await repository.resolve(cacheOnly: mode.cacheOnly, force: mode.force)
+        if let error = result.error, !(error is CancellationError) {
+            return (result.value, JarvisHealthFailure(error))
+        }
+        return (result.value, nil)
     }
 
     private func read(
@@ -657,7 +685,8 @@ struct JarvisHealthArea: View {
         limit: Int?,
         capabilities: JarvisHealthCapabilities?,
         previous: JarvisHealthRead?,
-        client: JarvisHealthClient
+        client: JarvisHealthClient,
+        mode: JarvisHealthLoadMode
     ) async -> JarvisHealthRead {
         guard capabilities?.availableSources.contains(source.rawValue) == true else {
             return .notServed
@@ -669,7 +698,24 @@ struct JarvisHealthArea: View {
                 metric: metric,
                 limit: limit
             )
-            return JarvisHealthRead(try await client.queryAll(query))
+            let scope = [
+                "read", source.rawValue, period?.startDate ?? "-", period?.endDate ?? "-", metric ?? "-",
+            ].joined(separator: ":")
+            let repository: JarvisRepository<JarvisHealthStoredRead> = await JarvisAppCache.repository(
+                .health, scope: scope
+            ) { _ in try await client.fetchStoredRead(query) }
+            let result = await repository.resolve(cacheOnly: mode.cacheOnly, force: mode.force)
+            if Task.isCancelled { return previous ?? .loading }
+            if let stored = result.value {
+                var read = JarvisHealthRead(stored)
+                if let error = result.error {
+                    read.failure = JarvisHealthFailure(error)
+                    read.isStale = true
+                }
+                return read
+            }
+            if mode.cacheOnly { return previous ?? .loading }
+            return JarvisHealthRead(error: result.error ?? JarvisClientError.networkFailure, previous: previous)
         } catch is CancellationError {
             return previous ?? .loading
         } catch {
@@ -682,7 +728,8 @@ struct JarvisHealthArea: View {
         period: JarvisHealthPeriod,
         capabilities: JarvisHealthCapabilities?,
         previous: [JarvisHealthMetricSeries],
-        client: JarvisHealthClient
+        client: JarvisHealthClient,
+        mode: JarvisHealthLoadMode
     ) async -> [JarvisHealthMetricSeries] {
         let definitions: [(JarvisHealthLogic.BodyMetric, JarvisHealthLocalizationKey)] = [
             (.weight, .weight), (.fatPercent, .bodyFat), (.leanMass, .leanMass),
@@ -696,7 +743,7 @@ struct JarvisHealthArea: View {
             let old = previous.first { $0.metricName == metricName }?.read
             let read = await self.read(
                 .metrics, period: period, metric: metricName, limit: 500,
-                capabilities: capabilities, previous: old, client: client
+                capabilities: capabilities, previous: old, client: client, mode: mode
             )
             if Task.isCancelled { return metrics }
             metrics.append(JarvisHealthMetricSeries(metricName: metricName, title: title, read: read))

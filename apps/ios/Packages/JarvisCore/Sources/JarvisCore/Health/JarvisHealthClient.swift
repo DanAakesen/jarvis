@@ -85,6 +85,23 @@ public struct JarvisHealthQueryResult: Decodable, Sendable {
     public let coverage: JarvisHealthCoverage
 }
 
+/// What the Health page keeps from one data read so it can show it again without asking the backend.
+public struct JarvisHealthStoredRead: Codable, Equatable, Sendable {
+    public let items: [[String: JSONValue]]
+    public let hasMore: Bool
+    public let freshness: [String: JSONValue]?
+
+    public init(items: [[String: JSONValue]], hasMore: Bool, freshness: [String: JSONValue]?) {
+        self.items = items
+        self.hasMore = hasMore
+        self.freshness = freshness
+    }
+
+    public init(_ result: JarvisHealthQueryResult) {
+        self.init(items: result.items, hasMore: result.coverage.hasMore, freshness: result.freshness)
+    }
+}
+
 public struct JarvisHealthTargets: Codable, Equatable, Sendable {
     public let targets: Values
 
@@ -272,6 +289,12 @@ public final class JarvisHealthClient: Sendable {
             throw JarvisHealthClientError.invalidResponse
         }
         return result
+    }
+
+    /// A full read for the repository layer. Health reads are POSTs with no validator, so every refresh is a full
+    /// read; the freshness window is what spares the backend.
+    public func fetchStoredRead(_ query: JarvisHealthQuery) async throws -> JarvisFetchResult<JarvisHealthStoredRead> {
+        .modified(JarvisHealthStoredRead(try await queryAll(query)), validator: nil)
     }
 
     public func queryAll(

@@ -70,9 +70,6 @@ struct JarvisSettingsArea: View {
     @State private var signingOut = false
     @State private var confirmCurrentSignOut = false
     @State private var confirmAllSignOut = false
-    private let loadingSkeletonKeys: [JarvisSettingsLocalizationKey] = [
-        .appearanceRow, .personalityRow, .identityRow, .voiceRow,
-    ]
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -87,7 +84,7 @@ struct JarvisSettingsArea: View {
             VStack(spacing: 0) {
                 header
                 if loading && response == nil {
-                    loadingSkeleton
+                    loadingState
                 } else if response == nil {
                     errorState
                 } else {
@@ -182,7 +179,7 @@ struct JarvisSettingsArea: View {
                     .accessibilityAddTraits(.updatesFrequently)
             }
         }
-        .refreshable { await reload() }
+        .refreshable { await reload(force: true) }
     }
 
     @ViewBuilder
@@ -237,28 +234,14 @@ struct JarvisSettingsArea: View {
         VStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
             Text(message(for: loadError ?? .offline))
                 .foregroundStyle(.secondary)
-            JarvisLabelledButton(title: copy(.retry)) { Task { await reload() } }
+            JarvisLabelledButton(title: copy(.retry)) { Task { await reload(force: true) } }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var loadingSkeleton: some View {
-        JarvisList {
-            ForEach(loadingSkeletonKeys, id: \.self) { key in
-                HStack {
-                    Text(copy(key))
-                        .redacted(reason: .placeholder)
-                    Spacer()
-                    Capsule()
-                        .fill(.tertiary)
-                        .frame(width: JarvisDesignTokens.settingsSkeletonValueWidth, height: JarvisDesignTokens.settingsSkeletonValueHeight)
-                }
-                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
-            }
-        }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .accessibilityHidden(true)
+    private var loadingState: some View {
+        JarvisLoadingView(title: copy(.loading))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var hasVisibleContent: Bool {
@@ -411,6 +394,7 @@ struct JarvisSettingsArea: View {
                         options: current.options,
                         credentials: credentials
                     )
+                    Task { await JarvisAppCache.invalidate(.settings) }
                 },
                 onFailure: noteFailure
             )
@@ -427,6 +411,7 @@ struct JarvisSettingsArea: View {
                 readOnly: readOnly,
                 onSaved: { fresh in
                     response = fresh
+                    Task { await JarvisAppCache.invalidate(.settings) }
                     if let theme = fresh.string(area: "appearance", key: "theme") {
                         storedTheme = theme
                     }
@@ -436,23 +421,33 @@ struct JarvisSettingsArea: View {
         }
     }
 
-    private func reload() async {
+    /// Reads through the repository: the cached settings show at once, a stale entry refreshes in the background
+    /// and a failed refresh keeps what is on screen.
+    private func reload(force: Bool = false) async {
         guard let client else {
             loadError = .unavailable
             loading = false
             return
         }
-        loading = true
-        do {
-            let fresh = try await client.loadSettings()
-            response = fresh
-            loadError = nil
-            readOnly = false
-            if let theme = fresh.string(area: "appearance", key: "theme") {
-                storedTheme = theme
+        loading = response == nil
+        let repository: JarvisRepository<JarvisSettingsResponse> = await JarvisAppCache.repository(.settings) {
+            try await client.fetchSettings(validator: $0)
+        }
+        for await update in repository.updates(force: force) {
+            if Task.isCancelled { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                response = fresh
+                loadError = nil
+                readOnly = false
+                if let theme = fresh.string(area: "appearance", key: "theme") {
+                    storedTheme = theme
+                }
+            case .refreshing:
+                break
+            case .failed(let error, _):
+                noteFailure(error)
             }
-        } catch {
-            noteFailure(error)
         }
         loading = false
     }

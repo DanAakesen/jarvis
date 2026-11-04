@@ -128,14 +128,16 @@ final class JarvisTodayModel: ObservableObject {
 
     // MARK: Loading
 
-    func refresh() async {
+    /// Reads through the repositories: cached cards show at once and only stale ones refresh. `force` (retry)
+    /// refreshes every card.
+    func refresh(force: Bool = false) async {
         now = dependencies.now()
         if let fixture = dependencies.fixture {
             apply(fixture)
             return
         }
-        async let loadedCalendar: Void = loadCalendar()
-        async let loadedTasks: Void = loadTasks()
+        async let loadedCalendar: Void = loadCalendar(force: force)
+        async let loadedTasks: Void = loadTasks(force: force)
         async let loadedSteps: Void = loadSteps()
         async let loadedWorkouts: Void = loadWorkouts()
         _ = await (loadedCalendar, loadedTasks, loadedSteps, loadedWorkouts)
@@ -148,7 +150,7 @@ final class JarvisTodayModel: ObservableObject {
 
     func refreshTasks() async {
         guard !isFixture else { return }
-        await loadTasks()
+        await loadTasks(force: false)
     }
 
     func complete(_ task: VaultTask) async {
@@ -159,7 +161,8 @@ final class JarvisTodayModel: ObservableObject {
         }
         guard let client = dependencies.notes else { return }
         _ = try? await client.setTaskDone(task, done: true)
-        await loadTasks()
+        await JarvisAppCache.invalidateAll(.tasks)
+        await loadTasks(force: true)
     }
 
     /// Saves a gym log on `day`, at the current time of day, through the vault path.
@@ -190,26 +193,57 @@ final class JarvisTodayModel: ObservableObject {
         workouts = JarvisTodaySection(value: fixture.gymEntries, isLoading: false)
     }
 
-    private func loadCalendar() async {
+    private func loadCalendar(force: Bool) async {
         let start = timeCalendar.startOfDay(for: now)
         let end = timeCalendar.date(byAdding: .day, value: 2, to: start) ?? start
-        let result = await fetch { try await self.dependencies.calendar.entries(from: start, to: end) }
-        calendar = Self.merged(calendar, result.map { JarvisTodayAgenda.upcoming($0, now: self.now) })
+        let source = dependencies.calendar
+        let currentNow = now
+        await load(
+            .calendar, scope: String(Int(start.timeIntervalSince1970)), force: force, into: \.calendar,
+            fetch: { _ in .modified(try await source.entries(from: start, to: end), validator: nil) },
+            map: { JarvisTodayAgenda.upcoming($0, now: currentNow) }
+        )
         guard let client = dependencies.notes else { return }
-        let found = await fetch { try await client.notes().notes }
-        notes = Self.merged(notes, found)
+        await load(
+            .notes, scope: "home", force: force, into: \.notes,
+            fetch: { try await client.fetchNotes(validator: $0) },
+            map: { (page: VaultNotePage) in page.notes }
+        )
     }
 
-    private func loadTasks() async {
+    private func loadTasks(force: Bool) async {
         guard let client = dependencies.notes else {
             taskData = Self.merged(taskData, .failure(.unavailable))
             return
         }
-        let result = await fetch { () -> JarvisTodayTaskData in
-            let list = try await client.tasks()
-            return JarvisTodayTaskData(tasks: list.items, today: list.today)
+        await load(
+            .tasks, scope: "open", force: force, into: \.taskData,
+            fetch: { try await client.fetchOpenTasks(validator: $0) },
+            map: { (list: VaultTaskList) in JarvisTodayTaskData(tasks: list.items, today: list.today) }
+        )
+    }
+
+    /// Cached value first, then a quiet refresh when it is stale; a failed refresh keeps the value on the card.
+    private func load<Value: Codable & Sendable & Equatable, Output: Equatable>(
+        _ kind: JarvisRepositoryKind,
+        scope: String,
+        force: Bool,
+        into section: ReferenceWritableKeyPath<JarvisTodayModel, JarvisTodaySection<Output>>,
+        fetch: @escaping JarvisRepository<Value>.Fetch,
+        map: (Value) -> Output
+    ) async {
+        let repository = await JarvisAppCache.repository(kind, scope: scope, fetch: fetch)
+        for await update in repository.updates(force: force) {
+            if Task.isCancelled { return }
+            switch update {
+            case .cached(let value, _), .fresh(let value):
+                self[keyPath: section] = Self.merged(self[keyPath: section], .success(map(value)))
+            case .refreshing:
+                break
+            case .failed(let error, _):
+                self[keyPath: section] = Self.merged(self[keyPath: section], .failure(Self.failure(for: error)))
+            }
         }
-        taskData = Self.merged(taskData, result)
     }
 
     private func loadSteps() async {

@@ -41,7 +41,7 @@ struct JarvisStatusArea: View {
                     .padding(.horizontal)
                     .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
-            .refreshable { await refresh() }
+            .refreshable { await refresh(force: true) }
             .accessibilityIdentifier("status.scroll")
         }
         .jarvisPageHeader {
@@ -52,24 +52,32 @@ struct JarvisStatusArea: View {
         }
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)
-        .task(id: reloadToken) { await refresh() }
+        .task(id: reloadToken) { await refresh(force: reloadToken > 0) }
         .task { await keepClockFresh() }
     }
 
-    private func refresh() async {
+    /// Reads through the repository: cached data first, then a quiet refresh when it is stale (or forced). A failed
+    /// refresh keeps the cached snapshot on screen and marks the page partial.
+    private func refresh(force: Bool = false) async {
         guard let client else {
             state = JarvisStatusViewState(snapshot: state.snapshot, failure: .notConfigured, isLoading: false)
             return
         }
         state.begin()
-        do {
-            let snapshot = try await client.snapshot()
+        let repository: JarvisRepository<JarvisStatusSnapshot> = await JarvisAppCache.repository(.status) {
+            try await client.fetchSnapshot(validator: $0)
+        }
+        for await update in repository.updates(force: force) {
             if Task.isCancelled { return }
-            tick = Date()
-            state.succeeded(snapshot)
-        } catch {
-            if Task.isCancelled { return }
-            state.failed(error)
+            switch update {
+            case .cached(let snapshot, _), .fresh(let snapshot):
+                tick = Date()
+                state.succeeded(snapshot)
+            case .refreshing:
+                break
+            case .failed(let error, _):
+                state.failed(error)
+            }
         }
     }
 

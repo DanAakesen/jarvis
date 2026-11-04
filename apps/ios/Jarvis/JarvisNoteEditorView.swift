@@ -171,6 +171,7 @@ struct JarvisNoteEditorView: View {
         defer { saving = false }
         do {
             _ = try await client.saveNote(path: note.path, content: draft, sha: sha)
+            await JarvisAppCache.invalidateAll(.notes)
             do {
                 let refreshed = try await client.readNote(path: note.path)
                 note = refreshed
