@@ -166,3 +166,9 @@
 "settings.role.embedding" = "Indlejring";
 "settings.role.codex" = "Codex";
 "settings.role.copilot" = "Copilot";
+"settings.row.healthGoals" = "Sundhedsmål";
+"settings.goal.sleep" = "Søvnmål (timer)";
+"settings.goal.kcal" = "Kalorier (kcal)";
+"settings.goal.protein" = "Protein (g)";
+"settings.goal.carbs" = "Kulhydrater (g)";
+"settings.goal.fat" = "Fedt (g)";

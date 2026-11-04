@@ -206,6 +206,7 @@ struct JarvisHealthArea: View {
     private let gymModel: JarvisTodayModel?
 
     @State private var periodPreset: JarvisHealthPeriodPreset = .today
+    @State private var goals = JarvisHealthGoals.load()
     @State private var searchText = ""
     @State private var refreshVersion = 0
     @State private var dashboard: JarvisHealthDashboardData?
@@ -283,9 +284,10 @@ struct JarvisHealthArea: View {
                                 )
                                 .accessibilityIdentifier("health.empty")
                             } else if dashboard.capabilities != nil {
-                                JarvisHealthRingsSection(
+                                JarvisHealthHeroCarousel(
                                     data: dashboard,
                                     period: period,
+                                    goals: goals,
                                     language: language
                                 ) { periodMenu }
                                 JarvisHealthSummarySection(
@@ -311,13 +313,6 @@ struct JarvisHealthArea: View {
                                     client: client,
                                     language: language,
                                     hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                )
-                                JarvisHealthNutritionSection(
-                                    read: dashboard.nutritionDays,
-                                    targets: dashboard.nutritionTargets,
-                                    targetFailure: dashboard.nutritionTargetFailure,
-                                    period: period,
-                                    language: language
                                 )
                                 freshnessLine(dashboard)
                                 if let client {
@@ -354,6 +349,7 @@ struct JarvisHealthArea: View {
         }
         .jarvisPageHeader { header }
         .animation(.easeInOut(duration: 0.25), value: dashboard?.preset)
+        .onAppear { goals = JarvisHealthGoals.load() }
         .jarvisAmbientBackground()
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
@@ -625,7 +621,7 @@ struct JarvisHealthArea: View {
         )
         guard !Task.isCancelled else { return }
         next.nutritionDays = await read(
-            .nutritionDays, period: selectedPeriod, limit: 400,
+            .nutritionDays, period: chartPeriod(selectedPeriod), limit: 400,
             capabilities: next.capabilities, previous: previous?.nutritionDays, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
@@ -635,7 +631,7 @@ struct JarvisHealthArea: View {
         )
         guard !Task.isCancelled else { return }
         next.sleep = await read(
-            .sleep, period: sleepPeriod(selectedPeriod), limit: 500,
+            .sleep, period: chartPeriod(sleepPeriod(selectedPeriod)), limit: 500,
             capabilities: next.capabilities, previous: previous?.sleep, client: client, mode: mode
         )
         guard !Task.isCancelled else { return }
@@ -749,6 +745,14 @@ struct JarvisHealthArea: View {
             metrics.append(JarvisHealthMetricSeries(metricName: metricName, title: title, read: read))
         }
         return metrics
+    }
+
+    /// The hero charts always show the last seven days, so reads reach back that far whatever the period.
+    private func chartPeriod(_ period: JarvisHealthPeriod) -> JarvisHealthPeriod {
+        let anchor = periodPreset == .yesterday ? now.addingTimeInterval(-86_400) : now
+        let week = JarvisHealthPeriod.make(.sevenDays, now: anchor)
+        guard period.endDate == week.endDate, week.startDate < period.startDate else { return period }
+        return JarvisHealthPeriod(startDate: week.startDate, endDate: period.endDate) ?? period
     }
 
     private func sleepPeriod(_ period: JarvisHealthPeriod) -> JarvisHealthPeriod {
