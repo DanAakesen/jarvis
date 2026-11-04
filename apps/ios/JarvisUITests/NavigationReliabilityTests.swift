@@ -39,6 +39,35 @@ final class NavigationReliabilityTests: XCTestCase {
         }
     }
 
+    /// Health's plus menu and the Home tiles open the very same two sheets: same presentation, same identifiers.
+    func testHealthPlusAndHomeTilesOpenTheSameLogSheetsInDanishAndEnglish() {
+        for language in ["da", "en"] {
+            launch(language: language)
+            defer { app.terminate() }
+            var identifiers: [String: [Bool]] = [:]
+            func probe(_ key: String) {
+                let session = app.buttons["today.workout.session.chest"]
+                let name = app.textFields["today.lift.name"]
+                XCTAssertTrue(session.waitForExistence(timeout: 5) || name.waitForExistence(timeout: 5), "\(language) \(key)")
+                identifiers[key] = [
+                    session.exists, name.exists,
+                    app.buttons["sheet.cancel"].exists, app.buttons["sheet.confirm"].exists,
+                    app.descendants(matching: .any)["today.log.date"].exists,
+                ]
+                cancelSheet()
+            }
+            navigate(to: "today")
+            tap(app.buttons["today.logWorkout"]); probe("home.workout")
+            tap(app.buttons["today.logLift"]); probe("home.lift")
+            navigate(to: "health")
+            tap(app.buttons["health.plus"]); tap(app.buttons["health.logWorkout"]); probe("health.workout")
+            tap(app.buttons["health.plus"]); tap(app.buttons["health.logLift"]); probe("health.lift")
+            XCTAssertEqual(identifiers["home.workout"], identifiers["health.workout"], "\(language) workout sheet")
+            XCTAssertEqual(identifiers["home.lift"], identifiers["health.lift"], "\(language) lift sheet")
+            XCTAssertNotEqual(identifiers["health.workout"], identifiers["health.lift"])
+        }
+    }
+
     func testMenuRemainsHittableFiveSecondsAfterLaunchInDanish() {
         assertMenuAfterStartup(language: "da")
     }

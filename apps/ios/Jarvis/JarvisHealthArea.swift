@@ -196,7 +196,8 @@ struct JarvisHealthArea: View {
     let onRetryConfiguration: () -> Void
     private let now: Date
     private let presentNewLiftAfterLoading: Bool
-    private let workoutLogger: (any JarvisWorkoutLogging)?
+    /// The Home model, so the plus menu opens the very same log sheets as the Home tiles.
+    private let gymModel: JarvisTodayModel?
 
     @State private var periodPreset: JarvisHealthPeriodPreset = .today
     @State private var searchText = ""
@@ -223,7 +224,7 @@ struct JarvisHealthArea: View {
         now: Date = Date(),
         workoutInitiallySelected: Bool = false,
         presentNewLiftAfterLoading: Bool = false,
-        workoutLogger: (any JarvisWorkoutLogging)? = nil
+        gymModel: JarvisTodayModel? = nil
     ) {
         self.client = client
         self.language = language
@@ -231,7 +232,7 @@ struct JarvisHealthArea: View {
         self.onRetryConfiguration = onRetryConfiguration
         self.now = now
         self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
-        self.workoutLogger = workoutLogger
+        self.gymModel = gymModel
         _trackWorkout = State(initialValue: workoutInitiallySelected)
     }
 
@@ -353,24 +354,19 @@ struct JarvisHealthArea: View {
         .task(id: "\(liftsAvailable)-\(refreshVersion)") {
             await loadLifts()
         }
-        .sheet(isPresented: $newLiftPresented) {
-            JarvisHealthNewLiftSheet(
-                client: client,
-                exercises: pastExercises,
-                language: language,
-                onSaved: { refreshVersion += 1 }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+        .sheet(isPresented: $newLiftPresented, onDismiss: { refreshVersion += 1 }) {
+            if let gymModel {
+                JarvisTodayGymSheet(model: gymModel, language: language, kind: .lift)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         }
-        .sheet(isPresented: $newWorkoutPresented) {
-            JarvisHealthNewWorkoutSheet(
-                logger: workoutLogger ?? client,
-                language: language,
-                onSaved: { refreshVersion += 1 }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+        .sheet(isPresented: $newWorkoutPresented, onDismiss: { refreshVersion += 1 }) {
+            if let gymModel {
+                JarvisTodayGymSheet(model: gymModel, language: language, kind: .workout)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
         }
         .task {
             guard observeRefreshEvents, let client else { return }
@@ -402,13 +398,14 @@ struct JarvisHealthArea: View {
             } label: {
                 Label(copy.text(.logLift), systemImage: "dumbbell")
             }
-            .disabled(!liftsAvailable || liftsLoading)
+            .disabled(gymModel == nil)
             .accessibilityIdentifier("health.logLift")
             Button {
                 newWorkoutPresented = true
             } label: {
                 Label(copy.text(.logWorkout), systemImage: "figure.run")
             }
+            .disabled(gymModel == nil)
             .accessibilityIdentifier("health.logWorkout")
         }
     }
