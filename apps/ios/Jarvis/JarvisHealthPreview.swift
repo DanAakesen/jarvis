@@ -149,7 +149,7 @@ enum JarvisHealthPreview {
                   "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.nutrition.days",
-                    "startDate": "2026-10-31",
+                    "startDate": "2026-10-25",
                     "endDate": "2026-10-31",
                     "limit": 400
                   },
@@ -157,17 +157,18 @@ enum JarvisHealthPreview {
                     "statusCode": 200,
                     "body": {
                       "source": "daily.nutrition.days",
-                      "items": [{
-                        "meal_date": "2026-10-31",
-                        "meal_count": 3,
-                        "energy_kcal": 1450,
-                        "protein_grams": 92,
-                        "partial_nutrients": [],
-                        "unknown_nutrients": []
-                      }],
+                      "items": [
+                        {"meal_date": "2026-10-25", "meal_count": 3, "energy_kcal": 2000, "protein_grams": 118, "carbohydrates_grams": 230, "fat_grams": 66, "partial_nutrients": [], "unknown_nutrients": []},
+                        {"meal_date": "2026-10-26", "meal_count": 3, "energy_kcal": 2250, "protein_grams": 131, "carbohydrates_grams": 260, "fat_grams": 74, "partial_nutrients": [], "unknown_nutrients": []},
+                        {"meal_date": "2026-10-27", "meal_count": 3, "energy_kcal": 1900, "protein_grams": 104, "carbohydrates_grams": 210, "fat_grams": 60, "partial_nutrients": [], "unknown_nutrients": []},
+                        {"meal_date": "2026-10-28", "meal_count": 3, "energy_kcal": 2100, "protein_grams": 125, "carbohydrates_grams": 240, "fat_grams": 70, "partial_nutrients": [], "unknown_nutrients": []},
+                        {"meal_date": "2026-10-29", "meal_count": 3, "energy_kcal": 2300, "protein_grams": 140, "carbohydrates_grams": 270, "fat_grams": 78, "partial_nutrients": [], "unknown_nutrients": []},
+                        {"meal_date": "2026-10-30", "meal_count": 3, "energy_kcal": 1850, "protein_grams": 99, "carbohydrates_grams": 205, "fat_grams": 58, "partial_nutrients": [], "unknown_nutrients": []},
+                        {"meal_date": "2026-10-31", "meal_count": 3, "energy_kcal": 1450, "protein_grams": 92, "carbohydrates_grams": 160, "fat_grams": 48, "partial_nutrients": [], "unknown_nutrients": []}
+                      ],
                       "status": "available",
                       "freshness": null,
-                      "coverage": {"returned": 1, "hasMore": false, "next": null}
+                      "coverage": {"returned": 7, "hasMore": false, "next": null}
                     }
                   }
                 },
@@ -202,7 +203,7 @@ enum JarvisHealthPreview {
                   "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.sleep",
-                    "startDate": "2026-10-30",
+                    "startDate": "2026-10-25",
                     "endDate": "2026-10-31",
                     "limit": 500
                   },
@@ -210,14 +211,18 @@ enum JarvisHealthPreview {
                     "statusCode": 200,
                     "body": {
                       "source": "daily.health.sleep",
-                      "items": [{
-                        "sleep_date": "2026-10-31",
-                        "total_sleep_hours": 7.5,
-                        "asleep_hours": 7.2
-                      }],
+                      "items": [
+                        {"sleep_date": "2026-10-25", "total_sleep_hours": 6.8, "asleep_hours": 6.8, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 3.9, "awake_hours": 0.4},
+                        {"sleep_date": "2026-10-26", "total_sleep_hours": 7.4, "asleep_hours": 7.4, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 4.5, "awake_hours": 0.4},
+                        {"sleep_date": "2026-10-27", "total_sleep_hours": 8.1, "asleep_hours": 8.1, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 5.2, "awake_hours": 0.4},
+                        {"sleep_date": "2026-10-28", "total_sleep_hours": 6.2, "asleep_hours": 6.2, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 3.3, "awake_hours": 0.4},
+                        {"sleep_date": "2026-10-29", "total_sleep_hours": 7.0, "asleep_hours": 7.0, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 4.1, "awake_hours": 0.4},
+                        {"sleep_date": "2026-10-30", "total_sleep_hours": 7.8, "asleep_hours": 7.8, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 4.9, "awake_hours": 0.4},
+                        {"sleep_date": "2026-10-31", "total_sleep_hours": 7.5, "asleep_hours": 7.5, "deep_hours": 1.2, "rem_hours": 1.7, "light_hours": 4.6, "awake_hours": 0.4}
+                      ],
                       "status": "available",
                       "freshness": null,
-                      "coverage": {"returned": 1, "hasMore": false, "next": null}
+                      "coverage": {"returned": 7, "hasMore": false, "next": null}
                     }
                   }
                 },

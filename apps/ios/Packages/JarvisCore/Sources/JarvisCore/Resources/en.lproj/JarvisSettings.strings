@@ -166,3 +166,9 @@
 "settings.role.embedding" = "Embedding";
 "settings.role.codex" = "Codex";
 "settings.role.copilot" = "Copilot";
+"settings.row.healthGoals" = "Health goals";
+"settings.goal.sleep" = "Sleep goal (hours)";
+"settings.goal.kcal" = "Calories (kcal)";
+"settings.goal.protein" = "Protein (g)";
+"settings.goal.carbs" = "Carbs (g)";
+"settings.goal.fat" = "Fat (g)";

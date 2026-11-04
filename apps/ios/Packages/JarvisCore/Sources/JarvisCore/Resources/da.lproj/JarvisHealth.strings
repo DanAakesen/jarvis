@@ -90,6 +90,16 @@
 "health.workoutType.legsCore" = "Ben + core";
 "health.workoutType.cardio" = "Cardio";
 "health.workoutType.other" = "Andet";
+"health.deepSleep" = "Dyb";
+"health.remSleep" = "REM";
+"health.lightSleep" = "Let";
+"health.awake" = "Vågen";
+"health.protein" = "Protein";
+"health.carbs" = "Kulhydrater";
+"health.fat" = "Fedt";
+"health.kcalEaten" = "Spist";
+"health.sleepChart" = "Søvn pr. dag";
+"health.heroPages" = "Sundhedskort";
 "health.sync" = "Synkroniser Apple Sundhed";
 "health.syncing" = "Synkroniserer…";
 "health.syncNever" = "Ikke synkroniseret endnu";

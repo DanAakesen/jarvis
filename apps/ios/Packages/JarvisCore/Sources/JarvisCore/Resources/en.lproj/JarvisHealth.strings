@@ -90,6 +90,16 @@
 "health.workoutType.legsCore" = "Legs + core";
 "health.workoutType.cardio" = "Cardio";
 "health.workoutType.other" = "Other";
+"health.deepSleep" = "Deep";
+"health.remSleep" = "REM";
+"health.lightSleep" = "Light";
+"health.awake" = "Awake";
+"health.protein" = "Protein";
+"health.carbs" = "Carbs";
+"health.fat" = "Fat";
+"health.kcalEaten" = "Eaten";
+"health.sleepChart" = "Sleep per day";
+"health.heroPages" = "Health cards";
 "health.sync" = "Sync Apple Health";
 "health.syncing" = "Syncing…";
 "health.syncNever" = "Not synced yet";
