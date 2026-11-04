@@ -149,6 +149,8 @@
 "voice.showCaptions" = "Vis undertekster";
 "voice.screenShareUnavailable" = "Skærmdeling er ikke tilgængelig: denne version indeholder ikke Jarvis' udsendelsesudvidelse.";
 "notes.overview" = "Overblik";
+"notes.links" = "links";
+"notes.recent" = "Seneste";
 "notes.openTasks" = "Åbne opgaver";
 "notes.folderCount" = "Mapper";
 "notes.rootNotes" = "Noter i roden";
