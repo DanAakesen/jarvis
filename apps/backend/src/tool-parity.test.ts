@@ -19,7 +19,7 @@ import { VOICE_CAPABILITY_DISCOVERY_TOOL, VOICE_CAPABILITY_EXECUTION_TOOL } from
 import { createGoogleModule } from './google/tools.js';
 import { createWorkspacesModule } from './core/workspaces.js';
 import type sql from 'mssql';
-import { composeDaily } from './daily/composition.js';
+import { composeHealth } from './health/composition.js';
 import type { ConversationStore } from './core/conversation-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -81,10 +81,10 @@ class FakeSocket extends EventEmitter {
 }
 
 function fixture() {
-  const daily = composeDaily({
+  const daily = composeHealth({
     enabled: true, pool: {} as sql.ConnectionPool, ownerObjectId: config.auth.ownerObjectId,
   });
-  if (!daily) throw new Error('Daily fixture did not compose');
+  if (!daily) throw new Error('Health fixture did not compose');
   const app = buildApp(config, undefined, {
     modules: [coreModule, conversationModule, factoryModule, daily, additionalTools],
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
@@ -94,10 +94,10 @@ function fixture() {
 }
 
 async function voiceFixture() {
-  const daily = composeDaily({
+  const daily = composeHealth({
     enabled: true, pool: {} as sql.ConnectionPool, ownerObjectId: config.auth.ownerObjectId,
   });
-  if (!daily) throw new Error('Daily fixture did not compose');
+  if (!daily) throw new Error('Health fixture did not compose');
   const routes = new Map<string, (browser: WebSocket, request: FastifyRequest) => void>();
   const sockets: FakeSocket[] = [];
   const conversationStore = {

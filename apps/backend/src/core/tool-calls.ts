@@ -13,7 +13,7 @@ export interface CodexToolUsageCount {
   readonly count: string;
 }
 
-export interface DailyMcpAuditRecord {
+export interface HealthMcpAuditRecord {
   readonly requestId: string;
   readonly tool: 'read_nutrition' | 'lookup_food' | 'log_food' | 'correct_food' | 'delete_food' | 'read_food_preferences' | 'manage_saved_food';
   readonly phase: 'awaiting_confirmation' | ToolCallOutcome;
@@ -22,7 +22,7 @@ export interface DailyMcpAuditRecord {
 
 export interface ToolCallStore {
   record(call: ToolCallRecord): Promise<void>;
-  recordDailyMcp?(call: DailyMcpAuditRecord): Promise<void>;
+  recordHealthMcp?(call: HealthMcpAuditRecord): Promise<void>;
   listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 
@@ -71,7 +71,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
       return confirmation;
     }
     if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential' ||
-      tool === 'health_feed' || tool === 'proactive_preferences' || tool === 'proactive_item_feedback') && typeof confirmation === 'string' &&
+      tool === 'proactive_preferences' || tool === 'proactive_item_feedback') && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&
         !Array.from(confirmation).some((character) => {
           const code = character.charCodeAt(0);

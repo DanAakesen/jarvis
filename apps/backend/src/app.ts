@@ -33,12 +33,12 @@ import type { ProjectStore } from './factory/projects.js';
 import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-view.js';
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
-import { registerHealthUploadRoutes,type HealthUploadOptions } from './daily/health-upload/server.js';
-import { ownerId } from './daily/health-upload/contracts.js';
-import { HealthProcessingWorker } from './daily/health/worker.js';
-import type { SqlHealthProcessor } from './daily/health/processor.js';
-import { registerHealthCapabilityRoutes } from './daily/health-upload/capability-routes.js';
-import type { SqlHealthCapabilities } from './daily/health-upload/sql-capabilities.js';
+import { registerHealthUploadRoutes,type HealthUploadOptions } from './health/health-upload/server.js';
+import { ownerId } from './health/health-upload/contracts.js';
+import { HealthProcessingWorker } from './health/health/worker.js';
+import type { SqlHealthProcessor } from './health/health/processor.js';
+import { registerHealthCapabilityRoutes } from './health/health-upload/capability-routes.js';
+import type { SqlHealthCapabilities } from './health/health-upload/sql-capabilities.js';
 import type { SettingsStore } from './core/settings.js';
 import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
@@ -86,7 +86,7 @@ export interface BuildAppOptions {
   readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
-  readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
+  readonly nutritionExportAuth?: import('./health/nutrition-export/auth.js').NutritionExportCredentialVerifier;
   /** Default-off health upload composition; production supplies it only behind JARVIS_HEALTH_UPLOAD_ENABLED. */
   readonly healthUpload?: HealthUploadOptions;
   /** Owner session service; production supplies it only behind JARVIS_OWNER_SESSION_ENABLED. Ignored while the switch is off. */

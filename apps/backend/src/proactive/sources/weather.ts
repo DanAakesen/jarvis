@@ -6,7 +6,7 @@ import { sanitizeFactText } from '../todo-file.js';
 
 const requestTimeoutMs = 15_000;
 const responseLimit = 128 * 1024;
-const requiredDailyFields = [
+const requiredHealthFields = [
   'time',
   'weather_code',
   'temperature_2m_max',
@@ -65,7 +65,7 @@ function forecastUrl(latitude: number, longitude: number): URL {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', String(latitude));
   url.searchParams.set('longitude', String(longitude));
-  url.searchParams.set('daily', requiredDailyFields.slice(1).join(','));
+  url.searchParams.set('daily', requiredHealthFields.slice(1).join(','));
   url.searchParams.set('forecast_days', '2');
   url.searchParams.set('timezone', 'auto');
   return url;
@@ -74,7 +74,7 @@ function forecastUrl(latitude: number, longitude: number): URL {
 function forecastFacts(value: unknown, observedAt: string): SourceFact[] | null {
   if (!isObject(value) || !isObject(value.daily)) return null;
   const daily = value.daily;
-  const arrays = requiredDailyFields.map((key) => daily[key]);
+  const arrays = requiredHealthFields.map((key) => daily[key]);
   if (arrays.some((items) => !Array.isArray(items) || items.length < 2)) return null;
   const [dates, codes, highs, lows, chances, amounts, winds] = arrays as [
     unknown[], unknown[], unknown[], unknown[], unknown[], unknown[], unknown[],

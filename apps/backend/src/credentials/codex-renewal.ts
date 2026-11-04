@@ -121,7 +121,7 @@ export async function runCodexRenewalOnce(
   return result;
 }
 
-export function startDailyCodexRenewalJob(
+export function startHealthCodexRenewalJob(
   store: CredentialStatusStore,
   client: Pick<FoundryClient, 'startCodexRenewal' | 'status' | 'deleteSession'>,
   onResult: (result: RenewalResult, details: RenewalDiagnostics) => void,

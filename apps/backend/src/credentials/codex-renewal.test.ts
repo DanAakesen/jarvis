@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CredentialStatusStore } from './credential-status.js';
-import { runCodexRenewalOnce, startDailyCodexRenewalJob } from './codex-renewal.js';
+import { runCodexRenewalOnce, startHealthCodexRenewalJob } from './codex-renewal.js';
 import { FoundryClientError, type FoundryClient, type InvocationSnapshot } from '../foundry/client.js';
 
 function fixture(status = 'completed', result: Record<string, unknown> | null = {
@@ -138,7 +138,7 @@ describe('Codex renewal job', () => {
     const { store, client } = fixture();
     vi.mocked(client.startCodexRenewal).mockRejectedValue(new FoundryClientError('http', 'start', 404));
     const onResult = vi.fn();
-    const stop = startDailyCodexRenewalJob(store, client, onResult);
+    const stop = startHealthCodexRenewalJob(store, client, onResult);
     try {
       await vi.advanceTimersByTimeAsync(0);
       expect(onResult).toHaveBeenLastCalledWith('uncertain', { kind: 'http', statusCode: 404 });
@@ -173,7 +173,7 @@ describe('Codex renewal job', () => {
     const { store, client } = fixture();
     vi.mocked(store.acquireCodexRenewalLease).mockRejectedValue(new Error('private-database-error'));
     const onResult = vi.fn();
-    const stop = startDailyCodexRenewalJob(store, client, onResult);
+    const stop = startHealthCodexRenewalJob(store, client, onResult);
     try {
       await vi.advanceTimersByTimeAsync(0);
       expect(onResult).toHaveBeenLastCalledWith('uncertain', { kind: 'internal' });

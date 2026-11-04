@@ -32,8 +32,8 @@ import type { TaskController, TaskRecord, TaskStore } from '../factory/task-stor
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import { createOwnerInteractionService } from '../core/owner-interactions.js';
-import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
-import type { MealInput } from '../daily/nutrition/model.js';
+import { healthFoodReviewTool } from '../health/tools/food-review.js';
+import type { MealInput } from '../health/nutrition/model.js';
 import {
   createDanishVoiceAgentEndpoint,
   DANISH_VOICE_AGENT_NAME,
@@ -3797,7 +3797,6 @@ describe('backend-relayed Voice Live WebSocket', () => {
     { outcome: 'ok', name: 'health_food_review', timeout: 180_000 },
     { outcome: 'ok', name: 'health_saved_food', timeout: 180_000 },
     { outcome: 'ok', name: 'health_nutrition_targets', timeout: 180_000 },
-    { outcome: 'ok', name: 'health_feed', timeout: 210_000 },
     { outcome: 'ok', name: 'health_food_lookup', timeout: 30_000 },
     { outcome: 'ok', name: 'health_summary', timeout: 30_000 },
     { outcome: 'ok', name: 'health_nutrition_history', timeout: 180_000 },
@@ -4205,7 +4204,7 @@ describe('food estimate confirmation turns', () => {
       rows.set(input.idempotencyKey, saved);
       return saved;
     });
-    const tool = dailyFoodReviewTool(() => ({
+    const tool = healthFoodReviewTool(() => ({
       intake: async key => rows.get(key) ?? null, lookupSaved: async () => null, log,
       correct: vi.fn(), remove: vi.fn(),
     }));

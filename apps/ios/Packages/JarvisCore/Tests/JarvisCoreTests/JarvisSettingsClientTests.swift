@@ -103,7 +103,7 @@ final class JarvisSettingsClientTests: XCTestCase {
           "interactions": [
             {
               "method": "PATCH",
-              "path": "/api/daily/training-targets",
+              "path": "/api/health/training-targets",
               "requestBody": {"gymSessionsPerWeek": 3},
               "response": {
                 "statusCode": 200,
@@ -228,7 +228,7 @@ final class JarvisSettingsClientTests: XCTestCase {
             {"method":"GET","path":"/api/models","response":{"statusCode":200,"body":{
               "source":"arm","deployments":[{"name":"fixture-deployment","model":"fixture-model","version":"v1","sku":"Standard","capacity":1,"capabilities":["chat"],"reasoningEfforts":["none"]}]
             }}},
-            {"method":"GET","path":"/api/daily/training-targets","response":{"statusCode":200,"body":{
+            {"method":"GET","path":"/api/health/training-targets","response":{"statusCode":200,"body":{
               "targets":{"gymSessionsPerWeek":null,"runSessionsPerWeek":null,"dailySteps":null},
               "bounds":{
                 "gymSessionsPerWeek":{"label":"Synthetic gym","unit":"sessions","min":0,"max":7},
@@ -237,7 +237,7 @@ final class JarvisSettingsClientTests: XCTestCase {
               },
               "missing":["gymSessionsPerWeek","runSessionsPerWeek","dailySteps"],"updatedAt":null
             }}},
-            {"method":"GET","path":"/api/daily/nutrition-targets","response":{"statusCode":200,"body":{
+            {"method":"GET","path":"/api/health/nutrition-targets","response":{"statusCode":200,"body":{
               "targets":{"restingKcal":null,"deficitKcal":null,"proteinGrams":null},
               "bounds":{
                 "restingKcal":{"label":"Synthetic resting","unit":"kcal","min":500,"max":5000},
@@ -273,7 +273,7 @@ final class JarvisSettingsClientTests: XCTestCase {
 
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.map(\.path), [
-            "/api/models", "/api/daily/training-targets", "/api/daily/nutrition-targets",
+            "/api/models", "/api/health/training-targets", "/api/health/nutrition-targets",
             "/api/health/upload-credential", "/api/proactive/settings", "/api/routines", "/api/me",
         ])
         await assertConsumed(transport)

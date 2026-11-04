@@ -28,7 +28,7 @@ import { createProductionModules } from './production-modules.js';
 import { createBackendLogsModule } from './operations/backend-logs.js';
 import { createToolRegistry } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
-import { composeDaily } from './daily/composition.js';
+import { composeHealth } from './health/composition.js';
 import { createMemoryOwnerReminderStore } from './proactive/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
@@ -41,15 +41,15 @@ const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
 )) as { maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
-const dailyToolNames = [
+const healthToolNames = [
   'health_query', 'health_show', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
   'health_summary', 'health_nutrition_history', 'health_coach_status',
 ];
 const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback', 'owner_reminders'];
 const proactiveOwner = '11111111-1111-4111-8111-111111111111';
 
-// Daily is composed by default here so the size gates below always cover the largest catalogue the server can run.
-function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean } = {}) {
+// Health is composed by default here so the size gates below always cover the largest catalogue the server can run.
+function modulesWithEveryFeature(options: { health?: boolean; proactive?: boolean } = {}) {
   const frameStore = new FrameStore();
   return createProductionModules({
     core: coreModule,
@@ -75,8 +75,8 @@ function modulesWithEveryFeature(options: { daily?: boolean; proactive?: boolean
     screenVision: createScreenVisionModule({} as never, frameStore),
     visionWatch: createVisionWatchModule({} as never),
     voiceRelay: createVoiceRelayModule({} as never),
-    daily: composeDaily({
-      enabled: options.daily !== false,
+    health: composeHealth({
+      enabled: options.health !== false,
       pool: {} as never,
       ownerObjectId: proactiveOwner,
     }),
@@ -127,7 +127,7 @@ describe('production tool catalogue', () => {
       'core', 'conversation', 'factory', 'operations', 'task-recipes', 'vault', 'web-research',
       'html-research', 'google', 'github-webhook', 'pc-bridge', 'phone', 'phone-status',
       'browser-agent', 'image-generation', 'html-view', 'weather', 'workspaces', 'workspace-pins',
-      'screen-vision', 'vision-watch', 'voice', 'daily', 'proactive', 'backend-logs',
+      'screen-vision', 'vision-watch', 'voice', 'health', 'proactive', 'backend-logs',
     ]);
   });
 
@@ -211,15 +211,15 @@ describe('production tool catalogue', () => {
     expect(off.some(({ id }) => id === 'proactive')).toBe(false);
   });
 
-  it('leaves the production module list and tool catalogue unchanged when Daily is off', () => {
+  it('leaves the production module list and tool catalogue unchanged when Health is off', () => {
     const on = modulesWithEveryFeature();
-    const off = modulesWithEveryFeature({ daily: false });
-    expect(off.map(({ id }) => id)).toEqual(on.map(({ id }) => id).filter((id) => id !== 'daily'));
+    const off = modulesWithEveryFeature({ health: false });
+    expect(off.map(({ id }) => id)).toEqual(on.map(({ id }) => id).filter((id) => id !== 'health'));
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
     expect(offNames.filter((name) => name.startsWith('health_') || name.startsWith('daily_'))).toEqual([]);
-    expect(createToolRegistry(on).list().map(({ name }) => name).filter((name) => !dailyToolNames.includes(name)))
+    expect(createToolRegistry(on).list().map(({ name }) => name).filter((name) => !healthToolNames.includes(name)))
       .toEqual(offNames);
-    expect(on.find(({ id }) => id === 'daily')!.tools.map(({ name }) => name)).toEqual(dailyToolNames);
+    expect(on.find(({ id }) => id === 'health')!.tools.map(({ name }) => name)).toEqual(healthToolNames);
   });
 
   it('passes the smoke contract with the real all-features composed registry', async () => {

@@ -22,18 +22,18 @@ type MenuEntry =
   | { kind: 'context'; key: 'context'; label: 'Context panel'; icon: 'context' };
 
 /** Chat, Health and Workspaces have persistent bottom controls; the sheet lists the remaining destinations. */
-function menuPages(dailyEnabled: boolean, proactiveEnabled: boolean, healthSections: boolean): readonly MenuPage[] {
+function menuPages(healthEnabled: boolean, proactiveEnabled: boolean, healthSections: boolean): readonly MenuPage[] {
   const proactive = proactiveEnabled ? [{ to: '/proactive', label: 'Proactive', icon: 'sparkle' as const }] : [];
-  const health = dailyEnabled && healthSections ? [{ to: '/health', label: 'Health', icon: 'health' as const }] : [];
+  const health = healthEnabled && healthSections ? [{ to: '/health', label: 'Health', icon: 'health' as const }] : [];
   return [...proactive, ...health, ...pages];
 }
 
-export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled = false, proactiveEnabled = false, sections }: {
+export function MobileMenu({ open, onClose, onNavigate, onContext, healthEnabled = false, proactiveEnabled = false, sections }: {
   open: boolean;
   onClose: () => void;
   onNavigate: () => void;
   onContext: () => void;
-  dailyEnabled?: boolean;
+  healthEnabled?: boolean;
   proactiveEnabled?: boolean;
   /** The pages inside the area that is open, listed under that area's own link (the rail's sidebar does not exist on a phone). */
   sections?: { label: string; links: readonly AreaSectionLink[] };
@@ -43,7 +43,7 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
   const returnFocus = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
   const [pageIndex, setPageIndex] = useState(0);
-  const entries: MenuEntry[] = menuPages(dailyEnabled, proactiveEnabled, sections?.label === 'Health').flatMap((page) => {
+  const entries: MenuEntry[] = menuPages(healthEnabled, proactiveEnabled, sections?.label === 'Health').flatMap((page) => {
     const currentSection = sections?.label === page.label;
     return [
       { kind: 'page' as const, key: page.to, label: page.label, to: page.to, ...(page.end ? { end: page.end } : {}), icon: page.icon, currentSection },
@@ -141,9 +141,9 @@ export function MobileMenu({ open, onClose, onNavigate, onContext, dailyEnabled 
   );
 }
 
-export function MobileBottomNav({ menuOpen, dailyEnabled = false, workspacesOpen = false, onToggleWorkspaces, onOpenMenu, onNavigate }: {
+export function MobileBottomNav({ menuOpen, healthEnabled = false, workspacesOpen = false, onToggleWorkspaces, onOpenMenu, onNavigate }: {
   menuOpen: boolean;
-  dailyEnabled?: boolean;
+  healthEnabled?: boolean;
   workspacesOpen?: boolean;
   onToggleWorkspaces: () => void;
   onOpenMenu: () => void;
@@ -159,7 +159,7 @@ export function MobileBottomNav({ menuOpen, dailyEnabled = false, workspacesOpen
       <Link className="mobile-bottom-nav-link" to="/" aria-current={isChat ? 'page' : undefined} onClick={onNavigate}>
         <ShellIcon name="chat" /><span>Chat</span>
       </Link>
-      {dailyEnabled && <Link className="mobile-bottom-nav-link" to="/health" aria-current={isHealth ? 'page' : undefined} onClick={onNavigate}>
+      {healthEnabled && <Link className="mobile-bottom-nav-link" to="/health" aria-current={isHealth ? 'page' : undefined} onClick={onNavigate}>
         <ShellIcon name="health" /><span>Health</span>
       </Link>}
       <button className="mobile-bottom-nav-link" type="button" aria-pressed={workspacesOpen}
