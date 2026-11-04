@@ -3797,7 +3797,6 @@ describe('backend-relayed Voice Live WebSocket', () => {
     { outcome: 'ok', name: 'health_food_review', timeout: 180_000 },
     { outcome: 'ok', name: 'health_saved_food', timeout: 180_000 },
     { outcome: 'ok', name: 'health_nutrition_targets', timeout: 180_000 },
-    { outcome: 'ok', name: 'health_feed', timeout: 210_000 },
     { outcome: 'ok', name: 'health_food_lookup', timeout: 30_000 },
     { outcome: 'ok', name: 'health_summary', timeout: 30_000 },
     { outcome: 'ok', name: 'health_nutrition_history', timeout: 180_000 },

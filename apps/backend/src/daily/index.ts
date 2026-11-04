@@ -1,4 +1,4 @@
-import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets } from '@jarvis/contracts';
+import { dailyContractVersion, dailyCapabilitiesVersion, dailyModuleId, dailyViewIds, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV5, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutTrainingTargets } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { resolveDailyOwner } from './owner.js';
 import type { DailyData } from './query.js';
@@ -16,9 +16,7 @@ import { trainingTargetsRoutes } from './routes/training-targets.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
 import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
 import type { TrainingTargetsAccess } from './training/targets-store.js';
-import { dailyFeedTool } from './tools/feed.js';
 import { dailySourceTools } from './tools/source-tools.js';
-import { dailyFeedRoutes } from './feeds/routes.js';
 import { liftRoutes } from './routes/lifts.js';
 import { workoutRoutes } from './routes/workouts.js';
 
@@ -33,7 +31,6 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
   if (trainingTargets && !data) throw new TypeError('Daily training targets require shared Daily data');
   if (nutritionSuggestions && !nutritionTargets) throw new TypeError('Daily nutrition suggestions require nutrition targets');
   const tools = data ? [dailyQueryTool(data.query), dailyShowTool(data.query),
-    ...(data.feeds ? [dailyFeedTool(data.feeds)] : []),
     ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition, Date.now, data.foodLookup)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
     ...(nutritionTargets ? [dailyNutritionTargetsTool(nutritionTargets)] : []),
@@ -46,7 +43,6 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
     registerRoutes: async (app) => {
       if (data) {
         await app.register(dailyQueryRoutes(data.query));
-        if (data.feeds) await app.register(dailyFeedRoutes(data.feeds));
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (data.lifts) await app.register(liftRoutes(data.lifts));
@@ -99,7 +95,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           module: dailyModuleId,
           version,
           stage: internalNutrition || savedNutrition || nutritionTargets ? 'internal-nutrition-rehearsal'
-            : data?.lifts ? 'lift-log-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
+            : data?.lifts ? 'lift-log-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
           pages: [],
@@ -107,27 +103,13 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
           ...(connector ? { connector: { transport: 'streamable-http', path: '/daily/mcp', writes: connector.writesEnabled === true } } : {}),
           ...(data ? {
             sources: version === 1 ? dailyQuerySourcesV1 : version === 2 ? dailyQuerySourcesV2
-              : version === 3 ? dailyQuerySourcesV3
-                : version === 4
-                  ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                    ? dailyQuerySourcesV4 : dailyQuerySourcesV3
-                  : version === 5
-                    ? data.trainingTargets
-                    ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                      ? dailyQuerySourcesV5 : dailyQuerySourcesV5WithoutFeeds
-                    : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                      ? dailyQuerySourcesV4 : dailyQuerySourcesV3
-                    : data.lifts
-                    ? request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                      ? data.trainingTargets
-                        ? data.feeds ? dailyQuerySourcesV6 : dailyQuerySourcesV6WithoutFeeds
-                        : data.feeds ? dailyQuerySourcesV6WithoutTrainingTargets : dailyQuerySourcesV6WithoutFeedsOrTrainingTargets
-                      : data.trainingTargets ? dailyQuerySourcesV5WithoutFeeds : dailyQuerySourcesV3
-                    : data.trainingTargets
-                    ? data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                      ? dailyQuerySourcesV5 : dailyQuerySourcesV5WithoutFeeds
-                    : data.feeds && request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
-                      ? dailyQuerySourcesV4 : dailyQuerySourcesV3,
+              : version <= 4 ? dailyQuerySourcesV3
+                : version === 5 ? data.trainingTargets ? dailyQuerySourcesV5 : dailyQuerySourcesV3
+                : data.lifts
+                  ? request.principal && !request.agentPrincipal && !request.dailyConnectorPrincipal
+                    ? data.trainingTargets ? dailyQuerySourcesV6 : dailyQuerySourcesV6WithoutTrainingTargets
+                    : data.trainingTargets ? dailyQuerySourcesV5 : dailyQuerySourcesV3
+                  : data.trainingTargets ? dailyQuerySourcesV5 : dailyQuerySourcesV3,
             refresh: { event: 'now', refetchOn: ['connect', 'reconnect', 'refocus'], revision: 'query-content-sha256' },
           } : {}),
         };

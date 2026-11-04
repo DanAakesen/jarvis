@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources as sources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, type DailyQuery } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources as sources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV5, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutTrainingTargets, type DailyQuery } from '@jarvis/contracts';
 import { DailyReadError, isDailyResult, loadDailySources, queryDaily } from './client';
 import { dailyFixture, jsonResponse } from './test-support';
 
@@ -115,11 +115,11 @@ describe('owner-authenticated Daily query client', () => {
   });
   it('keeps disabled/unavailable capabilities distinct and accepts only known unique source IDs', async () => {
     const fetch = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: dailyQuerySourcesV4 }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: dailyQuerySourcesV3 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: [sources.metrics, sources.metrics] }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: ['arbitrary-provider'] }));
     vi.stubGlobal('fetch', fetch);
-    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV4);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV3);
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(queryDaily(null, query, token, signal())).rejects.toMatchObject({ kind: 'disabled' });
@@ -130,14 +130,9 @@ describe('owner-authenticated Daily query client', () => {
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 2, sources: dailyQuerySourcesV2 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 2, sources: dailyQuerySourcesV3 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 3, sources: dailyQuerySourcesV3 }))
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 3, sources: dailyQuerySourcesV4 }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV3 }))
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 4, sources: dailyQuerySourcesV4 }))
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6WithoutFeedsOrTrainingTargets }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6WithoutTrainingTargets }))
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6WithoutFeeds }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 6, sources: dailyQuerySourcesV6 }))
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 5, sources: dailyQuerySourcesV5WithoutFeeds }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 5, sources: dailyQuerySourcesV5 }));
     vi.stubGlobal('fetch', fetch);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV1);
@@ -145,17 +140,11 @@ describe('owner-authenticated Daily query client', () => {
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV2);
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toMatchObject({ kind: 'invalid' });
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV3);
-    await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toMatchObject({ kind: 'invalid' });
-    // A v4 answer without the feed sources is what the backend sends while the feeds are off.
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV3);
-    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV4);
-    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6WithoutFeedsOrTrainingTargets);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6WithoutTrainingTargets);
-    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6WithoutFeeds);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV6);
-    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV5WithoutFeeds);
     expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV5);
-    expect(fetch).toHaveBeenCalledTimes(13);
+    expect(fetch).toHaveBeenCalledTimes(8);
   });
   it('does not claim success for oversized or mismatched responses', async () => {
     const fetch = vi.fn()

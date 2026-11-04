@@ -4,11 +4,6 @@ import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, da
 import { formatTime } from './ui/formatters';
 
 describe('retained Daily record presentation', () => {
-  it('provides human-readable columns for attention and calendar rows', () => {
-    expect(dailyColumns('daily.attention').map(column => column.label)).toEqual(['Type', 'Waiting', 'Age (business days)', 'Hidden']);
-    expect(dailyColumns('daily.calendar').map(column => column.label)).toEqual(['Event', 'Starts', 'Ends', 'Calendar', 'Location']);
-  });
-
   it('keeps the query-only training-target source out of collection presentation', () => {
     expect(dailyColumns(sources.trainingTargets)).toEqual([]);
     expect(dailySources.some(source => source.id === sources.trainingTargets)).toBe(false);

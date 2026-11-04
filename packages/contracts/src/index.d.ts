@@ -48,20 +48,16 @@ export const dailyQuerySources: Readonly<{
   plans: 'daily.nutrition.plans'; sync: 'daily.sync';
   briefs: 'daily.briefs.history'; brief: 'daily.briefs.detail';
   metricCatalog: 'daily.health.metric-catalog'; days: 'daily.nutrition.days';
-  attention: 'daily.attention'; calendar: 'daily.calendar'; trainingTargets: 'daily.health.training-targets';
+  trainingTargets: 'daily.health.training-targets';
   lifts: 'daily.health.lifts';
 }>;
 export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
-export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV2: readonly Exclude<DailySourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
+export const dailyQuerySourcesV1: readonly Exclude<DailySourceId, 'daily.briefs.history' | 'daily.briefs.detail' | 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
+export const dailyQuerySourcesV2: readonly Exclude<DailySourceId, 'daily.health.metric-catalog' | 'daily.nutrition.days' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
 export const dailyQuerySourcesV3: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets' | 'daily.health.lifts'>[];
-export const dailyQuerySourcesV4: readonly Exclude<DailySourceId, 'daily.health.training-targets' | 'daily.health.lifts'>[];
 export const dailyQuerySourcesV5: readonly Exclude<DailySourceId, 'daily.health.lifts'>[];
-export const dailyQuerySourcesV5WithoutFeeds: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.lifts'>[];
 export const dailyQuerySourcesV6: readonly DailySourceId[];
-export const dailyQuerySourcesV6WithoutFeeds: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar'>[];
 export const dailyQuerySourcesV6WithoutTrainingTargets: readonly Exclude<DailySourceId, 'daily.health.training-targets'>[];
-export const dailyQuerySourcesV6WithoutFeedsOrTrainingTargets: readonly Exclude<DailySourceId, 'daily.attention' | 'daily.calendar' | 'daily.health.training-targets'>[];
 export const dailyCapabilitiesVersion: 6;
 export const dailyCapabilitiesAccept: 'application/json;version=6, application/json;version=5, application/json;version=4, application/json;version=3, application/json;version=2, application/json';
 export type DailyCursor = { date: string; key: string } | { key: string } | { date: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string } | { startedAt: string; id: string } | { performedAt: string; id: string };
@@ -80,20 +76,11 @@ export type DailyQuery =
   | { source: 'daily.briefs.detail'; briefId: string }
   | { source: 'daily.health.training-targets' }
   | { source: 'daily.health.lifts'; limit?: number; cursor?: { performedAt: string; id: string }; lastPerExercise?: boolean }
-  | { source: 'daily.sync' }
-  | { source: 'daily.attention' }
-  | { source: 'daily.calendar'; from: string; to: string };
+  | { source: 'daily.sync' };
 export type DailyJson = null | boolean | number | string | DailyJson[] | { [key: string]: DailyJson };
 export interface DailyQueryResult {
   source: DailySourceId;
   period: { startDate: string; endDate: string; timeZone: 'Europe/Copenhagen' } | null;
-  calendarRange?: { from: string; to: string };
-  feedSources?: {
-    source: 'Gmail' | 'GoogleCalendar'; status: 'Missing' | 'Stale' | 'Current';
-    capturedAt: string | null; attemptedAt: string | null; error: string | null;
-    range?: { from: string; to: string } | null;
-  }[];
-  rangeCovered?: boolean;
   items: Record<string, DailyJson>[];
   status: 'available' | 'empty' | 'partial';
   units: Readonly<Record<string, string>>;

@@ -1,4 +1,4 @@
-import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV5, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutTrainingTargets, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
@@ -211,11 +211,9 @@ export async function loadDailySources(backendUrl: string | null, getAccessToken
         !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
         new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Health data services are not available yet.', 'disabled');
     const allowed = value.version === 1 ? dailyQuerySourcesV1 : value.version === 2 ? dailyQuerySourcesV2
-      : value.version === 3 ? dailyQuerySourcesV3 : value.version === 4 ? dailyQuerySourcesV4
-        : value.version === 5 ? [...dailyQuerySourcesV5, ...dailyQuerySourcesV5WithoutFeeds]
-          : [...dailyQuerySourcesV6, ...dailyQuerySourcesV6WithoutFeeds, ...dailyQuerySourcesV6WithoutTrainingTargets,
-            ...dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, ...dailyQuerySourcesV5, ...dailyQuerySourcesV5WithoutFeeds,
-            dailyQuerySourcesV4, dailyQuerySourcesV3].flat();
+      : value.version === 3 || value.version === 4 ? dailyQuerySourcesV3
+        : value.version === 5 ? dailyQuerySourcesV5
+          : [...dailyQuerySourcesV6, ...dailyQuerySourcesV6WithoutTrainingTargets, ...dailyQuerySourcesV5, ...dailyQuerySourcesV3];
     if (value.sources.some(id => !allowed.some(known => known === id))) {
       throw new DailyReadError(`Health returned incompatible version ${value.version} capabilities. No collections were claimed.`, 'invalid');
     }

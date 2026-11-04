@@ -93,7 +93,7 @@ describe('Rules & sources section', () => {
 
   it('renders all seven applicable rule cards, the session account, and the real nutrition editor', async () => {
     mount();
-    for (const name of ['Access', 'Behaviour', 'Mail', 'Calendar', 'Refresh', 'Notification', 'Sources']) {
+    for (const name of ['Access', 'Behaviour', 'Refresh', 'Notification', 'Sources']) {
       expect(screen.getAllByRole('heading', { name }).some(heading => heading.closest('article'))).toBe(true);
     }
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
@@ -156,7 +156,7 @@ describe('Rules & sources section', () => {
     expect(await within(source('Health uploads')).findByText('Synced')).not.toBeNull();
     expect(source('Health uploads').querySelector('time')?.dateTime).toBe(processedAt);
     expect(within(source('Health uploads')).getByText(/Source freshness is unknown/u)).not.toBeNull();
-    for (const name of ['Nutrition capture', 'Mail', 'Calendar']) {
+    for (const name of ['Nutrition capture']) {
       expect(within(source(name)).getByText('Not connected')).not.toBeNull();
       expect(source(name).querySelector('time')).toBeNull();
     }

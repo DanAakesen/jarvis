@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutFeeds, dailyQuerySourcesV6WithoutTrainingTargets, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
+import { dailyViewIds, dailyModuleId, dailyContractVersion, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV5, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutTrainingTargets, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './index.js';
 
 test('Daily reserves four distinct stable view IDs without registering renderers', () => {
   assert.equal(dailyModuleId, 'daily');
@@ -28,24 +28,14 @@ test('capability v1-v5 source lists remain fixed while v6 adds owner workout lif
   assert.deepEqual(dailyQuerySourcesV3, [
     ...dailyQuerySourcesV2, 'daily.health.metric-catalog', 'daily.nutrition.days',
   ]);
-  assert.deepEqual(dailyQuerySourcesV4, [
-    ...dailyQuerySourcesV3, 'daily.attention', 'daily.calendar',
-  ]);
-  assert.deepEqual(dailyQuerySourcesV5, [...dailyQuerySourcesV4, dailyQuerySources.trainingTargets]);
-  assert.deepEqual(dailyQuerySourcesV5WithoutFeeds, [...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
+  assert.deepEqual(dailyQuerySourcesV5, [...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
   assert.deepEqual(dailyQuerySourcesV6, [...dailyQuerySourcesV5, dailyQuerySources.lifts]);
-  assert.deepEqual(dailyQuerySourcesV6WithoutFeeds, [...dailyQuerySourcesV5WithoutFeeds, dailyQuerySources.lifts]);
-  assert.deepEqual(dailyQuerySourcesV6WithoutTrainingTargets, [...dailyQuerySourcesV4, dailyQuerySources.lifts]);
-  assert.deepEqual(dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, [...dailyQuerySourcesV3, dailyQuerySources.lifts]);
+  assert.deepEqual(dailyQuerySourcesV6WithoutTrainingTargets, [...dailyQuerySourcesV3, dailyQuerySources.lifts]);
   assert.ok(Object.isFrozen(dailyQuerySourcesV2));
   assert.ok(Object.isFrozen(dailyQuerySourcesV3));
-  assert.ok(Object.isFrozen(dailyQuerySourcesV4));
   assert.ok(Object.isFrozen(dailyQuerySourcesV5));
-  assert.ok(Object.isFrozen(dailyQuerySourcesV5WithoutFeeds));
   assert.ok(Object.isFrozen(dailyQuerySourcesV6));
-  assert.ok(Object.isFrozen(dailyQuerySourcesV6WithoutFeeds));
   assert.ok(Object.isFrozen(dailyQuerySourcesV6WithoutTrainingTargets));
-  assert.ok(Object.isFrozen(dailyQuerySourcesV6WithoutFeedsOrTrainingTargets));
 });
 
 test('lift history queries validate bounded pagination and the latest-per-exercise option', () => {
@@ -70,27 +60,11 @@ test('training target query accepts no caller selectors', () => {
   }
 });
 
-test('attention and calendar source queries accept only their bounded selectors', () => {
-  const attention = { source: dailyQuerySources.attention };
-  assert.equal(isDailyQuery(attention), true);
-  for (const patch of [{ owner: 'foreign' }, { from: '2026-10-01T00:00:00Z' }, { cursor: {} }]) {
-    assert.equal(isDailyQuery({ ...attention, ...patch }), false);
-  }
-
-  const calendar = {
-    source: dailyQuerySources.calendar,
-    from: '2026-10-01T00:00:00Z',
-    to: '2026-12-02T00:00:00Z',
-  };
-  assert.equal(isDailyQuery(calendar), true);
-  assert.equal(isDailyQuery({ ...calendar, to: '2026-10-01T00:00:00Z' }), false);
-  assert.equal(isDailyQuery({ ...calendar, to: '2026-12-03T00:00:00Z' }), false);
-  for (const patch of [
-    { from: '2026-02-30T00:00:00Z' }, { from: '2026-10-01' }, { to: null },
-    { cursor: {} }, { owner: 'foreign' }, { extra: true },
-  ]) assert.equal(isDailyQuery({ ...calendar, ...patch }), false, JSON.stringify(patch));
-  assert.ok(dailyQuerySchema.properties.source.enum.includes(dailyQuerySources.attention));
-  assert.ok(dailyQuerySchema.properties.source.enum.includes(dailyQuerySources.calendar));
+test('the retired attention and calendar sources are no longer accepted', () => {
+  assert.equal(isDailyQuery({ source: 'daily.attention' }), false);
+  assert.equal(isDailyQuery({ source: 'daily.calendar', from: '2026-10-01T00:00:00Z', to: '2026-10-02T00:00:00Z' }), false);
+  assert.ok(!dailyQuerySchema.properties.source.enum.includes('daily.attention'));
+  assert.ok(!dailyQuerySchema.properties.source.enum.includes('daily.calendar'));
 });
 
 test('metric filters and metric catalogue queries validate their exact selector and key cursor', () => {

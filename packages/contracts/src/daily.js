@@ -28,8 +28,6 @@ export const dailyQuerySources = Object.freeze({
   brief: 'daily.briefs.detail',
   metricCatalog: 'daily.health.metric-catalog',
   days: 'daily.nutrition.days',
-  attention: 'daily.attention',
-  calendar: 'daily.calendar',
   trainingTargets: 'daily.health.training-targets',
   lifts: 'daily.health.lifts',
 });
@@ -39,15 +37,9 @@ export const dailyQuerySourcesV2 = Object.freeze([
 export const dailyQuerySourcesV3 = Object.freeze([
   ...dailyQuerySourcesV2, dailyQuerySources.metricCatalog, dailyQuerySources.days,
 ]);
-export const dailyQuerySourcesV4 = Object.freeze([
-  ...dailyQuerySourcesV3, dailyQuerySources.attention, dailyQuerySources.calendar,
-]);
-export const dailyQuerySourcesV5 = Object.freeze([...dailyQuerySourcesV4, dailyQuerySources.trainingTargets]);
-export const dailyQuerySourcesV5WithoutFeeds = Object.freeze([...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
+export const dailyQuerySourcesV5 = Object.freeze([...dailyQuerySourcesV3, dailyQuerySources.trainingTargets]);
 export const dailyQuerySourcesV6 = Object.freeze([...dailyQuerySourcesV5, dailyQuerySources.lifts]);
-export const dailyQuerySourcesV6WithoutFeeds = Object.freeze([...dailyQuerySourcesV5WithoutFeeds, dailyQuerySources.lifts]);
-export const dailyQuerySourcesV6WithoutTrainingTargets = Object.freeze([...dailyQuerySourcesV4, dailyQuerySources.lifts]);
-export const dailyQuerySourcesV6WithoutFeedsOrTrainingTargets = Object.freeze([...dailyQuerySourcesV3, dailyQuerySources.lifts]);
+export const dailyQuerySourcesV6WithoutTrainingTargets = Object.freeze([...dailyQuerySourcesV3, dailyQuerySources.lifts]);
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));
 const key = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256 &&
@@ -71,12 +63,6 @@ export function isDailyQuery(v) {
         v.lastPerExercise !== undefined && typeof v.lastPerExercise !== 'boolean') return false;
     return v.cursor === undefined || (record(v.cursor) && keys(v.cursor, ['performedAt', 'id']) &&
       instant(v.cursor.performedAt) && key(v.cursor.id));
-  }
-  if (v.source === dailyQuerySources.attention) return keys(v, ['source']);
-  if (v.source === dailyQuerySources.calendar) {
-    if (!keys(v, ['source', 'from', 'to']) || !instant(v.from) || !instant(v.to)) return false;
-    const range = Date.parse(v.to) - Date.parse(v.from);
-    return range > 0 && range <= 62 * 86400000;
   }
   if (v.source === dailyQuerySources.workout) return keys(v, ['source', 'workoutId']) && key(v.workoutId);
   if (v.source === dailyQuerySources.brief) return keys(v, ['source', 'briefId']) && briefId(v.briefId);
@@ -122,8 +108,6 @@ export const dailyQuerySchema = Object.freeze({
     source: { type: 'string', enum: Object.values(dailyQuerySources) },
     startDate: { type: 'string', description: 'Inclusive Europe/Copenhagen date, YYYY-MM-DD; required for health/nutrition history, not briefs.' },
     endDate: { type: 'string', description: 'Inclusive calendar date; at most 366 days after startDate.' },
-    from: { type: 'string', description: 'Inclusive ISO instant; only for daily.calendar. The range is at most 62 days.' },
-    to: { type: 'string', description: 'Exclusive ISO instant; only for daily.calendar.' },
     metric: { type: 'string', minLength: 1, maxLength: 256, description: 'Metric_name key or its readable name; only for daily.health.metrics and daily.health.heart-rate. Applied before the row limit.' },
     workoutId: { type: 'string', maxLength: 256 },
     briefId: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact returned legacy brief ID, without trimming; only for brief detail.' },

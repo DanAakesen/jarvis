@@ -12,7 +12,7 @@ import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
 import { suggest, type BudgetContext, type Suggestion } from './nutrition/model.js';
 import type { NutritionSuggestionSources } from './nutrition/suggestion-adapter.js';
-import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV4, dailyQuerySourcesV5, dailyQuerySourcesV5WithoutFeeds, dailyQuerySourcesV6WithoutFeedsOrTrainingTargets, dailyViewIds } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV6WithoutTrainingTargets, dailyViewIds } from '@jarvis/contracts';
 import type { ToolCallRecord } from '../core/tool-calls.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -144,7 +144,7 @@ describe('Daily integration contract', () => {
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
     apps.push(app);
     const capability = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: dailyCapabilitiesAccept } });
-    expect(capability.json()).toMatchObject({ version: 6, sources: dailyQuerySourcesV6WithoutFeedsOrTrainingTargets });
+    expect(capability.json()).toMatchObject({ version: 6, sources: dailyQuerySourcesV6WithoutTrainingTargets });
     const agentCapability = await app.inject({ url: '/daily/capabilities', headers: { ...headers('agent'), accept: dailyCapabilitiesAccept } });
     expect(agentCapability.json().sources).not.toContain(dailyQuerySources.lifts);
     expect((await app.inject({ method: 'POST', url: '/daily/query', headers: headers(),
@@ -160,91 +160,17 @@ describe('Daily integration contract', () => {
     expect(entries.create).toHaveBeenCalledOnce();
     expect(history).toHaveBeenCalledOnce();
   });
-  it('registers owner-only browser feed routes and v4 query sources only when feeds are composed', async () => {
-    const feedReads = {
-      queryAttention: vi.fn(async () => ({
-        items: [{ type: 'thread', id: 'synthetic-thread', bucket: 'waiting_for_you', ageBusinessDays: 1, hidden: false }],
-        feedSources: [{ source: 'Gmail' as const, status: 'Current' as const, capturedAt: '2026-10-16T10:00:00Z',
-          attemptedAt: '2026-10-16T10:00:00Z', error: null }],
-      })),
-      queryCalendar: vi.fn(async () => ({
-        items: [{ id: 'synthetic-calendar:event-01', title: 'Synthetic event' }],
-        calendarRange: { from: '2026-10-16T00:00:00Z', to: '2026-10-17T00:00:00Z' },
-        feedSources: [{ source: 'GoogleCalendar' as const, status: 'Current' as const,
-          capturedAt: '2026-10-16T10:00:00Z', attemptedAt: '2026-10-16T10:00:00Z', error: null,
-          range: { from: '2026-10-01T00:00:00Z', to: '2026-11-01T00:00:00Z' } }],
-        rangeCovered: true,
-      })),
-    };
-    const query = new DailyQueryService({
-      health: () => ({ history: vi.fn(), metricCatalog: vi.fn(), sync: vi.fn(), workoutDetail: vi.fn(), workoutMetrics: vi.fn(), heartRate: vi.fn() }),
-      nutrition: () => ({ history: vi.fn(), days: vi.fn(), favorites: vi.fn(), plans: vi.fn() }),
-      briefs: () => ({ history: vi.fn(), detail: vi.fn() }),
-    }, () => Date.parse('2026-10-16T12:00:00Z'), feedReads);
-    const actions = {
-      execute: vi.fn(),
-      refreshFromBrowser: vi.fn(async () => ({ runId: 'synthetic-run', state: 'completed' })),
-      hideThread: vi.fn(async () => true),
-      receiveOrder: vi.fn(async () => true),
-      restore: vi.fn(async () => true),
-    };
-    const data: DailyData = {
-      query, changes: createDailyChanges(), feeds: actions,
-      trainingTargets: () => ({ read: vi.fn(async () => ({ targets: {
-        gymSessionsPerWeek: null, runSessionsPerWeek: null, dailySteps: null,
-      }, updatedAt: null })), write: vi.fn() }),
-    };
+  it('has no Daily feed routes, tool or query sources', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
     const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
-    const unconfigured = buildApp(config, undefined, { auth, modules: [
-      coreModule, ...createDailyModules(true, { query: { query: vi.fn() }, changes: createDailyChanges() }),
-    ] });
-    apps.push(app, unconfigured);
-    const range = { from: '2026-10-16T00:00:00Z', to: '2026-10-17T00:00:00Z' };
-    const capabilityV4 = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json;version=4' } });
-    expect(capabilityV4.json().sources).toEqual(dailyQuerySourcesV4);
-    const capability = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json;version=5' } });
-    expect(capability.statusCode).toBe(200);
-    expect(capability.json().sources).toEqual(dailyQuerySourcesV5);
-    const agentCapability = await app.inject({ url: '/daily/capabilities', headers: { ...headers('agent'), accept: 'application/json;version=5' } });
-    expect(agentCapability.json().sources).toEqual(dailyQuerySourcesV5WithoutFeeds);
-    expect((await unconfigured.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: 'application/json;version=5' } })).json().sources)
-      .toEqual(dailyQuerySourcesV3);
+    apps.push(app);
     for (const path of ['/daily/feeds/refresh', '/daily/feeds/hide', '/daily/feeds/receive', '/daily/feeds/restore']) {
-      expect((await unconfigured.inject({ method: 'POST', url: path, headers: headers(), payload: {} })).statusCode).toBe(404);
+      expect((await app.inject({ method: 'POST', url: path, headers: headers(), payload: {} })).statusCode).toBe(404);
     }
-
-    const attention = await app.inject({ method: 'POST', url: '/daily/query', headers: headers(), payload: { source: dailyQuerySources.attention } });
-    expect(attention.statusCode).toBe(200);
-    expect(attention.json()).toMatchObject({ status: 'available', items: [{ ageBusinessDays: 1, hidden: false }] });
-    const calendar = await app.inject({ method: 'POST', url: '/daily/query', headers: headers(), payload: { source: dailyQuerySources.calendar, ...range } });
-    expect(calendar.statusCode).toBe(200);
-    expect(calendar.json()).toMatchObject({ status: 'available', rangeCovered: true, calendarRange: range });
-    expect((await app.inject({ method: 'POST', url: '/daily/query', headers: headers('agent'), payload: { source: dailyQuerySources.attention } })).statusCode)
-      .toBe(403);
-
-    const actionsToCall = [
-      { path: '/daily/feeds/refresh', payload: range, expected: { runId: 'synthetic-run', state: 'completed' } },
-      { path: '/daily/feeds/hide', payload: { id: 'synthetic-thread' }, expected: { status: 'hidden' } },
-      { path: '/daily/feeds/receive', payload: { id: 'synthetic-order' }, expected: { status: 'received' } },
-      { path: '/daily/feeds/restore', payload: { type: 'thread', key: 'synthetic-thread' }, expected: { status: 'restored' } },
-    ];
-    for (const action of actionsToCall) {
-      const response = await app.inject({ method: 'POST', url: action.path, headers: headers(), payload: action.payload });
-      expect(response.statusCode, action.path).toBe(200);
-      expect(response.json()).toMatchObject(action.expected);
-      for (const kind of ['agent', 'runner', 'other', 'connector']) {
-        expect((await app.inject({ method: 'POST', url: action.path, headers: headers(kind), payload: action.payload })).statusCode)
-          .toBe(403);
-      }
-    }
-    expect(actions.refreshFromBrowser).toHaveBeenCalledWith(expect.anything(), range, expect.any(AbortSignal));
-    expect(actions.hideThread).toHaveBeenCalledOnce();
-    expect(actions.receiveOrder).toHaveBeenCalledOnce();
-    expect(actions.restore).toHaveBeenCalledOnce();
-    const invalid = await app.inject({ method: 'POST', url: '/daily/feeds/refresh', headers: headers(),
-      payload: { ...range, confirmed: true } });
-    expect(invalid.statusCode).toBe(400);
-    expect(actions.refreshFromBrowser).toHaveBeenCalledOnce();
+    expect((await app.inject({ method: 'POST', url: '/tools/health_feed', headers: headers(), payload: {} })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/daily/query', headers: headers(), payload: { source: 'daily.attention' } })).statusCode).toBe(400);
+    expect((await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept: dailyCapabilitiesAccept } })).json().sources)
+      .not.toContain('daily.calendar');
   });
   it('requires an explicit internal store factory rather than enabling writes with read-only data', async () => {
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
@@ -430,49 +356,15 @@ describe('Daily integration contract', () => {
     expect(internal).not.toHaveBeenCalled();
     expect(foodLookup).not.toHaveBeenCalled();
   });
-  it('adds only the explicit feed capability, uses the existing dispatcher/audit and bridges owner commits until shutdown', async () => {
-    const execute = vi.fn(async () => ({ operation: 'read_attention', sources: [], waiting: [{ private: 'synthetic private mail' }] }));
+  it('bridges owner commits to the Now refresh event until shutdown', async () => {
     const changes = createDailyChanges();
-    const data: DailyData = { query: { query: vi.fn() }, changes, feeds: {
-      execute, refreshFromBrowser: vi.fn(), hideThread: vi.fn(), receiveOrder: vi.fn(), restore: vi.fn(),
-    } };
-    expect(createDailyModules(false, data)).toEqual([]);
-    expect(createDailyModules(true, { query: data.query, changes })[0]!.tools.map(tool => tool.name)).toEqual(['health_query', 'health_show']);
-    const calls: ToolCallRecord[] = [];
-    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)],
-      toolCallStore: { record: async call => { calls.push(call); } } });
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, { query: { query: vi.fn() }, changes })] });
     apps.push(app);
-    expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
-      stage: 'feed-rehearsal', tools: ['health_query', 'health_show', 'health_feed'], pages: [], sources: dailyQuerySourcesV1,
-    });
-    expect(execute).not.toHaveBeenCalled();
+    await app.ready();
     const publish = vi.spyOn(app.nowEventHub, 'publish');
-    for (const kind of ['owner', 'agent']) {
-      const response = await app.inject({ method: 'POST', url: '/tools/health_feed',
-        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } });
-      expect(response.statusCode).toBe(200); expect(response.json()).toMatchObject({ outcome: 'ok', result: { operation: 'read_attention' } });
-    }
-    expect(calls).toHaveLength(2);
-    expect(calls).toEqual(expect.arrayContaining([expect.objectContaining({
-      tool: 'health_feed', outcome: 'ok', arguments: { redacted: true }, result: { redacted: true },
-    })]));
-    expect(JSON.stringify(calls)).not.toContain('synthetic private mail');
-    expect((await app.inject({ method: 'POST', url: '/tools/health_feed',
-      headers: { ...headers(), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention', confirmed: true } })).json().outcome).toBe('refused');
-    const deniedOwner = await app.inject({ method: 'POST', url: '/tools/health_feed',
-      headers: { ...headers('other'), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } });
-    // Root auth admits verified human identities; the tool owns resource authorisation.
-    expect(deniedOwner.statusCode).toBe(200);
-    expect(deniedOwner.json()).toMatchObject({ outcome: 'error', result: { error: 'Tool execution failed' } });
-    expect(calls.at(-1)).toMatchObject({ tool: 'health_feed', outcome: 'error', arguments: { redacted: true }, result: { redacted: true } });
-    for (const kind of ['runner', 'connector']) {
-      expect((await app.inject({ method: 'POST', url: '/tools/health_feed',
-        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } })).statusCode).toBe(403);
-    }
-    expect(execute).toHaveBeenCalledTimes(2);
-    changes.publish({ owner: other, sources: ['daily.feed'] }); expect(publish).not.toHaveBeenCalled();
-    changes.publish({ owner, sources: ['daily.feed'] }); expect(publish).toHaveBeenCalledWith({ type: 'refresh' });
+    changes.publish({ owner: other, sources: ['daily.health'] }); expect(publish).not.toHaveBeenCalled();
+    changes.publish({ owner, sources: ['daily.health'] }); expect(publish).toHaveBeenCalledWith({ type: 'refresh' });
     await app.close(); publish.mockClear();
-    changes.publish({ owner, sources: ['daily.feed'] }); expect(publish).not.toHaveBeenCalled();
+    changes.publish({ owner, sources: ['daily.health'] }); expect(publish).not.toHaveBeenCalled();
   });
 });

@@ -18,7 +18,5 @@ export function sourceCoverage(result: DailyQueryResult | undefined, refreshFail
       note: at ? 'Last completed processing. Source freshness is unknown.' : 'No completed health-upload sync evidence is available.',
     },
     { label: 'Nutrition capture', at: null, status: 'Not connected', note: 'Nutrition capture sync status is not served by the sync source; this does not mean there are no nutrition records.' },
-    { label: 'Mail', at: null, status: 'Not connected', note: 'No Gmail attention source is served here.' },
-    { label: 'Calendar', at: null, status: 'Not connected', note: 'No calendar attention source is served here.' },
   ];
 }
