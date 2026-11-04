@@ -496,7 +496,7 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
     @Binding var selection: Tag
 
     var body: some View {
-        HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 JarvisLabelledButton(
                     title: item.title,
