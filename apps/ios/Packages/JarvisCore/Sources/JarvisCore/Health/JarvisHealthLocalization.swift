@@ -11,6 +11,8 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case syncComplete = "health.syncComplete"
     case syncPartial = "health.syncPartial"
     case syncFailed = "health.syncFailed"
+    case syncRetry = "health.syncRetry"
+    case syncLastTime = "health.syncLastTime"
     case periodLabel = "health.periodLabel"
     case search = "health.search"
     case clearSearch = "health.clearSearch"

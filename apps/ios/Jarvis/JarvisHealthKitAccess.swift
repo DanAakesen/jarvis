@@ -9,7 +9,7 @@ enum JarvisHealthKitAccess {
         .heartRate, .restingHeartRate, .walkingHeartRateAverage, .heartRateVariabilitySDNN,
         .oxygenSaturation, .respiratoryRate, .vo2Max, .bloodPressureSystolic, .bloodPressureDiastolic,
         .bloodGlucose, .bodyTemperature, .appleSleepingWristTemperature,
-        .bodyMass, .bodyMassIndex, .bodyFatPercentage, .leanBodyMass, .height,
+        .bodyMass, .bodyMassIndex, .bodyFatPercentage, .leanBodyMass, .height, .waistCircumference,
         .walkingSpeed, .walkingStepLength, .runningSpeed,
         .dietaryEnergyConsumed, .dietaryProtein, .dietaryCarbohydrates, .dietaryFatTotal,
         .dietarySugar, .dietaryFiber, .dietaryWater, .dietaryCaffeine,

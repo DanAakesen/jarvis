@@ -1,14 +1,23 @@
 import XCTest
 @testable import JarvisCore
 
-private actor RecordingSender: JarvisHealthIngestSender {
-    var calls: [(Data, String, String)] = []
+private actor RecordingSender: JarvisHealthSyncSender {
+    var requests: [JarvisHealthSyncRequest] = []
     var fail = false
-    func send(payload: Data, automationId: String, sessionId: String) async throws {
+    func send(_ request: JarvisHealthSyncRequest) async throws {
         if fail { throw JarvisHealthSyncError.unavailable }
-        calls.append((payload, automationId, sessionId))
+        requests.append(request)
     }
-    func setFail() { fail = true }
+    func setFail(_ value: Bool) { fail = value }
+}
+
+private final class MemoryAnchorStore: JarvisHealthSyncAnchorStore, @unchecked Sendable {
+    var anchor: Date?
+    var lastSync: Date?
+    func save(anchor: Date, lastSync: Date) {
+        self.anchor = anchor
+        self.lastSync = lastSync
+    }
 }
 
 final class JarvisHealthSyncTests: XCTestCase {
@@ -17,10 +26,11 @@ final class JarvisHealthSyncTests: XCTestCase {
     private func batch(denied: [String] = []) -> JarvisHealthSyncBatch {
         JarvisHealthSyncBatch(
             samples: [
-                JarvisHealthSample(metric: "step_count", unit: "count", start: t0, end: t0 + 60, value: 120),
-                JarvisHealthSample(metric: "heart_rate", unit: "count/min", start: t0, end: t0, value: 61),
+                JarvisHealthSample(id: "s2", metric: "step_count", unit: "count", start: t0, end: t0 + 60, value: 120),
+                JarvisHealthSample(id: "s1", metric: "heart_rate", unit: "count/min", start: t0, end: t0, value: 61),
+                JarvisHealthSample(id: "s3", metric: "step_count", unit: "count", start: t0 + 60, end: t0 + 120, value: 5),
             ],
-            sleep: [JarvisHealthSleepSegment(stage: "deep", start: t0, end: t0 + 3600)],
+            sleep: [JarvisHealthSleepSegment(id: "z1", stage: "deep", start: t0, end: t0 + 3600)],
             workouts: [JarvisHealthWorkoutSample(
                 id: "w1", activity: "Running", start: t0, end: t0 + 1800, activeEnergyKcal: 250, distanceMetres: 5000
             )],
@@ -29,53 +39,106 @@ final class JarvisHealthSyncTests: XCTestCase {
         )
     }
 
-    func testPayloadUsesIngestShapeAndIsDeterministic() throws {
-        let first = try JarvisHealthPayloadBuilder.payload(batch())
-        XCTAssertEqual(first, try JarvisHealthPayloadBuilder.payload(batch()))
+    func testRequestBodyCarriesSampleIdsAndIsDeterministic() throws {
+        let first = try JarvisHealthSyncRequest.requests(for: batch(), anchor: t0)[1].encoded()
+        XCTAssertEqual(first, try JarvisHealthSyncRequest.requests(for: batch(), anchor: t0)[1].encoded())
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: first) as? [String: Any])
-        let data = try XCTUnwrap(root["data"] as? [String: Any])
-        let metrics = try XCTUnwrap(data["metrics"] as? [[String: Any]])
-        XCTAssertEqual(metrics.compactMap { $0["name"] as? String }, ["heart_rate", "step_count", "sleep_analysis"])
-        let workout = try XCTUnwrap((data["workouts"] as? [[String: Any]])?.first)
-        XCTAssertEqual(workout["id"] as? String, "w1")
-        XCTAssertEqual(workout["duration"] as? Double, 1800)
-        XCTAssertEqual((workout["distance"] as? [String: Any])?["units"] as? String, "km")
+        let samples = try XCTUnwrap(root["samples"] as? [[String: Any]])
+        XCTAssertEqual(samples.compactMap { $0["id"] as? String }, ["s2", "s3"])
+        XCTAssertEqual(samples.first?["metric"] as? String, "step_count")
+        XCTAssertNotNil(root["anchor"] as? String)
     }
 
-    func testSessionIdFollowsContent() throws {
-        let a = try JarvisHealthPayloadBuilder.payload(batch())
-        var changed = batch()
-        changed = JarvisHealthSyncBatch(
-            samples: changed.samples + [JarvisHealthSample(metric: "step_count", unit: "count", start: t0 + 1, end: t0 + 2, value: 1)],
-            sleep: changed.sleep, workouts: changed.workouts, readTypes: changed.readTypes,
-            deniedOrUnreadTypes: [], windowStart: t0, windowEnd: t0
+    func testRequestsKeepEachMetricWholeAndSendSleepAndWorkoutsSeparately() {
+        let requests = JarvisHealthSyncRequest.requests(for: batch(), anchor: nil)
+        XCTAssertEqual(requests.count, 4)
+        XCTAssertEqual(requests[0].samples.map(\.metric), ["heart_rate"])
+        XCTAssertEqual(requests[1].samples.map(\.id), ["s2", "s3"])
+        XCTAssertEqual(requests[2].sleep.count, 1)
+        XCTAssertEqual(requests[3].workouts.map(\.id), ["w1"])
+        XCTAssertTrue(requests.allSatisfy { $0.anchor == nil })
+    }
+
+    func testFirstSyncReadsAWeekAndLaterSyncsStartAtTheAnchorsDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertEqual(
+            JarvisHealthSyncWindow.start(anchor: nil, now: now, calendar: calendar),
+            now.addingTimeInterval(-7 * 86_400)
         )
-        let b = try JarvisHealthPayloadBuilder.payload(changed)
-        XCTAssertEqual(JarvisHealthPayloadBuilder.sessionId(for: a), JarvisHealthPayloadBuilder.sessionId(for: a))
-        XCTAssertNotEqual(JarvisHealthPayloadBuilder.sessionId(for: a), JarvisHealthPayloadBuilder.sessionId(for: b))
+        let anchor = now.addingTimeInterval(-3_600)
+        XCTAssertEqual(
+            JarvisHealthSyncWindow.start(anchor: anchor, now: now, calendar: calendar),
+            calendar.startOfDay(for: anchor)
+        )
+        XCTAssertEqual(
+            JarvisHealthSyncWindow.start(anchor: now.addingTimeInterval(86_400), now: now, calendar: calendar),
+            calendar.startOfDay(for: now)
+        )
     }
 
-    func testCompleteOnlyWhenEveryTypeWasRead() async {
+    func testCompleteSyncSendsEverythingAndAdvancesTheAnchor() async {
         let sender = RecordingSender()
-        let runner = JarvisHealthSyncRunner(sender: sender, now: { Date(timeIntervalSince1970: 5) })
-        let complete = await runner.sync(batch())
-        XCTAssertEqual(complete, .complete(at: Date(timeIntervalSince1970: 5)))
-        let partial = await runner.sync(batch(denied: ["nutrition", "body_mass"]))
-        XCTAssertEqual(partial, .partial(at: Date(timeIntervalSince1970: 5), missingTypes: ["body_mass", "nutrition"]))
-        let calls = await sender.calls
-        XCTAssertEqual(calls.count, 2)
-        XCTAssertEqual(calls[0].1, "jarvis-ios")
-    }
-
-    func testFailedUploadIsNeverReportedAsComplete() async {
-        let sender = RecordingSender()
-        await sender.setFail()
-        let runner = JarvisHealthSyncRunner(sender: sender)
+        let store = MemoryAnchorStore()
+        let finished = Date(timeIntervalSince1970: 5)
+        let runner = JarvisHealthSyncRunner(sender: sender, store: store, now: { finished })
         let state = await runner.sync(batch())
-        XCTAssertEqual(state, .failed)
+        XCTAssertEqual(state, .complete(at: finished))
+        let sent = await sender.requests
+        XCTAssertEqual(sent.count, 4)
+        XCTAssertEqual(store.anchor, t0 + 7200)
+        XCTAssertEqual(store.lastSync, finished)
+    }
+
+    func testLaterSyncSendsTheAnchorFromTheLastCompleteSync() async {
+        let sender = RecordingSender()
+        let store = MemoryAnchorStore()
+        store.anchor = t0
+        let runner = JarvisHealthSyncRunner(sender: sender, store: store)
+        _ = await runner.sync(batch())
+        let sent = await sender.requests
+        XCTAssertTrue(sent.allSatisfy { $0.anchor == t0 })
+    }
+
+    func testPartialSyncNamesMissingTypesAndKeepsTheAnchor() async {
+        let sender = RecordingSender()
+        let store = MemoryAnchorStore()
+        store.anchor = t0
+        let finished = Date(timeIntervalSince1970: 5)
+        let runner = JarvisHealthSyncRunner(sender: sender, store: store, now: { finished })
+        let state = await runner.sync(batch(denied: ["nutrition", "body_mass"]))
+        XCTAssertEqual(state, .partial(at: finished, missingTypes: ["body_mass", "nutrition"]))
+        XCTAssertEqual(store.anchor, t0)
+        XCTAssertNil(store.lastSync)
+    }
+
+    func testFailedUploadIsNeverReportedAsCompleteAndRetrySucceeds() async {
+        let sender = RecordingSender()
+        let store = MemoryAnchorStore()
+        let runner = JarvisHealthSyncRunner(sender: sender, store: store)
+        await sender.setFail(true)
+        let failed = await runner.sync(batch())
+        XCTAssertEqual(failed, .failed)
+        XCTAssertNil(store.anchor)
+        XCTAssertNil(store.lastSync)
         let none = await runner.sync(JarvisHealthSyncBatch(
             samples: [], sleep: [], workouts: [], readTypes: [], deniedOrUnreadTypes: [], windowStart: t0, windowEnd: t0
         ))
         XCTAssertEqual(none, .failed)
+        await sender.setFail(false)
+        let retried = await runner.sync(batch())
+        guard case .complete = retried else { return XCTFail("retry should complete") }
+        XCTAssertEqual(store.anchor, t0 + 7200)
+    }
+
+    func testSyncLocalizationExistsInDanishAndEnglish() {
+        for key in [JarvisHealthLocalizationKey.sync, .syncing, .syncNever, .syncComplete, .syncPartial, .syncFailed, .syncRetry, .syncLastTime] {
+            XCTAssertNotEqual(JarvisHealthLocalization.string(key, language: .da), key.rawValue)
+            XCTAssertNotEqual(JarvisHealthLocalization.string(key, language: .en), key.rawValue)
+            XCTAssertNotEqual(
+                JarvisHealthLocalization.string(key, language: .da), JarvisHealthLocalization.string(key, language: .en)
+            )
+        }
     }
 }
