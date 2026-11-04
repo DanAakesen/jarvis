@@ -106,3 +106,4 @@
 "health.syncComplete" = "Synced %@. Every data type was read.";
 "health.syncPartial" = "Partly synced %@. Missing: %@.";
 "health.syncFailed" = "Sync failed. Try again.";
+"health.syncRetry" = "Try again";
