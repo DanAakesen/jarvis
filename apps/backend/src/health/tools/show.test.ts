@@ -284,12 +284,12 @@ describe('health_show publishing', () => {
     expect(operations(f)).toEqual(['update', 'show']);
     expect(f.execute.mock.calls.every(([who]) => who === owner)).toBe(true);
     const [update, show] = sent(f);
-    expect(update?.viewId).toBe('health-metrics-table');
-    expect(show?.viewId).toBe('health-metrics-table');
+    expect(update?.viewId).toBe('daily-metrics-table');
+    expect(show?.viewId).toBe('daily-metrics-table');
     expect(isWorkspaceCommand(update)).toBe(true);
     expect(isWorkspaceCommand(show)).toBe(true);
     expect(update?.commandId).not.toBe(show?.commandId);
-    expect(outcome.view).toEqual({ viewId: 'health-metrics-table', operation: 'refreshed', renderer: 'table', rowsShown: 2, rowsReturned: 2, partial: false, notes: [] });
+    expect(outcome.view).toEqual({ viewId: 'daily-metrics-table', operation: 'refreshed', renderer: 'table', rowsShown: 2, rowsReturned: 2, partial: false, notes: [] });
     expect(outcome.result).toEqual(answer(sources.metrics, [steps('2026-10-16', 1234), steps('2026-10-17', 61.5)]));
   });
 
@@ -350,12 +350,12 @@ describe('health_show publishing', () => {
     const beta = await idFor({ source: sources.heartRate, workoutId: 'workout-beta', display: 'chart' });
     const table = await idFor({ source: sources.heartRate, workoutId: 'workout-alpha' });
     expect(alpha.renderer).toBe('chart');
-    expect(alpha.viewId).toMatch(/^health-heart-rate-chart-[0-9a-f]{8}$/u);
+    expect(alpha.viewId).toMatch(/^daily-heart-rate-chart-[0-9a-f]{8}$/u);
     expect(again.viewId).toBe(alpha.viewId);
     expect(beta.viewId).not.toBe(alpha.viewId);
-    expect(beta.viewId).toMatch(/^health-heart-rate-chart-[0-9a-f]{8}$/u);
+    expect(beta.viewId).toMatch(/^daily-heart-rate-chart-[0-9a-f]{8}$/u);
     expect(table.renderer).toBe('table');
-    expect(table.viewId).toMatch(/^health-heart-rate-table-[0-9a-f]{8}$/u);
+    expect(table.viewId).toMatch(/^daily-heart-rate-table-[0-9a-f]{8}$/u);
   });
 
   it('passes the workout and metric selectors to the bounded heart-rate read', async () => {
@@ -382,7 +382,7 @@ describe('health_show publishing', () => {
     expect(outcome.view.renderer).toBe('chart');
     expect(outcome.view.rowsShown).toBe(2);
     expect(outcome.view.rowsReturned).toBe(2);
-    expect(outcome.view.viewId).toMatch(/^health-metrics-chart-step-count-[0-9a-f]{6}$/u);
+    expect(outcome.view.viewId).toMatch(/^daily-metrics-chart-step-count-[0-9a-f]{6}$/u);
     expect(outcome.view.partial).toBe(false);
     expect(outcome.result.items).toEqual(matching);
     expect(JSON.stringify(outcome.result)).not.toContain('a_unrelated_');
@@ -401,7 +401,7 @@ describe('health_show publishing', () => {
     expect(outcome.view).toMatchObject({ renderer: 'chart', rowsShown: 7, rowsReturned: 7, partial: true });
     expect(outcome.view.notes.join(' ')).toContain('More records are available beyond this page.');
     expect(outcome.result.coverage).toMatchObject({ returned: 7, hasMore: true });
-    expect(outcome.view.viewId).toMatch(/^health-metrics-chart-step-count-/u);
+    expect(outcome.view.viewId).toMatch(/^daily-metrics-chart-step-count-/u);
   });
 
   it('keeps an empty filtered result specific to the selected measurement', async () => {
@@ -411,7 +411,7 @@ describe('health_show publishing', () => {
     });
     expect(outcome.view.renderer).toBe('text');
     expect(outcome.view.rowsReturned).toBe(0);
-    expect(outcome.view.viewId).toMatch(/^health-metrics-table-step-count-/u);
+    expect(outcome.view.viewId).toMatch(/^daily-metrics-table-step-count-/u);
     expect(outcome.view.notes).toEqual([]);
     expect(sent(f)[0]?.view?.title).toContain('Step count');
   });
@@ -429,7 +429,7 @@ describe('health_show publishing', () => {
     const f = fixture(answer(sources.workouts, [workout]));
     const outcome = await run(f, { source: sources.workouts, ...week, display: 'chart' });
     expect(firstRead(f).query).toEqual({ source: sources.workouts, ...week, limit: maxShownRows });
-    expect(outcome.view).toMatchObject({ renderer: 'chart', viewId: 'health-workouts-chart', rowsShown: 1, notes: [] });
+    expect(outcome.view).toMatchObject({ renderer: 'chart', viewId: 'daily-workouts-chart', rowsShown: 1, notes: [] });
   });
 
   it('charts a requested per-day nutrition trend without sending the display selector or nutrient as query data', async () => {
@@ -462,7 +462,7 @@ describe('health_show publishing', () => {
     const f = fixture(answer(sources.sync, [{ feeds: [], heartbeat: null, inbox: null }]));
     const outcome = await run(f, { source: sources.sync });
     expect(firstRead(f).query).toEqual({ source: sources.sync });
-    expect(outcome.view).toMatchObject({ viewId: 'health-sync', renderer: 'detail' });
+    expect(outcome.view).toMatchObject({ viewId: 'daily-sync', renderer: 'detail' });
   });
 
   it('fails closed when the built view would not pass workspace validation', async () => {

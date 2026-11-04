@@ -328,7 +328,7 @@ describe('Health SQL owner schema on real SQL Server', () => {
 
   it('refuses destructive down migration while any Health record exists', async () => {
     await expect(revertMigration(pool, (await readMigrations()).filter((migration) => migration.name === filename), await readDownMigration(filename)))
-      .rejects.toThrow('Health rollback requires empty tables');
+      .rejects.toThrow('Daily rollback requires empty tables');
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(2);
   });
 
