@@ -48,6 +48,7 @@
 "notes.reload" = "Genindlæs seneste";
 "notes.titleField" = "Titel";
 "notes.folderField" = "Mappe";
+"notes.newFolder" = "Ny mappe";
 "notes.contentField" = "Tekst";
 "notes.dueDate" = "Dato";
 "notes.dueTime" = "Tid";

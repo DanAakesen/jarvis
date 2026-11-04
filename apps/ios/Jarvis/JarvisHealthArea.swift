@@ -359,6 +359,8 @@ struct JarvisHealthArea: View {
                 language: language,
                 onSaved: { refreshVersion += 1 }
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $newWorkoutPresented) {
             JarvisHealthNewWorkoutSheet(
@@ -366,6 +368,8 @@ struct JarvisHealthArea: View {
                 language: language,
                 onSaved: { refreshVersion += 1 }
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .task {
             guard observeRefreshEvents, let client else { return }

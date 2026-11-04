@@ -148,12 +148,12 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(workout.waitForExistence(timeout: 10))
         workout.tap()
         XCTAssertTrue(app.buttons["today.workout.session.chest"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["today.lift.type.benchPress"].exists, "Log workout shows workout types, not lifts")
+        XCTAssertFalse(app.textFields["today.lift.name"].exists, "Log workout shows workout types, not lifts")
         app.buttons["sheet.cancel"].tap()
         let lift = app.buttons["today.logLift"]
         XCTAssertTrue(lift.waitForExistence(timeout: 5))
         lift.tap()
-        XCTAssertTrue(app.buttons["today.lift.type.benchPress"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textFields["today.lift.name"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["today.workout.session.chest"].exists, "Log lift shows lifts, not workout types")
         app.buttons["sheet.cancel"].tap()
     }
@@ -182,11 +182,12 @@ final class TodayUITests: XCTestCase {
         let log = app.buttons["today.logLift"]
         XCTAssertTrue(log.waitForExistence(timeout: 10))
         log.tap()
-        let bench = app.buttons["today.lift.type.benchPress"]
-        XCTAssertTrue(bench.waitForExistence(timeout: 5))
+        let name = app.textFields["today.lift.name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
         let save = app.buttons["sheet.confirm"]
         XCTAssertFalse(save.isEnabled)
-        bench.tap()
+        name.tap()
+        name.typeText("Bench press")
         for (field, value) in [("weight", "60"), ("reps", "8"), ("sets", "3")] {
             let input = app.textFields["today.lift.\(field)"]
             XCTAssertTrue(sheetElement("today.lift.\(field)").exists, "today.lift.\(field) missing")

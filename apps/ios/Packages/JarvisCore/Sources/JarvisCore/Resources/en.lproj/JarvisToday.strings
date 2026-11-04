@@ -85,6 +85,8 @@
 "today.lift.barbellRow" = "Barbell row";
 "today.lift.pullUp" = "Pull-up";
 "today.liftType" = "Lift";
+"today.liftName" = "Exercise";
+"today.liftNameHint" = "Type a name. Your earlier exercises show up here.";
 "today.logDate" = "Date";
 "today.setDate" = "Set date";
 "today.clearDate" = "Clear date";

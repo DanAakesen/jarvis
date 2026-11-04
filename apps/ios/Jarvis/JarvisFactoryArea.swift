@@ -211,6 +211,8 @@ struct JarvisFactoryArea: View {
                         refreshVersion += 1
                     }
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
         }
         .navigationDestination(isPresented: $taskPresented) {

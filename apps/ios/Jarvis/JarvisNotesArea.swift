@@ -60,6 +60,7 @@ struct JarvisNotesCopy {
     var reload: String { text(.reload) }
     var titleField: String { text(.titleField) }
     var folderField: String { text(.folderField) }
+    func newFolder(_ name: String) -> String { "\(text(.newFolder)): \(name)" }
     var contentField: String { text(.contentField) }
     var dueDate: String { text(.dueDate) }
     var dueTime: String { text(.dueTime) }

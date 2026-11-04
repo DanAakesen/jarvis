@@ -19,7 +19,9 @@ struct JarvisTodayGymSheet: View {
     let kind: Kind
 
     @State private var session: JarvisGymSessionType?
-    @State private var liftType: JarvisGymLiftType?
+    @State private var liftName = ""
+    @State private var manualSession: JarvisGymSessionType = .chest
+    @State private var memory = JarvisLiftNameMemory.load()
     @State private var weight = ""
     @State private var reps = ""
     @State private var sets = ""
@@ -39,13 +41,15 @@ struct JarvisTodayGymSheet: View {
         JarvisTodayLocalization.string(key, language: language)
     }
 
+    private var trimmedName: String { liftName.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var knownSession: JarvisGymSessionType? { memory.session(for: trimmedName) }
+    private var liftSession: JarvisGymSessionType { knownSession ?? manualSession }
+
     private var parsedLift: JarvisGymLift? {
-        guard let liftType,
+        guard !trimmedName.isEmpty,
               let kilos = Double(weight.replacingOccurrences(of: ",", with: ".")),
               let repCount = Int(reps), let setCount = Int(sets) else { return nil }
-        let lift = JarvisGymLift(
-            exercise: liftType.title(language: language), weightKg: kilos, reps: repCount, sets: setCount
-        )
+        let lift = JarvisGymLift(exercise: trimmedName, weightKg: kilos, reps: repCount, sets: setCount)
         return lift.isValid ? lift : nil
     }
 
@@ -89,13 +93,43 @@ struct JarvisTodayGymSheet: View {
                         }
                     }
                 case .lift:
-                    Section(copy(.liftType)) {
-                        ForEach(JarvisGymLiftType.allCases) { option in
-                            choiceRow(
-                                title: option.title(language: language),
-                                isSelected: liftType == option,
-                                identifier: "today.lift.type.\(option.rawValue)"
-                            ) { liftType = option }
+                    Section {
+                        TextField(copy(.liftName), text: $liftName)
+                            .textInputAutocapitalization(.sentences)
+                            .accessibilityIdentifier("today.lift.name")
+                            .onChange(of: liftName) { resetStatus() }
+                        let suggestions = memory.suggestions(matching: liftName, language: language)
+                        if !suggestions.isEmpty {
+                            ScrollView(.horizontal) {
+                                HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
+                                    ForEach(suggestions) { suggestion in
+                                        JarvisLabelledButton(
+                                            title: suggestion.name,
+                                            identifier: "today.lift.suggestion.\(suggestion.id)",
+                                            isCompact: true
+                                        ) {
+                                            liftName = suggestion.name
+                                            resetStatus()
+                                        }
+                                    }
+                                }
+                            }
+                            .scrollIndicators(.hidden)
+                        }
+                    } header: {
+                        Text(copy(.liftType))
+                    } footer: {
+                        Text(copy(.liftNameHint))
+                    }
+                    if !trimmedName.isEmpty, knownSession == nil {
+                        Section(copy(.sessionTypeGroup)) {
+                            Picker(copy(.sessionTypeGroup), selection: $manualSession) {
+                                ForEach(JarvisGymSessionType.allCases) { option in
+                                    Text(option.title(language: language)).tag(option)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .accessibilityIdentifier("today.lift.session")
                         }
                     }
                     Section {
@@ -184,7 +218,7 @@ struct JarvisTodayGymSheet: View {
 
     private func save() async {
         guard let date, canSave else { return }
-        let target = kind == .workout ? session : liftType?.session
+        let target = kind == .workout ? session : liftSession
         guard let target else { return }
         status = .saving
         do {
@@ -192,6 +226,10 @@ struct JarvisTodayGymSheet: View {
                 session: target, lift: kind == .lift ? parsedLift : nil, on: date
             )
             status = .saved
+            if kind == .lift {
+                memory.record(name: trimmedName, session: liftSession)
+                memory.save()
+            }
         } catch let error as JarvisGymLogError {
             switch error {
             case .unavailable: status = .failed(.saveUnavailable)

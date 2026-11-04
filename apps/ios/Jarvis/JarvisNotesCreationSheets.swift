@@ -16,15 +16,52 @@ struct JarvisNewNoteSheet: View {
     @State private var errorMessage: String?
     @State private var outcomeUnknown = false
     @State private var authorizationUnavailable = false
+    @State private var directories: [String] = []
+
+    private var trimmedFolder: String { folder.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var folderMatches: [String] {
+        Array(directories.filter {
+            $0 != trimmedFolder && (trimmedFolder.isEmpty || $0.localizedCaseInsensitiveContains(trimmedFolder))
+        }.prefix(5))
+    }
+
+    private var createsNewFolder: Bool {
+        !trimmedFolder.isEmpty && JarvisNotesLogic.validFolder(trimmedFolder) && !directories.contains(trimmedFolder)
+    }
+
+    /// A lookup into the vault folders as you type, with the option to start a new folder. The folder is created
+    /// when the note is saved, because a vault folder only exists once it holds a note.
+    @ViewBuilder
+    private var folderLookup: some View {
+        Section {
+            TextField(copy.folderField, text: $folder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("notes.create.folder")
+            ForEach(folderMatches, id: \.self) { directory in
+                Button {
+                    folder = directory
+                } label: {
+                    Label(directory, systemImage: "folder")
+                        .foregroundStyle(.primary)
+                }
+                .accessibilityIdentifier("notes.create.folder.\(directory)")
+            }
+            if createsNewFolder {
+                Label(copy.newFolder(trimmedFolder), systemImage: "folder.badge.plus")
+                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                    .accessibilityIdentifier("notes.create.folder.new")
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
             JarvisForm {
                 TextField(copy.titleField, text: $title)
                     .textInputAutocapitalization(.sentences)
-                TextField(copy.folderField, text: $folder)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                folderLookup
                 Section {
                     TextEditor(text: $content)
                         .frame(minHeight: JarvisDesignTokens.notesEditorMinimumHeight)
@@ -50,6 +87,9 @@ struct JarvisNewNoteSheet: View {
             }
         }
         .onAppear { folder = initialFolder }
+        .task {
+            directories = (try? await client.folderTree().directories) ?? []
+        }
     }
 
     private var canCreate: Bool {

@@ -290,6 +290,8 @@ struct JarvisMemorySettingsView: View {
                     }
                 )
             }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 

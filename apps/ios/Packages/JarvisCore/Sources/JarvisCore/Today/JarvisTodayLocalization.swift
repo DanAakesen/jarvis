@@ -81,6 +81,8 @@ public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
     case liftBarbellRow = "today.lift.barbellRow"
     case liftPullUp = "today.lift.pullUp"
     case liftType = "today.liftType"
+    case liftName = "today.liftName"
+    case liftNameHint = "today.liftNameHint"
     case logDate = "today.logDate"
     case setDate = "today.setDate"
     case clearDate = "today.clearDate"

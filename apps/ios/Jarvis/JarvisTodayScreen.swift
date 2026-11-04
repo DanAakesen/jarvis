@@ -558,7 +558,7 @@ struct JarvisTodayScreen: View {
             JarvisTodayGymSheet(
                 model: model, language: language, kind: presented.id == "lift" ? .lift : .workout
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
     }

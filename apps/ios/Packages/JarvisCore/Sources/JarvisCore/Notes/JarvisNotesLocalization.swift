@@ -66,6 +66,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case reload = "notes.reload"
     case titleField = "notes.titleField"
     case folderField = "notes.folderField"
+    case newFolder = "notes.newFolder"
     case contentField = "notes.contentField"
     case dueDate = "notes.dueDate"
     case dueTime = "notes.dueTime"

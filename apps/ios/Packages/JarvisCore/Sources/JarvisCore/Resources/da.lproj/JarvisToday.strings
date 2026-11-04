@@ -85,6 +85,8 @@
 "today.lift.barbellRow" = "Stangroning";
 "today.lift.pullUp" = "Pull-up";
 "today.liftType" = "Løft";
+"today.liftName" = "Øvelse";
+"today.liftNameHint" = "Skriv et navn. Dine tidligere øvelser dukker op her.";
 "today.logDate" = "Dato";
 "today.setDate" = "Vælg dato";
 "today.clearDate" = "Ryd dato";

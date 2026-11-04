@@ -202,6 +202,8 @@ enum JarvisDesignTokens {
     static let notesRowMinimumHeight: CGFloat = 52
     static let notesIconSize: CGFloat = 18
     static let notesChipSpacing: CGFloat = 8
+    /// Tighter rows in forms and sheets, which open at half height.
+    static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16
     static let labelledVerticalPadding: CGFloat = 10
     static let notesGraphNodeRadius: CGFloat = 5
@@ -400,6 +402,7 @@ struct JarvisForm<Content: View>: View {
         Form {
             content.listRowBackground(JarvisGlassSurface())
         }
+        .environment(\.defaultMinListRowHeight, JarvisDesignTokens.sheetRowMinimumHeight)
         .jarvisAmbientBackground()
     }
 }
