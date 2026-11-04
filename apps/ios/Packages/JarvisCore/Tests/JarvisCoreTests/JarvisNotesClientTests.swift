@@ -252,4 +252,22 @@ private actor NotesTokenStore: TokenStore {
 private actor NotesTokenProvider: AccessTokenProvider {
     func currentToken(for request: HTTPRequest) async throws -> String { "entra.fixture.token" }
     func requestSignIn() async {}
+
+    func testOverviewFolderSharesAndRecentNotes() throws {
+        func node(_ id: String, _ folder: String, _ updated: String) -> String {
+            """
+            {"id":"\(id)","path":"\(folder)/\(id).md","title":"\(id)","folder":"\(folder)","directory":"\(folder)","updatedAt":"\(updated)","degree":0}
+            """
+        }
+        let json = """
+        {"nodes":[\(node("a", "Work", "2026-01-01")),\(node("b", "Work", "2026-03-01")),\(node("c", "Home", "2026-02-01"))],
+         "edges":[],"updatedAt":"2026-03-01"}
+        """
+        let graph = try JSONDecoder().decode(KnowledgeGraph.self, from: Data(json.utf8))
+        XCTAssertEqual(
+            JarvisNotesPresentation.folderShares(graph),
+            [JarvisNotesFolderShare(folder: "Work", count: 2), JarvisNotesFolderShare(folder: "Home", count: 1)]
+        )
+        XCTAssertEqual(JarvisNotesPresentation.recentNotes(graph, limit: 2).map(\.id), ["b", "c"])
+    }
 }

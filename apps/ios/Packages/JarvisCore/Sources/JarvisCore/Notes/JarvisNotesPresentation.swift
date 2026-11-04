@@ -70,3 +70,23 @@ public enum JarvisNotesPresentation {
         folders[index] = folder
     }
 }
+
+public struct JarvisNotesFolderShare: Equatable, Sendable, Identifiable {
+    public let folder: String
+    public let count: Int
+    public var id: String { folder }
+}
+
+extension JarvisNotesPresentation {
+    /// Notes per top-level folder, largest first, for the overview colour bar and its legend. Root notes use "".
+    public static func folderShares(_ graph: KnowledgeGraph) -> [JarvisNotesFolderShare] {
+        Dictionary(grouping: graph.nodes, by: \.folder)
+            .map { JarvisNotesFolderShare(folder: $0.key, count: $0.value.count) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.folder.localizedStandardCompare($1.folder) == .orderedAscending }
+    }
+
+    /// The most recently updated notes, newest first, for the Recent strip.
+    public static func recentNotes(_ graph: KnowledgeGraph, limit: Int = 5) -> [KnowledgeGraphNode] {
+        Array(graph.nodes.sorted { $0.updatedAt > $1.updatedAt }.prefix(max(0, limit)))
+    }
+}

@@ -140,6 +140,7 @@ struct JarvisFactoryArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if showsSegmentRow { segmentRow }
             if previewState == .loading {
                 FactoryLoadingView(copy: copy, releases: segment == .releases)
             } else if client == nil {
@@ -261,7 +262,7 @@ struct JarvisFactoryArea: View {
     private var createIdentity: String { board == nil ? "waiting" : "create-ready" }
 
     private var header: some View {
-        JarvisPageHeader(title: copy.text(.title), language: language) { filterButton }
+        JarvisPageHeader(title: copy.text(.title), language: language)
     }
 
     private var headline: JarvisPagePhrase? {
@@ -291,18 +292,26 @@ struct JarvisFactoryArea: View {
         .accessibilityLabel(copy.text(.stageTasks))
     }
 
-    private var segmentSwitcher: some View {
+    private var showsSegmentRow: Bool {
+        previewState != .loading && client != nil && !projects.isEmpty
+    }
+
+    /// The second row, under the title: the narrowed segmented bar with the filter button to its right.
+    private var segmentRow: some View {
         HStack(spacing: JarvisPageHeaderMetrics.spacing) {
-            ForEach(FactorySegment.allCases) { item in
-                JarvisLabelledButton(
-                    title: segmentTitle(item),
-                    identifier: "factory.segment.\(item.rawValue)",
-                    isFullWidth: true,
-                    isSelected: segment == item
-                ) { segment = item }
-            }
+            JarvisSegmentedBar(
+                title: copy.text(.title),
+                identifierPrefix: "factory.segment",
+                items: FactorySegment.allCases.map {
+                    JarvisTabItem(tag: $0, title: segmentTitle($0), identifier: "factory.segment.\($0.rawValue)")
+                },
+                selection: $segment
+            )
+            filterButton
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
+        .padding(.bottom, JarvisPageHeaderMetrics.actionSpacing)
+        .accessibilityIdentifier("factory.segmentRow")
     }
 
     /// The new-task plus sits beside the search field, below the full-width toggle.
@@ -317,7 +326,7 @@ struct JarvisFactoryArea: View {
         }
     }
 
-    /// One round glass filter button in the header plus position (top right). Its small menu has a checkmark on the
+    /// One round glass filter button right of the segmented bar. Its small menu has a checkmark on the
     /// selected project and, on the board, the agent and state filters.
     @ViewBuilder
     private var filterButton: some View {
@@ -510,22 +519,19 @@ struct JarvisFactoryArea: View {
     @State private var releaseViewForDestination: FactoryReleaseView?
 
     private var bottomDock: some View {
-        VStack(spacing: JarvisPageHeaderMetrics.spacing) {
-            segmentSwitcher
-            HStack(spacing: JarvisPageHeaderMetrics.spacing) {
-                JarvisSearchField(
-                    placeholder: copy.text(segment == .releases ? .searchReleases : .search),
-                    text: $searchText,
-                    identifier: "factory.search",
-                    clearTitle: copy.text(.clearSearch),
-                    accessibilityTitle: copy.text(
-                        segment == .releases ? .searchReleasesAccessibility : .searchAccessibility
-                    )
+        HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+            JarvisSearchField(
+                placeholder: copy.text(segment == .releases ? .searchReleases : .search),
+                text: $searchText,
+                identifier: "factory.search",
+                clearTitle: copy.text(.clearSearch),
+                accessibilityTitle: copy.text(
+                    segment == .releases ? .searchReleasesAccessibility : .searchAccessibility
                 )
-                plusButton
-            }
-            .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
+            )
+            plusButton
         }
+        .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
         .padding(.vertical, JarvisPageHeaderMetrics.spacing)
     }
 
