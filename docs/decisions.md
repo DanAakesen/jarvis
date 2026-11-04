@@ -10834,3 +10834,11 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Home: Today / Tasks due use the full-width `JarvisSegmentedBar` with the plus on its right.
 - Home composer (checked by reading code): `sendDraft` plays the lift-off animation then hands the text to Chat, which sends it once history has loaded. Every plus-menu choice is handed to Chat, which performs it (video and screen share turn on there). Same `JarvisComposerBar` and `JarvisComposerPlusMenu` as Chat.
 - Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore `swift test` passes. HIG pages used: Layout, Lists and tables, Segmented controls, Menus, Typography.
+
+## Health hero carousel and charts (P15-83)
+
+- The Health page hero is a swipeable carousel (Training, Sleep, Nutrition) with equal card height and page dots. Every Health bar chart uses `JarvisHealthBarChart`: headline is the average (or the tapped day; tap again to return), target chip and dashed target line, weekday labels, bars grow from the baseline.
+- Chart value logic (`JarvisHealthChartValues`) lives in JarvisCore and is unit tested. Missing days stay empty; averages only use recorded days.
+- Sleep goal (default 8 h), kcal (2200), carbs (250 g) and fat (70 g) goals are stored on the device (`JarvisHealthGoals`, Settings > Health goals) because the Daily target API only serves training and resting/deficit/protein targets. Protein keeps using the server target.
+- The hero reads sleep and nutrition days for the last seven days whatever the selected period. The separate Nutrition panel was removed; its protein chart is the Nutrition hero chart. HealthKit already requests every readable type (`JarvisHealthKitAccess`); shown data comes from the Daily reads and shows an empty state when there is none.
+- Not verified: no Xcode in the sandbox, so the app-target edits were not compiled. JarvisCore `swift test` passes.

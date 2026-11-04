@@ -8,6 +8,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
     let period: JarvisHealthPeriod
     let language: JarvisAppLanguage
     let accessory: Accessory
+    var fillsHeight = false
 
     init(
         data: JarvisHealthDashboardData,
@@ -52,6 +53,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
                 )
             }
         }
+        .fillingHeight(fillsHeight)
     }
 
     private func ring(
@@ -117,6 +119,14 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
             guard let date, date >= period.startDate, date <= period.endDate else { return false }
             return JarvisHealthLogic.workoutKind(row["workout_type"]?.stringValue) == kind
         }.count)
+    }
+}
+
+extension JarvisHealthRingsSection {
+    func fillingHeight(_ fills: Bool = true) -> Self {
+        var copy = self
+        copy.fillsHeight = fills
+        return copy
     }
 }
 
@@ -578,97 +588,6 @@ struct JarvisHealthBodySection: View {
         case .offline: return copy.text(.offline)
         case .available, .empty: return copy.text(.notRecorded)
         }
-    }
-}
-
-struct JarvisHealthNutritionSection: View {
-    let read: JarvisHealthRead
-    let targets: JarvisNutritionTargets?
-    let targetFailure: JarvisHealthFailure?
-    let period: JarvisHealthPeriod
-    let language: JarvisAppLanguage
-
-    private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
-
-    var body: some View {
-        JarvisHealthPanel(title: copy.text(.nutrition)) {
-            if read.state == .loading {
-                JarvisHealthStateLine(state: .loading, language: language)
-            } else if read.state == .notServed || read.state == .failed || read.state == .offline {
-                JarvisHealthStateLine(state: read.state, language: language)
-            } else if proteinPoints.isEmpty {
-                Text(copy.text(.empty))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            } else {
-                Chart {
-                    ForEach(proteinPoints) { point in
-                        BarMark(
-                            x: .value(copy.text(.date), point.date),
-                            y: .value(copy.text(.proteinChart), point.value)
-                        )
-                        .foregroundStyle(JarvisDesignTokens.healthAccent)
-                        .annotation(position: .top) {
-                            if point.isPartial {
-                                Text("≤")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    if let target = targets?.targets.proteinGrams {
-                        RuleMark(y: .value(copy.text(.target), target))
-                            .lineStyle(StrokeStyle(
-                                lineWidth: JarvisDesignTokens.healthTargetLineWidth,
-                                dash: JarvisDesignTokens.healthTargetLineDash
-                            ))
-                            .foregroundStyle(JarvisDesignTokens.healthAccentSecondary)
-                    }
-                }
-                .chartLegend(.hidden)
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisValueLabel()
-                    }
-                }
-                .frame(height: JarvisDesignTokens.healthChartHeight)
-                .accessibilityLabel(copy.text(.proteinChart))
-                .accessibilityValue(chartSummary)
-                if let failure = targetFailure {
-                    Text(failure.title(language: language))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if targets?.targets.proteinGrams == nil {
-                    Text(copy.text(.noTarget))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private var proteinPoints: [JarvisHealthChartPoint] {
-        read.items.compactMap { row in
-            guard let date = row["meal_date"]?.stringValue,
-                  date >= period.startDate, date <= period.endDate,
-                  (row["meal_count"]?.numberValue ?? 0) > 0,
-                  let value = row["protein_grams"]?.numberValue,
-                  let parsedDate = parseDate(date) else {
-                return nil
-            }
-            let partial = row["partial_nutrients"]?.arrayValue?.contains(.string("protein_grams")) == true
-            return JarvisHealthChartPoint(date: parsedDate, value: value, isPartial: partial)
-        }
-        .sorted { $0.date < $1.date }
-    }
-
-    private var chartSummary: String {
-        let values = proteinPoints.map {
-            "\($0.isPartial ? "≤ " : "")\(formatNumber($0.value, language: language))"
-        }
-        guard !values.isEmpty else { return copy.text(.empty) }
-        let target = targets?.targets.proteinGrams.map { "\(copy.text(.targetLabel)) \(formatNumber($0, language: language)) g" }
-        return ([target] + [values.joined(separator: ", ")]).compactMap { $0 }.joined(separator: ". ")
     }
 }
 
