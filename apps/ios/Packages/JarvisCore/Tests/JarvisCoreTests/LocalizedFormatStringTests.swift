@@ -22,7 +22,7 @@ final class LocalizedFormatStringTests: XCTestCase {
         "health.target": ["@"],
         "today.greeting.nextEvent": ["@", "@"],
         "today.greeting.tasks": ["ld"],
-        "today.greeting.steps": ["ld"],
+        "today.greeting.steps": ["@"],
         "today.greeting.workouts": ["ld"],
         "today.showMore": ["ld"],
         "today.ago.days": ["ld"],

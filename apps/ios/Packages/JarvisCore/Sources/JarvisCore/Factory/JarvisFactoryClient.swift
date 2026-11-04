@@ -225,7 +225,10 @@ public final class JarvisFactoryClient: Sendable {
         return view
     }
 
+    /// `onConnected` runs once the stream is open, so the caller can tell an established connection from a failed
+    /// one even when no board event arrives for a while.
     public func listenForBoardUpdates(
+        onConnected: () async -> Void = {},
         _ receive: (FactoryBoardUpdate) async -> Void
     ) async throws {
         let response = try await client.performChatStream(
@@ -234,6 +237,7 @@ public final class JarvisFactoryClient: Sendable {
             accept: "text/event-stream",
             headers: [:]
         )
+        await onConnected()
         var parser = SSEParser()
         for try await chunk in response.body {
             for event in parser.append(chunk) {

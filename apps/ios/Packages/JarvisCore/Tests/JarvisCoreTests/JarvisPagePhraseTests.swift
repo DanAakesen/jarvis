@@ -44,7 +44,7 @@ final class JarvisPagePhraseTests: XCTestCase {
         let open = JarvisHealthPagePhrase.Input(isToday: true, gymDone: 0, gymTarget: 1, steps: 4200, stepsTarget: 8000)
         XCTAssertEqual(
             JarvisHealthPagePhrase.make(open, language: .en).plainText,
-            "Dan, you are at 4,200 of 8,000 steps, and today’s workout is still open."
+            "Dan, you are at 4.2k of 8k steps, and today’s workout is still open."
         )
         let done = JarvisHealthPagePhrase.Input(isToday: true, gymDone: 1, gymTarget: 1, steps: 4200, stepsTarget: 8000)
         XCTAssertTrue(JarvisHealthPagePhrase.make(done, language: .en).plainText.hasPrefix("Today’s workout is done"))

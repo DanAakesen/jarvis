@@ -357,3 +357,21 @@ private func isValidSubmissionID(_ value: String) -> Bool {
         options: .regularExpression
     ) != nil
 }
+
+/// What the Factory page may call "offline". Only a real network failure counts: a server error, a rejected token
+/// or an event stream the server closed while the phone was online must not show the offline notice.
+public enum JarvisFactoryConnectionPolicy {
+    public static func isNetworkFailure(_ error: Error) -> Bool {
+        if let error = error as? JarvisClientError {
+            return error == .networkFailure || error == .timedOut
+        }
+        if let error = error as? URLError {
+            return [.notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .timedOut, .cannotConnectToHost,
+                    .cannotFindHost, .dnsLookupFailed].contains(error.code)
+        }
+        return false
+    }
+
+    /// Consecutive failed connection attempts before the live-update stream is called offline.
+    public static let offlineAfterFailures = 3
+}

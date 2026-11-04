@@ -61,7 +61,9 @@ public struct JarvisTodayGreeting: Equatable, Sendable {
         }
         // Only values that were actually read: steps and logged workouts are left out until they are known.
         if let stepsToday, stepsToday > 0 {
-            sentences.append(JarvisTodayLocalization.string(.greetingSteps, count: stepsToday, language: language))
+            sentences.append(JarvisTodayLocalization.string(
+                .greetingSteps, text: JarvisNumberFormat.compact(stepsToday, language: language), language: language
+            ))
         }
         if workoutsThisWeek == 1 {
             sentences.append(JarvisTodayLocalization.string(.greetingWorkoutOne, language: language))

@@ -117,6 +117,15 @@ public enum JarvisTodayLocalization {
         String(format: string(key, language: language), locale: language.locale, count)
     }
 
+    /// For the keys whose value carries one string placeholder (`%@`).
+    public static func string(
+        _ key: JarvisTodayLocalizationKey,
+        text: String,
+        language: JarvisAppLanguage = .default
+    ) -> String {
+        string(key, language: language).replacingOccurrences(of: "%@", with: text)
+    }
+
     /// For the keys whose value carries two string placeholders (`%@`).
     public static func string(
         _ key: JarvisTodayLocalizationKey,

@@ -582,7 +582,7 @@ struct JarvisFactoryArea: View {
         } catch {
             guard !Task.isCancelled else { return }
             contentError = true
-            connection = .offline
+            if JarvisFactoryConnectionPolicy.isNetworkFailure(error) { connection = .offline }
         }
         contentLoading = false
     }
@@ -600,21 +600,24 @@ struct JarvisFactoryArea: View {
         guard liveUpdatesEnabled, let client else { return }
         while !Task.isCancelled {
             do {
-                try await client.listenForBoardUpdates { update in
-                    guard update.projectId == selectedProjectID else { return }
+                try await client.listenForBoardUpdates(onConnected: {
                     await MainActor.run {
                         boardEventFailures = 0
                         boardRetrySeconds = 1
                         connection = .connected
+                    }
+                }) { update in
+                    guard update.projectId == selectedProjectID else { return }
+                    await MainActor.run {
                         refreshVersion += 1
                     }
                 }
-                boardEventFailures += 1
-                connection = boardEventFailures >= 3 ? .offline : .reconnecting
             } catch {
                 guard !Task.isCancelled else { return }
                 boardEventFailures += 1
-                connection = boardEventFailures >= 3 ? .offline : .reconnecting
+                let failedOffline = JarvisFactoryConnectionPolicy.isNetworkFailure(error)
+                    && boardEventFailures >= JarvisFactoryConnectionPolicy.offlineAfterFailures
+                connection = failedOffline ? .offline : .reconnecting
             }
             do {
                 try await Task.sleep(for: .seconds(boardRetrySeconds))
