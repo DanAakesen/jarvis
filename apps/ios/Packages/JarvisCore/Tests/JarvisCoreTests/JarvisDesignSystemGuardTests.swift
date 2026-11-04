@@ -66,9 +66,10 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
     func testNoScreenUsesAnAdHocSpinner() throws {
         let spinner = #"ProgressView\((?!value:)"#
         XCTAssertEqual(
-            try offenders(spinner, allowing: Self.sharedLayer.union(["JarvisLoadingView.swift", "FactoryTaskActivitySurface.swift"])),
+            try offenders(spinner, allowing: ["JarvisLoadingView.swift", "FactoryTaskActivitySurface.swift"]),
             []
         )
+        XCTAssertEqual(try offenders(#"\.redacted\(reason:\s*\.placeholder"#, allowing: ["JarvisLoadingView.swift"]), [])
     }
 
     func testNoScreenDefinesAButtonStyle() throws {

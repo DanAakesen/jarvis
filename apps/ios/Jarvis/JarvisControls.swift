@@ -227,7 +227,7 @@ extension View {
 
 /// The one icon button, identical to the Chat header buttons: Apple glass, 44 pt target, secondary accent icon.
 /// Optional busy state (a progress view in place of the icon), count badge, selected state, tint and short text glyph.
-/// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle, ProgressView.
+/// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle.
 struct JarvisIconButton: View {
     let title: String
     var systemImage: String?
@@ -253,6 +253,38 @@ struct JarvisIconButton: View {
         .accessibilityLabel(title)
         .accessibilityHint(hint)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// The task checkbox: no border or glass. When checked it animates into a check mark, then runs `action` so the row
+/// clears after the check is seen.
+struct JarvisCheckButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let title: String
+    var identifier: String
+    let action: () -> Void
+    @State private var isChecked = false
+
+    var body: some View {
+        Button {
+            guard !isChecked else { return }
+            if reduceMotion { isChecked = true } else { withAnimation(.snappy(duration: 0.25)) { isChecked = true } }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 350))
+                action()
+            }
+        } label: {
+            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                .font(.title2)
+                .foregroundStyle(isChecked ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isChecked ? .isSelected : [])
         .accessibilityIdentifier(identifier)
     }
 }
@@ -332,7 +364,7 @@ private struct JarvisLabelledContent: View {
     var body: some View {
         HStack(spacing: 8) {
             if isBusy {
-                ProgressView().accessibilityHidden(true)
+                JarvisLoadingView(size: .inline).accessibilityHidden(true)
             } else if let leading {
                 leading
             } else if let systemImage {
@@ -622,8 +654,7 @@ struct JarvisShutterButton: View {
     var body: some View {
         Button(action: action) {
             if isBusy {
-                ProgressView()
-                    .tint(.white)
+                JarvisLoadingView(size: .inline)
                     .frame(width: JarvisDesignTokens.voiceControlDiameter, height: JarvisDesignTokens.voiceControlDiameter)
             } else {
                 Circle()
@@ -657,7 +688,7 @@ private struct JarvisControlGlyph: View {
     var body: some View {
         Group {
             if isBusy {
-                ProgressView()
+                JarvisLoadingView(size: .inline)
             } else if let text {
                 Text(text)
                     .font(.system(size: 15, weight: .semibold))
@@ -895,7 +926,7 @@ private struct JarvisComposerGlyph: View {
     var body: some View {
         Group {
             if isBusy {
-                ProgressView()
+                JarvisLoadingView(size: .inline)
             } else {
                 Image(systemName: systemImage)
                     .font(.system(size: iconSize, weight: .regular))

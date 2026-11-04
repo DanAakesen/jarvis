@@ -234,8 +234,6 @@ enum JarvisDesignTokens {
     static let settingsRowMinimumHeight = notesRowMinimumHeight
     static let settingsIconSize = notesIconSize
     static let settingsSearchRadius: CGFloat = 20
-    static let settingsSkeletonValueWidth: CGFloat = 64
-    static let settingsSkeletonValueHeight: CGFloat = 12
     static let settingsAccent = primaryAccent
     static let settingsSecondaryAccent = secondaryAccent
     static let healthHorizontalInset: CGFloat = 16

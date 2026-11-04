@@ -14,6 +14,20 @@ public struct NotesGraphPosition: Equatable, Sendable {
 }
 
 public enum JarvisNotesPresentation {
+    /// The most recently modified notes, newest first. Nodes whose date cannot be read sort last.
+    public static func recentNotes(_ nodes: [KnowledgeGraphNode], limit: Int = 5) -> [KnowledgeGraphNode] {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions.insert(.withFractionalSeconds)
+        let plain = ISO8601DateFormatter()
+        func date(_ node: KnowledgeGraphNode) -> Date {
+            fractional.date(from: node.updatedAt) ?? plain.date(from: node.updatedAt) ?? .distantPast
+        }
+        return Array(nodes.sorted {
+            let (a, b) = (date($0), date($1))
+            return a == b ? $0.path < $1.path : a > b
+        }.prefix(max(0, limit)))
+    }
+
     public static func folderTree(_ paths: [String]) -> [VaultFolderNode] {
         var roots: [VaultFolderNode] = []
         for path in Set(paths).sorted() {

@@ -13,12 +13,41 @@ final class JarvisTodayGymTests: XCTestCase {
     }
 
     func testFiveSessionTypesHaveBothLanguages() {
-        XCTAssertEqual(JarvisGymSessionType.allCases.map(\.rawValue), ["chest", "back", "arms", "legs", "cardio"])
+        XCTAssertEqual(JarvisGymSessionType.loggable.map(\.rawValue), ["chest", "back", "arms", "legs", "cardio"])
+        XCTAssertEqual(JarvisGymSessionType.strength.title(language: .en), "Strength training")
+        XCTAssertEqual(JarvisGymSessionType.strength.title(language: .da), "Styrketræning")
+        XCTAssertFalse(JarvisGymSessionType.other.shortTitle(language: .da).hasPrefix("today."))
         XCTAssertEqual(JarvisGymSessionType.chest.title(language: .en), "Chest + Triceps + Core")
         XCTAssertEqual(JarvisGymSessionType.back.title(language: .da), "Ryg + Biceps + Core")
         XCTAssertEqual(JarvisGymSessionType.arms.shortTitle(language: .da), "Arme")
         XCTAssertEqual(JarvisGymSessionType.legs.title(language: .en), "Legs + Core")
         XCTAssertEqual(JarvisGymSessionType.cardio.shortTitle(language: .en), "Cardio")
+    }
+
+    func testHealthStrengthMergesWithAnyNearbyStrengthLogButNotCardio() {
+        XCTAssertTrue(JarvisCombinedGymLogStore.sameWorkout(.chest, .strength))
+        XCTAssertFalse(JarvisCombinedGymLogStore.sameWorkout(.cardio, .strength))
+        XCTAssertFalse(JarvisCombinedGymLogStore.sameWorkout(.chest, .cardio))
+    }
+
+    func testDurationTextAndActiveSummary() {
+        XCTAssertEqual(JarvisTodayLocalization.durationText(minutes: 45, language: .en), "45m")
+        XCTAssertEqual(JarvisTodayLocalization.durationText(minutes: 125, language: .da), "2t 5m")
+        XCTAssertEqual(JarvisTodayLocalization.durationText(minutes: 120, language: .en), "2h")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let entries = [
+            JarvisGymLogEntry(performedAt: now, session: .strength, durationMinutes: 40, activeKilocalories: 250),
+            JarvisGymLogEntry(performedAt: now, session: .cardio, durationMinutes: 30.4, activeKilocalories: 300),
+            JarvisGymLogEntry(performedAt: now.addingTimeInterval(-40 * 86_400), session: .cardio, durationMinutes: 99),
+        ]
+        let display = JarvisTodayActivityDisplay(
+            state: JarvisTodayActivityState(range: .week), workouts: entries,
+            steps: .empty,
+            now: now, language: .en
+        )
+        XCTAssertEqual(display.totalWorkouts, 2)
+        XCTAssertEqual(display.activeMinutes, 70)
+        XCTAssertEqual(display.activeKilocalories, 550)
     }
 
     func testLiftsHaveBothLanguagesAndAValidSession() {

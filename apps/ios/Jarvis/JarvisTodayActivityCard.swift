@@ -22,6 +22,8 @@ struct JarvisTodayActivityCard: View {
         case .arms: Color.cyan
         case .legs: JarvisDesignTokens.ambientGreen
         case .cardio: JarvisDesignTokens.ambientBlue
+        case .strength: JarvisDesignTokens.primaryAccent
+        case .other: Color.gray
         }
     }
 
@@ -92,7 +94,7 @@ struct JarvisTodayActivityCard: View {
         } else {
             HStack(alignment: .center, spacing: 14) {
                 donut(display)
-                legend(display)
+                summary(display)
             }
         }
     }
@@ -183,39 +185,42 @@ struct JarvisTodayActivityCard: View {
         }
     }
 
-    private func legend(_ display: JarvisTodayActivityDisplay) -> some View {
+    /// Active time and active kilocalories for the period: two large numbers split by a hairline, as tall as the donut.
+    private func summary(_ display: JarvisTodayActivityDisplay) -> some View {
         VStack(spacing: 0) {
-            ForEach(display.segments) { segment in
-                let selected = display.centerSession == segment.session
-                Button {
-                    animate { model.activity.toggleSegment(segment.session) }
-                } label: {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(color(segment.session))
-                            .frame(width: 10, height: 10)
-                            .accessibilityHidden(true)
-                        Text(segment.session.shortTitle(language: language))
-                            .font(.footnote)
-                            .lineLimit(1)
-                        Spacer(minLength: 4)
-                        Text("\(segment.count)")
-                            .font(.footnote.weight(.semibold))
-                            .monospacedDigit()
-                    }
-                    .foregroundStyle(selected ? JarvisDesignTokens.primaryAccent : Color.primary)
-                    .frame(maxWidth: .infinity, minHeight: 22, maxHeight: 22)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(segment.count == 0)
-                .accessibilityLabel(
-                    "\(segment.session.title(language: language)), \(segment.count)"
-                )
-                .accessibilityAddTraits(selected ? .isSelected : [])
-                .accessibilityIdentifier("today.legend.\(segment.session.rawValue)")
-            }
+            summaryValue(
+                JarvisTodayLocalization.durationText(minutes: display.activeMinutes, language: language),
+                label: copy(.activeTime),
+                identifier: "today.summary.time"
+            )
+            Divider().accessibilityHidden(true)
+            summaryValue(
+                JarvisNumberFormat.compact(display.activeKilocalories, language: language),
+                label: copy(.activeKcal),
+                identifier: "today.summary.kcal"
+            )
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: donutSize)
+    }
+
+    private func summaryValue(_ value: String, label: String, identifier: String) -> some View {
+        VStack(spacing: 0) {
+            Text(value)
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(value)
+        .accessibilityIdentifier(identifier)
     }
 
     // MARK: Steps

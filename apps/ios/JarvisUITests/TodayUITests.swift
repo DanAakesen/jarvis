@@ -45,9 +45,9 @@ final class TodayUITests: XCTestCase {
                 XCTAssertTrue(greeting.waitForExistence(timeout: 5))
                 XCTAssertFalse(app.buttons["navigation.openSidebar"].exists, "Home has no sidebar button")
                 XCTAssertTrue(app.descendants(matching: .any)["today.donut"].exists)
-                for session in ["chest", "back", "arms", "legs", "cardio"] {
-                    XCTAssertTrue(app.buttons["today.legend.\(session)"].exists, "Muscle row \(session)")
-                }
+                XCTAssertTrue(app.descendants(matching: .any)["today.summary.time"].exists, "Active time")
+                XCTAssertTrue(app.descendants(matching: .any)["today.summary.kcal"].exists, "Active kcal")
+                XCTAssertFalse(app.buttons["today.legend.chest"].exists, "No workout types list on Home")
                 XCTAssertTrue(app.descendants(matching: .any)["today.steps.ring"].exists)
                 XCTAssertTrue(app.descendants(matching: .any)["today.steps.chart"].exists)
                 let workout = app.buttons["today.logWorkout"]

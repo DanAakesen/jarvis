@@ -3,8 +3,15 @@ import Foundation
 /// The five gym session types on the Today quick-log sheet and in the workouts donut.
 public enum JarvisGymSessionType: String, CaseIterable, Identifiable, Sendable {
     case chest, back, arms, legs, cardio
+    /// Apple Health strength workouts carry no muscle group, so they get their own type. Never offered for manual logging.
+    case strength
+    /// Any other Apple Health workout (yoga, tennis, ...). Never offered for manual logging.
+    case other
 
     public var id: String { rawValue }
+
+    /// The sessions a person can pick when logging a gym session by hand.
+    public static let loggable: [JarvisGymSessionType] = [.chest, .back, .arms, .legs, .cardio]
 
     var titleKey: JarvisTodayLocalizationKey {
         switch self {
@@ -13,6 +20,8 @@ public enum JarvisGymSessionType: String, CaseIterable, Identifiable, Sendable {
         case .arms: .sessionArms
         case .legs: .sessionLegs
         case .cardio: .sessionCardio
+        case .strength: .sessionStrength
+        case .other: .sessionOther
         }
     }
 
@@ -23,6 +32,8 @@ public enum JarvisGymSessionType: String, CaseIterable, Identifiable, Sendable {
         case .arms: .shortArms
         case .legs: .shortLegs
         case .cardio: .shortCardio
+        case .strength: .shortStrength
+        case .other: .shortOther
         }
     }
 
@@ -99,11 +110,22 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
     public let performedAt: Date
     public let session: JarvisGymSessionType
     public let lift: JarvisGymLift?
+    /// Workout length in minutes and active energy in kilocalories; zero when the source does not know them.
+    public let durationMinutes: Double
+    public let activeKilocalories: Double
 
-    public init(performedAt: Date, session: JarvisGymSessionType, lift: JarvisGymLift? = nil) {
+    public init(
+        performedAt: Date,
+        session: JarvisGymSessionType,
+        lift: JarvisGymLift? = nil,
+        durationMinutes: Double = 0,
+        activeKilocalories: Double = 0
+    ) {
         self.performedAt = performedAt
         self.session = session
         self.lift = lift
+        self.durationMinutes = durationMinutes
+        self.activeKilocalories = activeKilocalories
     }
 }
 
@@ -254,6 +276,13 @@ public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
         try await primary.save(entry)
     }
 
+    /// A Health workout matches a vault log of the same session. A Health strength workout has no muscle group, so it
+    /// matches any vault log that is not cardio.
+    static func sameWorkout(_ vault: JarvisGymSessionType, _ health: JarvisGymSessionType) -> Bool {
+        if vault == health { return true }
+        return health == .strength && vault != .cardio && vault != .other
+    }
+
     public func entries(since: Date) async throws -> [JarvisGymLogEntry] {
         var firstError: Error?
         var primaryEntries: [JarvisGymLogEntry] = []
@@ -271,7 +300,7 @@ public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
                 succeeded = true
                 merged += extra.filter { candidate in
                     !primaryEntries.contains {
-                        $0.session == candidate.session
+                        Self.sameWorkout($0.session, candidate.session)
                             && abs($0.performedAt.timeIntervalSince(candidate.performedAt)) < 7200
                     }
                 }
