@@ -61,8 +61,8 @@ export function readNavigateCommand(command: unknown): NavigateRequest | null {
   };
 }
 
-export function resolveNavigation({ page, section, taskId, issueNumber }: NavigateRequest, dailyEnabled = false): NavigateTarget {
-  if ((page === 'daily' || page === 'health') && dailyEnabled !== true) return { ok: false, reason: 'Health is not enabled in this client.' };
+export function resolveNavigation({ page, section, taskId, issueNumber }: NavigateRequest, healthEnabled = false): NavigateTarget {
+  if ((page === 'daily' || page === 'health') && healthEnabled !== true) return { ok: false, reason: 'Health is not enabled in this client.' };
   if (issueNumber !== undefined && (page !== 'factory' || !Number.isSafeInteger(issueNumber) || issueNumber <= 0)) {
     return { ok: false, reason: 'An issue can only be opened on the Software Factory board by its positive whole number.' };
   }
@@ -141,9 +141,9 @@ const pagePrefixes: readonly [string, WorkspaceNavigationPage][] = [
 ];
 
 /** The shell page for a route, for the `view` Dan is looking at (P9-43). */
-export function pageForPath(pathname: string, dailyEnabled = false): WorkspaceNavigationPage {
-  if (dailyEnabled === true && (pathname === '/health' || pathname.startsWith('/health/') ||
-      pathname === '/daily' || pathname.startsWith('/daily/'))) return 'health';
+export function pageForPath(pathname: string, healthEnabled = false): WorkspaceNavigationPage {
+  if (healthEnabled === true && (pathname === '/health' || pathname.startsWith('/health/') ||
+      pathname === '/health' || pathname.startsWith('/health/'))) return 'health';
   return pagePrefixes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] ?? 'home';
 }
 

@@ -983,8 +983,8 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: codexToolModel
             }
             {
-              // Backend half of the Daily switch; the web half is VITE_DAILY_ENABLED in deploy.yml. To turn Daily off, revert the whole change or set both to 'false' and update daily/default-off.test.ts in the same commit.
-              name: 'JARVIS_DAILY_ENABLED'
+              // Backend half of the Health switch; the web half is VITE_HEALTH_ENABLED in deploy.yml. To turn Health off, revert the whole change or set both to 'false' and update health/default-off.test.ts in the same commit.
+              name: 'JARVIS_HEALTH_ENABLED'
               value: 'true'
             }
             {

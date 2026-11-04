@@ -6,12 +6,12 @@ import { loadDatabaseConfig } from './config.js';
 import { applyMigrations,readDownMigration,readMigrations,revertMigration } from './migrations.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import { SqlHealthBuffer } from '../daily/health-upload/sql-buffer.js';
-import { SqlHealthCapabilities } from '../daily/health-upload/sql-capabilities.js';
-import { createSqlHealthUpload } from '../daily/health-upload/sql-composition.js';
-import { healthSqlQuery,healthSqlTransaction } from '../daily/health-upload/sql-transaction.js';
-import { HealthConflict,HealthDenied,HealthUnavailable,sha256,type HealthCapability } from '../daily/health-upload/contracts.js';
-import { HealthCapabilityLifecycleError,type PreparedHealthCapability } from '../daily/health-upload/capability-operation.js';
+import { SqlHealthBuffer } from '../health/health-upload/sql-buffer.js';
+import { SqlHealthCapabilities } from '../health/health-upload/sql-capabilities.js';
+import { createSqlHealthUpload } from '../health/health-upload/sql-composition.js';
+import { healthSqlQuery,healthSqlTransaction } from '../health/health-upload/sql-transaction.js';
+import { HealthConflict,HealthDenied,HealthUnavailable,sha256,type HealthCapability } from '../health/health-upload/contracts.js';
+import { HealthCapabilityLifecycleError,type PreparedHealthCapability } from '../health/health-upload/capability-operation.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') throw new Error('Health tests require isolated loopback SQL Server');

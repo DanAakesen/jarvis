@@ -4,20 +4,20 @@ import sql from 'mssql';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readDownMigration, readMigrations, revertMigration } from './migrations.js';
-import { SqlHealthBuffer, healthInboxByteLimit, healthInboxRowLimit } from '../daily/health-upload/sql-buffer.js';
-import { SqlHealthCapabilities } from '../daily/health-upload/sql-capabilities.js';
-import { HealthConflict, HealthUnavailable, sha256, type HealthCapability, type HealthKind } from '../daily/health-upload/contracts.js';
-import { SqlHealthProcessor, processingRetryDelays } from '../daily/health/processor.js';
-import { DailyHealthReadModel } from '../daily/health/read-model.js';
+import { SqlHealthBuffer, healthInboxByteLimit, healthInboxRowLimit } from '../health/health-upload/sql-buffer.js';
+import { SqlHealthCapabilities } from '../health/health-upload/sql-capabilities.js';
+import { HealthConflict, HealthUnavailable, sha256, type HealthCapability, type HealthKind } from '../health/health-upload/contracts.js';
+import { SqlHealthProcessor, processingRetryDelays } from '../health/health/processor.js';
+import { HealthReadModel } from '../health/health/read-model.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import { dailySourceTools } from '../daily/tools/source-tools.js';
-import type { NutritionStore } from '../daily/nutrition/store.js';
-import type { DailyCoachStore } from '../daily/coach-store.js';
-import { healthUploadLimit } from '../daily/health-upload/contracts.js';
-import { createDailyData } from '../daily/query.js';
-import { createDailyModules } from '../daily/index.js';
-import { dailyQuerySources } from '@jarvis/contracts';
+import { healthSourceTools } from '../health/tools/source-tools.js';
+import type { NutritionStore } from '../health/nutrition/store.js';
+import type { HealthCoachStore } from '../health/coach-store.js';
+import { healthUploadLimit } from '../health/health-upload/contracts.js';
+import { createHealthData } from '../health/query.js';
+import { createHealthModules } from '../health/index.js';
+import { healthQuerySources } from '@jarvis/contracts';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') throw new Error('Health tests require isolated loopback SQL Server');
@@ -31,7 +31,7 @@ const now = () => clock; const signal = () => new AbortController().signal;
 const migrations = async () => (await readMigrations()).filter(({ name }) =>
   ['0041_daily_owner_schema.sql', '0046_daily_health_upload_inbox.sql', filename, '0060_daily_health_processing_state.sql'].includes(name));
 const processor = (id = owner) => new SqlHealthProcessor(pool, id, now);
-const readModel = (id = owner) => DailyHealthReadModel.forRequest(pool, { server: { ownerObjectId: id }, principal: { objectId: id } } as unknown as FastifyRequest);
+const readModel = (id = owner) => HealthReadModel.forRequest(pool, { server: { ownerObjectId: id }, principal: { objectId: id } } as unknown as FastifyRequest);
 const workout = (id = 'synthetic-workout', hr = 100) => ({ id, name: 'Traditional Strength Training', start: '2026-10-13T08:00:00Z', duration: 3600,
   activeEnergyBurned: { qty: 100, units: 'kcal' }, heartRateData: [{ date: '2026-10-13T08:00:10Z', qty: hr, units: 'bpm' }], metadata: { synthetic: true } });
 const payload = (qty = 100, workouts = [workout('one'), workout('two')]) => ({ data: { workouts, metrics: [
@@ -180,7 +180,7 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     } as unknown as FastifyRequest;
     const read = readModel();
     const data = { query: {} as never, changes: {} as never, health: () => read };
-    const sourceTools = dailySourceTools(data, () => ({} as NutritionStore), () => ({} as DailyCoachStore), now);
+    const sourceTools = healthSourceTools(data, () => ({} as NutritionStore), () => ({} as HealthCoachStore), now);
     await vi.waitFor(async () => {
       expect((await read.sync(signal())).inbox).toMatchObject({ accepted: 0, processing: 0, succeeded: 1, quarantined: 0 });
     }, { timeout: 10_000, interval: 25 });
@@ -354,9 +354,9 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     const heartRate = await read.heartRate('synthetic-projection-workout', {}, signal());
     expect(heartRate.items[0]).toMatchObject({ avg_value: 95, unit: 'bpm', sources: ['Synthetic HR Source'], sourcesTruncated: false });
 
-    const module = createDailyModules(true, createDailyData(pool, owner, now))[0]!;
+    const module = createHealthModules(true, createHealthData(pool, owner, now))[0]!;
     const queryTool = module.tools.find(tool => tool.name === 'health_query')!;
-    const workoutDetail = await queryTool.execute({ source: dailyQuerySources.workout, workoutId: 'synthetic-projection-workout' }, {
+    const workoutDetail = await queryTool.execute({ source: healthQuerySources.workout, workoutId: 'synthetic-projection-workout' }, {
       server: { ownerObjectId: owner }, principal: { objectId: owner },
     } as unknown as FastifyRequest, signal()) as { items: { additionalMetrics: { metric_name: string }[]; detail: Record<string, unknown> }[] };
     expect(workoutDetail.items[0]?.detail.heartRateData).toMatchObject({ samples: 2, unit: 'bpm', avg_value: 95 });

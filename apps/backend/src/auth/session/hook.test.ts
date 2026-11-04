@@ -8,13 +8,13 @@ import { buildApp } from '../../app.js';
 import { loadConfig } from '../../config.js';
 import { coreModule } from '../../core/index.js';
 import type { UsageStore } from '../../core/usage.js';
-import { dailyMcpPath } from '../../daily/mcp/paths.js';
-import { dailyMcpRoutes } from '../../daily/mcp/routes.js';
-import type { NutritionExportCredentialVerifier, NutritionExportDevice } from '../../daily/nutrition-export/auth.js';
-import { registerNutritionExportRoutes } from '../../daily/nutrition-export/routes.js';
+import { healthMcpPath } from '../../health/mcp/paths.js';
+import { healthMcpRoutes } from '../../health/mcp/routes.js';
+import type { NutritionExportCredentialVerifier, NutritionExportDevice } from '../../health/nutrition-export/auth.js';
+import { registerNutritionExportRoutes } from '../../health/nutrition-export/routes.js';
 import { createLogger } from '../../logging.js';
 import type { BackendModule } from '../../modules.js';
-import { AuthenticationDenied, dailyNutritionScopes, type TokenVerifier } from '../verify.js';
+import { AuthenticationDenied, healthNutritionScopes, type TokenVerifier } from '../verify.js';
 import { ownerSessionPolicy } from './config.js';
 import { InMemoryOwnerSessionStore } from './memory-store.js';
 import { OwnerSessionService } from './service.js';
@@ -50,7 +50,7 @@ const entraPrincipals: Record<string, Awaited<ReturnType<TokenVerifier>>> = {
   'eyJ.entra.phone': { kind: 'jarvis-phone-event-grid', objectId: strangerObjectId, tenantId },
   'eyJ.entra.deploy': { kind: 'jarvis-deploy', objectId: strangerObjectId, tenantId },
   'eyJ.entra.connector': {
-    kind: 'jarvis-daily-connector', objectId: owner, tenantId, clientId: connectorClientId, scopes: [dailyNutritionScopes.read],
+    kind: 'jarvis-daily-connector', objectId: owner, tenantId, clientId: connectorClientId, scopes: [healthNutritionScopes.read],
   },
 };
 const noServicePrincipals = { agent: null, runner: null, bridge: null, phone: null, deploy: null, connector: null };
@@ -97,7 +97,7 @@ function fixture({ enabled = true, ...options }: FixtureOptions = {}) {
       bridge: request.pcBridgePrincipal,
       phone: request.phoneEventGridPrincipal,
       deploy: request.deployPrincipal,
-      connector: request.dailyConnectorPrincipal,
+      connector: request.healthConnectorPrincipal,
       ownerSession: request.ownerSession,
     };
   });
@@ -644,7 +644,7 @@ describe('owner session tokens in the authentication hook', () => {
       const session = await mint(f);
       const capability = 'synthetic_export_capability_'.padEnd(43, 'x');
       const claimWith = (token: string) => f.app.inject({
-        method: 'POST', url: '/daily/nutrition/export/claim', headers: auth(token), payload: { operationKey: 'x' },
+        method: 'POST', url: '/health/nutrition/export/claim', headers: auth(token), payload: { operationKey: 'x' },
       });
       expect((await claimWith(capability)).statusCode).toBe(200);
       expect(verify).toHaveBeenCalledTimes(1);
@@ -656,7 +656,7 @@ describe('owner session tokens in the authentication hook', () => {
       expect(verify).not.toHaveBeenCalled();
       expect(claim).not.toHaveBeenCalled();
       expect(f.records()).toContainEqual(expect.objectContaining({
-        level: 40, msg: 'request.auth_denied', method: 'POST', route: '/daily/nutrition/export/claim', statusCode: 403,
+        level: 40, msg: 'request.auth_denied', method: 'POST', route: '/health/nutrition/export/claim', statusCode: 403,
       }));
     });
 
@@ -665,15 +665,15 @@ describe('owner session tokens in the authentication hook', () => {
       const connector: BackendModule = {
         id: 'connector-stub',
         tools: [],
-        registerRoutes: dailyMcpRoutes({ query }, {
-          auth: { ...config.auth, dailyConnectorClientId: connectorClientId },
-          resource: `https://${connectorHost}${dailyMcpPath}`,
+        registerRoutes: healthMcpRoutes({ query }, {
+          auth: { ...config.auth, healthConnectorClientId: connectorClientId },
+          resource: `https://${connectorHost}${healthMcpPath}`,
           nutrition: {} as never,
         }),
       };
       const f = fixture({ modules: [coreModule, connector] });
       const session = await mint(f);
-      const call = (token: string) => f.app.inject({ url: dailyMcpPath, headers: { ...auth(token), host: connectorHost } });
+      const call = (token: string) => f.app.inject({ url: healthMcpPath, headers: { ...auth(token), host: connectorHost } });
       expect([400, 401, 403]).not.toContain((await call('eyJ.entra.connector')).statusCode);
       for (const token of [session, entraOwner]) expect((await call(token)).statusCode).toBe(403);
       expect(query).not.toHaveBeenCalled();

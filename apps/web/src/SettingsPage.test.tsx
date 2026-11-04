@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { SettingsPage } from './SettingsPage';
-import { expectNoDailyInRenderedContent } from './test/visible-copy';
+import { expectNoHealthInRenderedContent } from './test/visible-copy';
 import { ResearchSection } from './SettingsAdvanced';
 import { ProjectsPage } from './factory/ProjectsPage';
 import { ThemePreferenceContext, type ThemeMode, type ThemePreference } from './theme-preference-context';
@@ -711,7 +711,7 @@ describe('SettingsPage', () => {
     await screen.findByRole('button', { name: 'Save settings' });
     expect(screen.queryByRole('region', { name: 'Nutrition stand-in' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Nutrition targets' })).toBeNull();
-    expect(fetchMock.mock.calls.every(([url]) => !String(url).includes('/daily/'))).toBe(true);
+    expect(fetchMock.mock.calls.every(([url]) => !String(url).includes('/health/'))).toBe(true);
   });
 
   it('edits models per role, tuning, research, retrieval and timeouts, and requests a deployment removal', async () => {
@@ -822,7 +822,7 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
     await screen.findByText('Saved');
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({ settings: { global: { maxCheckAttempts: 5, visionDailyBudgetUsd: 2.5 } } });
-    expectNoDailyInRenderedContent(document.body);
+    expectNoHealthInRenderedContent(document.body);
   });
 
   it('renews the Codex credential on request and reports a busy agent', async () => {
