@@ -40,6 +40,7 @@ enum JarvisSettingsDetail: String, Hashable {
     case newDeployment
     case trainingTargets
     case nutritionTargets
+    case healthGoals
     case healthCredential
     case owner
     case credentials
@@ -300,6 +301,7 @@ struct JarvisSettingsArea: View {
             return [
                 row("training", .trainingTargetsRow, .trainingTargets),
                 row("nutrition", .nutritionTargetsRow, .nutritionTargets),
+                row("healthGoals", .healthGoalsRow, .healthGoals),
                 row("healthCredential", .uploadCredentialRow, .healthCredential),
             ]
         case .account:
@@ -374,6 +376,8 @@ struct JarvisSettingsArea: View {
             JarvisTargetsSettingsView(
                 client: client, language: language, kind: .nutrition, readOnly: readOnly, onFailure: noteFailure
             )
+        case .healthGoals:
+            JarvisHealthGoalsSettingsView(language: language)
         case .healthCredential:
             JarvisHealthCredentialView(client: client, language: language, onFailure: noteFailure)
         case .owner:
