@@ -10845,6 +10845,15 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Requests per page (derived from code, not measured on a device). Before: every visit refetched. After: 0 inside the freshness window, 1 conditional request (304) when stale. Status 1→0/1, Proactive 3→0/3, Settings 1→0/1, Notes 3–4→0/3–4, Factory 2→0/2, Home 3→0/3.
 - Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore (`swift test`) and backend (`vitest`, `tsc`, `eslint`) checks pass.
 
+## 2026-11-04 P15-82: Gym and Factory home screen widgets
+
+- Eight widgets (four Gym, four Factory) live in the existing `JarvisWidgets` extension next to the Live Activity. No controls, no Live Activity change.
+- The app writes one versioned JSON snapshot (`widget-snapshot.json`, `JarvisWidgetSnapshot`, version 1) into the `group.com.danaakesen.jarvis` container; the widgets only read it. It holds display numbers, localised task text and opaque task/confirmation ids. No tokens or secrets. Each topic (Gym, Factory) is a section with its own status and age, so one failed refresh never blanks the other.
+- Timelines are scheduled, not pushed: `JarvisWidgetTimeline` emits an entry now and one when the data turns stale (two refresh intervals: Gym 30 min, Factory 15 min) and asks WidgetKit to reload after one interval. Stale data stays on screen with "Opdateret HH:mm". A failed refresh keeps the last values and marks them stale.
+- Widget buttons are only immediate actions: Godkend, pause, resume, retry as App Intents, bare icons with no text. The intent calls `JarvisFactoryWidgetActions`; the app installs the handler that holds the authenticated clients. If the intent runs in the extension process, the tap is queued in the App Group (action and id only, dropped after 15 minutes) and the app drains it on its next refresh. Approve needs device authentication.
+- Colours: orange accent; blue only for runs versus lifts; red for failed. The only ring is the Gym medium steps ring.
+- Not verified: no Xcode in the sandbox. JarvisCore (`swift test`) covers the snapshot, builders, timeline and action queue. The widget views, intents, previews, the HealthKit workout query and the app publisher were not compiled or rendered; Mac compile, preview and device checks are pending. Apple docs used: WidgetKit (Keeping a widget up to date, Making a configurable widget, Adding interactivity to widgets and Live Activities), App Intents, HIG Widgets.
+
 ## Health hero carousel and charts (P15-83)
 
 - The Health page hero is a swipeable carousel (Training, Sleep, Nutrition) with equal card height and page dots. Every Health bar chart uses `JarvisHealthBarChart`: headline is the average (or the tapped day; tap again to return), target chip and dashed target line, weekday labels, bars grow from the baseline.
