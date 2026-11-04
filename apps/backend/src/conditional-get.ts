@@ -33,7 +33,7 @@ function matches(header: string | string[] | undefined, etag: string): boolean {
 /**
  * Adds a strong ETag to successful responses of the cacheable GET routes and answers 304 when the client already
  * holds that exact body. `Cache-Control: private, no-cache` keeps shared caches out and forces revalidation, so the
- * client always decides freshness itself.
+ * client always decides freshness itself. A Cache-Control a route already set (for example `no-store`) is kept.
  */
 export function installConditionalGet<Logger extends FastifyBaseLogger>(
   app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>,
@@ -45,7 +45,7 @@ export function installConditionalGet<Logger extends FastifyBaseLogger>(
     if (typeof payload !== 'string' && !Buffer.isBuffer(payload)) return payload;
     const etag = `"${createHash('sha256').update(payload).digest('base64url').slice(0, 27)}"`;
     reply.header('ETag', etag);
-    reply.header('Cache-Control', 'private, no-cache');
+    if (reply.getHeader('cache-control') === undefined) reply.header('Cache-Control', 'private, no-cache');
     if (!matches(request.headers['if-none-match'], etag)) return payload;
     reply.code(304);
     reply.removeHeader('content-length');
