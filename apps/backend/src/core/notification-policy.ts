@@ -12,7 +12,10 @@ export interface RecentNotification {
   readonly at: Date;
 }
 
-export type NotificationAdmission = 'admit' | 'duplicate' | 'daily_cap';
+/** Successful runs are log entries; only these kinds may reach the owner as a notification. */
+export const notifiableKinds: readonly NotificationKind[] = ['info', 'warning', 'error'];
+
+export type NotificationAdmission = 'admit' | 'duplicate' | 'daily_cap' | 'not_notifiable';
 
 /**
  * Decides whether a new owner notification may be stored. `recent` holds every stored notification row
@@ -23,6 +26,7 @@ export function admitNotification(
   candidate: { readonly kind: NotificationKind; readonly title: string },
   now: Date,
 ): NotificationAdmission {
+  if (!notifiableKinds.includes(candidate.kind)) return 'not_notifiable';
   const since = now.getTime() - notificationWindowMs;
   const inWindow = recent.filter(({ at }) => at.getTime() > since);
   if (inWindow.some(({ kind, title }) => kind === candidate.kind && title === candidate.title)) return 'duplicate';

@@ -40,7 +40,8 @@ const visibleActivityCte = `WITH attention AS (
           FROM dbo.activity
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
             AND (alert_key NOT LIKE N'credential:github-app:failed:%' OR recovered_at IS NULL)
-            AND (alert_key NOT LIKE N'notification:%' OR at > DATEADD(day, -${notificationExpiryDays}, SYSUTCDATETIME()))
+            AND (alert_key NOT LIKE N'notification:%' OR
+              (kind <> N'success' AND at > DATEADD(day, -${notificationExpiryDays}, SYSUTCDATETIME())))
         )`;
 
 export function createNowFeedStore(pool: sql.ConnectionPool, onNotificationCreated: () => void = () => {}): NowFeedStore {
@@ -108,6 +109,8 @@ export function createNowFeedStore(pool: sql.ConnectionPool, onNotificationCreat
           kind: row.kind as RecentNotification['kind'], title: row.title, at: new Date(row.at),
         }));
         const admission = admitNotification(recent, { kind: kind as RecentNotification['kind'], title: text }, new Date());
+        await new sql.Request(transaction).query(`DELETE FROM dbo.activity
+          WHERE alert_key LIKE N'notification:%' AND at <= DATEADD(day, -${notificationExpiryDays}, SYSUTCDATETIME());`);
         if (admission === 'admit') {
           await new sql.Request(transaction)
             .input('kind', sql.NVarChar(32), kind)

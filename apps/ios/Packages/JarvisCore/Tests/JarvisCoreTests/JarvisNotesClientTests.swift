@@ -96,6 +96,21 @@ final class JarvisNotesClientTests: XCTestCase {
         await assertConsumed(transport)
     }
 
+    func testNotesListSkipsUnusableNotesInsteadOfFailingThePage() async throws {
+        let scenario = """
+        {"version": 1, "interactions": [{"method": "GET", "path": "/api/notes",
+         "query": {"limit": "50", "offset": "0"},
+         "response": {"statusCode": 200, "body": {"notes": [
+          {"path": "Work/ok.md", "title": "Ok", "folder": "Work", "directory": "Work", "updatedAt": "2026-10-30T08:00:00.000Z"},
+          {"path": ".hidden/odd.md", "title": "Odd", "folder": ".hidden", "directory": ".hidden", "updatedAt": "2026-10-30T08:00:00.000Z"},
+          {"path": "Work/ok.md", "title": "Ok", "folder": "Work", "directory": "Work", "updatedAt": "2026-10-30T08:00:00.000Z"}
+         ], "limit": 50, "offset": 0, "hasMore": false}}}]}
+        """
+        let transport = try FixtureTransport(scenario: Data(scenario.utf8))
+        let page = try await JarvisNotesClient(client: try makeClient(transport)).notes()
+        XCTAssertEqual(page.notes.map(\.path), ["Work/ok.md"])
+    }
+
     func testTasksGroupCompleteCreateAndDoNotRetryUnknownWrites() async throws {
         let transport = try notesFixture("tasks")
         let notes = JarvisNotesClient(client: try makeClient(transport))

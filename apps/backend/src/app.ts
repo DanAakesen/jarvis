@@ -449,8 +449,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
         : undefined;
       if (event.type !== 'state_changed' || typeof nextState !== 'string' ||
         !['Ready', 'Running', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(nextState)) return;
+      if (nextState === 'Done') return;
       try {
-        const kind = nextState === 'NeedsAttention' ? 'warning' : nextState === 'Done' ? 'success' : 'info';
+        const kind = nextState === 'NeedsAttention' ? 'warning' : 'info';
         await app.ownerInteractions?.notify(kind, `Task ${event.taskId} is now ${nextState}.`);
       } catch {
         app.log.warn('task_status_notification.failed');

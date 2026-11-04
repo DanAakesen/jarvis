@@ -171,12 +171,12 @@ public enum JarvisNotesLogic {
     }
 
     public static func validNotePath(_ path: String) -> Bool {
-        path.utf8.count <= 180 && path == path.precomposedStringWithCanonicalMapping &&
+        path.utf16.count <= 180 && path == path.precomposedStringWithCanonicalMapping &&
             path.lowercased().hasSuffix(".md") && validVaultPath(path)
     }
 
     public static func validFolder(_ folder: String) -> Bool {
-        folder.isEmpty || (folder.utf8.count <= 180 && folder == folder.precomposedStringWithCanonicalMapping &&
+        folder.isEmpty || (folder.utf16.count <= 180 && folder == folder.precomposedStringWithCanonicalMapping &&
             validVaultPath(folder))
     }
 
@@ -234,14 +234,19 @@ public final class JarvisNotesClient: Sendable {
     public func folderTree() async throws -> VaultNoteTree {
         let response = try await request(method: .get, path: ["notes", "tree"], idempotent: true)
         guard response.body.count <= 1024 * 1024,
-              let tree = try? JSONDecoder().decode(VaultNoteTree.self, from: response.body),
-              tree.directories.count <= 10_000,
-              tree.rootNoteCount >= 0, tree.rootNoteCount <= 10_000,
-              JarvisNotesLogic.isISODateTime(tree.updatedAt),
-              Set(tree.directories).count == tree.directories.count,
-              tree.directories.allSatisfy(JarvisNotesLogic.validFolder) else {
+              let decoded = try? JSONDecoder().decode(VaultNoteTree.self, from: response.body),
+              decoded.directories.count <= 10_000,
+              decoded.rootNoteCount >= 0, decoded.rootNoteCount <= 10_000,
+              JarvisNotesLogic.isISODateTime(decoded.updatedAt) else {
             throw JarvisNotesClientError.invalidResponse
         }
+        // One odd folder name must not hide the whole tree, so unusable entries are dropped, not fatal.
+        var seen = Set<String>()
+        let directories = decoded.directories.filter { JarvisNotesLogic.validFolder($0) && seen.insert($0).inserted }
+        let tree = VaultNoteTree(
+            directories: directories, rootNoteCount: decoded.rootNoteCount,
+            truncated: decoded.truncated, updatedAt: decoded.updatedAt
+        )
         return tree
     }
 
@@ -267,17 +272,23 @@ public final class JarvisNotesClient: Sendable {
             method: .get, path: ["notes"], query: items, idempotent: true
         )
         guard response.body.count <= 4 * 1024 * 1024,
-              let page = try? JSONDecoder().decode(VaultNotePage.self, from: response.body),
-              page.notes.count <= 50, page.limit == 50, page.offset == offset,
-              Set(page.notes.map(\.path)).count == page.notes.count,
-              page.notes.allSatisfy({
-                  JarvisNotesLogic.validNotePath($0.path) && !$0.title.isEmpty &&
-                      $0.title.utf16.count <= 200 && $0.folder == Self.topFolder($0.path) &&
-                      $0.directory == Self.directory($0.path) && JarvisNotesLogic.isISODateTime($0.updatedAt)
-              }),
-              directory.map({ expected in page.notes.allSatisfy { $0.directory == expected } }) ?? true else {
+              let decoded = try? JSONDecoder().decode(VaultNotePage.self, from: response.body),
+              decoded.notes.count <= 50, decoded.limit == 50, decoded.offset == offset else {
             throw JarvisNotesClientError.invalidResponse
         }
+        // The Notes page used to fail as a whole when a single note had an unusable path or date. The remaining
+        // notes are still valid, so skip the odd ones and keep the page.
+        var seen = Set<String>()
+        let valid = decoded.notes.filter {
+            JarvisNotesLogic.validNotePath($0.path) && !$0.title.isEmpty &&
+                $0.title.utf16.count <= 200 && $0.folder == Self.topFolder($0.path) &&
+                $0.directory == Self.directory($0.path) && JarvisNotesLogic.isISODateTime($0.updatedAt) &&
+                seen.insert($0.path).inserted
+        }
+        let page = VaultNotePage(
+            notes: directory.map { expected in valid.filter { $0.directory == expected } } ?? valid,
+            limit: decoded.limit, offset: decoded.offset, hasMore: decoded.hasMore
+        )
         return page
     }
 

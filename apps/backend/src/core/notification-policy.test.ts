@@ -4,10 +4,14 @@ import { admitNotification, notificationDailyCapPerKind, type RecentNotification
 const now = new Date('2026-11-03T10:00:00.000Z');
 
 describe('owner notification admission', () => {
+  it('never admits a success: a successful run is a log entry, not a notification', () => {
+    expect(admitNotification([], { kind: 'success', title: 'Deployment accepted.' }, now)).toBe('not_notifiable');
+  });
+
   it('rejects the same text of the same kind inside the rolling day, even when dismissed', () => {
     const recent: RecentNotification[] = [{ kind: 'info', title: 'Task 1 is now Done.', at: new Date('2026-11-03T08:00:00Z') }];
     expect(admitNotification(recent, { kind: 'info', title: 'Task 1 is now Done.' }, now)).toBe('duplicate');
-    expect(admitNotification(recent, { kind: 'success', title: 'Task 1 is now Done.' }, now)).toBe('admit');
+    expect(admitNotification(recent, { kind: 'error', title: 'Task 1 is now Done.' }, now)).toBe('admit');
   });
 
   it('allows the text again once the day has passed', () => {
