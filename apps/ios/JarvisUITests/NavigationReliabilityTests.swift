@@ -79,6 +79,67 @@ final class NavigationReliabilityTests: XCTestCase {
         }
     }
 
+    func testPageHeaderIsTransparentAndOrdered() {
+        launch(language: "en")
+        defer { app.terminate() }
+        for destination in ["usage", "status", "proactive", "health", "notes", "softwareFactory"] {
+            navigate(to: destination)
+            let title = app.staticTexts["page.title"]
+            let menu = app.buttons["navigation.openSidebar"]
+            waitFor(title, key: "exists", value: true)
+            waitFor(menu, key: "isHittable", value: true)
+            XCTAssertLessThan(title.frame.minX, menu.frame.minX, "\(destination): title left, menu right")
+            XCTAssertLessThan(abs(title.frame.midY - menu.frame.midY), 24, "\(destination): title level with menu")
+            let headline = app.staticTexts["page.headline"]
+            if headline.exists {
+                XCTAssertLessThanOrEqual(title.frame.maxY, headline.frame.minY + 1, "\(destination): phrase under the header")
+            }
+            let bandBottom = menu.frame.maxY + 8
+            XCTAssertLessThan(
+                largestRowStep(in: app.screenshot().image, column: 8, upTo: bandBottom), 0.06,
+                "\(destination): the header has no background or line"
+            )
+            attachScreenshot("Transparent header \(destination)")
+            openByEdge()
+            tap(app.buttons["navigation.chat"])
+            waitFor(app.buttons["navigation.chat"], key: "exists", value: false)
+        }
+    }
+
+    /// Only simple icon buttons in this allowlist must be perfect 48 pt circles; pills and tabs are not asserted.
+    func testSimpleIconButtonsAreRoundCircles() {
+        launch(language: "en")
+        defer { app.terminate() }
+        let allowlist = ["navigation.openSidebar", "chat.notifications"]
+        for identifier in allowlist {
+            let button = app.buttons[identifier]
+            waitFor(button, key: "isHittable", value: true)
+            XCTAssertEqual(button.frame.width, 48, accuracy: 1, "\(identifier) is 48 pt")
+            XCTAssertEqual(button.frame.height, 48, accuracy: 1, "\(identifier) is a circle")
+        }
+    }
+
+    /// Largest luminance jump between neighbouring pixel rows down one column; a bar edge or line makes a jump.
+    private func largestRowStep(in image: UIImage, column: CGFloat, upTo bottom: CGFloat) -> CGFloat {
+        guard let cgImage = image.cgImage else { return 1 }
+        let scale = image.scale
+        let x = Int(column * scale)
+        let rows = min(Int(bottom * scale), cgImage.height)
+        guard x < cgImage.width, rows > 1,
+              let column = cgImage.cropping(to: CGRect(x: x, y: 0, width: 1, height: rows)),
+              let context = CGContext(
+                data: nil, width: 1, height: rows, bitsPerComponent: 8, bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ), let data = { context.draw(column, in: CGRect(x: 0, y: 0, width: 1, height: rows)); return context.data }()
+        else { return 1 }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: rows * 4)
+        func luminance(_ row: Int) -> CGFloat {
+            (0.2126 * CGFloat(pixels[row * 4]) + 0.7152 * CGFloat(pixels[row * 4 + 1]) + 0.0722 * CGFloat(pixels[row * 4 + 2])) / 255
+        }
+        return (1..<rows).map { abs(luminance($0) - luminance($0 - 1)) }.max() ?? 0
+    }
+
     func testNotificationsSheetHasOneHeaderWithCentredClose() {
         for language in ["da", "en"] {
             launch(language: language)
