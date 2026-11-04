@@ -308,11 +308,11 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   /** Project management, rendered with this page's new-project defaults disclosure. */
   projects?: ReactNode;
   renderProjects?: (projectDefaults: ReactNode) => ReactNode;
-  /** Daily nutrition targets, saved on their own; only supplied while Daily is on. */
+  /** Health nutrition targets, saved on their own; only supplied while Health is on. */
   nutrition?: ReactNode;
-  /** Daily training targets, saved on their own; only supplied while Daily is on. */
+  /** Health training targets, saved on their own; only supplied while Health is on. */
   trainingTargets?: ReactNode;
-  /** Health upload credential management, supplied only while the Daily area is enabled. */
+  /** Health upload credential management, supplied only while the Health area is enabled. */
   healthUpload?: ReactNode;
   /** Proactive settings, supplied only while the independent web feature gate is on. */
   proactive?: ReactNode;

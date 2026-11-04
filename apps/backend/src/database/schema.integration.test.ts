@@ -2810,7 +2810,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect((await rollbackPool.request().query<{ count: number }>(`SELECT COUNT(*) AS count FROM sys.indexes
       WHERE object_id = OBJECT_ID(N'dbo.tool_calls') AND name = N'IX_tool_calls_message_id';`)).recordset[0]?.count).toBe(1);
     expect(await applyMigrations(rollbackPool, historical)).toEqual([down.name]);
-    const record = createToolCallStore(rollbackPool).recordDailyMcp;
+    const record = createToolCallStore(rollbackPool).recordHealthMcp;
     if (!record) throw new Error('Connector audit method missing');
     const sessionId = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')", rollbackPool);
     const messageId = await scalar(`INSERT dbo.messages (jarvis_session_id, role, text)
@@ -2848,7 +2848,7 @@ describe('committed domain schema (groups 1-8)', () => {
     const newer = await revertNewerThan(rollbackPool, committed, down.name);
     expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
     expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...newer.map((migration) => migration.name)]);
-    const record = createToolCallStore(rollbackPool).recordDailyMcp;
+    const record = createToolCallStore(rollbackPool).recordHealthMcp;
     if (!record) throw new Error('Connector audit method missing');
     for (const tool of ['read_food_preferences', 'manage_saved_food'] as const) {
       await record({ requestId: randomUUID(), tool, phase: 'ok', outcome: 'ok' });

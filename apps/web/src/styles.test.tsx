@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 type Color = [number, number, number];
 
-// Daily has parallel responsive work and remains outside this pass's breakpoint contract.
+// Health has parallel responsive work and remains outside this pass's breakpoint contract.
 function stylesheetFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    if (entry.isDirectory()) return entry.name === 'daily' ? [] : stylesheetFiles(path);
+    if (entry.isDirectory()) return entry.name === 'health' ? [] : stylesheetFiles(path);
     return entry.name.endsWith('.css') ? [path] : [];
   });
 }
@@ -197,11 +197,11 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(sharedStyles, /\.html-app-frame\s*\{([^}]*)\}/, 'max-width')).toBe('100%');
   });
 
-  it('keeps Daily phone navigation, detail spacing, focus and reduced motion consistent', () => {
-    const nutrition = readFileSync('src/daily/sections/nutrition/nutrition.css', 'utf8');
-    const workouts = readFileSync('src/daily/sections/workouts/workouts.css', 'utf8');
-    const overview = readFileSync('src/daily/daily-overview.css', 'utf8');
-    const shared = readFileSync('src/daily/ui/daily-ui.css', 'utf8');
+  it('keeps Health phone navigation, detail spacing, focus and reduced motion consistent', () => {
+    const nutrition = readFileSync('src/health/sections/nutrition/nutrition.css', 'utf8');
+    const workouts = readFileSync('src/health/sections/workouts/workouts.css', 'utf8');
+    const overview = readFileSync('src/health/health-overview.css', 'utf8');
+    const shared = readFileSync('src/health/ui/health-ui.css', 'utf8');
     expect(ruleDeclaration(nutrition, /\.nutrition-controls\s*\{([^}]*)\}/, 'display')).toBe('flex');
     expect(ruleDeclaration(nutrition, /\.nutrition-controls\s*\{([^}]*)\}/, 'flex-wrap')).toBe('wrap');
     expect(ruleDeclaration(nutrition, /\.nutrition-controls\s*\{([^}]*)\}/, 'align-items')).toBe('flex-end');
@@ -215,7 +215,7 @@ describe('app-wide control contract', () => {
     expect(overview).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(overview).toContain('@media (min-width: 1200px)');
     expect(overview).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))');
-    expect(shared).toContain('.daily-coverage-note > summary:focus-visible');
+    expect(shared).toContain('.health-coverage-note > summary:focus-visible');
     expect(shared).toContain('min-height: 44px; align-content: center; cursor: pointer');
   });
 
@@ -298,13 +298,13 @@ describe('app-wide control contract', () => {
     expect(ruleDeclaration(pushNotifications, /\.push-notifications\s*\{([^}]*)\}/, 'justify-items')).toBe('start');
   });
 
-  it('pairs Daily and Proactive block alerts with the shared error surface', () => {
-    const daily = readFileSync('src/daily/daily.css', 'utf8');
+  it('pairs Health and Proactive block alerts with the shared error surface', () => {
+    const daily = readFileSync('src/health/health.css', 'utf8');
     const proactive = readFileSync('src/proactive.css', 'utf8');
     const shared = readFileSync('src/styles.css', 'utf8');
-    expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'background'))
+    expect(ruleDeclaration(daily, /\.health-notice\[role="alert"\]\s*\{([^}]*)\}/, 'background'))
       .toBe('var(--error-surface)');
-    expect(ruleDeclaration(daily, /\.daily-notice\[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
+    expect(ruleDeclaration(daily, /\.health-notice\[role="alert"\]\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');
     expect(proactive).toContain('.proactive-page [role="alert"]');
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'background')).toBe('var(--error-surface)');
     expect(ruleDeclaration(shared, /\.state-message--error\s*\{([^}]*)\}/, 'border')).toBe('1px solid var(--rule)');

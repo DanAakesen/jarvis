@@ -32,8 +32,8 @@ import type { TaskController, TaskRecord, TaskStore } from '../factory/task-stor
 import { factoryModule } from '../factory/index.js';
 import type { BackendModule } from '../modules.js';
 import { createOwnerInteractionService } from '../core/owner-interactions.js';
-import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
-import type { MealInput } from '../daily/nutrition/model.js';
+import { healthFoodReviewTool } from '../health/tools/food-review.js';
+import type { MealInput } from '../health/nutrition/model.js';
 import {
   createDanishVoiceAgentEndpoint,
   DANISH_VOICE_AGENT_NAME,
@@ -4204,7 +4204,7 @@ describe('food estimate confirmation turns', () => {
       rows.set(input.idempotencyKey, saved);
       return saved;
     });
-    const tool = dailyFoodReviewTool(() => ({
+    const tool = healthFoodReviewTool(() => ({
       intake: async key => rows.get(key) ?? null, lookupSaved: async () => null, log,
       correct: vi.fn(), remove: vi.fn(),
     }));

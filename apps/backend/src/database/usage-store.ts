@@ -2,7 +2,7 @@ import sql from 'mssql';
 import { foundryTokenCosts, DKK_PER_USD } from '../core/usage-pricing.js';
 import type { FoundryModelUsage } from '../core/usage.js';
 import { databaseReadRequest } from './wake-retry.js';
-import type { DailyToolCount, UsageEntry, UsageStore } from '../core/usage.js';
+import type { HealthToolCount, UsageEntry, UsageStore } from '../core/usage.js';
 import { imageUsageEventId } from '../vision/screen.js';
 import { createScreenFrameUsageStore } from './screen-usage-store.js';
 
@@ -23,7 +23,7 @@ interface CostTotalRow {
 export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
   return {
     async list(from, to) {
-      const dailyFrom = from ?? new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
+      const healthFrom = from ?? new Date(to.getTime() - 90 * 24 * 60 * 60 * 1000);
       const utcDayStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
       const utcMonthStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), 1));
       const { recordset } = await databaseReadRequest(pool)
@@ -76,7 +76,7 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
       const toolCalls = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, utcDayStart)
         .input('to', sql.DateTime2, to)
-        .query<DailyToolCount>(`SELECT tool, CONVERT(varchar(19), COUNT_BIG(*)) AS count
+        .query<HealthToolCount>(`SELECT tool, CONVERT(varchar(19), COUNT_BIG(*)) AS count
         FROM dbo.tool_calls
         WHERE at >= @from AND at < @to
         GROUP BY tool
@@ -84,12 +84,12 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
       const costTotals = await databaseReadRequest(pool)
         .input('from', sql.DateTime2, from)
         .input('to', sql.DateTime2, to)
-        .input('dailyFrom', sql.DateTime2, dailyFrom)
+        .input('healthFrom', sql.DateTime2, healthFrom)
         .input('dayStart', sql.DateTime2, utcDayStart)
         .input('monthStart', sql.DateTime2, utcMonthStart)
         .query<CostTotalRow>(`WITH daily_cost_rows AS (
             SELECT at, cost_usd, cost_dkk, cost_status
-            FROM dbo.usage WHERE at >= @dailyFrom AND at < @to
+            FROM dbo.usage WHERE at >= @healthFrom AND at < @to
             UNION ALL
             SELECT @to,
               CONVERT(decimal(19,8), ROUND(ROUND(DATEDIFF_BIG(millisecond,
@@ -174,8 +174,8 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
       return {
         entries,
         totalEntries: recordset[0]?.totalEntries ?? '0',
-        dailyToolCounts: toolCalls.recordset,
-        dailyCostTotals: totals.filter((_, index) => costTotals.recordset[index]?.period === 'daily'),
+        healthToolCounts: toolCalls.recordset,
+        healthCostTotals: totals.filter((_, index) => costTotals.recordset[index]?.period === 'daily'),
         monthlyCostTotals: totals.filter((_, index) => costTotals.recordset[index]?.period === 'monthly'),
         toolCalls: meteredTools.recordset.map(({ tool, count }) => ({ tool, count, costStatus: 'unverified' as const })),
       };

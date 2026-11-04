@@ -169,7 +169,7 @@ export const coreModule: BackendModule = {
     const toolRoutes = app.jarvisTools.list().flatMap(tool => {
       const legacy = tool.name === 'health_history' ? 'daily_health_history'
         : tool.name === 'health_summary' ? 'daily_health_summary' : `daily_${tool.name.slice(7)}`;
-      const names = tool.moduleId === 'daily' && tool.name.startsWith('health_') ? [tool.name, legacy] : [tool.name];
+      const names = tool.moduleId === 'health' && tool.name.startsWith('health_') ? [tool.name, legacy] : [tool.name];
       return names.map(routeName => ({ tool, routeName }));
     });
     for (const { tool, routeName } of toolRoutes) {

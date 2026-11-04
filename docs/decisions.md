@@ -10788,3 +10788,11 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: every page except Chat, Settings, Voice and Home uses `.jarvisPageHeader` (transparent safe-area inset; content scrolls behind it). Settings keeps its list header. One loader, `JarvisLoadingView`, replaces all `ProgressView` spinners (guard test). A second row of tabs uses the full-width `JarvisSegmentedBar`; the Notes folder pills stay a carousel.
 - Decision: Home and Chat share `JarvisComposerPlusMenu`. Home sends a typed message through `JarvisChatHandoff` (Chat sends it once its history is loaded, after a short lift-off animation that honors Reduce Motion); a plus-menu choice on Home opens Chat and performs it there. Home's old New task / New note entries were removed from the composer plus (the Home tiles remain).
 - Not done / not verified: no Xcode in the sandbox, so none of the app-target UI was compiled or run on a simulator or device. Health data other than steps and cardio workouts is authorized but not displayed. Status and Proactive got the header, tabs and plus changes but no new hero. Hero icon colors on Factory use the existing tints.
+
+## Daily renamed to Health; legacy feeds retired (P15-78, 2026-11-04)
+
+- The legacy Daily calendar and Gmail feeds, the `daily_feed` tool and the calendar/attention Health query sources are deleted. Calendar and Gmail use only `apps/backend/src/google`. Tables are kept; no migration was added.
+- Backend module, routes, web module, contracts and env switches are renamed to Health: `/health/*`, `JARVIS_HEALTH_ENABLED`, `VITE_HEALTH_ENABLED`. The old `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED` are read as fallbacks.
+- Temporary alias: every `/health/*` route is also served at `/daily/*` (`apps/backend/src/health/legacy-alias.ts`, nutrition export paths included). `/daily/capabilities` still reports `module: "daily"`. Remove the alias, the env fallbacks and the web `daily/*` redirect once no build 67 or earlier client remains.
+- Stable identifiers are unchanged: source ids `daily.*`, SQL schema/table names, persisted view ids `daily-*`, `DAILY_HEALTH_*` host variables, and the `daily-health` lock name.
+- iPhone HealthKit sync (item 3) is not part of this change and remains open.

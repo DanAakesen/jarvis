@@ -6,12 +6,12 @@ import { coreModule } from './index.js';
 import { runModelToolCall } from './tool-origin.js';
 import { MAX_TOOL_DESCRIPTION_CHARACTERS, ToolFailure, ToolRefusal } from './tool-registry.js';
 import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandTool } from './workspace-commands.js';
-import { dailyQuerySources, workspaceNavigationPages, type DailyQueryResult, type WorkspaceCommand } from '@jarvis/contracts';
+import { healthQuerySources, workspaceNavigationPages, type HealthQueryResult, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 import { toModelToolSchema, executeRealtimeToolCall } from '../voice/realtime.js';
 import type { BackendModule } from '../modules.js';
-import { createDailyModules } from '../daily/index.js';
-import { createDailyChanges } from '../daily/revisions.js';
+import { createHealthModules } from '../health/index.js';
+import { createHealthChanges } from '../health/revisions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
@@ -31,11 +31,11 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-function fixture(dailyEnabled = false, extraModules: readonly BackendModule[] = [], dailyQuery = vi.fn()) {
+function fixture(healthEnabled = false, extraModules: readonly BackendModule[] = [], healthQuery = vi.fn()) {
   const broker = new WorkspaceCommandBroker();
   const records: unknown[] = [];
   const app = buildApp(config, undefined, {
-    modules: [coreModule, ...createDailyModules(dailyEnabled, { query: { query: dailyQuery }, changes: createDailyChanges() }), ...extraModules],
+    modules: [coreModule, ...createHealthModules(healthEnabled, { query: { query: healthQuery }, changes: createHealthChanges() }), ...extraModules],
     auth: async (token) => token === 'header.user.signature'
       ? { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' }
       : { kind: 'jarvis-agent', objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef', tenantId: config.auth.tenantId },
@@ -43,7 +43,7 @@ function fixture(dailyEnabled = false, extraModules: readonly BackendModule[] = 
     workspaceCommands: broker,
   });
   apps.push(app);
-  return { app, broker, records, dailyQuery };
+  return { app, broker, records, healthQuery };
 }
 
 describe('workspace command delivery', () => {
@@ -990,8 +990,8 @@ describe('workspace command delivery', () => {
   });
 
   it('creates, refreshes and closes an acknowledged Health chart across chat and voice requests', async () => {
-    const result: DailyQueryResult = {
-      source: dailyQuerySources.metrics,
+    const result: HealthQueryResult = {
+      source: healthQuerySources.metrics,
       period: { startDate: '2026-10-11', endDate: '2026-10-17', timeZone: 'Europe/Copenhagen' },
       items: [
         { metric_date: '2026-10-16', metric_name: 'step_count', value: 1234, avg_value: null, unit: 'count' },
@@ -1005,8 +1005,8 @@ describe('workspace command delivery', () => {
       coverage: { returned: 2, hasMore: false, next: null, sourceCompleteness: 'unknown' },
       revision: '0'.repeat(64),
     };
-    const dailyQuery = vi.fn().mockResolvedValue(result);
-    const { app, broker } = fixture(true, [], dailyQuery);
+    const healthQuery = vi.fn().mockResolvedValue(result);
+    const { app, broker } = fixture(true, [], healthQuery);
     const delivered: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') delivered.push(data.command);
@@ -1024,7 +1024,7 @@ describe('workspace command delivery', () => {
       return command;
     };
     const input = {
-      source: dailyQuerySources.metrics, startDate: '2026-10-11', endDate: '2026-10-17',
+      source: healthQuerySources.metrics, startDate: '2026-10-11', endDate: '2026-10-17',
       metric: 'step_count', display: 'chart',
     };
 
@@ -1053,10 +1053,10 @@ describe('workspace command delivery', () => {
     expect((await refreshing).json()).toMatchObject({
       outcome: 'ok', result: { view: { operation: 'refreshed', viewId: create.viewId, renderer: 'chart', rowsShown: 2 } },
     });
-    expect(dailyQuery).toHaveBeenCalledTimes(2);
-    expect(dailyQuery.mock.calls.map(([query]) => query)).toEqual([
-      { source: dailyQuerySources.metrics, startDate: input.startDate, endDate: input.endDate, metric: 'step_count', limit: 200 },
-      { source: dailyQuerySources.metrics, startDate: input.startDate, endDate: input.endDate, metric: 'step_count', limit: 200 },
+    expect(healthQuery).toHaveBeenCalledTimes(2);
+    expect(healthQuery.mock.calls.map(([query]) => query)).toEqual([
+      { source: healthQuerySources.metrics, startDate: input.startDate, endDate: input.endDate, metric: 'step_count', limit: 200 },
+      { source: healthQuerySources.metrics, startDate: input.startDate, endDate: input.endDate, metric: 'step_count', limit: 200 },
     ]);
 
     const closing = app.inject({

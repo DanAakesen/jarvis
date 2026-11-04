@@ -1,5 +1,5 @@
-export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
-export { dailyQuerySources, dailyQuerySourcesV1, dailyQuerySourcesV2, dailyQuerySourcesV3, dailyQuerySourcesV5, dailyQuerySourcesV6, dailyQuerySourcesV6WithoutTrainingTargets, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './daily.js';
+export { healthViewIds, healthModuleId, healthContractVersion } from './health.js';
+export { healthQuerySources, healthQuerySourcesV1, healthQuerySourcesV2, healthQuerySourcesV3, healthQuerySourcesV5, healthQuerySourcesV6, healthQuerySourcesV6WithoutTrainingTargets, healthCapabilitiesVersion, healthCapabilitiesAccept, healthQuerySchema, isHealthQuery } from './health.js';
 export { vaultMirrorStatusSchema, vaultMirrorStatusViewSchema } from './vault-mirror.js';
 
 export const generatedViewVersion = 1;

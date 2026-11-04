@@ -13,7 +13,7 @@ export interface CodexToolUsageCount {
   readonly count: string;
 }
 
-export interface DailyMcpAuditRecord {
+export interface HealthMcpAuditRecord {
   readonly requestId: string;
   readonly tool: 'read_nutrition' | 'lookup_food' | 'log_food' | 'correct_food' | 'delete_food' | 'read_food_preferences' | 'manage_saved_food';
   readonly phase: 'awaiting_confirmation' | ToolCallOutcome;
@@ -22,7 +22,7 @@ export interface DailyMcpAuditRecord {
 
 export interface ToolCallStore {
   record(call: ToolCallRecord): Promise<void>;
-  recordDailyMcp?(call: DailyMcpAuditRecord): Promise<void>;
+  recordHealthMcp?(call: HealthMcpAuditRecord): Promise<void>;
   listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 
