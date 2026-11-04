@@ -26,6 +26,8 @@
 "today.tasksUnavailable" = "Tasks unavailable";
 "today.markDone" = "Mark done";
 "today.workouts" = "Workouts";
+"today.activeTime" = "Active time";
+"today.activeKcal" = "Active kcal";
 "today.workoutsByType" = "Workouts by type";
 "today.workoutsEmpty" = "No workouts";
 "today.workoutsUnavailable" = "Workouts unavailable";
@@ -51,6 +53,10 @@
 "today.short.back" = "Back";
 "today.short.arms" = "Arms";
 "today.short.legs" = "Legs";
+"today.session.strength" = "Strength training";
+"today.session.other" = "Other workout";
+"today.short.strength" = "Strength";
+"today.short.other" = "Other";
 "today.short.cardio" = "Cardio";
 "today.quickActions" = "Quick actions";
 "today.logWorkout" = "Log workout";

@@ -257,6 +257,38 @@ struct JarvisIconButton: View {
     }
 }
 
+/// The task checkbox: no border or glass. When checked it animates into a check mark, then runs `action` so the row
+/// clears after the check is seen.
+struct JarvisCheckButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let title: String
+    var identifier: String
+    let action: () -> Void
+    @State private var isChecked = false
+
+    var body: some View {
+        Button {
+            guard !isChecked else { return }
+            if reduceMotion { isChecked = true } else { withAnimation(.snappy(duration: 0.25)) { isChecked = true } }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 350))
+                action()
+            }
+        } label: {
+            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                .font(.title2)
+                .foregroundStyle(isChecked ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isChecked ? .isSelected : [])
+        .accessibilityIdentifier(identifier)
+    }
+}
+
 /// The one menu button: a glass icon, the same as `JarvisIconButton`, that opens a menu.
 struct JarvisMenuButton<Content: View>: View {
     let title: String

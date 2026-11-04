@@ -131,7 +131,7 @@ struct JarvisNotesArea: View {
     let onRetryConfiguration: () -> Void
 
     @State private var selectedTab: JarvisNotesTab = .notes
-    @State private var selectedScope: JarvisNotesSearchScope = .all
+    private let selectedScope: JarvisNotesSearchScope = .all
     @State private var selectedFolder = ""
     @State private var searchText = ""
     @State private var refreshVersion = 0
@@ -539,11 +539,6 @@ struct JarvisNotesArea: View {
                 identifier: "notes.search",
                 clearTitle: copy.clearSearch
             )
-            JarvisLabelledMenu(title: copy.title(for: selectedScope), identifier: "notes.scope") {
-                ForEach(JarvisNotesSearchScope.allCases) { scope in
-                    Button(copy.title(for: scope)) { selectedScope = scope }
-                }
-            }
             plusMenu
         }
     }

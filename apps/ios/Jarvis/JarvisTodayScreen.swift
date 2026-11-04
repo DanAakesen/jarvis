@@ -312,9 +312,8 @@ struct JarvisTodayScreen: View {
 
     private func taskRow(_ task: VaultTask) -> some View {
         HStack(spacing: 4) {
-            JarvisIconButton(
+            JarvisCheckButton(
                 title: "\(copy(.markDone)): \(task.text)",
-                systemImage: "circle",
                 identifier: "today.task.done.\(task.id)"
             ) { Task { await model.complete(task) } }
             VStack(alignment: .leading, spacing: 0) {

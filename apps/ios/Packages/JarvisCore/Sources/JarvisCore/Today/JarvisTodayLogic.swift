@@ -207,14 +207,24 @@ public enum JarvisTodayActivity {
         now: Date,
         calendar: Calendar = .current
     ) -> [JarvisGymSessionType: Int] {
-        let today = calendar.startOfDay(for: now)
-        guard let start = calendar.date(byAdding: .day, value: -(range.dayCount - 1), to: today),
-              let end = calendar.date(byAdding: .day, value: 1, to: today) else { return [:] }
         var counts: [JarvisGymSessionType: Int] = [:]
-        for entry in entries where entry.performedAt >= start && entry.performedAt < end {
+        for entry in entriesInRange(entries, range: range, now: now, calendar: calendar) {
             counts[entry.session, default: 0] += 1
         }
         return counts
+    }
+
+    /// The workouts performed on the days in the range, including today.
+    public static func entriesInRange(
+        _ entries: [JarvisGymLogEntry],
+        range: JarvisTodayRange,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> [JarvisGymLogEntry] {
+        let today = calendar.startOfDay(for: now)
+        guard let start = calendar.date(byAdding: .day, value: -(range.dayCount - 1), to: today),
+              let end = calendar.date(byAdding: .day, value: 1, to: today) else { return [] }
+        return entries.filter { $0.performedAt >= start && $0.performedAt < end }
     }
 
     /// "27 Oct to 2 Nov" for day ranges, "06:00 to 22:00" for today.
@@ -292,6 +302,9 @@ public struct JarvisTodayActivityDisplay: Equatable, Sendable {
 
     public let segments: [Segment]
     public let totalWorkouts: Int
+    /// Summed workout minutes and active kilocalories for the range, rounded.
+    public let activeMinutes: Int
+    public let activeKilocalories: Int
     public let centerCount: Int
     public let centerSession: JarvisGymSessionType?
     public let bars: [JarvisStepBar]
@@ -315,6 +328,9 @@ public struct JarvisTodayActivityDisplay: Equatable, Sendable {
             return Segment(session: $0, count: count, fraction: total > 0 ? Double(count) / Double(total) : 0)
         }
         totalWorkouts = total
+        let inRange = JarvisTodayActivity.entriesInRange(workouts, range: state.range, now: now, calendar: calendar)
+        activeMinutes = Int(inRange.reduce(0) { $0 + $1.durationMinutes }.rounded())
+        activeKilocalories = Int(inRange.reduce(0) { $0 + $1.activeKilocalories }.rounded())
         centerSession = state.selectedSegment
         centerCount = state.selectedSegment.map { counts[$0] ?? 0 } ?? total
 

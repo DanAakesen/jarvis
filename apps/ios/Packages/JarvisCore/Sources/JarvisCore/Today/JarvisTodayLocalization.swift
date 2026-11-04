@@ -29,6 +29,8 @@ public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
     case tasksUnavailable = "today.tasksUnavailable"
     case markDone = "today.markDone"
     case workouts = "today.workouts"
+    case activeTime = "today.activeTime"
+    case activeKcal = "today.activeKcal"
     case workoutsByType = "today.workoutsByType"
     case workoutsEmpty = "today.workoutsEmpty"
     case workoutsUnavailable = "today.workoutsUnavailable"
@@ -55,6 +57,10 @@ public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
     case shortArms = "today.short.arms"
     case shortLegs = "today.short.legs"
     case shortCardio = "today.short.cardio"
+    case sessionStrength = "today.session.strength"
+    case sessionOther = "today.session.other"
+    case shortStrength = "today.short.strength"
+    case shortOther = "today.short.other"
     case quickActions = "today.quickActions"
     case logWorkout = "today.logWorkout"
     case logLift = "today.logLift"
@@ -139,5 +145,16 @@ public enum JarvisTodayLocalization {
             result.replaceSubrange(range, with: value)
         }
         return result
+    }
+}
+
+extension JarvisTodayLocalization {
+    /// A short duration for a large number: "45m", "2h 5m" in English, "2t 5m" in Danish.
+    public static func durationText(minutes: Int, language: JarvisAppLanguage) -> String {
+        let total = max(0, minutes)
+        let hourUnit = language == .da ? "t" : "h"
+        guard total >= 60 else { return "\(total)m" }
+        let remainder = total % 60
+        return remainder == 0 ? "\(total / 60)\(hourUnit)" : "\(total / 60)\(hourUnit) \(remainder)m"
     }
 }

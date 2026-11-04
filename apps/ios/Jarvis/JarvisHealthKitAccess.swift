@@ -44,8 +44,9 @@ enum JarvisHealthKitAccess {
     }
 }
 
-/// Runs, rides, swims and other cardio workouts recorded in Health, shown with the vault gym logs on Home.
-/// Strength workouts carry no muscle group in Health, so those still come from the vault log.
+/// Every workout recorded in Health (strength, runs, rides, walks and the rest), shown with the vault gym logs on Home.
+/// Strength workouts carry no muscle group in Health, so they show as strength training; the combined store drops one
+/// only when a real vault log exists within two hours.
 struct JarvisHealthKitWorkoutSource: JarvisGymLogStore {
     func save(_ entry: JarvisGymLogEntry) async throws { throw JarvisGymLogError.unavailable }
 
@@ -55,23 +56,30 @@ struct JarvisHealthKitWorkoutSource: JarvisGymLogStore {
         let descriptor = HKSampleQueryDescriptor(
             predicates: [.workout(HKQuery.predicateForSamples(withStart: since, end: nil, options: .strictStartDate))],
             sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)],
-            limit: 200
+            limit: 500
         )
         let workouts = try await descriptor.result(for: store)
-        return workouts.compactMap { workout in
-            Self.isCardio(workout.workoutActivityType)
-                ? JarvisGymLogEntry(performedAt: workout.startDate, session: .cardio)
-                : nil
+        return workouts.map { workout in
+            let energy = workout.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()
+            return JarvisGymLogEntry(
+                performedAt: workout.startDate,
+                session: Self.session(workout.workoutActivityType),
+                durationMinutes: workout.duration / 60,
+                activeKilocalories: energy?.doubleValue(for: .kilocalorie()) ?? 0
+            )
         }
     }
 
-    private static func isCardio(_ type: HKWorkoutActivityType) -> Bool {
+    static func session(_ type: HKWorkoutActivityType) -> JarvisGymSessionType {
         switch type {
+        case .traditionalStrengthTraining, .functionalStrengthTraining, .coreTraining, .flexibility:
+            .strength
         case .running, .walking, .hiking, .cycling, .swimming, .rowing, .elliptical, .stairClimbing,
-             .highIntensityIntervalTraining, .mixedCardio, .jumpRope, .crossTraining, .cardioDance:
-            true
+             .highIntensityIntervalTraining, .mixedCardio, .jumpRope, .crossTraining, .cardioDance,
+             .handCycling, .wheelchairWalkPace, .wheelchairRunPace, .stairs, .stepTraining:
+            .cardio
         default:
-            false
+            .other
         }
     }
 }
