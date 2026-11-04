@@ -10825,3 +10825,11 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Element-level loading: each Home card and Health/Notes/Factory section keeps its own state; the only loading view is `JarvisLoadingView`. `JarvisCachedSection` is the shared per-card loader.
 - Requests per page (derived from code, not measured on a device). Before: every visit refetched. After: 0 inside the freshness window, 1 conditional request (304) when stale. Status 1→0/1, Proactive 3→0/3, Settings 1→0/1, Notes 3–4→0/3–4, Factory 2→0/2, Home 3→0/3.
 - Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore (`swift test`) and backend (`vitest`, `tsc`, `eslint`) checks pass.
+
+## Health hero carousel and charts (P15-83)
+
+- The Health page hero is a swipeable carousel (Training, Sleep, Nutrition) with equal card height and page dots. Every Health bar chart uses `JarvisHealthBarChart`: headline is the average (or the tapped day; tap again to return), target chip and dashed target line, weekday labels, bars grow from the baseline.
+- Chart value logic (`JarvisHealthChartValues`) lives in JarvisCore and is unit tested. Missing days stay empty; averages only use recorded days.
+- Sleep goal (default 8 h), kcal (2200), carbs (250 g) and fat (70 g) goals are stored on the device (`JarvisHealthGoals`, Settings > Health goals) because the Daily target API only serves training and resting/deficit/protein targets. Protein keeps using the server target.
+- The hero reads sleep and nutrition days for the last seven days whatever the selected period. The separate Nutrition panel was removed; its protein chart is the Nutrition hero chart. HealthKit already requests every readable type (`JarvisHealthKitAccess`); shown data comes from the Daily reads and shows an empty state when there is none.
+- Not verified: no Xcode in the sandbox, so the app-target edits were not compiled. JarvisCore `swift test` passes.

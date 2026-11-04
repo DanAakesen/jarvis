@@ -96,6 +96,14 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
     let title: String
     let accessory: Accessory
     let content: Content
+    private var fillsHeight = false
+
+    /// Stretches the card to the height its parent offers, so cards in a carousel share one height.
+    func fillingHeight(_ fills: Bool = true) -> Self {
+        var copy = self
+        copy.fillsHeight = fills
+        return copy
+    }
 
     init(title: String, @ViewBuilder accessory: () -> Accessory, @ViewBuilder content: () -> Content) {
         self.title = title
@@ -114,7 +122,7 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
             }
             content
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         .padding(JarvisPageHeaderMetrics.heroInset)
         .background(
             .regularMaterial,
