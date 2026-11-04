@@ -29,6 +29,8 @@ struct JarvisNotesCopy {
     var title: String { text(.title) }
     var overview: String { text(.overview) }
     var openTasks: String { text(.openTasks) }
+    var folderCount: String { text(.folderCount) }
+    var rootNotes: String { text(.rootNotes) }
     var doneTasks: String { text(.doneTasks) }
     var refresh: String { text(.refresh) }
     var search: String { text(.search) }
@@ -294,6 +296,17 @@ struct JarvisNotesArea: View {
                         language: language
                     )
                 }
+            }
+            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+        } else if let tree {
+            JarvisPageHeroCard(title: copy.overview) {
+                JarvisPageStatGrid(
+                    stats: [
+                        JarvisPageStat(id: "folders", value: tree.directories.count, label: copy.folderCount, systemImage: "folder", tint: JarvisDesignTokens.primaryAccent),
+                        JarvisPageStat(id: "rootNotes", value: tree.rootNoteCount, label: copy.rootNotes, systemImage: "note.text", tint: JarvisDesignTokens.primaryAccent),
+                    ],
+                    language: language
+                )
             }
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         }

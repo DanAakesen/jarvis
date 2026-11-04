@@ -48,8 +48,8 @@
 "health.heartRate" = "Puls";
 "health.date" = "Dato";
 "health.average" = "Gennemsnit";
-"health.over" = "Over";
-"health.left" = "Tilbage";
+"health.over" = "over";
+"health.left" = "tilbage";
 "health.loadingTarget" = "Indlæser mål";
 "health.targetsUnavailable" = "Mål ikke tilgængelige";
 "health.noMeals" = "Ingen måltider";
