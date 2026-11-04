@@ -10814,3 +10814,6 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 ## 2026-11-04 P15-79: Notes tab bar under the hero
 - Decision: on Notes the Notes / Tasks / List / Graph bar is the last row of the scrolling head (header, phrase, hero, tab bar, Recent strip, list). It stays at the top only while the hero has no data (loading, error, empty), on Graph, and while searching, so the tabs are always reachable. Not compiled or run on a device.
+
+## 2026-11-04 P15-79: Health plus menu reuses the Home log sheets
+- Decision: Health's plus menu (log a workout, log a lift) presents `JarvisTodayGymSheet` with the Home model, exactly like the two Home tiles. The Health-only `JarvisHealthNewWorkoutSheet` and `JarvisHealthNewLiftSheet` are removed, so each sheet has one implementation. `testHealthPlusAndHomeTilesOpenTheSameLogSheetsInDanishAndEnglish` compares the sheet identifiers from both entry points. Not compiled or run on a device.
