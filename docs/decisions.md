@@ -10797,3 +10797,7 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 ## 2026-11-04 P15-79: One loading animation (item 17)
 - Decision: `JarvisLoadingView` is the only loading animation, with `Size.area` and `Size.inline` variants. Busy buttons in `JarvisControls.swift` (4 sites) and the Settings loading skeleton now use it. The guard test also fails on `.redacted(reason: .placeholder)` skeletons and on any indeterminate `ProgressView` outside the view (determinate `ProgressView(value:)` bars and the WidgetKit Live Activity surface stay).
+
+## 2026-11-04 P15-79: Notes folders collapsed and Recent strip
+- Decision: Notes folders (Notes and List tabs) start collapsed on first open; expansion is per session (`@State`). The Notes tab shows a Recent strip (label "Seneste" / "Recent") of the 5 most recently modified notes, taken from the knowledge graph nodes via `JarvisNotesPresentation.recentNotes`. 140 pt hairline cards (radius 16) open the note. It is hidden when a folder filter is active, while searching, on empty or failed loads, and uses `JarvisLoadingView` for loading. The strip sits in the list head after the hero; moving the segmented bar below the hero (item 12) is still open.
+- Not verified: nothing was compiled or run on a simulator; the UI test only asserts when notes data exists in the launch scenario.

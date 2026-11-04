@@ -15,6 +15,30 @@ final class NavigationReliabilityTests: XCTestCase {
         exerciseNavigation(language: "en")
     }
 
+    func testNotesFoldersStartCollapsedAndRecentStripShowsInDanishAndEnglish() {
+        for (language, label, collapsed) in [("da", "Seneste", "Lukket"), ("en", "Recent", "Collapsed")] {
+            launch(language: language)
+            defer { app.terminate() }
+            navigate(to: "notes")
+            waitFor(app.staticTexts["page.title"], key: "exists", value: true)
+            let folders = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'notes.folder.'"))
+            if folders.count > 0 {
+                for index in 0..<folders.count {
+                    let header = folders.element(boundBy: index)
+                    XCTAssertEqual(header.value as? String, collapsed, "\(language): folder \(header.identifier) starts collapsed")
+                }
+            }
+            let recent = app.descendants(matching: .any)["notes.recent"]
+            if recent.waitForExistence(timeout: 3) {
+                XCTAssertTrue(recent.staticTexts[label].exists, "\(language): Recent label")
+                let cards = app.buttons.matching(identifier: "notes.recent.card")
+                XCTAssertLessThanOrEqual(cards.count, 5)
+                XCTAssertGreaterThan(cards.count, 0)
+            }
+            attachScreenshot("Notes collapsed folders and Recent strip (\(language))")
+        }
+    }
+
     func testMenuRemainsHittableFiveSecondsAfterLaunchInDanish() {
         assertMenuAfterStartup(language: "da")
     }

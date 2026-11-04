@@ -87,6 +87,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case resetGraph = "notes.resetGraph"
     case vaultRoot = "notes.vaultRoot"
     case loadMore = "notes.loadMore"
+    case recent = "notes.recent"
     case createHint = "notes.createHint"
     case discardTitle = "notes.discardTitle"
     case discard = "notes.discard"

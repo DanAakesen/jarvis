@@ -81,6 +81,7 @@ struct JarvisNotesCopy {
     var resetGraph: String { text(.resetGraph) }
     var vaultRoot: String { text(.vaultRoot) }
     var loadMore: String { text(.loadMore) }
+    var recent: String { text(.recent) }
     var createHint: String { text(.createHint) }
     var discardTitle: String { text(.discardTitle) }
     var discard: String { text(.discard) }
@@ -146,6 +147,8 @@ struct JarvisNotesArea: View {
     @State private var directoryLoading = Set<String>()
     @State private var taskList: VaultTaskList?
     @State private var graph: KnowledgeGraph?
+    @State private var recentNotes: [KnowledgeGraphNode] = []
+    @State private var recentLoading = false
     @State private var graphSearch: KnowledgeGraphSearch?
     @State private var taskSearch: VaultTaskList?
     @State private var loading = false
@@ -364,7 +367,20 @@ struct JarvisNotesArea: View {
                     stateView(icon: "note.text", title: copy.emptyNotes, retry: nil)
                 }
             } else {
-                JarvisList(head: { pageHead }) {
+                notesFolderList
+            }
+        }
+    }
+
+    private var notesFolderList: some View {
+        Group {
+            Group {
+                JarvisList(head: {
+                    VStack(spacing: 0) {
+                        pageHead
+                        if showsRecent { recentStrip }
+                    }
+                }) {
                     ForEach(visibleFolderGroups, id: \.self) { folder in
                         Section {
                             if expandedFolders.contains(folder) {
@@ -612,6 +628,7 @@ struct JarvisNotesArea: View {
         .buttonStyle(.plain)
         .accessibilityLabel(title)
         .accessibilityValue(isExpanded ? copy.expanded : copy.collapsed)
+        .accessibilityIdentifier("notes.folder.\(inList ? "list." : "")\(folder)")
     }
 
     private func noteRow(_ note: VaultNoteSummary) -> some View {
@@ -871,10 +888,6 @@ struct JarvisNotesArea: View {
                     directoryNotes = [:]
                     groupHasMore = [:]
                     directoryHasMore = [:]
-                    if nextTree.rootNoteCount > 0 {
-                        expandedFolders.insert("")
-                        await loadDirectory("", offset: 0)
-                    }
                 }
             case .tasks:
                 if force || taskList == nil {
@@ -889,11 +902,8 @@ struct JarvisNotesArea: View {
                     graph = result
                 }
             }
-            if tree != nil && selectedTab == .notes && groupNotes.isEmpty {
-                if let first = topLevelFolders.first {
-                    expandedFolders.insert(first)
-                    await loadNoteGroup(first, offset: 0)
-                }
+            if selectedTab == .notes, force || recentNotes.isEmpty {
+                await loadRecent(client)
             }
         } catch {
             guard !Task.isCancelled else { return }
@@ -901,6 +911,85 @@ struct JarvisNotesArea: View {
             loadRetryUnavailable = authorizationUnavailable(error)
             signInUnavailable = loadRetryUnavailable
         }
+    }
+
+    /// The five most recently modified notes. A failure leaves the strip hidden; the list still loads.
+    private func loadRecent(_ client: JarvisNotesClient) async {
+        recentLoading = true
+        defer { recentLoading = false }
+        guard let result = try? await client.graph(), !Task.isCancelled else { return }
+        recentNotes = JarvisNotesPresentation.recentNotes(result.nodes)
+    }
+
+    private var showsRecent: Bool {
+        selectedFolder.isEmpty && (recentLoading || !recentNotes.isEmpty)
+    }
+
+    private var recentStrip: some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
+            Text(copy.recent)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(nil)
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            if recentLoading && recentNotes.isEmpty {
+                JarvisLoadingView(size: .inline)
+                    .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                        ForEach(recentNotes) { node in recentCard(node) }
+                    }
+                    .scrollTargetLayout()
+                }
+                .contentMargins(.horizontal, JarvisDesignTokens.notesHorizontalInset, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollIndicators(.hidden)
+            }
+        }
+        .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+        .accessibilityIdentifier("notes.recent")
+    }
+
+    private func recentCard(_ node: KnowledgeGraphNode) -> some View {
+        let dot = [Color.orange, JarvisDesignTokens.ambientGreen, JarvisDesignTokens.ambientBlue, .pink, .purple, .teal]
+        let index = node.folder.unicodeScalars.reduce(0) { ($0 + Int($1.value)) % dot.count }
+        let opening = openingNotePaths.contains(node.path)
+        return Button {
+            Task { await openNote(path: node.path) }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(node.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    Circle().fill(dot[index]).frame(width: 8, height: 8).accessibilityHidden(true)
+                    if opening {
+                        JarvisLoadingView(size: .inline)
+                    } else {
+                        Text(JarvisNotesLocalization.formattedUpdatedDate(node.updatedAt, language: copy.language))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .padding(12)
+            .frame(width: 140, height: 84, alignment: .topLeading)
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.18), lineWidth: 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(opening)
+        .accessibilityLabel(node.title)
+        .accessibilityIdentifier("notes.recent.card")
     }
 
     private func loadNoteGroup(_ folder: String, offset: Int) async {

@@ -68,6 +68,7 @@
 "notes.showGraph" = "Show graph";
 "notes.resetGraph" = "Reset graph view";
 "notes.vaultRoot" = "Vault root";
+"notes.recent" = "Recent";
 "notes.loadMore" = "Load more";
 "notes.createHint" = "Create a note or task";
 "notes.discardTitle" = "Discard changes?";

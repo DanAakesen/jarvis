@@ -68,6 +68,7 @@
 "notes.showGraph" = "Vis graf";
 "notes.resetGraph" = "Nulstil grafvisning";
 "notes.vaultRoot" = "Rod";
+"notes.recent" = "Seneste";
 "notes.loadMore" = "Indlæs flere";
 "notes.createHint" = "Opret en note eller opgave";
 "notes.discardTitle" = "Kassér ændringer?";
