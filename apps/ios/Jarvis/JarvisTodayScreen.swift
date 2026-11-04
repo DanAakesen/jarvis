@@ -134,7 +134,7 @@ struct JarvisTodayScreen: View {
 
     private var agenda: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+            HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
                 tabControl
                 plusMenu
             }
@@ -149,7 +149,7 @@ struct JarvisTodayScreen: View {
     private var tabControl: some View {
         let today = rows(for: .today).count
         let due = taskLists?.due.count
-        return JarvisTabStrip(
+        return JarvisSegmentedBar(
             title: copy(.agendaAndTasks),
             identifierPrefix: "today.tab",
             items: [
