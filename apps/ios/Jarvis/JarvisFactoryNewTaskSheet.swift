@@ -207,6 +207,7 @@ struct JarvisFactoryNewTaskSheet: View {
             let task = try await client.createTask(submission)
             await JarvisFactoryLiveActivityController.update(task: task, language: language)
             submissionsByDraft[draft] = nil
+            await JarvisAppCache.invalidateAll(.factory)
             onCreated()
         } catch {
             createFailed = true

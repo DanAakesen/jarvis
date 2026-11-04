@@ -478,3 +478,29 @@ public final class JarvisClient: Sendable {
 private struct DeviceLabelRequest: Encodable {
     let deviceLabel: String
 }
+
+extension JarvisClient {
+    /// Conditional read for the repository layer: sends If-None-Match when a validator is known and maps 304 to
+    /// `notModified`. `parse` validates a 200 response and must throw for anything that must not be cached.
+    func conditionalGet<Value: Sendable>(
+        path: [String],
+        queryItems: [URLQueryItem] = [],
+        validator: String?,
+        accept: String = "application/json",
+        timeout: Duration? = nil,
+        parse: (HTTPResponse) throws -> Value
+    ) async throws -> JarvisFetchResult<Value> {
+        let response = try await performAuthenticatedRequest(
+            method: .get,
+            path: path,
+            queryItems: queryItems,
+            headers: validator.map { ["If-None-Match": $0] } ?? [:],
+            idempotent: true,
+            additionalSuccessStatuses: [304],
+            accept: accept,
+            timeout: timeout
+        )
+        if response.statusCode == 304 { return .notModified }
+        return .modified(try parse(response), validator: response.header("ETag"))
+    }
+}

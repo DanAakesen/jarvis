@@ -10802,7 +10802,7 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - `JarvisRepository` and `JarvisCache` in JarvisCore (`Cache/`) give stale-while-revalidate reads: fresh cache makes no request, stale cache is shown then refreshed, a failed refresh keeps the cached value and reports the failure. Freshness per kind: calendar 2 min, notes and tasks 5 min, Factory and status 1 min, usage 2 min.
 - Storage is JSON files under the Caches directory (excluded from backup), one folder per account. SwiftData was not used so the layer stays pure Swift and testable on Linux CI. No tokens are cached; they stay in the Keychain.
 - The cache is cleared on sign-out and on every new sign-in (`JarvisAppCache.clear()`); `bind(account:)` clears on account change.
-- Conditional requests: the Usage client sends `If-None-Match` and maps 304; the backend does not emit ETags yet (follow-up).
+- Conditional requests: the Usage client sends `If-None-Match` and maps 304; the backend emits ETags since P15-81.
 - Signposts (`OSSignposter`, category `repository`) wrap each page open and refresh.
 - Wired so far: Usage page (repository plus `LazyVStack`). Notes, tasks, calendar, Factory, status, proactive, Health and settings views still read from their clients and are follow-ups. Health stays read directly from HealthKit.
 - Requests on Usage: first open 1, repeat open within 2 min 0 (before: 1 on every open). Not measured on a device.
@@ -10815,3 +10815,13 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Truthful status: the Sync button on the Health page shows complete only when every type was read and uploaded; otherwise it lists the missing types or reports failure. iOS does not reveal denied read types, so only failed reads are listed.
 - iOS now calls `/health/*` and accepts module `health` or `daily`. The `/daily` alias stays until builds ≤67 are gone, since those builds are still installed; removal criteria above are unchanged.
 - Not done: background delivery (`HKObserverQuery` / `BGTaskScheduler`) and a backend-side coverage readout beyond the existing `daily.sync` source.
+
+## 2026-11-04 P15-81: Cache wired into all pages, ETag on the backend
+
+- Status, Proactive, Settings, Health, Notes, Factory, Home (calendar, notes, tasks) and pending confirmations (new kind `notifications`, 30 s) read through `JarvisRepository`. Cached data shows at once, a stale entry refreshes in the background, and a failed refresh keeps the cached data visible. Pull-to-refresh, retry, live loops and SSE events force a refresh.
+- Writes invalidate the affected kinds (`JarvisAppCache.invalidate` / `invalidateAll`): notes, tasks, Factory task creation, proactive feedback, settings, and confirmation decisions.
+- Backend: `conditional-get.ts` adds a SHA-256 `ETag` and `Cache-Control: private, no-cache` to 200 responses of an allowlisted set of GET routes and answers a matching `If-None-Match` with 304. Mutations are never conditional. JarvisCore clients use `JarvisClient.conditionalGet`.
+- Not cached: Health lifts, Notes search, graph and single-note reads, Factory releases, later pages of a note list. Health data reads are POSTs without a validator, so they only use the freshness window.
+- Element-level loading: each Home card and Health/Notes/Factory section keeps its own state; the only loading view is `JarvisLoadingView`. `JarvisCachedSection` is the shared per-card loader.
+- Requests per page (derived from code, not measured on a device). Before: every visit refetched. After: 0 inside the freshness window, 1 conditional request (304) when stale. Status 1→0/1, Proactive 3→0/3, Settings 1→0/1, Notes 3–4→0/3–4, Factory 2→0/2, Home 3→0/3.
+- Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore (`swift test`) and backend (`vitest`, `tsc`, `eslint`) checks pass.

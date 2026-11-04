@@ -18,6 +18,8 @@ public protocol JarvisCacheStorage: Sendable {
     func read(account: String, key: String) async -> JarvisCacheEntry?
     func write(_ entry: JarvisCacheEntry, account: String, key: String) async
     func remove(account: String, key: String) async
+    /// Removes every entry of the account whose key starts with `prefix` (all scopes of one kind).
+    func remove(account: String, keyPrefix: String) async
     /// Removes the entries of every account.
     func removeAll() async
 }
@@ -36,6 +38,11 @@ public actor JarvisInMemoryCacheStorage: JarvisCacheStorage {
     }
 
     public func remove(account: String, key: String) { entries[slot(account, key)] = nil }
+
+    public func remove(account: String, keyPrefix: String) {
+        let prefix = slot(account, keyPrefix)
+        entries = entries.filter { !$0.key.hasPrefix(prefix) }
+    }
 
     public func removeAll() { entries.removeAll() }
 }
@@ -86,6 +93,14 @@ public actor JarvisFileCacheStorage: JarvisCacheStorage {
 
     public func remove(account: String, key: String) {
         try? FileManager.default.removeItem(at: file(account, key))
+    }
+
+    public func remove(account: String, keyPrefix: String) {
+        let prefix = Self.name(keyPrefix)
+        let urls = (try? FileManager.default.contentsOfDirectory(at: folder(account), includingPropertiesForKeys: nil)) ?? []
+        for url in urls where url.lastPathComponent.hasPrefix(prefix) {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     public func removeAll() {

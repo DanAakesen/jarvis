@@ -393,7 +393,7 @@ struct JarvisTodayScreen: View {
                     title: copy(.retry),
                     systemImage: "arrow.clockwise",
                     identifier: "today.retry"
-                ) { Task { await model.refresh() } }
+                ) { Task { await model.refresh(force: true) } }
             }
         }
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)

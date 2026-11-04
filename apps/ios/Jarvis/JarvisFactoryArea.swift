@@ -154,7 +154,7 @@ struct JarvisFactoryArea: View {
                 FactoryStateMessage(
                     title: copy.text(.actionFailed),
                     actionTitle: copy.text(.retry),
-                    action: { Task { await loadProjects() } }
+                    action: { Task { await loadProjects(force: true) } }
                 )
             } else if projects.isEmpty {
                 FactoryStateMessage(title: copy.text(.emptyProjects))
@@ -541,7 +541,7 @@ struct JarvisFactoryArea: View {
         }
     }
 
-    private func loadProjects() async {
+    private func loadProjects(force: Bool = false) async {
         guard let client else {
             projectLoading = false
             projectsError = true
@@ -550,8 +550,12 @@ struct JarvisFactoryArea: View {
         projectLoading = true
         projectsError = false
         do {
-            let result = try await client.projects()
+            let repository = await JarvisAppCache.repository(.factory, scope: "projects") {
+                try await client.fetchProjects(validator: $0)
+            }
+            let resolved = await repository.resolve(force: force)
             guard !Task.isCancelled else { return }
+            guard let result = resolved.value else { throw resolved.error ?? JarvisFactoryClientError.invalidRequest }
             projects = result
             if !result.contains(where: { $0.id == selectedProjectID }) {
                 selectedProjectID = result.first?.id ?? ""
@@ -570,15 +574,28 @@ struct JarvisFactoryArea: View {
         }
         contentLoading = true
         contentError = false
+        var showingSavedBoard = false
         do {
             if segment == .releases {
                 releaseView = try await client.releases(projectId: selectedProjectID)
             } else {
-                board = try await client.board(projectId: selectedProjectID)
+                let projectId = selectedProjectID
+                let repository = await JarvisAppCache.repository(.factory, scope: projectId) {
+                    try await client.fetchBoard(projectId: projectId, validator: $0)
+                }
+                let resolved = await repository.resolve(force: refreshVersion > 0)
+                guard let cachedBoard = resolved.value else {
+                    throw resolved.error ?? JarvisFactoryClientError.invalidRequest
+                }
+                board = cachedBoard
+                if let refreshError = resolved.error {
+                    showingSavedBoard = JarvisFactoryConnectionPolicy.isNetworkFailure(refreshError)
+                }
             }
             guard !Task.isCancelled else { return }
             contentError = false
-            connection = previewState == .offline ? .offline : previewState == .reconnecting ? .reconnecting : .connected
+            connection = previewState == .offline || showingSavedBoard
+                ? .offline : previewState == .reconnecting ? .reconnecting : .connected
         } catch {
             guard !Task.isCancelled else { return }
             contentError = true
@@ -590,7 +607,7 @@ struct JarvisFactoryArea: View {
     private func refresh() async {
         guard !refreshing else { return }
         refreshing = true
-        await loadProjects()
+        await loadProjects(force: true)
         refreshVersion += 1
         await loadSelectedContent()
         refreshing = false
