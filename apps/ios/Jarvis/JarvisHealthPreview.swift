@@ -39,11 +39,11 @@ enum JarvisHealthPreview {
               "interactions": [
                 {
                   "method": "GET",
-                  "path": "/api/daily/capabilities",
+                  "path": "/api/health/capabilities",
                   "response": {
                     "statusCode": 200,
                     "body": {
-                      "module": "daily",
+                      "module": "health",
                       "version": 5,
                       "sources": [
                         "daily.health.workouts",
@@ -61,7 +61,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "GET",
-                  "path": "/api/daily/training-targets",
+                  "path": "/api/health/training-targets",
                   "response": {
                     "statusCode": 200,
                     "body": {
@@ -75,7 +75,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "GET",
-                  "path": "/api/daily/nutrition-targets",
+                  "path": "/api/health/nutrition-targets",
                   "response": {
                     "statusCode": 200,
                     "body": {
@@ -89,7 +89,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.workouts",
                     "startDate": "2026-10-31",
@@ -120,7 +120,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metrics",
                     "startDate": "2026-10-31",
@@ -146,7 +146,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.nutrition.days",
                     "startDate": "2026-10-31",
@@ -173,7 +173,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.nutrition.meals",
                     "startDate": "2026-10-31",
@@ -199,7 +199,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.sleep",
                     "startDate": "2026-10-30",
@@ -223,7 +223,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metric-catalog",
                     "startDate": "2026-10-31",
@@ -268,7 +268,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.sync"
                   },
@@ -287,7 +287,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metrics",
                     "startDate": "2026-10-31",
@@ -314,7 +314,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metrics",
                     "startDate": "2026-10-31",
@@ -341,7 +341,7 @@ enum JarvisHealthPreview {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metrics",
                     "startDate": "2026-10-31",

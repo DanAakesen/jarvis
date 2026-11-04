@@ -57,7 +57,7 @@ final class JarvisHealthClientTests: XCTestCase {
               "interactions": [
                 {
                   "method": "GET",
-                  "path": "/api/daily/training-targets",
+                  "path": "/api/health/training-targets",
                   "response": {
                     "statusCode": 200,
                     "body": {
@@ -71,7 +71,7 @@ final class JarvisHealthClientTests: XCTestCase {
                 },
                 {
                   "method": "GET",
-                  "path": "/api/daily/nutrition-targets",
+                  "path": "/api/health/nutrition-targets",
                   "response": {
                     "statusCode": 200,
                     "body": {
@@ -100,8 +100,8 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertEqual(nutrition.targets.proteinGrams, 130)
         let requests = await fixture.recordedRequests()
         XCTAssertEqual(requests.map(\.path), [
-            "/api/daily/training-targets",
-            "/api/daily/nutrition-targets",
+            "/api/health/training-targets",
+            "/api/health/nutrition-targets",
         ])
         let remainingInteractions = await fixture.remainingInteractions()
         XCTAssertEqual(remainingInteractions, 0)
@@ -124,11 +124,11 @@ final class JarvisHealthClientTests: XCTestCase {
               "interactions": [
                 {
                   "method": "GET",
-                  "path": "/api/daily/capabilities",
+                  "path": "/api/health/capabilities",
                   "response": {
                     "statusCode": 200,
                     "body": {
-                      "module": "daily",
+                      "module": "health",
                       "version": 6,
                       "sources": ["daily.health.metrics"]
                     }
@@ -136,7 +136,7 @@ final class JarvisHealthClientTests: XCTestCase {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metrics",
                     "startDate": "2026-10-30",
@@ -161,7 +161,7 @@ final class JarvisHealthClientTests: XCTestCase {
                 },
                 {
                   "method": "POST",
-                  "path": "/api/daily/query",
+                  "path": "/api/health/query",
                   "requestBody": {
                     "source": "daily.health.metrics",
                     "startDate": "2026-10-30",
@@ -205,7 +205,7 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertTrue(acceptHeaders.dropFirst().allSatisfy { $0 == "application/json" })
         XCTAssertEqual(
             requests.map(\.path),
-            ["/api/daily/capabilities", "/api/daily/query", "/api/daily/query"]
+            ["/api/health/capabilities", "/api/health/query", "/api/health/query"]
         )
         XCTAssertEqual(remainingInteractions, 0)
     }
@@ -253,7 +253,7 @@ final class JarvisHealthClientTests: XCTestCase {
             ]
             if page == 1 { request["cursor"] = cursor }
             return [
-                "method": "POST", "path": "/api/daily/query", "requestBody": request,
+                "method": "POST", "path": "/api/health/query", "requestBody": request,
                 "response": ["statusCode": 200, "body": [
                     "source": "daily.health.lifts", "status": page == 0 ? "partial" : "available",
                     "items": [["exerciseName": page == 0 ? "Squat" : "Bench press", "weightKg": 80]],
@@ -285,7 +285,7 @@ final class JarvisHealthClientTests: XCTestCase {
         ]
         let interactions: [[String: Any]] = [503, 201, 200].map { status in
             [
-                "method": "POST", "path": "/api/daily/lifts", "requestBody": body,
+                "method": "POST", "path": "/api/health/lifts", "requestBody": body,
                 "response": [
                     "statusCode": status,
                     "body": ["entry": ["id": id.uuidString], "replayed": status == 200],
@@ -348,7 +348,7 @@ final class JarvisHealthClientTests: XCTestCase {
         }
         let interactions: [[String: Any]] = [("pending", 201), ("synced", 200)].map { vault, status in
             [
-                "method": "POST", "path": "/api/daily/workouts", "requestBody": body,
+                "method": "POST", "path": "/api/health/workouts", "requestBody": body,
                 "response": ["statusCode": status, "body": ["entry": entry(vault), "replayed": status == 200]],
             ]
         }
@@ -384,7 +384,7 @@ final class JarvisHealthClientTests: XCTestCase {
         ]
         let fixture = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: [
             "version": 1, "interactions": [[
-                "method": "GET", "path": "/api/daily/workouts", "query": ["limit": "20", "days": "14"],
+                "method": "GET", "path": "/api/health/workouts", "query": ["limit": "20", "days": "14"],
                 "response": ["statusCode": 200, "body": ["items": [item]]],
             ]],
         ]))

@@ -122,14 +122,14 @@ public final class JarvisHealthClient: Sendable {
     public func capabilities() async throws -> JarvisHealthCapabilities {
         let response = try await client.performAuthenticatedRequest(
             method: .get,
-            path: ["daily", "capabilities"],
+            path: ["health", "capabilities"],
             idempotent: true,
             accept: "application/json;version=6"
         )
         guard response.statusCode == 200,
               response.body.count <= Self.responseLimit,
               let value = try? JSONDecoder().decode(CapabilityEnvelope.self, from: response.body),
-              value.module == "daily", (1...6).contains(value.version),
+              (value.module == "health" || value.module == "daily"), (1...6).contains(value.version),
               !value.sources.isEmpty, value.sources.count <= 64,
               Set(value.sources).count == value.sources.count else {
             throw JarvisHealthClientError.invalidResponse
@@ -140,7 +140,7 @@ public final class JarvisHealthClient: Sendable {
     public func trainingTargets() async throws -> JarvisHealthTargets {
         let response = try await client.performAuthenticatedRequest(
             method: .get,
-            path: ["daily", "training-targets"],
+            path: ["health", "training-targets"],
             idempotent: true
         )
         guard response.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
@@ -150,7 +150,7 @@ public final class JarvisHealthClient: Sendable {
     public func nutritionTargets() async throws -> JarvisNutritionTargets {
         let response = try await client.performAuthenticatedRequest(
             method: .get,
-            path: ["daily", "nutrition-targets"],
+            path: ["health", "nutrition-targets"],
             idempotent: true
         )
         guard response.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
@@ -162,7 +162,7 @@ public final class JarvisHealthClient: Sendable {
         guard draft.isValid else { throw JarvisClientError.invalidRequest }
         let response = try await client.performAuthenticatedRequest(
             method: .post,
-            path: ["daily", "lifts"],
+            path: ["health", "lifts"],
             body: try JSONEncoder().encode(draft),
             idempotent: false
         )
@@ -189,7 +189,7 @@ public final class JarvisHealthClient: Sendable {
         guard draft.isValid else { throw JarvisClientError.invalidRequest }
         let response = try await client.performAuthenticatedRequest(
             method: .post,
-            path: ["daily", "workouts"],
+            path: ["health", "workouts"],
             body: try JSONEncoder().encode(draft),
             idempotent: false
         )
@@ -210,7 +210,7 @@ public final class JarvisHealthClient: Sendable {
         if let days { query.append(URLQueryItem(name: "days", value: String(days))) }
         let response = try await client.performAuthenticatedRequest(
             method: .get,
-            path: ["daily", "workouts"],
+            path: ["health", "workouts"],
             queryItems: query,
             idempotent: true
         )
@@ -234,7 +234,7 @@ public final class JarvisHealthClient: Sendable {
         }
         let response = try await client.performAuthenticatedRequest(
             method: .post,
-            path: ["daily", "query"],
+            path: ["health", "query"],
             body: body,
             idempotent: true
         )

@@ -334,7 +334,7 @@ public struct JarvisSettingsClient: Sendable {
     }
 
     public func loadTrainingTargets() async throws -> JarvisTargetValues {
-        let value: JarvisTargetValues = try await send(.get, path: ["daily", "training-targets"], idempotent: true)
+        let value: JarvisTargetValues = try await send(.get, path: ["health", "training-targets"], idempotent: true)
         try Self.validateTargets(value, keys: ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"])
         return value
     }
@@ -349,13 +349,13 @@ public struct JarvisSettingsClient: Sendable {
             bounds: bounds
         )
         let body = try JSONEncoder().encode(TargetPatch(values: changes))
-        let value: JarvisTargetValues = try await send(.patch, path: ["daily", "training-targets"], body: body)
+        let value: JarvisTargetValues = try await send(.patch, path: ["health", "training-targets"], body: body)
         try Self.validateTargets(value, keys: ["gymSessionsPerWeek", "runSessionsPerWeek", "dailySteps"])
         return value
     }
 
     public func loadNutritionTargets() async throws -> JarvisTargetValues {
-        let value: JarvisTargetValues = try await send(.get, path: ["daily", "nutrition-targets"], idempotent: true)
+        let value: JarvisTargetValues = try await send(.get, path: ["health", "nutrition-targets"], idempotent: true)
         try Self.validateTargets(value, keys: ["restingKcal", "deficitKcal", "proteinGrams"])
         return value
     }
@@ -370,7 +370,7 @@ public struct JarvisSettingsClient: Sendable {
             bounds: bounds
         )
         let body = try JSONEncoder().encode(TargetPatch(values: changes))
-        let value: JarvisTargetValues = try await send(.patch, path: ["daily", "nutrition-targets"], body: body)
+        let value: JarvisTargetValues = try await send(.patch, path: ["health", "nutrition-targets"], body: body)
         try Self.validateTargets(value, keys: ["restingKcal", "deficitKcal", "proteinGrams"])
         return value
     }

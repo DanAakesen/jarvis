@@ -12,7 +12,7 @@ enum JarvisHealthLiftFixture {
             ]
         }
         func interaction(_ method: String, _ path: String, _ body: [String: Any]) -> [String: Any] {
-            ["method": method, "path": "/api/daily/\(path)",
+            ["method": method, "path": "/api/health/\(path)",
              "response": ["statusCode": 200, "body": body]]
         }
         let liftResult: [String: Any] = [
@@ -24,7 +24,7 @@ enum JarvisHealthLiftFixture {
             "version": 1,
             "interactions": [
                 interaction("GET", "capabilities", [
-                    "module": "daily", "version": 6, "sources": ["daily.health.lifts"],
+                    "module": "health", "version": 6, "sources": ["daily.health.lifts"],
                 ]),
                 interaction("GET", "training-targets", ["targets": [:]]),
                 interaction("GET", "nutrition-targets", ["targets": [:]]),
