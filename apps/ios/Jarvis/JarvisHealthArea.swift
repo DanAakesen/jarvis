@@ -326,17 +326,17 @@ struct JarvisHealthArea: View {
                 .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
             .scrollIndicators(.hidden)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                    segmentSwitcher
+                    searchBar
+                }
+                .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
+            }
         }
         .jarvisAmbientBackground()
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                segmentSwitcher
-                searchBar
-            }
-            .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
-        }
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {
             await loadDashboard()
         }

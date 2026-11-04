@@ -117,6 +117,10 @@ final class JarvisChatModel: ObservableObject {
     let fixtureMode: Bool
     let startupError: String?
 
+    private func chatCopy(_ key: JarvisChatLocalizationKey) -> String {
+        JarvisChatLocalization.string(key, language: appLanguage)
+    }
+
     private var appLanguage: JarvisAppLanguage {
         JarvisAppLanguage(
             rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
@@ -236,7 +240,7 @@ final class JarvisChatModel: ObservableObject {
 
     func addAttachment(name: String, contentType: String, data: Data) {
         guard pendingAttachments.count < ChatAttachmentLimits.maximumCount else {
-            actionError = "You can attach up to five files."
+            actionError = chatCopy(.errTooMany)
             return
         }
         guard !data.isEmpty, data.count <= ChatAttachmentLimits.maximumFileBytes else {
@@ -390,7 +394,7 @@ final class JarvisChatModel: ObservableObject {
     func refreshActivity() async {
         if fixtureMode, nowFeed != nil { return }
         guard let nowClient else {
-            activityError = startupError ?? "Activity is unavailable."
+            activityError = startupError ?? chatCopy(.activityUnavailableMessage)
             return
         }
         do {
@@ -480,7 +484,7 @@ final class JarvisChatModel: ObservableObject {
         defer { dismissingActivityIDs.remove(item.id) }
         do {
             try await nowClient.dismissActivity(id: item.id)
-            activityMessage = "Activity dismissed."
+            activityMessage = chatCopy(.activityDismissed)
             nowFeed = try await nowClient.load()
             activityError = nil
         } catch {
@@ -505,7 +509,7 @@ final class JarvisChatModel: ObservableObject {
                     continue
                 }
             }
-            activityMessage = "Activity dismissed."
+            activityMessage = chatCopy(.activityDismissed)
             activityError = nil
         } catch {
             activityError = message(for: error)
@@ -813,33 +817,33 @@ final class JarvisChatModel: ObservableObject {
     private func message(for error: any Error) -> String {
         if let error = error as? JarvisClientError {
             switch error {
-            case .signInRequired: "Sign in is required."
-            case .notOwner: "This account cannot access Jarvis."
-            case .rateLimited: "Jarvis is busy. Try again later."
-            case .serviceUnavailable: "Jarvis is unavailable. Try again."
-            case .networkFailure, .timedOut: "You're offline. Check your connection."
-            default: "Jarvis could not complete the request."
+            case .signInRequired: chatCopy(.errSignIn)
+            case .notOwner: chatCopy(.errNotOwner)
+            case .rateLimited: chatCopy(.errRateLimited)
+            case .serviceUnavailable: chatCopy(.errUnavailable)
+            case .networkFailure, .timedOut: chatCopy(.errOffline)
+            default: chatCopy(.errGeneric)
             }
         } else if let error = error as? JarvisChatClientError {
             switch error {
-            case .invalidUpload: "This attachment type or size is not supported."
-            case .tooManyAttachments: "You can attach up to five files."
-            case .invalidTextLength: "Enter a message before sending."
-            case .turnNotFound: "The active turn is no longer available."
-            case .reattachTimedOut: "Jarvis could not reconnect to the active turn."
-            default: "Jarvis could not complete the turn."
+            case .invalidUpload: chatCopy(.errInvalidUpload)
+            case .tooManyAttachments: chatCopy(.errTooMany)
+            case .invalidTextLength: chatCopy(.errTextLength)
+            case .turnNotFound: chatCopy(.errTurnNotFound)
+            case .reattachTimedOut: chatCopy(.errReattach)
+            default: chatCopy(.errTurn)
             }
         } else if let error = error as? JarvisNowFeedClientError,
                   error == .activityUnavailable {
-            "This activity is no longer available."
+            chatCopy(.errActivityGone)
         } else if let error = error as? JarvisApprovalsClientError,
                   error == .confirmationUnavailable {
-            "This confirmation is no longer available."
+            chatCopy(.errConfirmationGone)
         } else if let error = error as? JarvisApprovalsClientError,
                   error == .awayMode {
-            "Away mode is on. This request wasn't approved."
+            chatCopy(.errAwayMode)
         } else {
-            "Jarvis could not load this information."
+            chatCopy(.errLoad)
         }
     }
 }

@@ -27,10 +27,10 @@ struct JarvisActivitySheet: View {
                         } description: {
                             Text(error)
                         } actions: {
-                            JarvisLabelledButton(
+                            JarvisIconButton(
                                 title: copy(.activityRetry),
-                                isDisabled: model.fixtureMode,
-                                hint: model.fixtureMode ? copy(.activityRetryUnavailable) : ""
+                                systemImage: "arrow.clockwise",
+                                identifier: "activity.retry"
                             ) { Task { await model.refreshActivity() } }
                         }
                     } else if let feed = model.nowFeed {
@@ -44,10 +44,10 @@ struct JarvisActivitySheet: View {
                                     .font(.footnote)
                                     .foregroundStyle(.red)
                                 Spacer()
-                                JarvisLabelledButton(
+                                JarvisIconButton(
                                     title: copy(.activityRetry),
-                                    isDisabled: model.fixtureMode,
-                                    hint: model.fixtureMode ? copy(.activityRetryUnavailable) : ""
+                                    systemImage: "arrow.clockwise",
+                                    identifier: "activity.retry"
                                 ) { Task { await model.refreshActivity() } }
                             }
                         }
@@ -121,7 +121,7 @@ struct JarvisActivitySheet: View {
                         title: copy(.clearAll),
                         systemImage: "trash",
                         identifier: "activity.clearAll",
-                        isDisabled: model.fixtureMode || !model.dismissingActivityIDs.isEmpty
+                        isDisabled: !model.dismissingActivityIDs.isEmpty
                     ) { Task { await model.dismissActivities(items) } }
                 }
                 JarvisIconButton(
@@ -365,15 +365,13 @@ struct JarvisActivitySheet: View {
                     JarvisIconButton(
                         title: String(format: copy(.clearGroupLabel), title(for: group.category)),
                         systemImage: "trash",
-                        identifier: "activity.clear.\(group.id)",
-                        isDisabled: model.fixtureMode
+                        identifier: "activity.clear.\(group.id)"
                     ) { Task { await model.dismissActivities(group.items) } }
                 } else {
                     JarvisIconButton(
                         title: String(format: copy(.dismissLabel), group.latest.title),
                         systemImage: "xmark",
-                        identifier: "activity.dismiss.\(group.latest.id)",
-                        isDisabled: model.fixtureMode
+                        identifier: "activity.dismiss.\(group.latest.id)"
                     ) { Task { await model.dismissActivity(group.latest) } }
                 }
             }

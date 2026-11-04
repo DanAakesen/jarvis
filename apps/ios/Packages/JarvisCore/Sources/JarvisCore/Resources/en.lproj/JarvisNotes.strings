@@ -149,6 +149,8 @@
 "voice.screenShareUnavailable" = "Screen sharing is unavailable: this build does not include the Jarvis broadcast extension.";
 "notes.overview" = "Overview";
 "notes.openTasks" = "Open tasks";
+"notes.folderCount" = "Folders";
+"notes.rootNotes" = "Root notes";
 "notes.doneTasks" = "Done";
 "voice.sentPhoto" = "Photo sent";
 "voice.sentVideo" = "Video sent";

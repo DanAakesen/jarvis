@@ -48,8 +48,8 @@
 "health.heartRate" = "Heart rate";
 "health.date" = "Date";
 "health.average" = "Average";
-"health.over" = "Over";
-"health.left" = "Left";
+"health.over" = "over";
+"health.left" = "left";
 "health.loadingTarget" = "Loading target";
 "health.targetsUnavailable" = "Targets unavailable";
 "health.noMeals" = "No meals";

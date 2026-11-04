@@ -99,6 +99,8 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case create = "notes.create"
     case overview = "notes.overview"
     case openTasks = "notes.openTasks"
+    case folderCount = "notes.folderCount"
+    case rootNotes = "notes.rootNotes"
     case doneTasks = "notes.doneTasks"
     case dueTimeEnabled = "notes.dueTimeEnabled"
     case dueDateEnabled = "notes.dueDateEnabled"

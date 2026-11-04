@@ -149,6 +149,8 @@
 "voice.screenShareUnavailable" = "Skærmdeling er ikke tilgængelig: denne version indeholder ikke Jarvis' udsendelsesudvidelse.";
 "notes.overview" = "Overblik";
 "notes.openTasks" = "Åbne opgaver";
+"notes.folderCount" = "Mapper";
+"notes.rootNotes" = "Noter i roden";
 "notes.doneTasks" = "Klaret";
 "voice.sentPhoto" = "Foto sendt";
 "voice.sentVideo" = "Video sendt";
