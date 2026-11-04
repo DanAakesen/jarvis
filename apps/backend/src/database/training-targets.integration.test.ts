@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyRequest } from 'fastify';
-import { TrainingTargetsStore } from '../daily/training/targets-store.js';
-import { composeDaily } from '../daily/composition.js';
+import { TrainingTargetsStore } from '../health/training/targets-store.js';
+import { composeHealth } from '../health/composition.js';
 import { createToolRegistry } from '../core/tool-registry.js';
-import { dailyQuerySources } from '@jarvis/contracts';
+import { healthQuerySources } from '@jarvis/contracts';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
 
@@ -41,7 +41,7 @@ afterAll(async () => {
   }
 });
 
-describe('Daily training-target SQL persistence', () => {
+describe('Health training-target SQL persistence', () => {
   it('isolates owners, applies partial changes, clears all values, and enforces bounds', async () => {
     const store = TrainingTargetsStore.forRequest(pool, requestFor(owner));
     const otherStore = TrainingTargetsStore.forRequest(pool, requestFor(other));
@@ -66,9 +66,9 @@ describe('Daily training-target SQL persistence', () => {
       VALUES (@owner, 100001, SYSUTCDATETIME());`)).rejects.toThrow();
   });
   it('reads owner targets through the production-registered health_query handler without defaults or cross-owner access', async () => {
-    const ownerModule = composeDaily({ enabled: true, pool, ownerObjectId: owner })!;
+    const ownerModule = composeHealth({ enabled: true, pool, ownerObjectId: owner })!;
     const ownerTool = createToolRegistry([ownerModule]).get('health_query')!;
-    const query = { source: dailyQuerySources.trainingTargets };
+    const query = { source: healthQuerySources.trainingTargets };
     const empty = await ownerTool.execute(query, requestFor(owner), signal()) as Record<string, unknown>;
     expect(empty).toMatchObject({
       status: 'available',
@@ -94,12 +94,12 @@ describe('Daily training-target SQL persistence', () => {
     } as unknown as FastifyRequest, signal())).rejects.toThrow();
     await expect(ownerTool.execute(query, requestFor(other), signal())).rejects.toThrow();
 
-    const otherModule = composeDaily({ enabled: true, pool, ownerObjectId: other })!;
+    const otherModule = composeHealth({ enabled: true, pool, ownerObjectId: other })!;
     const otherTool = createToolRegistry([otherModule]).get('health_query')!;
     const otherResult = await otherTool.execute(query, requestFor(other), signal()) as Record<string, unknown>;
     expect(otherResult).toMatchObject({ items: [{ targets: {
       gymSessionsPerWeek: null, runSessionsPerWeek: 2, dailySteps: null,
     } }] });
-    expect(composeDaily({ enabled: false, pool: undefined, ownerObjectId: owner })).toBeUndefined();
+    expect(composeHealth({ enabled: false, pool: undefined, ownerObjectId: owner })).toBeUndefined();
   });
 });

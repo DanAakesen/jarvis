@@ -1,4 +1,4 @@
-export type ShellIconName = 'home' | 'factory' | 'knowledge' | 'tasks' | 'notes_tree' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'workspaces' | 'daily' | 'present' | 'away' | 'on_the_move' | 'running' | 'done' | 'failed' | 'idle' | 'attention' | 'chat' | 'health' | 'menu' | 'chevron' | 'sparkle';
+export type ShellIconName = 'home' | 'factory' | 'knowledge' | 'tasks' | 'notes_tree' | 'usage' | 'status' | 'health_area' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'workspaces' | 'daily' | 'present' | 'away' | 'on_the_move' | 'running' | 'done' | 'failed' | 'idle' | 'attention' | 'chat' | 'health' | 'menu' | 'chevron' | 'sparkle';
 
 export function ShellIcon({ name }: { name: ShellIconName }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -17,7 +17,7 @@ export function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
     case 'status':
       return <svg {...common}><path d="M2 12h4l3-8 5 16 3-8h5" /></svg>;
-    case 'daily':
+    case 'health_area':
       return <svg {...common}><path d="m6.5 6.5 11 11M3 7l4-4m-2 6 4-4m6 14 4-4m-2 6 4-4" /></svg>;
     case 'navigation':
       return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m-3-11h1m-1 4h1" /></svg>;

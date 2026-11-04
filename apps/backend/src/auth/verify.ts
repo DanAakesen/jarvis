@@ -8,13 +8,13 @@ export interface RunnerPrincipal { kind: 'jarvis-runner'; objectId: string; tena
 export interface PcBridgePrincipal { kind: 'jarvis-pc-bridge'; objectId: string; tenantId: string }
 export interface PhoneEventGridPrincipal { kind: 'jarvis-phone-event-grid'; objectId: string; tenantId: string }
 export interface DeployPrincipal { kind: 'jarvis-deploy'; objectId: string; tenantId: string }
-export const dailyNutritionScopes = { read: 'Daily.Nutrition.Read', write: 'Daily.Nutrition.Write' } as const;
-export interface DailyConnectorPrincipal {
+export const healthNutritionScopes = { read: 'Daily.Nutrition.Read', write: 'Daily.Nutrition.Write' } as const;
+export interface HealthConnectorPrincipal {
   kind: 'jarvis-daily-connector'; objectId: string; tenantId: string; clientId: string;
-  scopes: readonly (typeof dailyNutritionScopes[keyof typeof dailyNutritionScopes])[];
+  scopes: readonly (typeof healthNutritionScopes[keyof typeof healthNutritionScopes])[];
 }
 type Principal = UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal |
-  PhoneEventGridPrincipal | DeployPrincipal | DailyConnectorPrincipal;
+  PhoneEventGridPrincipal | DeployPrincipal | HealthConnectorPrincipal;
 export type TokenVerifier = (token: string) =>
   Promise<Principal>;
 export const agentToolsRole = 'Jarvis.Tools';
@@ -48,15 +48,15 @@ export function isDeployPrincipal(
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
 }
-export function isDailyConnectorPrincipal(principal: Principal): principal is DailyConnectorPrincipal {
+export function isHealthConnectorPrincipal(principal: Principal): principal is HealthConnectorPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-daily-connector';
 }
 
 export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey): TokenVerifier {
-  const connectorClientId = config.dailyConnectorClientId?.toLowerCase();
-  if (config.dailyConnectorClientId !== undefined &&
-      (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(config.dailyConnectorClientId) ||
-       [config.apiClientId, config.pcBridgeClientId].some(id => id?.toLowerCase() === config.dailyConnectorClientId?.toLowerCase()))) {
+  const connectorClientId = config.healthConnectorClientId?.toLowerCase();
+  if (config.healthConnectorClientId !== undefined &&
+      (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(config.healthConnectorClientId) ||
+       [config.apiClientId, config.pcBridgeClientId].some(id => id?.toLowerCase() === config.healthConnectorClientId?.toLowerCase()))) {
     throw new ConfigurationError('The Health connector must identify a separate approved OAuth client');
   }
   const issuer = `https://login.microsoftonline.com/${config.tenantId}/v2.0`;
@@ -98,15 +98,15 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
     if (connectorClientId !== undefined && typeof payload.azp === 'string' && payload.azp.toLowerCase() === connectorClientId) {
       if (objectId !== config.ownerObjectId || !scopes.length || payload.roles !== undefined ||
           (payload.idtyp !== undefined && payload.idtyp !== 'user') ||
-          scopes.some(scope => scope !== dailyNutritionScopes.read && scope !== dailyNutritionScopes.write)) {
+          scopes.some(scope => scope !== healthNutritionScopes.read && scope !== healthNutritionScopes.write)) {
         throw new AuthenticationDenied(403);
       }
       return {
         kind: 'jarvis-daily-connector', objectId, tenantId: config.tenantId, clientId: connectorClientId,
-        scopes: scopes.filter(scope => scope === dailyNutritionScopes.read || scope === dailyNutritionScopes.write),
+        scopes: scopes.filter(scope => scope === healthNutritionScopes.read || scope === healthNutritionScopes.write),
       };
     }
-    if (scopes.includes(dailyNutritionScopes.read) || scopes.includes(dailyNutritionScopes.write)) {
+    if (scopes.includes(healthNutritionScopes.read) || scopes.includes(healthNutritionScopes.write)) {
       throw new AuthenticationDenied(403);
     }
     if (config.pcBridgeClientId !== undefined && payload.azp === config.pcBridgeClientId) {

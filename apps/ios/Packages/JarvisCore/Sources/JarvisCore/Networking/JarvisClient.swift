@@ -49,6 +49,8 @@ public struct JarvisClientConfiguration: Sendable {
 
 public final class JarvisClient: Sendable {
     private let configuration: JarvisClientConfiguration
+
+    public var baseURL: URL { configuration.baseURL }
     private let transport: any HTTPTransport
     private let tokenStore: any TokenStore
     private let accessTokenProvider: any AccessTokenProvider

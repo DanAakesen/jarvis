@@ -34,7 +34,7 @@ interface UsageReport {
   entries: UsageEntry[];
   totalEntries: string;
   truncated: boolean;
-  dailyToolUsage: {
+  healthToolUsage: {
     date: string;
     tools: { tool: string; count: string }[];
   };
@@ -96,10 +96,10 @@ function isUsageReport(value: unknown): value is UsageReport {
         BigInt(count.count) <= maxSqlBigInt))) &&
     Array.isArray(value.entries) && value.entries.length <= 1000 && value.entries.every(isUsageEntry) &&
     typeof value.totalEntries === 'string' && /^\d+$/.test(value.totalEntries) &&
-    isObject(value.dailyToolUsage) && typeof value.dailyToolUsage.date === 'string' &&
-    /^\d{4}-\d{2}-\d{2}$/.test(value.dailyToolUsage.date) &&
-    Array.isArray(value.dailyToolUsage.tools) && value.dailyToolUsage.tools.length <= 100 &&
-    value.dailyToolUsage.tools.every((tool) => isObject(tool) &&
+    isObject(value.healthToolUsage) && typeof value.healthToolUsage.date === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value.healthToolUsage.date) &&
+    Array.isArray(value.healthToolUsage.tools) && value.healthToolUsage.tools.length <= 100 &&
+    value.healthToolUsage.tools.every((tool) => isObject(tool) &&
       typeof tool.tool === 'string' && tool.tool.length > 0 && tool.tool.length <= 64 &&
       typeof tool.count === 'string' && /^\d+$/.test(tool.count)) &&
     typeof value.truncated === 'boolean';
@@ -298,7 +298,7 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
     byTask.set(key, current);
   }
   const topTasks = [...byTask.values()].filter((item) => item.value > 0).sort((left, right) => right.value - left.value).slice(0, 6);
-  const tools: Slice[] = (report?.dailyToolUsage.tools ?? []).map(({ tool, count }) => ({ key: tool, label: tool.replaceAll('_', ' '), value: Number(count) }))
+  const tools: Slice[] = (report?.healthToolUsage.tools ?? []).map(({ tool, count }) => ({ key: tool, label: tool.replaceAll('_', ' '), value: Number(count) }))
     .sort((left, right) => right.value - left.value);
   const codexCalls = report?.codexToolCallsToday?.reduce((sum, { count }) => sum + Number(count), 0) ?? null;
   const groupNoun = groupBy === 'project' ? 'Project' : groupBy === 'agent' ? 'Agent' : 'Source';

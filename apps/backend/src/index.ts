@@ -72,8 +72,8 @@ import { createRecipeModule } from './core/recipe-management.js';
 import { createRecipeStore } from './database/recipe-store.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
-import { runCodexRenewalOnce, startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
-import { startDailyCopilotStatusJob } from './credentials/copilot-status.js';
+import { runCodexRenewalOnce, startHealthCodexRenewalJob } from './credentials/codex-renewal.js';
+import { startHealthCopilotStatusJob } from './credentials/copilot-status.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
 import { createGitHubAppRepositoryCatalog, createGitHubAppTokenIssuer } from './github-app.js';
 import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
@@ -147,16 +147,15 @@ import {
 import { createPushLedger } from './push/push-ledger.js';
 import { registerPushRoutes } from './push/routes.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
-import { composeDaily } from './daily/composition.js';
-import { createFoundryMailSemanticModel } from './daily/feeds/foundry-model.js';
+import { composeHealth } from './health/composition.js';
 import { registerProactive } from './proactive/composition.js';
 import { createProactiveStore } from './database/proactive-store.js';
 import { createOwnerReminderStore } from './database/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
 import { createProactiveToolsModule } from './proactive/tools.js';
-import { createSqlHealthUpload } from './daily/health-upload/sql-composition.js';
-import { SqlHealthProcessor } from './daily/health/processor.js';
-import { SqlHealthCapabilities } from './daily/health-upload/sql-capabilities.js';
+import { createSqlHealthUpload } from './health/health-upload/sql-composition.js';
+import { SqlHealthProcessor } from './health/health/processor.js';
+import { SqlHealthCapabilities } from './health/health-upload/sql-capabilities.js';
 import { OwnerSessionService } from './auth/session/service.js';
 import { createOwnerSessionStore } from './database/owner-session-store.js';
 import { ownerSessionBootRevokeTimeoutMs, startOwnerSessionBootRevoke } from './auth/session/boot-revoke.js';
@@ -464,13 +463,6 @@ try {
       },
     })
     : { read: async () => fallbackModelCatalogue() };
-  const dailyMailSemantic = config.dailyFeedsEnabled && config.foundryProjectEndpoint && credential && settingsStore && usageStore
-    ? createFoundryMailSemanticModel(config.foundryProjectEndpoint, async (scope, signal) => {
-      const token = await credential.getToken(scope, { abortSignal: signal });
-      if (!token) throw new Error('Daily mail semantic identity unavailable');
-      return token.token;
-    }, settingsStore, modelCatalogue, usageStore)
-    : undefined;
   const embeddingModel = async () => settingsStore
     ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.embedding.model
     : config.foundryMemoryEmbeddingDeploymentName ?? 'text-embedding-3-small';
@@ -1003,16 +995,11 @@ try {
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,
-    daily: composeDaily({
-      enabled: config.dailyEnabled === true,
+    health: composeHealth({
+      enabled: config.healthEnabled === true,
       pool: database?.pool,
       ownerObjectId: config.auth.ownerObjectId,
-      feedsEnabled: config.dailyFeedsEnabled === true,
       ...(vaultClient ? { gymVault: { vault: vaultClient, logger } } : {}),
-      ...(config.dailyFeedsEnabled ? { feeds: {
-        ...(googleApiClient ? { google: googleApiClient } : {}),
-        ...(dailyMailSemantic ? { semantic: dailyMailSemantic } : {}),
-      } } : {}),
     }),
     proactive: proactiveToolsModule,
   });
@@ -1368,7 +1355,7 @@ try {
     let stopCopilotStatus: (() => void) | undefined;
     app.addHook('onClose', async () => { stopCopilotStatus?.(); });
     app.addHook('onReady', async () => {
-      stopCopilotStatus = startDailyCopilotStatusJob(credentialStatusStore, {
+      stopCopilotStatus = startHealthCopilotStatusJob(credentialStatusStore, {
         getSecret: async () => {
           const secret = await secrets.getSecret('jarvis-copilot', { abortSignal: AbortSignal.timeout(10_000) });
           if (!secret.value) throw new Error('Copilot credential unavailable');
@@ -1386,7 +1373,7 @@ try {
     let stopCodexRenewal: (() => void) | undefined;
     app.addHook('onClose', async () => { stopCodexRenewal?.(); });
     app.addHook('onReady', async () => {
-      stopCodexRenewal = startDailyCodexRenewalJob(
+      stopCodexRenewal = startHealthCodexRenewalJob(
         app.credentialStatusStore!,
         client,
         (outcome, details) => logger.info({ outcome, ...details }, 'credentials.codex_renewal'),

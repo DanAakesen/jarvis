@@ -84,8 +84,8 @@ describe('SQL usage store', () => {
         estimated: row.estimated,
       }],
       totalEntries: '1',
-      dailyToolCounts: [{ tool: 'image_generation', count: '2' }],
-      dailyCostTotals: [{
+      healthToolCounts: [{ tool: 'image_generation', count: '2' }],
+      healthCostTotals: [{
         period: '2026-10-04', usd: 0.0304, dkk: 0.2, estimatedEntries: 1, unverifiedEntries: 0,
       }],
       monthlyCostTotals: [{
@@ -111,7 +111,7 @@ describe('SQL usage store', () => {
     expect(query.mock.calls[2]?.[0]).toContain('GROUP BY CONVERT(date, at)');
     expect(query.mock.calls[2]?.[0]).toContain('GROUP BY YEAR(at), MONTH(at)');
     expect(query.mock.calls[3]?.[0]).toContain("N'image_generation'");
-    expect(input).toHaveBeenNthCalledWith(7, 'dailyFrom', sql.DateTime2, from);
+    expect(input).toHaveBeenNthCalledWith(7, 'healthFrom', sql.DateTime2, from);
   });
 
   it('records role/model token quantities idempotently and prices only known models', async () => {

@@ -1,0 +1,84 @@
+.health-briefs { display: grid; align-content: start; gap: var(--space-4); min-width: 0; }
+.health-briefs [hidden] { display: none; }
+.health-briefs h3, .health-briefs h4, .health-briefs p { margin: 0; }
+.health-briefs h3 { font-size: var(--type-subsection); }
+.health-briefs > section { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
+.health-brief-history { gap: var(--space-4); }
+.health-brief-month { display: grid; gap: var(--space-2); min-width: 0; }
+.health-brief-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.health-brief-list li { min-width: 0; }
+.health-briefs .health-brief-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  align-content: start;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--surface-translucent);
+  text-align: start;
+  white-space: normal;
+}
+.health-briefs .health-brief-row:hover { background: var(--glass-hover); }
+.health-briefs .health-brief-row:active { background: var(--glass-pressed); }
+.health-briefs .health-brief-row:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.health-brief-date { color: var(--text-muted); font-size: var(--type-small); font-variant-numeric: tabular-nums; }
+.health-brief-label { font-size: var(--type-body); font-weight: 650; overflow-wrap: anywhere; }
+.health-brief-chips { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); min-width: 0; }
+.health-brief-chips > span {
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: var(--type-small);
+  overflow-wrap: anywhere;
+}
+.health-brief-unavailable { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.health-brief-count, .health-brief-refresh, .health-brief-coverage { color: var(--text-muted); font-size: var(--type-small); }
+.health-brief-coverage { display: grid; justify-items: start; gap: var(--space-2); }
+.health-brief-empty { display: grid; gap: var(--space-2); }
+.health-brief-detail { gap: var(--space-3); }
+.health-brief-detail > .secondary-button { justify-self: start; }
+.health-brief-detail h3 { font-size: var(--type-subsection); overflow-wrap: anywhere; }
+.health-brief-detail h3:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.health-brief-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.health-brief-navigation { display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-5); }
+.health-brief-navigation > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.health-brief-navigation span { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.health-brief-meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0; padding: 0; list-style: none; }
+.health-brief-meta li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-2); min-width: 0; }
+.health-brief-meta li span:first-child { color: var(--text-muted); font-size: var(--type-small); }
+.health-brief-meta li span:last-child { overflow-wrap: anywhere; }
+.health-brief-article { display: grid; align-content: start; gap: var(--space-4); max-width: 65ch; min-width: 0; line-height: var(--line-prose); }
+.health-brief-preview { font-size: var(--type-lead); }
+.health-brief-article-section { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
+.health-brief-article-section h4 { font-size: var(--type-body); }
+.health-brief-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.health-brief-content-facts { display: grid; gap: var(--space-2); margin: 0; }
+.health-brief-content-facts > div { display: grid; grid-template-columns: minmax(6rem, 1fr) minmax(0, 2fr); gap: var(--space-2); min-width: 0; }
+.health-brief-content-facts dt { color: var(--text-muted); font-size: var(--type-small); overflow-wrap: anywhere; }
+.health-brief-content-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.health-brief-content-facts dd p { margin: 0; }
+.health-brief-article ul { display: grid; gap: var(--space-2); margin: 0; padding-inline-start: var(--space-5); }
+.health-brief-raw { min-width: 0; }
+.health-brief-raw summary { min-height: 44px; align-content: center; cursor: pointer; }
+.health-brief-raw summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.health-brief-raw pre { max-width: 100%; margin: var(--space-2) 0 0; padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-control); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 380px) {
+  .health-brief-navigation { display: grid; }
+  .health-brief-content-facts > div { grid-template-columns: minmax(0, 1fr); }
+}

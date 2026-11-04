@@ -1958,8 +1958,7 @@ function registerVoiceRoute(
         const signal = AbortSignal.any([
           controller.signal,
           AbortSignal.timeout(
-            toolName === 'health_feed' ? 210_000
-              : ['health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_history', 'health_coach_status'].includes(toolName) ? 180_000 : 30_000,
+            ['health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_history', 'health_coach_status'].includes(toolName) ? 180_000 : 30_000,
           ),
           ...(browserStopController ? [browserStopController.signal] : []),
         ]);
