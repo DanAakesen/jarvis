@@ -1127,7 +1127,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("segmentSwitcher", header_body)
         bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
         self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
-        self.assertIn("JarvisTabStrip(", area)
+        self.assertIn("JarvisSegmentedBar(", area)
         self.assertNotIn(".pickerStyle(.segmented)", area)
         self.assertIn("guard !more || !liftsLoading", area)
         self.assertIn("guard liftLoadID == loadID else { return }", area)
@@ -1382,7 +1382,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("!$0.running.isEmpty", activity_predicate)
         self.assertIn("!$0.items.isEmpty", activity_predicate)
         self.assertNotIn("$0.awayMode", activity_predicate)
-        self.assertIn("JarvisComposerMenuButton(", screen)
+        self.assertIn("JarvisComposerPlusMenu(", screen)
         self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
         self.assertIn('ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")', sheet)
         self.assertIn("if !items.isEmpty", sheet)
