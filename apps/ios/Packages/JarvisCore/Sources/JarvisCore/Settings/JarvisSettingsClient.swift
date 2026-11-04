@@ -304,6 +304,20 @@ public struct JarvisSettingsClient: Sendable {
         try await send(.get, path: ["settings"], idempotent: true)
     }
 
+    /// Conditional read for the repository layer.
+    public func fetchSettings(validator: String?) async throws -> JarvisFetchResult<JarvisSettingsResponse> {
+        do {
+            return try await client.conditionalGet(path: ["settings"], validator: validator) {
+                guard let value = try? JSONDecoder().decode(JarvisSettingsResponse.self, from: $0.body) else {
+                    throw JarvisSettingsClientError.invalidResponse
+                }
+                return value
+            }
+        } catch {
+            throw Self.map(error)
+        }
+    }
+
     public func saveSettings(_ patch: JarvisSettingsPatch) async throws -> JarvisSettingsResponse {
         try JarvisSettingsLogic.validateSettingsPatch(patch)
         let body = try JSONEncoder().encode(patch)

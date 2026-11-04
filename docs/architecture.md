@@ -8571,3 +8571,7 @@ replacement feed. No database schema change.
 ### Gym log vault copy (P15-60)
 
 `apps/backend/src/daily/gym/` holds the workout model and store, the marker-based Gym log note writer (`gym-log.ts`) and the sync/retry service (`gym-sync.ts`). `composeDaily` receives the vault client; without it entries stay `pending`. Routes: `/daily/workouts` (GET, POST, PATCH, DELETE) and the existing `/daily/lifts` routes, which now accept an optional `workoutId` and return `entry.vault`. Migration `0074_daily_gym_log.sql` adds the workout table and the lift link, day and sync columns. See `docs/decisions.md` (2026-11-02 P15-60).
+
+## On-device cache and conditional GET (P15-81)
+
+iOS pages read server lists through `JarvisRepository` (JarvisCore `Cache/`) over `JarvisAppCache` (JSON files in Caches, one account, cleared on sign-out; secrets stay in the Keychain). A fresh entry makes no request; a stale one is shown and revalidated with `If-None-Match`; a failed refresh keeps the cached data. Kinds: notes, tasks, calendar, factory, usage, status, proactive, health, settings, notifications. The backend `conditional-get.ts` `onSend` hook adds a SHA-256 `ETag` and `Cache-Control: private, no-cache` to 200 responses of an allowlisted set of GET routes and returns 304 on a matching `If-None-Match`. Writes in the app invalidate the affected kinds.

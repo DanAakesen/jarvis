@@ -13,7 +13,7 @@ public enum JarvisHealthSource: String, CaseIterable, Codable, Sendable {
     case lifts = "daily.health.lifts"
 }
 
-public struct JarvisHealthCapabilities: Decodable, Equatable, Sendable {
+public struct JarvisHealthCapabilities: Codable, Equatable, Sendable {
     public let version: Int
     public let sources: [String]
 
@@ -85,20 +85,37 @@ public struct JarvisHealthQueryResult: Decodable, Sendable {
     public let coverage: JarvisHealthCoverage
 }
 
-public struct JarvisHealthTargets: Decodable, Equatable, Sendable {
+/// What the Health page keeps from one data read so it can show it again without asking the backend.
+public struct JarvisHealthStoredRead: Codable, Equatable, Sendable {
+    public let items: [[String: JSONValue]]
+    public let hasMore: Bool
+    public let freshness: [String: JSONValue]?
+
+    public init(items: [[String: JSONValue]], hasMore: Bool, freshness: [String: JSONValue]?) {
+        self.items = items
+        self.hasMore = hasMore
+        self.freshness = freshness
+    }
+
+    public init(_ result: JarvisHealthQueryResult) {
+        self.init(items: result.items, hasMore: result.coverage.hasMore, freshness: result.freshness)
+    }
+}
+
+public struct JarvisHealthTargets: Codable, Equatable, Sendable {
     public let targets: Values
 
-    public struct Values: Decodable, Equatable, Sendable {
+    public struct Values: Codable, Equatable, Sendable {
         public let gymSessionsPerWeek: Double?
         public let runSessionsPerWeek: Double?
         public let dailySteps: Double?
     }
 }
 
-public struct JarvisNutritionTargets: Decodable, Equatable, Sendable {
+public struct JarvisNutritionTargets: Codable, Equatable, Sendable {
     public let targets: Values
 
-    public struct Values: Decodable, Equatable, Sendable {
+    public struct Values: Codable, Equatable, Sendable {
         public let restingKcal: Double?
         public let deficitKcal: Double?
         public let proteinGrams: Double?
@@ -126,6 +143,31 @@ public final class JarvisHealthClient: Sendable {
             idempotent: true,
             accept: "application/json;version=6"
         )
+        return try parseCapabilities(response)
+    }
+
+    /// Conditional reads for the repository layer. Validation matches the plain reads.
+    public func fetchCapabilities(validator: String?) async throws -> JarvisFetchResult<JarvisHealthCapabilities> {
+        try await client.conditionalGet(
+            path: ["daily", "capabilities"], validator: validator, accept: "application/json;version=6"
+        ) { try self.parseCapabilities($0) }
+    }
+
+    public func fetchTrainingTargets(validator: String?) async throws -> JarvisFetchResult<JarvisHealthTargets> {
+        try await client.conditionalGet(path: ["daily", "training-targets"], validator: validator) {
+            guard $0.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
+            return try self.decode($0.body)
+        }
+    }
+
+    public func fetchNutritionTargets(validator: String?) async throws -> JarvisFetchResult<JarvisNutritionTargets> {
+        try await client.conditionalGet(path: ["daily", "nutrition-targets"], validator: validator) {
+            guard $0.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
+            return try self.decode($0.body)
+        }
+    }
+
+    private func parseCapabilities(_ response: HTTPResponse) throws -> JarvisHealthCapabilities {
         guard response.statusCode == 200,
               response.body.count <= Self.responseLimit,
               let value = try? JSONDecoder().decode(CapabilityEnvelope.self, from: response.body),
@@ -247,6 +289,12 @@ public final class JarvisHealthClient: Sendable {
             throw JarvisHealthClientError.invalidResponse
         }
         return result
+    }
+
+    /// A full read for the repository layer. Health reads are POSTs with no validator, so every refresh is a full
+    /// read; the freshness window is what spares the backend.
+    public func fetchStoredRead(_ query: JarvisHealthQuery) async throws -> JarvisFetchResult<JarvisHealthStoredRead> {
+        .modified(JarvisHealthStoredRead(try await queryAll(query)), validator: nil)
     }
 
     public func queryAll(

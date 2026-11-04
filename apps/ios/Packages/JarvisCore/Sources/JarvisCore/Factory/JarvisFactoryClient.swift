@@ -26,14 +26,46 @@ public final class JarvisFactoryClient: Sendable {
             path: ["factory", "projects"],
             idempotent: true
         )
+        return try Self.parseProjects(response)
+    }
+
+    /// Conditional reads for the repository layer. Validation matches the plain reads.
+    public func fetchProjects(validator: String?) async throws -> JarvisFetchResult<[FactoryProject]> {
+        try await client.conditionalGet(path: ["factory", "projects"], validator: validator) {
+            try Self.parseProjects($0)
+        }
+    }
+
+    public func fetchBoard(projectId: String, validator: String?) async throws -> JarvisFetchResult<FactoryBoard> {
+        guard isValidFactoryID(projectId) else { throw JarvisFactoryClientError.invalidRequest }
+        return try await client.conditionalGet(
+            path: ["factory", "board"],
+            queryItems: [URLQueryItem(name: "project", value: projectId)],
+            validator: validator
+        ) { try Self.parseBoard($0, projectId: projectId) }
+    }
+
+    private static func parseProjects(_ response: HTTPResponse) throws -> [FactoryProject] {
         guard response.statusCode == 200,
-              response.body.count <= Self.maximumResponseBytes,
+              response.body.count <= maximumResponseBytes,
               let projects = try? JSONDecoder().decode([FactoryProject].self, from: response.body),
               projects.count <= 100,
               projects.allSatisfy({ isValidFactoryID($0.id) && !$0.name.isEmpty }) else {
             throw JarvisFactoryClientError.invalidResponse
         }
         return projects
+    }
+
+    private static func parseBoard(_ response: HTTPResponse, projectId: String) throws -> FactoryBoard {
+        guard response.statusCode == 200,
+              response.body.count <= maximumResponseBytes,
+              let board = try? JSONDecoder().decode(FactoryBoard.self, from: response.body),
+              board.project.id == projectId,
+              board.columns.count == FactoryBoardColumnID.allCases.count,
+              board.columns.allSatisfy({ $0.cards.count <= 1_000 }) else {
+            throw JarvisFactoryClientError.invalidResponse
+        }
+        return board
     }
 
     public func board(projectId: String) async throws -> FactoryBoard {

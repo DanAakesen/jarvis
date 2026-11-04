@@ -482,6 +482,7 @@ struct ContentView: View {
         guard let notesClient else { throw JarvisInsightsError.invalidRequest }
         let draft = JarvisProactiveLogic.taskDraft(for: item)
         _ = try await notesClient.createTask(text: draft.text, scope: .personal, due: draft.due, time: draft.time)
+        await JarvisAppCache.invalidateAll(.tasks)
     }
 
     private static func makeTodayDependencies(

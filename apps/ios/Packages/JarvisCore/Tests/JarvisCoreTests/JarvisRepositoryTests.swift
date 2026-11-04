@@ -177,6 +177,66 @@ final class JarvisRepositoryTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
     }
 
+    func testInvalidateByKindAndScopeDropsOnlyThatEntry() async {
+        let clock = Clock(), counter = Counter()
+        let cache = JarvisCache(storage: JarvisInMemoryCacheStorage()) { clock.now }
+        await cache.bind(account: "dan")
+        let items = JarvisRepository<[String]>(cache: cache, kind: .proactive, scope: "items") { _ in .modified(["i"], validator: nil) }
+        let runs = JarvisRepository<[String]>(cache: cache, kind: .proactive, scope: "runs") { _ in .modified(["r"], validator: nil) }
+        _ = await collect(items.updates())
+        _ = await collect(runs.updates())
+        await cache.invalidate(kind: .proactive, scope: "items")
+        let droppedItems = await items.cachedValue()
+        let keptRuns = await runs.cachedValue()
+        XCTAssertNil(droppedItems)
+        XCTAssertEqual(keptRuns, ["r"])
+        XCTAssertEqual(counter.calls, 0)
+    }
+
+    func testInvalidateAllDropsEveryScopeOfOneKindOnDiskAndInMemory() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("jarvis-cache-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storages: [any JarvisCacheStorage] = [JarvisInMemoryCacheStorage(), JarvisFileCacheStorage(root: root)]
+        for storage in storages {
+            let cache = JarvisCache(storage: storage)
+            await cache.bind(account: "dan")
+            let tree = JarvisRepository<[String]>(cache: cache, kind: .notes, scope: "tree") { _ in .modified(["t"], validator: nil) }
+            let folder = JarvisRepository<[String]>(cache: cache, kind: .notes, scope: "folder:Work") { _ in .modified(["f"], validator: nil) }
+            let tasks = JarvisRepository<[String]>(cache: cache, kind: .tasks, scope: "open") { _ in .modified(["k"], validator: nil) }
+            for repository in [tree, folder, tasks] { _ = await collect(repository.updates()) }
+            await cache.invalidateAll(kind: .notes)
+            let droppedTree = await tree.cachedValue()
+            let droppedFolder = await folder.cachedValue()
+            let keptTasks = await tasks.cachedValue()
+            XCTAssertNil(droppedTree)
+            XCTAssertNil(droppedFolder)
+            XCTAssertEqual(keptTasks, ["k"])
+        }
+    }
+
+    func testResolveReturnsCacheOnlyWithoutRequestAndFallsBackOnFailure() async {
+        let clock = Clock(), counter = Counter()
+        let shouldFail = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            if shouldFail.calls > 0 { throw Boom() }
+            return .modified(["a"], validator: "v1")
+        }
+        let empty = await repo.resolve(cacheOnly: true)
+        XCTAssertNil(empty.value)
+        XCTAssertEqual(counter.calls, 0)
+        let loaded = await repo.resolve()
+        XCTAssertEqual(loaded.value, ["a"])
+        XCTAssertNil(loaded.error)
+        let instant = await repo.resolve(cacheOnly: true)
+        XCTAssertEqual(instant.value, ["a"])
+        shouldFail.hit(nil)
+        clock.advance(400)
+        let fallback = await repo.resolve()
+        XCTAssertEqual(fallback.value, ["a"])
+        XCTAssertNotNil(fallback.error)
+    }
+
     func testFreshnessWindowsMatchPolicy() {
         XCTAssertEqual(JarvisRepositoryKind.calendar.freshness, .seconds(120))
         XCTAssertEqual(JarvisRepositoryKind.notes.freshness, .seconds(300))

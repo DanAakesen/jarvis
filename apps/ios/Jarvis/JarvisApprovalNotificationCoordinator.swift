@@ -67,7 +67,13 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
             return
         }
         do {
-            let pending = try await approvalsClient.pendingConfirmations()
+            let repository = await JarvisAppCache.repository(.notifications) {
+                try await approvalsClient.fetchPending(validator: $0)
+            }
+            let resolved = await repository.resolve()
+            guard resolved.error == nil, let pending = resolved.value else {
+                throw resolved.error ?? JarvisApprovalsClientError.invalidResponse
+            }
             await synchronize(pending.confirmations, language: language)
         } catch {
             await removeLegacyPendingNotifications()
@@ -183,6 +189,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
 
             do {
                 try await approvalsClient.resolveConfirmation(id: id, decision: decision)
+                await JarvisAppCache.invalidate(.notifications)
                 UserDefaults.standard.set(decision.rawValue, forKey: Self.actionResultKey)
                 await dismissNotification(confirmationID: id)
                 NotificationCenter.default.post(name: .jarvisApprovalActionCompleted, object: nil)

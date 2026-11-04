@@ -110,6 +110,7 @@ struct JarvisNewNoteSheet: View {
         let body = trimmedBody.isEmpty ? "# \(title.trimmingCharacters(in: .whitespacesAndNewlines))" : content
         do {
             _ = try await client.createNote(path: path, content: body)
+            await JarvisAppCache.invalidateAll(.notes)
             dismiss()
             await onCreated(path)
         } catch let error as JarvisClientError {
@@ -211,6 +212,7 @@ struct JarvisNewTaskSheet: View {
                 due: date,
                 time: time
             )
+            await JarvisAppCache.invalidateAll(.tasks)
             dismiss()
             onCreated()
         } catch let error as JarvisClientError {
