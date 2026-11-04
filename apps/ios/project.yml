@@ -118,6 +118,7 @@ targets:
       - path: Widgets
       - path: Shared/FactoryTaskActivityAttributes.swift
       - path: Shared/FactoryTaskActivitySurface.swift
+      - path: Shared/FactoryWidgetIntents.swift
     dependencies:
       - package: JarvisCore
         product: JarvisCore
@@ -128,6 +129,7 @@ targets:
         SWIFT_VERSION: "5.0"
         IPHONEOS_DEPLOYMENT_TARGET: "26.0"
         INFOPLIST_FILE: Widgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Widgets/JarvisWidgets.entitlements
         GENERATE_INFOPLIST_FILE: "NO"
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
