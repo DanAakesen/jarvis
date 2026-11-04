@@ -2,12 +2,10 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-#if canImport(CryptoKit)
-import CryptoKit
-#endif
 
 /// One HealthKit quantity reading, already converted to the unit named in `unit`.
 public struct JarvisHealthSample: Equatable, Sendable {
+    public let id: String
     public let metric: String
     public let unit: String
     public let start: Date
@@ -15,7 +13,8 @@ public struct JarvisHealthSample: Equatable, Sendable {
     public let value: Double
     public let source: String?
 
-    public init(metric: String, unit: String, start: Date, end: Date, value: Double, source: String? = nil) {
+    public init(id: String, metric: String, unit: String, start: Date, end: Date, value: Double, source: String? = nil) {
+        self.id = id
         self.metric = metric
         self.unit = unit
         self.start = start
@@ -27,12 +26,14 @@ public struct JarvisHealthSample: Equatable, Sendable {
 
 /// One HealthKit sleep-analysis segment. `stage` is core, deep, rem, asleep, awake or in_bed.
 public struct JarvisHealthSleepSegment: Equatable, Sendable {
+    public let id: String
     public let stage: String
     public let start: Date
     public let end: Date
     public let source: String?
 
-    public init(stage: String, start: Date, end: Date, source: String? = nil) {
+    public init(id: String, stage: String, start: Date, end: Date, source: String? = nil) {
+        self.id = id
         self.stage = stage
         self.start = start
         self.end = end
@@ -95,70 +96,64 @@ public enum JarvisHealthSyncState: Equatable, Sendable {
     case failed
 }
 
-/// Builds the Health Auto Export-shaped JSON the existing `/api/health/ingest` path already normalises,
-/// so iPhone data lands in the same tables as the automations app. Output is canonical (sorted keys, stable order):
-/// the same data always yields the same bytes, which is what makes retries idempotent.
-public enum JarvisHealthPayloadBuilder {
-    public static func payload(_ batch: JarvisHealthSyncBatch) throws -> Data {
-        var metrics: [[String: Any]] = []
-        let byMetric = Dictionary(grouping: batch.samples, by: { "\($0.metric)\u{0}\($0.unit)" })
-        for key in byMetric.keys.sorted() {
-            let group = (byMetric[key] ?? []).sorted { ($0.start, $0.value) < ($1.start, $1.value) }
-            guard let first = group.first else { continue }
-            metrics.append([
-                "name": first.metric,
-                "units": first.unit,
-                "data": group.map { sample -> [String: Any] in
-                    var row: [String: Any] = ["date": iso(sample.start), "qty": sample.value]
-                    if let source = sample.source { row["source"] = source }
-                    return row
-                },
-            ])
-        }
-        if !batch.sleep.isEmpty {
-            let segments = batch.sleep.sorted { ($0.start, $0.stage) < ($1.start, $1.stage) }
-            metrics.append([
-                "name": "sleep_analysis",
-                "units": "hr",
-                "data": segments.map { segment -> [String: Any] in
-                    var row: [String: Any] = [
-                        "startDate": iso(segment.start), "endDate": iso(segment.end),
-                        "date": iso(segment.end), "value": segment.stage,
-                        "qty": max(0, segment.end.timeIntervalSince(segment.start)) / 3600,
-                    ]
-                    if let source = segment.source { row["source"] = source }
-                    return row
-                },
-            ])
-        }
-        let workouts = batch.workouts.sorted { ($0.start, $0.id) < ($1.start, $1.id) }.map { workout -> [String: Any] in
-            var row: [String: Any] = [
-                "id": workout.id, "name": workout.activity,
-                "start": iso(workout.start), "end": iso(workout.end),
-                "duration": max(0, workout.end.timeIntervalSince(workout.start)),
-            ]
-            if let kcal = workout.activeEnergyKcal { row["activeEnergyBurned"] = ["qty": kcal, "units": "kcal"] }
-            if let metres = workout.distanceMetres { row["distance"] = ["qty": metres / 1000, "units": "km"] }
-            return row
-        }
-        let body: [String: Any] = ["data": ["metrics": metrics, "workouts": workouts]]
+/// The request body of `POST /health/sync`. Every sample carries its HealthKit UUID, so the backend can tell a
+/// repeat from new data. Keys are sorted and rows ordered, so identical data always encodes to identical bytes.
+public struct JarvisHealthSyncRequest: Equatable, Sendable {
+    public let anchor: Date?
+    public let samples: [JarvisHealthSample]
+    public let sleep: [JarvisHealthSleepSegment]
+    public let workouts: [JarvisHealthWorkoutSample]
+
+    public init(
+        anchor: Date?, samples: [JarvisHealthSample] = [], sleep: [JarvisHealthSleepSegment] = [],
+        workouts: [JarvisHealthWorkoutSample] = []
+    ) {
+        self.anchor = anchor
+        self.samples = samples
+        self.sleep = sleep
+        self.workouts = workouts
+    }
+
+    /// Never split a metric across requests: the backend recomputes each metric day from the samples it receives,
+    /// so a day must arrive whole. One request per metric, then one for sleep and one for workouts.
+    public static func requests(for batch: JarvisHealthSyncBatch, anchor: Date?) -> [JarvisHealthSyncRequest] {
+        let byMetric = Dictionary(grouping: batch.samples, by: \.metric)
+        var requests = byMetric.keys.sorted().map { JarvisHealthSyncRequest(anchor: anchor, samples: byMetric[$0] ?? []) }
+        if !batch.sleep.isEmpty { requests.append(JarvisHealthSyncRequest(anchor: anchor, sleep: batch.sleep)) }
+        if !batch.workouts.isEmpty { requests.append(JarvisHealthSyncRequest(anchor: anchor, workouts: batch.workouts)) }
+        return requests
+    }
+
+    public func encoded() throws -> Data {
+        var body: [String: Any] = [
+            "samples": samples.sorted { $0.id < $1.id }.map { sample -> [String: Any] in
+                var row: [String: Any] = [
+                    "id": sample.id, "metric": sample.metric, "unit": sample.unit,
+                    "start": Self.iso(sample.start), "end": Self.iso(sample.end), "value": sample.value,
+                ]
+                if let source = sample.source { row["source"] = source }
+                return row
+            },
+            "sleep": sleep.sorted { $0.id < $1.id }.map { segment -> [String: Any] in
+                var row: [String: Any] = [
+                    "id": segment.id, "stage": segment.stage,
+                    "start": Self.iso(segment.start), "end": Self.iso(segment.end),
+                ]
+                if let source = segment.source { row["source"] = source }
+                return row
+            },
+            "workouts": workouts.sorted { $0.id < $1.id }.map { workout -> [String: Any] in
+                var row: [String: Any] = [
+                    "id": workout.id, "activity": workout.activity,
+                    "start": Self.iso(workout.start), "end": Self.iso(workout.end),
+                ]
+                if let kcal = workout.activeEnergyKcal { row["activeEnergyKcal"] = kcal }
+                if let metres = workout.distanceMetres { row["distanceMetres"] = metres }
+                return row
+            },
+        ]
+        if let anchor { body["anchor"] = Self.iso(anchor) }
         return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
-    }
-
-    /// Same bytes give the same id, so a retry of an accepted upload is acknowledged instead of stored twice,
-    /// and changed data gets a new id.
-    public static func sessionId(for payload: Data) -> String {
-        "ios-" + digest(payload)
-    }
-
-    static func digest(_ data: Data) -> String {
-        #if canImport(CryptoKit)
-        return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        #else
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in data { hash = (hash ^ UInt64(byte)) &* 0x100_0000_01b3 }
-        return String(format: "%016llx", hash)
-        #endif
     }
 
     private static func iso(_ date: Date) -> String {
@@ -173,69 +168,75 @@ public enum JarvisHealthSyncError: Error, Equatable, Sendable {
     case unavailable
 }
 
-/// Sends one payload to the existing Health ingest path. The real sender uses the Health upload credential.
-public protocol JarvisHealthIngestSender: Sendable {
-    func send(payload: Data, automationId: String, sessionId: String) async throws
+public protocol JarvisHealthSyncSender: Sendable {
+    func send(_ request: JarvisHealthSyncRequest) async throws
 }
 
-/// Reads and uploads one batch, then reports truthfully: `complete` only when every type was read and sent.
-public struct JarvisHealthSyncRunner: Sendable {
-    public static let automationId = "jarvis-ios"
+/// Where the sync remembers how far it got. The anchor is the end of the last window that was read completely.
+public protocol JarvisHealthSyncAnchorStore: Sendable {
+    var anchor: Date? { get }
+    var lastSync: Date? { get }
+    func save(anchor: Date, lastSync: Date)
+}
 
-    private let sender: JarvisHealthIngestSender
+public final class JarvisHealthUserDefaultsAnchorStore: JarvisHealthSyncAnchorStore, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let anchorKey = "jarvis.health.sync.anchor"
+    private let lastSyncKey = "jarvis.health.sync.lastSync"
+
+    public init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    public var anchor: Date? { defaults.object(forKey: anchorKey) as? Date }
+    public var lastSync: Date? { defaults.object(forKey: lastSyncKey) as? Date }
+
+    public func save(anchor: Date, lastSync: Date) {
+        defaults.set(anchor, forKey: anchorKey)
+        defaults.set(lastSync, forKey: lastSyncKey)
+    }
+}
+
+/// Incremental window: from the start of the day of the anchor, so a metric day is always re-sent whole.
+/// Without an anchor (first sync) it reaches back `firstSyncDays`.
+public enum JarvisHealthSyncWindow {
+    public static let firstSyncDays = 7
+
+    public static func start(anchor: Date?, now: Date, calendar: Calendar = .current) -> Date {
+        guard let anchor else {
+            return calendar.date(byAdding: .day, value: -firstSyncDays, to: now) ?? now
+        }
+        return calendar.startOfDay(for: min(anchor, now))
+    }
+}
+
+/// Uploads one batch, then reports truthfully: `complete` only when every type was read and sent. Only a
+/// complete sync moves the anchor, so a type that failed to read is read again next time.
+public struct JarvisHealthSyncRunner: Sendable {
+    private let sender: JarvisHealthSyncSender
+    private let store: JarvisHealthSyncAnchorStore
     private let now: @Sendable () -> Date
 
-    public init(sender: JarvisHealthIngestSender, now: @escaping @Sendable () -> Date = { Date() }) {
+    public init(
+        sender: JarvisHealthSyncSender, store: JarvisHealthSyncAnchorStore,
+        now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.sender = sender
+        self.store = store
         self.now = now
     }
 
     public func sync(_ batch: JarvisHealthSyncBatch) async -> JarvisHealthSyncState {
         guard !batch.readTypes.isEmpty else { return .failed }
         do {
-            if !batch.isEmpty {
-                let payload = try JarvisHealthPayloadBuilder.payload(batch)
-                try await sender.send(
-                    payload: payload,
-                    automationId: Self.automationId,
-                    sessionId: JarvisHealthPayloadBuilder.sessionId(for: payload)
-                )
+            for request in JarvisHealthSyncRequest.requests(for: batch, anchor: store.anchor) {
+                try await sender.send(request)
             }
         } catch {
             return .failed
         }
+        let finished = now()
         let missing = batch.deniedOrUnreadTypes.sorted()
-        return missing.isEmpty ? .complete(at: now()) : .partial(at: now(), missingTypes: missing)
-    }
-}
-
-/// Production sender: posts to `/api/health/ingest` with the Health upload credential and the idempotency headers.
-public struct JarvisHealthURLSessionSender: JarvisHealthIngestSender {
-    private let baseURL: URL
-    private let token: @Sendable () async throws -> String
-    private let session: URLSession
-
-    public init(baseURL: URL, token: @escaping @Sendable () async throws -> String, session: URLSession = .shared) {
-        self.baseURL = baseURL
-        self.token = token
-        self.session = session
-    }
-
-    public func send(payload: Data, automationId: String, sessionId: String) async throws {
-        var request = URLRequest(url: baseURL.appendingPathComponent("api/health/ingest"))
-        request.httpMethod = "POST"
-        request.httpBody = payload
-        request.timeoutInterval = 60
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let secret = try await token()
-        request.setValue("Bearer " + secret, forHTTPHeaderField: "Authorization")
-        request.setValue(automationId, forHTTPHeaderField: "Automation-Id")
-        request.setValue(sessionId, forHTTPHeaderField: "Session-Id")
-        request.setValue(JarvisHealthPayloadBuilder.digest(payload), forHTTPHeaderField: "X-Payload-Checksum")
-        let (_, response) = try await session.data(for: request)
-        guard let status = (response as? HTTPURLResponse)?.statusCode else { throw JarvisHealthSyncError.unavailable }
-        guard (200..<300).contains(status) else {
-            throw status >= 500 || status == 429 ? JarvisHealthSyncError.unavailable : JarvisHealthSyncError.rejected
-        }
+        guard missing.isEmpty else { return .partial(at: finished, missingTypes: missing) }
+        store.save(anchor: batch.windowEnd, lastSync: finished)
+        return .complete(at: finished)
     }
 }

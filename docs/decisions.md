@@ -10789,6 +10789,19 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Home and Chat share `JarvisComposerPlusMenu`. Home sends a typed message through `JarvisChatHandoff` (Chat sends it once its history is loaded, after a short lift-off animation that honors Reduce Motion); a plus-menu choice on Home opens Chat and performs it there. Home's old New task / New note entries were removed from the composer plus (the Home tiles remain).
 - Not done / not verified: no Xcode in the sandbox, so none of the app-target UI was compiled or run on a simulator or device. Health data other than steps and cardio workouts is authorized but not displayed. Status and Proactive got the header, tabs and plus changes but no new hero. Hero icon colors on Factory use the existing tints.
 
+## 2026-11-04 P15-79: Build 68 feedback, first slice
+- Decision: every Apple Health workout counts on Home. `JarvisGymSessionType` gains `strength` (Health strength, shown as "Strength training") and `other`; both are excluded from manual logging (`loggable`). A Health strength workout is dropped only when a non-cardio vault gym log exists within two hours.
+- Decision: Home's workouts card shows Active time and Active kcal (34 pt, hairline between) instead of a workout types list. Workout entries carry duration and active energy from HealthKit.
+- Decision: the task checkbox is `JarvisCheckButton` (no border, animates to a check mark, then completes). The Notes search scope menu was removed; search covers notes and tasks.
+- Not done: the rest of #1573 (page pattern tests, Health carousel, Notes hero and list, Factory layout). Nothing was compiled or run on a device.
+
+## 2026-11-04 P15-79: One loading animation (item 17)
+- Decision: `JarvisLoadingView` is the only loading animation, with `Size.area` and `Size.inline` variants. Busy buttons in `JarvisControls.swift` (4 sites) and the Settings loading skeleton now use it. The guard test also fails on `.redacted(reason: .placeholder)` skeletons and on any indeterminate `ProgressView` outside the view (determinate `ProgressView(value:)` bars and the WidgetKit Live Activity surface stay).
+
+## 2026-11-04 P15-79: Notes folders collapsed and Recent strip
+- Decision: Notes folders (Notes and List tabs) start collapsed on first open; expansion is per session (`@State`). The Notes tab shows a Recent strip (label "Seneste" / "Recent") of the 5 most recently modified notes, taken from the knowledge graph nodes via `JarvisNotesPresentation.recentNotes`. 140 pt hairline cards (radius 16) open the note. It is hidden when a folder filter is active, while searching, on empty or failed loads, and uses `JarvisLoadingView` for loading. The strip sits in the list head after the hero; moving the segmented bar below the hero (item 12) is still open.
+- Not verified: nothing was compiled or run on a simulator; the UI test only asserts when notes data exists in the launch scenario.
+
 ## Daily renamed to Health; legacy feeds retired (P15-78, 2026-11-04)
 
 - The legacy Daily calendar and Gmail feeds, the `daily_feed` tool and the calendar/attention Health query sources are deleted. Calendar and Gmail use only `apps/backend/src/google`. Tables are kept; no migration was added.
@@ -10806,6 +10819,12 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Signposts (`OSSignposter`, category `repository`) wrap each page open and refresh.
 - Wired so far: Usage page (repository plus `LazyVStack`). Notes, tasks, calendar, Factory, status, proactive, Health and settings views still read from their clients and are follow-ups. Health stays read directly from HealthKit.
 - Requests on Usage: first open 1, repeat open within 2 min 0 (before: 1 on every open). Not measured on a device.
+
+## 2026-11-04 P15-79: Notes tab bar under the hero
+- Decision: on Notes the Notes / Tasks / List / Graph bar is the last row of the scrolling head (header, phrase, hero, tab bar, Recent strip, list). It stays at the top only while the hero has no data (loading, error, empty), on Graph, and while searching, so the tabs are always reachable. Not compiled or run on a device.
+
+## 2026-11-04 P15-79: Health plus menu reuses the Home log sheets
+- Decision: Health's plus menu (log a workout, log a lift) presents `JarvisTodayGymSheet` with the Home model, exactly like the two Home tiles. The Health-only `JarvisHealthNewWorkoutSheet` and `JarvisHealthNewLiftSheet` are removed, so each sheet has one implementation. `testHealthPlusAndHomeTilesOpenTheSameLogSheetsInDanishAndEnglish` compares the sheet identifiers from both entry points. Not compiled or run on a device.
 
 ## iPhone Health sync into the existing ingest path (P15-78, 2026-11-04)
 
@@ -10825,6 +10844,17 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Element-level loading: each Home card and Health/Notes/Factory section keeps its own state; the only loading view is `JarvisLoadingView`. `JarvisCachedSection` is the shared per-card loader.
 - Requests per page (derived from code, not measured on a device). Before: every visit refetched. After: 0 inside the freshness window, 1 conditional request (304) when stale. Status 1→0/1, Proactive 3→0/3, Settings 1→0/1, Notes 3–4→0/3–4, Factory 2→0/2, Home 3→0/3.
 - Not verified: no Xcode in the sandbox, so the app-target edits were not compiled or run. JarvisCore (`swift test`) and backend (`vitest`, `tsc`, `eslint`) checks pass.
+
+## iPhone Health sync moves to an owner-only route with an anchor (P15-86, 2026-11-04)
+
+- Replaces the P15-78 path through `/api/health/ingest`. The app now calls `POST /health/sync` with the normal owner sign-in; only the owner user token is accepted (agent, connector and other users get 401/403). The app no longer creates or rotates the Health upload credential, so the automations app credential is left alone.
+- Body: `{ anchor?, samples[], sleep[], workouts[] }`; every row carries its HealthKit UUID. The backend validates strictly (ids, metric names, ISO instants, finite values, at most 20,000 rows, 8 MiB), converts the rows to the existing Health Auto Export shape and writes through the existing normaliser and `writeNormalized`, so the same `daily.*` tables are used. No migration.
+- Idempotency: the ingestion id is `ios-` plus the SHA-256 of the sorted, de-duplicated rows, recorded in `daily.health_ingestions` under automation `jarvis-ios`. An identical retry returns `status: "replayed"` and writes nothing; the same id with different content in one request is a 400. Metric days are recomputed from the rows received, so the app sends each metric whole (one request per metric, one for sleep, one for workouts) and the incremental window starts at the start of the anchor's day. Workouts are keyed by their UUID. Nutrition metrics are read and sent but still dropped by the existing normaliser (Jarvis meals are canonical).
+- Anchor: the end of the last fully read window, kept in `UserDefaults` with the last-sync time. A partial sync (a type failed to read) does not move it. First sync reads 7 days.
+- UI: the Sync button becomes the shared `JarvisLoadingView` while running, then shows a success or partial line, or an error line with a Try again button, plus the last-sync time. All strings are in Danish and English (`JarvisHealth.strings`).
+- Verified: backend tests/tsc/eslint and `swift test` for JarvisCore. Not verified: the app target was not compiled here (no Xcode); CI is the compiler. Background delivery is still open.
+- Apple docs used: [HealthKit](https://developer.apple.com/documentation/healthkit), [Authorizing access to health data](https://developer.apple.com/documentation/healthkit/authorizing-access-to-health-data), [HKSampleQueryDescriptor](https://developer.apple.com/documentation/healthkit/hksamplequerydescriptor), [HKAnchoredObjectQuery](https://developer.apple.com/documentation/healthkit/hkanchoredobjectquery) (considered; a date anchor was chosen so each metric day is re-sent whole), [Human Interface Guidelines: Loading](https://developer.apple.com/design/human-interface-guidelines/loading), [Feedback](https://developer.apple.com/design/human-interface-guidelines/feedback), [Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons), [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility), [Privacy](https://developer.apple.com/design/human-interface-guidelines/privacy). Direct fetches of Apple pages were not verified in this environment.
+
 
 ## 2026-11-04 P15-85: Notes hero and rows, Factory layout, Home chips
 

@@ -106,3 +106,4 @@
 "health.syncComplete" = "Synkroniseret %@. Alle datatyper blev læst.";
 "health.syncPartial" = "Delvist synkroniseret %@. Mangler: %@.";
 "health.syncFailed" = "Synkroniseringen mislykkedes. Prøv igen.";
+"health.syncRetry" = "Prøv igen";

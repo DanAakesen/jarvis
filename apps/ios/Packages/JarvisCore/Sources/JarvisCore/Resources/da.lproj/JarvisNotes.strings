@@ -68,6 +68,7 @@
 "notes.showGraph" = "Vis graf";
 "notes.resetGraph" = "Nulstil grafvisning";
 "notes.vaultRoot" = "Rod";
+"notes.recent" = "Seneste";
 "notes.loadMore" = "Indlæs flere";
 "notes.createHint" = "Opret en note eller opgave";
 "notes.discardTitle" = "Kassér ændringer?";
@@ -150,7 +151,6 @@
 "voice.screenShareUnavailable" = "Skærmdeling er ikke tilgængelig: denne version indeholder ikke Jarvis' udsendelsesudvidelse.";
 "notes.overview" = "Overblik";
 "notes.links" = "links";
-"notes.recent" = "Seneste";
 "notes.openTasks" = "Åbne opgaver";
 "notes.folderCount" = "Mapper";
 "notes.rootNotes" = "Noter i roden";

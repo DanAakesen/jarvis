@@ -68,6 +68,7 @@
 "notes.showGraph" = "Show graph";
 "notes.resetGraph" = "Reset graph view";
 "notes.vaultRoot" = "Vault root";
+"notes.recent" = "Recent";
 "notes.loadMore" = "Load more";
 "notes.createHint" = "Create a note or task";
 "notes.discardTitle" = "Discard changes?";
@@ -150,7 +151,6 @@
 "voice.screenShareUnavailable" = "Screen sharing is unavailable: this build does not include the Jarvis broadcast extension.";
 "notes.overview" = "Overview";
 "notes.links" = "links";
-"notes.recent" = "Recent";
 "notes.openTasks" = "Open tasks";
 "notes.folderCount" = "Folders";
 "notes.rootNotes" = "Root notes";

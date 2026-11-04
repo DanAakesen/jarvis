@@ -20,6 +20,7 @@ import { healthSourceTools } from './tools/source-tools.js';
 import { isLegacyDailyRequest, serveLegacyDailyAlias } from './legacy-alias.js';
 import { liftRoutes } from './routes/lifts.js';
 import { workoutRoutes } from './routes/workouts.js';
+import { deviceSyncRoutes } from './routes/sync.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createHealthModules(enabled = false, data?: HealthData, connector?: HealthMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition, nutritionTargets?: NutritionTargetsAccess, nutritionSuggestions?: NutritionSuggestionSources, trainingTargets?: TrainingTargetsAccess): readonly BackendModule[] {
@@ -49,6 +50,7 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
         if (data.lifts) await app.register(liftRoutes(data.lifts));
         if (data.workouts) await app.register(workoutRoutes(data.workouts));
+        if (data.deviceSync) await app.register(deviceSyncRoutes(data.deviceSync));
         if (data.retryGymVault) {
           const retry = data.retryGymVault;
           const lifetime = new AbortController();

@@ -26,6 +26,8 @@
 "today.tasksUnavailable" = "Opgaver ikke tilgængelige";
 "today.markDone" = "Markér som udført";
 "today.workouts" = "Træning";
+"today.activeTime" = "Aktiv tid";
+"today.activeKcal" = "Aktive kcal";
 "today.workoutsByType" = "Træninger efter type";
 "today.workoutsEmpty" = "Ingen træninger";
 "today.workoutsUnavailable" = "Træning ikke tilgængelig";
@@ -51,6 +53,10 @@
 "today.short.back" = "Ryg";
 "today.short.arms" = "Arme";
 "today.short.legs" = "Ben";
+"today.session.strength" = "Styrketræning";
+"today.session.other" = "Anden træning";
+"today.short.strength" = "Styrke";
+"today.short.other" = "Andet";
 "today.short.cardio" = "Cardio";
 "today.quickActions" = "Hurtige handlinger";
 "today.logWorkout" = "Log træning";

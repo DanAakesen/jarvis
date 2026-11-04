@@ -25,6 +25,7 @@ import { LiftEntriesStore } from './lifts/lifts-store.js';
 import type { LiftEntriesAccess } from './lifts/lifts-store.js';
 import { WorkoutEntriesStore } from './gym/workouts-store.js';
 import type { WorkoutEntriesAccess } from './gym/workouts-store.js';
+import { SqlDeviceSyncStore, type DeviceSyncAccess } from './sync/device-sync-store.js';
 import { createGymLogWriter } from './gym/gym-log.js';
 import { createGymVaultSync, type GymSyncLogger } from './gym/gym-sync.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
@@ -268,6 +269,10 @@ export function createHealthData(pool: sql.ConnectionPool, owner: string, now: (
     checkOwner(request);
     return WorkoutEntriesStore.forRequest(pool, request, changes, gymSync);
   };
+  const deviceSync: DeviceSyncAccess = request => {
+    checkOwner(request);
+    return SqlDeviceSyncStore.forRequest(pool, request, changes, now);
+  };
   const readers: HealthReaders = {
     health: request => { checkOwner(request); return HealthReadModel.forRequest(pool, request); },
     nutrition,
@@ -279,7 +284,7 @@ export function createHealthData(pool: sql.ConnectionPool, owner: string, now: (
     ? async (input, request, signal) => { checkOwner(request); return frida.lookup(input, signal); }
     : undefined;
   return {
-    query: new HealthQueryService(readers, now), changes, trainingTargets, lifts, workouts,
+    query: new HealthQueryService(readers, now), changes, trainingTargets, lifts, workouts, deviceSync,
     ...(gymSync ? { retryGymVault: (signal: AbortSignal) => gymSync.retryPending(signal) } : {}),
     health: (request: FastifyRequest) => { checkOwner(request); return readers.health(request); },
     nutrition,
@@ -294,6 +299,7 @@ export interface HealthData {
   trainingTargets?: TrainingTargetsAccess;
   lifts?: LiftEntriesAccess;
   workouts?: WorkoutEntriesAccess;
+  deviceSync?: DeviceSyncAccess;
   retryGymVault?: (signal: AbortSignal) => Promise<{ synced: number; pending: number }>;
   health?: (request: FastifyRequest) => Pick<HealthReadModel, 'history' | 'sync'>;
   nutrition?: (request: FastifyRequest) => Pick<NutritionStore, 'history' | 'days' | 'feedback' | 'preferences'>;

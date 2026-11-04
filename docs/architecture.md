@@ -2,7 +2,7 @@
 
 - Backend `apps/backend/src/health`, web `apps/web/src/health`, contracts `packages/contracts/src/health.js`. Routes are `/health/*`; `/daily/*` is a temporary alias (`health/legacy-alias.ts`) for builds ≤67. Switches: `JARVIS_HEALTH_ENABLED`, `VITE_HEALTH_ENABLED` (old `*_DAILY_ENABLED` read as fallback).
 - The legacy Daily calendar/Gmail feeds are removed; Calendar and Gmail use only `apps/backend/src/google`.
-- iPhone data flow: HealthKit → `JarvisHealthKitReader` → `JarvisHealthPayloadBuilder` → `/api/health/ingest` (same normaliser and `daily.*` tables as the automations app). Source ids, schema and table names keep the `daily` name.
+- iPhone data flow: HealthKit → `JarvisHealthKitReader` (since the anchor) → `JarvisHealthSyncRequest` → owner-only `POST /health/sync` (`health/routes/sync.ts`, `health/sync/`) → same normaliser and `daily.*` tables as the automations app (P15-86). Source ids, schema and table names keep the `daily` name.
 
 ## Suggestion-to-approval binding (P15-46 / #1494)
 

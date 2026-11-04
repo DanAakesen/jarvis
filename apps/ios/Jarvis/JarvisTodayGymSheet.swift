@@ -84,7 +84,7 @@ struct JarvisTodayGymSheet: View {
                 switch kind {
                 case .workout:
                     Section(copy(.sessionTypeGroup)) {
-                        ForEach(JarvisGymSessionType.allCases) { option in
+                        ForEach(JarvisGymSessionType.loggable) { option in
                             choiceRow(
                                 title: option.title(language: language),
                                 isSelected: session == option,
@@ -124,7 +124,7 @@ struct JarvisTodayGymSheet: View {
                     if !trimmedName.isEmpty, knownSession == nil {
                         Section(copy(.sessionTypeGroup)) {
                             Picker(copy(.sessionTypeGroup), selection: $manualSession) {
-                                ForEach(JarvisGymSessionType.allCases) { option in
+                                ForEach(JarvisGymSessionType.loggable) { option in
                                     Text(option.title(language: language)).tag(option)
                                 }
                             }
